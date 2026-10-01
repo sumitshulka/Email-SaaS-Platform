@@ -242,7 +242,7 @@ export function ListsPage() {
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<ContactList | null | undefined>(undefined); const [name, setName] = useState('');
   const lists = (query.data || []) as ContactList[];
-  const contacts = (contactsQuery.data || []) as Contact[];
+  const contacts = contactsQuery.data?.contacts ?? [];
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const save = (e: FormEvent) => {
     e.preventDefault();
