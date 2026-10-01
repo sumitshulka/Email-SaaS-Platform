@@ -17,6 +17,12 @@ export type ApplicationEmailConfigInput = {
   replyTo?: string;
 };
 
+export type ApplicationEmailMessage = {
+  to: string;
+  subject: string;
+  text: string;
+};
+
 export async function getApplicationEmailConfig() {
   const [config] = await db
     .select()
@@ -30,6 +36,11 @@ export async function sendApplicationEmail(
   subject: string,
   text: string,
 ): Promise<void> {
+  if (testTransport) {
+    await testTransport({ to, subject, text });
+    return;
+  }
+
   const config = await getApplicationEmailConfig();
   if (!config) {
     throw new Error("Application email is not configured.");
@@ -58,3 +69,16 @@ export async function sendApplicationEmail(
   });
   transport.close();
 }
+
+export function setApplicationEmailTransportForTests(
+  transport: ((message: ApplicationEmailMessage) => Promise<void>) | null,
+): void {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("A test email transport can only be configured in test mode.");
+  }
+  testTransport = transport ?? undefined;
+}
+
+let testTransport:
+  | ((message: ApplicationEmailMessage) => Promise<void>)
+  | undefined;
