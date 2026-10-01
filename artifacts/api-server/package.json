@@ -21,13 +21,15 @@
     "helmet": "^8.3.0",
     "nodemailer": "^10.0.13",
     "pino": "^9.14.0",
-    "pino-http": "^10.5.0"
+    "pino-http": "^10.5.0",
+    "sanitize-html": "^2.17.7"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
+    "@types/sanitize-html": "^2.16.2",
     "esbuild": "0.28.2",
     "esbuild-plugin-pino": "^2.3.3",
     "pg-mem": "^3.0.14",
