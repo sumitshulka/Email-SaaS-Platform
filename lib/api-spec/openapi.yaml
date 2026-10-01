@@ -1410,6 +1410,7 @@ components:
         name: { type: string }
         subject: { type: string }
         textBody: { type: string }
+        htmlBody: { type: ["string", "null"] }
         listId: { type: ["string", "null"], format: uuid }
         status: { type: string, enum: [draft, queued, sending, completed] }
         recipients: { type: integer }
@@ -1423,7 +1424,7 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, subject, textBody, listId, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, completedAt, createdAt, updatedAt]
+      required: [id, name, subject, textBody, htmlBody, listId, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, completedAt, createdAt, updatedAt]
     CampaignDashboard:
       type: object
       properties:
@@ -1463,6 +1464,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         subject: { type: string, minLength: 1, maxLength: 200 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
+        htmlBody: { type: string, maxLength: 100000 }
         listId: { type: string, format: uuid }
       required: [name, subject, textBody, listId]
     CampaignUpdate:
@@ -1471,6 +1473,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         subject: { type: string, minLength: 1, maxLength: 200 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
+        htmlBody: { type: string, maxLength: 100000 }
         listId: { type: string, format: uuid }
     AdminDashboard:
       type: object

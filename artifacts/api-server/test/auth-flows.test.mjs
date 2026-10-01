@@ -217,6 +217,7 @@ memory.public.none(`
     name varchar(160) NOT NULL,
     subject varchar(200) NOT NULL,
     text_body text NOT NULL,
+    html_body text,
     status email_campaign_status NOT NULL DEFAULT 'draft',
     queued_at timestamptz,
     completed_at timestamptz,
@@ -1474,6 +1475,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
             email,
             firstName: "Owner",
             lastName: "Contact",
+            ...(email === "one@owner.test" ? { companyName: "Acme & Sons" } : {}),
             subscribed: true,
             listIds: [ownerList.body.id],
           },
@@ -1584,12 +1586,27 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       cookie: owner.cookie,
       body: {
         name: "Owner campaign",
-        subject: "A workspace update",
-        textBody: "A short plain-text campaign.",
+          subject: "A workspace update for {{firstName}}",
+          textBody: "Hello {{firstName}} from the campaign.",
+          htmlBody: "<p>Draft <em>format</em></p>",
         listId: ownerList.body.id,
       },
     });
     assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+    assert.equal(campaign.body.htmlBody, "<p>Draft <em>format</em></p>");
+    const updatedCampaign = await api(`/campaigns/${campaign.body.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        htmlBody:
+          "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}.</p><script>alert(1)</script>",
+      },
+    });
+    assert.equal(updatedCampaign.response.status, 200, JSON.stringify(updatedCampaign.body));
+    assert.equal(
+      updatedCampaign.body.htmlBody,
+      "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}.</p>",
+    );
     assert.equal(campaign.body.recipients, 3);
     assert.equal(campaign.body.estimatedDurationSeconds, 108);
     const draftDashboard = await api(`/campaigns/${campaign.body.id}`, {
@@ -1666,7 +1683,22 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(finalCampaign.bounced, 1);
     assert.equal(finalCampaign.suppressed, 1);
     assert.equal(finalCampaign.queued, 0);
-    assert.equal(tenantDeliveries.filter((message) => message.subject === "A workspace update").length, 2);
+    assert.equal(
+      tenantDeliveries.filter((message) =>
+        message.subject.startsWith("A workspace update for "),
+      ).length,
+      2,
+    );
+    const personalizedDelivery = tenantDeliveries.find(
+      (message) => message.to === "one@owner.test",
+    );
+    assert.ok(personalizedDelivery);
+    assert.equal(personalizedDelivery.subject, "A workspace update for Owner");
+    assert.equal(personalizedDelivery.text, "Hello Owner from the campaign.");
+    assert.equal(
+      personalizedDelivery.html,
+      "<p><strong>Hi Owner</strong>, welcome to Acme &amp; Sons.</p>",
+    );
 
     const recipientOutcomes = await db
       .select({
@@ -1702,7 +1734,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(bouncedHistory.response.status, 200);
     assert.equal(bouncedHistory.body[0].status, "bounced");
-    assert.equal(bouncedHistory.body[0].subject, "A workspace update");
+    assert.equal(bouncedHistory.body[0].subject, "A workspace update for {{firstName}}");
     const noEmailHistory = await api(
       `/contacts/${ownerContacts[2].body.id}/email-history`,
       { cookie: owner.cookie },

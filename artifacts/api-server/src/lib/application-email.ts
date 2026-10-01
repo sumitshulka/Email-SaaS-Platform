@@ -29,6 +29,7 @@ export type TenantEmailMessage = {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 };
 
 export type TenantEmailResult = {
@@ -92,12 +93,14 @@ export async function sendTenantEmail(
   to: string,
   subject: string,
   text: string,
+  html?: string,
 ): Promise<TenantEmailResult> {
   const message = {
     userId: configuration.userId,
     to,
     subject,
     text,
+    ...(html ? { html } : {}),
   };
   if (tenantTestTransport) {
     return tenantTestTransport(message);
@@ -126,6 +129,7 @@ export async function sendTenantEmail(
       replyTo: configuration.replyTo ?? undefined,
       subject,
       text,
+      ...(html ? { html } : {}),
     });
     const addressIs = (value: unknown): boolean =>
       value === to ||

@@ -119,6 +119,7 @@ export const emailCampaignsTable = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     subject: varchar("subject", { length: 200 }).notNull(),
     textBody: text("text_body").notNull(),
+    htmlBody: text("html_body"),
     status: emailCampaignStatusEnum("status").notNull().default("draft"),
     queuedAt: timestamp("queued_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),

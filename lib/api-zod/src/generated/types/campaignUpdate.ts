@@ -22,5 +22,7 @@ export interface CampaignUpdate {
      * @maxLength 100000
      */
   textBody?: string;
+  /** @maxLength 100000 */
+  htmlBody?: string;
   listId?: string;
 }

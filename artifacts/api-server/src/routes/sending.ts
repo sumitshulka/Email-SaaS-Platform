@@ -66,6 +66,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { sendTenantEmail } from "../lib/application-email";
+import { sanitizeCampaignHtml } from "../lib/campaign-template";
 import { encryptSecret } from "../lib/security";
 import {
   estimateCampaignDeliverySeconds,
@@ -1549,6 +1550,9 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       name: parsed.data.name.trim(),
       subject: parsed.data.subject.trim(),
       textBody: parsed.data.textBody,
+      htmlBody: parsed.data.htmlBody
+        ? sanitizeCampaignHtml(parsed.data.htmlBody)
+        : null,
     })
     .returning();
   const [summary] = (await campaignPayloads(userId)).filter(
@@ -1594,6 +1598,13 @@ router.patch(
         ...(parsed.data.subject ? { subject: parsed.data.subject.trim() } : {}),
         ...(parsed.data.textBody !== undefined
           ? { textBody: parsed.data.textBody }
+          : {}),
+        ...(parsed.data.htmlBody !== undefined
+          ? {
+              htmlBody: parsed.data.htmlBody
+                ? sanitizeCampaignHtml(parsed.data.htmlBody)
+                : null,
+            }
           : {}),
         ...(parsed.data.listId ? { listId: parsed.data.listId } : {}),
         updatedAt: new Date(),

@@ -698,6 +698,7 @@ export const ListCampaignsResponseItem = zod.object({
   "name": zod.string(),
   "subject": zod.string(),
   "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
@@ -724,12 +725,15 @@ export const createCampaignBodySubjectMax = 200;
 
 export const createCampaignBodyTextBodyMax = 100000;
 
+export const createCampaignBodyHtmlBodyMax = 100000;
+
 
 
 export const CreateCampaignBody = zod.object({
   "name": zod.string().min(1).max(createCampaignBodyNameMax),
   "subject": zod.string().min(1).max(createCampaignBodySubjectMax),
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
+  "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
   "listId": zod.string().uuid()
 })
 
@@ -738,6 +742,7 @@ export const CreateCampaignResponse = zod.object({
   "name": zod.string(),
   "subject": zod.string(),
   "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
@@ -767,6 +772,7 @@ export const GetCampaignDashboardResponse = zod.object({
   "name": zod.string(),
   "subject": zod.string(),
   "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
@@ -814,12 +820,15 @@ export const updateCampaignBodySubjectMax = 200;
 
 export const updateCampaignBodyTextBodyMax = 100000;
 
+export const updateCampaignBodyHtmlBodyMax = 100000;
+
 
 
 export const UpdateCampaignBody = zod.object({
   "name": zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
   "subject": zod.string().min(1).max(updateCampaignBodySubjectMax).optional(),
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
+  "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
   "listId": zod.string().uuid().optional()
 })
 
@@ -828,6 +837,7 @@ export const UpdateCampaignResponse = zod.object({
   "name": zod.string(),
   "subject": zod.string(),
   "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
@@ -866,6 +876,7 @@ export const SendCampaignResponse = zod.object({
   "name": zod.string(),
   "subject": zod.string(),
   "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),

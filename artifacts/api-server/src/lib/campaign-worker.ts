@@ -21,6 +21,11 @@ import {
   type TenantSendingConfiguration,
 } from "@workspace/db";
 import { sendTenantEmail } from "./application-email";
+import {
+  personalizeCampaignHtml,
+  personalizeCampaignText,
+  type CampaignPersonalization,
+} from "./campaign-template";
 import { logger } from "./logger";
 import {
   getMinimumEmailSpacingSeconds,
@@ -35,6 +40,7 @@ type DeliveryClaim =
       sender: TenantSendingConfiguration;
       campaign: EmailCampaign;
       recipient: EmailCampaignRecipient;
+      personalization: CampaignPersonalization;
     }
   | { completedCampaignId: string };
 
@@ -263,6 +269,7 @@ async function claimDelivery(
       return { completedCampaignId: recipient.campaignId };
     }
 
+    let personalization: CampaignPersonalization;
     if (recipient.contactId) {
       const [contact] = await tx
         .select({ subscribed: contactsTable.subscribed })
@@ -274,7 +281,35 @@ async function claimDelivery(
           ),
         );
       if (contact?.subscribed) {
-        // Continue to claim this recipient below.
+        const [details] = await tx
+          .select({
+            firstName: contactsTable.firstName,
+            lastName: contactsTable.lastName,
+            name: contactsTable.name,
+            companyName: contactsTable.companyName,
+            linkedinUrl: contactsTable.linkedinUrl,
+            phoneNumber: contactsTable.phoneNumber,
+          })
+          .from(contactsTable)
+          .where(
+            and(
+              eq(contactsTable.id, recipient.contactId),
+              eq(contactsTable.userId, userId),
+            ),
+          )
+          .limit(1);
+        personalization = {
+          firstName: details?.firstName ?? recipient.firstName,
+          lastName: details?.lastName ?? recipient.lastName,
+          fullName:
+            [details?.firstName, details?.lastName].filter(Boolean).join(" ") ||
+            details?.name ||
+            [recipient.firstName, recipient.lastName].filter(Boolean).join(" "),
+          email: recipient.email,
+          companyName: details?.companyName ?? "",
+          phoneNumber: details?.phoneNumber ?? "",
+          linkedinUrl: details?.linkedinUrl ?? "",
+        };
       } else {
         await tx
           .update(emailCampaignRecipientsTable)
@@ -354,7 +389,7 @@ async function claimDelivery(
           inArray(emailCampaignsTable.status, ["queued", "sending"]),
         ),
       );
-    return { sender, campaign, recipient: claimed };
+    return { sender, campaign, recipient: claimed, personalization };
   });
 }
 
@@ -456,8 +491,20 @@ export async function processPendingCampaignDeliveries(
       result = await sendTenantEmail(
         claimed.sender,
         claimed.recipient.email,
-        claimed.campaign.subject,
-        claimed.campaign.textBody,
+        personalizeCampaignText(
+          claimed.campaign.subject,
+          claimed.personalization,
+        ),
+        personalizeCampaignText(
+          claimed.campaign.textBody,
+          claimed.personalization,
+        ),
+        claimed.campaign.htmlBody
+          ? personalizeCampaignHtml(
+              claimed.campaign.htmlBody,
+              claimed.personalization,
+            )
+          : undefined,
       );
     } catch (error) {
       const retry = claimed.recipient.attempts <= settings.retryAttempts;

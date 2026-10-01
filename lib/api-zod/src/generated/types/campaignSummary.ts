@@ -13,6 +13,8 @@ export interface CampaignSummary {
   subject: string;
   textBody: string;
   /** @nullable */
+  htmlBody: string | null;
+  /** @nullable */
   listId: string | null;
   status: CampaignSummaryStatus;
   recipients: number;

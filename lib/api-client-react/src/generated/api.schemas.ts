@@ -505,6 +505,8 @@ export interface CampaignSummary {
   subject: string;
   textBody: string;
   /** @nullable */
+  htmlBody: string | null;
+  /** @nullable */
   listId: string | null;
   status: CampaignSummaryStatus;
   recipients: number;
@@ -564,6 +566,8 @@ export interface CampaignInput {
      * @maxLength 100000
      */
   textBody: string;
+  /** @maxLength 100000 */
+  htmlBody?: string;
   listId: string;
 }
 
@@ -583,6 +587,8 @@ export interface CampaignUpdate {
      * @maxLength 100000
      */
   textBody?: string;
+  /** @maxLength 100000 */
+  htmlBody?: string;
   listId?: string;
 }
 

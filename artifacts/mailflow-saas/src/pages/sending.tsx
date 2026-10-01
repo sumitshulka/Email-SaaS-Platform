@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
+import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
@@ -281,13 +283,20 @@ export function ContactsPage() {
 }
 
 export function ListsPage() {
+  const [, setLocation] = useLocation();
   const query = useListContactLists(); const contactsQuery = useListContacts();
   const create = useCreateContactList(); const update = useUpdateContactList(); const remove = useDeleteContactList();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<ContactList | null | undefined>(undefined); const [name, setName] = useState('');
   const [listToDelete, setListToDelete] = useState<ContactList | null>(null);
+  const [viewingList, setViewingList] = useState<ContactList | null>(null);
   const lists = (query.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts ?? [];
+  const viewingContacts = viewingList
+    ? contacts
+        .filter(contact => contact.listIds.includes(viewingList.id))
+        .sort((left, right) => left.email.localeCompare(right.email))
+    : [];
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -317,7 +326,7 @@ export function ListsPage() {
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#edf4fc] text-[#245b9b]"><Users className="h-5 w-5"/></div>
           <div className="min-w-[180px] flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="display text-[18px] font-bold text-[#1c2b3d]">{list.name}</h2><Status tone={list.active ? 'green' : 'gray'}>{list.active ? 'Active' : 'Inactive'}</Status></div><p className="mt-1 text-[11px] text-[#7c8794]">Created {new Date(list.createdAt).toLocaleDateString()} · updated {new Date(list.updatedAt).toLocaleDateString()}</p></div>
           <div className="min-w-[125px] rounded-md bg-[#f7f9fb] px-3 py-2"><div className="text-[10px] text-[#7e8996]">Contacts</div><div className="mt-0.5 text-[16px] font-bold text-[#26364a]">{memberCount.toLocaleString()} <span className="text-[10px] font-normal text-[#84909d]">members</span></div></div>
-           <div className="flex w-full gap-2 sm:w-auto"><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} disabled={remove.isPending} onClick={() => setListToDelete(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div>
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button variant="outline" testId={`button-view-list-contacts-${list.id}`} onClick={() => setViewingList(list)}><Users className="h-3.5 w-3.5"/>View contacts</Button><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} disabled={remove.isPending} onClick={() => setListToDelete(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div>
         </div>
         <div className="flex items-center justify-between border-t border-[#edf0f2] bg-[#fcfcfd] px-5 py-2.5"><span className="mono text-[9px] tracking-[.1em] text-[#9aa3ad]">LIST {String(index + 1).padStart(2, '0')}</span><span className="text-[10px] text-[#87919d]">{list.active ? 'Available for campaign targeting' : 'Hidden from campaign queueing'}</span></div>
       </section>;
@@ -326,6 +335,22 @@ export function ListsPage() {
       <form onSubmit={save} className="space-y-4"><Field label="List name" value={name} onChange={setName} placeholder="Product updates" required testId="input-list-name"/>{editing && <div className="rounded-md bg-[#f6f8fa] p-3 text-[11px] leading-5 text-[#6e7b8a]">This list currently has {editing.contactCount} contact{editing.contactCount === 1 ? '' : 's'} associated. Renaming does not change memberships.</div>}
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-list" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-list" disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save list' : 'Create list'}</Button></div>
       </form>
+    </Modal>}
+    {viewingList && <Modal wide title={`Contacts in ${viewingList.name}`} subtitle={`${viewingContacts.length.toLocaleString()} contact${viewingContacts.length === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
+      {viewingContacts.length ? <div className="max-h-[60vh] overflow-y-auto rounded-md border border-[#e7ebef]">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-3 border-b border-[#e7ebef] bg-[#f8fafb] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-[#7e8996]"><span>Contact</span><span>Email</span><span>Status</span></div>
+        {viewingContacts.map(contact => {
+          const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
+          return <div key={contact.id} data-testid={`row-list-contact-${contact.id}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-3 border-b border-[#edf0f2] px-4 py-3 last:border-b-0">
+            <div className="min-w-0"><div className="truncate text-[12px] font-semibold text-[#29384a]">{displayName}</div>{contact.companyName && <div className="mt-0.5 truncate text-[10px] text-[#87919d]">{contact.companyName}</div>}</div>
+            <a className="truncate text-[11px] text-[#365f8b] hover:underline" href={`mailto:${contact.email}`}>{contact.email}</a>
+            <Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status>
+          </div>;
+        })}
+      </div> : <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-8 text-center">
+        <Users className="mx-auto h-5 w-5 text-[#7f8ea0]"/><p className="mt-3 text-[13px] font-semibold text-[#344154]">No contacts in this list yet</p><p className="mt-1 text-[11px] text-[#7b8794]">Add or import contacts and assign them to this list.</p>
+        <div className="mt-4"><Button variant="outline" testId="button-add-contacts-to-list" onClick={() => { setViewingList(null); setLocation('/contacts'); }}>Go to contacts</Button></div>
+      </div>}
     </Modal>}
      <ConfirmActionDialog
        open={Boolean(listToDelete)}
@@ -340,11 +365,12 @@ export function ListsPage() {
   </></QueryState>;
 }
 
-type CampaignForm = { name: string; subject: string; textBody: string; listId: string };
-const blankCampaign: CampaignForm = { name: '', subject: '', textBody: '', listId: '' };
+type CampaignForm = { name: string; subject: string; textBody: string; htmlBody: string; listId: string };
+const blankCampaign: CampaignForm = { name: '', subject: '', textBody: '', htmlBody: '', listId: '' };
 
 export function CampaignsPage() {
   const [, setLocation] = useLocation();
+  const subjectInputRef = useRef<HTMLInputElement>(null);
   const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -355,10 +381,21 @@ export function CampaignsPage() {
   const activeLists = lists.filter(list => list.active);
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listId: activeLists[0]?.id || '' }); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, listId: campaign.listId || '' }); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listId: campaign.listId || '' }); };
+  const insertSubjectPlaceholder = (token: string) => {
+    const input = subjectInputRef.current;
+    const start = input?.selectionStart ?? form.subject.length;
+    const end = input?.selectionEnd ?? start;
+    const subject = `${form.subject.slice(0, start)}${token}${form.subject.slice(end)}`;
+    setForm(current => ({ ...current, subject }));
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
   const save = (e: FormEvent) => {
     e.preventDefault();
-    const data = { name: form.name.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), listId: form.listId };
+    const data = { name: form.name.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listId: form.listId };
     const success = () => { refresh(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
     const fail = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
     if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
@@ -403,8 +440,9 @@ export function CampaignsPage() {
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Queueing starts delivery to subscribed contacts in the selected list." close={() => setEditing(undefined)}>
       <form onSubmit={save} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2"><Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/><label><span className={labelClass}>Target list</span><select data-testid="select-campaign-list" required className={inputClass} value={form.listId} onChange={e => setForm(f => ({ ...f, listId: e.target.value }))}><option value="" disabled>Select an active list</option>{activeLists.map(list => <option key={list.id} value={list.id}>{list.name} · {list.contactCount} contacts</option>)}</select></label></div>
-        <Field label="Email subject" value={form.subject} onChange={v => setForm(f => ({ ...f, subject: v }))} placeholder="A concise subject your audience will recognize" required testId="input-campaign-subject"/>
-        <label className="block"><span className={labelClass}>Plain-text message</span><textarea data-testid="input-campaign-body" required rows={9} value={form.textBody} onChange={e => setForm(f => ({ ...f, textBody: e.target.value }))} placeholder="Write your message…" className="w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2.5 text-[13px] leading-6 text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"/></label>
+         <label className="block"><span className={labelClass}>Email subject</span><input ref={subjectInputRef} data-testid="input-campaign-subject" className={inputClass} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="A concise subject your audience will recognize" required maxLength={200}/></label>
+         <div className="-mt-2 flex flex-wrap items-center gap-1.5"><span className="mr-1 text-[10px] text-[#7e8996]">Insert a subject field:</span>{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertSubjectPlaceholder(token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-subject-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
+         <label className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the delivered email. A plain-text fallback is generated from this message automatically.</span></label>
         <div className="flex items-center gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] text-[#607186]"><Users className="h-4 w-4 shrink-0 text-[#245b9b]"/>Eligible recipients are subscribed contacts associated with the selected active list.</div>
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || !activeLists.length}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>
@@ -518,7 +556,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
         <section className={`${panelClass} p-5`}>
           <h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign message</h2>
           <div className="mt-4 border-b border-[#edf0f2] pb-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Subject</div><p className="mt-1 text-[13px] font-semibold text-[#29384a]">{campaign.subject}</p></div>
-          <div className="pt-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text body</div><pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#566476]">{campaign.textBody}</pre></div>
+           <div className="pt-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">{campaign.htmlBody ? 'Formatted message' : 'Plain-text message'}</div>{campaign.htmlBody ? <div className="campaign-message-preview mt-2 rounded-md bg-[#f8fafb] p-4 text-[12px] leading-6 text-[#566476] [&_a]:text-[#245b9b] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[#9abbe1] [&_blockquote]:pl-3 [&_h1]:my-2 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_strong]:font-bold [&_u]:underline [&_ul]:my-2 [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: campaign.htmlBody }}/> : <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#566476]">{campaign.textBody}</pre>}</div>
           <div className="mt-5 flex flex-wrap gap-5 border-t border-[#edf0f2] pt-4 text-[10px] text-[#7c8794]"><span>Created: {formatDate(campaign.createdAt)}</span><span>Queued: {formatDate(campaign.queuedAt)}</span><span>Completed: {formatDate(campaign.completedAt)}</span></div>
         </section>
       </>;
