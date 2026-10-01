@@ -292,6 +292,36 @@ export interface Contact {
   updatedAt: string;
 }
 
+export type ContactEmailHistoryItemStatus = typeof ContactEmailHistoryItemStatus[keyof typeof ContactEmailHistoryItemStatus];
+
+
+export const ContactEmailHistoryItemStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  delivered: 'delivered',
+  bounced: 'bounced',
+  suppressed: 'suppressed',
+  unknown: 'unknown',
+} as const;
+
+export interface ContactEmailHistoryItem {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  subject: string;
+  status: ContactEmailHistoryItemStatus;
+  /** @minimum 0 */
+  attempts: number;
+  /** @nullable */
+  lastAttemptAt: string | null;
+  /** @nullable */
+  deliveredAt: string | null;
+}
+
+export type ContactDirectoryItem = Contact & ({
+  lastEmail: ContactEmailHistoryItem | null;
+});
+
 export interface ContactInput {
   /** @maxLength 254 */
   email: string;
@@ -964,7 +994,7 @@ export interface ContactUploadSettings {
 }
 
 export interface ContactCollection {
-  contacts: Contact[];
+  contacts: ContactDirectoryItem[];
   quota: ContactQuota;
   uploadSettings: ContactUploadSettings;
 }

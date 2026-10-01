@@ -468,6 +468,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/email-history:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getContactEmailHistory
+      tags: [sending]
+      summary: List attempted campaign emails for a tenant contact
+      responses:
+        "200":
+          description: Campaign email history ordered from newest attempt to oldest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactEmailHistoryItem"
+        "404":
+          description: Contact not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contact-lists:
     get:
       operationId: listContactLists
@@ -1231,6 +1258,30 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, email, name, firstName, lastName, subscribed, listIds, createdAt, updatedAt]
+    ContactEmailHistoryItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        campaignId: { type: string, format: uuid }
+        campaignName: { type: string }
+        subject: { type: string }
+        status:
+          type: string
+          enum: [queued, sending, delivered, bounced, suppressed, unknown]
+        attempts: { type: integer, minimum: 0 }
+        lastAttemptAt: { type: ["string", "null"], format: date-time }
+        deliveredAt: { type: ["string", "null"], format: date-time }
+      required: [id, campaignId, campaignName, subject, status, attempts, lastAttemptAt, deliveredAt]
+    ContactDirectoryItem:
+      allOf:
+        - $ref: "#/components/schemas/Contact"
+        - type: object
+          properties:
+            lastEmail:
+              anyOf:
+                - $ref: "#/components/schemas/ContactEmailHistoryItem"
+                - type: "null"
+          required: [lastEmail]
     ContactInput:
       type: object
       properties:
@@ -1650,7 +1701,7 @@ components:
       properties:
         contacts:
           type: array
-          items: { $ref: "#/components/schemas/Contact" }
+          items: { $ref: "#/components/schemas/ContactDirectoryItem" }
         quota: { $ref: "#/components/schemas/ContactQuota" }
         uploadSettings: { $ref: "#/components/schemas/ContactUploadSettings" }
       required: [contacts, quota, uploadSettings]

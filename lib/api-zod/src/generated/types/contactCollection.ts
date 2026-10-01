@@ -5,12 +5,12 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
-import type { Contact } from './contact';
+import type { ContactDirectoryItem } from './contactDirectoryItem';
 import type { ContactQuota } from './contactQuota';
 import type { ContactUploadSettings } from './contactUploadSettings';
 
 export interface ContactCollection {
-  contacts: Contact[];
+  contacts: ContactDirectoryItem[];
   quota: ContactQuota;
   uploadSettings: ContactUploadSettings;
 }

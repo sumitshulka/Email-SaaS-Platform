@@ -8,6 +8,7 @@ import {
   gt,
   inArray,
   lte,
+  max,
   ne,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
@@ -20,6 +21,8 @@ import {
   CreateContactResponse,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
+  GetContactEmailHistoryParams,
+  GetContactEmailHistoryResponse,
   DeleteCampaignParams,
   DeleteCampaignResponse,
   DeleteContactListParams,
@@ -170,6 +173,59 @@ async function getContactPayload(
       contact.name,
     listIds: memberships.map((membership) => membership.listId),
   };
+}
+
+async function getTenantContactEmailHistory(userId: string, contactId?: string) {
+  const filters = [
+    eq(emailCampaignRecipientsTable.userId, userId),
+    gt(emailCampaignRecipientsTable.attempts, 0),
+    ...(contactId ? [eq(emailCampaignRecipientsTable.contactId, contactId)] : []),
+  ];
+
+  return db
+    .select({
+      id: emailCampaignRecipientsTable.id,
+      contactId: emailCampaignRecipientsTable.contactId,
+      campaignId: emailCampaignRecipientsTable.campaignId,
+      campaignName: emailCampaignsTable.name,
+      subject: emailCampaignsTable.subject,
+      status: emailCampaignRecipientsTable.status,
+      attempts: emailCampaignRecipientsTable.attempts,
+      lastAttemptAt: max(emailSendAttemptsTable.attemptedAt),
+      deliveredAt: emailCampaignRecipientsTable.deliveredAt,
+      createdAt: emailCampaignRecipientsTable.createdAt,
+    })
+    .from(emailCampaignRecipientsTable)
+    .innerJoin(
+      emailCampaignsTable,
+      and(
+        eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+        eq(emailCampaignsTable.userId, userId),
+      ),
+    )
+    .innerJoin(
+      emailSendAttemptsTable,
+      and(
+        eq(emailSendAttemptsTable.recipientId, emailCampaignRecipientsTable.id),
+        eq(emailSendAttemptsTable.userId, userId),
+      ),
+    )
+    .where(and(...filters))
+    .groupBy(
+      emailCampaignRecipientsTable.id,
+      emailCampaignRecipientsTable.contactId,
+      emailCampaignRecipientsTable.campaignId,
+      emailCampaignsTable.name,
+      emailCampaignsTable.subject,
+      emailCampaignRecipientsTable.status,
+      emailCampaignRecipientsTable.attempts,
+      emailCampaignRecipientsTable.deliveredAt,
+      emailCampaignRecipientsTable.createdAt,
+    )
+    .orderBy(
+      desc(max(emailSendAttemptsTable.attemptedAt)),
+      desc(emailCampaignRecipientsTable.createdAt),
+    );
 }
 
 async function isValidTenantListSelection(
@@ -510,7 +566,7 @@ router.post(
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const userId = req.authUser!.id;
-  const [contacts, quota, memberships] = await Promise.all([
+  const [contacts, quota, memberships, emailHistory] = await Promise.all([
     db
       .select()
       .from(contactsTable)
@@ -524,6 +580,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       })
       .from(contactListMembersTable)
       .where(eq(contactListMembersTable.userId, userId)),
+    getTenantContactEmailHistory(userId),
   ]);
   const uploadSettings = await getPlatformSettings();
   const listIdsByContact = new Map<string, string[]>();
@@ -531,6 +588,15 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     const current = listIdsByContact.get(membership.contactId) ?? [];
     current.push(membership.listId);
     listIdsByContact.set(membership.contactId, current);
+  }
+  const lastEmailByContact = new Map<
+    string,
+    (typeof emailHistory)[number]
+  >();
+  for (const email of emailHistory) {
+    if (email.contactId && !lastEmailByContact.has(email.contactId)) {
+      lastEmailByContact.set(email.contactId, email);
+    }
   }
   res.json(
     ListContactsResponse.parse({
@@ -540,6 +606,20 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
           [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
           contact.name,
         listIds: listIdsByContact.get(contact.id) ?? [],
+        lastEmail: (() => {
+          const email = lastEmailByContact.get(contact.id);
+          if (!email) return null;
+          return {
+            id: email.id,
+            campaignId: email.campaignId,
+            campaignName: email.campaignName,
+            subject: email.subject,
+            status: email.status,
+            attempts: email.attempts,
+            lastAttemptAt: email.lastAttemptAt,
+            deliveredAt: email.deliveredAt,
+          };
+        })(),
       })),
       quota,
       uploadSettings: {
@@ -549,6 +629,51 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.get(
+  "/contacts/:contactId/email-history",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetContactEmailHistoryParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid contact identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [contact] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
+      return;
+    }
+    const history = await getTenantContactEmailHistory(
+      userId,
+      params.data.contactId,
+    );
+    res.json(
+      GetContactEmailHistoryResponse.parse(
+        history.map((email) => ({
+          id: email.id,
+          campaignId: email.campaignId,
+          campaignName: email.campaignName,
+          subject: email.subject,
+          status: email.status,
+          attempts: email.attempts,
+          lastAttemptAt: email.lastAttemptAt,
+          deliveredAt: email.deliveredAt,
+        })),
+      ),
+    );
+  },
+);
 
 router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const parsed = CreateContactBody.safeParse(normalizedContactInput(req.body));

@@ -7,16 +7,18 @@ import {
   ShieldCheck, Trash2, Users, X,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
+import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import {
   getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetCampaignDashboard, useGetTenantSendingSettings,
-  useListCampaigns, useListContactLists, useListContacts, useSendCampaign,
+  useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, useSendCampaign,
   useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
-  CampaignDashboard, CampaignSummary, Contact, ContactList, TenantSendingSettings, TenantSendingSettingsInput,
+  CampaignDashboard, CampaignSummary, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList,
+  TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -163,13 +165,35 @@ export function SendingSettingsPage() {
 type ContactForm = { email: string; firstName: string; lastName: string; companyName: string; linkedinUrl: string; phoneNumber: string; subscribed: boolean; listIds: string[] };
 const emptyContact: ContactForm = { email: '', firstName: '', lastName: '', companyName: '', linkedinUrl: '', phoneNumber: '', subscribed: true, listIds: [] };
 
+function emailStatusTone(status: ContactEmailHistoryItem['status']): 'blue' | 'green' | 'orange' | 'gray' {
+  if (status === 'delivered') return 'green';
+  if (status === 'bounced') return 'orange';
+  if (status === 'queued' || status === 'sending') return 'blue';
+  return 'gray';
+}
+
+function ContactEmailHistoryDialog({ contact, close }: { contact: Contact; close: () => void }) {
+  const query = useGetContactEmailHistory(contact.id);
+  return <Modal wide title="Email history" subtitle={`Campaign emails sent to ${contact.email}.`} close={close}>
+    {query.isLoading ? <div aria-label="Loading email history" className="space-y-3"><div className="h-20 animate-pulse rounded-md bg-[#edf0f3]"/><div className="h-20 animate-pulse rounded-md bg-[#f1f3f5]"/></div>
+      : query.isError ? <div role="alert" className="flex items-center justify-between gap-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4"><p className="text-[12px] text-[#99501e]">We couldn’t load this contact’s email history.</p><Button variant="outline" testId="button-retry-contact-email-history" onClick={() => void query.refetch()}>Retry</Button></div>
+      : query.data?.length ? <ol data-testid="list-contact-email-history" className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">{query.data.map((email: ContactEmailHistoryItem) => <li key={email.id} data-testid={`item-contact-email-history-${email.id}`} className="rounded-lg border border-[#e5e9ed] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-[13px] font-semibold text-[#26364a]">{email.campaignName}</div><div className="mt-1 break-words text-[12px] text-[#697687]">{email.subject}</div></div><Status tone={emailStatusTone(email.status)}>{email.status}</Status></div>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-[#edf0f2] pt-3 text-[11px] text-[#788392]"><span>Last attempt: {formatDate(email.lastAttemptAt)}</span><span>{email.attempts} {email.attempts === 1 ? 'attempt' : 'attempts'}</span>{email.deliveredAt && <span>Delivered: {formatDate(email.deliveredAt)}</span>}</div>
+      </li>)}</ol>
+      : <div data-testid="empty-contact-email-history" className="rounded-lg border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-10 text-center"><Mail className="mx-auto h-5 w-5 text-[#557399]"/><div className="mt-3 text-[14px] font-semibold text-[#26364a]">No email history yet</div><p className="mt-1 text-[12px] text-[#738091]">No campaign emails have been attempted for this contact.</p></div>}
+  </Modal>;
+}
+
 export function ContactsPage() {
-  const contactsQuery = useListContacts();
+  const contactsQuery = useListContacts({ query: { queryKey: getListContactsQueryKey(), refetchInterval: 30_000 } });
   const listsQuery = useListContactLists();
   const create = useCreateContact(); const update = useUpdateContact(); const remove = useDeleteContact();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [search, setSearch] = useState(''); const [filter, setFilter] = useState('all');
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
+  const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const contacts = contactsQuery.data?.contacts ?? [];
   const lists = (listsQuery.data || []) as ContactList[];
   const visible = useMemo(() => contacts.filter(c => {
@@ -195,9 +219,13 @@ export function ContactsPage() {
       create.mutate({ data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, ...(companyName ? { companyName } : {}), ...(linkedinUrl ? { linkedinUrl } : {}), ...(phoneNumber ? { phoneNumber } : {}) } }, { onSuccess: done, onError: failed });
     }
   };
-  const deleteContact = (contact: Contact) => {
-    if (!window.confirm(`Delete ${contact.email} from this workspace?`)) return;
-    remove.mutate({ contactId: contact.id }, { onSuccess: () => { reload(); setNotice({ kind: 'success', text: 'Contact deleted.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
+  const confirmDeleteContact = () => {
+    if (!contactToDelete) return;
+    const contact = contactToDelete;
+    remove.mutate({ contactId: contact.id }, {
+      onSuccess: () => { setContactToDelete(null); reload(); setNotice({ kind: 'success', text: 'Contact deleted.' }); },
+      onError: error => { setContactToDelete(null); setNotice({ kind: 'error', text: mutationError(error) }); },
+    });
   };
   const toggleSub = (contact: Contact) => update.mutate({ contactId: contact.id, data: { subscribed: !contact.subscribed } }, { onSuccess: () => { reload(); setNotice({ kind: 'success', text: contact.subscribed ? 'Contact unsubscribed.' : 'Contact subscribed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
   const busy = create.isPending || update.isPending;
@@ -217,12 +245,13 @@ export function ContactsPage() {
           <select data-testid="select-contact-status-filter" className={`${inputClass} w-auto min-w-[135px]`} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="subscribed">Subscribed</option><option value="unsubscribed">Unsubscribed</option></select>
         </div>
       </div>
-      {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
+       {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
         <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span><span className="block text-[12px] font-semibold text-[#26364a]">{contact.firstName} {contact.lastName}</span><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span>{(contact.companyName || contact.phoneNumber || contact.linkedinUrl) && <span data-testid={`text-contact-details-${contact.id}`} className="mt-0.5 block text-[11px] text-[#7c8794]">{[contact.companyName, contact.phoneNumber].filter(Boolean).join(' · ')}{contact.linkedinUrl && <>{(contact.companyName || contact.phoneNumber) ? ' · ' : ''}{/^https?:\/\//i.test(contact.linkedinUrl) ? <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-[#245b9b] hover:underline">LinkedIn</a> : contact.linkedinUrl}</>}</span>}</span></div></td>
         <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{contact.listIds.length ? contact.listIds.map(id => <span key={id} className="rounded bg-[#f1f4f7] px-2 py-1 text-[10px] text-[#5f6e7f]">{lists.find(l => l.id === id)?.name || 'List'}</span>) : <span className="text-[11px] text-[#9aa3ad]">No list</span>}</div></td>
         <td className="px-4 py-3.5"><button data-testid={`button-toggle-subscription-${contact.id}`} disabled={update.isPending} onClick={() => toggleSub(contact)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#dbe8f7] disabled:opacity-60"><Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status></button></td>
+         <td className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.subject}>{contact.lastEmail.subject}</div><div className="mt-1 truncate text-[10px] text-[#7c8794]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div className="mt-1.5 flex flex-wrap items-center gap-2"><Status tone={emailStatusTone(contact.lastEmail.status)}>{contact.lastEmail.status}</Status><span className="text-[10px] text-[#87919d]">{formatDate(contact.lastEmail.lastAttemptAt)}</span></div></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
-        <td className="px-5 py-3.5"><div className="flex justify-end gap-1"><Button variant="quiet" testId={`button-edit-contact-${contact.id}`} onClick={() => openEdit(contact)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-contact-${contact.id}`} onClick={() => deleteContact(contact)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/></Button></div></td>
+         <td className="px-5 py-3.5"><div className="flex justify-end gap-1"><Button variant="quiet" testId={`button-contact-history-${contact.id}`} onClick={() => setHistoryContact(contact)}><Clock3 className="h-3.5 w-3.5"/>History</Button><Button variant="quiet" testId={`button-edit-contact-${contact.id}`} onClick={() => openEdit(contact)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-contact-${contact.id}`} disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div></td>
       </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={search || filter !== 'all' ? 'No matching contacts' : 'Your audience starts here'} detail={search || filter !== 'all' ? 'Try a different search or status filter.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={!contacts.length ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
     </section>
     {editing !== undefined && <Modal title={editing ? 'Edit contact' : 'Add contact'} subtitle="Contact details and list memberships for this workspace." close={() => setEditing(undefined)}>
@@ -236,6 +265,17 @@ export function ContactsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-contact" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-contact" disabled={busy}>{busy && <LoaderCircle className="h-4 w-4 animate-spin"/>}{busy ? 'Saving contact' : editing ? 'Save changes' : 'Add contact'}</Button></div>
       </form>
     </Modal>}
+     {historyContact && <ContactEmailHistoryDialog contact={historyContact} close={() => setHistoryContact(null)}/>}
+     <ConfirmActionDialog
+       open={Boolean(contactToDelete)}
+       title="Delete this contact?"
+       description={contactToDelete ? `Delete ${contactToDelete.email} from this workspace? It will be removed from its lists, and past delivery records will no longer be linked to this contact.` : ''}
+       confirmLabel="Delete contact"
+       pending={remove.isPending}
+       onOpenChange={open => { if (!open && !remove.isPending) setContactToDelete(null); }}
+       onConfirm={confirmDeleteContact}
+       testId="dialog-delete-contact"
+     />
     {importing && <ContactImportDialog onClose={() => setImporting(false)} onChanged={reload}/>}
   </></QueryState>;
 }
@@ -245,6 +285,7 @@ export function ListsPage() {
   const create = useCreateContactList(); const update = useUpdateContactList(); const remove = useDeleteContactList();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<ContactList | null | undefined>(undefined); const [name, setName] = useState('');
+  const [listToDelete, setListToDelete] = useState<ContactList | null>(null);
   const lists = (query.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts ?? [];
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
@@ -256,9 +297,13 @@ export function ListsPage() {
     else create.mutate({ data: { name: name.trim() } }, { onSuccess: success, onError: fail });
   };
   const toggle = (list: ContactList) => update.mutate({ listId: list.id, data: { active: !list.active } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: list.active ? 'List deactivated.' : 'List activated and available for campaigns.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
-  const del = (list: ContactList) => {
-    if (!window.confirm(`Delete the list “${list.name}”? Contacts will remain in your workspace.`)) return;
-    remove.mutate({ listId: list.id }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'List deleted. Contacts remain in the workspace.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
+  const confirmDeleteList = () => {
+    if (!listToDelete) return;
+    const list = listToDelete;
+    remove.mutate({ listId: list.id }, {
+      onSuccess: () => { setListToDelete(null); refresh(); setNotice({ kind: 'success', text: 'List deleted. Contacts remain in the workspace.' }); },
+      onError: error => { setListToDelete(null); setNotice({ kind: 'error', text: mutationError(error) }); },
+    });
   };
   const openCreate = () => { setEditing(null); setName(''); };
   return <QueryState loading={query.isLoading || contactsQuery.isLoading} error={query.isError || contactsQuery.isError} retry={() => { void query.refetch(); void contactsQuery.refetch(); }} label="contact lists"><>
@@ -272,7 +317,7 @@ export function ListsPage() {
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#edf4fc] text-[#245b9b]"><Users className="h-5 w-5"/></div>
           <div className="min-w-[180px] flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="display text-[18px] font-bold text-[#1c2b3d]">{list.name}</h2><Status tone={list.active ? 'green' : 'gray'}>{list.active ? 'Active' : 'Inactive'}</Status></div><p className="mt-1 text-[11px] text-[#7c8794]">Created {new Date(list.createdAt).toLocaleDateString()} · updated {new Date(list.updatedAt).toLocaleDateString()}</p></div>
           <div className="min-w-[125px] rounded-md bg-[#f7f9fb] px-3 py-2"><div className="text-[10px] text-[#7e8996]">Contacts</div><div className="mt-0.5 text-[16px] font-bold text-[#26364a]">{memberCount.toLocaleString()} <span className="text-[10px] font-normal text-[#84909d]">members</span></div></div>
-          <div className="flex w-full gap-2 sm:w-auto"><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} onClick={() => del(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/></Button></div>
+           <div className="flex w-full gap-2 sm:w-auto"><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} disabled={remove.isPending} onClick={() => setListToDelete(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div>
         </div>
         <div className="flex items-center justify-between border-t border-[#edf0f2] bg-[#fcfcfd] px-5 py-2.5"><span className="mono text-[9px] tracking-[.1em] text-[#9aa3ad]">LIST {String(index + 1).padStart(2, '0')}</span><span className="text-[10px] text-[#87919d]">{list.active ? 'Available for campaign targeting' : 'Hidden from campaign queueing'}</span></div>
       </section>;
@@ -282,6 +327,16 @@ export function ListsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-list" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-list" disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save list' : 'Create list'}</Button></div>
       </form>
     </Modal>}
+     <ConfirmActionDialog
+       open={Boolean(listToDelete)}
+       title="Delete this contact list?"
+       description={listToDelete ? `Delete “${listToDelete.name}”? Contacts will remain in your workspace but will no longer belong to this list.` : ''}
+       confirmLabel="Delete list"
+       pending={remove.isPending}
+       onOpenChange={open => { if (!open && !remove.isPending) setListToDelete(null); }}
+       onConfirm={confirmDeleteList}
+       testId="dialog-delete-contact-list"
+     />
   </></QueryState>;
 }
 
@@ -294,6 +349,7 @@ export function CampaignsPage() {
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const [pendingAction, setPendingAction] = useState<{ kind: 'queue' | 'delete'; campaign: CampaignSummary } | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
   const activeLists = lists.filter(list => list.active);
@@ -308,13 +364,22 @@ export function CampaignsPage() {
     if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
     else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
   };
-  const queue = (campaign: CampaignSummary) => {
-    if (!window.confirm(`Queue “${campaign.name}” for ${campaign.recipients} recipients?`)) return;
-    send.mutate({ campaignId: campaign.id }, { onSuccess: response => { refresh(); setNotice({ kind: 'success', text: response.status === 'queued' ? 'Campaign queued for delivery.' : `Campaign status: ${response.status}.` }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
-  };
-  const del = (campaign: CampaignSummary) => {
-    if (!window.confirm(`Delete the draft “${campaign.name}”?`)) return;
-    remove.mutate({ campaignId: campaign.id }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign draft deleted.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
+  const queue = (campaign: CampaignSummary) => setPendingAction({ kind: 'queue', campaign });
+  const del = (campaign: CampaignSummary) => setPendingAction({ kind: 'delete', campaign });
+  const confirmCampaignAction = () => {
+    if (!pendingAction) return;
+    const action = pendingAction;
+    if (action.kind === 'queue') {
+      send.mutate({ campaignId: action.campaign.id }, {
+        onSuccess: response => { setPendingAction(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.status === 'queued' ? 'Campaign queued for delivery.' : `Campaign status: ${response.status}.` }); },
+        onError: error => { setPendingAction(null); setNotice({ kind: 'error', text: mutationError(error) }); },
+      });
+    } else {
+      remove.mutate({ campaignId: action.campaign.id }, {
+        onSuccess: () => { setPendingAction(null); refresh(); setNotice({ kind: 'success', text: 'Campaign draft deleted.' }); },
+        onError: error => { setPendingAction(null); setNotice({ kind: 'error', text: mutationError(error) }); },
+      });
+    }
   };
   const statusTone = (status: CampaignSummary['status']) => status === 'completed' ? 'green' : status === 'queued' || status === 'sending' ? 'blue' : 'gray';
   const totalDelivered = campaigns.reduce((sum, campaign) => sum + campaign.delivered, 0);
@@ -332,7 +397,7 @@ export function CampaignsPage() {
         <td className="px-4 py-4"><Status tone={statusTone(campaign.status)}>{campaign.status}</Status></td>
          <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} delivered</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} bounced</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">{campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
         <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]">{campaign.queuedAt ? <><span className="block">Queued {formatDate(campaign.queuedAt)}</span>{campaign.completedAt && <span className="block">Finished {formatDate(campaign.completedAt)}</span>}</> : 'Not queued'}</td>
-        <td className="px-5 py-4"><div className="flex justify-end gap-1">{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !campaign.listId || !lists.some(l => l.id === campaign.listId && l.active)}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/></Button></>}</div></td>
+         <td className="px-5 py-4"><div className="flex justify-end gap-1">{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !campaign.listId || !lists.some(l => l.id === campaign.listId && l.active)}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
       </tr>)}</tbody></table></div>
     </section> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Queueing starts delivery to subscribed contacts in the selected list." close={() => setEditing(undefined)}>
@@ -344,6 +409,19 @@ export function CampaignsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || !activeLists.length}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>
     </Modal>}
+     <ConfirmActionDialog
+       open={Boolean(pendingAction)}
+       title={pendingAction?.kind === 'queue' ? 'Queue this campaign?' : 'Delete this draft?'}
+       description={pendingAction?.kind === 'queue'
+         ? `Start sending “${pendingAction.campaign.name}” to ${pendingAction.campaign.recipients} eligible recipients in its selected list.`
+         : pendingAction ? `Permanently delete the draft “${pendingAction.campaign.name}”? This cannot be undone.` : ''}
+       confirmLabel={pendingAction?.kind === 'queue' ? 'Queue campaign' : 'Delete draft'}
+       destructive={pendingAction?.kind !== 'queue'}
+       pending={send.isPending || remove.isPending}
+       onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) setPendingAction(null); }}
+       onConfirm={confirmCampaignAction}
+       testId="dialog-campaign-action"
+     />
   </></QueryState>;
 }
 

@@ -314,11 +314,13 @@ export const TestTenantSendingSettingsResponse = zod.object({
 /**
  * @summary List contacts and quota for the authenticated tenant
  */
-export const listContactsResponseContactsItemCompanyNameMax = 200;
+export const listContactsResponseContactsItemOneCompanyNameMax = 200;
 
-export const listContactsResponseContactsItemLinkedinUrlMax = 2048;
+export const listContactsResponseContactsItemOneLinkedinUrlMax = 2048;
 
-export const listContactsResponseContactsItemPhoneNumberMax = 40;
+export const listContactsResponseContactsItemOnePhoneNumberMax = 40;
+
+export const listContactsResponseContactsItemTwoLastEmailOneAttemptsMin = 0;
 
 export const listContactsResponseQuotaUsedMin = 0;
 
@@ -336,14 +338,25 @@ export const ListContactsResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "companyName": zod.string().max(listContactsResponseContactsItemCompanyNameMax).nullish(),
-  "linkedinUrl": zod.string().max(listContactsResponseContactsItemLinkedinUrlMax).nullish(),
-  "phoneNumber": zod.string().max(listContactsResponseContactsItemPhoneNumberMax).nullish(),
+  "companyName": zod.string().max(listContactsResponseContactsItemOneCompanyNameMax).nullish(),
+  "linkedinUrl": zod.string().max(listContactsResponseContactsItemOneLinkedinUrlMax).nullish(),
+  "phoneNumber": zod.string().max(listContactsResponseContactsItemOnePhoneNumberMax).nullish(),
   "subscribed": zod.boolean(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "lastEmail": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "campaignId": zod.string().uuid(),
+  "campaignName": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
+  "attempts": zod.number().int().min(listContactsResponseContactsItemTwoLastEmailOneAttemptsMin),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "deliveredAt": zod.coerce.date().nullable()
+}),zod.null()])
+}))),
   "quota": zod.object({
   "used": zod.number().int().min(listContactsResponseQuotaUsedMin),
   "limit": zod.number().int().min(listContactsResponseQuotaLimitMin),
@@ -575,6 +588,30 @@ export const DeleteContactParams = zod.object({
 })
 
 export const DeleteContactResponse = zod.void()
+
+
+/**
+ * @summary List attempted campaign emails for a tenant contact
+ */
+export const GetContactEmailHistoryParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const getContactEmailHistoryResponseAttemptsMin = 0;
+
+
+
+export const GetContactEmailHistoryResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "campaignId": zod.string().uuid(),
+  "campaignName": zod.string(),
+  "subject": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
+  "attempts": zod.number().int().min(getContactEmailHistoryResponseAttemptsMin),
+  "lastAttemptAt": zod.coerce.date().nullable(),
+  "deliveredAt": zod.coerce.date().nullable()
+})
+export const GetContactEmailHistoryResponse = zod.array(GetContactEmailHistoryResponseItem)
 
 
 /**

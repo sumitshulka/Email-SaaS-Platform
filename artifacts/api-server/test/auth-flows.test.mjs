@@ -1643,6 +1643,52 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(finalCampaign.queued, 0);
     assert.equal(tenantDeliveries.filter((message) => message.subject === "A workspace update").length, 2);
 
+    const recipientOutcomes = await db
+      .select({
+        contactId: dbModule.emailCampaignRecipientsTable.contactId,
+        status: dbModule.emailCampaignRecipientsTable.status,
+      })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id));
+    const deliveredRecipient = recipientOutcomes.find((item) => item.status === "delivered");
+    const bouncedRecipient = recipientOutcomes.find((item) => item.status === "bounced");
+    const contactsWithHistory = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(contactsWithHistory.response.status, 200);
+    const contactById = new Map(
+      contactsWithHistory.body.contacts.map((contact) => [contact.id, contact]),
+    );
+    assert.equal(contactById.get(deliveredRecipient.contactId).lastEmail.status, "delivered");
+    assert.equal(contactById.get(bouncedRecipient.contactId).lastEmail.status, "bounced");
+    assert.ok(contactById.get(deliveredRecipient.contactId).lastEmail.lastAttemptAt);
+    assert.equal(contactById.get(ownerContacts[2].body.id).lastEmail, null);
+
+    const deliveredHistory = await api(
+      `/contacts/${deliveredRecipient.contactId}/email-history`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(deliveredHistory.response.status, 200);
+    assert.equal(deliveredHistory.body.length, 1);
+    assert.equal(deliveredHistory.body[0].status, "delivered");
+    assert.equal(deliveredHistory.body[0].campaignName, "Owner campaign");
+    assert.ok(deliveredHistory.body[0].lastAttemptAt);
+    const bouncedHistory = await api(
+      `/contacts/${bouncedRecipient.contactId}/email-history`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(bouncedHistory.response.status, 200);
+    assert.equal(bouncedHistory.body[0].status, "bounced");
+    assert.equal(bouncedHistory.body[0].subject, "A workspace update");
+    const noEmailHistory = await api(
+      `/contacts/${ownerContacts[2].body.id}/email-history`,
+      { cookie: owner.cookie },
+    );
+    assert.deepEqual(noEmailHistory.body, []);
+    const crossTenantHistory = await api(
+      `/contacts/${otherContact.body.id}/email-history`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(crossTenantHistory.response.status, 404);
+
     const ownerDashboard = await api("/dashboard", { cookie: owner.cookie });
     const otherDashboard = await api("/dashboard", { cookie: other.cookie });
     assert.equal(ownerDashboard.response.status, 200);

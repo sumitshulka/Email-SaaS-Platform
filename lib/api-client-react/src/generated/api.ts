@@ -36,6 +36,7 @@ import type {
   Contact,
   ContactCollection,
   ContactCsvInput,
+  ContactEmailHistoryItem,
   ContactImportInput,
   ContactImportResponse,
   ContactImportResult,
@@ -1692,6 +1693,83 @@ export const useDeleteContact = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getDeleteContactMutationOptions(options));
     }
+
+export const getGetContactEmailHistoryUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/email-history`
+}
+
+/**
+ * @summary List attempted campaign emails for a tenant contact
+ */
+export const getContactEmailHistory = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContactEmailHistoryItem[]> => {
+
+  return customFetch<ContactEmailHistoryItem[]>(getGetContactEmailHistoryUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactEmailHistoryQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/email-history`
+    ] as const;
+    }
+
+
+export const getGetContactEmailHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getContactEmailHistory>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactEmailHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactEmailHistoryQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactEmailHistory>>> = ({ signal }) => getContactEmailHistory(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactEmailHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactEmailHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getContactEmailHistory>>>
+export type GetContactEmailHistoryQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List attempted campaign emails for a tenant contact
+ */
+
+export function useGetContactEmailHistory<TData = Awaited<ReturnType<typeof getContactEmailHistory>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactEmailHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactEmailHistoryQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListContactListsUrl = () => {
 
