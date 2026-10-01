@@ -28,6 +28,7 @@ import type {
   ApplicationEmailSettingsInput,
   AuthResponse,
   AuthUser,
+  CampaignDashboard,
   CampaignInput,
   CampaignSummary,
   CampaignUpdate,
@@ -2184,6 +2185,83 @@ export const useCreateCampaign = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getCreateCampaignMutationOptions(options));
     }
+
+export const getGetCampaignDashboardUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}`
+}
+
+/**
+ * @summary Get campaign performance, target-list breakdown, and pacing estimate
+ */
+export const getCampaignDashboard = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignDashboard> => {
+
+  return customFetch<CampaignDashboard>(getGetCampaignDashboardUrl(campaignId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignDashboardQueryKey = (campaignId: string,) => {
+    return [
+    `/api/campaigns/${campaignId}`
+    ] as const;
+    }
+
+
+export const getGetCampaignDashboardQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignDashboard>>, TError = ErrorType<ApiError>>(campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignDashboardQueryKey(campaignId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignDashboard>>> = ({ signal }) => getCampaignDashboard(campaignId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: campaignId !== null && campaignId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignDashboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignDashboardQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignDashboard>>>
+export type GetCampaignDashboardQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get campaign performance, target-list breakdown, and pacing estimate
+ */
+
+export function useGetCampaignDashboard<TData = Awaited<ReturnType<typeof getCampaignDashboard>>, TError = ErrorType<ApiError>>(
+ campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignDashboardQueryOptions(campaignId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateCampaignUrl = (campaignId: string,) => {
 

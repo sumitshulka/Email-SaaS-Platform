@@ -600,6 +600,23 @@ paths:
         schema:
           type: string
           format: uuid
+    get:
+      operationId: getCampaignDashboard
+      tags: [sending]
+      summary: Get campaign performance, target-list breakdown, and pacing estimate
+      responses:
+        "200":
+          description: Campaign dashboard with its target list and estimated send schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignDashboard"
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     patch:
       operationId: updateCampaign
       tags: [sending]
@@ -1332,6 +1349,7 @@ components:
         listId: { type: ["string", "null"], format: uuid }
         status: { type: string, enum: [draft, queued, sending, completed] }
         recipients: { type: integer }
+        estimatedDurationSeconds: { type: integer }
         queued: { type: integer }
         delivered: { type: integer }
         bounced: { type: integer }
@@ -1341,7 +1359,40 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, subject, textBody, listId, status, recipients, queued, delivered, bounced, suppressed, unknown, queuedAt, completedAt, createdAt, updatedAt]
+      required: [id, name, subject, textBody, listId, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, completedAt, createdAt, updatedAt]
+    CampaignDashboard:
+      type: object
+      properties:
+        campaign:
+          $ref: "#/components/schemas/CampaignSummary"
+        targetList:
+          oneOf:
+            - $ref: "#/components/schemas/CampaignTargetList"
+            - type: "null"
+        pacing:
+          $ref: "#/components/schemas/CampaignPacing"
+      required: [campaign, targetList, pacing]
+    CampaignTargetList:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        active: { type: boolean }
+        totalContacts: { type: integer }
+        eligibleContacts: { type: integer }
+        unsubscribedContacts: { type: integer }
+      required: [id, name, active, totalContacts, eligibleContacts, unsubscribedContacts]
+    CampaignPacing:
+      type: object
+      properties:
+        emailsPerHour: { type: integer }
+        emailsPerDay: { type: integer }
+        maxCampaignSize: { type: integer }
+        minimumSpacingSeconds: { type: integer }
+        remainingEmails: { type: integer }
+        estimatedDurationSeconds: { type: integer }
+        estimatedCompletionAt: { type: ["string", "null"], format: date-time }
+      required: [emailsPerHour, emailsPerDay, maxCampaignSize, minimumSpacingSeconds, remainingEmails, estimatedDurationSeconds, estimatedCompletionAt]
     CampaignInput:
       type: object
       properties:

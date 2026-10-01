@@ -1551,6 +1551,17 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       },
     });
     assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+    assert.equal(campaign.body.recipients, 3);
+    assert.equal(campaign.body.estimatedDurationSeconds, 108);
+    const draftDashboard = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(draftDashboard.response.status, 200, JSON.stringify(draftDashboard.body));
+    assert.equal(draftDashboard.body.targetList.name, ownerList.body.name);
+    assert.equal(draftDashboard.body.targetList.totalContacts, 3);
+    assert.equal(draftDashboard.body.targetList.eligibleContacts, 3);
+    assert.equal(draftDashboard.body.pacing.remainingEmails, 3);
+    assert.equal(draftDashboard.body.pacing.minimumSpacingSeconds, 36);
 
     await db.insert(dbModule.systemConfigurationTable).values({
       key: "platform",
@@ -1562,6 +1573,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     });
     assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
     assert.equal(queued.body.recipients, 3);
+    const queuedDashboard = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(queuedDashboard.body.pacing.emailsPerHour, 1);
+    assert.equal(queuedDashboard.body.pacing.remainingEmails, 3);
     const unsubscribed = await api(`/contacts/${ownerContacts[2].body.id}`, {
       method: "PATCH",
       cookie: owner.cookie,
@@ -1577,11 +1593,26 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(partialCampaign.queued, 1);
     assert.equal(partialCampaign.suppressed, 1);
     assert.equal(partialCampaign.status, "sending");
+    const progressDashboard = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(progressDashboard.body.pacing.remainingEmails, 1);
+    assert.ok(progressDashboard.body.pacing.estimatedDurationSeconds >= 3600);
 
     await db
       .update(dbModule.systemConfigurationTable)
       .set({ value: { defaultEmailsPerHour: 100, maxEmailsPerDay: 10 } })
       .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+      .where(eq(dbModule.emailCampaignRecipientsTable.status, "queued"));
+    const pacedBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
+    assert.equal(pacedBatch, 0, "a raised hourly cap must not send before the minimum spacing interval");
+    await db
+      .update(dbModule.emailSendAttemptsTable)
+      .set({ attemptedAt: new Date(Date.now() - 60_000) })
+      .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
     await db
       .update(dbModule.emailCampaignRecipientsTable)
       .set({ nextAttemptAt: new Date(Date.now() - 1000) })

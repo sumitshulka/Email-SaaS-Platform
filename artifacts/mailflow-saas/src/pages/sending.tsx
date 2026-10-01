@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import {
-  Activity, AlertCircle, Check, CheckCircle2, CirclePlus, Clock3,
+  Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, CirclePlus, Clock3,
   Edit3, Fingerprint, LoaderCircle, Upload, Mail, Search, Send,
   ShieldCheck, Trash2, Users, X,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import {
-  getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
+  getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetTenantSendingSettings,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetCampaignDashboard, useGetTenantSendingSettings,
   useListCampaigns, useListContactLists, useListContacts, useSendCampaign,
   useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
-  CampaignSummary, Contact, ContactList, TenantSendingSettings, TenantSendingSettingsInput,
+  CampaignDashboard, CampaignSummary, Contact, ContactList, TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -288,11 +289,11 @@ type CampaignForm = { name: string; subject: string; textBody: string; listId: s
 const blankCampaign: CampaignForm = { name: '', subject: '', textBody: '', listId: '' };
 
 export function CampaignsPage() {
+  const [, setLocation] = useLocation();
   const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
-  const [detail, setDetail] = useState<CampaignSummary | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
   const activeLists = lists.filter(list => list.active);
@@ -326,8 +327,8 @@ export function CampaignsPage() {
     {campaigns.length ? <section className={panelClass}>
       <div className="flex items-center justify-between border-b border-[#e9edf0] px-4 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign activity</h2><p className="mt-1 text-[11px] text-[#788392]">Queue timestamps and final delivery counts from your workspace.</p></div><span className="mono hidden text-[9px] tracking-[.12em] text-[#9aa3ad] sm:block"><Activity className="mr-1 inline h-3.5 w-3.5"/>DELIVERY LOG</span></div>
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Queued / completed</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaigns.map(campaign => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
-        <td className="max-w-[240px] px-5 py-4"><button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setDetail(campaign)} className="text-left"><span className="block truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></td>
-        <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{lists.find(l => l.id === campaign.listId)?.name || 'Removed list'}</span><span className="mt-1 text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} recipients</span></td>
+        <td className="max-w-[240px] px-5 py-4"><button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="text-left"><span className="block truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></td>
+        <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{lists.find(l => l.id === campaign.listId)?.name || 'Removed list'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
         <td className="px-4 py-4"><Status tone={statusTone(campaign.status)}>{campaign.status}</Status></td>
          <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} delivered</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} bounced</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">{campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
         <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]">{campaign.queuedAt ? <><span className="block">Queued {formatDate(campaign.queuedAt)}</span>{campaign.completedAt && <span className="block">Finished {formatDate(campaign.completedAt)}</span>}</> : 'Not queued'}</td>
@@ -343,12 +344,106 @@ export function CampaignsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || !activeLists.length}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>
     </Modal>}
-    {detail && <Modal wide title={detail.name} subtitle="Campaign content and persisted delivery outcome." close={() => setDetail(null)}>
-      <div className="mb-4 flex flex-wrap items-center gap-3"><Status tone={statusTone(detail.status)}>{detail.status}</Status><span className="text-[11px] text-[#778291]">Audience: {lists.find(l => l.id === detail.listId)?.name || 'Removed list'}</span></div>
-       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[['Recipients', detail.recipients], ['Delivered', detail.delivered], ['Bounced', detail.bounced], ['Suppressed', detail.suppressed], ['Unknown', detail.unknown]].map(([label, value]) => <div key={label} className="rounded-md bg-[#f7f9fb] p-3"><div className="text-[10px] text-[#7a8795]">{label}</div><div className="mt-1 text-[17px] font-bold text-[#26364a]">{Number(value).toLocaleString()}</div></div>)}</div>
-      <div className="mt-4 rounded-md border border-[#e4e8ed] p-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Subject</div><p className="mt-1 text-[13px] font-semibold text-[#29384a]">{detail.subject}</p><div className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text body</div><pre className="mt-2 max-h-[260px] overflow-auto whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#566476]">{detail.textBody}</pre></div>
-      <div className="mt-4 flex flex-wrap gap-5 text-[10px] text-[#7c8794]"><span>Queued: {formatDate(detail.queuedAt)}</span><span>Completed: {formatDate(detail.completedAt)}</span></div>
-      <div className="mt-5 flex justify-end"><Button variant="outline" testId="button-close-campaign-details" onClick={() => setDetail(null)}>Close</Button></div>
-    </Modal>}
   </></QueryState>;
+}
+
+function formatDeliveryDuration(seconds: number) {
+  if (seconds <= 0) return 'Under a minute';
+  if (seconds < 60) return `${seconds} sec`;
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours < 24) return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours ? `${days} day ${remainingHours} hr` : `${days} day`;
+}
+
+export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
+  const [, setLocation] = useLocation();
+  const query = useGetCampaignDashboard(campaignId, {
+    query: {
+      queryKey: getGetCampaignDashboardQueryKey(campaignId),
+      refetchInterval: 10_000,
+    },
+  });
+  const dashboard = query.data as CampaignDashboard | undefined;
+
+  return <QueryState loading={query.isLoading} error={query.isError} retry={() => { void query.refetch(); }} label="campaign dashboard">
+    {dashboard && (() => {
+      const { campaign, targetList, pacing } = dashboard;
+      const resolved = campaign.delivered + campaign.bounced + campaign.suppressed + campaign.unknown;
+      const progress = campaign.recipients > 0 ? Math.min(100, Math.round((resolved / campaign.recipients) * 100)) : 0;
+      const statusTone = campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
+      const metrics = [
+        { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? 'Currently eligible in this list' : 'Captured when queued' },
+        { label: 'Delivered', value: campaign.delivered, detail: 'Accepted by SMTP provider' },
+        { label: 'Bounced', value: campaign.bounced, detail: 'Rejected or failed delivery' },
+        { label: 'Suppressed', value: campaign.suppressed, detail: 'Unsubscribed or removed' },
+        { label: 'Still queued', value: pacing.remainingEmails, detail: campaign.status === 'draft' ? 'Will be queued when sent' : 'Waiting for paced delivery' },
+      ];
+
+      return <>
+        <div className="mb-5">
+          <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
+        </div>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{campaign.status}</Status>}/>
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`}>
+            <div className="text-[11px] text-[#778291]">{metric.label}</div>
+            <div className="display mt-2 text-[25px] font-bold text-[#192638]">{metric.value.toLocaleString()}</div>
+            <div className="mt-1 text-[10px] text-[#8a95a1]">{metric.detail}</div>
+          </div>)}
+        </div>
+
+        <div className="mb-5 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+          <section className={`${panelClass} p-5`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery pacing</h2><p className="mt-1 text-[11px] text-[#788392]">Based on the workspace limits set by the superadmin.</p></div>
+              <Clock3 className="h-5 w-5 text-[#245b9b]"/>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">Estimated time remaining</div><div className="mt-1 text-[20px] font-bold text-[#26364a]">{formatDeliveryDuration(pacing.estimatedDurationSeconds)}</div></div>
+              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">Estimated finish</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{campaign.status === 'completed' ? formatDate(campaign.completedAt) : pacing.estimatedCompletionAt ? formatDate(pacing.estimatedCompletionAt) : 'No emails waiting'}</div></div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div><div className="text-[10px] text-[#85909d]">Hourly cap</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerHour.toLocaleString()} emails/hour</div></div>
+              <div><div className="text-[10px] text-[#85909d]">Daily cap</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerDay.toLocaleString()} emails/day</div></div>
+              <div><div className="text-[10px] text-[#85909d]">Minimum spacing</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">One email every {formatDeliveryDuration(pacing.minimumSpacingSeconds)}</div></div>
+            </div>
+            {campaign.status === 'draft' && pacing.remainingEmails > pacing.maxCampaignSize && <div className="mt-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]"><AlertCircle className="mr-2 inline h-4 w-4"/>This audience exceeds the current maximum campaign size of {pacing.maxCampaignSize.toLocaleString()} emails, so it cannot be queued yet.</div>}
+            <p className="mt-4 border-t border-[#edf0f2] pt-3 text-[10px] leading-5 text-[#8993a0]">Estimate assumes no other campaigns use the sending allowance. Existing queued work and SMTP response times can make delivery take longer.</p>
+          </section>
+
+          <section className={`${panelClass} p-5`}>
+            <h2 className="display text-[17px] font-bold text-[#1b293a]">Target list</h2>
+            {targetList ? <>
+              <div className="mt-1 flex items-center gap-2 text-[12px] text-[#647183]"><Users className="h-4 w-4 text-[#245b9b]"/>{targetList.name}<Status tone={targetList.active ? 'green' : 'gray'}>{targetList.active ? 'active' : 'inactive'}</Status></div>
+              <div className="mt-5 grid grid-cols-3 gap-2">
+                {[['All contacts', targetList.totalContacts], ['Eligible', targetList.eligibleContacts], ['Unsubscribed', targetList.unsubscribedContacts]].map(([label, value]) => <div key={label} className="rounded-md bg-[#f7f9fb] p-3"><div className="text-[10px] text-[#7a8795]">{label}</div><div className="mt-1 text-[16px] font-bold text-[#26364a]">{Number(value).toLocaleString()}</div></div>)}
+              </div>
+              <p className="mt-4 text-[10px] leading-5 text-[#8993a0]">Only subscribed contacts in the selected list are eligible. The recipient total is fixed when a draft is queued.</p>
+            </> : <p className="mt-3 text-[12px] text-[#7b8794]">The campaign’s target list has been removed.</p>}
+          </section>
+        </div>
+
+        <section className={`${panelClass} mb-5 overflow-hidden`}>
+          <div className="flex items-center justify-between border-b border-[#e9edf0] px-5 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery progress</h2><p className="mt-1 text-[11px] text-[#788392]">{resolved.toLocaleString()} of {campaign.recipients.toLocaleString()} recipients resolved</p></div><span className="mono text-[11px] text-[#647183]">{progress}%</span></div>
+          <div className="px-5 py-4"><div className="h-2 overflow-hidden rounded-full bg-[#edf0f2]"><div className="h-full rounded-full bg-[#397050] transition-all" style={{ width: `${progress}%` }}/></div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-4">
+              {[['Delivered', campaign.delivered, '#397050'], ['Bounced', campaign.bounced, '#ae642c'], ['Suppressed', campaign.suppressed, '#66717e'], ['Unknown', campaign.unknown, '#8a65a2']].map(([label, value, color]) => <div key={label} className="flex items-center justify-between text-[11px]"><span className="text-[#778291]">{label}</span><span className="font-semibold" style={{ color: String(color) }}>{Number(value).toLocaleString()}</span></div>)}
+            </div>
+          </div>
+        </section>
+
+        <section className={`${panelClass} p-5`}>
+          <h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign message</h2>
+          <div className="mt-4 border-b border-[#edf0f2] pb-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Subject</div><p className="mt-1 text-[13px] font-semibold text-[#29384a]">{campaign.subject}</p></div>
+          <div className="pt-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text body</div><pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#566476]">{campaign.textBody}</pre></div>
+          <div className="mt-5 flex flex-wrap gap-5 border-t border-[#edf0f2] pt-4 text-[10px] text-[#7c8794]"><span>Created: {formatDate(campaign.createdAt)}</span><span>Queued: {formatDate(campaign.queuedAt)}</span><span>Completed: {formatDate(campaign.completedAt)}</span></div>
+        </section>
+      </>;
+    })()}
+  </QueryState>;
 }

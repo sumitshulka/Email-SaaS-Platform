@@ -478,6 +478,7 @@ export interface CampaignSummary {
   listId: string | null;
   status: CampaignSummaryStatus;
   recipients: number;
+  estimatedDurationSeconds: number;
   queued: number;
   delivered: number;
   bounced: number;
@@ -489,6 +490,32 @@ export interface CampaignSummary {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CampaignTargetList {
+  id: string;
+  name: string;
+  active: boolean;
+  totalContacts: number;
+  eligibleContacts: number;
+  unsubscribedContacts: number;
+}
+
+export interface CampaignPacing {
+  emailsPerHour: number;
+  emailsPerDay: number;
+  maxCampaignSize: number;
+  minimumSpacingSeconds: number;
+  remainingEmails: number;
+  estimatedDurationSeconds: number;
+  /** @nullable */
+  estimatedCompletionAt: string | null;
+}
+
+export interface CampaignDashboard {
+  campaign: CampaignSummary;
+  targetList: CampaignTargetList | null;
+  pacing: CampaignPacing;
 }
 
 export interface CampaignInput {

@@ -23,7 +23,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
 import AdminBillingPage from '@/pages/admin-billing';
-import { CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
+import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import PlansPage from '@/pages/plans';
 import NotFound from '@/pages/not-found';
 import './index.css';
@@ -506,6 +506,7 @@ function Routes() {
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/lists">{() => <RouteGate>{() => <ListsPage/>}</RouteGate>}</Route>
     <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage/>}</RouteGate>}</Route>
+    <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId}/>}</RouteGate>}</Route>
     <Route path="/admin">{() => <RouteGate admin>{() => <AdminDashboardPage/>}</RouteGate>}</Route>
     <Route path="/admin/users">{() => <RouteGate admin>{() => <AdminUsersPage/>}</RouteGate>}</Route>
     <Route path="/admin/billing">{() => <RouteGate admin>{() => <AdminBillingPage/>}</RouteGate>}</Route>

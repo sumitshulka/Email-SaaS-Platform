@@ -659,6 +659,7 @@ export const ListCampaignsResponseItem = zod.object({
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
   "delivered": zod.number().int(),
   "bounced": zod.number().int(),
@@ -698,6 +699,7 @@ export const CreateCampaignResponse = zod.object({
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
   "delivered": zod.number().int(),
   "bounced": zod.number().int(),
@@ -707,6 +709,53 @@ export const CreateCampaignResponse = zod.object({
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get campaign performance, target-list breakdown, and pacing estimate
+ */
+export const GetCampaignDashboardParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const GetCampaignDashboardResponse = zod.object({
+  "campaign": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "subject": zod.string(),
+  "textBody": zod.string(),
+  "listId": zod.string().uuid().nullable(),
+  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
+  "queued": zod.number().int(),
+  "delivered": zod.number().int(),
+  "bounced": zod.number().int(),
+  "suppressed": zod.number().int(),
+  "unknown": zod.number().int(),
+  "queuedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "targetList": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "active": zod.boolean(),
+  "totalContacts": zod.number().int(),
+  "eligibleContacts": zod.number().int(),
+  "unsubscribedContacts": zod.number().int()
+}),zod.null()]),
+  "pacing": zod.object({
+  "emailsPerHour": zod.number().int(),
+  "emailsPerDay": zod.number().int(),
+  "maxCampaignSize": zod.number().int(),
+  "minimumSpacingSeconds": zod.number().int(),
+  "remainingEmails": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
+  "estimatedCompletionAt": zod.coerce.date().nullable()
+})
 })
 
 
@@ -740,6 +789,7 @@ export const UpdateCampaignResponse = zod.object({
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
   "delivered": zod.number().int(),
   "bounced": zod.number().int(),
@@ -777,6 +827,7 @@ export const SendCampaignResponse = zod.object({
   "listId": zod.string().uuid().nullable(),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
   "delivered": zod.number().int(),
   "bounced": zod.number().int(),

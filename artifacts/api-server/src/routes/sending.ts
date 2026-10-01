@@ -18,6 +18,8 @@ import {
   CreateContactListBody,
   CreateContactListResponse,
   CreateContactResponse,
+  GetCampaignDashboardParams,
+  GetCampaignDashboardResponse,
   DeleteCampaignParams,
   DeleteCampaignResponse,
   DeleteContactListParams,
@@ -62,7 +64,11 @@ import {
 } from "@workspace/db";
 import { sendTenantEmail } from "../lib/application-email";
 import { encryptSecret } from "../lib/security";
-import { getPlatformSettings } from "../lib/platform-settings";
+import {
+  estimateCampaignDeliverySeconds,
+  getMinimumEmailSpacingSeconds,
+  getPlatformSettings,
+} from "../lib/platform-settings";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import { requireUserRole } from "../lib/session";
 
@@ -209,7 +215,7 @@ async function contactListPayloads(userId: string) {
 }
 
 async function campaignPayloads(userId: string) {
-  const [campaigns, recipients] = await Promise.all([
+  const [campaigns, recipients, eligibleByList, settings] = await Promise.all([
     db
       .select()
       .from(emailCampaignsTable)
@@ -222,7 +228,42 @@ async function campaignPayloads(userId: string) {
       })
       .from(emailCampaignRecipientsTable)
       .where(eq(emailCampaignRecipientsTable.userId, userId)),
+    db
+      .select({
+        listId: contactListMembersTable.listId,
+        value: count(),
+      })
+      .from(contactListMembersTable)
+      .innerJoin(
+        contactsTable,
+        and(
+          eq(contactsTable.id, contactListMembersTable.contactId),
+          eq(contactsTable.userId, contactListMembersTable.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          eq(contactsTable.subscribed, true),
+        ),
+      )
+      .groupBy(contactListMembersTable.listId),
+    getPlatformSettings(),
   ]);
+  const estimateNow = new Date();
+  const recentAttempts = await db
+    .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
+    .from(emailSendAttemptsTable)
+    .where(
+      and(
+        eq(emailSendAttemptsTable.userId, userId),
+        gte(
+          emailSendAttemptsTable.attemptedAt,
+          new Date(estimateNow.getTime() - 24 * 60 * 60 * 1000),
+        ),
+      ),
+    )
+    .orderBy(asc(emailSendAttemptsTable.attemptedAt));
   const counts = new Map<
     string,
     {
@@ -257,17 +298,40 @@ async function campaignPayloads(userId: string) {
     }
     counts.set(recipient.campaignId, total);
   }
-  return campaigns.map((campaign) => ({
-    ...campaign,
-    ...(counts.get(campaign.id) ?? {
+  const eligibleCounts = new Map(
+    eligibleByList.map((row) => [row.listId, row.value]),
+  );
+  return campaigns.map((campaign) => {
+    const deliveryCounts = counts.get(campaign.id) ?? {
       recipients: 0,
       queued: 0,
       delivered: 0,
       bounced: 0,
       suppressed: 0,
       unknown: 0,
-    }),
-  }));
+    };
+    const recipients =
+      campaign.status === "draft"
+        ? eligibleCounts.get(campaign.listId ?? "") ?? 0
+        : deliveryCounts.recipients;
+    const remainingRecipients =
+      campaign.status === "draft"
+        ? recipients
+        : campaign.status === "completed"
+          ? 0
+          : deliveryCounts.queued;
+    return {
+      ...campaign,
+      ...deliveryCounts,
+      recipients,
+      estimatedDurationSeconds: estimateCampaignDeliverySeconds(
+        remainingRecipients,
+        settings,
+        recentAttempts.map((attempt) => attempt.attemptedAt),
+        estimateNow,
+      ),
+    };
+  });
 }
 
 async function completeCampaignIfFinished(
@@ -1205,6 +1269,129 @@ router.get("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.json(ListCampaignsResponse.parse(await campaignPayloads(req.authUser!.id)));
 });
 
+router.get(
+  "/campaigns/:campaignId",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetCampaignDashboardParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({
+        error: "Invalid campaign identifier.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    const [campaign] = (await campaignPayloads(userId)).filter(
+      (item) => item.id === params.data.campaignId,
+    );
+    if (!campaign) {
+      res.status(404).json({
+        error: "Campaign not found.",
+        code: "CAMPAIGN_NOT_FOUND",
+      });
+      return;
+    }
+
+    let targetList: {
+      id: string;
+      name: string;
+      active: boolean;
+      totalContacts: number;
+      eligibleContacts: number;
+      unsubscribedContacts: number;
+    } | null = null;
+    if (campaign.listId) {
+      const [list] = await db
+        .select({
+          id: contactListsTable.id,
+          name: contactListsTable.name,
+          active: contactListsTable.active,
+        })
+        .from(contactListsTable)
+        .where(
+          and(
+            eq(contactListsTable.id, campaign.listId),
+            eq(contactListsTable.userId, userId),
+          ),
+        );
+      if (list) {
+        const [total, eligible] = await Promise.all([
+          db
+            .select({ value: count() })
+            .from(contactListMembersTable)
+            .where(
+              and(
+                eq(contactListMembersTable.userId, userId),
+                eq(contactListMembersTable.listId, list.id),
+              ),
+            ),
+          db
+            .select({ value: count() })
+            .from(contactListMembersTable)
+            .innerJoin(
+              contactsTable,
+              and(
+                eq(contactsTable.id, contactListMembersTable.contactId),
+                eq(contactsTable.userId, contactListMembersTable.userId),
+              ),
+            )
+            .where(
+              and(
+                eq(contactListMembersTable.userId, userId),
+                eq(contactListMembersTable.listId, list.id),
+                eq(contactsTable.subscribed, true),
+              ),
+            ),
+        ]);
+        const totalContacts = total[0]?.value ?? 0;
+        const eligibleContacts = eligible[0]?.value ?? 0;
+        targetList = {
+          ...list,
+          totalContacts,
+          eligibleContacts,
+          unsubscribedContacts: Math.max(0, totalContacts - eligibleContacts),
+        };
+      }
+    }
+
+    const settings = await getPlatformSettings();
+    const remainingEmails =
+      campaign.status === "draft"
+        ? (targetList?.eligibleContacts ?? 0)
+        : campaign.status === "completed"
+          ? 0
+          : campaign.queued;
+    const now = new Date();
+    const estimatedDurationSeconds =
+      campaign.status === "completed"
+        ? 0
+        : campaign.estimatedDurationSeconds;
+    const estimatedCompletionAt =
+      remainingEmails > 0 && campaign.status !== "completed"
+        ? new Date(now.getTime() + estimatedDurationSeconds * 1000)
+        : null;
+
+    res.json(
+      GetCampaignDashboardResponse.parse({
+        campaign,
+        targetList,
+        pacing: {
+          emailsPerHour: settings.defaultEmailsPerHour,
+          emailsPerDay: settings.maxEmailsPerDay,
+          maxCampaignSize: settings.maxCampaignSize,
+          minimumSpacingSeconds:
+            getMinimumEmailSpacingSeconds(settings),
+          remainingEmails,
+          estimatedDurationSeconds,
+          estimatedCompletionAt,
+        },
+      }),
+    );
+  },
+);
+
 router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   const parsed = CreateCampaignBody.safeParse(req.body);
   if (!parsed.success) {
@@ -1239,17 +1426,10 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       textBody: parsed.data.textBody,
     })
     .returning();
-  res.status(201).json(
-    CreateCampaignResponse.parse({
-      ...campaign,
-      recipients: 0,
-      queued: 0,
-      delivered: 0,
-      bounced: 0,
-      suppressed: 0,
-      unknown: 0,
-    }),
+  const [summary] = (await campaignPayloads(userId)).filter(
+    (item) => item.id === campaign.id,
   );
+  res.status(201).json(CreateCampaignResponse.parse(summary));
 });
 
 router.patch(

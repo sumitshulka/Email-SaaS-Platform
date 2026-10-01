@@ -16,6 +16,7 @@ export interface CampaignSummary {
   listId: string | null;
   status: CampaignSummaryStatus;
   recipients: number;
+  estimatedDurationSeconds: number;
   queued: number;
   delivered: number;
   bounced: number;

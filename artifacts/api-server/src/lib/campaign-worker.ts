@@ -2,6 +2,7 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   gte,
   inArray,
@@ -21,7 +22,10 @@ import {
 } from "@workspace/db";
 import { sendTenantEmail } from "./application-email";
 import { logger } from "./logger";
-import { getPlatformSettings } from "./platform-settings";
+import {
+  getMinimumEmailSpacingSeconds,
+  getPlatformSettings,
+} from "./platform-settings";
 
 const MAX_DELIVERIES_PER_TICK = 100;
 const STALE_DELIVERY_MINUTES = 10;
@@ -112,6 +116,7 @@ async function rateLimitDelay(
   now: Date,
   hourlyLimit: number,
   dailyLimit: number,
+  queuePollingSeconds: number,
 ): Promise<Date | null> {
   const hourStart = new Date(now.getTime() - 60 * 60 * 1000);
   const dayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -135,6 +140,23 @@ async function rateLimitDelay(
     );
 
   let allowedAt: Date | null = null;
+  const [latestAttempt] = await tx
+    .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
+    .from(emailSendAttemptsTable)
+    .where(eq(emailSendAttemptsTable.userId, userId))
+    .orderBy(desc(emailSendAttemptsTable.attemptedAt))
+    .limit(1);
+  if (latestAttempt) {
+    const spacingSeconds = getMinimumEmailSpacingSeconds({
+      defaultEmailsPerHour: hourlyLimit,
+      queuePollingSeconds,
+    });
+    const pacedAllowedAt = new Date(
+      latestAttempt.attemptedAt.getTime() + spacingSeconds * 1000,
+    );
+    if (pacedAllowedAt > now) allowedAt = pacedAllowedAt;
+  }
+
   if ((hourly?.value ?? 0) >= hourlyLimit) {
     const [oldest] = await tx
       .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
@@ -148,7 +170,12 @@ async function rateLimitDelay(
       .orderBy(asc(emailSendAttemptsTable.attemptedAt))
       .limit(1);
     if (oldest) {
-      allowedAt = new Date(oldest.attemptedAt.getTime() + 60 * 60 * 1000);
+      const hourlyAllowedAt = new Date(
+        oldest.attemptedAt.getTime() + 60 * 60 * 1000,
+      );
+      if (!allowedAt || hourlyAllowedAt > allowedAt) {
+        allowedAt = hourlyAllowedAt;
+      }
     }
   }
 
@@ -180,6 +207,7 @@ async function claimDelivery(
   userId: string,
   hourlyLimit: number,
   dailyLimit: number,
+  queuePollingSeconds: number,
 ): Promise<DeliveryClaim | null> {
   const now = new Date();
   return db.transaction(async (tx) => {
@@ -286,6 +314,7 @@ async function claimDelivery(
       now,
       hourlyLimit,
       dailyLimit,
+      queuePollingSeconds,
     );
     if (rateDelay) {
       await tx
@@ -410,6 +439,7 @@ export async function processPendingCampaignDeliveries(
       candidate.userId,
       settings.defaultEmailsPerHour,
       settings.maxEmailsPerDay,
+      settings.queuePollingSeconds,
     );
     if (!claimed) continue;
     if ("completedCampaignId" in claimed) {
