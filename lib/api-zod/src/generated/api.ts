@@ -432,8 +432,13 @@ export const CreateContactResponse = zod.object({
  * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
  * @summary Import contacts for the authenticated tenant
  */
+export const importContactsQueryListIdsMax = 100;
+
+
+
 export const ImportContactsQueryParams = zod.object({
-  "listId": zod.coerce.string().uuid().optional().describe('Assign imported CSV contacts to this contact list owned by the authenticated tenant.')
+  "listIds": zod.array(zod.coerce.string().uuid()).max(importContactsQueryListIdsMax).optional().describe('Assign imported CSV contacts to these contact lists owned by the authenticated tenant. Repeat the parameter once per list.'),
+  "listId": zod.coerce.string().uuid().optional().describe('Legacy single-list selection. Use listIds to assign contacts to multiple lists.')
 })
 
 export const importContactsBodyContactsItemRowNumberMin = 2;

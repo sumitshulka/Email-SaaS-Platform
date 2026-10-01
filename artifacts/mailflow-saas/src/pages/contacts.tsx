@@ -23,6 +23,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+const MAX_IMPORT_LISTS = 100;
+
 function requestError(error: unknown): string {
   if (error && typeof error === "object") {
     if ("data" in error && error.data && typeof error.data === "object" && "error" in error.data) {
@@ -53,21 +55,25 @@ export default function ContactsPage() {
   const createContact = useCreateContact();
   const deleteContact = useDeleteContact();
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [selectedListId, setSelectedListId] = useState("");
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const importContacts = useMutation<
     ContactImportResponse,
     Error,
-    { csvText: string; listId: string }
+    { csvText: string; listIds: string[] }
   >({
-    mutationFn: ({ csvText, listId }) =>
-      customFetch<ContactImportResponse>(
-        `/api/contacts/import?listId=${encodeURIComponent(listId)}`,
+    mutationFn: ({ csvText, listIds }) => {
+      const query = new URLSearchParams();
+      listIds.forEach((listId) => query.append("listIds", listId));
+      const queryString = query.toString();
+      return customFetch<ContactImportResponse>(
+        `/api/contacts/import${queryString ? `?${queryString}` : ""}`,
         {
           method: "POST",
           headers: { "Content-Type": "text/csv" },
           body: csvText,
         },
-      ),
+      );
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getListContactListsQueryKey() });
@@ -99,8 +105,8 @@ export default function ContactsPage() {
     setUploadError(null);
     importContacts.reset();
     if (!file) return;
-    if (!selectedListId) {
-      setUploadError("Choose a contact list before importing contacts.");
+    if (selectedListIds.length === 0) {
+      setUploadError("Choose at least one contact list before importing contacts.");
       return;
     }
     if (!csvImportEnabled || !/\.csv$/i.test(file.name)) {
@@ -120,7 +126,7 @@ export default function ContactsPage() {
     }
     void file
       .text()
-      .then((csvText) => importContacts.mutate({ csvText, listId: selectedListId }))
+      .then((csvText) => importContacts.mutate({ csvText, listIds: selectedListIds }))
       .catch(() => setUploadError("The selected file could not be read."));
   };
 
@@ -413,37 +419,58 @@ export default function ContactsPage() {
             </p>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className="min-w-56">
-            <span className="mb-1 block text-[11px] font-semibold text-[#53677b]">
+        <div className="mt-4 flex flex-wrap items-start gap-3">
+          <fieldset
+            data-testid="select-contact-import-lists"
+            disabled={contactListsQuery.isLoading || contactLists.length === 0 || importContacts.isPending}
+            className="min-w-56"
+          >
+            <legend className="mb-1 text-[11px] font-semibold text-[#53677b]">
               Add imported contacts to
-            </span>
-            <select
-              aria-label="Contact list for imported contacts"
-              data-testid="select-contact-import-list"
-              value={selectedListId}
-              onChange={(event) => {
-                setSelectedListId(event.currentTarget.value);
-                setUploadError(null);
-                importContacts.reset();
-              }}
-              disabled={contactListsQuery.isLoading || contactLists.length === 0 || importContacts.isPending}
-              className="w-full rounded-md border border-[#cbd8e3] bg-white px-3 py-2 text-[12px] text-[#26374a] disabled:opacity-50"
-            >
-              <option value="">Select a contact list</option>
+            </legend>
+            <div className="max-h-40 min-w-56 space-y-1 overflow-y-auto rounded-md border border-[#cbd8e3] bg-white p-2">
               {contactLists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
+                <label key={list.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-[12px] text-[#26374a] hover:bg-[#f4f8fb]">
+                  <input
+                    type="checkbox"
+                    aria-label={`Add imported contacts to ${list.name}`}
+                    data-testid={`checkbox-contact-import-list-${list.id}`}
+                    checked={selectedListIds.includes(list.id)}
+                    disabled={
+                      !selectedListIds.includes(list.id) &&
+                      selectedListIds.length >= MAX_IMPORT_LISTS
+                    }
+                    onChange={(event) => {
+                      const checked = event.currentTarget.checked;
+                      setSelectedListIds((current) =>
+                        checked
+                          ? [...current, list.id]
+                          : current.filter((selectedId) => selectedId !== list.id),
+                      );
+                      setUploadError(null);
+                      importContacts.reset();
+                    }}
+                    className="accent-[#174f99]"
+                  />
+                  <span className="truncate">{list.name}</span>
+                </label>
               ))}
-            </select>
-          </label>
+              {contactLists.length === 0 && !contactListsQuery.isLoading && (
+                <p className="px-1 py-1 text-[11px] text-[#788696]">No contact lists available.</p>
+              )}
+            </div>
+            <p className="mt-1 text-[10px] text-[#788696]">
+              {selectedListIds.length === 0
+                ? `Select one or more lists (up to ${MAX_IMPORT_LISTS}).`
+                : `${selectedListIds.length} list${selectedListIds.length === 1 ? "" : "s"} selected${selectedListIds.length >= MAX_IMPORT_LISTS ? " · maximum reached" : ""}`}
+            </p>
+          </fieldset>
           <input
             type="file"
             accept={allowedFileTypes.map((type) => `.${type}`).join(",")}
             aria-label="Choose a CSV file to import contacts"
             data-testid="input-contact-csv"
-            disabled={!quota.canAdd || !csvImportEnabled || !selectedListId || importContacts.isPending}
+            disabled={!quota.canAdd || !csvImportEnabled || selectedListIds.length === 0 || importContacts.isPending}
             onChange={(event) => {
               selectCsv(event.currentTarget.files?.[0]);
               event.currentTarget.value = "";

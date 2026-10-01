@@ -8,7 +8,12 @@
 
 export type ImportContactsParams = {
 /**
- * Assign imported CSV contacts to this contact list owned by the authenticated tenant.
+ * Assign imported CSV contacts to these contact lists owned by the authenticated tenant. Repeat the parameter once per list.
+ * @maxItems 100
+ */
+listIds?: string[];
+/**
+ * Legacy single-list selection. Use listIds to assign contacts to multiple lists.
  */
 listId?: string;
 };

@@ -582,16 +582,22 @@ describe("tenant contact management and package quotas", { concurrency: false },
       cookie: owner.cookie,
       body: { name: "Imported contacts" },
     });
+    const secondOwnerList = await api("/contact-lists", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Additional audience" },
+    });
     const otherList = await api("/contact-lists", {
       method: "POST",
       cookie: other.cookie,
       body: { name: "Other tenant list" },
     });
     assert.equal(ownerList.response.status, 201, JSON.stringify(ownerList.body));
+    assert.equal(secondOwnerList.response.status, 201, JSON.stringify(secondOwnerList.body));
     assert.equal(otherList.response.status, 201, JSON.stringify(otherList.body));
 
     const imported = await uploadCsv(
-      `/contacts/import?listId=${ownerList.body.id}`,
+      `/contacts/import?listIds=${ownerList.body.id}&listIds=${secondOwnerList.body.id}`,
       "name,email\nFirst Contact,first@owner.test\nOver Quota,second@owner.test",
       owner.cookie,
     );
@@ -611,11 +617,18 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .select()
       .from(dbModule.contactListMembersTable)
       .where(eq(dbModule.contactListMembersTable.userId, owner.user.id));
-    assert.equal(savedMemberships.length, 1);
-    assert.equal(savedMemberships[0].listId, ownerList.body.id);
+    assert.equal(savedMemberships.length, 2);
+    assert.deepEqual(
+      new Set(savedMemberships.map((membership) => membership.listId)),
+      new Set([ownerList.body.id, secondOwnerList.body.id]),
+    );
     const lists = await api("/contact-lists", { cookie: owner.cookie });
     assert.equal(
       lists.body.find((list) => list.id === ownerList.body.id).contactCount,
+      1,
+    );
+    assert.equal(
+      lists.body.find((list) => list.id === secondOwnerList.body.id).contactCount,
       1,
     );
 
@@ -626,11 +639,23 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
     assert.equal(foreignListImport.response.status, 400);
     assert.equal(foreignListImport.body.code, "INVALID_LIST");
+    const mixedTenantListImport = await uploadCsv(
+      `/contacts/import?listIds=${ownerList.body.id}&listIds=${otherList.body.id}`,
+      "name,email\nMust Not Partially Import,mixed-list@owner.test",
+      owner.cookie,
+    );
+    assert.equal(mixedTenantListImport.response.status, 400);
+    assert.equal(mixedTenantListImport.body.code, "INVALID_LIST");
     const ownerContacts = await api("/contacts", { cookie: owner.cookie });
     assert.deepEqual(
       new Set(ownerContacts.body.contacts.map((contact) => contact.email)),
       new Set(["first@owner.test"]),
     );
+    const membershipsAfterInvalidImports = await db
+      .select()
+      .from(dbModule.contactListMembersTable)
+      .where(eq(dbModule.contactListMembersTable.userId, owner.user.id));
+    assert.equal(membershipsAfterInvalidImports.length, 2);
     const otherLists = await api("/contact-lists", { cookie: other.cookie });
     assert.equal(
       otherLists.body.find((list) => list.id === otherList.body.id).contactCount,
@@ -638,7 +663,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
 
     const malformedListImport = await uploadCsv(
-      "/contacts/import?listId=not-a-uuid",
+      "/contacts/import?listIds=not-a-uuid",
       "name,email\nMust Not Import,malformed-list@owner.test",
       owner.cookie,
     );

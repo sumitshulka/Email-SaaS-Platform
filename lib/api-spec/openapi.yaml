@@ -357,10 +357,23 @@ paths:
       summary: Import contacts for the authenticated tenant
       description: Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
       parameters:
+        - name: listIds
+          in: query
+          required: false
+          description: Assign imported CSV contacts to these contact lists owned by the authenticated tenant. Repeat the parameter once per list.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 100
+            items:
+              type: string
+              format: uuid
         - name: listId
           in: query
           required: false
-          description: Assign imported CSV contacts to this contact list owned by the authenticated tenant.
+          deprecated: true
+          description: Legacy single-list selection. Use listIds to assign contacts to multiple lists.
           schema:
             type: string
             format: uuid

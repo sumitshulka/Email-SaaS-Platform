@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, lte } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import express, {
   Router,
   type IRouter,
@@ -291,15 +291,21 @@ async function importContactCsv(
   res: Response,
   settings: Awaited<ReturnType<typeof getPlatformSettings>>,
 ): Promise<void> {
-  const params = ImportContactsQueryParams.safeParse(req.query);
-  if (!params.success) {
+  const rawListIds = req.query.listIds;
+  const params = ImportContactsQueryParams.safeParse({
+    ...req.query,
+    listIds: typeof rawListIds === "string" ? [rawListIds] : rawListIds,
+  });
+  if (!params.success || (params.data.listId && params.data.listIds)) {
     res.status(400).json({
-      error: "Choose a valid contact list.",
+      error: "Choose valid contact lists.",
       code: "INVALID_INPUT",
     });
     return;
   }
-  const listId = params.data.listId;
+  const listIds = [
+    ...new Set(params.data.listIds ?? (params.data.listId ? [params.data.listId] : [])),
+  ];
 
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     res.status(400).json({
@@ -455,18 +461,19 @@ async function importContactCsv(
       .for("update");
     if (!lockedUser) return { kind: "user_missing" as const };
 
-    if (listId) {
-      const [tenantList] = await tx
+    if (listIds.length > 0) {
+      const tenantLists = await tx
         .select({ id: contactListsTable.id })
         .from(contactListsTable)
         .where(
           and(
-            eq(contactListsTable.id, listId),
+            inArray(contactListsTable.id, listIds),
             eq(contactListsTable.userId, userId),
           ),
-        )
-        .limit(1);
-      if (!tenantList) return { kind: "invalid_list" as const };
+        );
+      if (tenantLists.length !== listIds.length) {
+        return { kind: "invalid_list" as const };
+      }
     }
 
     const now = new Date();
@@ -549,14 +556,20 @@ async function importContactCsv(
         .insert(contactsTable)
         .values(toInsert)
         .returning({ id: contactsTable.id });
-      if (listId) {
-        await tx.insert(contactListMembersTable).values(
-          inserted.map((contact) => ({
+      if (listIds.length > 0) {
+        const memberships = inserted.flatMap((contact) =>
+          listIds.map((listId) => ({
             userId,
             listId,
             contactId: contact.id,
           })),
         );
+        const batchSize = 1000;
+        for (let offset = 0; offset < memberships.length; offset += batchSize) {
+          await tx
+            .insert(contactListMembersTable)
+            .values(memberships.slice(offset, offset + batchSize));
+        }
       }
     }
     const used = currentUsed + toInsert.length;
@@ -586,7 +599,7 @@ async function importContactCsv(
   }
   if (result.kind === "invalid_list") {
     res.status(400).json({
-      error: "Choose a contact list from your workspace.",
+      error: "Choose contact lists from your workspace.",
       code: "INVALID_LIST",
     });
     return;
