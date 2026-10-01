@@ -30,7 +30,9 @@ import type {
   AuthUser,
   CampaignDashboard,
   CampaignInput,
+  CampaignPreviewInput,
   CampaignSummary,
+  CampaignTemplatePreview,
   CampaignUpdate,
   ChangePasswordInput,
   Contact,
@@ -2270,6 +2272,94 @@ export const useCreateCampaign = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateCampaignMutationOptions(options));
+    }
+
+export const getPreviewCampaignUrl = () => {
+
+
+
+
+  return `/api/campaigns/preview`
+}
+
+/**
+ * @summary Render unsaved campaign content for an eligible contact in its target list
+ */
+export const previewCampaign = async (campaignPreviewInput: CampaignPreviewInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignTemplatePreview> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignTemplatePreview>(getPreviewCampaignUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignPreviewInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewCampaignMutationKey = () => ['previewCampaign'] as const;
+
+export const getPreviewCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCampaign>>, TError,PreviewCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewCampaign>>, TError,PreviewCampaignMutationVariables, TContext> => {
+
+const mutationKey = getPreviewCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewCampaign>>, PreviewCampaignMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewCampaign(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof previewCampaign>>>
+    export type PreviewCampaignMutationBody = BodyType<CampaignPreviewInput>
+    export type PreviewCampaignMutationError = ErrorType<ApiError>
+    export type PreviewCampaignMutationVariables = {data: BodyType<CampaignPreviewInput>}
+
+    /**
+ * @summary Render unsaved campaign content for an eligible contact in its target list
+ */
+export const usePreviewCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCampaign>>, TError,PreviewCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewCampaign>>,
+        TError,
+        PreviewCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewCampaignMutationOptions(options));
     }
 
 export const getGetCampaignDashboardUrl = (campaignId: string,) => {

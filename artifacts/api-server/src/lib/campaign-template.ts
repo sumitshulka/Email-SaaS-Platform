@@ -10,6 +10,18 @@ export type CampaignPersonalization = {
   linkedinUrl: string;
 };
 
+export type CampaignTemplate = {
+  subject: string;
+  textBody: string;
+  htmlBody?: string | null;
+};
+
+export type RenderedCampaignTemplate = {
+  subject: string;
+  textBody: string;
+  htmlBody: string | null;
+};
+
 const allowedCampaignTags = [
   "a",
   "b",
@@ -87,4 +99,17 @@ export function personalizeCampaignHtml(
     personalization,
     true,
   );
+}
+
+export function renderCampaignForContact(
+  template: CampaignTemplate,
+  personalization: CampaignPersonalization,
+): RenderedCampaignTemplate {
+  return {
+    subject: personalizeCampaignText(template.subject, personalization),
+    textBody: personalizeCampaignText(template.textBody, personalization),
+    htmlBody: template.htmlBody
+      ? personalizeCampaignHtml(template.htmlBody, personalization)
+      : null,
+  };
 }

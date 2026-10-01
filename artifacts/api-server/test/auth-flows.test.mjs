@@ -1607,6 +1607,46 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       updatedCampaign.body.htmlBody,
       "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}.</p>",
     );
+    const samplePreview = await api("/campaigns/preview", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        listId: ownerList.body.id,
+        contactId: ownerContacts[0].body.id,
+        subject: "Hello {{fullName}} ({{missing}})",
+        textBody: "A note for {{fullName}} at {{companyName}} from {{email}}.",
+        htmlBody:
+          "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}. {{missing}}</p><script>alert(1)</script>",
+      },
+    });
+    assert.equal(samplePreview.response.status, 200, JSON.stringify(samplePreview.body));
+    assert.equal(samplePreview.body.subject, "Hello Owner Contact ({{missing}})");
+    assert.equal(
+      samplePreview.body.textBody,
+      "A note for Owner Contact at Acme & Sons from one@owner.test.",
+    );
+    assert.equal(
+      samplePreview.body.htmlBody,
+      "<p><strong>Hi Owner</strong>, welcome to Acme &amp; Sons. {{missing}}</p>",
+    );
+    const outOfListPreview = await api("/campaigns/preview", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        listId: ownerList.body.id,
+        contactId: otherContact.body.id,
+        subject: "Hello",
+        textBody: "Hello",
+        htmlBody: "<p>Hello</p>",
+      },
+    });
+    assert.equal(outOfListPreview.response.status, 404);
+    const savedAfterPreview = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(savedAfterPreview.body.campaign.subject, campaign.body.subject);
+    assert.equal(savedAfterPreview.body.campaign.textBody, campaign.body.textBody);
+    assert.equal(savedAfterPreview.body.campaign.htmlBody, updatedCampaign.body.htmlBody);
     assert.equal(campaign.body.recipients, 3);
     assert.equal(campaign.body.estimatedDurationSeconds, 108);
     const draftDashboard = await api(`/campaigns/${campaign.body.id}`, {

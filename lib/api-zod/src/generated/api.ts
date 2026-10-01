@@ -760,6 +760,32 @@ export const CreateCampaignResponse = zod.object({
 
 
 /**
+ * @summary Render unsaved campaign content for an eligible contact in its target list
+ */
+export const previewCampaignBodySubjectMax = 200;
+
+export const previewCampaignBodyTextBodyMax = 100000;
+
+export const previewCampaignBodyHtmlBodyMax = 100000;
+
+
+
+export const PreviewCampaignBody = zod.object({
+  "listId": zod.string().uuid(),
+  "contactId": zod.string().uuid(),
+  "subject": zod.string().max(previewCampaignBodySubjectMax),
+  "textBody": zod.string().max(previewCampaignBodyTextBodyMax),
+  "htmlBody": zod.string().max(previewCampaignBodyHtmlBodyMax)
+})
+
+export const PreviewCampaignResponse = zod.object({
+  "subject": zod.string(),
+  "textBody": zod.string(),
+  "htmlBody": zod.string().nullable()
+})
+
+
+/**
  * @summary Get campaign performance, target-list breakdown, and pacing estimate
  */
 export const GetCampaignDashboardParams = zod.object({

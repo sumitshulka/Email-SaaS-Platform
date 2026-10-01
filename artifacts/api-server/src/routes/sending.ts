@@ -36,6 +36,8 @@ import {
   ListCampaignsResponse,
   ListContactListsResponse,
   ListContactsResponse,
+  PreviewCampaignBody,
+  PreviewCampaignResponse,
   SendCampaignParams,
   SendCampaignResponse,
   TestTenantSendingSettingsBody,
@@ -66,7 +68,10 @@ import {
   usersTable,
 } from "@workspace/db";
 import { sendTenantEmail } from "../lib/application-email";
-import { sanitizeCampaignHtml } from "../lib/campaign-template";
+import {
+  renderCampaignForContact,
+  sanitizeCampaignHtml,
+} from "../lib/campaign-template";
 import { encryptSecret } from "../lib/security";
 import {
   estimateCampaignDeliveryAfterQueueSeconds,
@@ -1453,6 +1458,90 @@ router.delete(
 router.get("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.json(ListCampaignsResponse.parse(await campaignPayloads(req.authUser!.id)));
 });
+
+router.post(
+  "/campaigns/preview",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = PreviewCampaignBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Some campaign preview details are invalid.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    const [list] = await db
+      .select({ id: contactListsTable.id })
+      .from(contactListsTable)
+      .where(
+        and(
+          eq(contactListsTable.id, parsed.data.listId),
+          eq(contactListsTable.userId, userId),
+          eq(contactListsTable.active, true),
+        ),
+      );
+    if (!list) {
+      res.status(400).json({
+        error: "Choose an active contact list from your workspace.",
+        code: "INVALID_CONTACT_LIST",
+      });
+      return;
+    }
+
+    const [contact] = await db
+      .select({
+        email: contactsTable.email,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+        name: contactsTable.name,
+        companyName: contactsTable.companyName,
+        linkedinUrl: contactsTable.linkedinUrl,
+        phoneNumber: contactsTable.phoneNumber,
+      })
+      .from(contactListMembersTable)
+      .innerJoin(
+        contactsTable,
+        eq(contactsTable.id, contactListMembersTable.contactId),
+      )
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          eq(contactListMembersTable.listId, list.id),
+          eq(contactListMembersTable.contactId, parsed.data.contactId),
+          eq(contactsTable.userId, userId),
+          eq(contactsTable.subscribed, true),
+        ),
+      )
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({
+        error: "Choose a subscribed contact in the selected list.",
+        code: "CAMPAIGN_PREVIEW_CONTACT_NOT_FOUND",
+      });
+      return;
+    }
+
+    const rendered = renderCampaignForContact(
+      parsed.data,
+      {
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        fullName:
+          [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+          contact.name ||
+          "",
+        email: contact.email,
+        companyName: contact.companyName ?? "",
+        phoneNumber: contact.phoneNumber ?? "",
+        linkedinUrl: contact.linkedinUrl ?? "",
+      },
+    );
+    res.json(PreviewCampaignResponse.parse(rendered));
+  },
+);
 
 router.get(
   "/campaigns/:campaignId",

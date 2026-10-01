@@ -632,6 +632,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/preview:
+    post:
+      operationId: previewCampaign
+      tags: [sending]
+      summary: Render unsaved campaign content for an eligible contact in its target list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignPreviewInput"
+      responses:
+        "200":
+          description: Personalized subject, formatted HTML, and plain-text fallback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignTemplatePreview"
+        "400":
+          description: Invalid preview input or active list required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Sample contact is not an eligible member of the target list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns/{campaignId}:
     parameters:
       - name: campaignId
@@ -1475,6 +1505,22 @@ components:
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
         listId: { type: string, format: uuid }
+    CampaignPreviewInput:
+      type: object
+      properties:
+        listId: { type: string, format: uuid }
+        contactId: { type: string, format: uuid }
+        subject: { type: string, maxLength: 200 }
+        textBody: { type: string, maxLength: 100000 }
+        htmlBody: { type: string, maxLength: 100000 }
+      required: [listId, contactId, subject, textBody, htmlBody]
+    CampaignTemplatePreview:
+      type: object
+      properties:
+        subject: { type: string }
+        textBody: { type: string }
+        htmlBody: { type: ["string", "null"] }
+      required: [subject, textBody, htmlBody]
     AdminDashboard:
       type: object
       properties:

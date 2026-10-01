@@ -14,12 +14,12 @@ import {
   getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetCampaignDashboard, useGetTenantSendingSettings,
-  useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, useSendCampaign,
+  useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, usePreviewCampaign, useSendCampaign,
   useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
-  CampaignDashboard, CampaignSummary, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList,
+  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList,
   TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 
@@ -378,17 +378,44 @@ const blankCampaign: CampaignForm = { name: '', subject: '', textBody: '', htmlB
 export function CampaignsPage() {
   const [, setLocation] = useLocation();
   const subjectInputRef = useRef<HTMLInputElement>(null);
-  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists();
+  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const contactsQuery = useListContacts();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
+  const previewCampaign = usePreviewCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const [sampleContactId, setSampleContactId] = useState('');
+  const [previewState, setPreviewState] = useState<{ key: string; rendered: CampaignTemplatePreview } | null>(null);
+  const [previewError, setPreviewError] = useState<{ key: string; message: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<{ kind: 'queue' | 'delete'; campaign: CampaignSummary } | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
+  const contacts = contactsQuery.data?.contacts || [];
   const activeLists = lists.filter(list => list.active);
+  const eligibleSampleContacts = contacts.filter(contact => contact.subscribed && contact.listIds.includes(form.listId));
+  const previewKey = JSON.stringify([form.listId, sampleContactId, form.subject, form.textBody, form.htmlBody]);
+  const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
+  const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listId: activeLists[0]?.id || '' }); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listId: campaign.listId || '' }); };
+  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listId: activeLists[0]?.id || '' }); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listId: campaign.listId || '' }); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const requestPreview = () => {
+    if (!sampleContactId) return;
+    const key = previewKey;
+    setPreviewState(null);
+    setPreviewError(null);
+    previewCampaign.mutate({
+      data: {
+        listId: form.listId,
+        contactId: sampleContactId,
+        subject: form.subject,
+        textBody: form.textBody,
+        htmlBody: form.htmlBody,
+      },
+    }, {
+      onSuccess: rendered => setPreviewState({ key, rendered }),
+      onError: error => setPreviewError({ key, message: mutationError(error) }),
+    });
+  };
   const insertSubjectPlaceholder = (token: string) => {
     const input = subjectInputRef.current;
     const start = input?.selectionStart ?? form.subject.length;
@@ -446,10 +473,30 @@ export function CampaignsPage() {
     </section> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Queueing starts delivery to subscribed contacts in the selected list." close={() => setEditing(undefined)}>
       <form onSubmit={save} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2"><Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/><label><span className={labelClass}>Target list</span><select data-testid="select-campaign-list" required className={inputClass} value={form.listId} onChange={e => setForm(f => ({ ...f, listId: e.target.value }))}><option value="" disabled>Select an active list</option>{activeLists.map(list => <option key={list.id} value={list.id}>{list.name} · {list.contactCount} contacts</option>)}</select></label></div>
+        <div className="grid gap-4 sm:grid-cols-2"><Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/><label><span className={labelClass}>Target list</span><select data-testid="select-campaign-list" required className={inputClass} value={form.listId} onChange={e => { setForm(f => ({ ...f, listId: e.target.value })); setSampleContactId(''); }}><option value="" disabled>Select an active list</option>{activeLists.map(list => <option key={list.id} value={list.id}>{list.name} · {list.contactCount} contacts</option>)}</select></label></div>
          <label className="block"><span className={labelClass}>Email subject</span><input ref={subjectInputRef} data-testid="input-campaign-subject" className={inputClass} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="A concise subject your audience will recognize" required maxLength={200}/></label>
          <div className="-mt-2 flex flex-wrap items-center gap-1.5"><span className="mr-1 text-[10px] text-[#7e8996]">Insert a subject field:</span>{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertSubjectPlaceholder(token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-subject-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
          <label className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
+         <section className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
+           <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the current unsaved subject and message using a subscribed contact in this list.</p></div>
+           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+             <label className="min-w-0 flex-1"><span className={labelClass}>Sample contact</span><select data-testid="select-campaign-preview-contact" className={inputClass} value={sampleContactId} onChange={e => setSampleContactId(e.target.value)} disabled={!form.listId || contactsQuery.isLoading}>
+               <option value="">{contactsQuery.isLoading ? 'Loading contacts…' : 'Choose a subscribed contact'}</option>
+               {eligibleSampleContacts.map(contact => <option key={contact.id} value={contact.id}>{[contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email} · {contact.email}</option>)}
+             </select></label>
+             <Button variant="outline" testId="button-preview-campaign" onClick={requestPreview} disabled={!sampleContactId || previewCampaign.isPending}>
+               {previewCampaign.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}Preview email
+             </Button>
+           </div>
+           {contactsQuery.isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>We couldn’t load contacts for the preview.</span><Button variant="outline" testId="button-retry-preview-contacts" onClick={() => void contactsQuery.refetch()}>Retry</Button></div>}
+           {!contactsQuery.isLoading && !contactsQuery.isError && form.listId && eligibleSampleContacts.length === 0 && <p className="text-[11px] text-[#8a5a31]">This list has no subscribed contacts available to preview.</p>}
+           {visiblePreviewError && <p role="alert" className="text-[11px] text-[#99501e]">{visiblePreviewError}</p>}
+           {visiblePreview && <div data-testid="panel-campaign-preview" className="space-y-4 rounded-md border border-[#e2e7ed] bg-white p-4">
+             <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Resolved subject</div><p data-testid="text-campaign-preview-subject" className="mt-1 break-words text-[13px] font-semibold text-[#29384a]">{visiblePreview.subject}</p></div>
+             <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Formatted HTML</div>{visiblePreview.htmlBody !== null ? <div data-testid="html-campaign-preview" className="campaign-message-preview mt-2 rounded-md bg-[#f8fafb] p-4 text-[12px] leading-6 text-[#566476] [&_a]:text-[#245b9b] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[#9abbe1] [&_blockquote]:pl-3 [&_h1]:my-2 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_strong]:font-bold [&_u]:underline [&_ul]:my-2 [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: visiblePreview.htmlBody }}/> : <p className="mt-2 text-[11px] text-[#84909d]">No formatted HTML message.</p>}</div>
+             <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text fallback</div><pre data-testid="text-campaign-preview-fallback" className="mt-2 whitespace-pre-wrap break-words rounded-md bg-[#f8fafb] p-4 font-sans text-[12px] leading-6 text-[#566476]">{visiblePreview.textBody}</pre></div>
+           </div>}
+         </section>
         <div className="flex items-center gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] text-[#607186]"><Users className="h-4 w-4 shrink-0 text-[#245b9b]"/>Eligible recipients are subscribed contacts associated with the selected active list.</div>
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || !activeLists.length}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>

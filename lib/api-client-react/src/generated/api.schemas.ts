@@ -592,6 +592,24 @@ export interface CampaignUpdate {
   listId?: string;
 }
 
+export interface CampaignPreviewInput {
+  listId: string;
+  contactId: string;
+  /** @maxLength 200 */
+  subject: string;
+  /** @maxLength 100000 */
+  textBody: string;
+  /** @maxLength 100000 */
+  htmlBody: string;
+}
+
+export interface CampaignTemplatePreview {
+  subject: string;
+  textBody: string;
+  /** @nullable */
+  htmlBody: string | null;
+}
+
 export interface AdminUser {
   id: string;
   username: string;

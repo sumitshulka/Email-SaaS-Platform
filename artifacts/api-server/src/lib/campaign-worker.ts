@@ -22,8 +22,7 @@ import {
 } from "@workspace/db";
 import { sendTenantEmail } from "./application-email";
 import {
-  personalizeCampaignHtml,
-  personalizeCampaignText,
+  renderCampaignForContact,
   type CampaignPersonalization,
 } from "./campaign-template";
 import { logger } from "./logger";
@@ -488,23 +487,16 @@ export async function processPendingCampaignDeliveries(
     processed += 1;
     let result: Awaited<ReturnType<typeof sendTenantEmail>>;
     try {
+      const rendered = renderCampaignForContact(
+        claimed.campaign,
+        claimed.personalization,
+      );
       result = await sendTenantEmail(
         claimed.sender,
         claimed.recipient.email,
-        personalizeCampaignText(
-          claimed.campaign.subject,
-          claimed.personalization,
-        ),
-        personalizeCampaignText(
-          claimed.campaign.textBody,
-          claimed.personalization,
-        ),
-        claimed.campaign.htmlBody
-          ? personalizeCampaignHtml(
-              claimed.campaign.htmlBody,
-              claimed.personalization,
-            )
-          : undefined,
+        rendered.subject,
+        rendered.textBody,
+        rendered.htmlBody ?? undefined,
       );
     } catch (error) {
       const retry = claimed.recipient.attempts <= settings.retryAttempts;
