@@ -653,6 +653,8 @@ export const TestRazorpayConnectionResponse = zod.object({
 export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin = 3;
 export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
 
+export const listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
+
 
 
 export const ListAdminSubscriptionPackagesResponse = zod.object({
@@ -663,6 +665,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "amountMinor": zod.number().int(),
   "currency": zod.string().min(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -683,6 +686,9 @@ export const createSubscriptionPackageBodyAmountMinorMax = 100000000;
 export const createSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 export const createSubscriptionPackageBodyPeriodDaysMax = 3660;
 
+export const createSubscriptionPackageBodyContactLimitMin = 0;
+export const createSubscriptionPackageBodyContactLimitMax = 10000000;
+
 
 
 export const CreateSubscriptionPackageBody = zod.object({
@@ -691,11 +697,14 @@ export const CreateSubscriptionPackageBody = zod.object({
   "amountMinor": zod.number().int().min(1).max(createSubscriptionPackageBodyAmountMinorMax),
   "currency": zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
   "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
+  "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
   "active": zod.boolean()
 })
 
 export const createSubscriptionPackageResponseCurrencyMin = 3;
 export const createSubscriptionPackageResponseCurrencyMax = 3;
+
+export const createSubscriptionPackageResponseContactLimitMin = 0;
 
 
 
@@ -706,6 +715,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "amountMinor": zod.number().int(),
   "currency": zod.string().min(createSubscriptionPackageResponseCurrencyMin).max(createSubscriptionPackageResponseCurrencyMax),
   "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -729,6 +739,9 @@ export const updateSubscriptionPackageBodyAmountMinorMax = 100000000;
 export const updateSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
 export const updateSubscriptionPackageBodyPeriodDaysMax = 3660;
 
+export const updateSubscriptionPackageBodyContactLimitMin = 0;
+export const updateSubscriptionPackageBodyContactLimitMax = 10000000;
+
 
 
 export const UpdateSubscriptionPackageBody = zod.object({
@@ -737,11 +750,14 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "amountMinor": zod.number().int().min(1).max(updateSubscriptionPackageBodyAmountMinorMax).optional(),
   "currency": zod.string().regex(updateSubscriptionPackageBodyCurrencyRegExp).optional(),
   "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
+  "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
   "active": zod.boolean().optional()
 })
 
 export const updateSubscriptionPackageResponseCurrencyMin = 3;
 export const updateSubscriptionPackageResponseCurrencyMax = 3;
+
+export const updateSubscriptionPackageResponseContactLimitMin = 0;
 
 
 
@@ -752,6 +768,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "amountMinor": zod.number().int(),
   "currency": zod.string().min(updateSubscriptionPackageResponseCurrencyMin).max(updateSubscriptionPackageResponseCurrencyMax),
   "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -764,6 +781,8 @@ export const UpdateSubscriptionPackageResponse = zod.object({
 export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin = 3;
 export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
 
+export const listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
+
 
 
 export const ListAvailableSubscriptionPackagesResponse = zod.object({
@@ -774,6 +793,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "amountMinor": zod.number().int(),
   "currency": zod.string().min(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -786,6 +806,8 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
  */
 export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin = 3;
 export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax = 3;
+
+export const getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin = 0;
 
 
 
@@ -802,12 +824,73 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "amountMinor": zod.number().int(),
   "currency": zod.string().min(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
 }),zod.null()])
 })
+
+
+/**
+ * @summary List contacts and the authenticated customer's contact quota
+ */
+export const listContactsResponseQuotaUsedMin = 0;
+
+export const listContactsResponseQuotaLimitMin = 0;
+
+export const listContactsResponseQuotaRemainingMin = 0;
+
+
+
+export const ListContactsResponse = zod.object({
+  "contacts": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "createdAt": zod.coerce.date()
+})),
+  "quota": zod.object({
+  "used": zod.number().int().min(listContactsResponseQuotaUsedMin),
+  "limit": zod.number().int().min(listContactsResponseQuotaLimitMin),
+  "remaining": zod.number().int().min(listContactsResponseQuotaRemainingMin),
+  "canAdd": zod.boolean(),
+  "requiresSubscription": zod.boolean()
+})
+})
+
+
+/**
+ * @summary Save a contact if the authenticated customer's quota allows it
+ */
+export const createContactBodyNameMax = 120;
+
+export const createContactBodyEmailMax = 254;
+
+
+
+export const CreateContactBody = zod.object({
+  "name": zod.string().min(1).max(createContactBodyNameMax),
+  "email": zod.string().email().max(createContactBodyEmailMax)
+})
+
+export const CreateContactResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a contact owned by the authenticated customer
+ */
+export const DeleteContactParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const DeleteContactResponse = zod.void()
 
 
 /**
@@ -851,6 +934,8 @@ export const VerifyRazorpayPaymentBody = zod.object({
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin = 3;
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax = 3;
 
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin = 0;
+
 
 
 export const VerifyRazorpayPaymentResponse = zod.object({
@@ -868,6 +953,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "amountMinor": zod.number().int(),
   "currency": zod.string().min(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

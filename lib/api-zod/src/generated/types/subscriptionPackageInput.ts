@@ -26,5 +26,10 @@ export interface SubscriptionPackageInput {
      * @maximum 3660
      */
   periodDays: number;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  contactLimit: number;
   active: boolean;
 }

@@ -496,6 +496,8 @@ export interface SubscriptionPackage {
      */
   currency: string;
   periodDays: number;
+  /** @minimum 0 */
+  contactLimit: number;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -525,6 +527,11 @@ export interface SubscriptionPackageInput {
      * @maximum 3660
      */
   periodDays: number;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  contactLimit: number;
   active: boolean;
 }
 
@@ -548,7 +555,45 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 3660
      */
   periodDays?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  contactLimit?: number;
   active?: boolean;
+}
+
+export interface Contact {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface ContactInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /** @maxLength 254 */
+  email: string;
+}
+
+export interface ContactQuota {
+  /** @minimum 0 */
+  used: number;
+  /** @minimum 0 */
+  limit: number;
+  /** @minimum 0 */
+  remaining: number;
+  canAdd: boolean;
+  requiresSubscription: boolean;
+}
+
+export interface ContactList {
+  contacts: Contact[];
+  quota: ContactQuota;
 }
 
 export interface CreateSubscriptionOrderInput {

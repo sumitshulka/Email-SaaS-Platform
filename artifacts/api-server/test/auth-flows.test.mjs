@@ -22,6 +22,7 @@ memory.public.registerFunction({
 memory.public.none(`
   CREATE TYPE user_role AS ENUM ('SUPERADMIN', 'USER');
   CREATE TYPE razorpay_environment AS ENUM ('sandbox', 'production');
+  CREATE TYPE subscription_status AS ENUM ('active', 'superseded', 'cancelled');
   CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     username varchar(50) NOT NULL,
@@ -118,11 +119,43 @@ memory.public.none(`
     updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE subscription_packages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name varchar(120) NOT NULL,
+    description text NOT NULL DEFAULT '',
+    amount_minor integer NOT NULL,
+    currency varchar(3) NOT NULL DEFAULT 'INR',
+    period_days integer NOT NULL,
+    contact_limit integer NOT NULL DEFAULT 5000,
+    active boolean NOT NULL DEFAULT true,
+    created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
   CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     razorpay_environment razorpay_environment,
     razorpay_order_id varchar(80),
     updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE user_subscriptions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    package_id uuid NOT NULL REFERENCES subscription_packages(id) ON DELETE RESTRICT,
+    payment_id uuid NOT NULL,
+    status subscription_status NOT NULL DEFAULT 'active',
+    starts_at timestamptz NOT NULL,
+    ends_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE contacts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name varchar(120) NOT NULL,
+    email varchar(254) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, email)
   );
   CREATE TABLE audit_logs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -210,7 +243,10 @@ after(async () => {
 
 beforeEach(async () => {
   await db.delete(dbModule.auditLogsTable);
+  await db.delete(dbModule.contactsTable);
+  await db.delete(dbModule.userSubscriptionsTable);
   await db.delete(dbModule.paymentsTable);
+  await db.delete(dbModule.subscriptionPackagesTable);
   await db.delete(dbModule.razorpayConfigurationTable);
   await db.delete(dbModule.passwordResetTokensTable);
   await db.delete(dbModule.otpVerificationsTable);
@@ -393,6 +429,145 @@ describe("Razorpay environment configuration", { concurrency: false }, () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("tenant contact management and package quotas", { concurrency: false }, () => {
+  it("stores package contact limits and returns them from create and update", async () => {
+    const admin = await loggedInUser({
+      username: "package-limit-admin",
+      role: "SUPERADMIN",
+    });
+    const created = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Contact Starter",
+        description: "Test package",
+        amountMinor: 19900,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 1250,
+        active: true,
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.contactLimit, 1250);
+
+    const updated = await api(`/admin/billing/packages/${created.body.id}`, {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: { contactLimit: 2400 },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.contactLimit, 2400);
+    const [saved] = await db
+      .select()
+      .from(dbModule.subscriptionPackagesTable)
+      .where(eq(dbModule.subscriptionPackagesTable.id, created.body.id));
+    assert.equal(saved.contactLimit, 2400);
+  });
+
+  it("isolates contacts by tenant and enforces package limits on every create", async () => {
+    const owner = await loggedInUser({
+      username: "contacts-owner",
+      email: "contacts-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "contacts-other",
+      email: "contacts-other@example.test",
+    });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Two Contact Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 2,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "11111111-1111-4111-8111-111111111111",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const first = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Alex Morgan", email: "ALEX@example.test" },
+    });
+    assert.equal(first.response.status, 201, JSON.stringify(first.body));
+    assert.equal(first.body.email, "alex@example.test");
+    const duplicate = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Alex Again", email: "alex@example.test" },
+    });
+    assert.equal(duplicate.response.status, 409);
+    assert.equal(duplicate.body.code, "CONTACT_ALREADY_EXISTS");
+
+    const second = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Jamie Lee", email: "jamie@example.test" },
+    });
+    assert.equal(second.response.status, 201, JSON.stringify(second.body));
+    const blockedByLimit = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Taylor Reed", email: "taylor@example.test" },
+    });
+    assert.equal(blockedByLimit.response.status, 409);
+    assert.equal(blockedByLimit.body.code, "CONTACT_LIMIT_REACHED");
+
+    const ownerList = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(ownerList.response.status, 200, JSON.stringify(ownerList.body));
+    assert.deepEqual(
+      new Set(ownerList.body.contacts.map((contact) => contact.email)),
+      new Set(["alex@example.test", "jamie@example.test"]),
+    );
+    assert.deepEqual(ownerList.body.quota, {
+      used: 2,
+      limit: 2,
+      remaining: 0,
+      canAdd: false,
+      requiresSubscription: false,
+    });
+
+    const otherList = await api("/contacts", { cookie: other.cookie });
+    assert.equal(otherList.response.status, 200, JSON.stringify(otherList.body));
+    assert.equal(otherList.body.contacts.length, 0);
+    assert.equal(otherList.body.quota.requiresSubscription, true);
+    const subscriptionRequired = await api("/contacts", {
+      method: "POST",
+      cookie: other.cookie,
+      body: { name: "No Plan", email: "no-plan@example.test" },
+    });
+    assert.equal(subscriptionRequired.response.status, 403);
+    assert.equal(subscriptionRequired.body.code, "SUBSCRIPTION_REQUIRED");
+
+    const crossTenantDelete = await api(`/contacts/${first.body.id}`, {
+      method: "DELETE",
+      cookie: other.cookie,
+    });
+    assert.equal(crossTenantDelete.response.status, 404);
+    const deleted = await api(`/contacts/${first.body.id}`, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(deleted.response.status, 204);
+    const allowedAfterDelete = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Taylor Reed", email: "taylor@example.test" },
+    });
+    assert.equal(allowedAfterDelete.response.status, 201, JSON.stringify(allowedAfterDelete.body));
   });
 });
 

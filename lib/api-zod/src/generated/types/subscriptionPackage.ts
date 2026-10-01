@@ -17,6 +17,8 @@ export interface SubscriptionPackage {
      */
   currency: string;
   periodDays: number;
+  /** @minimum 0 */
+  contactLimit: number;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

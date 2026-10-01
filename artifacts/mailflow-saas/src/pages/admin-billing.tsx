@@ -26,11 +26,12 @@ type PackageDraft = {
   amount: string;
   currency: string;
   periodDays: string;
+  contactLimit: string;
   active: boolean;
 };
 
 const blankDraft: PackageDraft = {
-  name: '', description: '', amount: '', currency: 'INR', periodDays: '30', active: true,
+  name: '', description: '', amount: '', currency: 'INR', periodDays: '30', contactLimit: '5000', active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -41,14 +42,15 @@ function Panel({ children, className = '' }: { children: ReactNode; className?: 
 }
 
 function Field({
-  label, value, onChange, testId, type = 'text', placeholder, hint, step,
+  label, value, onChange, testId, type = 'text', placeholder, hint, step, min, max,
 }: {
   label: string; value: string; onChange: (value: string) => void; testId: string;
   type?: string; placeholder?: string; hint?: string; step?: string;
+  min?: number; max?: number;
 }) {
   return <label className="block min-w-0 space-y-1.5">
     <span className="text-[12px] font-semibold text-[#35445a]">{label}</span>
-    <input data-testid={testId} type={type} step={step} value={value} onChange={event => onChange(event.target.value)}
+    <input data-testid={testId} type={type} step={step} min={min} max={max} value={value} onChange={event => onChange(event.target.value)}
       placeholder={placeholder} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/>
     {hint && <span className="block text-[11px] text-[#85909c]">{hint}</span>}
   </label>;
@@ -101,7 +103,8 @@ export default function AdminBillingPage() {
     setDraft({
       name: pkg.name, description: pkg.description,
       amount: (pkg.amountMinor / (10 ** (new Intl.NumberFormat(undefined, { style: 'currency', currency: pkg.currency }).resolvedOptions().maximumFractionDigits ?? 2))).toString(),
-      currency: pkg.currency, periodDays: String(pkg.periodDays), active: pkg.active,
+      currency: pkg.currency, periodDays: String(pkg.periodDays),
+      contactLimit: String(pkg.contactLimit), active: pkg.active,
     });
     setNotice(null);
   };
@@ -112,7 +115,8 @@ export default function AdminBillingPage() {
     const payload: SubscriptionPackageInput = {
       name: draft.name.trim(), description: draft.description.trim(),
       amountMinor: inputMinor(draft.amount, currency), currency,
-      periodDays: Number(draft.periodDays), active: draft.active,
+      periodDays: Number(draft.periodDays), contactLimit: Number(draft.contactLimit),
+      active: draft.active,
     };
     if (editing) {
       updatePackage.mutate({ packageId: editing.id, data: payload }, {
@@ -239,16 +243,17 @@ export default function AdminBillingPage() {
         <div className="mb-4 flex items-center justify-between"><h3 className="text-[14px] font-bold text-[#23364b]">{editing ? `Edit ${editing.name}` : 'Create a package'}</h3>
           <button data-testid="button-close-package-form" onClick={resetPackageForm} className="rounded px-2 py-1 text-[11px] font-semibold text-[#6f7e8e] hover:bg-[#f1f4f6]">Close</button></div>
         <form onSubmit={submitPackage} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <Field label="Package name" value={draft.name} onChange={name => setDraft(d => ({ ...d, name }))} testId="input-package-name" placeholder="e.g. Team monthly"/>
              <Field label="Price" value={draft.amount} onChange={amount => setDraft(d => ({ ...d, amount }))} testId="input-package-amount" type="number" step="any" placeholder="0.00"/>
             <Field label="Currency code" value={draft.currency} onChange={currency => setDraft(d => ({ ...d, currency: currency.toUpperCase() }))} testId="input-package-currency" placeholder="INR" hint="Three-letter ISO 4217 code."/>
              <Field label="Term length (days)" value={draft.periodDays} onChange={periodDays => setDraft(d => ({ ...d, periodDays }))} testId="input-package-period-days" type="number" step="1" placeholder="30"/>
+            <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
           </div>
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Description</span><textarea data-testid="input-package-description" value={draft.description} onChange={event => setDraft(d => ({ ...d, description: event.target.value }))} rows={3} maxLength={2000} placeholder="What this package includes" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]"><input data-testid="input-package-active" type="checkbox" checked={draft.active} onChange={event => setDraft(d => ({ ...d, active: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>Available to customers</label>
           {(createPackage.isError || updatePackage.isError) && <p role="alert" data-testid="status-package-form-error" className="text-[12px] text-[#a84926]">{errorText(createPackage.error || updatePackage.error)}</p>}
-           <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || inputMinor(draft.amount, draft.currency) < 1 || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
+            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || inputMinor(draft.amount, draft.currency) < 1 || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1 || !Number.isInteger(Number(draft.contactLimit)) || Number(draft.contactLimit) < 0 || Number(draft.contactLimit) > 10000000} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}{busy ? 'Saving package' : editing ? 'Save changes' : 'Create package'}
           </button>
         </form>
@@ -259,7 +264,7 @@ export default function AdminBillingPage() {
           <div className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] gap-4 border-b border-[#e7ecf0] bg-[#f7f9fa] px-5 py-3 mono text-[9px] uppercase tracking-[.15em] text-[#83909d] md:grid"><span>Package</span><span>Rate & term</span><span>Visibility</span><span>Last updated</span><span className="text-right">Actions</span></div>
           <div className="divide-y divide-[#edf0f2]">{packages.map(pkg => <article key={pkg.id} data-testid={`row-subscription-package-${pkg.id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] md:items-center md:gap-4">
             <div><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
-            <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">per {pkg.periodDays} days · {pkg.currency}</div></div>
+            <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">per {pkg.periodDays} days · {pkg.currency}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts</div></div>
             <div><span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
             <div className="text-[11px] text-[#788695] md:text-[10px]">{new Date(pkg.updatedAt).toLocaleDateString()}</div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
