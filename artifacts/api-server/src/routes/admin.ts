@@ -35,6 +35,7 @@ import {
   applicationEmailConfigurationTable,
   auditLogsTable,
   db,
+  emailSendAttemptsTable,
   paymentsTable,
   subscriptionPackagesTable,
   systemConfigurationTable,
@@ -110,31 +111,6 @@ async function toAdminUsers(users: Array<typeof usersTable.$inferSelect>) {
   return users.map((user) => toAdminUser(user, statusByUser.get(user.id) ?? null));
 }
 
-router.get("/dashboard", async (req, res): Promise<void> => {
-  const userId = req.authUser?.id;
-  if (!userId || req.authUser?.role !== "USER") {
-    res.status(401).json({ error: "Please sign in to continue.", code: "UNAUTHENTICATED" });
-    return;
-  }
-  const { subscription } = await getCurrentSubscriptionForUser(userId);
-  res.json({
-    subscriptionStatus:
-      subscription?.status === "active"
-        ? "active"
-        : subscription?.status === "expired"
-          ? "expired"
-          : "inactive",
-    contacts: 0,
-    activeLists: 0,
-    emailsSent: 0,
-    delivered: 0,
-    bounced: 0,
-    remainingThisHour: 0,
-    setupStepsCompleted: req.authUser.emailVerified ? 1 : 0,
-    setupStepsTotal: 8,
-  });
-});
-
 router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<void> => {
   const liveUsers = and(
     eq(usersTable.role, "USER"),
@@ -194,6 +170,9 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
         gte(paymentsTable.updatedAt, monthStart),
       ),
     );
+  const [emailAttempts] = await db
+    .select({ value: count() })
+    .from(emailSendAttemptsTable);
   const minorUnitDigits = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: platformSettings.defaultCurrency,
@@ -209,7 +188,7 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       activeSubscriptions: subscriptionCount?.value ?? 0,
       revenueThisMonth:
         Number(revenue?.value ?? 0) / 10 ** (minorUnitDigits ?? 2),
-      emailsSent: 0,
+      emailsSent: emailAttempts?.value ?? 0,
       recentUsers: await toAdminUsers(recent),
     }),
   );

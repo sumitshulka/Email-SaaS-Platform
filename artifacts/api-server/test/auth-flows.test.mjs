@@ -149,14 +149,6 @@ memory.public.none(`
     ends_at timestamptz NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
   );
-  CREATE TABLE contacts (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name varchar(120) NOT NULL,
-    email varchar(254) NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (user_id, email)
-  );
   CREATE TABLE audit_logs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -166,6 +158,90 @@ memory.public.none(`
     ip_address varchar(80),
     metadata jsonb NOT NULL DEFAULT '{}',
     created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TYPE email_campaign_status AS ENUM ('draft', 'queued', 'sending', 'completed');
+  CREATE TYPE email_campaign_recipient_status AS ENUM ('queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown');
+  CREATE TABLE tenant_sending_configurations (
+    user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    provider varchar(32) NOT NULL DEFAULT 'other',
+    host varchar(255) NOT NULL,
+    port integer NOT NULL,
+    encryption varchar(10) NOT NULL,
+    username_encrypted text NOT NULL,
+    password_encrypted text NOT NULL,
+    from_name varchar(120) NOT NULL,
+    from_email varchar(254) NOT NULL,
+    reply_to varchar(254),
+    verified_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE contacts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name varchar(120) NOT NULL DEFAULT '',
+    email varchar(254) NOT NULL,
+    first_name varchar(100) NOT NULL DEFAULT '',
+    last_name varchar(100) NOT NULL DEFAULT '',
+    subscribed boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, email),
+    UNIQUE (id, user_id)
+  );
+  CREATE TABLE contact_lists (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name varchar(120) NOT NULL,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, name),
+    UNIQUE (id, user_id)
+  );
+  CREATE TABLE contact_list_members (
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    list_id uuid NOT NULL,
+    contact_id uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (list_id, user_id) REFERENCES contact_lists(id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (contact_id, user_id) REFERENCES contacts(id, user_id) ON DELETE CASCADE,
+    UNIQUE (user_id, list_id, contact_id)
+  );
+  CREATE TABLE email_campaigns (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
+    name varchar(160) NOT NULL,
+    subject varchar(200) NOT NULL,
+    text_body text NOT NULL,
+    status email_campaign_status NOT NULL DEFAULT 'draft',
+    queued_at timestamptz,
+    completed_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (id, user_id)
+  );
+  CREATE TABLE email_campaign_recipients (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    campaign_id uuid NOT NULL REFERENCES email_campaigns(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
+    email varchar(254) NOT NULL,
+    first_name varchar(100) NOT NULL DEFAULT '',
+    last_name varchar(100) NOT NULL DEFAULT '',
+    status email_campaign_recipient_status NOT NULL DEFAULT 'queued',
+    attempts integer NOT NULL DEFAULT 0,
+    next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    last_error text,
+    delivered_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE email_send_attempts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id uuid NOT NULL REFERENCES email_campaign_recipients(id) ON DELETE CASCADE,
+    attempted_at timestamptz NOT NULL DEFAULT now()
   );
 `);
 
@@ -206,19 +282,32 @@ const testDb = drizzle(memoryPool, { schema });
 const dbModule = await import("@workspace/db");
 dbModule.setTestDatabase(testDb);
 
-const [{ default: app }, emailModule, securityModule, seedModule, razorpayModule] = await Promise.all([
+const [
+  { default: app },
+  emailModule,
+  securityModule,
+  seedModule,
+  razorpayModule,
+  campaignWorkerModule,
+] = await Promise.all([
   import("../src/app.ts"),
   import("../src/lib/application-email.ts"),
   import("../src/lib/security.ts"),
   import("../src/lib/seed.ts"),
   import("../src/lib/razorpay.ts"),
+  import("../src/lib/campaign-worker.ts"),
 ]);
 
 const { db, usersTable, userSessionsTable, loginAttemptsTable, otpVerificationsTable } =
   dbModule;
 const emails = [];
+const tenantDeliveries = [];
 emailModule.setApplicationEmailTransportForTests(async (message) => {
   emails.push(message);
+});
+emailModule.setTenantEmailTransportForTests(async (message) => {
+  tenantDeliveries.push(message);
+  return { accepted: true };
 });
 
 let server;
@@ -242,6 +331,13 @@ after(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(dbModule.emailSendAttemptsTable);
+  await db.delete(dbModule.emailCampaignRecipientsTable);
+  await db.delete(dbModule.emailCampaignsTable);
+  await db.delete(dbModule.contactListMembersTable);
+  await db.delete(dbModule.contactsTable);
+  await db.delete(dbModule.contactListsTable);
+  await db.delete(dbModule.tenantSendingConfigurationTable);
   await db.delete(dbModule.auditLogsTable);
   await db.delete(dbModule.contactsTable);
   await db.delete(dbModule.userSubscriptionsTable);
@@ -265,6 +361,7 @@ beforeEach(async () => {
     fromEmail: "no-reply@mailflow.test",
   });
   emails.length = 0;
+  tenantDeliveries.length = 0;
 });
 
 async function api(path, { method = "GET", body, cookie } = {}) {
@@ -838,5 +935,191 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(deletedSession.revokedAt);
     const deletedAgain = await login(deletedUser.email);
     assert.equal(deletedAgain.response.status, 401);
+  });
+});
+
+describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
+    const owner = await loggedInUser({ username: "sending-owner" });
+    const other = await loggedInUser({ username: "sending-other" });
+
+    const ownerList = await api("/contact-lists", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Owner audience" },
+    });
+    const otherList = await api("/contact-lists", {
+      method: "POST",
+      cookie: other.cookie,
+      body: { name: "Other audience" },
+    });
+    assert.equal(ownerList.response.status, 201);
+    assert.equal(otherList.response.status, 201);
+
+    const ownerContacts = await Promise.all(
+      ["one@owner.test", "two@owner.test", "three@owner.test"].map((email) =>
+        api("/contacts", {
+          method: "POST",
+          cookie: owner.cookie,
+          body: {
+            email,
+            firstName: "Owner",
+            lastName: "Contact",
+            subscribed: true,
+            listIds: [ownerList.body.id],
+          },
+        }),
+      ),
+    );
+    const otherContact = await api("/contacts", {
+      method: "POST",
+      cookie: other.cookie,
+      body: {
+        email: "person@other.test",
+        firstName: "Other",
+        lastName: "Contact",
+        subscribed: true,
+        listIds: [otherList.body.id],
+      },
+    });
+    assert.ok(ownerContacts.every((result) => result.response.status === 201));
+    assert.equal(otherContact.response.status, 201);
+
+    const isolatedContacts = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(isolatedContacts.response.status, 200);
+    assert.equal(isolatedContacts.body.length, 3);
+    assert.ok(isolatedContacts.body.every((contact) => contact.email.endsWith("@owner.test")));
+    const crossTenantMembership = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        email: "intruder@owner.test",
+        firstName: "Invalid",
+        lastName: "Membership",
+        subscribed: true,
+        listIds: [otherList.body.id],
+      },
+    });
+    assert.equal(crossTenantMembership.response.status, 400);
+    const crossTenantEdit = await api(`/contacts/${otherContact.body.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { firstName: "Changed by another tenant" },
+    });
+    assert.equal(crossTenantEdit.response.status, 404);
+
+    const savedSender = await api("/sending/settings", {
+      method: "PUT",
+      cookie: owner.cookie,
+      body: {
+        provider: "other",
+        host: "smtp.owner.test",
+        port: 2525,
+        encryption: "none",
+        username: "smtp-owner-user",
+        password: "smtp-owner-secret",
+        fromName: "Owner Mail",
+        fromEmail: "mail@owner.test",
+      },
+    });
+    assert.equal(savedSender.response.status, 200, JSON.stringify(savedSender.body));
+    assert.equal(savedSender.body.username, "••••••");
+    assert.equal("password" in savedSender.body, false);
+    const [storedSender] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, owner.user.id));
+    assert.notEqual(storedSender.usernameEncrypted, "smtp-owner-user");
+    assert.notEqual(storedSender.passwordEncrypted, "smtp-owner-secret");
+    assert.equal(securityModule.decryptSecret(storedSender.usernameEncrypted), "smtp-owner-user");
+    assert.equal(securityModule.decryptSecret(storedSender.passwordEncrypted), "smtp-owner-secret");
+
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      if (message.subject === "Mailflow sender identity test") {
+        return { accepted: true };
+      }
+      if (message.to === "one@owner.test") return { accepted: true };
+      return { accepted: false, error: "Recipient rejected by test transport." };
+    });
+    const testedSender = await api("/sending/settings/test", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { toEmail: "owner@owner.test" },
+    });
+    assert.equal(testedSender.response.status, 200, JSON.stringify(testedSender.body));
+    assert.ok(testedSender.body.verifiedAt);
+    assert.equal(emails.length, 0, "tenant test mail must not use platform notification SMTP");
+    const otherSender = await api("/sending/settings", { cookie: other.cookie });
+    assert.equal(otherSender.body.credentialsConfigured, false);
+
+    const campaign = await api("/campaigns", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        name: "Owner campaign",
+        subject: "A workspace update",
+        textBody: "A short plain-text campaign.",
+        listId: ownerList.body.id,
+      },
+    });
+    assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: { defaultEmailsPerHour: 1, maxEmailsPerDay: 10 },
+    });
+    const queued = await api(`/campaigns/${campaign.body.id}/send`, {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
+    assert.equal(queued.body.recipients, 3);
+    const unsubscribed = await api(`/contacts/${ownerContacts[2].body.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { subscribed: false },
+    });
+    assert.equal(unsubscribed.response.status, 200);
+
+    const firstBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
+    assert.equal(firstBatch, 1);
+    const afterRateLimit = await api("/campaigns", { cookie: owner.cookie });
+    const partialCampaign = afterRateLimit.body.find((item) => item.id === campaign.body.id);
+    assert.equal(partialCampaign.delivered, 1);
+    assert.equal(partialCampaign.queued, 1);
+    assert.equal(partialCampaign.suppressed, 1);
+    assert.equal(partialCampaign.status, "sending");
+
+    await db
+      .update(dbModule.systemConfigurationTable)
+      .set({ value: { defaultEmailsPerHour: 100, maxEmailsPerDay: 10 } })
+      .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+      .where(eq(dbModule.emailCampaignRecipientsTable.status, "queued"));
+    const secondBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
+    assert.equal(secondBatch, 1);
+
+    const finalCampaigns = await api("/campaigns", { cookie: owner.cookie });
+    const finalCampaign = finalCampaigns.body.find((item) => item.id === campaign.body.id);
+    assert.equal(finalCampaign.status, "completed");
+    assert.equal(finalCampaign.delivered, 1);
+    assert.equal(finalCampaign.bounced, 1);
+    assert.equal(finalCampaign.suppressed, 1);
+    assert.equal(finalCampaign.queued, 0);
+    assert.equal(tenantDeliveries.filter((message) => message.subject === "A workspace update").length, 2);
+
+    const ownerDashboard = await api("/dashboard", { cookie: owner.cookie });
+    const otherDashboard = await api("/dashboard", { cookie: other.cookie });
+    assert.equal(ownerDashboard.response.status, 200);
+    assert.equal(ownerDashboard.body.contacts, 3);
+    assert.equal(ownerDashboard.body.activeLists, 1);
+    assert.equal(ownerDashboard.body.emailsSent, 2);
+    assert.equal(ownerDashboard.body.delivered, 1);
+    assert.equal(ownerDashboard.body.bounced, 1);
+    assert.equal(otherDashboard.body.contacts, 1);
+    assert.equal(otherDashboard.body.emailsSent, 0);
   });
 });

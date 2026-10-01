@@ -18,12 +18,11 @@ export interface MessageResponse {
   message: string;
 }
 
-export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
-
+export type AuthUserRole = (typeof AuthUserRole)[keyof typeof AuthUserRole];
 
 export const AuthUserRole = {
-  SUPERADMIN: 'SUPERADMIN',
-  USER: 'USER',
+  SUPERADMIN: "SUPERADMIN",
+  USER: "USER",
 } as const;
 
 export interface AuthUser {
@@ -46,43 +45,43 @@ export interface AuthResponse {
 
 export interface LoginInput {
   /**
-     * @minLength 1
-     * @maxLength 254
-     */
+   * @minLength 1
+   * @maxLength 254
+   */
   identifier: string;
   /**
-     * @minLength 1
-     * @maxLength 256
-     */
+   * @minLength 1
+   * @maxLength 256
+   */
   password: string;
 }
 
 export interface RegisterInput {
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   firstName: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   lastName: string;
   /** @maxLength 254 */
   email: string;
   /**
-     * @minLength 8
-     * @maxLength 256
-     */
+   * @minLength 8
+   * @maxLength 256
+   */
   password: string;
 }
 
 export interface VerifyEmailInput {
   email: string;
   /**
-     * @minLength 6
-     * @maxLength 6
-     */
+   * @minLength 6
+   * @maxLength 6
+   */
   code: string;
 }
 
@@ -92,62 +91,62 @@ export interface ForgotPasswordInput {
 
 export interface ResetPasswordInput {
   /**
-     * @minLength 32
-     * @maxLength 256
-     */
+   * @minLength 32
+   * @maxLength 256
+   */
   token: string;
   /**
-     * @minLength 8
-     * @maxLength 256
-     */
+   * @minLength 8
+   * @maxLength 256
+   */
   password: string;
 }
 
 export interface ChangePasswordInput {
   /**
-     * @minLength 1
-     * @maxLength 256
-     */
+   * @minLength 1
+   * @maxLength 256
+   */
   currentPassword: string;
   /**
-     * @minLength 8
-     * @maxLength 256
-     */
+   * @minLength 8
+   * @maxLength 256
+   */
   newPassword: string;
 }
 
 export interface ProfileUpdateInput {
   /**
-     * @minLength 3
-     * @maxLength 50
-     */
+   * @minLength 3
+   * @maxLength 50
+   */
   username?: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   firstName?: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   lastName?: string;
   /** @maxLength 254 */
   email?: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   timezone?: string;
 }
 
-export type UserDashboardSubscriptionStatus = typeof UserDashboardSubscriptionStatus[keyof typeof UserDashboardSubscriptionStatus];
-
+export type UserDashboardSubscriptionStatus =
+  (typeof UserDashboardSubscriptionStatus)[keyof typeof UserDashboardSubscriptionStatus];
 
 export const UserDashboardSubscriptionStatus = {
-  inactive: 'inactive',
-  active: 'active',
-  expired: 'expired',
+  inactive: "inactive",
+  active: "active",
+  expired: "expired",
 } as const;
 
 export interface UserDashboard {
@@ -160,6 +159,252 @@ export interface UserDashboard {
   remainingThisHour: number;
   setupStepsCompleted: number;
   setupStepsTotal: number;
+}
+
+export type TenantSendingSettingsProvider =
+  (typeof TenantSendingSettingsProvider)[keyof typeof TenantSendingSettingsProvider];
+
+export const TenantSendingSettingsProvider = {
+  google_workspace: "google_workspace",
+  gmail: "gmail",
+  microsoft_365: "microsoft_365",
+  other: "other",
+} as const;
+
+/**
+ * @nullable
+ */
+export type TenantSendingSettingsEncryption =
+  | (typeof TenantSendingSettingsEncryption)[keyof typeof TenantSendingSettingsEncryption]
+  | null;
+
+export const TenantSendingSettingsEncryption = {
+  none: "none",
+  ssl: "ssl",
+  tls: "tls",
+} as const;
+
+export interface TenantSendingSettings {
+  provider: TenantSendingSettingsProvider;
+  /** @nullable */
+  host: string | null;
+  /** @nullable */
+  port: number | null;
+  /** @nullable */
+  encryption: TenantSendingSettingsEncryption;
+  /** @nullable */
+  username: string | null;
+  credentialsConfigured: boolean;
+  /** @nullable */
+  fromName: string | null;
+  /** @nullable */
+  fromEmail: string | null;
+  /** @nullable */
+  replyTo: string | null;
+  verified: boolean;
+  /** @nullable */
+  verifiedAt: string | null;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export type TenantSendingSettingsInputProvider =
+  (typeof TenantSendingSettingsInputProvider)[keyof typeof TenantSendingSettingsInputProvider];
+
+export const TenantSendingSettingsInputProvider = {
+  google_workspace: "google_workspace",
+  gmail: "gmail",
+  microsoft_365: "microsoft_365",
+  other: "other",
+} as const;
+
+export type TenantSendingSettingsInputEncryption =
+  (typeof TenantSendingSettingsInputEncryption)[keyof typeof TenantSendingSettingsInputEncryption];
+
+export const TenantSendingSettingsInputEncryption = {
+  none: "none",
+  ssl: "ssl",
+  tls: "tls",
+} as const;
+
+export interface TenantSendingSettingsInput {
+  provider: TenantSendingSettingsInputProvider;
+  /**
+   * @minLength 1
+   * @maxLength 255
+   */
+  host: string;
+  /**
+   * @minimum 1
+   * @maximum 65535
+   */
+  port: number;
+  encryption: TenantSendingSettingsInputEncryption;
+  /**
+   * @minLength 1
+   * @maxLength 254
+   */
+  username?: string;
+  /** @maxLength 512 */
+  password?: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  fromName: string;
+  fromEmail: string;
+  replyTo?: string;
+}
+
+export interface TenantSendingTestInput {
+  toEmail: string;
+}
+
+export interface TenantSendingTestResponse {
+  message: string;
+  verifiedAt: string;
+}
+
+export interface Contact {
+  id: string;
+  email: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  subscribed: boolean;
+  listIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContactInput {
+  /** @maxLength 254 */
+  email: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+  /** @maxLength 100 */
+  firstName?: string;
+  /** @maxLength 100 */
+  lastName?: string;
+  subscribed?: boolean;
+  /** @maxItems 100 */
+  listIds?: string[];
+}
+
+export interface ContactUpdate {
+  /** @maxLength 254 */
+  email?: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name?: string;
+  /** @maxLength 100 */
+  firstName?: string;
+  /** @maxLength 100 */
+  lastName?: string;
+  subscribed?: boolean;
+  /** @maxItems 100 */
+  listIds?: string[];
+}
+
+export interface ContactList {
+  id: string;
+  name: string;
+  active: boolean;
+  contactCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContactListInput {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+}
+
+export interface ContactListUpdate {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name?: string;
+  active?: boolean;
+}
+
+export type CampaignSummaryStatus =
+  (typeof CampaignSummaryStatus)[keyof typeof CampaignSummaryStatus];
+
+export const CampaignSummaryStatus = {
+  draft: "draft",
+  queued: "queued",
+  sending: "sending",
+  completed: "completed",
+} as const;
+
+export interface CampaignSummary {
+  id: string;
+  name: string;
+  subject: string;
+  textBody: string;
+  /** @nullable */
+  listId: string | null;
+  status: CampaignSummaryStatus;
+  recipients: number;
+  queued: number;
+  delivered: number;
+  bounced: number;
+  suppressed: number;
+  unknown: number;
+  /** @nullable */
+  queuedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignInput {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  name: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  subject: string;
+  /**
+   * @minLength 1
+   * @maxLength 100000
+   */
+  textBody: string;
+  listId: string;
+}
+
+export interface CampaignUpdate {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  name?: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  subject?: string;
+  /**
+   * @minLength 1
+   * @maxLength 100000
+   */
+  textBody?: string;
+  listId?: string;
 }
 
 export interface AdminUser {
@@ -200,12 +445,12 @@ export interface UserStatusInput {
   active: boolean;
 }
 
-export type PlatformSettingsPackageVisibility = typeof PlatformSettingsPackageVisibility[keyof typeof PlatformSettingsPackageVisibility];
-
+export type PlatformSettingsPackageVisibility =
+  (typeof PlatformSettingsPackageVisibility)[keyof typeof PlatformSettingsPackageVisibility];
 
 export const PlatformSettingsPackageVisibility = {
-  public: 'public',
-  hidden: 'hidden',
+  public: "public",
+  hidden: "hidden",
 } as const;
 
 export interface PlatformSettings {
@@ -240,34 +485,34 @@ export interface PlatformSettings {
   updatedAt: string | null;
 }
 
-export type PlatformSettingsInputPackageVisibility = typeof PlatformSettingsInputPackageVisibility[keyof typeof PlatformSettingsInputPackageVisibility];
-
+export type PlatformSettingsInputPackageVisibility =
+  (typeof PlatformSettingsInputPackageVisibility)[keyof typeof PlatformSettingsInputPackageVisibility];
 
 export const PlatformSettingsInputPackageVisibility = {
-  public: 'public',
-  hidden: 'hidden',
+  public: "public",
+  hidden: "hidden",
 } as const;
 
 export interface PlatformSettingsInput {
   /**
-     * @minLength 1
-     * @maxLength 100
-     */
+   * @minLength 1
+   * @maxLength 100
+   */
   applicationName: string;
   /**
-     * @minLength 3
-     * @maxLength 3
-     */
+   * @minLength 3
+   * @maxLength 3
+   */
   defaultCurrency: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   defaultTimezone: string;
   /**
-     * @minLength 1
-     * @maxLength 40
-     */
+   * @minLength 1
+   * @maxLength 40
+   */
   dateFormat: string;
   supportEmail: string;
   /** @maxLength 40 */
@@ -279,29 +524,29 @@ export interface PlatformSettingsInput {
   maxUploadFileSizeMb: number;
   allowedContactFileTypes: string[];
   /**
-     * @minimum 8
-     * @maximum 128
-     */
+   * @minimum 8
+   * @maximum 128
+   */
   passwordMinimumLength: number;
   /**
-     * @minimum 1
-     * @maximum 60
-     */
+   * @minimum 1
+   * @maximum 60
+   */
   otpExpiryMinutes: number;
   /**
-     * @minimum 1
-     * @maximum 10
-     */
+   * @minimum 1
+   * @maximum 10
+   */
   maxOtpAttempts: number;
   /**
-     * @minimum 3
-     * @maximum 20
-     */
+   * @minimum 3
+   * @maximum 20
+   */
   loginAttemptThreshold: number;
   /**
-     * @minimum 1
-     * @maximum 720
-     */
+   * @minimum 1
+   * @maximum 720
+   */
   sessionDurationHours: number;
   /** @minimum 1 */
   defaultEmailsPerHour: number;
@@ -310,14 +555,14 @@ export interface PlatformSettingsInput {
   /** @minimum 1 */
   maxCampaignSize: number;
   /**
-     * @minimum 1
-     * @maximum 1
-     */
+   * @minimum 1
+   * @maximum 1
+   */
   maxConcurrentCampaigns: number;
   /**
-     * @minimum 0
-     * @maximum 10
-     */
+   * @minimum 0
+   * @maximum 10
+   */
   retryAttempts: number;
   /** @minimum 1 */
   retryDelaySeconds: number;
@@ -332,26 +577,27 @@ export interface PlatformSettingsInput {
   packageVisibility: PlatformSettingsInputPackageVisibility;
 }
 
-export type ApplicationEmailSettingsProvider = typeof ApplicationEmailSettingsProvider[keyof typeof ApplicationEmailSettingsProvider];
-
+export type ApplicationEmailSettingsProvider =
+  (typeof ApplicationEmailSettingsProvider)[keyof typeof ApplicationEmailSettingsProvider];
 
 export const ApplicationEmailSettingsProvider = {
-  google_workspace: 'google_workspace',
-  gmail: 'gmail',
-  microsoft_365: 'microsoft_365',
-  other: 'other',
+  google_workspace: "google_workspace",
+  gmail: "gmail",
+  microsoft_365: "microsoft_365",
+  other: "other",
 } as const;
 
 /**
  * @nullable
  */
-export type ApplicationEmailSettingsEncryption = typeof ApplicationEmailSettingsEncryption[keyof typeof ApplicationEmailSettingsEncryption] | null;
-
+export type ApplicationEmailSettingsEncryption =
+  | (typeof ApplicationEmailSettingsEncryption)[keyof typeof ApplicationEmailSettingsEncryption]
+  | null;
 
 export const ApplicationEmailSettingsEncryption = {
-  none: 'none',
-  ssl: 'ssl',
-  tls: 'tls',
+  none: "none",
+  ssl: "ssl",
+  tls: "tls",
 } as const;
 
 export interface ApplicationEmailSettings {
@@ -375,49 +621,49 @@ export interface ApplicationEmailSettings {
   updatedAt: string | null;
 }
 
-export type ApplicationEmailSettingsInputProvider = typeof ApplicationEmailSettingsInputProvider[keyof typeof ApplicationEmailSettingsInputProvider];
-
+export type ApplicationEmailSettingsInputProvider =
+  (typeof ApplicationEmailSettingsInputProvider)[keyof typeof ApplicationEmailSettingsInputProvider];
 
 export const ApplicationEmailSettingsInputProvider = {
-  google_workspace: 'google_workspace',
-  gmail: 'gmail',
-  microsoft_365: 'microsoft_365',
-  other: 'other',
+  google_workspace: "google_workspace",
+  gmail: "gmail",
+  microsoft_365: "microsoft_365",
+  other: "other",
 } as const;
 
-export type ApplicationEmailSettingsInputEncryption = typeof ApplicationEmailSettingsInputEncryption[keyof typeof ApplicationEmailSettingsInputEncryption];
-
+export type ApplicationEmailSettingsInputEncryption =
+  (typeof ApplicationEmailSettingsInputEncryption)[keyof typeof ApplicationEmailSettingsInputEncryption];
 
 export const ApplicationEmailSettingsInputEncryption = {
-  none: 'none',
-  ssl: 'ssl',
-  tls: 'tls',
+  none: "none",
+  ssl: "ssl",
+  tls: "tls",
 } as const;
 
 export interface ApplicationEmailSettingsInput {
   provider: ApplicationEmailSettingsInputProvider;
   /**
-     * @minLength 1
-     * @maxLength 255
-     */
+   * @minLength 1
+   * @maxLength 255
+   */
   host: string;
   /**
-     * @minimum 1
-     * @maximum 65535
-     */
+   * @minimum 1
+   * @maximum 65535
+   */
   port: number;
   encryption: ApplicationEmailSettingsInputEncryption;
   /**
-     * @minLength 1
-     * @maxLength 254
-     */
+   * @minLength 1
+   * @maxLength 254
+   */
   username?: string;
   /** @maxLength 512 */
   password?: string;
   /**
-     * @minLength 1
-     * @maxLength 120
-     */
+   * @minLength 1
+   * @maxLength 120
+   */
   fromName: string;
   fromEmail: string;
   replyTo?: string;
@@ -427,12 +673,12 @@ export interface TestEmailInput {
   toEmail: string;
 }
 
-export type RazorpayEnvironment = typeof RazorpayEnvironment[keyof typeof RazorpayEnvironment];
-
+export type RazorpayEnvironment =
+  (typeof RazorpayEnvironment)[keyof typeof RazorpayEnvironment];
 
 export const RazorpayEnvironment = {
-  sandbox: 'sandbox',
-  production: 'production',
+  sandbox: "sandbox",
+  production: "production",
 } as const;
 
 export interface RazorpayEnvironmentSettings {
@@ -456,19 +702,19 @@ export interface RazorpaySettings {
 export interface RazorpaySettingsInput {
   environment: RazorpayEnvironment;
   /**
-     * @minLength 3
-     * @maxLength 255
-     */
+   * @minLength 3
+   * @maxLength 255
+   */
   keyId: string;
   /**
-     * @minLength 1
-     * @maxLength 512
-     */
+   * @minLength 1
+   * @maxLength 512
+   */
   keySecret?: string;
   /**
-     * @minLength 1
-     * @maxLength 512
-     */
+   * @minLength 1
+   * @maxLength 512
+   */
   webhookSecret?: string;
 }
 
@@ -491,9 +737,9 @@ export interface SubscriptionPackage {
   description: string;
   amountMinor: number;
   /**
-     * @minLength 3
-     * @maxLength 3
-     */
+   * @minLength 3
+   * @maxLength 3
+   */
   currency: string;
   periodDays: number;
   /** @minimum 0 */
@@ -509,75 +755,58 @@ export interface SubscriptionPackageList {
 
 export interface SubscriptionPackageInput {
   /**
-     * @minLength 2
-     * @maxLength 120
-     */
+   * @minLength 2
+   * @maxLength 120
+   */
   name: string;
   /** @maxLength 2000 */
   description: string;
   /**
-     * @minimum 1
-     * @maximum 100000000
-     */
+   * @minimum 1
+   * @maximum 100000000
+   */
   amountMinor: number;
   /** @pattern ^[A-Z]{3}$ */
   currency: string;
   /**
-     * @minimum 1
-     * @maximum 3660
-     */
+   * @minimum 1
+   * @maximum 3660
+   */
   periodDays: number;
   /**
-     * @minimum 0
-     * @maximum 10000000
-     */
+   * @minimum 0
+   * @maximum 10000000
+   */
   contactLimit: number;
   active: boolean;
 }
 
 export interface SubscriptionPackageUpdateInput {
   /**
-     * @minLength 2
-     * @maxLength 120
-     */
+   * @minLength 2
+   * @maxLength 120
+   */
   name?: string;
   /** @maxLength 2000 */
   description?: string;
   /**
-     * @minimum 1
-     * @maximum 100000000
-     */
+   * @minimum 1
+   * @maximum 100000000
+   */
   amountMinor?: number;
   /** @pattern ^[A-Z]{3}$ */
   currency?: string;
   /**
-     * @minimum 1
-     * @maximum 3660
-     */
+   * @minimum 1
+   * @maximum 3660
+   */
   periodDays?: number;
   /**
-     * @minimum 0
-     * @maximum 10000000
-     */
+   * @minimum 0
+   * @maximum 10000000
+   */
   contactLimit?: number;
   active?: boolean;
-}
-
-export interface Contact {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-}
-
-export interface ContactInput {
-  /**
-     * @minLength 1
-     * @maxLength 120
-     */
-  name: string;
-  /** @maxLength 254 */
-  email: string;
 }
 
 export interface ContactQuota {
@@ -591,7 +820,7 @@ export interface ContactQuota {
   requiresSubscription: boolean;
 }
 
-export interface ContactList {
+export interface ContactCollection {
   contacts: Contact[];
   quota: ContactQuota;
 }
@@ -611,14 +840,14 @@ export interface SubscriptionOrderCreated {
   customerEmail: string;
 }
 
-export type SubscriptionSummaryStatus = typeof SubscriptionSummaryStatus[keyof typeof SubscriptionSummaryStatus];
-
+export type SubscriptionSummaryStatus =
+  (typeof SubscriptionSummaryStatus)[keyof typeof SubscriptionSummaryStatus];
 
 export const SubscriptionSummaryStatus = {
-  active: 'active',
-  superseded: 'superseded',
-  cancelled: 'cancelled',
-  expired: 'expired',
+  active: "active",
+  superseded: "superseded",
+  cancelled: "cancelled",
+  expired: "expired",
 } as const;
 
 export interface SubscriptionSummary {
@@ -636,28 +865,28 @@ export interface CurrentSubscription {
 export interface VerifyRazorpayPaymentInput {
   paymentId: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   razorpayOrderId: string;
   /**
-     * @minLength 1
-     * @maxLength 80
-     */
+   * @minLength 1
+   * @maxLength 80
+   */
   razorpayPaymentId: string;
   /**
-     * @minLength 64
-     * @maxLength 64
-     */
+   * @minLength 64
+   * @maxLength 64
+   */
   razorpaySignature: string;
 }
 
-export type PaymentVerificationResultStatus = typeof PaymentVerificationResultStatus[keyof typeof PaymentVerificationResultStatus];
-
+export type PaymentVerificationResultStatus =
+  (typeof PaymentVerificationResultStatus)[keyof typeof PaymentVerificationResultStatus];
 
 export const PaymentVerificationResultStatus = {
-  pending: 'pending',
-  active: 'active',
+  pending: "pending",
+  active: "active",
 } as const;
 
 export interface PaymentVerificationResult {
@@ -666,29 +895,30 @@ export interface PaymentVerificationResult {
   subscription: SubscriptionSummary | null;
 }
 
-export interface RazorpayWebhookPayload { [key: string]: unknown }
+export interface RazorpayWebhookPayload {
+  [key: string]: unknown;
+}
 
 export type ListAdminUsersParams = {
-search?: string;
-status?: ListAdminUsersStatus;
-/**
- * @minimum 1
- */
-page?: number;
-/**
- * @minimum 1
- * @maximum 100
- */
-pageSize?: number;
+  search?: string;
+  status?: ListAdminUsersStatus;
+  /**
+   * @minimum 1
+   */
+  page?: number;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  pageSize?: number;
 };
 
-export type ListAdminUsersStatus = typeof ListAdminUsersStatus[keyof typeof ListAdminUsersStatus];
-
+export type ListAdminUsersStatus =
+  (typeof ListAdminUsersStatus)[keyof typeof ListAdminUsersStatus];
 
 export const ListAdminUsersStatus = {
-  all: 'all',
-  active: 'active',
-  inactive: 'inactive',
-  pending: 'pending',
+  all: "all",
+  active: "active",
+  inactive: "inactive",
+  pending: "pending",
 } as const;
-

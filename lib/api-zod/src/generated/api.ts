@@ -5,17 +5,15 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
-import * as zod from 'zod';
-
+import * as zod from "zod";
 
 /**
  * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
-  "status": zod.string()
-})
-
+  status: zod.string(),
+});
 
 /**
  * @summary Sign in with username or email
@@ -24,29 +22,26 @@ export const loginBodyIdentifierMax = 254;
 
 export const loginBodyPasswordMax = 256;
 
-
-
 export const LoginBody = zod.object({
-  "identifier": zod.string().min(1).max(loginBodyIdentifierMax),
-  "password": zod.string().min(1).max(loginBodyPasswordMax)
-})
+  identifier: zod.string().min(1).max(loginBodyIdentifierMax),
+  password: zod.string().min(1).max(loginBodyPasswordMax),
+});
 
 export const LoginResponse = zod.object({
-  "user": zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "role": zod.enum(['SUPERADMIN', 'USER']),
-  "timezone": zod.string(),
-  "active": zod.boolean(),
-  "emailVerified": zod.boolean(),
-  "mustChangeCredentials": zod.boolean(),
-  "createdAt": zod.coerce.date()
-})
-})
-
+  user: zod.object({
+    id: zod.string().uuid(),
+    username: zod.string(),
+    firstName: zod.string(),
+    lastName: zod.string(),
+    email: zod.string().email(),
+    role: zod.enum(["SUPERADMIN", "USER"]),
+    timezone: zod.string(),
+    active: zod.boolean(),
+    emailVerified: zod.boolean(),
+    mustChangeCredentials: zod.boolean(),
+    createdAt: zod.coerce.date(),
+  }),
+});
 
 /**
  * @summary Register a tenant account and send email verification
@@ -60,19 +55,19 @@ export const registerBodyEmailMax = 254;
 export const registerBodyPasswordMin = 8;
 export const registerBodyPasswordMax = 256;
 
-
-
 export const RegisterBody = zod.object({
-  "firstName": zod.string().min(1).max(registerBodyFirstNameMax),
-  "lastName": zod.string().min(1).max(registerBodyLastNameMax),
-  "email": zod.string().email().max(registerBodyEmailMax),
-  "password": zod.string().min(registerBodyPasswordMin).max(registerBodyPasswordMax)
-})
+  firstName: zod.string().min(1).max(registerBodyFirstNameMax),
+  lastName: zod.string().min(1).max(registerBodyLastNameMax),
+  email: zod.string().email().max(registerBodyEmailMax),
+  password: zod
+    .string()
+    .min(registerBodyPasswordMin)
+    .max(registerBodyPasswordMax),
+});
 
 export const RegisterResponse = zod.object({
-  "message": zod.string()
-})
-
+  message: zod.string(),
+});
 
 /**
  * @summary Verify a registration email with a one-time code
@@ -80,41 +75,40 @@ export const RegisterResponse = zod.object({
 export const verifyRegistrationEmailBodyCodeMin = 6;
 export const verifyRegistrationEmailBodyCodeMax = 6;
 
-
-
 export const VerifyRegistrationEmailBody = zod.object({
-  "email": zod.string().email(),
-  "code": zod.string().min(verifyRegistrationEmailBodyCodeMin).max(verifyRegistrationEmailBodyCodeMax)
-})
+  email: zod.string().email(),
+  code: zod
+    .string()
+    .min(verifyRegistrationEmailBodyCodeMin)
+    .max(verifyRegistrationEmailBodyCodeMax),
+});
 
 export const VerifyRegistrationEmailResponse = zod.object({
-  "user": zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "role": zod.enum(['SUPERADMIN', 'USER']),
-  "timezone": zod.string(),
-  "active": zod.boolean(),
-  "emailVerified": zod.boolean(),
-  "mustChangeCredentials": zod.boolean(),
-  "createdAt": zod.coerce.date()
-})
-})
-
+  user: zod.object({
+    id: zod.string().uuid(),
+    username: zod.string(),
+    firstName: zod.string(),
+    lastName: zod.string(),
+    email: zod.string().email(),
+    role: zod.enum(["SUPERADMIN", "USER"]),
+    timezone: zod.string(),
+    active: zod.boolean(),
+    emailVerified: zod.boolean(),
+    mustChangeCredentials: zod.boolean(),
+    createdAt: zod.coerce.date(),
+  }),
+});
 
 /**
  * @summary Send a password reset link without revealing account existence
  */
 export const RequestPasswordResetBody = zod.object({
-  "email": zod.string().email()
-})
+  email: zod.string().email(),
+});
 
 export const RequestPasswordResetResponse = zod.object({
-  "message": zod.string()
-})
-
+  message: zod.string(),
+});
 
 /**
  * @summary Set a new password using a one-time reset token
@@ -125,41 +119,42 @@ export const resetPasswordBodyTokenMax = 256;
 export const resetPasswordBodyPasswordMin = 8;
 export const resetPasswordBodyPasswordMax = 256;
 
-
-
 export const ResetPasswordBody = zod.object({
-  "token": zod.string().min(resetPasswordBodyTokenMin).max(resetPasswordBodyTokenMax),
-  "password": zod.string().min(resetPasswordBodyPasswordMin).max(resetPasswordBodyPasswordMax)
-})
+  token: zod
+    .string()
+    .min(resetPasswordBodyTokenMin)
+    .max(resetPasswordBodyTokenMax),
+  password: zod
+    .string()
+    .min(resetPasswordBodyPasswordMin)
+    .max(resetPasswordBodyPasswordMax),
+});
 
 export const ResetPasswordResponse = zod.object({
-  "message": zod.string()
-})
-
+  message: zod.string(),
+});
 
 /**
  * @summary Get the authenticated user
  */
 export const GetCurrentUserResponse = zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "role": zod.enum(['SUPERADMIN', 'USER']),
-  "timezone": zod.string(),
-  "active": zod.boolean(),
-  "emailVerified": zod.boolean(),
-  "mustChangeCredentials": zod.boolean(),
-  "createdAt": zod.coerce.date()
-})
-
+  id: zod.string().uuid(),
+  username: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().email(),
+  role: zod.enum(["SUPERADMIN", "USER"]),
+  timezone: zod.string(),
+  active: zod.boolean(),
+  emailVerified: zod.boolean(),
+  mustChangeCredentials: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
 
 /**
  * @summary Revoke the current session
  */
-export const LogoutResponse = zod.void()
-
+export const LogoutResponse = zod.void();
 
 /**
  * @summary Change the authenticated user's password
@@ -169,17 +164,20 @@ export const changePasswordBodyCurrentPasswordMax = 256;
 export const changePasswordBodyNewPasswordMin = 8;
 export const changePasswordBodyNewPasswordMax = 256;
 
-
-
 export const ChangePasswordBody = zod.object({
-  "currentPassword": zod.string().min(1).max(changePasswordBodyCurrentPasswordMax),
-  "newPassword": zod.string().min(changePasswordBodyNewPasswordMin).max(changePasswordBodyNewPasswordMax)
-})
+  currentPassword: zod
+    .string()
+    .min(1)
+    .max(changePasswordBodyCurrentPasswordMax),
+  newPassword: zod
+    .string()
+    .min(changePasswordBodyNewPasswordMin)
+    .max(changePasswordBodyNewPasswordMax),
+});
 
 export const ChangePasswordResponse = zod.object({
-  "message": zod.string()
-})
-
+  message: zod.string(),
+});
 
 /**
  * @summary Update the authenticated user's profile and username/email
@@ -195,73 +193,479 @@ export const updateProfileBodyEmailMax = 254;
 
 export const updateProfileBodyTimezoneMax = 80;
 
-
-
 export const UpdateProfileBody = zod.object({
-  "username": zod.string().min(updateProfileBodyUsernameMin).max(updateProfileBodyUsernameMax).optional(),
-  "firstName": zod.string().min(1).max(updateProfileBodyFirstNameMax).optional(),
-  "lastName": zod.string().min(1).max(updateProfileBodyLastNameMax).optional(),
-  "email": zod.string().email().max(updateProfileBodyEmailMax).optional(),
-  "timezone": zod.string().min(1).max(updateProfileBodyTimezoneMax).optional()
-})
+  username: zod
+    .string()
+    .min(updateProfileBodyUsernameMin)
+    .max(updateProfileBodyUsernameMax)
+    .optional(),
+  firstName: zod.string().min(1).max(updateProfileBodyFirstNameMax).optional(),
+  lastName: zod.string().min(1).max(updateProfileBodyLastNameMax).optional(),
+  email: zod.string().email().max(updateProfileBodyEmailMax).optional(),
+  timezone: zod.string().min(1).max(updateProfileBodyTimezoneMax).optional(),
+});
 
 export const UpdateProfileResponse = zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "role": zod.enum(['SUPERADMIN', 'USER']),
-  "timezone": zod.string(),
-  "active": zod.boolean(),
-  "emailVerified": zod.boolean(),
-  "mustChangeCredentials": zod.boolean(),
-  "createdAt": zod.coerce.date()
-})
-
+  id: zod.string().uuid(),
+  username: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().email(),
+  role: zod.enum(["SUPERADMIN", "USER"]),
+  timezone: zod.string(),
+  active: zod.boolean(),
+  emailVerified: zod.boolean(),
+  mustChangeCredentials: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
 
 /**
  * @summary Get tenant dashboard summary
  */
 export const GetUserDashboardResponse = zod.object({
-  "subscriptionStatus": zod.enum(['inactive', 'active', 'expired']),
-  "contacts": zod.number().int(),
-  "activeLists": zod.number().int(),
-  "emailsSent": zod.number().int(),
-  "delivered": zod.number().int(),
-  "bounced": zod.number().int(),
-  "remainingThisHour": zod.number().int(),
-  "setupStepsCompleted": zod.number().int(),
-  "setupStepsTotal": zod.number().int()
-})
+  subscriptionStatus: zod.enum(["inactive", "active", "expired"]),
+  contacts: zod.number().int(),
+  activeLists: zod.number().int(),
+  emailsSent: zod.number().int(),
+  delivered: zod.number().int(),
+  bounced: zod.number().int(),
+  remainingThisHour: zod.number().int(),
+  setupStepsCompleted: zod.number().int(),
+  setupStepsTotal: zod.number().int(),
+});
 
+/**
+ * @summary Get the authenticated tenant's sending identity
+ */
+export const GetTenantSendingSettingsResponse = zod.object({
+  provider: zod.enum(["google_workspace", "gmail", "microsoft_365", "other"]),
+  host: zod.string().nullable(),
+  port: zod.number().int().nullable(),
+  encryption: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("ssl"),
+      zod.literal("tls"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  username: zod.string().nullable(),
+  credentialsConfigured: zod.boolean(),
+  fromName: zod.string().nullable(),
+  fromEmail: zod.string().nullable(),
+  replyTo: zod.string().nullable(),
+  verified: zod.boolean(),
+  verifiedAt: zod.coerce.date().nullable(),
+  updatedAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * @summary Save the authenticated tenant's SMTP sending identity
+ */
+export const updateTenantSendingSettingsBodyHostMax = 255;
+
+export const updateTenantSendingSettingsBodyPortMax = 65535;
+
+export const updateTenantSendingSettingsBodyUsernameMax = 254;
+
+export const updateTenantSendingSettingsBodyPasswordMax = 512;
+
+export const updateTenantSendingSettingsBodyFromNameMax = 120;
+
+export const UpdateTenantSendingSettingsBody = zod.object({
+  provider: zod.enum(["google_workspace", "gmail", "microsoft_365", "other"]),
+  host: zod.string().min(1).max(updateTenantSendingSettingsBodyHostMax),
+  port: zod.number().int().min(1).max(updateTenantSendingSettingsBodyPortMax),
+  encryption: zod.enum(["none", "ssl", "tls"]),
+  username: zod
+    .string()
+    .min(1)
+    .max(updateTenantSendingSettingsBodyUsernameMax)
+    .optional(),
+  password: zod
+    .string()
+    .max(updateTenantSendingSettingsBodyPasswordMax)
+    .optional(),
+  fromName: zod.string().min(1).max(updateTenantSendingSettingsBodyFromNameMax),
+  fromEmail: zod.string().email(),
+  replyTo: zod.string().email().optional(),
+});
+
+export const UpdateTenantSendingSettingsResponse = zod.object({
+  provider: zod.enum(["google_workspace", "gmail", "microsoft_365", "other"]),
+  host: zod.string().nullable(),
+  port: zod.number().int().nullable(),
+  encryption: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("ssl"),
+      zod.literal("tls"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  username: zod.string().nullable(),
+  credentialsConfigured: zod.boolean(),
+  fromName: zod.string().nullable(),
+  fromEmail: zod.string().nullable(),
+  replyTo: zod.string().nullable(),
+  verified: zod.boolean(),
+  verifiedAt: zod.coerce.date().nullable(),
+  updatedAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * @summary Send a test message using the tenant's own SMTP credentials
+ */
+export const TestTenantSendingSettingsBody = zod.object({
+  toEmail: zod.string().email(),
+});
+
+export const TestTenantSendingSettingsResponse = zod.object({
+  message: zod.string(),
+  verifiedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List contacts and quota for the authenticated tenant
+ */
+export const listContactsResponseQuotaUsedMin = 0;
+
+export const listContactsResponseQuotaLimitMin = 0;
+
+export const listContactsResponseQuotaRemainingMin = 0;
+
+export const ListContactsResponse = zod.object({
+  contacts: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      email: zod.string().email(),
+      name: zod.string(),
+      firstName: zod.string(),
+      lastName: zod.string(),
+      subscribed: zod.boolean(),
+      listIds: zod.array(zod.string().uuid()),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  quota: zod.object({
+    used: zod.number().int().min(listContactsResponseQuotaUsedMin),
+    limit: zod.number().int().min(listContactsResponseQuotaLimitMin),
+    remaining: zod.number().int().min(listContactsResponseQuotaRemainingMin),
+    canAdd: zod.boolean(),
+    requiresSubscription: zod.boolean(),
+  }),
+});
+
+/**
+ * @summary Add a contact to the authenticated tenant
+ */
+export const createContactBodyEmailMax = 254;
+
+export const createContactBodyNameMax = 120;
+
+export const createContactBodyFirstNameMax = 100;
+
+export const createContactBodyLastNameMax = 100;
+
+export const createContactBodyListIdsMax = 100;
+
+export const CreateContactBody = zod.object({
+  email: zod.string().email().max(createContactBodyEmailMax),
+  name: zod.string().min(1).max(createContactBodyNameMax),
+  firstName: zod.string().max(createContactBodyFirstNameMax).optional(),
+  lastName: zod.string().max(createContactBodyLastNameMax).optional(),
+  subscribed: zod.boolean().optional(),
+  listIds: zod
+    .array(zod.string().uuid())
+    .max(createContactBodyListIdsMax)
+    .optional(),
+});
+
+export const CreateContactResponse = zod.object({
+  id: zod.string().uuid(),
+  email: zod.string().email(),
+  name: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  subscribed: zod.boolean(),
+  listIds: zod.array(zod.string().uuid()),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update a contact owned by the authenticated tenant
+ */
+export const UpdateContactParams = zod.object({
+  contactId: zod.coerce.string().uuid(),
+});
+
+export const updateContactBodyEmailMax = 254;
+
+export const updateContactBodyNameMax = 120;
+
+export const updateContactBodyFirstNameMax = 100;
+
+export const updateContactBodyLastNameMax = 100;
+
+export const updateContactBodyListIdsMax = 100;
+
+export const UpdateContactBody = zod.object({
+  email: zod.string().email().max(updateContactBodyEmailMax).optional(),
+  name: zod.string().min(1).max(updateContactBodyNameMax).optional(),
+  firstName: zod.string().max(updateContactBodyFirstNameMax).optional(),
+  lastName: zod.string().max(updateContactBodyLastNameMax).optional(),
+  subscribed: zod.boolean().optional(),
+  listIds: zod
+    .array(zod.string().uuid())
+    .max(updateContactBodyListIdsMax)
+    .optional(),
+});
+
+export const UpdateContactResponse = zod.object({
+  id: zod.string().uuid(),
+  email: zod.string().email(),
+  name: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  subscribed: zod.boolean(),
+  listIds: zod.array(zod.string().uuid()),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a contact owned by the authenticated tenant
+ */
+export const DeleteContactParams = zod.object({
+  contactId: zod.coerce.string().uuid(),
+});
+
+export const DeleteContactResponse = zod.void();
+
+/**
+ * @summary List contact lists belonging to the authenticated tenant
+ */
+export const ListContactListsResponseItem = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  active: zod.boolean(),
+  contactCount: zod.number().int(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListContactListsResponse = zod.array(ListContactListsResponseItem);
+
+/**
+ * @summary Create a contact list for the authenticated tenant
+ */
+export const createContactListBodyNameMax = 120;
+
+export const CreateContactListBody = zod.object({
+  name: zod.string().min(1).max(createContactListBodyNameMax),
+});
+
+export const CreateContactListResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  active: zod.boolean(),
+  contactCount: zod.number().int(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Rename or activate a contact list owned by the authenticated tenant
+ */
+export const UpdateContactListParams = zod.object({
+  listId: zod.coerce.string().uuid(),
+});
+
+export const updateContactListBodyNameMax = 120;
+
+export const UpdateContactListBody = zod.object({
+  name: zod.string().min(1).max(updateContactListBodyNameMax).optional(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateContactListResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  active: zod.boolean(),
+  contactCount: zod.number().int(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a contact list owned by the authenticated tenant
+ */
+export const DeleteContactListParams = zod.object({
+  listId: zod.coerce.string().uuid(),
+});
+
+export const DeleteContactListResponse = zod.void();
+
+/**
+ * @summary List campaigns belonging to the authenticated tenant
+ */
+export const ListCampaignsResponseItem = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  subject: zod.string(),
+  textBody: zod.string(),
+  listId: zod.string().uuid().nullable(),
+  status: zod.enum(["draft", "queued", "sending", "completed"]),
+  recipients: zod.number().int(),
+  queued: zod.number().int(),
+  delivered: zod.number().int(),
+  bounced: zod.number().int(),
+  suppressed: zod.number().int(),
+  unknown: zod.number().int(),
+  queuedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem);
+
+/**
+ * @summary Create a draft campaign for one of the tenant's contact lists
+ */
+export const createCampaignBodyNameMax = 160;
+
+export const createCampaignBodySubjectMax = 200;
+
+export const createCampaignBodyTextBodyMax = 100000;
+
+export const CreateCampaignBody = zod.object({
+  name: zod.string().min(1).max(createCampaignBodyNameMax),
+  subject: zod.string().min(1).max(createCampaignBodySubjectMax),
+  textBody: zod.string().min(1).max(createCampaignBodyTextBodyMax),
+  listId: zod.string().uuid(),
+});
+
+export const CreateCampaignResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  subject: zod.string(),
+  textBody: zod.string(),
+  listId: zod.string().uuid().nullable(),
+  status: zod.enum(["draft", "queued", "sending", "completed"]),
+  recipients: zod.number().int(),
+  queued: zod.number().int(),
+  delivered: zod.number().int(),
+  bounced: zod.number().int(),
+  suppressed: zod.number().int(),
+  unknown: zod.number().int(),
+  queuedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Edit a draft campaign owned by the authenticated tenant
+ */
+export const UpdateCampaignParams = zod.object({
+  campaignId: zod.coerce.string().uuid(),
+});
+
+export const updateCampaignBodyNameMax = 160;
+
+export const updateCampaignBodySubjectMax = 200;
+
+export const updateCampaignBodyTextBodyMax = 100000;
+
+export const UpdateCampaignBody = zod.object({
+  name: zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
+  subject: zod.string().min(1).max(updateCampaignBodySubjectMax).optional(),
+  textBody: zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
+  listId: zod.string().uuid().optional(),
+});
+
+export const UpdateCampaignResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  subject: zod.string(),
+  textBody: zod.string(),
+  listId: zod.string().uuid().nullable(),
+  status: zod.enum(["draft", "queued", "sending", "completed"]),
+  recipients: zod.number().int(),
+  queued: zod.number().int(),
+  delivered: zod.number().int(),
+  bounced: zod.number().int(),
+  suppressed: zod.number().int(),
+  unknown: zod.number().int(),
+  queuedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a draft campaign owned by the authenticated tenant
+ */
+export const DeleteCampaignParams = zod.object({
+  campaignId: zod.coerce.string().uuid(),
+});
+
+export const DeleteCampaignResponse = zod.void();
+
+/**
+ * @summary Queue a tenant campaign for worker-based delivery
+ */
+export const SendCampaignParams = zod.object({
+  campaignId: zod.coerce.string().uuid(),
+});
+
+export const SendCampaignResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  subject: zod.string(),
+  textBody: zod.string(),
+  listId: zod.string().uuid().nullable(),
+  status: zod.enum(["draft", "queued", "sending", "completed"]),
+  recipients: zod.number().int(),
+  queued: zod.number().int(),
+  delivered: zod.number().int(),
+  bounced: zod.number().int(),
+  suppressed: zod.number().int(),
+  unknown: zod.number().int(),
+  queuedAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
 
 /**
  * @summary Get platform administration summary
  */
 export const GetAdminDashboardResponse = zod.object({
-  "totalUsers": zod.number().int(),
-  "activeUsers": zod.number().int(),
-  "pendingUsers": zod.number().int(),
-  "disabledUsers": zod.number().int(),
-  "newUsersThisMonth": zod.number().int(),
-  "activeSubscriptions": zod.number().int(),
-  "revenueThisMonth": zod.number(),
-  "emailsSent": zod.number().int(),
-  "recentUsers": zod.array(zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "emailVerified": zod.boolean(),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "lastLoginAt": zod.coerce.date().nullable(),
-  "subscriptionStatus": zod.string().nullable()
-}))
-})
-
+  totalUsers: zod.number().int(),
+  activeUsers: zod.number().int(),
+  pendingUsers: zod.number().int(),
+  disabledUsers: zod.number().int(),
+  newUsersThisMonth: zod.number().int(),
+  activeSubscriptions: zod.number().int(),
+  revenueThisMonth: zod.number(),
+  emailsSent: zod.number().int(),
+  recentUsers: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      username: zod.string(),
+      firstName: zod.string(),
+      lastName: zod.string(),
+      email: zod.string().email(),
+      emailVerified: zod.boolean(),
+      active: zod.boolean(),
+      createdAt: zod.coerce.date(),
+      lastLoginAt: zod.coerce.date().nullable(),
+      subscriptionStatus: zod.string().nullable(),
+    }),
+  ),
+});
 
 /**
  * @summary Search and paginate tenant accounts
@@ -272,103 +676,110 @@ export const listAdminUsersQueryPageDefault = 1;
 export const listAdminUsersQueryPageSizeDefault = 25;
 export const listAdminUsersQueryPageSizeMax = 100;
 
-
-
 export const ListAdminUsersQueryParams = zod.object({
-  "search": zod.coerce.string().optional(),
-  "status": zod.enum(['all', 'active', 'inactive', 'pending']).default(listAdminUsersQueryStatusDefault),
-  "page": zod.coerce.number().int().min(1).default(listAdminUsersQueryPageDefault),
-  "pageSize": zod.coerce.number().int().min(1).max(listAdminUsersQueryPageSizeMax).default(listAdminUsersQueryPageSizeDefault)
-})
+  search: zod.coerce.string().optional(),
+  status: zod
+    .enum(["all", "active", "inactive", "pending"])
+    .default(listAdminUsersQueryStatusDefault),
+  page: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(listAdminUsersQueryPageDefault),
+  pageSize: zod.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(listAdminUsersQueryPageSizeMax)
+    .default(listAdminUsersQueryPageSizeDefault),
+});
 
 export const ListAdminUsersResponse = zod.object({
-  "items": zod.array(zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "emailVerified": zod.boolean(),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "lastLoginAt": zod.coerce.date().nullable(),
-  "subscriptionStatus": zod.string().nullable()
-})),
-  "total": zod.number().int(),
-  "page": zod.number().int(),
-  "pageSize": zod.number().int()
-})
-
+  items: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      username: zod.string(),
+      firstName: zod.string(),
+      lastName: zod.string(),
+      email: zod.string().email(),
+      emailVerified: zod.boolean(),
+      active: zod.boolean(),
+      createdAt: zod.coerce.date(),
+      lastLoginAt: zod.coerce.date().nullable(),
+      subscriptionStatus: zod.string().nullable(),
+    }),
+  ),
+  total: zod.number().int(),
+  page: zod.number().int(),
+  pageSize: zod.number().int(),
+});
 
 /**
  * @summary Activate or deactivate a tenant account
  */
 export const UpdateAdminUserStatusParams = zod.object({
-  "userId": zod.coerce.string().uuid()
-})
+  userId: zod.coerce.string().uuid(),
+});
 
 export const UpdateAdminUserStatusBody = zod.object({
-  "active": zod.boolean()
-})
+  active: zod.boolean(),
+});
 
 export const UpdateAdminUserStatusResponse = zod.object({
-  "id": zod.string().uuid(),
-  "username": zod.string(),
-  "firstName": zod.string(),
-  "lastName": zod.string(),
-  "email": zod.string().email(),
-  "emailVerified": zod.boolean(),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "lastLoginAt": zod.coerce.date().nullable(),
-  "subscriptionStatus": zod.string().nullable()
-})
-
+  id: zod.string().uuid(),
+  username: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().email(),
+  emailVerified: zod.boolean(),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  lastLoginAt: zod.coerce.date().nullable(),
+  subscriptionStatus: zod.string().nullable(),
+});
 
 /**
  * @summary Soft-delete a tenant account
  */
 export const DeleteAdminUserParams = zod.object({
-  "userId": zod.coerce.string().uuid()
-})
+  userId: zod.coerce.string().uuid(),
+});
 
-export const DeleteAdminUserResponse = zod.void()
-
+export const DeleteAdminUserResponse = zod.void();
 
 /**
  * @summary Get platform configuration
  */
 export const GetAdminSettingsResponse = zod.object({
-  "applicationName": zod.string(),
-  "defaultCurrency": zod.string(),
-  "defaultTimezone": zod.string(),
-  "dateFormat": zod.string(),
-  "supportEmail": zod.string(),
-  "supportPhone": zod.string(),
-  "maintenanceMode": zod.boolean(),
-  "maxContactsPerUser": zod.number().int(),
-  "maxUploadFileSizeMb": zod.number().int(),
-  "allowedContactFileTypes": zod.array(zod.string()),
-  "passwordMinimumLength": zod.number().int(),
-  "otpExpiryMinutes": zod.number().int(),
-  "maxOtpAttempts": zod.number().int(),
-  "loginAttemptThreshold": zod.number().int(),
-  "sessionDurationHours": zod.number().int(),
-  "defaultEmailsPerHour": zod.number().int(),
-  "maxEmailsPerDay": zod.number().int(),
-  "maxCampaignSize": zod.number().int(),
-  "maxConcurrentCampaigns": zod.number().int(),
-  "retryAttempts": zod.number().int(),
-  "retryDelaySeconds": zod.number().int(),
-  "bounceThreshold": zod.number().int(),
-  "deliveryTrackingEnabled": zod.boolean(),
-  "queuePollingSeconds": zod.number().int(),
-  "allowUserWithoutSubscription": zod.boolean(),
-  "gracePeriodDays": zod.number().int(),
-  "packageVisibility": zod.enum(['public', 'hidden']),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  applicationName: zod.string(),
+  defaultCurrency: zod.string(),
+  defaultTimezone: zod.string(),
+  dateFormat: zod.string(),
+  supportEmail: zod.string(),
+  supportPhone: zod.string(),
+  maintenanceMode: zod.boolean(),
+  maxContactsPerUser: zod.number().int(),
+  maxUploadFileSizeMb: zod.number().int(),
+  allowedContactFileTypes: zod.array(zod.string()),
+  passwordMinimumLength: zod.number().int(),
+  otpExpiryMinutes: zod.number().int(),
+  maxOtpAttempts: zod.number().int(),
+  loginAttemptThreshold: zod.number().int(),
+  sessionDurationHours: zod.number().int(),
+  defaultEmailsPerHour: zod.number().int(),
+  maxEmailsPerDay: zod.number().int(),
+  maxCampaignSize: zod.number().int(),
+  maxConcurrentCampaigns: zod.number().int(),
+  retryAttempts: zod.number().int(),
+  retryDelaySeconds: zod.number().int(),
+  bounceThreshold: zod.number().int(),
+  deliveryTrackingEnabled: zod.boolean(),
+  queuePollingSeconds: zod.number().int(),
+  allowUserWithoutSubscription: zod.boolean(),
+  gracePeriodDays: zod.number().int(),
+  packageVisibility: zod.enum(["public", "hidden"]),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Update platform configuration
@@ -384,8 +795,6 @@ export const updateAdminSettingsBodyDateFormatMax = 40;
 
 export const updateAdminSettingsBodySupportPhoneMax = 40;
 
-
-
 export const updateAdminSettingsBodyPasswordMinimumLengthMin = 8;
 export const updateAdminSettingsBodyPasswordMinimumLengthMax = 128;
 
@@ -398,99 +807,136 @@ export const updateAdminSettingsBodyLoginAttemptThresholdMax = 20;
 
 export const updateAdminSettingsBodySessionDurationHoursMax = 720;
 
-
-
-
 export const updateAdminSettingsBodyMaxConcurrentCampaignsMax = 1;
 
 export const updateAdminSettingsBodyRetryAttemptsMin = 0;
 export const updateAdminSettingsBodyRetryAttemptsMax = 10;
 
-
-
-
 export const updateAdminSettingsBodyGracePeriodDaysMin = 0;
 
-
-
 export const UpdateAdminSettingsBody = zod.object({
-  "applicationName": zod.string().min(1).max(updateAdminSettingsBodyApplicationNameMax),
-  "defaultCurrency": zod.string().min(updateAdminSettingsBodyDefaultCurrencyMin).max(updateAdminSettingsBodyDefaultCurrencyMax),
-  "defaultTimezone": zod.string().min(1).max(updateAdminSettingsBodyDefaultTimezoneMax),
-  "dateFormat": zod.string().min(1).max(updateAdminSettingsBodyDateFormatMax),
-  "supportEmail": zod.string().email(),
-  "supportPhone": zod.string().max(updateAdminSettingsBodySupportPhoneMax),
-  "maintenanceMode": zod.boolean(),
-  "maxContactsPerUser": zod.number().int().min(1),
-  "maxUploadFileSizeMb": zod.number().int().min(1),
-  "allowedContactFileTypes": zod.array(zod.string()),
-  "passwordMinimumLength": zod.number().int().min(updateAdminSettingsBodyPasswordMinimumLengthMin).max(updateAdminSettingsBodyPasswordMinimumLengthMax),
-  "otpExpiryMinutes": zod.number().int().min(1).max(updateAdminSettingsBodyOtpExpiryMinutesMax),
-  "maxOtpAttempts": zod.number().int().min(1).max(updateAdminSettingsBodyMaxOtpAttemptsMax),
-  "loginAttemptThreshold": zod.number().int().min(updateAdminSettingsBodyLoginAttemptThresholdMin).max(updateAdminSettingsBodyLoginAttemptThresholdMax),
-  "sessionDurationHours": zod.number().int().min(1).max(updateAdminSettingsBodySessionDurationHoursMax),
-  "defaultEmailsPerHour": zod.number().int().min(1),
-  "maxEmailsPerDay": zod.number().int().min(1),
-  "maxCampaignSize": zod.number().int().min(1),
-  "maxConcurrentCampaigns": zod.number().int().min(1).max(updateAdminSettingsBodyMaxConcurrentCampaignsMax),
-  "retryAttempts": zod.number().int().min(updateAdminSettingsBodyRetryAttemptsMin).max(updateAdminSettingsBodyRetryAttemptsMax),
-  "retryDelaySeconds": zod.number().int().min(1),
-  "bounceThreshold": zod.number().int().min(1),
-  "deliveryTrackingEnabled": zod.boolean(),
-  "queuePollingSeconds": zod.number().int().min(1),
-  "allowUserWithoutSubscription": zod.boolean(),
-  "gracePeriodDays": zod.number().int().min(updateAdminSettingsBodyGracePeriodDaysMin),
-  "packageVisibility": zod.enum(['public', 'hidden'])
-})
+  applicationName: zod
+    .string()
+    .min(1)
+    .max(updateAdminSettingsBodyApplicationNameMax),
+  defaultCurrency: zod
+    .string()
+    .min(updateAdminSettingsBodyDefaultCurrencyMin)
+    .max(updateAdminSettingsBodyDefaultCurrencyMax),
+  defaultTimezone: zod
+    .string()
+    .min(1)
+    .max(updateAdminSettingsBodyDefaultTimezoneMax),
+  dateFormat: zod.string().min(1).max(updateAdminSettingsBodyDateFormatMax),
+  supportEmail: zod.string().email(),
+  supportPhone: zod.string().max(updateAdminSettingsBodySupportPhoneMax),
+  maintenanceMode: zod.boolean(),
+  maxContactsPerUser: zod.number().int().min(1),
+  maxUploadFileSizeMb: zod.number().int().min(1),
+  allowedContactFileTypes: zod.array(zod.string()),
+  passwordMinimumLength: zod
+    .number()
+    .int()
+    .min(updateAdminSettingsBodyPasswordMinimumLengthMin)
+    .max(updateAdminSettingsBodyPasswordMinimumLengthMax),
+  otpExpiryMinutes: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateAdminSettingsBodyOtpExpiryMinutesMax),
+  maxOtpAttempts: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateAdminSettingsBodyMaxOtpAttemptsMax),
+  loginAttemptThreshold: zod
+    .number()
+    .int()
+    .min(updateAdminSettingsBodyLoginAttemptThresholdMin)
+    .max(updateAdminSettingsBodyLoginAttemptThresholdMax),
+  sessionDurationHours: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateAdminSettingsBodySessionDurationHoursMax),
+  defaultEmailsPerHour: zod.number().int().min(1),
+  maxEmailsPerDay: zod.number().int().min(1),
+  maxCampaignSize: zod.number().int().min(1),
+  maxConcurrentCampaigns: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateAdminSettingsBodyMaxConcurrentCampaignsMax),
+  retryAttempts: zod
+    .number()
+    .int()
+    .min(updateAdminSettingsBodyRetryAttemptsMin)
+    .max(updateAdminSettingsBodyRetryAttemptsMax),
+  retryDelaySeconds: zod.number().int().min(1),
+  bounceThreshold: zod.number().int().min(1),
+  deliveryTrackingEnabled: zod.boolean(),
+  queuePollingSeconds: zod.number().int().min(1),
+  allowUserWithoutSubscription: zod.boolean(),
+  gracePeriodDays: zod
+    .number()
+    .int()
+    .min(updateAdminSettingsBodyGracePeriodDaysMin),
+  packageVisibility: zod.enum(["public", "hidden"]),
+});
 
 export const UpdateAdminSettingsResponse = zod.object({
-  "applicationName": zod.string(),
-  "defaultCurrency": zod.string(),
-  "defaultTimezone": zod.string(),
-  "dateFormat": zod.string(),
-  "supportEmail": zod.string(),
-  "supportPhone": zod.string(),
-  "maintenanceMode": zod.boolean(),
-  "maxContactsPerUser": zod.number().int(),
-  "maxUploadFileSizeMb": zod.number().int(),
-  "allowedContactFileTypes": zod.array(zod.string()),
-  "passwordMinimumLength": zod.number().int(),
-  "otpExpiryMinutes": zod.number().int(),
-  "maxOtpAttempts": zod.number().int(),
-  "loginAttemptThreshold": zod.number().int(),
-  "sessionDurationHours": zod.number().int(),
-  "defaultEmailsPerHour": zod.number().int(),
-  "maxEmailsPerDay": zod.number().int(),
-  "maxCampaignSize": zod.number().int(),
-  "maxConcurrentCampaigns": zod.number().int(),
-  "retryAttempts": zod.number().int(),
-  "retryDelaySeconds": zod.number().int(),
-  "bounceThreshold": zod.number().int(),
-  "deliveryTrackingEnabled": zod.boolean(),
-  "queuePollingSeconds": zod.number().int(),
-  "allowUserWithoutSubscription": zod.boolean(),
-  "gracePeriodDays": zod.number().int(),
-  "packageVisibility": zod.enum(['public', 'hidden']),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  applicationName: zod.string(),
+  defaultCurrency: zod.string(),
+  defaultTimezone: zod.string(),
+  dateFormat: zod.string(),
+  supportEmail: zod.string(),
+  supportPhone: zod.string(),
+  maintenanceMode: zod.boolean(),
+  maxContactsPerUser: zod.number().int(),
+  maxUploadFileSizeMb: zod.number().int(),
+  allowedContactFileTypes: zod.array(zod.string()),
+  passwordMinimumLength: zod.number().int(),
+  otpExpiryMinutes: zod.number().int(),
+  maxOtpAttempts: zod.number().int(),
+  loginAttemptThreshold: zod.number().int(),
+  sessionDurationHours: zod.number().int(),
+  defaultEmailsPerHour: zod.number().int(),
+  maxEmailsPerDay: zod.number().int(),
+  maxCampaignSize: zod.number().int(),
+  maxConcurrentCampaigns: zod.number().int(),
+  retryAttempts: zod.number().int(),
+  retryDelaySeconds: zod.number().int(),
+  bounceThreshold: zod.number().int(),
+  deliveryTrackingEnabled: zod.boolean(),
+  queuePollingSeconds: zod.number().int(),
+  allowUserWithoutSubscription: zod.boolean(),
+  gracePeriodDays: zod.number().int(),
+  packageVisibility: zod.enum(["public", "hidden"]),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Get masked application SMTP configuration
  */
 export const GetApplicationEmailSettingsResponse = zod.object({
-  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
-  "host": zod.string().nullable(),
-  "port": zod.number().int().nullable(),
-  "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
-  "username": zod.string().nullable(),
-  "passwordConfigured": zod.boolean(),
-  "fromName": zod.string().nullable(),
-  "fromEmail": zod.string().nullable(),
-  "replyTo": zod.string().nullable(),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  provider: zod.enum(["google_workspace", "gmail", "microsoft_365", "other"]),
+  host: zod.string().nullable(),
+  port: zod.number().int().nullable(),
+  encryption: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("ssl"),
+      zod.literal("tls"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  username: zod.string().nullable(),
+  passwordConfigured: zod.boolean(),
+  fromName: zod.string().nullable(),
+  fromEmail: zod.string().nullable(),
+  replyTo: zod.string().nullable(),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Save application SMTP configuration
@@ -505,68 +951,87 @@ export const updateApplicationEmailSettingsBodyPasswordMax = 512;
 
 export const updateApplicationEmailSettingsBodyFromNameMax = 120;
 
-
-
 export const UpdateApplicationEmailSettingsBody = zod.object({
-  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
-  "host": zod.string().min(1).max(updateApplicationEmailSettingsBodyHostMax),
-  "port": zod.number().int().min(1).max(updateApplicationEmailSettingsBodyPortMax),
-  "encryption": zod.enum(['none', 'ssl', 'tls']),
-  "username": zod.string().min(1).max(updateApplicationEmailSettingsBodyUsernameMax).optional(),
-  "password": zod.string().max(updateApplicationEmailSettingsBodyPasswordMax).optional(),
-  "fromName": zod.string().min(1).max(updateApplicationEmailSettingsBodyFromNameMax),
-  "fromEmail": zod.string().email(),
-  "replyTo": zod.string().email().optional()
-})
+  provider: zod.enum(["google_workspace", "gmail", "microsoft_365", "other"]),
+  host: zod.string().min(1).max(updateApplicationEmailSettingsBodyHostMax),
+  port: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateApplicationEmailSettingsBodyPortMax),
+  encryption: zod.enum(["none", "ssl", "tls"]),
+  username: zod
+    .string()
+    .min(1)
+    .max(updateApplicationEmailSettingsBodyUsernameMax)
+    .optional(),
+  password: zod
+    .string()
+    .max(updateApplicationEmailSettingsBodyPasswordMax)
+    .optional(),
+  fromName: zod
+    .string()
+    .min(1)
+    .max(updateApplicationEmailSettingsBodyFromNameMax),
+  fromEmail: zod.string().email(),
+  replyTo: zod.string().email().optional(),
+});
 
 export const UpdateApplicationEmailSettingsResponse = zod.object({
-  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
-  "host": zod.string().nullable(),
-  "port": zod.number().int().nullable(),
-  "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
-  "username": zod.string().nullable(),
-  "passwordConfigured": zod.boolean(),
-  "fromName": zod.string().nullable(),
-  "fromEmail": zod.string().nullable(),
-  "replyTo": zod.string().nullable(),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  provider: zod.enum(["google_workspace", "gmail", "microsoft_365", "other"]),
+  host: zod.string().nullable(),
+  port: zod.number().int().nullable(),
+  encryption: zod
+    .union([
+      zod.literal("none"),
+      zod.literal("ssl"),
+      zod.literal("tls"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  username: zod.string().nullable(),
+  passwordConfigured: zod.boolean(),
+  fromName: zod.string().nullable(),
+  fromEmail: zod.string().nullable(),
+  replyTo: zod.string().nullable(),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Send a test message using the application SMTP account
  */
 export const SendApplicationEmailTestBody = zod.object({
-  "toEmail": zod.string().email()
-})
+  toEmail: zod.string().email(),
+});
 
 export const SendApplicationEmailTestResponse = zod.object({
-  "message": zod.string()
-})
-
+  message: zod.string(),
+});
 
 /**
  * @summary Get masked sandbox and production Razorpay configuration
  */
 export const GetRazorpaySettingsResponse = zod.object({
-  "activeEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
-  "sandbox": zod.object({
-  "keyId": zod.string().nullable(),
-  "keySecretConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean(),
-  "configured": zod.boolean(),
-  "updatedAt": zod.coerce.date().nullable()
-}),
-  "production": zod.object({
-  "keyId": zod.string().nullable(),
-  "keySecretConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean(),
-  "configured": zod.boolean(),
-  "updatedAt": zod.coerce.date().nullable()
-}),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  activeEnvironment: zod.union([
+    zod.enum(["sandbox", "production"]),
+    zod.null(),
+  ]),
+  sandbox: zod.object({
+    keyId: zod.string().nullable(),
+    keySecretConfigured: zod.boolean(),
+    webhookSecretConfigured: zod.boolean(),
+    configured: zod.boolean(),
+    updatedAt: zod.coerce.date().nullable(),
+  }),
+  production: zod.object({
+    keyId: zod.string().nullable(),
+    keySecretConfigured: zod.boolean(),
+    webhookSecretConfigured: zod.boolean(),
+    configured: zod.boolean(),
+    updatedAt: zod.coerce.date().nullable(),
+  }),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Save Razorpay credentials for one environment
@@ -578,74 +1043,86 @@ export const updateRazorpaySettingsBodyKeySecretMax = 512;
 
 export const updateRazorpaySettingsBodyWebhookSecretMax = 512;
 
-
-
 export const UpdateRazorpaySettingsBody = zod.object({
-  "environment": zod.enum(['sandbox', 'production']),
-  "keyId": zod.string().min(updateRazorpaySettingsBodyKeyIdMin).max(updateRazorpaySettingsBodyKeyIdMax),
-  "keySecret": zod.string().min(1).max(updateRazorpaySettingsBodyKeySecretMax).optional(),
-  "webhookSecret": zod.string().min(1).max(updateRazorpaySettingsBodyWebhookSecretMax).optional()
-})
+  environment: zod.enum(["sandbox", "production"]),
+  keyId: zod
+    .string()
+    .min(updateRazorpaySettingsBodyKeyIdMin)
+    .max(updateRazorpaySettingsBodyKeyIdMax),
+  keySecret: zod
+    .string()
+    .min(1)
+    .max(updateRazorpaySettingsBodyKeySecretMax)
+    .optional(),
+  webhookSecret: zod
+    .string()
+    .min(1)
+    .max(updateRazorpaySettingsBodyWebhookSecretMax)
+    .optional(),
+});
 
 export const UpdateRazorpaySettingsResponse = zod.object({
-  "activeEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
-  "sandbox": zod.object({
-  "keyId": zod.string().nullable(),
-  "keySecretConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean(),
-  "configured": zod.boolean(),
-  "updatedAt": zod.coerce.date().nullable()
-}),
-  "production": zod.object({
-  "keyId": zod.string().nullable(),
-  "keySecretConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean(),
-  "configured": zod.boolean(),
-  "updatedAt": zod.coerce.date().nullable()
-}),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  activeEnvironment: zod.union([
+    zod.enum(["sandbox", "production"]),
+    zod.null(),
+  ]),
+  sandbox: zod.object({
+    keyId: zod.string().nullable(),
+    keySecretConfigured: zod.boolean(),
+    webhookSecretConfigured: zod.boolean(),
+    configured: zod.boolean(),
+    updatedAt: zod.coerce.date().nullable(),
+  }),
+  production: zod.object({
+    keyId: zod.string().nullable(),
+    keySecretConfigured: zod.boolean(),
+    webhookSecretConfigured: zod.boolean(),
+    configured: zod.boolean(),
+    updatedAt: zod.coerce.date().nullable(),
+  }),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Select the active Razorpay environment
  */
 export const SetActiveRazorpayEnvironmentBody = zod.object({
-  "environment": zod.enum(['sandbox', 'production'])
-})
+  environment: zod.enum(["sandbox", "production"]),
+});
 
 export const SetActiveRazorpayEnvironmentResponse = zod.object({
-  "activeEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
-  "sandbox": zod.object({
-  "keyId": zod.string().nullable(),
-  "keySecretConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean(),
-  "configured": zod.boolean(),
-  "updatedAt": zod.coerce.date().nullable()
-}),
-  "production": zod.object({
-  "keyId": zod.string().nullable(),
-  "keySecretConfigured": zod.boolean(),
-  "webhookSecretConfigured": zod.boolean(),
-  "configured": zod.boolean(),
-  "updatedAt": zod.coerce.date().nullable()
-}),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
+  activeEnvironment: zod.union([
+    zod.enum(["sandbox", "production"]),
+    zod.null(),
+  ]),
+  sandbox: zod.object({
+    keyId: zod.string().nullable(),
+    keySecretConfigured: zod.boolean(),
+    webhookSecretConfigured: zod.boolean(),
+    configured: zod.boolean(),
+    updatedAt: zod.coerce.date().nullable(),
+  }),
+  production: zod.object({
+    keyId: zod.string().nullable(),
+    keySecretConfigured: zod.boolean(),
+    webhookSecretConfigured: zod.boolean(),
+    configured: zod.boolean(),
+    updatedAt: zod.coerce.date().nullable(),
+  }),
+  updatedAt: zod.coerce.date().nullable(),
+});
 
 /**
  * @summary Verify saved Razorpay API credentials for one environment
  */
 export const TestRazorpayConnectionBody = zod.object({
-  "environment": zod.enum(['sandbox', 'production'])
-})
+  environment: zod.enum(["sandbox", "production"]),
+});
 
 export const TestRazorpayConnectionResponse = zod.object({
-  "success": zod.boolean(),
-  "message": zod.string()
-})
-
+  success: zod.boolean(),
+  message: zod.string(),
+});
 
 /**
  * @summary List all subscription packages for administration
@@ -655,23 +1132,28 @@ export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
 
 export const listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
 
-
-
 export const ListAdminSubscriptionPackagesResponse = zod.object({
-  "packages": zod.array(zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string().min(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax),
-  "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-}))
-})
-
+  packages: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      name: zod.string(),
+      description: zod.string(),
+      amountMinor: zod.number().int(),
+      currency: zod
+        .string()
+        .min(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin)
+        .max(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax),
+      periodDays: zod.number().int(),
+      contactLimit: zod
+        .number()
+        .int()
+        .min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
+      active: zod.boolean(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+});
 
 /**
  * @summary Create a subscription package
@@ -683,51 +1165,69 @@ export const createSubscriptionPackageBodyDescriptionMax = 2000;
 
 export const createSubscriptionPackageBodyAmountMinorMax = 100000000;
 
-export const createSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const createSubscriptionPackageBodyCurrencyRegExp = new RegExp(
+  "^[A-Z]{3}$",
+);
 export const createSubscriptionPackageBodyPeriodDaysMax = 3660;
 
 export const createSubscriptionPackageBodyContactLimitMin = 0;
 export const createSubscriptionPackageBodyContactLimitMax = 10000000;
 
-
-
 export const CreateSubscriptionPackageBody = zod.object({
-  "name": zod.string().min(createSubscriptionPackageBodyNameMin).max(createSubscriptionPackageBodyNameMax),
-  "description": zod.string().max(createSubscriptionPackageBodyDescriptionMax),
-  "amountMinor": zod.number().int().min(1).max(createSubscriptionPackageBodyAmountMinorMax),
-  "currency": zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
-  "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
-  "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
-  "active": zod.boolean()
-})
+  name: zod
+    .string()
+    .min(createSubscriptionPackageBodyNameMin)
+    .max(createSubscriptionPackageBodyNameMax),
+  description: zod.string().max(createSubscriptionPackageBodyDescriptionMax),
+  amountMinor: zod
+    .number()
+    .int()
+    .min(1)
+    .max(createSubscriptionPackageBodyAmountMinorMax),
+  currency: zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
+  periodDays: zod
+    .number()
+    .int()
+    .min(1)
+    .max(createSubscriptionPackageBodyPeriodDaysMax),
+  contactLimit: zod
+    .number()
+    .int()
+    .min(createSubscriptionPackageBodyContactLimitMin)
+    .max(createSubscriptionPackageBodyContactLimitMax),
+  active: zod.boolean(),
+});
 
 export const createSubscriptionPackageResponseCurrencyMin = 3;
 export const createSubscriptionPackageResponseCurrencyMax = 3;
 
 export const createSubscriptionPackageResponseContactLimitMin = 0;
 
-
-
 export const CreateSubscriptionPackageResponse = zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string().min(createSubscriptionPackageResponseCurrencyMin).max(createSubscriptionPackageResponseCurrencyMax),
-  "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-
+  id: zod.string().uuid(),
+  name: zod.string(),
+  description: zod.string(),
+  amountMinor: zod.number().int(),
+  currency: zod
+    .string()
+    .min(createSubscriptionPackageResponseCurrencyMin)
+    .max(createSubscriptionPackageResponseCurrencyMax),
+  periodDays: zod.number().int(),
+  contactLimit: zod
+    .number()
+    .int()
+    .min(createSubscriptionPackageResponseContactLimitMin),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
 
 /**
  * @summary Update a subscription package
  */
 export const UpdateSubscriptionPackageParams = zod.object({
-  "packageId": zod.coerce.string().uuid()
-})
+  packageId: zod.coerce.string().uuid(),
+});
 
 export const updateSubscriptionPackageBodyNameMin = 2;
 export const updateSubscriptionPackageBodyNameMax = 120;
@@ -736,44 +1236,72 @@ export const updateSubscriptionPackageBodyDescriptionMax = 2000;
 
 export const updateSubscriptionPackageBodyAmountMinorMax = 100000000;
 
-export const updateSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const updateSubscriptionPackageBodyCurrencyRegExp = new RegExp(
+  "^[A-Z]{3}$",
+);
 export const updateSubscriptionPackageBodyPeriodDaysMax = 3660;
 
 export const updateSubscriptionPackageBodyContactLimitMin = 0;
 export const updateSubscriptionPackageBodyContactLimitMax = 10000000;
 
-
-
 export const UpdateSubscriptionPackageBody = zod.object({
-  "name": zod.string().min(updateSubscriptionPackageBodyNameMin).max(updateSubscriptionPackageBodyNameMax).optional(),
-  "description": zod.string().max(updateSubscriptionPackageBodyDescriptionMax).optional(),
-  "amountMinor": zod.number().int().min(1).max(updateSubscriptionPackageBodyAmountMinorMax).optional(),
-  "currency": zod.string().regex(updateSubscriptionPackageBodyCurrencyRegExp).optional(),
-  "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
-  "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
-  "active": zod.boolean().optional()
-})
+  name: zod
+    .string()
+    .min(updateSubscriptionPackageBodyNameMin)
+    .max(updateSubscriptionPackageBodyNameMax)
+    .optional(),
+  description: zod
+    .string()
+    .max(updateSubscriptionPackageBodyDescriptionMax)
+    .optional(),
+  amountMinor: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateSubscriptionPackageBodyAmountMinorMax)
+    .optional(),
+  currency: zod
+    .string()
+    .regex(updateSubscriptionPackageBodyCurrencyRegExp)
+    .optional(),
+  periodDays: zod
+    .number()
+    .int()
+    .min(1)
+    .max(updateSubscriptionPackageBodyPeriodDaysMax)
+    .optional(),
+  contactLimit: zod
+    .number()
+    .int()
+    .min(updateSubscriptionPackageBodyContactLimitMin)
+    .max(updateSubscriptionPackageBodyContactLimitMax)
+    .optional(),
+  active: zod.boolean().optional(),
+});
 
 export const updateSubscriptionPackageResponseCurrencyMin = 3;
 export const updateSubscriptionPackageResponseCurrencyMax = 3;
 
 export const updateSubscriptionPackageResponseContactLimitMin = 0;
 
-
-
 export const UpdateSubscriptionPackageResponse = zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string().min(updateSubscriptionPackageResponseCurrencyMin).max(updateSubscriptionPackageResponseCurrencyMax),
-  "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-
+  id: zod.string().uuid(),
+  name: zod.string(),
+  description: zod.string(),
+  amountMinor: zod.number().int(),
+  currency: zod
+    .string()
+    .min(updateSubscriptionPackageResponseCurrencyMin)
+    .max(updateSubscriptionPackageResponseCurrencyMax),
+  periodDays: zod.number().int(),
+  contactLimit: zod
+    .number()
+    .int()
+    .min(updateSubscriptionPackageResponseContactLimitMin),
+  active: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
 
 /**
  * @summary List packages available to the authenticated customer
@@ -783,23 +1311,30 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax = 
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
 
-
-
 export const ListAvailableSubscriptionPackagesResponse = zod.object({
-  "packages": zod.array(zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string().min(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax),
-  "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-}))
-})
-
+  packages: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      name: zod.string(),
+      description: zod.string(),
+      amountMinor: zod.number().int(),
+      currency: zod
+        .string()
+        .min(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin)
+        .max(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax),
+      periodDays: zod.number().int(),
+      contactLimit: zod
+        .number()
+        .int()
+        .min(
+          listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin,
+        ),
+      active: zod.boolean(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+});
 
 /**
  * @summary Get the authenticated customer's current subscription
@@ -809,108 +1344,55 @@ export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax = 3
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin = 0;
 
-
-
 export const GetCurrentSubscriptionResponse = zod.object({
-  "subscription": zod.union([zod.object({
-  "id": zod.string().uuid(),
-  "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
-  "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
-  "package": zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string().min(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax),
-  "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-}),zod.null()])
-})
-
-
-/**
- * @summary List contacts and the authenticated customer's contact quota
- */
-export const listContactsResponseQuotaUsedMin = 0;
-
-export const listContactsResponseQuotaLimitMin = 0;
-
-export const listContactsResponseQuotaRemainingMin = 0;
-
-
-
-export const ListContactsResponse = zod.object({
-  "contacts": zod.array(zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "email": zod.string().email(),
-  "createdAt": zod.coerce.date()
-})),
-  "quota": zod.object({
-  "used": zod.number().int().min(listContactsResponseQuotaUsedMin),
-  "limit": zod.number().int().min(listContactsResponseQuotaLimitMin),
-  "remaining": zod.number().int().min(listContactsResponseQuotaRemainingMin),
-  "canAdd": zod.boolean(),
-  "requiresSubscription": zod.boolean()
-})
-})
-
-
-/**
- * @summary Save a contact if the authenticated customer's quota allows it
- */
-export const createContactBodyNameMax = 120;
-
-export const createContactBodyEmailMax = 254;
-
-
-
-export const CreateContactBody = zod.object({
-  "name": zod.string().min(1).max(createContactBodyNameMax),
-  "email": zod.string().email().max(createContactBodyEmailMax)
-})
-
-export const CreateContactResponse = zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "email": zod.string().email(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Delete a contact owned by the authenticated customer
- */
-export const DeleteContactParams = zod.object({
-  "contactId": zod.coerce.string().uuid()
-})
-
-export const DeleteContactResponse = zod.void()
-
+  subscription: zod.union([
+    zod.object({
+      id: zod.string().uuid(),
+      status: zod.enum(["active", "superseded", "cancelled", "expired"]),
+      startsAt: zod.coerce.date(),
+      endsAt: zod.coerce.date(),
+      package: zod.object({
+        id: zod.string().uuid(),
+        name: zod.string(),
+        description: zod.string(),
+        amountMinor: zod.number().int(),
+        currency: zod
+          .string()
+          .min(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin)
+          .max(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax),
+        periodDays: zod.number().int(),
+        contactLimit: zod
+          .number()
+          .int()
+          .min(
+            getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin,
+          ),
+        active: zod.boolean(),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date(),
+      }),
+    }),
+    zod.null(),
+  ]),
+});
 
 /**
  * @summary Create a server-priced Razorpay order for a package
  */
 export const CreateSubscriptionOrderBody = zod.object({
-  "packageId": zod.string().uuid()
-})
+  packageId: zod.string().uuid(),
+});
 
 export const CreateSubscriptionOrderResponse = zod.object({
-  "paymentId": zod.string().uuid(),
-  "orderId": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string(),
-  "keyId": zod.string(),
-  "packageName": zod.string(),
-  "customerName": zod.string(),
-  "customerEmail": zod.string().email()
-})
-
+  paymentId: zod.string().uuid(),
+  orderId: zod.string(),
+  amountMinor: zod.number().int(),
+  currency: zod.string(),
+  keyId: zod.string(),
+  packageName: zod.string(),
+  customerName: zod.string(),
+  customerEmail: zod.string().email(),
+});
 
 /**
  * @summary Verify a Checkout response and confirm captured payment
@@ -922,53 +1404,69 @@ export const verifyRazorpayPaymentBodyRazorpayPaymentIdMax = 80;
 export const verifyRazorpayPaymentBodyRazorpaySignatureMin = 64;
 export const verifyRazorpayPaymentBodyRazorpaySignatureMax = 64;
 
-
-
 export const VerifyRazorpayPaymentBody = zod.object({
-  "paymentId": zod.string().uuid(),
-  "razorpayOrderId": zod.string().min(1).max(verifyRazorpayPaymentBodyRazorpayOrderIdMax),
-  "razorpayPaymentId": zod.string().min(1).max(verifyRazorpayPaymentBodyRazorpayPaymentIdMax),
-  "razorpaySignature": zod.string().min(verifyRazorpayPaymentBodyRazorpaySignatureMin).max(verifyRazorpayPaymentBodyRazorpaySignatureMax)
-})
+  paymentId: zod.string().uuid(),
+  razorpayOrderId: zod
+    .string()
+    .min(1)
+    .max(verifyRazorpayPaymentBodyRazorpayOrderIdMax),
+  razorpayPaymentId: zod
+    .string()
+    .min(1)
+    .max(verifyRazorpayPaymentBodyRazorpayPaymentIdMax),
+  razorpaySignature: zod
+    .string()
+    .min(verifyRazorpayPaymentBodyRazorpaySignatureMin)
+    .max(verifyRazorpayPaymentBodyRazorpaySignatureMax),
+});
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin = 3;
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax = 3;
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin = 0;
 
-
-
 export const VerifyRazorpayPaymentResponse = zod.object({
-  "status": zod.enum(['pending', 'active']),
-  "message": zod.string(),
-  "subscription": zod.union([zod.object({
-  "id": zod.string().uuid(),
-  "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
-  "startsAt": zod.coerce.date(),
-  "endsAt": zod.coerce.date(),
-  "package": zod.object({
-  "id": zod.string().uuid(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "amountMinor": zod.number().int(),
-  "currency": zod.string().min(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax),
-  "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
-  "active": zod.boolean(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-}),zod.null()])
-})
-
+  status: zod.enum(["pending", "active"]),
+  message: zod.string(),
+  subscription: zod.union([
+    zod.object({
+      id: zod.string().uuid(),
+      status: zod.enum(["active", "superseded", "cancelled", "expired"]),
+      startsAt: zod.coerce.date(),
+      endsAt: zod.coerce.date(),
+      package: zod.object({
+        id: zod.string().uuid(),
+        name: zod.string(),
+        description: zod.string(),
+        amountMinor: zod.number().int(),
+        currency: zod
+          .string()
+          .min(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin)
+          .max(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax),
+        periodDays: zod.number().int(),
+        contactLimit: zod
+          .number()
+          .int()
+          .min(
+            verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin,
+          ),
+        active: zod.boolean(),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date(),
+      }),
+    }),
+    zod.null(),
+  ]),
+});
 
 /**
  * @summary Receive signed Razorpay payment events
  */
-export const ReceiveRazorpayWebhookBody = zod.record(zod.string(), zod.unknown())
+export const ReceiveRazorpayWebhookBody = zod.record(
+  zod.string(),
+  zod.unknown(),
+);
 
 export const ReceiveRazorpayWebhookResponse = zod.object({
-  "message": zod.string()
-})
-
-
+  message: zod.string(),
+});

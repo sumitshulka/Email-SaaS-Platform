@@ -4,15 +4,13 @@ import authRouter from "./auth";
 import profileRouter from "./profile";
 import adminRouter from "./admin";
 import billingRouter from "./billing";
-import contactsRouter from "./contacts";
+import sendingRouter from "./sending";
 
 const router: IRouter = Router();
-
 router.use(healthRouter);
 router.use(authRouter);
 router.use(profileRouter);
 router.use(billingRouter);
-router.use(contactsRouter);
+router.use(sendingRouter);
 router.use(adminRouter);
-
 export default router;

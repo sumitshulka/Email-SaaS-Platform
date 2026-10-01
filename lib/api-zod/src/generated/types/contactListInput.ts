@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ContactList {
-  id: string;
+export interface ContactListInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
   name: string;
-  active: boolean;
-  contactCount: number;
-  createdAt: Date;
-  updatedAt: Date;
 }

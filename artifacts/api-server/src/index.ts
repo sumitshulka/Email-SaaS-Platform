@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureSeedSuperadmin } from "./lib/seed";
 import { requireSessionSecret } from "./lib/security";
+import { startCampaignWorker } from "./lib/campaign-worker";
 
 const rawPort = process.env["PORT"];
 
@@ -20,6 +21,7 @@ if (Number.isNaN(port) || port <= 0) {
 try {
   requireSessionSecret();
   await ensureSeedSuperadmin();
+  startCampaignWorker();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");

@@ -8,7 +8,12 @@
 
 export interface Contact {
   id: string;
-  name: string;
   email: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  subscribed: boolean;
+  listIds: string[];
   createdAt: Date;
+  updatedAt: Date;
 }

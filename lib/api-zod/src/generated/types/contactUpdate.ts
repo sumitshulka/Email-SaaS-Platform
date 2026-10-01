@@ -6,14 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ContactInput {
+export interface ContactUpdate {
   /** @maxLength 254 */
-  email: string;
+  email?: string;
   /**
      * @minLength 1
      * @maxLength 120
      */
-  name: string;
+  name?: string;
   /** @maxLength 100 */
   firstName?: string;
   /** @maxLength 100 */

@@ -28,10 +28,17 @@ import type {
   ApplicationEmailSettingsInput,
   AuthResponse,
   AuthUser,
+  CampaignInput,
+  CampaignSummary,
+  CampaignUpdate,
   ChangePasswordInput,
   Contact,
+  ContactCollection,
   ContactInput,
   ContactList,
+  ContactListInput,
+  ContactListUpdate,
+  ContactUpdate,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
   ForgotPasswordInput,
@@ -55,6 +62,10 @@ import type {
   SubscriptionPackageInput,
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
+  TenantSendingSettings,
+  TenantSendingSettingsInput,
+  TenantSendingTestInput,
+  TenantSendingTestResponse,
   TestEmailInput,
   TestRazorpayConnectionInput,
   UserDashboard,
@@ -1011,6 +1022,1317 @@ export function useGetUserDashboard<TData = Awaited<ReturnType<typeof getUserDas
 
 
 
+
+export const getGetTenantSendingSettingsUrl = () => {
+
+
+
+
+  return `/api/sending/settings`
+}
+
+/**
+ * @summary Get the authenticated tenant's sending identity
+ */
+export const getTenantSendingSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingSettings> => {
+
+  return customFetch<TenantSendingSettings>(getGetTenantSendingSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTenantSendingSettingsQueryKey = () => {
+    return [
+    `/api/sending/settings`
+    ] as const;
+    }
+
+
+export const getGetTenantSendingSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getTenantSendingSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTenantSendingSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTenantSendingSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTenantSendingSettings>>> = ({ signal }) => getTenantSendingSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTenantSendingSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTenantSendingSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getTenantSendingSettings>>>
+export type GetTenantSendingSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the authenticated tenant's sending identity
+ */
+
+export function useGetTenantSendingSettings<TData = Awaited<ReturnType<typeof getTenantSendingSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTenantSendingSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTenantSendingSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateTenantSendingSettingsUrl = () => {
+
+
+
+
+  return `/api/sending/settings`
+}
+
+/**
+ * @summary Save the authenticated tenant's SMTP sending identity
+ */
+export const updateTenantSendingSettings = async (tenantSendingSettingsInput: TenantSendingSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantSendingSettings>(getUpdateTenantSendingSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tenantSendingSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateTenantSendingSettingsMutationKey = () => ['updateTenantSendingSettings'] as const;
+
+export const getUpdateTenantSendingSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantSendingSettings>>, TError,UpdateTenantSendingSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTenantSendingSettings>>, TError,UpdateTenantSendingSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTenantSendingSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTenantSendingSettings>>, UpdateTenantSendingSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateTenantSendingSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTenantSendingSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateTenantSendingSettings>>>
+    export type UpdateTenantSendingSettingsMutationBody = BodyType<TenantSendingSettingsInput>
+    export type UpdateTenantSendingSettingsMutationError = ErrorType<ApiError>
+    export type UpdateTenantSendingSettingsMutationVariables = {data: BodyType<TenantSendingSettingsInput>}
+
+    /**
+ * @summary Save the authenticated tenant's SMTP sending identity
+ */
+export const useUpdateTenantSendingSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantSendingSettings>>, TError,UpdateTenantSendingSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTenantSendingSettings>>,
+        TError,
+        UpdateTenantSendingSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTenantSendingSettingsMutationOptions(options));
+    }
+
+export const getTestTenantSendingSettingsUrl = () => {
+
+
+
+
+  return `/api/sending/settings/test`
+}
+
+/**
+ * @summary Send a test message using the tenant's own SMTP credentials
+ */
+export const testTenantSendingSettings = async (tenantSendingTestInput: TenantSendingTestInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingTestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantSendingTestResponse>(getTestTenantSendingSettingsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tenantSendingTestInput)
+  }
+);}
+
+
+
+
+
+export const getTestTenantSendingSettingsMutationKey = () => ['testTenantSendingSettings'] as const;
+
+export const getTestTenantSendingSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingSettings>>, TError,TestTenantSendingSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingSettings>>, TError,TestTenantSendingSettingsMutationVariables, TContext> => {
+
+const mutationKey = getTestTenantSendingSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testTenantSendingSettings>>, TestTenantSendingSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  testTenantSendingSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestTenantSendingSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof testTenantSendingSettings>>>
+    export type TestTenantSendingSettingsMutationBody = BodyType<TenantSendingTestInput>
+    export type TestTenantSendingSettingsMutationError = ErrorType<ApiError>
+    export type TestTenantSendingSettingsMutationVariables = {data: BodyType<TenantSendingTestInput>}
+
+    /**
+ * @summary Send a test message using the tenant's own SMTP credentials
+ */
+export const useTestTenantSendingSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingSettings>>, TError,TestTenantSendingSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testTenantSendingSettings>>,
+        TError,
+        TestTenantSendingSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getTestTenantSendingSettingsMutationOptions(options));
+    }
+
+export const getListContactsUrl = () => {
+
+
+
+
+  return `/api/contacts`
+}
+
+/**
+ * @summary List contacts and quota for the authenticated tenant
+ */
+export const listContacts = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactCollection> => {
+
+  return customFetch<ContactCollection>(getListContactsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactsQueryKey = () => {
+    return [
+    `/api/contacts`
+    ] as const;
+    }
+
+
+export const getListContactsQueryOptions = <TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContacts>>> = ({ signal }) => listContacts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactsQueryResult = NonNullable<Awaited<ReturnType<typeof listContacts>>>
+export type ListContactsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List contacts and quota for the authenticated tenant
+ */
+
+export function useListContacts<TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactUrl = () => {
+
+
+
+
+  return `/api/contacts`
+}
+
+/**
+ * @summary Add a contact to the authenticated tenant
+ */
+export const createContact = async (contactInput: ContactInput, options?: Parameters<typeof customFetch>[1]): Promise<Contact> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Contact>(getCreateContactUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactMutationKey = () => ['createContact'] as const;
+
+export const getCreateContactMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContact>>, CreateContactMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContact(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactMutationResult = NonNullable<Awaited<ReturnType<typeof createContact>>>
+    export type CreateContactMutationBody = BodyType<ContactInput>
+    export type CreateContactMutationError = ErrorType<ApiError>
+    export type CreateContactMutationVariables = {data: BodyType<ContactInput>}
+
+    /**
+ * @summary Add a contact to the authenticated tenant
+ */
+export const useCreateContact = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContact>>,
+        TError,
+        CreateContactMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactMutationOptions(options));
+    }
+
+export const getUpdateContactUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}`
+}
+
+/**
+ * @summary Update a contact owned by the authenticated tenant
+ */
+export const updateContact = async (contactId: string,
+    contactUpdate: ContactUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Contact> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Contact>(getUpdateContactUrl(contactId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateContactMutationKey = () => ['updateContact'] as const;
+
+export const getUpdateContactMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContact>>, TError,UpdateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateContact>>, TError,UpdateContactMutationVariables, TContext> => {
+
+const mutationKey = getUpdateContactMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateContact>>, UpdateContactMutationVariables> = (props) => {
+          const {contactId,data} = props ?? {};
+
+          return  updateContact(contactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateContactMutationResult = NonNullable<Awaited<ReturnType<typeof updateContact>>>
+    export type UpdateContactMutationBody = BodyType<ContactUpdate>
+    export type UpdateContactMutationError = ErrorType<ApiError>
+    export type UpdateContactMutationVariables = {contactId: string;data: BodyType<ContactUpdate>}
+
+    /**
+ * @summary Update a contact owned by the authenticated tenant
+ */
+export const useUpdateContact = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContact>>, TError,UpdateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateContact>>,
+        TError,
+        UpdateContactMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateContactMutationOptions(options));
+    }
+
+export const getDeleteContactUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}`
+}
+
+/**
+ * @summary Delete a contact owned by the authenticated tenant
+ */
+export const deleteContact = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteContactUrl(contactId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteContactMutationKey = () => ['deleteContact'] as const;
+
+export const getDeleteContactMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,DeleteContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,DeleteContactMutationVariables, TContext> => {
+
+const mutationKey = getDeleteContactMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContact>>, DeleteContactMutationVariables> = (props) => {
+          const {contactId} = props ?? {};
+
+          return  deleteContact(contactId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContactMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContact>>>
+
+    export type DeleteContactMutationError = ErrorType<ApiError>
+    export type DeleteContactMutationVariables = {contactId: string}
+
+    /**
+ * @summary Delete a contact owned by the authenticated tenant
+ */
+export const useDeleteContact = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,DeleteContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContact>>,
+        TError,
+        DeleteContactMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteContactMutationOptions(options));
+    }
+
+export const getListContactListsUrl = () => {
+
+
+
+
+  return `/api/contact-lists`
+}
+
+/**
+ * @summary List contact lists belonging to the authenticated tenant
+ */
+export const listContactLists = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactList[]> => {
+
+  return customFetch<ContactList[]>(getListContactListsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactListsQueryKey = () => {
+    return [
+    `/api/contact-lists`
+    ] as const;
+    }
+
+
+export const getListContactListsQueryOptions = <TData = Awaited<ReturnType<typeof listContactLists>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactLists>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactListsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactLists>>> = ({ signal }) => listContactLists({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactLists>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactListsQueryResult = NonNullable<Awaited<ReturnType<typeof listContactLists>>>
+export type ListContactListsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List contact lists belonging to the authenticated tenant
+ */
+
+export function useListContactLists<TData = Awaited<ReturnType<typeof listContactLists>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactLists>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactListsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactListUrl = () => {
+
+
+
+
+  return `/api/contact-lists`
+}
+
+/**
+ * @summary Create a contact list for the authenticated tenant
+ */
+export const createContactList = async (contactListInput: ContactListInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactList> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactList>(getCreateContactListUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactListInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactListMutationKey = () => ['createContactList'] as const;
+
+export const getCreateContactListMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactList>>, TError,CreateContactListMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContactList>>, TError,CreateContactListMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactListMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContactList>>, CreateContactListMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContactList(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactListMutationResult = NonNullable<Awaited<ReturnType<typeof createContactList>>>
+    export type CreateContactListMutationBody = BodyType<ContactListInput>
+    export type CreateContactListMutationError = ErrorType<ApiError>
+    export type CreateContactListMutationVariables = {data: BodyType<ContactListInput>}
+
+    /**
+ * @summary Create a contact list for the authenticated tenant
+ */
+export const useCreateContactList = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactList>>, TError,CreateContactListMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContactList>>,
+        TError,
+        CreateContactListMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactListMutationOptions(options));
+    }
+
+export const getUpdateContactListUrl = (listId: string,) => {
+
+
+
+
+  return `/api/contact-lists/${listId}`
+}
+
+/**
+ * @summary Rename or activate a contact list owned by the authenticated tenant
+ */
+export const updateContactList = async (listId: string,
+    contactListUpdate: ContactListUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ContactList> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactList>(getUpdateContactListUrl(listId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactListUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateContactListMutationKey = () => ['updateContactList'] as const;
+
+export const getUpdateContactListMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContactList>>, TError,UpdateContactListMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateContactList>>, TError,UpdateContactListMutationVariables, TContext> => {
+
+const mutationKey = getUpdateContactListMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateContactList>>, UpdateContactListMutationVariables> = (props) => {
+          const {listId,data} = props ?? {};
+
+          return  updateContactList(listId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateContactListMutationResult = NonNullable<Awaited<ReturnType<typeof updateContactList>>>
+    export type UpdateContactListMutationBody = BodyType<ContactListUpdate>
+    export type UpdateContactListMutationError = ErrorType<ApiError>
+    export type UpdateContactListMutationVariables = {listId: string;data: BodyType<ContactListUpdate>}
+
+    /**
+ * @summary Rename or activate a contact list owned by the authenticated tenant
+ */
+export const useUpdateContactList = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContactList>>, TError,UpdateContactListMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateContactList>>,
+        TError,
+        UpdateContactListMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateContactListMutationOptions(options));
+    }
+
+export const getDeleteContactListUrl = (listId: string,) => {
+
+
+
+
+  return `/api/contact-lists/${listId}`
+}
+
+/**
+ * @summary Delete a contact list owned by the authenticated tenant
+ */
+export const deleteContactList = async (listId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteContactListUrl(listId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteContactListMutationKey = () => ['deleteContactList'] as const;
+
+export const getDeleteContactListMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactList>>, TError,DeleteContactListMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContactList>>, TError,DeleteContactListMutationVariables, TContext> => {
+
+const mutationKey = getDeleteContactListMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContactList>>, DeleteContactListMutationVariables> = (props) => {
+          const {listId} = props ?? {};
+
+          return  deleteContactList(listId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContactListMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContactList>>>
+
+    export type DeleteContactListMutationError = ErrorType<ApiError>
+    export type DeleteContactListMutationVariables = {listId: string}
+
+    /**
+ * @summary Delete a contact list owned by the authenticated tenant
+ */
+export const useDeleteContactList = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactList>>, TError,DeleteContactListMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContactList>>,
+        TError,
+        DeleteContactListMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteContactListMutationOptions(options));
+    }
+
+export const getListCampaignsUrl = () => {
+
+
+
+
+  return `/api/campaigns`
+}
+
+/**
+ * @summary List campaigns belonging to the authenticated tenant
+ */
+export const listCampaigns = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary[]> => {
+
+  return customFetch<CampaignSummary[]>(getListCampaignsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCampaignsQueryKey = () => {
+    return [
+    `/api/campaigns`
+    ] as const;
+    }
+
+
+export const getListCampaignsQueryOptions = <TData = Awaited<ReturnType<typeof listCampaigns>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCampaignsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCampaigns>>> = ({ signal }) => listCampaigns({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCampaignsQueryResult = NonNullable<Awaited<ReturnType<typeof listCampaigns>>>
+export type ListCampaignsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List campaigns belonging to the authenticated tenant
+ */
+
+export function useListCampaigns<TData = Awaited<ReturnType<typeof listCampaigns>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCampaigns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCampaignsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCampaignUrl = () => {
+
+
+
+
+  return `/api/campaigns`
+}
+
+/**
+ * @summary Create a draft campaign for one of the tenant's contact lists
+ */
+export const createCampaign = async (campaignInput: CampaignInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignSummary>(getCreateCampaignUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCampaignMutationKey = () => ['createCampaign'] as const;
+
+export const getCreateCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaign>>, TError,CreateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCampaign>>, TError,CreateCampaignMutationVariables, TContext> => {
+
+const mutationKey = getCreateCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCampaign>>, CreateCampaignMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCampaign(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof createCampaign>>>
+    export type CreateCampaignMutationBody = BodyType<CampaignInput>
+    export type CreateCampaignMutationError = ErrorType<ApiError>
+    export type CreateCampaignMutationVariables = {data: BodyType<CampaignInput>}
+
+    /**
+ * @summary Create a draft campaign for one of the tenant's contact lists
+ */
+export const useCreateCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaign>>, TError,CreateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCampaign>>,
+        TError,
+        CreateCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateCampaignMutationOptions(options));
+    }
+
+export const getUpdateCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}`
+}
+
+/**
+ * @summary Edit a draft campaign owned by the authenticated tenant
+ */
+export const updateCampaign = async (campaignId: string,
+    campaignUpdate: CampaignUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignSummary>(getUpdateCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCampaignMutationKey = () => ['updateCampaign'] as const;
+
+export const getUpdateCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaign>>, UpdateCampaignMutationVariables> = (props) => {
+          const {campaignId,data} = props ?? {};
+
+          return  updateCampaign(campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof updateCampaign>>>
+    export type UpdateCampaignMutationBody = BodyType<CampaignUpdate>
+    export type UpdateCampaignMutationError = ErrorType<ApiError>
+    export type UpdateCampaignMutationVariables = {campaignId: string;data: BodyType<CampaignUpdate>}
+
+    /**
+ * @summary Edit a draft campaign owned by the authenticated tenant
+ */
+export const useUpdateCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCampaign>>,
+        TError,
+        UpdateCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCampaignMutationOptions(options));
+    }
+
+export const getDeleteCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}`
+}
+
+/**
+ * @summary Delete a draft campaign owned by the authenticated tenant
+ */
+export const deleteCampaign = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCampaignMutationKey = () => ['deleteCampaign'] as const;
+
+export const getDeleteCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCampaign>>, DeleteCampaignMutationVariables> = (props) => {
+          const {campaignId} = props ?? {};
+
+          return  deleteCampaign(campaignId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCampaign>>>
+
+    export type DeleteCampaignMutationError = ErrorType<ApiError>
+    export type DeleteCampaignMutationVariables = {campaignId: string}
+
+    /**
+ * @summary Delete a draft campaign owned by the authenticated tenant
+ */
+export const useDeleteCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCampaign>>,
+        TError,
+        DeleteCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCampaignMutationOptions(options));
+    }
+
+export const getSendCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/send`
+}
+
+/**
+ * @summary Queue a tenant campaign for worker-based delivery
+ */
+export const sendCampaign = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
+
+  return customFetch<CampaignSummary>(getSendCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendCampaignMutationKey = () => ['sendCampaign'] as const;
+
+export const getSendCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendCampaign>>, TError,SendCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendCampaign>>, TError,SendCampaignMutationVariables, TContext> => {
+
+const mutationKey = getSendCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendCampaign>>, SendCampaignMutationVariables> = (props) => {
+          const {campaignId} = props ?? {};
+
+          return  sendCampaign(campaignId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof sendCampaign>>>
+
+    export type SendCampaignMutationError = ErrorType<ApiError>
+    export type SendCampaignMutationVariables = {campaignId: string}
+
+    /**
+ * @summary Queue a tenant campaign for worker-based delivery
+ */
+export const useSendCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendCampaign>>, TError,SendCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendCampaign>>,
+        TError,
+        SendCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendCampaignMutationOptions(options));
+    }
 
 export const getGetAdminDashboardUrl = () => {
 
@@ -2502,245 +3824,6 @@ export function useGetCurrentSubscription<TData = Awaited<ReturnType<typeof getC
 
 
 
-
-export const getListContactsUrl = () => {
-
-
-
-
-  return `/api/contacts`
-}
-
-/**
- * @summary List contacts and the authenticated customer's contact quota
- */
-export const listContacts = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactList> => {
-
-  return customFetch<ContactList>(getListContactsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListContactsQueryKey = () => {
-    return [
-    `/api/contacts`
-    ] as const;
-    }
-
-
-export const getListContactsQueryOptions = <TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListContactsQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContacts>>> = ({ signal }) => listContacts({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListContactsQueryResult = NonNullable<Awaited<ReturnType<typeof listContacts>>>
-export type ListContactsQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List contacts and the authenticated customer's contact quota
- */
-
-export function useListContacts<TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListContactsQueryOptions(options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getCreateContactUrl = () => {
-
-
-
-
-  return `/api/contacts`
-}
-
-/**
- * @summary Save a contact if the authenticated customer's quota allows it
- */
-export const createContact = async (contactInput: ContactInput, options?: Parameters<typeof customFetch>[1]): Promise<Contact> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return customFetch<Contact>(getCreateContactUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(contactInput)
-  }
-);}
-
-
-
-
-
-export const getCreateContactMutationKey = () => ['createContact'] as const;
-
-export const getCreateContactMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext> => {
-
-const mutationKey = getCreateContactMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContact>>, CreateContactMutationVariables> = (props) => {
-          const {data} = props ?? {};
-
-          return  createContact(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateContactMutationResult = NonNullable<Awaited<ReturnType<typeof createContact>>>
-    export type CreateContactMutationBody = BodyType<ContactInput>
-    export type CreateContactMutationError = ErrorType<void>
-    export type CreateContactMutationVariables = {data: BodyType<ContactInput>}
-
-    /**
- * @summary Save a contact if the authenticated customer's quota allows it
- */
-export const useCreateContact = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof createContact>>,
-        TError,
-        CreateContactMutationVariables,
-        TContext
-      > => {
-      return useMutation(getCreateContactMutationOptions(options));
-    }
-
-export const getDeleteContactUrl = (contactId: string,) => {
-
-
-
-
-  return `/api/contacts/${contactId}`
-}
-
-/**
- * @summary Delete a contact owned by the authenticated customer
- */
-export const deleteContact = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
-
-  return customFetch<void>(getDeleteContactUrl(contactId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-
-
-export const getDeleteContactMutationKey = () => ['deleteContact'] as const;
-
-export const getDeleteContactMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,DeleteContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,DeleteContactMutationVariables, TContext> => {
-
-const mutationKey = getDeleteContactMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContact>>, DeleteContactMutationVariables> = (props) => {
-          const {contactId} = props ?? {};
-
-          return  deleteContact(contactId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteContactMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContact>>>
-
-    export type DeleteContactMutationError = ErrorType<void>
-    export type DeleteContactMutationVariables = {contactId: string}
-
-    /**
- * @summary Delete a contact owned by the authenticated customer
- */
-export const useDeleteContact = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,DeleteContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteContact>>,
-        TError,
-        DeleteContactMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteContactMutationOptions(options));
-    }
 
 export const getCreateSubscriptionOrderUrl = () => {
 

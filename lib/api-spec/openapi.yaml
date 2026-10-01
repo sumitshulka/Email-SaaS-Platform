@@ -11,6 +11,7 @@ tags:
   - name: health
   - name: auth
   - name: dashboard
+  - name: sending
   - name: profile
   - name: admin
   - name: settings
@@ -237,6 +238,403 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserDashboard"
+  /sending/settings:
+    get:
+      operationId: getTenantSendingSettings
+      tags: [sending]
+      summary: Get the authenticated tenant's sending identity
+      responses:
+        "200":
+          description: Tenant SMTP sending settings without credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingSettings"
+    put:
+      operationId: updateTenantSendingSettings
+      tags: [sending]
+      summary: Save the authenticated tenant's SMTP sending identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantSendingSettingsInput"
+      responses:
+        "200":
+          description: Saved settings; a test send is required after changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingSettings"
+        "400":
+          description: Invalid sender settings or missing SMTP credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/settings/test:
+    post:
+      operationId: testTenantSendingSettings
+      tags: [sending]
+      summary: Send a test message using the tenant's own SMTP credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantSendingTestInput"
+      responses:
+        "200":
+          description: Test email accepted by the tenant's SMTP server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingTestResponse"
+        "400":
+          description: Sender settings are missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Tenant SMTP test send failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contacts:
+    get:
+      operationId: listContacts
+      tags: [sending]
+      summary: List contacts and quota for the authenticated tenant
+      responses:
+        "200":
+          description: Tenant contacts, list memberships, and current quota
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactCollection"
+    post:
+      operationId: createContact
+      tags: [sending]
+      summary: Add a contact to the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          description: Invalid contact or list membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An active subscription is required to add contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The contact already exists or the contact quota is full
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateContact
+      tags: [sending]
+      summary: Update a contact owned by the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactUpdate"
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          description: Invalid contact update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: This email already exists in the tenant's contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteContact
+      tags: [sending]
+      summary: Delete a contact owned by the authenticated tenant
+      responses:
+        "204":
+          description: Contact deleted
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contact-lists:
+    get:
+      operationId: listContactLists
+      tags: [sending]
+      summary: List contact lists belonging to the authenticated tenant
+      responses:
+        "200":
+          description: Tenant contact lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactList"
+    post:
+      operationId: createContactList
+      tags: [sending]
+      summary: Create a contact list for the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactListInput"
+      responses:
+        "201":
+          description: Contact list created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactList"
+        "409":
+          description: A list with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contact-lists/{listId}:
+    parameters:
+      - name: listId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateContactList
+      tags: [sending]
+      summary: Rename or activate a contact list owned by the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactListUpdate"
+      responses:
+        "200":
+          description: Updated contact list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactList"
+        "404":
+          description: Contact list not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A list with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteContactList
+      tags: [sending]
+      summary: Delete a contact list owned by the authenticated tenant
+      responses:
+        "204":
+          description: Contact list deleted
+        "404":
+          description: Contact list not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [sending]
+      summary: List campaigns belonging to the authenticated tenant
+      responses:
+        "200":
+          description: Tenant campaigns with persisted delivery outcomes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CampaignSummary"
+    post:
+      operationId: createCampaign
+      tags: [sending]
+      summary: Create a draft campaign for one of the tenant's contact lists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignInput"
+      responses:
+        "201":
+          description: Draft campaign created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSummary"
+        "400":
+          description: Invalid campaign or tenant-owned list required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateCampaign
+      tags: [sending]
+      summary: Edit a draft campaign owned by the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignUpdate"
+      responses:
+        "200":
+          description: Updated draft campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSummary"
+        "400":
+          description: Invalid campaign update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Only draft campaigns can be edited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteCampaign
+      tags: [sending]
+      summary: Delete a draft campaign owned by the authenticated tenant
+      responses:
+        "204":
+          description: Draft campaign deleted
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Only draft campaigns can be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/send:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: sendCampaign
+      tags: [sending]
+      summary: Queue a tenant campaign for worker-based delivery
+      responses:
+        "202":
+          description: Campaign queued for delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSummary"
+        "400":
+          description: Sender identity, list, or campaign is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Campaign cannot be sent in its current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Tenant campaign or size limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/dashboard:
     get:
       operationId: getAdminDashboard
@@ -544,56 +942,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CurrentSubscription"
-  /contacts:
-    get:
-      operationId: listContacts
-      tags: [contacts]
-      summary: List contacts and the authenticated customer's contact quota
-      responses:
-        "200":
-          description: Contacts owned by the authenticated customer
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ContactList"
-    post:
-      operationId: createContact
-      tags: [contacts]
-      summary: Save a contact if the authenticated customer's quota allows it
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ContactInput"
-      responses:
-        "201":
-          description: Saved contact
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Contact"
-        "403":
-          description: An active subscription is required to save contacts
-        "409":
-          description: The contact already exists or the contact quota is full
-  /contacts/{contactId}:
-    delete:
-      operationId: deleteContact
-      tags: [contacts]
-      summary: Delete a contact owned by the authenticated customer
-      parameters:
-        - name: contactId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "204":
-          description: Contact deleted
-        "404":
-          description: Contact not found
   /subscriptions/orders:
     post:
       operationId: createSubscriptionOrder
@@ -748,6 +1096,133 @@ components:
         setupStepsCompleted: { type: integer }
         setupStepsTotal: { type: integer }
       required: [subscriptionStatus, contacts, activeLists, emailsSent, delivered, bounced, remainingThisHour, setupStepsCompleted, setupStepsTotal]
+    TenantSendingSettings:
+      type: object
+      properties:
+        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
+        host: { type: ["string", "null"] }
+        port: { type: ["integer", "null"] }
+        encryption: { type: ["string", "null"], enum: [none, ssl, tls, null] }
+        username: { type: ["string", "null"] }
+        credentialsConfigured: { type: boolean }
+        fromName: { type: ["string", "null"] }
+        fromEmail: { type: ["string", "null"] }
+        replyTo: { type: ["string", "null"] }
+        verified: { type: boolean }
+        verifiedAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [provider, host, port, encryption, username, credentialsConfigured, fromName, fromEmail, replyTo, verified, verifiedAt, updatedAt]
+    TenantSendingSettingsInput:
+      type: object
+      properties:
+        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
+        host: { type: string, minLength: 1, maxLength: 255 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        encryption: { type: string, enum: [none, ssl, tls] }
+        username: { type: string, minLength: 1, maxLength: 254 }
+        password: { type: string, maxLength: 512 }
+        fromName: { type: string, minLength: 1, maxLength: 120 }
+        fromEmail: { type: string, format: email }
+        replyTo: { type: string, format: email }
+      required: [provider, host, port, encryption, fromName, fromEmail]
+    TenantSendingTestInput:
+      type: object
+      properties:
+        toEmail: { type: string, format: email }
+      required: [toEmail]
+    TenantSendingTestResponse:
+      type: object
+      properties:
+        message: { type: string }
+        verifiedAt: { type: string, format: date-time }
+      required: [message, verifiedAt]
+    Contact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        subscribed: { type: boolean }
+        listIds: { type: array, items: { type: string, format: uuid } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, email, name, firstName, lastName, subscribed, listIds, createdAt, updatedAt]
+    ContactInput:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        subscribed: { type: boolean }
+        listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
+      required: [email, name]
+    ContactUpdate:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        subscribed: { type: boolean }
+        listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
+    ContactList:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        active: { type: boolean }
+        contactCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, active, contactCount, createdAt, updatedAt]
+    ContactListInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+      required: [name]
+    ContactListUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        active: { type: boolean }
+    CampaignSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        subject: { type: string }
+        textBody: { type: string }
+        listId: { type: ["string", "null"], format: uuid }
+        status: { type: string, enum: [draft, queued, sending, completed] }
+        recipients: { type: integer }
+        queued: { type: integer }
+        delivered: { type: integer }
+        bounced: { type: integer }
+        suppressed: { type: integer }
+        unknown: { type: integer }
+        queuedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, subject, textBody, listId, status, recipients, queued, delivered, bounced, suppressed, unknown, queuedAt, completedAt, createdAt, updatedAt]
+    CampaignInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        textBody: { type: string, minLength: 1, maxLength: 100000 }
+        listId: { type: string, format: uuid }
+      required: [name, subject, textBody, listId]
+    CampaignUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        textBody: { type: string, minLength: 1, maxLength: 100000 }
+        listId: { type: string, format: uuid }
     AdminDashboard:
       type: object
       properties:
@@ -976,20 +1451,6 @@ components:
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         active: { type: boolean }
-    Contact:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        email: { type: string, format: email }
-        createdAt: { type: string, format: date-time }
-      required: [id, name, email, createdAt]
-    ContactInput:
-      type: object
-      properties:
-        name: { type: string, minLength: 1, maxLength: 120 }
-        email: { type: string, format: email, maxLength: 254 }
-      required: [name, email]
     ContactQuota:
       type: object
       properties:
@@ -999,7 +1460,7 @@ components:
         canAdd: { type: boolean }
         requiresSubscription: { type: boolean }
       required: [used, limit, remaining, canAdd, requiresSubscription]
-    ContactList:
+    ContactCollection:
       type: object
       properties:
         contacts:
@@ -1062,4 +1523,3 @@ components:
     RazorpayWebhookPayload:
       type: object
       additionalProperties: true
-

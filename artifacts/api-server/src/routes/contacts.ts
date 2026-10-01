@@ -70,7 +70,12 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       .orderBy(desc(contactsTable.createdAt)),
     getContactQuota(userId),
   ]);
-  res.json(ListContactsResponse.parse({ contacts, quota }));
+  res.json(
+    ListContactsResponse.parse({
+      contacts: contacts.map((contact) => ({ ...contact, listIds: [] })),
+      quota,
+    }),
+  );
 });
 
 router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
@@ -84,7 +89,9 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
   }
 
   const userId = req.authUser!.id;
-  const name = parsed.data.name.trim();
+  const name =
+    parsed.data.name?.trim() ||
+    [parsed.data.firstName, parsed.data.lastName].filter(Boolean).join(" ").trim();
   const email = parsed.data.email.trim().toLowerCase();
   if (!name || name.length > 120 || email.length > 254) {
     res.status(400).json({
@@ -94,6 +101,10 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
 
+  const firstName = parsed.data.firstName?.trim() ?? name.split(/\s+/)[0] ?? "";
+  const lastName =
+    parsed.data.lastName?.trim() ??
+    name.split(/\s+/).slice(1).join(" ");
   const settings = await getPlatformSettings();
   const result = await db.transaction(async (tx) => {
     const [lockedUser] = await tx
@@ -147,7 +158,14 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
 
     const [contact] = await tx
       .insert(contactsTable)
-      .values({ userId, name, email })
+      .values({
+        userId,
+        name,
+        email,
+        firstName,
+        lastName,
+        subscribed: parsed.data.subscribed ?? true,
+      })
       .returning();
     return { kind: "created" as const, contact: contact! };
   });
@@ -177,7 +195,9 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
     });
     return;
   }
-  res.status(201).json(CreateContactResponse.parse(result.contact));
+  res.status(201).json(
+    CreateContactResponse.parse({ ...result.contact, listIds: [] }),
+  );
 });
 
 router.delete(
