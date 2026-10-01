@@ -544,6 +544,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CurrentSubscription"
+  /contacts:
+    get:
+      operationId: listContacts
+      tags: [contacts]
+      summary: List contacts and the authenticated customer's contact quota
+      responses:
+        "200":
+          description: Contacts owned by the authenticated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactList"
+    post:
+      operationId: createContact
+      tags: [contacts]
+      summary: Save a contact if the authenticated customer's quota allows it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Saved contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "403":
+          description: An active subscription is required to save contacts
+        "409":
+          description: The contact already exists or the contact quota is full
+  /contacts/{contactId}:
+    delete:
+      operationId: deleteContact
+      tags: [contacts]
+      summary: Delete a contact owned by the authenticated customer
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Contact deleted
+        "404":
+          description: Contact not found
   /subscriptions/orders:
     post:
       operationId: createSubscriptionOrder
@@ -893,10 +943,11 @@ components:
         amountMinor: { type: integer }
         currency: { type: string, minLength: 3, maxLength: 3 }
         periodDays: { type: integer }
+        contactLimit: { type: integer, minimum: 0 }
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, description, amountMinor, currency, periodDays, active, createdAt, updatedAt]
+      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -912,8 +963,9 @@ components:
         amountMinor: { type: integer, minimum: 1, maximum: 100000000 }
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
+        contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         active: { type: boolean }
-      required: [name, description, amountMinor, currency, periodDays, active]
+      required: [name, description, amountMinor, currency, periodDays, contactLimit, active]
     SubscriptionPackageUpdateInput:
       type: object
       properties:
@@ -922,7 +974,39 @@ components:
         amountMinor: { type: integer, minimum: 1, maximum: 100000000 }
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
+        contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         active: { type: boolean }
+    Contact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, email, createdAt]
+    ContactInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+      required: [name, email]
+    ContactQuota:
+      type: object
+      properties:
+        used: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+        canAdd: { type: boolean }
+        requiresSubscription: { type: boolean }
+      required: [used, limit, remaining, canAdd, requiresSubscription]
+    ContactList:
+      type: object
+      properties:
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/Contact" }
+        quota: { $ref: "#/components/schemas/ContactQuota" }
+      required: [contacts, quota]
     CreateSubscriptionOrderInput:
       type: object
       properties:

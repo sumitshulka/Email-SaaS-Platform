@@ -41,6 +41,7 @@ export const subscriptionPackagesTable = pgTable(
     amountMinor: integer("amount_minor").notNull(),
     currency: varchar("currency", { length: 3 }).notNull().default("INR"),
     periodDays: integer("period_days").notNull(),
+    contactLimit: integer("contact_limit").notNull().default(5000),
     active: boolean("active").notNull().default(true),
     createdBy: uuid("created_by").references(() => usersTable.id, {
       onDelete: "set null",

@@ -22,3 +22,4 @@ export * from "./auth";
 export * from "./settings";
 export * from "./audit";
 export * from "./billing";
+export * from "./contacts";

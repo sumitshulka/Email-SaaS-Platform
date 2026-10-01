@@ -18,6 +18,7 @@ export function serializePackage(pkg: PackageRow) {
     amountMinor: pkg.amountMinor,
     currency: pkg.currency,
     periodDays: pkg.periodDays,
+    contactLimit: pkg.contactLimit,
     active: pkg.active,
     createdAt: pkg.createdAt.toISOString(),
     updatedAt: pkg.updatedAt.toISOString(),
