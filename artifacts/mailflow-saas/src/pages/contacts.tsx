@@ -79,6 +79,14 @@ export default function ContactsPage() {
   });
   const data = contactsQuery.data;
   const contactLists = contactListsQuery.data ?? [];
+  const getContactListNames = (listIds: string[]) => {
+    if (listIds.length === 0) return "No lists";
+    if (contactListsQuery.isLoading) return "Loading lists…";
+    if (contactListsQuery.isError) return "List names unavailable";
+    return listIds
+      .map((listId) => contactLists.find((list) => list.id === listId)?.name ?? "List unavailable")
+      .join(", ");
+  };
   const progress = data && data.quota.limit > 0
     ? Math.min(100, (data.quota.used / data.quota.limit) * 100)
     : 0;
@@ -256,6 +264,9 @@ export default function ContactsPage() {
                   <div className="min-w-0">
                     <h3 data-testid={`text-contact-name-${contact.id}`} className="truncate text-[13px] font-semibold text-[#26374a]">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.name}</h3>
                     <p data-testid={`text-contact-email-${contact.id}`} className="mt-1 truncate text-[11px] text-[#758394]">{contact.email}</p>
+                    <p data-testid={`text-contact-lists-${contact.id}`} className="mt-1 text-[11px] text-[#586a7b]">
+                      <span className="font-medium">Lists: </span>{getContactListNames(contact.listIds)}
+                    </p>
                     <p className="mt-1 text-[10px] text-[#8994a0]">Added {new Date(contact.createdAt).toLocaleDateString()}</p>
                   </div>
                   <button

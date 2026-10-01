@@ -759,6 +759,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
       new Set(ownerList.body.contacts.map((contact) => contact.email)),
       new Set(["alex@example.test", "jamie@example.test"]),
     );
+    assert.ok(ownerList.body.contacts.every((contact) => contact.listIds.length === 0));
     assert.deepEqual(ownerList.body.quota, {
       used: 2,
       limit: 2,
@@ -1476,6 +1477,19 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         contact.email.endsWith("@owner.test"),
       ),
     );
+    assert.ok(
+      isolatedContacts.body.contacts.every((contact) =>
+        contact.listIds.includes(ownerList.body.id) &&
+        !contact.listIds.includes(otherList.body.id),
+      ),
+    );
+    const ownerVisibleLists = await api("/contact-lists", { cookie: owner.cookie });
+    assert.deepEqual(
+      ownerVisibleLists.body.map((list) => list.name),
+      ["Owner audience"],
+    );
+    const otherContacts = await api("/contacts", { cookie: other.cookie });
+    assert.deepEqual(otherContacts.body.contacts[0].listIds, [otherList.body.id]);
     const crossTenantMembership = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,

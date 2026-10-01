@@ -79,7 +79,7 @@ async function getContactQuota(userId: string) {
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const userId = req.authUser!.id;
-  const [contacts, quota, settings] = await Promise.all([
+  const [contacts, quota, settings, memberships] = await Promise.all([
     db
       .select()
       .from(contactsTable)
@@ -87,10 +87,26 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       .orderBy(desc(contactsTable.createdAt)),
     getContactQuota(userId),
     getPlatformSettings(),
+    db
+      .select({
+        contactId: contactListMembersTable.contactId,
+        listId: contactListMembersTable.listId,
+      })
+      .from(contactListMembersTable)
+      .where(eq(contactListMembersTable.userId, userId)),
   ]);
+  const listIdsByContact = new Map<string, string[]>();
+  for (const membership of memberships) {
+    const listIds = listIdsByContact.get(membership.contactId) ?? [];
+    listIds.push(membership.listId);
+    listIdsByContact.set(membership.contactId, listIds);
+  }
   res.json(
     ListContactsResponse.parse({
-      contacts: contacts.map((contact) => ({ ...contact, listIds: [] })),
+      contacts: contacts.map((contact) => ({
+        ...contact,
+        listIds: listIdsByContact.get(contact.id) ?? [],
+      })),
       quota,
       uploadSettings: {
         maxFileSizeMb: settings.maxUploadFileSizeMb,
