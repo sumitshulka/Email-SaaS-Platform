@@ -1,0 +1,1 @@
+- [Phase 1 scope language](phase-scope.md) — don't present future sending or billing capabilities as available until backed by working flows and real data.

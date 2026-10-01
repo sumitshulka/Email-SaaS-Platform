@@ -1,0 +1,474 @@
+import { and, desc, eq, gt, isNull, ne, or } from "drizzle-orm";
+import { Router, type IRouter } from "express";
+import {
+  ChangePasswordBody,
+  ChangePasswordResponse,
+  GetCurrentUserResponse,
+  LoginBody,
+  LoginResponse,
+  RequestPasswordResetBody,
+  RequestPasswordResetResponse,
+  RegisterBody,
+  RegisterResponse,
+  ResetPasswordBody,
+  ResetPasswordResponse,
+  VerifyRegistrationEmailBody,
+  VerifyRegistrationEmailResponse,
+} from "@workspace/api-zod";
+import {
+  db,
+  loginAttemptsTable,
+  otpVerificationsTable,
+  passwordResetTokensTable,
+  userSessionsTable,
+  usersTable,
+} from "@workspace/db";
+import { sendApplicationEmail, getApplicationEmailConfig } from "../lib/application-email";
+import { getPlatformSettings } from "../lib/platform-settings";
+import {
+  clearSessionCookie,
+  createUserSession,
+  requireAuth,
+  revokeCurrentSession,
+} from "../lib/session";
+import {
+  constantTimeEqual,
+  hashPassword,
+  hmac,
+  randomToken,
+  sha256,
+  sixDigitCode,
+  verifyPassword,
+} from "../lib/security";
+
+const router: IRouter = Router();
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function toPublicUser(user: typeof usersTable.$inferSelect) {
+  return {
+    id: user.id,
+    username: user.username,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    role: user.role,
+    timezone: user.timezone,
+    active: user.active,
+    emailVerified: user.emailVerified,
+    mustChangeCredentials: user.mustChangeCredentials,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
+
+export async function createVerificationCode(
+  userId: string,
+  email: string,
+  purpose: "registration" | "email_change",
+  firstName: string,
+): Promise<void> {
+  const settings = await getPlatformSettings();
+  const code = sixDigitCode();
+  await db
+    .update(otpVerificationsTable)
+    .set({ consumedAt: new Date() })
+    .where(
+      and(
+        eq(otpVerificationsTable.email, email),
+        eq(otpVerificationsTable.purpose, purpose),
+        isNull(otpVerificationsTable.consumedAt),
+      ),
+    );
+  await db.insert(otpVerificationsTable).values({
+    userId,
+    email,
+    purpose,
+    codeHash: hmac(`${email}:${code}`, `otp:${purpose}`),
+    expiresAt: new Date(Date.now() + settings.otpExpiryMinutes * 60 * 1000),
+  });
+  await sendApplicationEmail(
+    email,
+    purpose === "registration" ? "Verify your Mailflow account" : "Confirm your email change",
+    `Hello ${firstName},\n\nYour verification code is ${code}. It expires in ${settings.otpExpiryMinutes} minutes.\n\nIf you did not request this, you can ignore this email.`,
+  );
+}
+
+router.post("/auth/login", async (req, res): Promise<void> => {
+  const parsed = LoginBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter your username/email and password.", code: "INVALID_INPUT" });
+    return;
+  }
+
+  const identifier = parsed.data.identifier.trim().toLowerCase();
+  const ipAddress = req.ip?.slice(0, 80) ?? "unknown";
+  const settings = await getPlatformSettings();
+  const [attempt] = await db
+    .select()
+    .from(loginAttemptsTable)
+    .where(
+      and(
+        eq(loginAttemptsTable.identifier, identifier),
+        eq(loginAttemptsTable.ipAddress, ipAddress),
+      ),
+    )
+    .limit(1);
+  const now = new Date();
+  if (attempt?.lockedUntil && attempt.lockedUntil > now) {
+    res.status(429).json({
+      error: "Too many sign-in attempts. Please try again later.",
+      code: "LOGIN_RATE_LIMITED",
+    });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(
+      and(
+        or(eq(usersTable.username, identifier), eq(usersTable.email, identifier)),
+        isNull(usersTable.deletedAt),
+      ),
+    )
+    .limit(1);
+  const passwordValid =
+    user != null && (await verifyPassword(parsed.data.password, user.passwordHash));
+
+  if (!user || !passwordValid || !user.active || !user.emailVerified) {
+    const sameWindow =
+      attempt != null && now.getTime() - attempt.windowStartedAt.getTime() < LOGIN_WINDOW_MS;
+    const failedCount = sameWindow ? (attempt?.failedCount ?? 0) + 1 : 1;
+    const lockedUntil =
+      failedCount >= settings.loginAttemptThreshold
+        ? new Date(now.getTime() + LOGIN_LOCK_MS)
+        : null;
+    await db
+      .insert(loginAttemptsTable)
+      .values({
+        identifier,
+        ipAddress,
+        failedCount,
+        windowStartedAt: sameWindow ? attempt!.windowStartedAt : now,
+        lockedUntil,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [loginAttemptsTable.identifier, loginAttemptsTable.ipAddress],
+        set: {
+          failedCount,
+          windowStartedAt: sameWindow ? attempt!.windowStartedAt : now,
+          lockedUntil,
+          updatedAt: now,
+        },
+      });
+    req.log.warn({ reason: "authentication_failed" }, "Authentication failed");
+    res.status(401).json({
+      error: "The username/email or password is incorrect, or the account is not verified.",
+      code: "INVALID_CREDENTIALS",
+    });
+    return;
+  }
+
+  await db
+    .delete(loginAttemptsTable)
+    .where(
+      and(
+        eq(loginAttemptsTable.identifier, identifier),
+        eq(loginAttemptsTable.ipAddress, ipAddress),
+      ),
+    );
+  const [updatedUser] = await db
+    .update(usersTable)
+    .set({ lastLoginAt: now })
+    .where(eq(usersTable.id, user.id))
+    .returning();
+  await createUserSession(updatedUser, req, res);
+  req.log.info({ userId: user.id, role: user.role }, "User signed in");
+  res.json(LoginResponse.parse({ user: toPublicUser(updatedUser) }));
+});
+
+router.post("/auth/register", async (req, res): Promise<void> => {
+  const parsed = RegisterBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Check the registration details and try again.", code: "INVALID_INPUT" });
+    return;
+  }
+  const email = normalizeEmail(parsed.data.email);
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(and(eq(usersTable.email, email), isNull(usersTable.deletedAt)))
+    .limit(1);
+  if (existing) {
+    res.status(409).json({ error: "An account with this email already exists.", code: "EMAIL_IN_USE" });
+    return;
+  }
+
+  const settings = await getPlatformSettings();
+  if (parsed.data.password.length < settings.passwordMinimumLength) {
+    res.status(400).json({
+      error: `Password must be at least ${settings.passwordMinimumLength} characters.`,
+      code: "PASSWORD_TOO_SHORT",
+    });
+    return;
+  }
+  if (!(await getApplicationEmailConfig())) {
+    res.status(503).json({
+      error: "Account verification is not available yet. Ask the administrator to configure application email.",
+      code: "APPLICATION_EMAIL_NOT_CONFIGURED",
+    });
+    return;
+  }
+
+  const usernameBase = email.split("@")[0]!.replace(/[^a-z0-9._-]/g, "").slice(0, 38) || "user";
+  const username = `${usernameBase}-${randomToken(5).slice(0, 7)}`;
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      username,
+      firstName: parsed.data.firstName.trim(),
+      lastName: parsed.data.lastName.trim(),
+      email,
+      passwordHash: await hashPassword(parsed.data.password),
+      role: "USER",
+      timezone: settings.defaultTimezone,
+      active: true,
+      emailVerified: false,
+    })
+    .returning();
+
+  try {
+    await createVerificationCode(user.id, email, "registration", user.firstName);
+  } catch {
+    await db.delete(usersTable).where(eq(usersTable.id, user.id));
+    req.log.warn({ userId: user.id }, "Registration email could not be sent");
+    res.status(502).json({
+      error: "We could not send a verification email. Please try again later.",
+      code: "VERIFICATION_EMAIL_FAILED",
+    });
+    return;
+  }
+
+  res.status(201).json(
+    RegisterResponse.parse({
+      message: "A verification code has been sent to your email address.",
+    }),
+  );
+});
+
+router.post("/auth/verify-email", async (req, res): Promise<void> => {
+  const parsed = VerifyRegistrationEmailBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter the six-digit code sent to your email.", code: "INVALID_INPUT" });
+    return;
+  }
+  const email = normalizeEmail(parsed.data.email);
+  const [otp] = await db
+    .select()
+    .from(otpVerificationsTable)
+    .where(
+      and(
+        eq(otpVerificationsTable.email, email),
+        or(
+          eq(otpVerificationsTable.purpose, "registration"),
+          eq(otpVerificationsTable.purpose, "email_change"),
+        ),
+        isNull(otpVerificationsTable.consumedAt),
+        gt(otpVerificationsTable.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(otpVerificationsTable.createdAt))
+    .limit(1);
+
+  if (!otp) {
+    res.status(400).json({ error: "This code is invalid or expired. Request a new code.", code: "OTP_INVALID" });
+    return;
+  }
+  const settings = await getPlatformSettings();
+  if (otp.attempts >= settings.maxOtpAttempts) {
+    res.status(400).json({ error: "Too many code attempts. Request a new code.", code: "OTP_ATTEMPTS_EXCEEDED" });
+    return;
+  }
+  const expected = hmac(`${email}:${parsed.data.code}`, `otp:${otp.purpose}`);
+  if (!constantTimeEqual(expected, otp.codeHash)) {
+    await db
+      .update(otpVerificationsTable)
+      .set({ attempts: otp.attempts + 1 })
+      .where(eq(otpVerificationsTable.id, otp.id));
+    res.status(400).json({ error: "The verification code is incorrect.", code: "OTP_INVALID" });
+    return;
+  }
+
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(otpVerificationsTable)
+      .set({ consumedAt: now })
+      .where(eq(otpVerificationsTable.id, otp.id));
+    await tx
+      .update(usersTable)
+      .set({ emailVerified: true, emailVerifiedAt: now, active: true })
+      .where(and(eq(usersTable.id, otp.userId!), isNull(usersTable.deletedAt)));
+  });
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, otp.userId!))
+    .limit(1);
+  if (!user || user.deletedAt) {
+    res.status(400).json({ error: "This account is no longer available.", code: "ACCOUNT_UNAVAILABLE" });
+    return;
+  }
+  await createUserSession(user, req, res);
+  res.json(VerifyRegistrationEmailResponse.parse({ user: toPublicUser(user) }));
+});
+
+router.post("/auth/forgot-password", async (req, res): Promise<void> => {
+  const parsed = RequestPasswordResetBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter a valid email address.", code: "INVALID_INPUT" });
+    return;
+  }
+  const email = normalizeEmail(parsed.data.email);
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.email, email), isNull(usersTable.deletedAt)))
+    .limit(1);
+  const emailConfig = await getApplicationEmailConfig();
+  if (user && emailConfig) {
+    const token = randomToken(32);
+    await db.insert(passwordResetTokensTable).values({
+      userId: user.id,
+      tokenHash: sha256(token),
+      expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+    });
+    const origin = `${req.protocol}://${req.get("host")}`;
+    try {
+      await sendApplicationEmail(
+        email,
+        "Reset your Mailflow password",
+        `Use this link to set a new password. The link expires in 30 minutes:\n\n${origin}/reset-password?token=${token}\n\nIf you did not request this, ignore this email.`,
+      );
+    } catch {
+      req.log.warn({ userId: user.id }, "Password reset email could not be sent");
+    }
+  }
+  res.json(
+    RequestPasswordResetResponse.parse({
+      message: "If an account matches that email, password reset instructions have been sent.",
+    }),
+  );
+});
+
+router.post("/auth/reset-password", async (req, res): Promise<void> => {
+  const parsed = ResetPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Check the reset token and new password.", code: "INVALID_INPUT" });
+    return;
+  }
+  const settings = await getPlatformSettings();
+  if (parsed.data.password.length < settings.passwordMinimumLength) {
+    res.status(400).json({
+      error: `Password must be at least ${settings.passwordMinimumLength} characters.`,
+      code: "PASSWORD_TOO_SHORT",
+    });
+    return;
+  }
+  const [token] = await db
+    .select()
+    .from(passwordResetTokensTable)
+    .where(
+      and(
+        eq(passwordResetTokensTable.tokenHash, sha256(parsed.data.token)),
+        isNull(passwordResetTokensTable.consumedAt),
+        gt(passwordResetTokensTable.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  if (!token) {
+    res.status(400).json({ error: "This reset link is invalid or expired.", code: "RESET_TOKEN_INVALID" });
+    return;
+  }
+  const passwordHash = await hashPassword(parsed.data.password);
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ passwordHash, mustChangeCredentials: false })
+      .where(eq(usersTable.id, token.userId));
+    await tx
+      .update(passwordResetTokensTable)
+      .set({ consumedAt: now })
+      .where(eq(passwordResetTokensTable.id, token.id));
+    await tx
+      .update(userSessionsTable)
+      .set({ revokedAt: now })
+      .where(and(eq(userSessionsTable.userId, token.userId), isNull(userSessionsTable.revokedAt)));
+  });
+  res.json(ResetPasswordResponse.parse({ message: "Your password has been updated. Please sign in." }));
+});
+
+router.get("/auth/me", requireAuth, (req, res): void => {
+  res.json(GetCurrentUserResponse.parse(toPublicUser(req.authUser!)));
+});
+
+router.post("/auth/logout", async (req, res): Promise<void> => {
+  await revokeCurrentSession(req);
+  clearSessionCookie(res);
+  res.sendStatus(204);
+});
+
+router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ChangePasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter your current password and a valid new password.", code: "INVALID_INPUT" });
+    return;
+  }
+  const user = req.authUser!;
+  if (!(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
+    res.status(400).json({ error: "Current password is incorrect.", code: "CURRENT_PASSWORD_INCORRECT" });
+    return;
+  }
+  const settings = await getPlatformSettings();
+  if (parsed.data.newPassword.length < settings.passwordMinimumLength) {
+    res.status(400).json({
+      error: `Password must be at least ${settings.passwordMinimumLength} characters.`,
+      code: "PASSWORD_TOO_SHORT",
+    });
+    return;
+  }
+
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({
+        passwordHash: await hashPassword(parsed.data.newPassword),
+        mustChangeCredentials: false,
+      })
+      .where(eq(usersTable.id, user.id));
+    await tx
+      .update(userSessionsTable)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(userSessionsTable.userId, user.id),
+          isNull(userSessionsTable.revokedAt),
+          req.sessionTokenHash
+            ? ne(userSessionsTable.tokenHash, req.sessionTokenHash)
+            : eq(userSessionsTable.userId, user.id),
+        ),
+      );
+  });
+  res.json(ChangePasswordResponse.parse({ message: "Password changed successfully." }));
+});
+
+export { toPublicUser };
+export default router;

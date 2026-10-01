@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Multi-tenant email SaaS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: auth
+  - name: dashboard
+  - name: profile
+  - name: admin
+  - name: settings
 paths:
   /healthz:
     get:
@@ -24,6 +28,378 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in with username or email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Sign-in temporarily limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a tenant account and send email verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Verification instructions sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid registration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Application email is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/verify-email:
+    post:
+      operationId: verifyRegistrationEmail
+      tags: [auth]
+      summary: Verify a registration email with a one-time code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailInput"
+      responses:
+        "200":
+          description: Email verified and session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid or expired verification code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/forgot-password:
+    post:
+      operationId: requestPasswordReset
+      tags: [auth]
+      summary: Send a password reset link without revealing account existence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordInput"
+      responses:
+        "200":
+          description: Generic response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Set a new password using a one-time reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid or expired reset token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke the current session
+      responses:
+        "204":
+          description: Signed out
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change the authenticated user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed; other sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid password or current password mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /profile:
+    patch:
+      operationId: updateProfile
+      tags: [profile]
+      summary: Update the authenticated user's profile and username/email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "409":
+          description: Username or email is already used
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /dashboard:
+    get:
+      operationId: getUserDashboard
+      tags: [dashboard]
+      summary: Get tenant dashboard summary
+      responses:
+        "200":
+          description: Tenant dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDashboard"
+  /admin/dashboard:
+    get:
+      operationId: getAdminDashboard
+      tags: [admin]
+      summary: Get platform administration summary
+      responses:
+        "200":
+          description: Admin dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: Search and paginate tenant accounts
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, active, inactive, pending]
+            default: all
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Page of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserPage"
+  /admin/users/{userId}/status:
+    patch:
+      operationId: updateAdminUserStatus
+      tags: [admin]
+      summary: Activate or deactivate a tenant account
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserStatusInput"
+      responses:
+        "200":
+          description: Account status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+  /admin/users/{userId}:
+    delete:
+      operationId: deleteAdminUser
+      tags: [admin]
+      summary: Soft-delete a tenant account
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Account deleted
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [settings]
+      summary: Get platform configuration
+      responses:
+        "200":
+          description: Current platform configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSettings"
+    put:
+      operationId: updateAdminSettings
+      tags: [settings]
+      summary: Update platform configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformSettingsInput"
+      responses:
+        "200":
+          description: Updated platform configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformSettings"
+  /admin/settings/email:
+    get:
+      operationId: getApplicationEmailSettings
+      tags: [settings]
+      summary: Get masked application SMTP configuration
+      responses:
+        "200":
+          description: Masked app SMTP configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationEmailSettings"
+    put:
+      operationId: updateApplicationEmailSettings
+      tags: [settings]
+      summary: Save application SMTP configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationEmailSettingsInput"
+      responses:
+        "200":
+          description: Masked updated app SMTP configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationEmailSettings"
+  /admin/settings/email/test:
+    post:
+      operationId: sendApplicationEmailTest
+      tags: [settings]
+      summary: Send a test message using the application SMTP account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestEmailInput"
+      responses:
+        "200":
+          description: Test email result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
 components:
   schemas:
     HealthStatus:
@@ -31,6 +407,234 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+      required: [error]
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+    AuthUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [SUPERADMIN, USER] }
+        timezone: { type: string }
+        active: { type: boolean }
+        emailVerified: { type: boolean }
+        mustChangeCredentials: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, username, firstName, lastName, email, role, timezone, active, emailVerified, mustChangeCredentials, createdAt]
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/AuthUser" }
+      required: [user]
+    LoginInput:
+      type: object
+      properties:
+        identifier: { type: string, minLength: 1, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 256 }
+      required: [identifier, password]
+    RegisterInput:
+      type: object
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 80 }
+        lastName: { type: string, minLength: 1, maxLength: 80 }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 256 }
+      required: [firstName, lastName, email, password]
+    VerifyEmailInput:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        code: { type: string, minLength: 6, maxLength: 6 }
+      required: [email, code]
+    ForgotPasswordInput:
+      type: object
+      properties:
+        email: { type: string, format: email }
+      required: [email]
+    ResetPasswordInput:
+      type: object
+      properties:
+        token: { type: string, minLength: 32, maxLength: 256 }
+        password: { type: string, minLength: 8, maxLength: 256 }
+      required: [token, password]
+    ChangePasswordInput:
+      type: object
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 256 }
+        newPassword: { type: string, minLength: 8, maxLength: 256 }
+      required: [currentPassword, newPassword]
+    ProfileUpdateInput:
+      type: object
+      properties:
+        username: { type: string, minLength: 3, maxLength: 50 }
+        firstName: { type: string, minLength: 1, maxLength: 80 }
+        lastName: { type: string, minLength: 1, maxLength: 80 }
+        email: { type: string, format: email, maxLength: 254 }
+        timezone: { type: string, minLength: 1, maxLength: 80 }
+    UserDashboard:
+      type: object
+      properties:
+        subscriptionStatus: { type: string, enum: [inactive, active, expired] }
+        contacts: { type: integer }
+        activeLists: { type: integer }
+        emailsSent: { type: integer }
+        delivered: { type: integer }
+        bounced: { type: integer }
+        remainingThisHour: { type: integer }
+        setupStepsCompleted: { type: integer }
+        setupStepsTotal: { type: integer }
+      required: [subscriptionStatus, contacts, activeLists, emailsSent, delivered, bounced, remainingThisHour, setupStepsCompleted, setupStepsTotal]
+    AdminDashboard:
+      type: object
+      properties:
+        totalUsers: { type: integer }
+        activeUsers: { type: integer }
+        pendingUsers: { type: integer }
+        disabledUsers: { type: integer }
+        newUsersThisMonth: { type: integer }
+        activeSubscriptions: { type: integer }
+        revenueThisMonth: { type: number }
+        emailsSent: { type: integer }
+        recentUsers:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUser" }
+      required: [totalUsers, activeUsers, pendingUsers, disabledUsers, newUsersThisMonth, activeSubscriptions, revenueThisMonth, emailsSent, recentUsers]
+    AdminUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        emailVerified: { type: boolean }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: ["string", "null"], format: date-time }
+        subscriptionStatus: { type: ["string", "null"] }
+      required: [id, username, firstName, lastName, email, emailVerified, active, createdAt, lastLoginAt, subscriptionStatus]
+    AdminUserPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUser" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    UserStatusInput:
+      type: object
+      properties:
+        active: { type: boolean }
+      required: [active]
+    PlatformSettings:
+      type: object
+      properties:
+        applicationName: { type: string }
+        defaultCurrency: { type: string }
+        defaultTimezone: { type: string }
+        dateFormat: { type: string }
+        supportEmail: { type: string }
+        supportPhone: { type: string }
+        maintenanceMode: { type: boolean }
+        maxContactsPerUser: { type: integer }
+        maxUploadFileSizeMb: { type: integer }
+        allowedContactFileTypes: { type: array, items: { type: string } }
+        passwordMinimumLength: { type: integer }
+        otpExpiryMinutes: { type: integer }
+        maxOtpAttempts: { type: integer }
+        loginAttemptThreshold: { type: integer }
+        sessionDurationHours: { type: integer }
+        defaultEmailsPerHour: { type: integer }
+        maxEmailsPerDay: { type: integer }
+        maxCampaignSize: { type: integer }
+        maxConcurrentCampaigns: { type: integer }
+        retryAttempts: { type: integer }
+        retryDelaySeconds: { type: integer }
+        bounceThreshold: { type: integer }
+        deliveryTrackingEnabled: { type: boolean }
+        queuePollingSeconds: { type: integer }
+        allowUserWithoutSubscription: { type: boolean }
+        gracePeriodDays: { type: integer }
+        packageVisibility: { type: string, enum: [public, hidden] }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt]
+    PlatformSettingsInput:
+      type: object
+      properties:
+        applicationName: { type: string, minLength: 1, maxLength: 100 }
+        defaultCurrency: { type: string, minLength: 3, maxLength: 3 }
+        defaultTimezone: { type: string, minLength: 1, maxLength: 80 }
+        dateFormat: { type: string, minLength: 1, maxLength: 40 }
+        supportEmail: { type: string, format: email }
+        supportPhone: { type: string, maxLength: 40 }
+        maintenanceMode: { type: boolean }
+        maxContactsPerUser: { type: integer, minimum: 1 }
+        maxUploadFileSizeMb: { type: integer, minimum: 1 }
+        allowedContactFileTypes: { type: array, items: { type: string } }
+        passwordMinimumLength: { type: integer, minimum: 8, maximum: 128 }
+        otpExpiryMinutes: { type: integer, minimum: 1, maximum: 60 }
+        maxOtpAttempts: { type: integer, minimum: 1, maximum: 10 }
+        loginAttemptThreshold: { type: integer, minimum: 3, maximum: 20 }
+        sessionDurationHours: { type: integer, minimum: 1, maximum: 720 }
+        defaultEmailsPerHour: { type: integer, minimum: 1 }
+        maxEmailsPerDay: { type: integer, minimum: 1 }
+        maxCampaignSize: { type: integer, minimum: 1 }
+        maxConcurrentCampaigns: { type: integer, minimum: 1, maximum: 1 }
+        retryAttempts: { type: integer, minimum: 0, maximum: 10 }
+        retryDelaySeconds: { type: integer, minimum: 1 }
+        bounceThreshold: { type: integer, minimum: 1 }
+        deliveryTrackingEnabled: { type: boolean }
+        queuePollingSeconds: { type: integer, minimum: 1 }
+        allowUserWithoutSubscription: { type: boolean }
+        gracePeriodDays: { type: integer, minimum: 0 }
+        packageVisibility: { type: string, enum: [public, hidden] }
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, allowUserWithoutSubscription, gracePeriodDays, packageVisibility]
+    ApplicationEmailSettings:
+      type: object
+      properties:
+        host: { type: ["string", "null"] }
+        port: { type: ["integer", "null"] }
+        encryption: { type: ["string", "null"], enum: [none, ssl, tls, null] }
+        username: { type: ["string", "null"] }
+        passwordConfigured: { type: boolean }
+        fromName: { type: ["string", "null"] }
+        fromEmail: { type: ["string", "null"] }
+        replyTo: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [host, port, encryption, username, passwordConfigured, fromName, fromEmail, replyTo, updatedAt]
+    ApplicationEmailSettingsInput:
+      type: object
+      properties:
+        host: { type: string, minLength: 1, maxLength: 255 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        encryption: { type: string, enum: [none, ssl, tls] }
+        username: { type: string, minLength: 1, maxLength: 254 }
+        password: { type: string, maxLength: 512 }
+        fromName: { type: string, minLength: 1, maxLength: 120 }
+        fromEmail: { type: string, format: email }
+        replyTo: { type: string, format: email }
+      required: [host, port, encryption, fromName, fromEmail]
+    TestEmailInput:
+      type: object
+      properties:
+        toEmail: { type: string, format: email }
+      required: [toEmail]
 

@@ -5,7 +5,8 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { AuthUser } from './authUser';
 
-export interface HealthStatus {
-  status: string;
+export interface AuthResponse {
+  user: AuthUser;
 }
