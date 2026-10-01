@@ -5,6 +5,8 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { ContactEmailHistoryItemReportOutcome } from './contactEmailHistoryItemReportOutcome';
+import type { ContactEmailHistoryItemReportSource } from './contactEmailHistoryItemReportSource';
 import type { ContactEmailHistoryItemStatus } from './contactEmailHistoryItemStatus';
 
 export interface ContactEmailHistoryItem {
@@ -19,4 +21,17 @@ export interface ContactEmailHistoryItem {
   lastAttemptAt: Date | null;
   /** @nullable */
   deliveredAt: Date | null;
+  reportOutcome?: ContactEmailHistoryItemReportOutcome;
+  /** @nullable */
+  reportSource?: ContactEmailHistoryItemReportSource;
+  /** @nullable */
+  reportDiagnostic?: string | null;
+  /** @nullable */
+  reportAt?: Date | null;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  messageId?: string | null;
+  /** @nullable */
+  smtpResponse?: string | null;
 }

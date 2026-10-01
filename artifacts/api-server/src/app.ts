@@ -35,6 +35,10 @@ app.use(
   }),
 );
 app.use(
+  "/api/sending/reports/import",
+  express.json({ limit: "7mb" }),
+);
+app.use(
   express.json({
     limit: "1mb",
     verify(req, _res, body) {

@@ -29,6 +29,7 @@ import type {
   AuthResponse,
   AuthUser,
   CampaignDashboard,
+  CampaignDeliveryReport,
   CampaignInput,
   CampaignPreviewInput,
   CampaignSummary,
@@ -49,7 +50,10 @@ import type {
   ContactUpdate,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
+  DeliveryReportImportResult,
+  DeliveryReportInput,
   ForgotPasswordInput,
+  GetCampaignDeliveryReportParams,
   HealthStatus,
   ImportContactsParams,
   ListAdminUsersParams,
@@ -2600,6 +2604,185 @@ export const useDeleteCampaign = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteCampaignMutationOptions(options));
+    }
+
+export const getGetCampaignDeliveryReportUrl = (campaignId: string,
+    params?: GetCampaignDeliveryReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/campaigns/${campaignId}/delivery-report?${stringifiedParams}` : `/api/campaigns/${campaignId}/delivery-report`
+}
+
+/**
+ * SMTP acceptance is not proof of inbox delivery. Imported reports are user-provided and are not authenticated provider events.
+ * @summary Get SMTP and imported delivery evidence for a tenant campaign
+ */
+export const getCampaignDeliveryReport = async (campaignId: string,
+    params?: GetCampaignDeliveryReportParams, options?: Parameters<typeof customFetch>[1]): Promise<CampaignDeliveryReport> => {
+
+  return customFetch<CampaignDeliveryReport>(getGetCampaignDeliveryReportUrl(campaignId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignDeliveryReportQueryKey = (campaignId: string,
+    params?: GetCampaignDeliveryReportParams,) => {
+    return [
+    `/api/campaigns/${campaignId}/delivery-report`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCampaignDeliveryReportQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignDeliveryReport>>, TError = ErrorType<ApiError>>(campaignId: string,
+    params?: GetCampaignDeliveryReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignDeliveryReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignDeliveryReportQueryKey(campaignId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignDeliveryReport>>> = ({ signal }) => getCampaignDeliveryReport(campaignId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: campaignId !== null && campaignId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignDeliveryReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignDeliveryReportQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignDeliveryReport>>>
+export type GetCampaignDeliveryReportQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get SMTP and imported delivery evidence for a tenant campaign
+ */
+
+export function useGetCampaignDeliveryReport<TData = Awaited<ReturnType<typeof getCampaignDeliveryReport>>, TError = ErrorType<ApiError>>(
+ campaignId: string,
+    params?: GetCampaignDeliveryReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignDeliveryReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignDeliveryReportQueryOptions(campaignId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getImportDeliveryReportUrl = () => {
+
+
+
+
+  return `/api/sending/reports/import`
+}
+
+/**
+ * Imports DSN, Microsoft 365, Google Workspace, or generic CSV reports. Evidence is labeled user_imported and is not authenticated as a provider event. Raw input is not retained.
+ * @summary Import a user-provided delivery report
+ */
+export const importDeliveryReport = async (deliveryReportInput: DeliveryReportInput, options?: Parameters<typeof customFetch>[1]): Promise<DeliveryReportImportResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<DeliveryReportImportResult>(getImportDeliveryReportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(deliveryReportInput)
+  }
+);}
+
+
+
+
+
+export const getImportDeliveryReportMutationKey = () => ['importDeliveryReport'] as const;
+
+export const getImportDeliveryReportMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importDeliveryReport>>, TError,ImportDeliveryReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importDeliveryReport>>, TError,ImportDeliveryReportMutationVariables, TContext> => {
+
+const mutationKey = getImportDeliveryReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importDeliveryReport>>, ImportDeliveryReportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  importDeliveryReport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportDeliveryReportMutationResult = NonNullable<Awaited<ReturnType<typeof importDeliveryReport>>>
+    export type ImportDeliveryReportMutationBody = BodyType<DeliveryReportInput>
+    export type ImportDeliveryReportMutationError = ErrorType<ApiError>
+    export type ImportDeliveryReportMutationVariables = {data: BodyType<DeliveryReportInput>}
+
+    /**
+ * @summary Import a user-provided delivery report
+ */
+export const useImportDeliveryReport = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importDeliveryReport>>, TError,ImportDeliveryReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importDeliveryReport>>,
+        TError,
+        ImportDeliveryReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getImportDeliveryReportMutationOptions(options));
     }
 
 export const getSendCampaignUrl = (campaignId: string,) => {

@@ -189,7 +189,7 @@ async function getTenantContactEmailHistory(userId: string, contactId?: string) 
     ...(contactId ? [eq(emailCampaignRecipientsTable.contactId, contactId)] : []),
   ];
 
-  return db
+  const history = await db
     .select({
       id: emailCampaignRecipientsTable.id,
       contactId: emailCampaignRecipientsTable.contactId,
@@ -200,6 +200,11 @@ async function getTenantContactEmailHistory(userId: string, contactId?: string) 
       attempts: emailCampaignRecipientsTable.attempts,
       lastAttemptAt: max(emailSendAttemptsTable.attemptedAt),
       deliveredAt: emailCampaignRecipientsTable.deliveredAt,
+      reportOutcome: emailCampaignRecipientsTable.reportOutcome,
+      reportSource: emailCampaignRecipientsTable.reportSource,
+      reportDiagnostic: emailCampaignRecipientsTable.reportDiagnostic,
+      reportAt: emailCampaignRecipientsTable.reportAt,
+      lastError: emailCampaignRecipientsTable.lastError,
       createdAt: emailCampaignRecipientsTable.createdAt,
     })
     .from(emailCampaignRecipientsTable)
@@ -227,12 +232,54 @@ async function getTenantContactEmailHistory(userId: string, contactId?: string) 
       emailCampaignRecipientsTable.status,
       emailCampaignRecipientsTable.attempts,
       emailCampaignRecipientsTable.deliveredAt,
+      emailCampaignRecipientsTable.reportOutcome,
+      emailCampaignRecipientsTable.reportSource,
+      emailCampaignRecipientsTable.reportDiagnostic,
+      emailCampaignRecipientsTable.reportAt,
+      emailCampaignRecipientsTable.lastError,
       emailCampaignRecipientsTable.createdAt,
     )
     .orderBy(
       desc(max(emailSendAttemptsTable.attemptedAt)),
       desc(emailCampaignRecipientsTable.createdAt),
     );
+  const latestAttempts = await db
+    .select({
+      recipientId: emailSendAttemptsTable.recipientId,
+      messageId: emailSendAttemptsTable.messageId,
+      smtpResponse: emailSendAttemptsTable.smtpResponse,
+    })
+    .from(emailSendAttemptsTable)
+    .where(
+      and(
+        eq(emailSendAttemptsTable.userId, userId),
+        inArray(
+          emailSendAttemptsTable.recipientId,
+          history.map((email) => email.id),
+        ),
+      ),
+    )
+    .orderBy(
+      desc(emailSendAttemptsTable.attemptedAt),
+      desc(emailSendAttemptsTable.id),
+    );
+  const latestAttemptByRecipient = new Map<
+    string,
+    (typeof latestAttempts)[number]
+  >();
+  for (const attempt of latestAttempts) {
+    if (!latestAttemptByRecipient.has(attempt.recipientId)) {
+      latestAttemptByRecipient.set(attempt.recipientId, attempt);
+    }
+  }
+  return history.map((email) => {
+    const latestAttempt = latestAttemptByRecipient.get(email.id);
+    return {
+      ...email,
+      messageId: latestAttempt?.messageId ?? null,
+      smtpResponse: latestAttempt?.smtpResponse ?? null,
+    };
+  });
 }
 
 async function isValidTenantListSelection(
@@ -609,7 +656,8 @@ router.post(
         .where(eq(tenantSendingConfigurationTable.userId, userId));
       res.json(
         TestTenantSendingSettingsResponse.parse({
-          message: "Test email sent successfully.",
+          message:
+            "The SMTP server accepted the test message; inbox delivery is not confirmed.",
           verifiedAt,
         }),
       );
@@ -683,6 +731,13 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
             attempts: email.attempts,
             lastAttemptAt: email.lastAttemptAt,
             deliveredAt: email.deliveredAt,
+            reportOutcome: email.reportOutcome,
+            reportSource: email.reportSource,
+            reportDiagnostic: email.reportDiagnostic,
+            reportAt: email.reportAt,
+            lastError: email.lastError,
+            messageId: email.messageId,
+            smtpResponse: email.smtpResponse,
           };
         })(),
       })),
@@ -734,6 +789,13 @@ router.get(
           attempts: email.attempts,
           lastAttemptAt: email.lastAttemptAt,
           deliveredAt: email.deliveredAt,
+          reportOutcome: email.reportOutcome,
+          reportSource: email.reportSource,
+          reportDiagnostic: email.reportDiagnostic,
+          reportAt: email.reportAt,
+          lastError: email.lastError,
+          messageId: email.messageId,
+          smtpResponse: email.smtpResponse,
         })),
       ),
     );

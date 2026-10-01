@@ -741,6 +741,83 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/delivery-report:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: offset
+        in: query
+        required: false
+        schema: { type: integer, minimum: 0, default: 0 }
+    get:
+      operationId: getCampaignDeliveryReport
+      tags: [sending]
+      summary: Get SMTP and imported delivery evidence for a tenant campaign
+      description: SMTP acceptance is not proof of inbox delivery. Imported reports are user-provided and are not authenticated provider events.
+      responses:
+        "200":
+          description: Paginated recipient evidence and campaign-wide summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignDeliveryReport"
+        "400":
+          description: Invalid pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Campaign not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/reports/import:
+    post:
+      operationId: importDeliveryReport
+      tags: [sending]
+      summary: Import a user-provided delivery report
+      description: Imports DSN, Microsoft 365, Google Workspace, or generic CSV reports. Evidence is labeled user_imported and is not authenticated as a provider event. Raw input is not retained.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryReportInput"
+      responses:
+        "200":
+          description: Imported, duplicate, unmatched, and ignored report counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryReportImportResult"
+        "400":
+          description: Invalid or unparseable report input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Campaign not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns/{campaignId}/send:
     parameters:
       - name: campaignId
@@ -1314,6 +1391,13 @@ components:
         attempts: { type: integer, minimum: 0 }
         lastAttemptAt: { type: ["string", "null"], format: date-time }
         deliveredAt: { type: ["string", "null"], format: date-time }
+        reportOutcome: { type: string, enum: [unconfirmed, delivered, bounced, delayed, failed] }
+        reportSource: { type: ["string", "null"], enum: [dsn, microsoft_365_csv, google_workspace_csv, generic_csv, null] }
+        reportDiagnostic: { type: ["string", "null"] }
+        reportAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+        messageId: { type: ["string", "null"] }
+        smtpResponse: { type: ["string", "null"] }
       required: [id, campaignId, campaignName, subject, status, attempts, lastAttemptAt, deliveredAt]
     ContactDirectoryItem:
       allOf:
@@ -1467,6 +1551,67 @@ components:
         pacing:
           $ref: "#/components/schemas/CampaignPacing"
       required: [campaign, targetList, pacing]
+    DeliveryReportInput:
+      type: object
+      description: Submitted content is processed in memory and not retained as a raw file. Imported evidence is user-provided and is not provider-authenticated.
+      properties:
+        format: { type: string, enum: [dsn, microsoft_365_csv, google_workspace_csv, generic_csv] }
+        content: { type: string, minLength: 1, maxLength: 1000000 }
+        campaignId: { type: string, format: uuid }
+      required: [format, content]
+    DeliveryReportImportResult:
+      type: object
+      properties:
+        imported: { type: integer, minimum: 0 }
+        duplicates: { type: integer, minimum: 0 }
+        unmatched: { type: integer, minimum: 0 }
+        ignored: { type: integer, minimum: 0 }
+        warnings: { type: array, items: { type: string } }
+        message: { type: string }
+      required: [imported, duplicates, unmatched, ignored, warnings, message]
+    CampaignDeliveryReport:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        summary:
+          type: object
+          properties:
+            smtpAccepted: { type: integer, minimum: 0 }
+            sendFailed: { type: integer, minimum: 0 }
+            reportedDelivered: { type: integer, minimum: 0 }
+            reportedBounced: { type: integer, minimum: 0 }
+            reportedDelayed: { type: integer, minimum: 0 }
+            reportedFailed: { type: integer, minimum: 0 }
+            unconfirmed: { type: integer, minimum: 0 }
+          required: [smtpAccepted, sendFailed, reportedDelivered, reportedBounced, reportedDelayed, reportedFailed, unconfirmed]
+        recipients:
+          type: array
+          items: { $ref: "#/components/schemas/DeliveryRecipient" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0 }
+      required: [campaignId, summary, recipients, total, limit, offset]
+    DeliveryRecipient:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        status: { type: string, enum: [queued, sending, delivered, bounced, suppressed, unknown] }
+        attempts: { type: integer, minimum: 0 }
+        smtpAcceptedAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+        reportOutcome: { type: string, enum: [unconfirmed, delivered, bounced, delayed, failed] }
+        reportSource: { type: ["string", "null"], enum: [dsn, microsoft_365_csv, google_workspace_csv, generic_csv, null] }
+        reportDiagnostic: { type: ["string", "null"] }
+        reportStatusCode: { type: ["string", "null"] }
+        reportAt: { type: ["string", "null"], format: date-time }
+        reportDeliveryScope: { type: ["string", "null"], enum: [mailbox, receiving_server, unspecified, null] }
+        latestMessageId: { type: ["string", "null"] }
+        latestSmtpResponse: { type: ["string", "null"] }
+        latestSmtpCode: { type: ["integer", "null"] }
+        dsnRequested: { type: boolean }
+        evidenceVerification: { type: ["string", "null"], enum: [user_imported, null] }
+      required: [id, email, status, attempts, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
     CampaignTargetList:
       type: object
       properties:

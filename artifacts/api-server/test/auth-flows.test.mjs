@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { DataType, newDb } from "pg-mem";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://mailflow-test:mailflow-test@127.0.0.1/mailflow_test";
@@ -238,6 +238,12 @@ memory.public.none(`
     next_attempt_at timestamptz NOT NULL DEFAULT now(),
     last_error text,
     delivered_at timestamptz,
+    report_outcome varchar(24) NOT NULL DEFAULT 'unconfirmed',
+    report_source varchar(32),
+    report_diagnostic text,
+    report_status_code varchar(64),
+    report_at timestamptz,
+    report_delivery_scope varchar(24),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
@@ -245,7 +251,30 @@ memory.public.none(`
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     recipient_id uuid NOT NULL REFERENCES email_campaign_recipients(id) ON DELETE CASCADE,
-    attempted_at timestamptz NOT NULL DEFAULT now()
+    message_id varchar(512),
+    smtp_response text,
+    smtp_code integer,
+    enhanced_status varchar(24),
+    outcome varchar(24) NOT NULL DEFAULT 'pending',
+    error_message text,
+    dsn_requested boolean NOT NULL DEFAULT false,
+    attempted_at timestamptz NOT NULL DEFAULT now(),
+    completed_at timestamptz
+  );
+  CREATE TABLE email_delivery_reports (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id uuid NOT NULL REFERENCES email_campaign_recipients(id) ON DELETE CASCADE,
+    attempt_id uuid NOT NULL REFERENCES email_send_attempts(id) ON DELETE CASCADE,
+    fingerprint varchar(64) NOT NULL,
+    outcome varchar(24) NOT NULL,
+    source varchar(32) NOT NULL,
+    diagnostic text,
+    status_code varchar(64),
+    occurred_at timestamptz,
+    received_at timestamptz NOT NULL DEFAULT now(),
+    delivery_scope varchar(24) NOT NULL DEFAULT 'unspecified',
+    UNIQUE (user_id, fingerprint)
   );
 `);
 
@@ -343,6 +372,7 @@ after(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(dbModule.emailDeliveryReportsTable);
   await db.delete(dbModule.emailSendAttemptsTable);
   await db.delete(dbModule.emailCampaignRecipientsTable);
   await db.delete(dbModule.emailCampaignsTable);
@@ -1567,8 +1597,21 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       if (message.subject === "Mailflow sender identity test") {
         return { accepted: true };
       }
-      if (message.to === "one@owner.test") return { accepted: true };
-      return { accepted: false, error: "Recipient rejected by test transport." };
+      if (message.to === "one@owner.test") {
+        return {
+          accepted: true,
+          smtpResponse: "250 2.0.0 SMTP accepted",
+          smtpCode: 250,
+          enhancedStatus: "2.0.0",
+        };
+      }
+      return {
+        accepted: false,
+        error: "Recipient rejected by test transport.",
+        smtpResponse: "550 5.1.1 recipient unavailable",
+        smtpCode: 550,
+        enhancedStatus: "5.1.1",
+      };
     });
     const testedSender = await api("/sending/settings/test", {
       method: "POST",
@@ -1663,6 +1706,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       key: "platform",
       value: {
         defaultEmailsPerHour: 1,
+        deliveryTrackingEnabled: true,
         maxEmailsPerDay: 2,
         maxConcurrentCampaigns: 2,
       },
@@ -1756,7 +1800,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
 
     await db
       .update(dbModule.systemConfigurationTable)
-      .set({ value: { defaultEmailsPerHour: 100, maxEmailsPerDay: 10 } })
+      .set({ value: { defaultEmailsPerHour: 100, maxEmailsPerDay: 10, deliveryTrackingEnabled: true } })
       .where(eq(dbModule.systemConfigurationTable.key, "platform"));
     await db
       .update(dbModule.emailCampaignRecipientsTable)
@@ -1798,16 +1842,57 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       personalizedDelivery.html,
       "<p><strong>Hi Owner</strong>, welcome to Acme &amp; Sons.</p>",
     );
+    assert.ok(personalizedDelivery.tracking?.attemptId);
+    assert.equal(
+      personalizedDelivery.tracking.messageId,
+      `<${personalizedDelivery.tracking.attemptId}@mailflow.local>`,
+    );
+    assert.equal(personalizedDelivery.tracking.dsnRequested, true);
 
     const recipientOutcomes = await db
       .select({
+        id: dbModule.emailCampaignRecipientsTable.id,
         contactId: dbModule.emailCampaignRecipientsTable.contactId,
+        email: dbModule.emailCampaignRecipientsTable.email,
         status: dbModule.emailCampaignRecipientsTable.status,
       })
       .from(dbModule.emailCampaignRecipientsTable)
       .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id));
     const deliveredRecipient = recipientOutcomes.find((item) => item.status === "delivered");
     const bouncedRecipient = recipientOutcomes.find((item) => item.status === "bounced");
+    const recordedAttempts = await db
+      .select()
+      .from(dbModule.emailSendAttemptsTable)
+      .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+    assert.equal(recordedAttempts.length, 2);
+    assert.ok(recordedAttempts.every((attempt) => attempt.dsnRequested));
+    assert.ok(
+      recordedAttempts.every((attempt) =>
+        new RegExp(`^<${attempt.id}@mailflow\\.local>$`).test(attempt.messageId),
+      ),
+    );
+    assert.deepEqual(
+      new Set(recordedAttempts.map((attempt) => attempt.outcome)),
+      new Set(["smtp_accepted", "smtp_rejected"]),
+    );
+    assert.ok(
+      recordedAttempts.every(
+        (attempt) =>
+          attempt.smtpCode === 250 || attempt.smtpCode === 550,
+      ),
+    );
+    assert.ok(
+      recordedAttempts.every(
+        (attempt) =>
+          attempt.enhancedStatus === "2.0.0" ||
+          attempt.enhancedStatus === "5.1.1",
+      ),
+    );
+    const deliveredAttempt = recordedAttempts.find(
+      (attempt) => attempt.recipientId === deliveredRecipient.id,
+    );
+    assert.ok(deliveredAttempt);
+    assert.equal(personalizedDelivery.tracking.messageId, deliveredAttempt.messageId);
     const contactsWithHistory = await api("/contacts", { cookie: owner.cookie });
     assert.equal(contactsWithHistory.response.status, 200);
     const contactById = new Map(
@@ -1816,6 +1901,14 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(contactById.get(deliveredRecipient.contactId).lastEmail.status, "delivered");
     assert.equal(contactById.get(bouncedRecipient.contactId).lastEmail.status, "bounced");
     assert.ok(contactById.get(deliveredRecipient.contactId).lastEmail.lastAttemptAt);
+    assert.equal(
+      contactById.get(deliveredRecipient.contactId).lastEmail.messageId,
+      deliveredAttempt.messageId,
+    );
+    assert.equal(
+      contactById.get(deliveredRecipient.contactId).lastEmail.smtpResponse,
+      "250 2.0.0 SMTP accepted",
+    );
     assert.equal(contactById.get(ownerContacts[2].body.id).lastEmail, null);
 
     const deliveredHistory = await api(
@@ -1827,6 +1920,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(deliveredHistory.body[0].status, "delivered");
     assert.equal(deliveredHistory.body[0].campaignName, "Owner campaign");
     assert.ok(deliveredHistory.body[0].lastAttemptAt);
+    assert.equal(deliveredHistory.body[0].messageId, deliveredAttempt.messageId);
+    assert.equal(
+      deliveredHistory.body[0].smtpResponse,
+      "250 2.0.0 SMTP accepted",
+    );
     const bouncedHistory = await api(
       `/contacts/${bouncedRecipient.contactId}/email-history`,
       { cookie: owner.cookie },
@@ -1834,6 +1932,8 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(bouncedHistory.response.status, 200);
     assert.equal(bouncedHistory.body[0].status, "bounced");
     assert.equal(bouncedHistory.body[0].subject, "A workspace update for {{firstName}}");
+    assert.equal(bouncedHistory.body[0].reportOutcome, "unconfirmed");
+    assert.ok(bouncedHistory.body[0].messageId);
     const noEmailHistory = await api(
       `/contacts/${ownerContacts[2].body.id}/email-history`,
       { cookie: owner.cookie },
@@ -1845,6 +1945,265 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(crossTenantHistory.response.status, 404);
 
+    const initialDeliveryPage = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=0`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(initialDeliveryPage.response.status, 200);
+    assert.equal(initialDeliveryPage.body.total, 3);
+    assert.equal(initialDeliveryPage.body.recipients.length, 1);
+    assert.equal(initialDeliveryPage.body.recipients[0].email, "one@owner.test");
+    assert.equal(initialDeliveryPage.body.summary.smtpAccepted, 1);
+    assert.equal(initialDeliveryPage.body.summary.sendFailed, 1);
+    assert.equal(initialDeliveryPage.body.summary.unconfirmed, 3);
+    assert.ok(initialDeliveryPage.body.recipients[0].latestMessageId);
+    assert.equal(initialDeliveryPage.body.recipients[0].dsnRequested, true);
+
+    const reportTimestamp = new Date(Date.now() + 1000).toISOString();
+    const dsnReport = [
+      `Original-Message-ID: ${deliveredAttempt.messageId}`,
+      `Final-Recipient: rfc822; ${deliveredRecipient.email}`,
+      "Action: delivered",
+      "Status: 2.0.0",
+      "Diagnostic-Code: smtp; 250 2.0.0 recipient accepted",
+      `Last-Attempt-Date: ${reportTimestamp}`,
+    ].join("\r\n");
+    const importedReport = await api("/sending/reports/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { format: "dsn", content: dsnReport },
+    });
+    assert.equal(importedReport.response.status, 200, JSON.stringify(importedReport.body));
+    assert.equal(importedReport.body.imported, 1);
+    assert.equal(importedReport.body.unmatched, 0);
+    assert.match(importedReport.body.message, /user-imported evidence/i);
+
+    const duplicateReport = await api("/sending/reports/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { format: "dsn", content: dsnReport },
+    });
+    assert.equal(duplicateReport.body.imported, 0);
+    assert.equal(duplicateReport.body.duplicates, 1);
+
+    const unmatchedReport = await api("/sending/reports/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        format: "generic_csv",
+        content:
+          "message_id,recipient_email,status\n<unknown@provider.test>,one@owner.test,delivered",
+      },
+    });
+    assert.equal(unmatchedReport.body.unmatched, 1);
+
+    const otherTenantImport = await api("/sending/reports/import", {
+      method: "POST",
+      cookie: other.cookie,
+      body: { format: "dsn", content: dsnReport },
+    });
+    assert.equal(otherTenantImport.response.status, 200);
+    assert.equal(otherTenantImport.body.imported, 0);
+    assert.equal(otherTenantImport.body.unmatched, 1);
+
+    const reportedDeliveryPage = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=0`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(reportedDeliveryPage.body.total, 3);
+    assert.equal(reportedDeliveryPage.body.summary.reportedDelivered, 1);
+    assert.equal(reportedDeliveryPage.body.summary.unconfirmed, 2);
+    assert.equal(reportedDeliveryPage.body.recipients[0].reportOutcome, "delivered");
+    assert.equal(
+      reportedDeliveryPage.body.recipients[0].evidenceVerification,
+      "user_imported",
+    );
+    const secondDeliveryPage = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=1`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(secondDeliveryPage.body.recipients.length, 1);
+    assert.notEqual(
+      secondDeliveryPage.body.recipients[0].id,
+      reportedDeliveryPage.body.recipients[0].id,
+    );
+
+    const bouncedAttempt = recordedAttempts.find(
+      (attempt) => attempt.recipientId === bouncedRecipient.id,
+    );
+    assert.ok(bouncedAttempt);
+    const makeDsn = ({
+      attempt = deliveredAttempt,
+      envelopeId,
+      outcome,
+      occurredAt,
+    }) =>
+      [
+        `Original-Message-ID: ${attempt.messageId}`,
+        ...(envelopeId ? [`Original-Envelope-ID: ${envelopeId}`] : []),
+        `Final-Recipient: rfc822; ${deliveredRecipient.email}`,
+        `Action: ${outcome === "bounced" ? "failed" : outcome}`,
+        `Status: ${outcome === "bounced" ? "5.1.1" : outcome === "delayed" ? "4.2.0" : "2.0.0"}`,
+        ...(occurredAt ? [`Last-Attempt-Date: ${occurredAt}`] : []),
+      ].join("\r\n");
+    const importDsn = (content) =>
+      api("/sending/reports/import", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { format: "dsn", content },
+      });
+    const importGeneric = (status, occurredAt) =>
+      api("/sending/reports/import", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: {
+          format: "generic_csv",
+          content: [
+            "message_id,recipient_email,status,timestamp",
+            `${deliveredAttempt.messageId},${deliveredRecipient.email},${status},${occurredAt ?? ""}`,
+          ].join("\n"),
+        },
+      });
+
+    const conflictingIdentifiers = await importDsn(
+      [
+        `Original-Message-ID: ${deliveredAttempt.messageId}`,
+        "Original-Envelope-ID: 123e4567-e89b-42d3-a456-426614174000",
+        `Final-Recipient: rfc822; ${deliveredRecipient.email}`,
+        "Action: delivered",
+        "Status: 2.0.0",
+      ].join("\r\n"),
+    );
+    assert.equal(conflictingIdentifiers.body.unmatched, 1);
+    const invalidEnvelopeId = await importDsn(
+      [
+        `Original-Message-ID: ${deliveredAttempt.messageId}`,
+        "Original-Envelope-ID: not-a-uuid",
+        `Final-Recipient: rfc822; ${deliveredRecipient.email}`,
+        "Action: delivered",
+        "Status: 2.0.0",
+      ].join("\r\n"),
+    );
+    assert.equal(invalidEnvelopeId.response.status, 200);
+    assert.equal(invalidEnvelopeId.body.unmatched, 1);
+    assert.match(invalidEnvelopeId.body.warnings[0], /invalid envelope ID/i);
+
+    const originalAttemptTime = deliveredAttempt.attemptedAt;
+    const attemptWholeSecond = new Date(
+      Math.floor(new Date(originalAttemptTime).getTime() / 1000) * 1000,
+    );
+    await db
+      .update(dbModule.emailSendAttemptsTable)
+      .set({ attemptedAt: new Date(attemptWholeSecond.getTime() + 450) })
+      .where(eq(dbModule.emailSendAttemptsTable.id, deliveredAttempt.id));
+    const sameSecondRfcBounce = await importDsn(
+      makeDsn({
+        outcome: "bounced",
+        occurredAt: attemptWholeSecond.toUTCString(),
+      }),
+    );
+    assert.equal(sameSecondRfcBounce.response.status, 200);
+    assert.equal(sameSecondRfcBounce.body.imported, 1);
+    assert.equal(sameSecondRfcBounce.body.ignored, 0);
+    const precedingSecondRfcBounce = await importDsn(
+      makeDsn({
+        outcome: "bounced",
+        occurredAt: new Date(attemptWholeSecond.getTime() - 1000).toUTCString(),
+      }),
+    );
+    assert.equal(precedingSecondRfcBounce.body.imported, 0);
+    assert.equal(precedingSecondRfcBounce.body.ignored, 1);
+    await db
+      .update(dbModule.emailSendAttemptsTable)
+      .set({ attemptedAt: new Date(originalAttemptTime) })
+      .where(eq(dbModule.emailSendAttemptsTable.id, deliveredAttempt.id));
+
+    const tieTimestamp = new Date(Date.now() + 10_000).toISOString();
+    const [concurrentDelivered, concurrentBounced] = await Promise.all([
+      importDsn(
+        makeDsn({
+          outcome: "delivered",
+          occurredAt: tieTimestamp,
+        }),
+      ),
+      importDsn(
+        makeDsn({
+          outcome: "bounced",
+          occurredAt: tieTimestamp,
+        }),
+      ),
+    ]);
+    assert.equal(concurrentDelivered.body.imported, 1);
+    assert.equal(concurrentBounced.body.imported, 1);
+    const tiedProjection = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=100`,
+      { cookie: owner.cookie },
+    );
+    const tiedRecipient = tiedProjection.body.recipients.find(
+      (item) => item.id === deliveredRecipient.id,
+    );
+    assert.equal(tiedRecipient.reportOutcome, "bounced");
+    assert.equal(new Date(tiedRecipient.reportAt).toISOString(), tieTimestamp);
+    const tiedEvents = await db
+      .select()
+      .from(dbModule.emailDeliveryReportsTable)
+      .where(
+        and(
+          eq(dbModule.emailDeliveryReportsTable.recipientId, deliveredRecipient.id),
+          eq(dbModule.emailDeliveryReportsTable.attemptId, deliveredAttempt.id),
+        ),
+      );
+    assert.equal(
+      tiedEvents.filter(
+        (event) =>
+          event.occurredAt?.toISOString() === tieTimestamp &&
+          ["delivered", "bounced"].includes(event.outcome),
+      ).length,
+      2,
+    );
+
+    const olderTimestamp = new Date(
+      new Date(tieTimestamp).getTime() - 1000,
+    ).toISOString();
+    const olderTerminal = await importDsn(
+      makeDsn({
+        outcome: "delivered",
+        occurredAt: olderTimestamp,
+      }),
+    );
+    assert.equal(olderTerminal.body.imported, 1);
+    assert.ok(olderTerminal.body.warnings.length > 0);
+    const undatedTerminal = await importGeneric("failed");
+    assert.equal(undatedTerminal.body.imported, 1);
+    assert.ok(undatedTerminal.body.warnings.length > 0);
+    const newerTimestamp = new Date(
+      new Date(tieTimestamp).getTime() + 1000,
+    ).toISOString();
+    const newerTerminal = await importGeneric("failed", newerTimestamp);
+    assert.equal(newerTerminal.body.imported, 1);
+    const delayedAfterTerminal = await importDsn(
+      makeDsn({
+        outcome: "delayed",
+        occurredAt: new Date(
+          new Date(tieTimestamp).getTime() + 2000,
+        ).toISOString(),
+      }),
+    );
+    assert.equal(delayedAfterTerminal.body.imported, 1);
+    assert.ok(delayedAfterTerminal.body.warnings.length > 0);
+    const dateOrderedProjection = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=100`,
+      { cookie: owner.cookie },
+    );
+    const dateOrderedRecipient = dateOrderedProjection.body.recipients.find(
+      (item) => item.id === deliveredRecipient.id,
+    );
+    assert.equal(dateOrderedRecipient.reportOutcome, "failed");
+    assert.equal(
+      new Date(dateOrderedRecipient.reportAt).toISOString(),
+      newerTimestamp,
+    );
+
     const ownerDashboard = await api("/dashboard", { cookie: owner.cookie });
     const otherDashboard = await api("/dashboard", { cookie: other.cookie });
     assert.equal(ownerDashboard.response.status, 200);
@@ -1855,5 +2214,101 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(ownerDashboard.body.bounced, 1);
     assert.equal(otherDashboard.body.contacts, 1);
     assert.equal(otherDashboard.body.emailsSent, 0);
+
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({
+        status: "queued",
+        nextAttemptAt: new Date(Date.now() - 1000),
+        reportOutcome: "bounced",
+        reportSource: "dsn",
+        reportDiagnostic: "old attempt diagnostic",
+        reportStatusCode: "5.1.1",
+        reportAt: new Date(Date.now() - 1000),
+        reportDeliveryScope: "recipient",
+      })
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, deliveredRecipient.id));
+    await db
+      .update(dbModule.emailCampaignsTable)
+      .set({ status: "queued", completedAt: null })
+      .where(eq(dbModule.emailCampaignsTable.id, campaign.body.id));
+    await db
+      .update(dbModule.emailSendAttemptsTable)
+      .set({ attemptedAt: new Date(Date.now() - 60_000) })
+      .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+    const retryEvidenceReset = await campaignWorkerModule.processPendingCampaignDeliveries(1);
+    assert.equal(retryEvidenceReset, 1);
+    const [resetRecipient] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, deliveredRecipient.id));
+    assert.equal(resetRecipient.reportOutcome, "unconfirmed");
+    assert.equal(resetRecipient.reportSource, null);
+    assert.equal(resetRecipient.reportDiagnostic, null);
+    assert.equal(resetRecipient.reportStatusCode, null);
+    assert.equal(resetRecipient.reportAt, null);
+    assert.equal(resetRecipient.reportDeliveryScope, null);
+
+    await db
+      .update(dbModule.systemConfigurationTable)
+      .set({
+        value: {
+          defaultEmailsPerHour: 100,
+          maxEmailsPerDay: 10,
+          retryAttempts: 0,
+        },
+      })
+      .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({
+        status: "queued",
+        nextAttemptAt: new Date(Date.now() - 1000),
+        reportOutcome: "delivered",
+        reportSource: "dsn",
+        reportAt: new Date(Date.now() - 1000),
+      })
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, deliveredRecipient.id));
+    await db
+      .update(dbModule.emailCampaignsTable)
+      .set({ status: "queued", completedAt: null })
+      .where(eq(dbModule.emailCampaignsTable.id, campaign.body.id));
+    await db
+      .update(dbModule.emailSendAttemptsTable)
+      .set({ attemptedAt: new Date(Date.now() - 60_000) })
+      .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+    emailModule.setTenantEmailTransportForTests(async () => {
+      throw Object.assign(new Error("connection timeout"), {
+        code: "ETIMEDOUT",
+        command: "DATA",
+      });
+    });
+    const unknownTerminalDelivery =
+      await campaignWorkerModule.processPendingCampaignDeliveries(1);
+    assert.equal(unknownTerminalDelivery, 1);
+    const [unknownRecipient] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, deliveredRecipient.id));
+    assert.equal(unknownRecipient.status, "unknown");
+    assert.equal(unknownRecipient.reportOutcome, "unconfirmed");
+    const latestOwnerAttempts = await db
+      .select()
+      .from(dbModule.emailSendAttemptsTable)
+      .where(
+        and(
+          eq(dbModule.emailSendAttemptsTable.userId, owner.user.id),
+          eq(dbModule.emailSendAttemptsTable.recipientId, deliveredRecipient.id),
+        ),
+      )
+      .orderBy(desc(dbModule.emailSendAttemptsTable.attemptedAt));
+    assert.equal(latestOwnerAttempts[0].outcome, "unknown");
+    assert.equal(latestOwnerAttempts[0].dsnRequested, false);
+    const terminalUnknownReport = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=100`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(terminalUnknownReport.body.summary.sendFailed, 1);
+    assert.equal(terminalUnknownReport.body.summary.smtpAccepted, 0);
   });
 });

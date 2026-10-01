@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   and,
   asc,
@@ -21,6 +22,7 @@ import {
   type TenantSendingConfiguration,
 } from "@workspace/db";
 import { sendTenantEmail } from "./application-email";
+import { decryptSecret } from "./security";
 import {
   renderCampaignForContact,
   type CampaignPersonalization,
@@ -40,6 +42,9 @@ type DeliveryClaim =
       campaign: EmailCampaign;
       recipient: EmailCampaignRecipient;
       personalization: CampaignPersonalization;
+      attemptId: string;
+      messageId: string;
+      dsnRequested: boolean;
     }
   | { completedCampaignId: string };
 
@@ -59,6 +64,89 @@ function deliveryError(error: unknown): string {
     return "Could not connect to the SMTP server.";
   }
   return "The SMTP provider could not accept this delivery.";
+}
+
+function smtpFailureEvidence(
+  error: unknown,
+  sender: TenantSendingConfiguration,
+): {
+  smtpResponse?: string;
+  smtpCode?: number;
+  enhancedStatus?: string;
+  outcome: "smtp_rejected" | "send_failed" | "unknown";
+} {
+  const details =
+    error && typeof error === "object"
+      ? (error as {
+          response?: unknown;
+          responseCode?: unknown;
+          statusCode?: unknown;
+          command?: unknown;
+        })
+      : {};
+  const responseCode =
+    typeof details.responseCode === "number"
+      ? details.responseCode
+      : typeof details.statusCode === "number"
+        ? details.statusCode
+        : undefined;
+  const errorCode =
+    error && typeof error === "object" && "code" in error &&
+    typeof error.code === "string"
+      ? error.code
+      : "";
+  const command =
+    typeof details.command === "string" ? details.command.trim() : "";
+  const explicitPreDataCommand =
+    /^(?:CONN|EHLO|HELO|STARTTLS|AUTH|MAIL FROM|RCPT TO)\b/i.test(command);
+  let smtpResponse =
+    typeof details.response === "string" ? details.response : undefined;
+  if (smtpResponse) {
+    smtpResponse = smtpResponse.replace(
+      /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,
+      " ",
+    );
+    for (const credential of [
+      decryptSecret(sender.usernameEncrypted),
+      decryptSecret(sender.passwordEncrypted),
+    ]) {
+      if (credential) smtpResponse = smtpResponse.split(credential).join("[redacted]");
+    }
+    smtpResponse = smtpResponse.slice(0, 1000);
+  }
+  const responsePrefixCode = Number(
+    smtpResponse?.match(/^\s*(\d{3})/)?.[1],
+  );
+  const parsedCode = responseCode ?? (responsePrefixCode || undefined);
+  const enhancedStatus =
+    smtpResponse?.match(/\b([245]\.\d{1,3}\.\d{1,3})\b/)?.[1];
+  return {
+    ...(smtpResponse ? { smtpResponse } : {}),
+    ...(parsedCode ? { smtpCode: parsedCode } : {}),
+    ...(enhancedStatus ? { enhancedStatus } : {}),
+    outcome:
+      parsedCode && parsedCode >= 400 && parsedCode <= 599
+        ? "smtp_rejected"
+        : errorCode === "EAUTH" ||
+            errorCode === "EDNS" ||
+            explicitPreDataCommand
+          ? "send_failed"
+          : "unknown",
+  };
+}
+
+function safeAttemptError(
+  message: string,
+  sender: TenantSendingConfiguration,
+): string {
+  let safe = message.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ");
+  for (const credential of [
+    decryptSecret(sender.usernameEncrypted),
+    decryptSecret(sender.passwordEncrypted),
+  ]) {
+    if (credential) safe = safe.split(credential).join("[redacted]");
+  }
+  return safe.slice(0, 1000);
 }
 
 async function completeCampaignIfFinished(
@@ -108,7 +196,34 @@ async function markInterruptedDeliveriesUnknown(): Promise<void> {
     .returning({
       userId: emailCampaignRecipientsTable.userId,
       campaignId: emailCampaignRecipientsTable.campaignId,
+      recipientId: emailCampaignRecipientsTable.id,
     });
+
+  if (interrupted.length > 0) {
+    const recipientIdsByUser = new Map<string, string[]>();
+    for (const item of interrupted) {
+      const ids = recipientIdsByUser.get(item.userId) ?? [];
+      ids.push(item.recipientId);
+      recipientIdsByUser.set(item.userId, ids);
+    }
+    for (const [userId, recipientIds] of recipientIdsByUser) {
+      await db
+        .update(emailSendAttemptsTable)
+        .set({
+          outcome: "unknown",
+          errorMessage:
+            "The worker stopped during delivery, so the SMTP outcome could not be confirmed.",
+          completedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(emailSendAttemptsTable.userId, userId),
+            inArray(emailSendAttemptsTable.recipientId, recipientIds),
+            eq(emailSendAttemptsTable.outcome, "pending"),
+          ),
+        );
+    }
+  }
 
   for (const item of interrupted) {
     await completeCampaignIfFinished(item.userId, item.campaignId);
@@ -213,6 +328,7 @@ async function claimDelivery(
   hourlyLimit: number,
   dailyLimit: number,
   queuePollingSeconds: number,
+  dsnRequested: boolean,
 ): Promise<DeliveryClaim | null> {
   const now = new Date();
   return db.transaction(async (tx) => {
@@ -358,9 +474,14 @@ async function claimDelivery(
       return null;
     }
 
+    const attemptId = randomUUID();
+    const messageId = `<${attemptId}@mailflow.local>`;
     await tx.insert(emailSendAttemptsTable).values({
+      id: attemptId,
       userId,
       recipientId: recipient.id,
+      messageId,
+      dsnRequested,
       attemptedAt: now,
     });
     const [claimed] = await tx
@@ -368,6 +489,12 @@ async function claimDelivery(
       .set({
         status: "sending",
         attempts: recipient.attempts + 1,
+        reportOutcome: "unconfirmed",
+        reportSource: null,
+        reportDiagnostic: null,
+        reportStatusCode: null,
+        reportAt: null,
+        reportDeliveryScope: null,
         updatedAt: now,
       })
       .where(
@@ -388,7 +515,15 @@ async function claimDelivery(
           inArray(emailCampaignsTable.status, ["queued", "sending"]),
         ),
       );
-    return { sender, campaign, recipient: claimed, personalization };
+    return {
+      sender,
+      campaign,
+      recipient: claimed,
+      personalization,
+      attemptId,
+      messageId,
+      dsnRequested,
+    };
   });
 }
 
@@ -396,11 +531,42 @@ async function finishDelivery(
   userId: string,
   campaignId: string,
   recipientId: string,
+  attemptId: string,
   result:
-    | { accepted: true }
-    | { accepted: false; error: string; retry: boolean; nextAttemptAt?: Date },
+    | {
+        accepted: true;
+        smtpResponse?: string;
+        smtpCode?: number;
+        enhancedStatus?: string;
+      }
+    | {
+        accepted: false;
+        error: string;
+        retry: boolean;
+        outcome: "smtp_rejected" | "send_failed" | "unknown";
+        smtpResponse?: string;
+        smtpCode?: number;
+        enhancedStatus?: string;
+        nextAttemptAt?: Date;
+      },
 ): Promise<void> {
   const now = new Date();
+  await db
+    .update(emailSendAttemptsTable)
+    .set({
+      outcome: result.accepted ? "smtp_accepted" : result.outcome,
+      smtpResponse: result.smtpResponse ?? null,
+      smtpCode: result.smtpCode ?? null,
+      enhancedStatus: result.enhancedStatus ?? null,
+      errorMessage: result.accepted ? null : result.error,
+      completedAt: now,
+    })
+    .where(
+      and(
+        eq(emailSendAttemptsTable.id, attemptId),
+        eq(emailSendAttemptsTable.userId, userId),
+      ),
+    );
   if (result.accepted) {
     await db
       .update(emailCampaignRecipientsTable)
@@ -421,7 +587,11 @@ async function finishDelivery(
     await db
       .update(emailCampaignRecipientsTable)
       .set({
-        status: result.retry ? "queued" : "bounced",
+        status: result.retry
+          ? "queued"
+          : result.outcome === "unknown"
+            ? "unknown"
+            : "bounced",
         nextAttemptAt: result.nextAttemptAt ?? now,
         lastError: result.error,
         updatedAt: now,
@@ -474,6 +644,7 @@ export async function processPendingCampaignDeliveries(
       settings.defaultEmailsPerHour,
       settings.maxEmailsPerDay,
       settings.queuePollingSeconds,
+      settings.deliveryTrackingEnabled,
     );
     if (!claimed) continue;
     if ("completedCampaignId" in claimed) {
@@ -497,18 +668,38 @@ export async function processPendingCampaignDeliveries(
         rendered.subject,
         rendered.textBody,
         rendered.htmlBody ?? undefined,
+        {
+          attemptId: claimed.attemptId,
+          messageId: claimed.messageId,
+          dsnRequested: claimed.dsnRequested,
+        },
       );
     } catch (error) {
-      const retry = claimed.recipient.attempts <= settings.retryAttempts;
-      const errorMessage = deliveryError(error);
+      const evidence = smtpFailureEvidence(error, claimed.sender);
+      const permanentSmtpRejection =
+        evidence.smtpCode !== undefined && evidence.smtpCode >= 500;
+      const retry =
+        !permanentSmtpRejection &&
+        claimed.recipient.attempts <= settings.retryAttempts;
+      const errorMessage = safeAttemptError(
+        deliveryError(error),
+        claimed.sender,
+      );
       await finishDelivery(
         candidate.userId,
         claimed.campaign.id,
         claimed.recipient.id,
+        claimed.attemptId,
         {
           accepted: false,
           error: errorMessage,
           retry,
+          outcome: evidence.outcome,
+          ...(evidence.smtpResponse ? { smtpResponse: evidence.smtpResponse } : {}),
+          ...(evidence.smtpCode ? { smtpCode: evidence.smtpCode } : {}),
+          ...(evidence.enhancedStatus
+            ? { enhancedStatus: evidence.enhancedStatus }
+            : {}),
           ...(retry
             ? {
                 nextAttemptAt: new Date(
@@ -534,12 +725,29 @@ export async function processPendingCampaignDeliveries(
       candidate.userId,
       claimed.campaign.id,
       claimed.recipient.id,
+      claimed.attemptId,
       result.accepted
-        ? { accepted: true }
+        ? {
+            accepted: true,
+            ...(result.smtpResponse ? { smtpResponse: result.smtpResponse } : {}),
+            ...(result.smtpCode ? { smtpCode: result.smtpCode } : {}),
+            ...(result.enhancedStatus
+              ? { enhancedStatus: result.enhancedStatus }
+              : {}),
+          }
         : {
             accepted: false,
-            error: result.error ?? "SMTP server rejected the recipient.",
+            error: safeAttemptError(
+              result.error ?? "SMTP server rejected the recipient.",
+              claimed.sender,
+            ),
             retry: false,
+            outcome: "smtp_rejected",
+            ...(result.smtpResponse ? { smtpResponse: result.smtpResponse } : {}),
+            ...(result.smtpCode ? { smtpCode: result.smtpCode } : {}),
+            ...(result.enhancedStatus
+              ? { enhancedStatus: result.enhancedStatus }
+              : {}),
           },
     );
   }

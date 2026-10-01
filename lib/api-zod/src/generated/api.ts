@@ -354,7 +354,14 @@ export const ListContactsResponse = zod.object({
   "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
   "attempts": zod.number().int().min(listContactsResponseContactsItemTwoLastEmailOneAttemptsMin),
   "lastAttemptAt": zod.coerce.date().nullable(),
-  "deliveredAt": zod.coerce.date().nullable()
+  "deliveredAt": zod.coerce.date().nullable(),
+  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']).optional(),
+  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullish(),
+  "reportDiagnostic": zod.string().nullish(),
+  "reportAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "smtpResponse": zod.string().nullish()
 }),zod.null()])
 }))),
   "quota": zod.object({
@@ -614,7 +621,14 @@ export const GetContactEmailHistoryResponseItem = zod.object({
   "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
   "attempts": zod.number().int().min(getContactEmailHistoryResponseAttemptsMin),
   "lastAttemptAt": zod.coerce.date().nullable(),
-  "deliveredAt": zod.coerce.date().nullable()
+  "deliveredAt": zod.coerce.date().nullable(),
+  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']).optional(),
+  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullish(),
+  "reportDiagnostic": zod.string().nullish(),
+  "reportAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "messageId": zod.string().nullish(),
+  "smtpResponse": zod.string().nullish()
 })
 export const GetContactEmailHistoryResponse = zod.array(GetContactEmailHistoryResponseItem)
 
@@ -888,6 +902,121 @@ export const DeleteCampaignParams = zod.object({
 })
 
 export const DeleteCampaignResponse = zod.void()
+
+
+/**
+ * SMTP acceptance is not proof of inbox delivery. Imported reports are user-provided and are not authenticated provider events.
+ * @summary Get SMTP and imported delivery evidence for a tenant campaign
+ */
+export const GetCampaignDeliveryReportParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const getCampaignDeliveryReportQueryLimitDefault = 50;
+export const getCampaignDeliveryReportQueryLimitMax = 100;
+
+export const getCampaignDeliveryReportQueryOffsetDefault = 0;
+export const getCampaignDeliveryReportQueryOffsetMin = 0;
+
+
+
+export const GetCampaignDeliveryReportQueryParams = zod.object({
+  "limit": zod.coerce.number().int().min(1).max(getCampaignDeliveryReportQueryLimitMax).default(getCampaignDeliveryReportQueryLimitDefault),
+  "offset": zod.coerce.number().int().min(getCampaignDeliveryReportQueryOffsetMin).default(getCampaignDeliveryReportQueryOffsetDefault)
+})
+
+export const getCampaignDeliveryReportResponseSummarySmtpAcceptedMin = 0;
+
+export const getCampaignDeliveryReportResponseSummarySendFailedMin = 0;
+
+export const getCampaignDeliveryReportResponseSummaryReportedDeliveredMin = 0;
+
+export const getCampaignDeliveryReportResponseSummaryReportedBouncedMin = 0;
+
+export const getCampaignDeliveryReportResponseSummaryReportedDelayedMin = 0;
+
+export const getCampaignDeliveryReportResponseSummaryReportedFailedMin = 0;
+
+export const getCampaignDeliveryReportResponseSummaryUnconfirmedMin = 0;
+
+export const getCampaignDeliveryReportResponseRecipientsItemAttemptsMin = 0;
+
+export const getCampaignDeliveryReportResponseTotalMin = 0;
+
+export const getCampaignDeliveryReportResponseLimitMax = 100;
+
+export const getCampaignDeliveryReportResponseOffsetMin = 0;
+
+
+
+export const GetCampaignDeliveryReportResponse = zod.object({
+  "campaignId": zod.string().uuid(),
+  "summary": zod.object({
+  "smtpAccepted": zod.number().int().min(getCampaignDeliveryReportResponseSummarySmtpAcceptedMin),
+  "sendFailed": zod.number().int().min(getCampaignDeliveryReportResponseSummarySendFailedMin),
+  "reportedDelivered": zod.number().int().min(getCampaignDeliveryReportResponseSummaryReportedDeliveredMin),
+  "reportedBounced": zod.number().int().min(getCampaignDeliveryReportResponseSummaryReportedBouncedMin),
+  "reportedDelayed": zod.number().int().min(getCampaignDeliveryReportResponseSummaryReportedDelayedMin),
+  "reportedFailed": zod.number().int().min(getCampaignDeliveryReportResponseSummaryReportedFailedMin),
+  "unconfirmed": zod.number().int().min(getCampaignDeliveryReportResponseSummaryUnconfirmedMin)
+}),
+  "recipients": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "email": zod.string().email(),
+  "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
+  "attempts": zod.number().int().min(getCampaignDeliveryReportResponseRecipientsItemAttemptsMin),
+  "smtpAcceptedAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable(),
+  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']),
+  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullable(),
+  "reportDiagnostic": zod.string().nullable(),
+  "reportStatusCode": zod.string().nullable(),
+  "reportAt": zod.coerce.date().nullable(),
+  "reportDeliveryScope": zod.union([zod.literal('mailbox'),zod.literal('receiving_server'),zod.literal('unspecified'),zod.literal(null)]).nullable(),
+  "latestMessageId": zod.string().nullable(),
+  "latestSmtpResponse": zod.string().nullable(),
+  "latestSmtpCode": zod.number().int().nullable(),
+  "dsnRequested": zod.boolean(),
+  "evidenceVerification": zod.union([zod.literal('user_imported'),zod.literal(null)]).nullable()
+})),
+  "total": zod.number().int().min(getCampaignDeliveryReportResponseTotalMin),
+  "limit": zod.number().int().min(1).max(getCampaignDeliveryReportResponseLimitMax),
+  "offset": zod.number().int().min(getCampaignDeliveryReportResponseOffsetMin)
+})
+
+
+/**
+ * Imports DSN, Microsoft 365, Google Workspace, or generic CSV reports. Evidence is labeled user_imported and is not authenticated as a provider event. Raw input is not retained.
+ * @summary Import a user-provided delivery report
+ */
+export const importDeliveryReportBodyContentMax = 1000000;
+
+
+
+export const ImportDeliveryReportBody = zod.object({
+  "format": zod.enum(['dsn', 'microsoft_365_csv', 'google_workspace_csv', 'generic_csv']),
+  "content": zod.string().min(1).max(importDeliveryReportBodyContentMax),
+  "campaignId": zod.string().uuid().optional()
+}).describe('Submitted content is processed in memory and not retained as a raw file. Imported evidence is user-provided and is not provider-authenticated.')
+
+export const importDeliveryReportResponseImportedMin = 0;
+
+export const importDeliveryReportResponseDuplicatesMin = 0;
+
+export const importDeliveryReportResponseUnmatchedMin = 0;
+
+export const importDeliveryReportResponseIgnoredMin = 0;
+
+
+
+export const ImportDeliveryReportResponse = zod.object({
+  "imported": zod.number().int().min(importDeliveryReportResponseImportedMin),
+  "duplicates": zod.number().int().min(importDeliveryReportResponseDuplicatesMin),
+  "unmatched": zod.number().int().min(importDeliveryReportResponseUnmatchedMin),
+  "ignored": zod.number().int().min(importDeliveryReportResponseIgnoredMin),
+  "warnings": zod.array(zod.string()),
+  "message": zod.string()
+})
 
 
 /**

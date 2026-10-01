@@ -30,11 +30,19 @@ export type TenantEmailMessage = {
   subject: string;
   text: string;
   html?: string;
+  tracking?: {
+    attemptId: string;
+    messageId: string;
+    dsnRequested: boolean;
+  };
 };
 
 export type TenantEmailResult = {
   accepted: boolean;
   error?: string;
+  smtpResponse?: string;
+  smtpCode?: number;
+  enhancedStatus?: string;
 };
 
 type TenantEmailTransport = (
@@ -94,6 +102,7 @@ export async function sendTenantEmail(
   subject: string,
   text: string,
   html?: string,
+  tracking?: TenantEmailMessage["tracking"],
 ): Promise<TenantEmailResult> {
   const message = {
     userId: configuration.userId,
@@ -101,6 +110,7 @@ export async function sendTenantEmail(
     subject,
     text,
     ...(html ? { html } : {}),
+    ...(tracking ? { tracking } : {}),
   };
   if (tenantTestTransport) {
     return tenantTestTransport(message);
@@ -130,7 +140,35 @@ export async function sendTenantEmail(
       subject,
       text,
       ...(html ? { html } : {}),
+      ...(tracking
+        ? {
+            messageId: tracking.messageId,
+            headers: { "X-Mailflow-Attempt-ID": tracking.attemptId },
+            ...(tracking.dsnRequested
+              ? {
+                  dsn: {
+                    id: tracking.attemptId,
+                    return: "headers",
+                    notify: ["success", "failure", "delay"],
+                    recipient: to,
+                  },
+                }
+              : {}),
+          }
+        : {}),
     });
+    const smtpResponse = safeSmtpResponse(info.response, configuration);
+    const smtpCode =
+      typeof info.responseCode === "number"
+        ? info.responseCode
+        : Number(smtpResponse?.match(/^(\d{3})/)?.[1]) || undefined;
+    const enhancedStatus =
+      smtpResponse?.match(/\b([245]\.\d{1,3}\.\d{1,3})\b/)?.[1];
+    const evidence = {
+      ...(smtpResponse ? { smtpResponse } : {}),
+      ...(smtpCode ? { smtpCode } : {}),
+      ...(enhancedStatus ? { enhancedStatus } : {}),
+    };
     const addressIs = (value: unknown): boolean =>
       value === to ||
       (typeof value === "object" &&
@@ -138,15 +176,38 @@ export async function sendTenantEmail(
         "address" in value &&
         value.address === to);
     if (Array.isArray(info.rejected) && info.rejected.some(addressIs)) {
-      return { accepted: false, error: "SMTP server rejected the recipient." };
+      return {
+        accepted: false,
+        error: "SMTP server rejected the recipient.",
+        ...evidence,
+      };
     }
     if (Array.isArray(info.accepted) && info.accepted.some(addressIs)) {
-      return { accepted: true };
+      return { accepted: true, ...evidence };
     }
-    return { accepted: false, error: "SMTP server did not accept the recipient." };
+    return {
+      accepted: false,
+      error: "SMTP server did not accept the recipient.",
+      ...evidence,
+    };
   } finally {
     transport.close();
   }
+}
+
+function safeSmtpResponse(
+  value: unknown,
+  configuration: TenantSendingConfiguration,
+): string | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  let safe = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ");
+  for (const credential of [
+    decryptSecret(configuration.usernameEncrypted),
+    decryptSecret(configuration.passwordEncrypted),
+  ]) {
+    if (credential) safe = safe.split(credential).join("[redacted]");
+  }
+  return safe.slice(0, 1000);
 }
 
 export function setTenantEmailTransportForTests(

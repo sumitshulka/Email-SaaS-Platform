@@ -163,6 +163,14 @@ export const emailCampaignRecipientsTable = pgTable(
       .defaultNow(),
     lastError: text("last_error"),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    reportOutcome: varchar("report_outcome", { length: 24 })
+      .notNull()
+      .default("unconfirmed"),
+    reportSource: varchar("report_source", { length: 32 }),
+    reportDiagnostic: text("report_diagnostic"),
+    reportStatusCode: varchar("report_status_code", { length: 64 }),
+    reportAt: timestamp("report_at", { withTimezone: true }),
+    reportDeliveryScope: varchar("report_delivery_scope", { length: 24 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -201,14 +209,71 @@ export const emailSendAttemptsTable = pgTable(
       .references(() => emailCampaignRecipientsTable.id, {
         onDelete: "cascade",
       }),
+    messageId: varchar("message_id", { length: 512 }),
+    smtpResponse: text("smtp_response"),
+    smtpCode: integer("smtp_code"),
+    enhancedStatus: varchar("enhanced_status", { length: 24 }),
+    outcome: varchar("outcome", { length: 24 }).notNull().default("pending"),
+    errorMessage: text("error_message"),
+    dsnRequested: boolean("dsn_requested").notNull().default(false),
     attemptedAt: timestamp("attempted_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
     index("email_send_attempts_user_time_idx").on(
       table.userId,
       table.attemptedAt,
+    ),
+    index("email_send_attempts_user_message_idx").on(
+      table.userId,
+      table.messageId,
+    ),
+  ],
+);
+
+export const emailDeliveryReportsTable = pgTable(
+  "email_delivery_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => emailCampaignRecipientsTable.id, {
+        onDelete: "cascade",
+      }),
+    attemptId: uuid("attempt_id")
+      .notNull()
+      .references(() => emailSendAttemptsTable.id, { onDelete: "cascade" }),
+    fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+    outcome: varchar("outcome", { length: 24 }).notNull(),
+    source: varchar("source", { length: 32 }).notNull(),
+    diagnostic: text("diagnostic"),
+    statusCode: varchar("status_code", { length: 64 }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deliveryScope: varchar("delivery_scope", { length: 24 })
+      .notNull()
+      .default("unspecified"),
+  },
+  (table) => [
+    uniqueIndex("email_delivery_reports_user_fingerprint_unique").on(
+      table.userId,
+      table.fingerprint,
+    ),
+    index("email_delivery_reports_recipient_time_idx").on(
+      table.userId,
+      table.recipientId,
+      table.receivedAt,
+    ),
+    index("email_delivery_reports_attempt_idx").on(
+      table.userId,
+      table.attemptId,
     ),
   ],
 );
@@ -238,3 +303,4 @@ export type EmailCampaign = typeof emailCampaignsTable.$inferSelect;
 export type EmailCampaignRecipient =
   typeof emailCampaignRecipientsTable.$inferSelect;
 export type EmailSendAttempt = typeof emailSendAttemptsTable.$inferSelect;
+export type EmailDeliveryReport = typeof emailDeliveryReportsTable.$inferSelect;

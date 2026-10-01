@@ -9,6 +9,7 @@ import {
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
+import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
@@ -119,7 +120,7 @@ export function SendingSettingsPage() {
   const runTest = (e: FormEvent) => {
     e.preventDefault();
     test.mutate({ data: { toEmail: testEmail.trim() } }, {
-      onSuccess: response => { void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); setNotice({ kind: 'success', text: response.message || 'Test message sent and sender identity verified.' }); },
+      onSuccess: response => { void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); setNotice({ kind: 'success', text: response.message || 'SMTP accepted the test message; check the recipient mailbox to confirm it arrived.' }); },
       onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
     });
   };
@@ -152,7 +153,7 @@ export function SendingSettingsPage() {
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={update.isPending}>{update.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}{update.isPending ? 'Saving settings' : 'Save sender settings'}</Button></div>
       </form>
       <div className={`${panelClass} overflow-hidden`}>
-        <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Send a test message</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">A test verifies this workspace's SMTP credentials and sender identity.</p></div>
+        <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Send a test message</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">A test confirms the SMTP server accepts this workspace's credentials. Check the recipient mailbox to confirm arrival.</p></div>
         <form onSubmit={runTest} className="space-y-4 p-5">
           <Field label="Deliver test to" value={testEmail} onChange={setTestEmail} type="email" placeholder="you@company.com" required testId="input-test-recipient"/>
           <Button type="submit" testId="button-test-sending-settings" disabled={test.isPending || !settings?.credentialsConfigured} className="w-full">{test.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}{test.isPending ? 'Sending test' : 'Send test email'}</Button>
@@ -161,6 +162,7 @@ export function SendingSettingsPage() {
         </form>
       </div>
     </div>
+    <DeliveryCapabilityNotes/>
   </></QueryState>;
 }
 
@@ -188,7 +190,7 @@ function ContactEmailHistoryDialog({ contact, close }: { contact: Contact; close
       : query.isError ? <div role="alert" className="flex items-center justify-between gap-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4"><p className="text-[12px] text-[#99501e]">We couldn’t load this contact’s email history.</p><Button variant="outline" testId="button-retry-contact-email-history" onClick={() => void query.refetch()}>Retry</Button></div>
       : query.data?.length ? <ol data-testid="list-contact-email-history" className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">{query.data.map((email: ContactEmailHistoryItem) => <li key={email.id} data-testid={`item-contact-email-history-${email.id}`} className="rounded-lg border border-[#e5e9ed] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-[13px] font-semibold text-[#26364a]">{email.campaignName}</div><div className="mt-1 break-words text-[12px] text-[#697687]">{email.subject}</div></div><Status tone={emailStatusTone(email.status)}>{emailStatusLabel(email.status)}</Status></div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-[#edf0f2] pt-3 text-[11px] text-[#788392]"><span>Last attempt: {formatDate(email.lastAttemptAt)}</span><span>{email.attempts} {email.attempts === 1 ? 'attempt' : 'attempts'}</span>{email.deliveredAt && <span>SMTP accepted: {formatDate(email.deliveredAt)}</span>}</div>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-[#edf0f2] pt-3 text-[11px] text-[#788392]"><span>Last attempt: {formatDate(email.lastAttemptAt)}</span><span>{email.attempts} {email.attempts === 1 ? 'attempt' : 'attempts'}</span>{email.deliveredAt && <span>SMTP accepted: {formatDate(email.deliveredAt)}</span>}</div><ContactReportEvidence detailed id={email.id} item={email}/>
       </li>)}</ol>
       : <div data-testid="empty-contact-email-history" className="rounded-lg border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-10 text-center"><Mail className="mx-auto h-5 w-5 text-[#557399]"/><div className="mt-3 text-[14px] font-semibold text-[#26364a]">No email history yet</div><p className="mt-1 text-[12px] text-[#738091]">No campaign emails have been attempted for this contact.</p></div>}
   </Modal>;
@@ -258,7 +260,7 @@ export function ContactsPage() {
         <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span><span className="block text-[12px] font-semibold text-[#26364a]">{contact.firstName} {contact.lastName}</span><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span>{(contact.companyName || contact.phoneNumber || contact.linkedinUrl) && <span data-testid={`text-contact-details-${contact.id}`} className="mt-0.5 block text-[11px] text-[#7c8794]">{[contact.companyName, contact.phoneNumber].filter(Boolean).join(' · ')}{contact.linkedinUrl && <>{(contact.companyName || contact.phoneNumber) ? ' · ' : ''}{/^https?:\/\//i.test(contact.linkedinUrl) ? <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-[#245b9b] hover:underline">LinkedIn</a> : contact.linkedinUrl}</>}</span>}</span></div></td>
         <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{contact.listIds.length ? contact.listIds.map(id => <span key={id} className="rounded bg-[#f1f4f7] px-2 py-1 text-[10px] text-[#5f6e7f]">{lists.find(l => l.id === id)?.name || 'List'}</span>) : <span className="text-[11px] text-[#9aa3ad]">No list</span>}</div></td>
         <td className="px-4 py-3.5"><button data-testid={`button-toggle-subscription-${contact.id}`} disabled={update.isPending} onClick={() => toggleSub(contact)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#dbe8f7] disabled:opacity-60"><Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status></button></td>
-         <td className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.subject}>{contact.lastEmail.subject}</div><div className="mt-1 truncate text-[10px] text-[#7c8794]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div className="mt-1.5 flex flex-wrap items-center gap-2"><Status tone={emailStatusTone(contact.lastEmail.status)}>{emailStatusLabel(contact.lastEmail.status)}</Status><span className="text-[10px] text-[#87919d]">{formatDate(contact.lastEmail.lastAttemptAt)}</span></div></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
+         <td className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.subject}>{contact.lastEmail.subject}</div><div className="mt-1 truncate text-[10px] text-[#7c8794]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div className="mt-1.5 flex flex-wrap items-center gap-2"><Status tone={emailStatusTone(contact.lastEmail.status)}>{emailStatusLabel(contact.lastEmail.status)}</Status><span className="text-[10px] text-[#87919d]">{formatDate(contact.lastEmail.lastAttemptAt)}</span></div><ContactReportEvidence id={contact.lastEmail.id} item={contact.lastEmail}/></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
          <td className="px-5 py-3.5"><div className="flex justify-end gap-1"><Button variant="quiet" testId={`button-contact-history-${contact.id}`} onClick={() => setHistoryContact(contact)}><Clock3 className="h-3.5 w-3.5"/>History</Button><Button variant="quiet" testId={`button-edit-contact-${contact.id}`} onClick={() => openEdit(contact)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-contact-${contact.id}`} disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div></td>
       </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={search || filter !== 'all' ? 'No matching contacts' : 'Your audience starts here'} detail={search || filter !== 'all' ? 'Try a different search or status filter.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={!contacts.length ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
@@ -606,6 +608,8 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
             </div>
           </div>
         </section>
+
+        <DeliveryEvidenceSection campaignId={campaignId} active={campaign.status === 'queued' || campaign.status === 'sending'}/>
 
         <section className={`${panelClass} p-5`}>
           <h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign message</h2>

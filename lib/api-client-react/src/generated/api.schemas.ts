@@ -304,6 +304,30 @@ export const ContactEmailHistoryItemStatus = {
   unknown: 'unknown',
 } as const;
 
+export type ContactEmailHistoryItemReportOutcome = typeof ContactEmailHistoryItemReportOutcome[keyof typeof ContactEmailHistoryItemReportOutcome];
+
+
+export const ContactEmailHistoryItemReportOutcome = {
+  unconfirmed: 'unconfirmed',
+  delivered: 'delivered',
+  bounced: 'bounced',
+  delayed: 'delayed',
+  failed: 'failed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ContactEmailHistoryItemReportSource = typeof ContactEmailHistoryItemReportSource[keyof typeof ContactEmailHistoryItemReportSource] | null;
+
+
+export const ContactEmailHistoryItemReportSource = {
+  dsn: 'dsn',
+  microsoft_365_csv: 'microsoft_365_csv',
+  google_workspace_csv: 'google_workspace_csv',
+  generic_csv: 'generic_csv',
+} as const;
+
 export interface ContactEmailHistoryItem {
   id: string;
   campaignId: string;
@@ -316,6 +340,19 @@ export interface ContactEmailHistoryItem {
   lastAttemptAt: string | null;
   /** @nullable */
   deliveredAt: string | null;
+  reportOutcome?: ContactEmailHistoryItemReportOutcome;
+  /** @nullable */
+  reportSource?: ContactEmailHistoryItemReportSource;
+  /** @nullable */
+  reportDiagnostic?: string | null;
+  /** @nullable */
+  reportAt?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  messageId?: string | null;
+  /** @nullable */
+  smtpResponse?: string | null;
 }
 
 export type ContactDirectoryItem = Contact & ({
@@ -548,6 +585,164 @@ export interface CampaignDashboard {
   campaign: CampaignSummary;
   targetList: CampaignTargetList | null;
   pacing: CampaignPacing;
+}
+
+export type DeliveryReportInputFormat = typeof DeliveryReportInputFormat[keyof typeof DeliveryReportInputFormat];
+
+
+export const DeliveryReportInputFormat = {
+  dsn: 'dsn',
+  microsoft_365_csv: 'microsoft_365_csv',
+  google_workspace_csv: 'google_workspace_csv',
+  generic_csv: 'generic_csv',
+} as const;
+
+/**
+ * Submitted content is processed in memory and not retained as a raw file. Imported evidence is user-provided and is not provider-authenticated.
+ */
+export interface DeliveryReportInput {
+  format: DeliveryReportInputFormat;
+  /**
+     * @minLength 1
+     * @maxLength 1000000
+     */
+  content: string;
+  campaignId?: string;
+}
+
+export interface DeliveryReportImportResult {
+  /** @minimum 0 */
+  imported: number;
+  /** @minimum 0 */
+  duplicates: number;
+  /** @minimum 0 */
+  unmatched: number;
+  /** @minimum 0 */
+  ignored: number;
+  warnings: string[];
+  message: string;
+}
+
+export type CampaignDeliveryReportSummary = {
+  /** @minimum 0 */
+  smtpAccepted: number;
+  /** @minimum 0 */
+  sendFailed: number;
+  /** @minimum 0 */
+  reportedDelivered: number;
+  /** @minimum 0 */
+  reportedBounced: number;
+  /** @minimum 0 */
+  reportedDelayed: number;
+  /** @minimum 0 */
+  reportedFailed: number;
+  /** @minimum 0 */
+  unconfirmed: number;
+};
+
+export type DeliveryRecipientStatus = typeof DeliveryRecipientStatus[keyof typeof DeliveryRecipientStatus];
+
+
+export const DeliveryRecipientStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  delivered: 'delivered',
+  bounced: 'bounced',
+  suppressed: 'suppressed',
+  unknown: 'unknown',
+} as const;
+
+export type DeliveryRecipientReportOutcome = typeof DeliveryRecipientReportOutcome[keyof typeof DeliveryRecipientReportOutcome];
+
+
+export const DeliveryRecipientReportOutcome = {
+  unconfirmed: 'unconfirmed',
+  delivered: 'delivered',
+  bounced: 'bounced',
+  delayed: 'delayed',
+  failed: 'failed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DeliveryRecipientReportSource = typeof DeliveryRecipientReportSource[keyof typeof DeliveryRecipientReportSource] | null;
+
+
+export const DeliveryRecipientReportSource = {
+  dsn: 'dsn',
+  microsoft_365_csv: 'microsoft_365_csv',
+  google_workspace_csv: 'google_workspace_csv',
+  generic_csv: 'generic_csv',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DeliveryRecipientReportDeliveryScope = typeof DeliveryRecipientReportDeliveryScope[keyof typeof DeliveryRecipientReportDeliveryScope] | null;
+
+
+export const DeliveryRecipientReportDeliveryScope = {
+  mailbox: 'mailbox',
+  receiving_server: 'receiving_server',
+  unspecified: 'unspecified',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DeliveryRecipientEvidenceVerification = typeof DeliveryRecipientEvidenceVerification[keyof typeof DeliveryRecipientEvidenceVerification] | null;
+
+
+export const DeliveryRecipientEvidenceVerification = {
+  user_imported: 'user_imported',
+} as const;
+
+export interface DeliveryRecipient {
+  id: string;
+  email: string;
+  status: DeliveryRecipientStatus;
+  /** @minimum 0 */
+  attempts: number;
+  /** @nullable */
+  smtpAcceptedAt: string | null;
+  /** @nullable */
+  lastError: string | null;
+  reportOutcome: DeliveryRecipientReportOutcome;
+  /** @nullable */
+  reportSource: DeliveryRecipientReportSource;
+  /** @nullable */
+  reportDiagnostic: string | null;
+  /** @nullable */
+  reportStatusCode: string | null;
+  /** @nullable */
+  reportAt: string | null;
+  /** @nullable */
+  reportDeliveryScope: DeliveryRecipientReportDeliveryScope;
+  /** @nullable */
+  latestMessageId: string | null;
+  /** @nullable */
+  latestSmtpResponse: string | null;
+  /** @nullable */
+  latestSmtpCode: number | null;
+  dsnRequested: boolean;
+  /** @nullable */
+  evidenceVerification: DeliveryRecipientEvidenceVerification;
+}
+
+export interface CampaignDeliveryReport {
+  campaignId: string;
+  summary: CampaignDeliveryReportSummary;
+  recipients: DeliveryRecipient[];
+  /** @minimum 0 */
+  total: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  limit: number;
+  /** @minimum 0 */
+  offset: number;
 }
 
 export interface CampaignInput {
@@ -1105,6 +1300,18 @@ listIds?: string[];
  * Legacy single-list selection. Use listIds to assign contacts to multiple lists.
  */
 listId?: string;
+};
+
+export type GetCampaignDeliveryReportParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
 };
 
 export type ListAdminUsersParams = {

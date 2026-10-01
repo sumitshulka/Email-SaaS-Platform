@@ -5,6 +5,7 @@ import profileRouter from "./profile";
 import adminRouter from "./admin";
 import billingRouter from "./billing";
 import sendingRouter from "./sending";
+import sendingReportsRouter from "./sending-reports";
 import { contactImportRouter } from "./contacts";
 
 const router: IRouter = Router();
@@ -14,5 +15,6 @@ router.use(profileRouter);
 router.use(billingRouter);
 router.use(contactImportRouter);
 router.use(sendingRouter);
+router.use(sendingReportsRouter);
 router.use(adminRouter);
 export default router;
