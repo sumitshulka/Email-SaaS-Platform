@@ -7,8 +7,10 @@ import {
   customFetch,
   getGetUserDashboardQueryKey,
   getListContactsQueryKey,
+  getListContactListsQueryKey,
   useCreateContact,
   useDeleteContact,
+  useListContactLists,
   useListContacts,
 } from "@workspace/api-client-react";
 import type { ContactImportResponse, ContactInput } from "@workspace/api-client-react";
@@ -47,18 +49,28 @@ function downloadRejectedContactsCsv(csv: string) {
 export default function ContactsPage() {
   const queryClient = useQueryClient();
   const contactsQuery = useListContacts();
+  const contactListsQuery = useListContactLists();
   const createContact = useCreateContact();
   const deleteContact = useDeleteContact();
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const importContacts = useMutation<ContactImportResponse, Error, string>({
-    mutationFn: (csvText) =>
-      customFetch<ContactImportResponse>("/api/contacts/import", {
-        method: "POST",
-        headers: { "Content-Type": "text/csv" },
-        body: csvText,
-      }),
+  const [selectedListId, setSelectedListId] = useState("");
+  const importContacts = useMutation<
+    ContactImportResponse,
+    Error,
+    { csvText: string; listId: string }
+  >({
+    mutationFn: ({ csvText, listId }) =>
+      customFetch<ContactImportResponse>(
+        `/api/contacts/import?listId=${encodeURIComponent(listId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "text/csv" },
+          body: csvText,
+        },
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getListContactListsQueryKey() });
       void queryClient.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
     },
   });
@@ -66,6 +78,7 @@ export default function ContactsPage() {
     defaultValues: { firstName: "", lastName: "", email: "" },
   });
   const data = contactsQuery.data;
+  const contactLists = contactListsQuery.data ?? [];
   const progress = data && data.quota.limit > 0
     ? Math.min(100, (data.quota.used / data.quota.limit) * 100)
     : 0;
@@ -78,6 +91,10 @@ export default function ContactsPage() {
     setUploadError(null);
     importContacts.reset();
     if (!file) return;
+    if (!selectedListId) {
+      setUploadError("Choose a contact list before importing contacts.");
+      return;
+    }
     if (!csvImportEnabled || !/\.csv$/i.test(file.name)) {
       setUploadError("Choose a CSV file allowed by your workspace settings.");
       return;
@@ -95,7 +112,7 @@ export default function ContactsPage() {
     }
     void file
       .text()
-      .then((csvText) => importContacts.mutate(csvText))
+      .then((csvText) => importContacts.mutate({ csvText, listId: selectedListId }))
       .catch(() => setUploadError("The selected file could not be read."));
   };
 
@@ -386,12 +403,36 @@ export default function ContactsPage() {
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className="min-w-56">
+            <span className="mb-1 block text-[11px] font-semibold text-[#53677b]">
+              Add imported contacts to
+            </span>
+            <select
+              aria-label="Contact list for imported contacts"
+              data-testid="select-contact-import-list"
+              value={selectedListId}
+              onChange={(event) => {
+                setSelectedListId(event.currentTarget.value);
+                setUploadError(null);
+                importContacts.reset();
+              }}
+              disabled={contactListsQuery.isLoading || contactLists.length === 0 || importContacts.isPending}
+              className="w-full rounded-md border border-[#cbd8e3] bg-white px-3 py-2 text-[12px] text-[#26374a] disabled:opacity-50"
+            >
+              <option value="">Select a contact list</option>
+              {contactLists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <input
             type="file"
             accept={allowedFileTypes.map((type) => `.${type}`).join(",")}
             aria-label="Choose a CSV file to import contacts"
             data-testid="input-contact-csv"
-            disabled={!quota.canAdd || !csvImportEnabled || importContacts.isPending}
+            disabled={!quota.canAdd || !csvImportEnabled || !selectedListId || importContacts.isPending}
             onChange={(event) => {
               selectCsv(event.currentTarget.files?.[0]);
               event.currentTarget.value = "";
@@ -406,6 +447,20 @@ export default function ContactsPage() {
           {!csvImportEnabled && (
             <p className="text-[11px] text-[#965323]">
               CSV imports are disabled by your workspace file type settings.
+            </p>
+          )}
+          {!contactListsQuery.isLoading && contactLists.length === 0 && (
+            <p className="text-[11px] text-[#965323]">
+              Create a contact list on the{" "}
+              <Link href="/lists" className="font-semibold text-[#174f99] underline">
+                Lists page
+              </Link>{" "}
+              before importing contacts.
+            </p>
+          )}
+          {contactListsQuery.isError && (
+            <p role="alert" className="text-[11px] text-[#a84926]">
+              Contact lists could not be loaded. {requestError(contactListsQuery.error)}
             </p>
           )}
         </div>

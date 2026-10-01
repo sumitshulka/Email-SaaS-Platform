@@ -554,6 +554,100 @@ describe("Razorpay environment configuration", { concurrency: false }, () => {
 });
 
 describe("tenant contact management and package quotas", { concurrency: false }, () => {
+  it("assigns CSV imports to a tenant-owned list and preserves quota and tenant isolation", async () => {
+    const owner = await loggedInUser({ username: "csv-list-owner" });
+    const other = await loggedInUser({ username: "csv-list-other" });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "One Contact CSV List Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 1,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "55555555-5555-4555-8555-555555555555",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const ownerList = await api("/contact-lists", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Imported contacts" },
+    });
+    const otherList = await api("/contact-lists", {
+      method: "POST",
+      cookie: other.cookie,
+      body: { name: "Other tenant list" },
+    });
+    assert.equal(ownerList.response.status, 201, JSON.stringify(ownerList.body));
+    assert.equal(otherList.response.status, 201, JSON.stringify(otherList.body));
+
+    const imported = await uploadCsv(
+      `/contacts/import?listId=${ownerList.body.id}`,
+      "name,email\nFirst Contact,first@owner.test\nOver Quota,second@owner.test",
+      owner.cookie,
+    );
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
+    assert.equal(imported.body.imported, 1);
+    assert.equal(imported.body.rejected.length, 1);
+    assert.match(imported.body.rejected[0].reason, /contact limit/i);
+    assert.deepEqual(imported.body.quota, {
+      used: 1,
+      limit: 1,
+      remaining: 0,
+      canAdd: false,
+      requiresSubscription: false,
+    });
+
+    const savedMemberships = await db
+      .select()
+      .from(dbModule.contactListMembersTable)
+      .where(eq(dbModule.contactListMembersTable.userId, owner.user.id));
+    assert.equal(savedMemberships.length, 1);
+    assert.equal(savedMemberships[0].listId, ownerList.body.id);
+    const lists = await api("/contact-lists", { cookie: owner.cookie });
+    assert.equal(
+      lists.body.find((list) => list.id === ownerList.body.id).contactCount,
+      1,
+    );
+
+    const foreignListImport = await uploadCsv(
+      `/contacts/import?listId=${otherList.body.id}`,
+      "name,email\nMust Not Import,blocked@owner.test",
+      owner.cookie,
+    );
+    assert.equal(foreignListImport.response.status, 400);
+    assert.equal(foreignListImport.body.code, "INVALID_LIST");
+    const ownerContacts = await api("/contacts", { cookie: owner.cookie });
+    assert.deepEqual(
+      new Set(ownerContacts.body.contacts.map((contact) => contact.email)),
+      new Set(["first@owner.test"]),
+    );
+    const otherLists = await api("/contact-lists", { cookie: other.cookie });
+    assert.equal(
+      otherLists.body.find((list) => list.id === otherList.body.id).contactCount,
+      0,
+    );
+
+    const malformedListImport = await uploadCsv(
+      "/contacts/import?listId=not-a-uuid",
+      "name,email\nMust Not Import,malformed-list@owner.test",
+      owner.cookie,
+    );
+    assert.equal(malformedListImport.response.status, 400);
+    assert.equal(malformedListImport.body.code, "INVALID_INPUT");
+    const afterInvalidImports = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(afterInvalidImports.body.contacts.length, 1);
+  });
+
   it("stores package contact limits and returns them from create and update", async () => {
     const admin = await loggedInUser({
       username: "package-limit-admin",

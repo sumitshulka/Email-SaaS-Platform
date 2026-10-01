@@ -356,6 +356,14 @@ paths:
       tags: [sending]
       summary: Import contacts for the authenticated tenant
       description: Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
+      parameters:
+        - name: listId
+          in: query
+          required: false
+          description: Assign imported CSV contacts to this contact list owned by the authenticated tenant.
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -375,7 +383,7 @@ paths:
                   - $ref: "#/components/schemas/ContactImportResult"
                   - $ref: "#/components/schemas/ContactImportResponse"
         "400":
-          description: Malformed import request
+          description: Malformed import request or invalid contact list selection
           content:
             application/json:
               schema:

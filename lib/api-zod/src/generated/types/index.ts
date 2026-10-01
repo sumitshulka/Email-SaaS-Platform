@@ -44,6 +44,7 @@ export * from './createSubscriptionOrderInput';
 export * from './currentSubscription';
 export * from './forgotPasswordInput';
 export * from './healthStatus';
+export * from './importContactsParams';
 export * from './listAdminUsersParams';
 export * from './listAdminUsersStatus';
 export * from './loginInput';

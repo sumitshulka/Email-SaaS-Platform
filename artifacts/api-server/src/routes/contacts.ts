@@ -9,10 +9,13 @@ import {
   CreateContactBody,
   CreateContactResponse,
   DeleteContactParams,
+  ImportContactsQueryParams,
   ImportContactsResponse,
   ListContactsResponse,
 } from "@workspace/api-zod";
 import {
+  contactListMembersTable,
+  contactListsTable,
   contactsTable,
   db,
   subscriptionPackagesTable,
@@ -272,6 +275,16 @@ async function importContactCsv(
   res: Response,
   settings: Awaited<ReturnType<typeof getPlatformSettings>>,
 ): Promise<void> {
+  const params = ImportContactsQueryParams.safeParse(req.query);
+  if (!params.success) {
+    res.status(400).json({
+      error: "Choose a valid contact list.",
+      code: "INVALID_INPUT",
+    });
+    return;
+  }
+  const listId = params.data.listId;
+
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     res.status(400).json({
       error: "Choose a non-empty CSV file.",
@@ -426,6 +439,20 @@ async function importContactCsv(
       .for("update");
     if (!lockedUser) return { kind: "user_missing" as const };
 
+    if (listId) {
+      const [tenantList] = await tx
+        .select({ id: contactListsTable.id })
+        .from(contactListsTable)
+        .where(
+          and(
+            eq(contactListsTable.id, listId),
+            eq(contactListsTable.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (!tenantList) return { kind: "invalid_list" as const };
+    }
+
     const now = new Date();
     const [activeSubscription] = await tx
       .select({ contactLimit: subscriptionPackagesTable.contactLimit })
@@ -502,7 +529,19 @@ async function importContactCsv(
     }
 
     if (toInsert.length > 0) {
-      await tx.insert(contactsTable).values(toInsert);
+      const inserted = await tx
+        .insert(contactsTable)
+        .values(toInsert)
+        .returning({ id: contactsTable.id });
+      if (listId) {
+        await tx.insert(contactListMembersTable).values(
+          inserted.map((contact) => ({
+            userId,
+            listId,
+            contactId: contact.id,
+          })),
+        );
+      }
     }
     const used = currentUsed + toInsert.length;
     return {
@@ -526,6 +565,13 @@ async function importContactCsv(
     res.status(403).json({
       error: "An active subscription is required to add contacts.",
       code: "SUBSCRIPTION_REQUIRED",
+    });
+    return;
+  }
+  if (result.kind === "invalid_list") {
+    res.status(400).json({
+      error: "Choose a contact list from your workspace.",
+      code: "INVALID_LIST",
     });
     return;
   }

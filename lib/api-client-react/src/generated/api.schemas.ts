@@ -1014,6 +1014,13 @@ export interface PaymentVerificationResult {
 
 export interface RazorpayWebhookPayload { [key: string]: unknown }
 
+export type ImportContactsParams = {
+/**
+ * Assign imported CSV contacts to this contact list owned by the authenticated tenant.
+ */
+listId?: string;
+};
+
 export type ListAdminUsersParams = {
 search?: string;
 status?: ListAdminUsersStatus;

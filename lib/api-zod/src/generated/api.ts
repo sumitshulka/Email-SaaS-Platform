@@ -419,6 +419,10 @@ export const CreateContactResponse = zod.object({
  * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
  * @summary Import contacts for the authenticated tenant
  */
+export const ImportContactsQueryParams = zod.object({
+  "listId": zod.coerce.string().uuid().optional().describe('Assign imported CSV contacts to this contact list owned by the authenticated tenant.')
+})
+
 export const importContactsBodyContactsItemRowNumberMin = 2;
 
 export const importContactsBodyContactsMax = 200;

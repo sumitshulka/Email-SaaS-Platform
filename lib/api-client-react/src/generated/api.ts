@@ -47,6 +47,7 @@ import type {
   CurrentSubscription,
   ForgotPasswordInput,
   HealthStatus,
+  ImportContactsParams,
   ListAdminUsersParams,
   LoginInput,
   MessageResponse,
@@ -1445,21 +1446,29 @@ export const useCreateContact = <TError = ErrorType<ApiError>,
       return useMutation(getCreateContactMutationOptions(options));
     }
 
-export const getImportContactsUrl = () => {
+export const getImportContactsUrl = (params?: ImportContactsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/contacts/import`
+  return stringifiedParams.length > 0 ? `/api/contacts/import?${stringifiedParams}` : `/api/contacts/import`
 }
 
 /**
  * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
  * @summary Import contacts for the authenticated tenant
  */
-export const importContacts = async (importContactsBody: ContactImportInput | ContactCsvInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactImportResult | ContactImportResponse> => {
+export const importContacts = async (importContactsBody: ContactImportInput | ContactCsvInput,
+    params?: ImportContactsParams, options?: Parameters<typeof customFetch>[1]): Promise<ContactImportResult | ContactImportResponse> => {
 
-  return customFetch<ContactImportResult | ContactImportResponse>(getImportContactsUrl(),
+  return customFetch<ContactImportResult | ContactImportResponse>(getImportContactsUrl(params),
   {
     ...options,
     method: 'POST'
@@ -1489,9 +1498,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof importContacts>>, ImportContactsMutationVariables> = (props) => {
-          const {data} = props ?? {};
+          const {data,params} = props ?? {};
 
-          return  importContacts(data,requestOptions)
+          return  importContacts(data,params,requestOptions)
         }
 
 
@@ -1504,7 +1513,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ImportContactsMutationResult = NonNullable<Awaited<ReturnType<typeof importContacts>>>
     export type ImportContactsMutationBody = BodyType<ContactImportInput | ContactCsvInput>
     export type ImportContactsMutationError = ErrorType<ApiError>
-    export type ImportContactsMutationVariables = {data: BodyType<ContactImportInput | ContactCsvInput>}
+    export type ImportContactsMutationVariables = {data: BodyType<ContactImportInput | ContactCsvInput>;params?: ImportContactsParams}
 
     /**
  * @summary Import contacts for the authenticated tenant
