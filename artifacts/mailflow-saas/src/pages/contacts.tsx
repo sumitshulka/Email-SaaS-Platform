@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ArrowRight, CircleAlert, ContactRound, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowRight, CircleAlert, ContactRound, Download, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link } from "wouter";
 import {
@@ -30,6 +30,18 @@ function requestError(error: unknown): string {
     if ("message" in error && typeof error.message === "string") return error.message;
   }
   return "The request could not be completed. Please try again.";
+}
+
+function downloadRejectedContactsCsv(csv: string) {
+  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `rejected-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default function ContactsPage() {
@@ -409,14 +421,25 @@ export default function ContactsPage() {
               {importContacts.data.rejected.length > 0 && ` ${importContacts.data.rejected.length.toLocaleString()} row${importContacts.data.rejected.length === 1 ? " was" : "s were"} not imported.`}
             </p>
             {importContacts.data.rejected.length > 0 && (
-              <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto border-t border-[#e6ebef] pt-3 text-[11px] text-[#6f7f8f]">
-                {importContacts.data.rejected.map((row) => (
-                  <li key={`${row.rowNumber}-${row.email ?? "blank"}`} className="break-words">
-                    <span className="font-semibold text-[#465b70]">Row {row.rowNumber}</span>
-                    {row.email ? ` · ${row.email}` : ""} — {row.reason}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <button
+                  type="button"
+                  data-testid="button-download-rejected-contacts"
+                  onClick={() => downloadRejectedContactsCsv(importContacts.data.rejectedCsv)}
+                  className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-md border border-[#cbd8e3] bg-white px-3 text-[11px] font-semibold text-[#174f99] hover:bg-[#f4f8fb]"
+                >
+                  <Download className="h-4 w-4" />
+                  Download rejected rows
+                </button>
+                <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto border-t border-[#e6ebef] pt-3 text-[11px] text-[#6f7f8f]">
+                  {importContacts.data.rejected.map((row) => (
+                    <li key={`${row.rowNumber}-${row.email ?? "blank"}`} className="break-words">
+                      <span className="font-semibold text-[#465b70]">Row {row.rowNumber}</span>
+                      {row.email ? ` · ${row.email}` : ""} — {row.reason}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         )}

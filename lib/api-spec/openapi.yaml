@@ -1289,8 +1289,11 @@ components:
         rejected:
           type: array
           items: { $ref: "#/components/schemas/ContactImportRejection" }
+        rejectedCsv:
+          type: string
+          description: CSV containing rejected source rows and their rejection reasons; empty when no rows were rejected.
         quota: { $ref: "#/components/schemas/ContactQuota" }
-      required: [imported, rejected, quota]
+      required: [imported, rejected, rejectedCsv, quota]
     ContactList:
       type: object
       properties:

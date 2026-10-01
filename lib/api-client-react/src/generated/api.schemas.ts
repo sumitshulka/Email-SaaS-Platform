@@ -428,6 +428,8 @@ export interface ContactImportResponse {
   /** @minimum 0 */
   imported: number;
   rejected: ContactImportRejection[];
+  /** CSV containing rejected source rows and their rejection reasons; empty when no rows were rejected. */
+  rejectedCsv: string;
   quota: ContactQuota;
 }
 

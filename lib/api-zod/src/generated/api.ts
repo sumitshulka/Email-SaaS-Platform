@@ -491,6 +491,7 @@ export const ImportContactsResponse = zod.union([zod.object({
   "email": zod.string().nullable(),
   "reason": zod.string()
 })),
+  "rejectedCsv": zod.string().describe('CSV containing rejected source rows and their rejection reasons; empty when no rows were rejected.'),
   "quota": zod.object({
   "used": zod.number().int().min(importContactsResponseTwoQuotaUsedMin),
   "limit": zod.number().int().min(importContactsResponseTwoQuotaLimitMin),

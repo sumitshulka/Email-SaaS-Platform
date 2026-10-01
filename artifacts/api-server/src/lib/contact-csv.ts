@@ -102,3 +102,52 @@ export function parseCsvRecords(input: string): CsvRecord[] {
 export function normalizeCsvHeader(header: string): string {
   return header.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
+
+export type RejectedContactCsvRow = {
+  sourceValues: string[];
+  reason: string;
+};
+
+export function buildRejectedContactsCsv(
+  sourceHeaders: string[],
+  rejectedRows: RejectedContactCsvRow[],
+): string {
+  if (rejectedRows.length === 0) return "";
+
+  const maxSourceColumns = Math.max(
+    sourceHeaders.length,
+    ...rejectedRows.map((row) => row.sourceValues.length),
+  );
+  const outputHeaders = sourceHeaders.slice();
+  for (let index = outputHeaders.length; index < maxSourceColumns; index += 1) {
+    const baseHeader = `Extra column ${index - sourceHeaders.length + 1}`;
+    let extraHeader = baseHeader;
+    let suffix = 2;
+    while (outputHeaders.includes(extraHeader)) {
+      extraHeader = `${baseHeader} (${suffix})`;
+      suffix += 1;
+    }
+    outputHeaders.push(extraHeader);
+  }
+
+  let reasonHeader = "Import rejection reason";
+  let suffix = 2;
+  while (outputHeaders.includes(reasonHeader)) {
+    reasonHeader = `Import rejection reason (${suffix})`;
+    suffix += 1;
+  }
+
+  const escapeField = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const lines = [
+    [...outputHeaders, reasonHeader].map(escapeField).join(","),
+    ...rejectedRows.map((row) => {
+      const sourceValues = Array.from(
+        { length: maxSourceColumns },
+        (_, index) => row.sourceValues[index] ?? "",
+      );
+      return [...sourceValues, row.reason].map(escapeField).join(",");
+    }),
+  ];
+
+  return `${lines.join("\r\n")}\r\n`;
+}

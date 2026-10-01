@@ -22,6 +22,7 @@ import {
 import { getPlatformSettings } from "../lib/platform-settings";
 import { requireUserRole } from "../lib/session";
 import {
+  buildRejectedContactsCsv,
   CsvSyntaxError,
   normalizeCsvHeader,
   parseCsvRecords,
@@ -333,6 +334,16 @@ async function importContactCsv(
     email: string | null;
     reason: string;
   }> = [];
+  const sourceRowsByNumber = new Map(
+    dataRecords.map((record) => [record.rowNumber, record.cells]),
+  );
+  const getSourceValues = (rowNumber: number): string[] => {
+    const sourceValues = sourceRowsByNumber.get(rowNumber);
+    if (!sourceValues) {
+      throw new Error(`Rejected contact row ${rowNumber} is missing its source values.`);
+    }
+    return sourceValues;
+  };
   const validatedRows: Array<{
     rowNumber: number;
     email: string;
@@ -519,10 +530,18 @@ async function importContactCsv(
     return;
   }
 
+  const orderedRejected = rejected.sort((left, right) => left.rowNumber - right.rowNumber);
   res.json(
     ImportContactsResponse.parse({
       imported: result.imported,
-      rejected: rejected.sort((left, right) => left.rowNumber - right.rowNumber),
+      rejected: orderedRejected,
+      rejectedCsv: buildRejectedContactsCsv(
+        headerRecord.cells,
+        orderedRejected.map((row) => ({
+          sourceValues: getSourceValues(row.rowNumber),
+          reason: row.reason,
+        })),
+      ),
       quota: result.quota,
     }),
   );

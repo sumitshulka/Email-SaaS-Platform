@@ -970,6 +970,14 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.match(imported.body.rejected[2].reason, /columns/i);
     assert.match(imported.body.rejected[3].reason, /more than once/i);
     assert.match(imported.body.rejected[4].reason, /contact limit/i);
+    assert.equal(
+      imported.body.rejectedCsv.split("\r\n")[0],
+      '"name","email","Import rejection reason"',
+    );
+    assert.match(
+      imported.body.rejectedCsv,
+      /"Already Saved","saved@example\.test","This email address is already in your contacts\."/,
+    );
     assert.deepEqual(imported.body.quota, {
       used: 3,
       limit: 3,
