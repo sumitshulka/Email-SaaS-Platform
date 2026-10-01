@@ -1,14 +1,17 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, CircleAlert, ContactRound, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { ArrowRight, CircleAlert, ContactRound, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link } from "wouter";
 import {
+  customFetch,
+  getGetUserDashboardQueryKey,
   getListContactsQueryKey,
   useCreateContact,
   useDeleteContact,
   useListContacts,
 } from "@workspace/api-client-react";
-import type { ContactInput } from "@workspace/api-client-react";
+import type { ContactImportResponse, ContactInput } from "@workspace/api-client-react";
 import {
   Form,
   FormControl,
@@ -34,6 +37,19 @@ export default function ContactsPage() {
   const contactsQuery = useListContacts();
   const createContact = useCreateContact();
   const deleteContact = useDeleteContact();
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const importContacts = useMutation<ContactImportResponse, Error, string>({
+    mutationFn: (csvText) =>
+      customFetch<ContactImportResponse>("/api/contacts/import", {
+        method: "POST",
+        headers: { "Content-Type": "text/csv" },
+        body: csvText,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+    },
+  });
   const form = useForm<ContactInput>({
     defaultValues: { firstName: "", lastName: "", email: "" },
   });
@@ -41,6 +57,35 @@ export default function ContactsPage() {
   const progress = data && data.quota.limit > 0
     ? Math.min(100, (data.quota.used / data.quota.limit) * 100)
     : 0;
+  const allowedFileTypes = (data?.uploadSettings.allowedFileTypes ?? []).map((type) =>
+    type.trim().toLowerCase().replace(/^\./, ""),
+  );
+  const csvImportEnabled = allowedFileTypes.includes("csv");
+
+  const selectCsv = (file?: File) => {
+    setUploadError(null);
+    importContacts.reset();
+    if (!file) return;
+    if (!csvImportEnabled || !/\.csv$/i.test(file.name)) {
+      setUploadError("Choose a CSV file allowed by your workspace settings.");
+      return;
+    }
+    const maxBytes = (data?.uploadSettings.maxFileSizeMb ?? 0) * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setUploadError(
+        `This file is too large. The maximum size is ${data?.uploadSettings.maxFileSizeMb} MB.`,
+      );
+      return;
+    }
+    if (file.size === 0) {
+      setUploadError("Choose a non-empty CSV file.");
+      return;
+    }
+    void file
+      .text()
+      .then((csvText) => importContacts.mutate(csvText))
+      .catch(() => setUploadError("The selected file could not be read."));
+  };
 
   const submit = (values: ContactInput) => {
     createContact.mutate(
@@ -310,6 +355,71 @@ export default function ContactsPage() {
             </form>
           </Form>
         </section>
+      </section>
+
+      <section className="rounded-lg border border-[#e1e6eb] bg-white p-5 md:p-6" data-testid="contact-csv-import">
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]">
+            <Upload className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[14px] font-bold text-[#1d2d40]">Import contacts from CSV</h2>
+            <p className="mt-1 text-[11px] leading-5 text-[#788696]">
+              Use columns named <span className="font-medium text-[#526579]">email</span> and{" "}
+              <span className="font-medium text-[#526579]">name</span>, or{" "}
+              <span className="font-medium text-[#526579]">first_name</span> and{" "}
+              <span className="font-medium text-[#526579]">last_name</span>. Maximum file size:{" "}
+              {data.uploadSettings.maxFileSizeMb} MB. Duplicate, invalid, and over-quota rows will be listed below.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            accept={allowedFileTypes.map((type) => `.${type}`).join(",")}
+            aria-label="Choose a CSV file to import contacts"
+            data-testid="input-contact-csv"
+            disabled={!quota.canAdd || !csvImportEnabled || importContacts.isPending}
+            onChange={(event) => {
+              selectCsv(event.currentTarget.files?.[0]);
+              event.currentTarget.value = "";
+            }}
+            className="max-w-full text-[12px] text-[#53677b] file:mr-3 file:rounded-md file:border-0 file:bg-[#174f99] file:px-3 file:py-2.5 file:text-[11px] file:font-semibold file:text-white disabled:opacity-50"
+          />
+          {importContacts.isPending && (
+            <span role="status" className="inline-flex items-center gap-2 text-[11px] text-[#53677b]">
+              <LoaderCircle className="h-4 w-4 animate-spin" /> Importing contacts…
+            </span>
+          )}
+          {!csvImportEnabled && (
+            <p className="text-[11px] text-[#965323]">
+              CSV imports are disabled by your workspace file type settings.
+            </p>
+          )}
+        </div>
+        {(uploadError || importContacts.isError) && (
+          <p role="alert" data-testid="status-contact-import-error" className="mt-3 text-[12px] text-[#a84926]">
+            {uploadError ?? requestError(importContacts.error)}
+          </p>
+        )}
+        {importContacts.data && (
+          <div role="status" data-testid="status-contact-import-result" className="mt-4 rounded-md border border-[#dfe7ed] bg-[#f8fafc] p-4">
+            <p className="text-[12px] font-semibold text-[#26374a]">
+              Imported {importContacts.data.imported.toLocaleString()} contact{importContacts.data.imported === 1 ? "" : "s"}.
+              {importContacts.data.rejected.length > 0 && ` ${importContacts.data.rejected.length.toLocaleString()} row${importContacts.data.rejected.length === 1 ? " was" : "s were"} not imported.`}
+            </p>
+            {importContacts.data.rejected.length > 0 && (
+              <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto border-t border-[#e6ebef] pt-3 text-[11px] text-[#6f7f8f]">
+                {importContacts.data.rejected.map((row) => (
+                  <li key={`${row.rowNumber}-${row.email ?? "blank"}`} className="break-words">
+                    <span className="font-semibold text-[#465b70]">Row {row.rowNumber}</span>
+                    {row.email ? ` · ${row.email}` : ""} — {row.reason}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

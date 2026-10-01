@@ -411,6 +411,26 @@ export interface ContactImportResult {
   quota: ContactQuota;
 }
 
+/**
+ * UTF-8 CSV. Include email and either name or first_name/last_name columns.
+ */
+export type ContactCsvInput = string;
+
+export interface ContactImportRejection {
+  /** @minimum 2 */
+  rowNumber: number;
+  /** @nullable */
+  email: string | null;
+  reason: string;
+}
+
+export interface ContactImportResponse {
+  /** @minimum 0 */
+  imported: number;
+  rejected: ContactImportRejection[];
+  quota: ContactQuota;
+}
+
 export interface ContactList {
   id: string;
   name: string;
@@ -908,9 +928,16 @@ export interface SubscriptionPackageUpdateInput {
   active?: boolean;
 }
 
+export interface ContactUploadSettings {
+  /** @minimum 1 */
+  maxFileSizeMb: number;
+  allowedFileTypes: string[];
+}
+
 export interface ContactCollection {
   contacts: Contact[];
   quota: ContactQuota;
+  uploadSettings: ContactUploadSettings;
 }
 
 export interface CreateSubscriptionOrderInput {

@@ -7,8 +7,10 @@
  */
 import type { Contact } from './contact';
 import type { ContactQuota } from './contactQuota';
+import type { ContactUploadSettings } from './contactUploadSettings';
 
 export interface ContactCollection {
   contacts: Contact[];
   quota: ContactQuota;
+  uploadSettings: ContactUploadSettings;
 }

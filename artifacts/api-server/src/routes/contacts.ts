@@ -1,9 +1,15 @@
 import { and, count, desc, eq, gt, lte } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import express, {
+  Router,
+  type IRouter,
+  type Request,
+  type Response,
+} from "express";
 import {
   CreateContactBody,
   CreateContactResponse,
   DeleteContactParams,
+  ImportContactsResponse,
   ListContactsResponse,
 } from "@workspace/api-zod";
 import {
@@ -15,8 +21,15 @@ import {
 } from "@workspace/db";
 import { getPlatformSettings } from "../lib/platform-settings";
 import { requireUserRole } from "../lib/session";
+import {
+  CsvSyntaxError,
+  normalizeCsvHeader,
+  parseCsvRecords,
+  type CsvRecord,
+} from "../lib/contact-csv";
 
 const router: IRouter = Router();
+export const contactImportRouter: IRouter = Router();
 
 async function getContactQuota(userId: string) {
   const now = new Date();
@@ -62,18 +75,23 @@ async function getContactQuota(userId: string) {
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const userId = req.authUser!.id;
-  const [contacts, quota] = await Promise.all([
+  const [contacts, quota, settings] = await Promise.all([
     db
       .select()
       .from(contactsTable)
       .where(eq(contactsTable.userId, userId))
       .orderBy(desc(contactsTable.createdAt)),
     getContactQuota(userId),
+    getPlatformSettings(),
   ]);
   res.json(
     ListContactsResponse.parse({
       contacts: contacts.map((contact) => ({ ...contact, listIds: [] })),
       quota,
+      uploadSettings: {
+        maxFileSizeMb: settings.maxUploadFileSizeMb,
+        allowedFileTypes: settings.allowedContactFileTypes,
+      },
     }),
   );
 });
@@ -199,6 +217,316 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
     CreateContactResponse.parse({ ...result.contact, listIds: [] }),
   );
 });
+
+contactImportRouter.post(
+  "/contacts/import",
+  requireUserRole,
+  async (req, res, next): Promise<void> => {
+    if (!req.is("text/csv")) {
+      next();
+      return;
+    }
+
+    const settings = await getPlatformSettings();
+    const allowedTypes = settings.allowedContactFileTypes.map((type) =>
+      type.trim().toLowerCase().replace(/^\./, ""),
+    );
+    if (!allowedTypes.includes("csv")) {
+      res.status(415).json({
+        error: "CSV imports are disabled by the platform file type settings.",
+        code: "FILE_TYPE_NOT_ALLOWED",
+      });
+      return;
+    }
+
+    const parseBody = express.raw({
+      type: "text/csv",
+      limit: settings.maxUploadFileSizeMb * 1024 * 1024,
+    });
+    parseBody(req, res, (error) => {
+      if (error) {
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "entity.too.large"
+        ) {
+          res.status(413).json({
+            error: `The CSV exceeds the ${settings.maxUploadFileSizeMb} MB upload limit.`,
+            code: "FILE_TOO_LARGE",
+          });
+          return;
+        }
+        next(error);
+        return;
+      }
+
+      void importContactCsv(req, res, settings).catch(next);
+    });
+  },
+);
+
+async function importContactCsv(
+  req: Request,
+  res: Response,
+  settings: Awaited<ReturnType<typeof getPlatformSettings>>,
+): Promise<void> {
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    res.status(400).json({
+      error: "Choose a non-empty CSV file.",
+      code: "INVALID_CSV",
+    });
+    return;
+  }
+
+  let csvText: string;
+  let records: CsvRecord[];
+  try {
+    csvText = new TextDecoder("utf-8", { fatal: true }).decode(req.body);
+    records = parseCsvRecords(csvText);
+  } catch (error) {
+    if (error instanceof CsvSyntaxError) {
+      res.status(400).json({
+        error: `Invalid CSV near row ${error.rowNumber}: ${error.message}`,
+        code: "INVALID_CSV",
+      });
+      return;
+    }
+    res.status(400).json({
+      error: "The CSV must use UTF-8 text encoding.",
+      code: "INVALID_CSV_ENCODING",
+    });
+    return;
+  }
+
+  const [headerRecord, ...dataRecords] = records;
+  if (!headerRecord) {
+    res.status(400).json({ error: "The CSV file is empty.", code: "INVALID_CSV" });
+    return;
+  }
+  const headers = headerRecord.cells.map(normalizeCsvHeader);
+  const emailIndex = headers.indexOf("email");
+  const nameIndex = headers.indexOf("name");
+  const firstNameIndex = headers.indexOf("first_name");
+  const lastNameIndex = headers.indexOf("last_name");
+  if (
+    new Set(headers).size !== headers.length ||
+    emailIndex < 0 ||
+    (nameIndex < 0 && firstNameIndex < 0 && lastNameIndex < 0)
+  ) {
+    res.status(400).json({
+      error: "Include one email column and either name or first_name/last_name columns.",
+      code: "INVALID_CSV_HEADERS",
+    });
+    return;
+  }
+  if (dataRecords.length === 0) {
+    res.status(400).json({
+      error: "The CSV has a header row but no contact rows.",
+      code: "EMPTY_CSV",
+    });
+    return;
+  }
+
+  const rejected: Array<{
+    rowNumber: number;
+    email: string | null;
+    reason: string;
+  }> = [];
+  const validatedRows: Array<{
+    rowNumber: number;
+    email: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+  }> = [];
+
+  for (const record of dataRecords) {
+    const rawEmail = record.cells[emailIndex]?.trim() ?? "";
+    const rowEmail = rawEmail ? rawEmail.toLowerCase() : null;
+    if (record.cells.length !== headers.length) {
+      rejected.push({
+        rowNumber: record.rowNumber,
+        email: rowEmail,
+        reason: `Expected ${headers.length} columns but found ${record.cells.length}.`,
+      });
+      continue;
+    }
+
+    const email = rawEmail.toLowerCase();
+    if (
+      email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      rejected.push({
+        rowNumber: record.rowNumber,
+        email: rowEmail,
+        reason: "Enter a valid email address of 254 characters or fewer.",
+      });
+      continue;
+    }
+
+    let name = nameIndex >= 0 ? record.cells[nameIndex]!.trim() : "";
+    let firstName =
+      firstNameIndex >= 0 ? record.cells[firstNameIndex]!.trim() : "";
+    let lastName =
+      lastNameIndex >= 0 ? record.cells[lastNameIndex]!.trim() : "";
+    if (!name) name = [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (!name) {
+      rejected.push({
+        rowNumber: record.rowNumber,
+        email,
+        reason: "Enter a contact name.",
+      });
+      continue;
+    }
+    if (name.length > 120) {
+      rejected.push({
+        rowNumber: record.rowNumber,
+        email,
+        reason: "Names can be up to 120 characters.",
+      });
+      continue;
+    }
+    if (!firstName && !lastName) {
+      const [derivedFirstName = "", ...remainingName] = name.split(/\s+/);
+      firstName = derivedFirstName;
+      lastName = remainingName.join(" ");
+    }
+    if (firstName.length > 100 || lastName.length > 100) {
+      rejected.push({
+        rowNumber: record.rowNumber,
+        email,
+        reason: "First and last names can be up to 100 characters each.",
+      });
+      continue;
+    }
+
+    validatedRows.push({ rowNumber: record.rowNumber, email, name, firstName, lastName });
+  }
+
+  const userId = req.authUser!.id;
+  const result = await db.transaction(async (tx) => {
+    const [lockedUser] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1)
+      .for("update");
+    if (!lockedUser) return { kind: "user_missing" as const };
+
+    const now = new Date();
+    const [activeSubscription] = await tx
+      .select({ contactLimit: subscriptionPackagesTable.contactLimit })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, userId),
+          eq(userSubscriptionsTable.status, "active"),
+          lte(userSubscriptionsTable.startsAt, now),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1);
+
+    if (!activeSubscription && !settings.allowUserWithoutSubscription) {
+      return { kind: "subscription_required" as const };
+    }
+    const limit = Math.min(
+      activeSubscription?.contactLimit ?? settings.maxContactsPerUser,
+      settings.maxContactsPerUser,
+    );
+    const [{ used: currentCount }] = await tx
+      .select({ used: count() })
+      .from(contactsTable)
+      .where(eq(contactsTable.userId, userId));
+    const currentUsed = Number(currentCount);
+    const existingContacts = await tx
+      .select({ email: contactsTable.email })
+      .from(contactsTable)
+      .where(eq(contactsTable.userId, userId));
+    const existingEmails = new Set(existingContacts.map((contact) => contact.email));
+    const seenImportEmails = new Set<string>();
+    const toInsert: typeof contactsTable.$inferInsert[] = [];
+
+    for (const contact of validatedRows) {
+      if (existingEmails.has(contact.email)) {
+        rejected.push({
+          rowNumber: contact.rowNumber,
+          email: contact.email,
+          reason: "This email address is already in your contacts.",
+        });
+        continue;
+      }
+      if (seenImportEmails.has(contact.email)) {
+        rejected.push({
+          rowNumber: contact.rowNumber,
+          email: contact.email,
+          reason: "This email address appears more than once in the CSV file.",
+        });
+        continue;
+      }
+      seenImportEmails.add(contact.email);
+      if (currentUsed + toInsert.length >= limit) {
+        rejected.push({
+          rowNumber: contact.rowNumber,
+          email: contact.email,
+          reason: `The contact limit of ${limit} has been reached.`,
+        });
+        continue;
+      }
+      toInsert.push({
+        userId,
+        name: contact.name,
+        email: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        subscribed: true,
+      });
+    }
+
+    if (toInsert.length > 0) {
+      await tx.insert(contactsTable).values(toInsert);
+    }
+    const used = currentUsed + toInsert.length;
+    return {
+      kind: "imported" as const,
+      imported: toInsert.length,
+      quota: {
+        used,
+        limit,
+        remaining: Math.max(0, limit - used),
+        canAdd: used < limit,
+        requiresSubscription: false,
+      },
+    };
+  });
+
+  if (result.kind === "user_missing") {
+    res.status(401).json({ error: "Please sign in to continue.", code: "UNAUTHENTICATED" });
+    return;
+  }
+  if (result.kind === "subscription_required") {
+    res.status(403).json({
+      error: "An active subscription is required to add contacts.",
+      code: "SUBSCRIPTION_REQUIRED",
+    });
+    return;
+  }
+
+  res.json(
+    ImportContactsResponse.parse({
+      imported: result.imported,
+      rejected: rejected.sort((left, right) => left.rowNumber - right.rowNumber),
+      quota: result.quota,
+    }),
+  );
+}
 
 router.delete(
   "/contacts/:contactId",

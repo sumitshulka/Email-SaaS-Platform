@@ -64,8 +64,16 @@ export function ContactImportDialog({ onClose, onChanged }: { onClose: () => voi
       try {
         const res = await importer.mutateAsync({ data: { contacts: batch } });
         onChanged();
-        acc.imported += res.imported; acc.duplicate += res.duplicate; acc.invalid += res.invalid; acc.limitReached += res.limitReached;
-        acc.issues.push(...res.issues);
+        acc.imported += res.imported;
+        if ("rejected" in res) {
+          acc.invalid += res.rejected.length;
+          acc.issues.push(...res.rejected.map(({ rowNumber, reason }) => ({ rowNumber, reason })));
+        } else {
+          acc.duplicate += res.duplicate;
+          acc.invalid += res.invalid;
+          acc.limitReached += res.limitReached;
+          acc.issues.push(...res.issues);
+        }
         acc.quotaText = res.quota.limit ? `${res.quota.used.toLocaleString()} of ${res.quota.limit.toLocaleString()} contacts used, ${res.quota.remaining.toLocaleString()} remaining${res.quota.requiresSubscription ? ' (subscription required for more)' : ''}` : '';
         setProgress({ done: Math.min(i + BATCH_SIZE, rows.length), total: rows.length });
       } catch (e) {

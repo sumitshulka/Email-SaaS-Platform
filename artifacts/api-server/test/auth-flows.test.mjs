@@ -255,6 +255,14 @@ function adaptMemoryQuery(client) {
   const query = client.query.bind(client);
   client.query = (config, ...args) => {
     const arrayMode = config && typeof config === "object" && config.rowMode === "array";
+    if (typeof config === "string") {
+      config = config.replace(/\s+for update skip locked\b/gi, " for update");
+    } else if (config && typeof config === "object" && typeof config.text === "string") {
+      config = {
+        ...config,
+        text: config.text.replace(/\s+for update skip locked\b/gi, " for update"),
+      };
+    }
     if (config && typeof config === "object" && (config.types || config.rowMode)) {
       config = { ...config };
       delete config.types;
@@ -383,6 +391,19 @@ async function api(path, { method = "GET", body, cookie } = {}) {
     body: text ? JSON.parse(text) : undefined,
     cookie: setCookie?.split(";", 1)[0],
   };
+}
+
+async function uploadCsv(path, csvText, cookie) {
+  const response = await fetch(`${baseUrl}/api${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "text/csv",
+      ...(cookie ? { cookie } : {}),
+    },
+    body: csvText,
+  });
+  const text = await response.text();
+  return { response, body: text ? JSON.parse(text) : undefined };
 }
 
 async function createUser({
@@ -885,6 +906,117 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(clearedOptionalFields.body.companyName, null);
     assert.equal(clearedOptionalFields.body.linkedinUrl, null);
     assert.equal(clearedOptionalFields.body.phoneNumber, null);
+  });
+
+  it("imports CSV rows without crossing tenant or package limits", async () => {
+    const owner = await loggedInUser({ username: "csv-owner" });
+    const other = await loggedInUser({ username: "csv-other" });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Three Contact CSV Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 3,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "33333333-3333-4333-8333-333333333333",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const existing = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        firstName: "Already",
+        lastName: "Saved",
+        email: "saved@example.test",
+      },
+    });
+    assert.equal(existing.response.status, 201, JSON.stringify(existing.body));
+
+    const importSettings = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(importSettings.response.status, 200);
+    assert.ok(importSettings.body.uploadSettings.allowedFileTypes.includes("csv"));
+
+    const imported = await uploadCsv(
+      "/contacts/import",
+      [
+        "name,email",
+        "Already Saved,saved@example.test",
+        "New Person,New@example.test",
+        "Bad Address,not-an-email",
+        "Malformed Row",
+        "Duplicate In File,new@example.test",
+        "Second Person,second@example.test",
+        "Beyond Limit,extra@example.test",
+      ].join("\n"),
+      owner.cookie,
+    );
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
+    assert.equal(imported.body.imported, 2);
+    assert.deepEqual(
+      imported.body.rejected.map((row) => row.rowNumber),
+      [2, 4, 5, 6, 8],
+    );
+    assert.match(imported.body.rejected[0].reason, /already in your contacts/i);
+    assert.match(imported.body.rejected[1].reason, /valid email/i);
+    assert.match(imported.body.rejected[2].reason, /columns/i);
+    assert.match(imported.body.rejected[3].reason, /more than once/i);
+    assert.match(imported.body.rejected[4].reason, /contact limit/i);
+    assert.deepEqual(imported.body.quota, {
+      used: 3,
+      limit: 3,
+      remaining: 0,
+      canAdd: false,
+      requiresSubscription: false,
+    });
+
+    const ownerContacts = await api("/contacts", { cookie: owner.cookie });
+    assert.deepEqual(
+      new Set(ownerContacts.body.contacts.map((contact) => contact.email)),
+      new Set(["saved@example.test", "new@example.test", "second@example.test"]),
+    );
+    const blockedImport = await uploadCsv(
+      "/contacts/import",
+      "name,email\nNo Package,no-package@example.test",
+      other.cookie,
+    );
+    assert.equal(blockedImport.response.status, 403);
+    assert.equal(blockedImport.body.code, "SUBSCRIPTION_REQUIRED");
+    const otherContacts = await api("/contacts", { cookie: other.cookie });
+    assert.equal(otherContacts.body.contacts.length, 0);
+
+    const malformedCsv = await uploadCsv(
+      "/contacts/import",
+      'name,email\n"Unclosed name,broken@example.test',
+      owner.cookie,
+    );
+    assert.equal(malformedCsv.response.status, 400);
+    assert.equal(malformedCsv.body.code, "INVALID_CSV");
+    const afterMalformedCsv = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(afterMalformedCsv.body.contacts.length, 3);
+  });
+
+  it("rejects CSV uploads larger than the configured platform file limit", async () => {
+    const owner = await loggedInUser({ username: "csv-size-owner" });
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: { maxUploadFileSizeMb: 1 },
+    });
+    const tooLarge = await uploadCsv(
+      "/contacts/import",
+      "x".repeat(1024 * 1024 + 1),
+      owner.cookie,
+    );
+    assert.equal(tooLarge.response.status, 413);
+    assert.equal(tooLarge.body.code, "FILE_TOO_LARGE");
   });
 });
 

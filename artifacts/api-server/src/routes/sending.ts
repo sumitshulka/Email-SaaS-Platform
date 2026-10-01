@@ -461,6 +461,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       .from(contactListMembersTable)
       .where(eq(contactListMembersTable.userId, userId)),
   ]);
+  const uploadSettings = await getPlatformSettings();
   const listIdsByContact = new Map<string, string[]>();
   for (const membership of memberships) {
     const current = listIdsByContact.get(membership.contactId) ?? [];
@@ -477,6 +478,10 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
         listIds: listIdsByContact.get(contact.id) ?? [],
       })),
       quota,
+      uploadSettings: {
+        maxFileSizeMb: uploadSettings.maxUploadFileSizeMb,
+        allowedFileTypes: uploadSettings.allowedContactFileTypes,
+      },
     }),
   );
 });

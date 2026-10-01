@@ -34,7 +34,9 @@ import type {
   ChangePasswordInput,
   Contact,
   ContactCollection,
+  ContactCsvInput,
   ContactImportInput,
+  ContactImportResponse,
   ContactImportResult,
   ContactInput,
   ContactList,
@@ -1452,31 +1454,17 @@ export const getImportContactsUrl = () => {
 }
 
 /**
- * Imports valid rows, skips duplicates, and reports invalid rows or rows blocked by quota.
+ * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
  * @summary Import contacts for the authenticated tenant
  */
-export const importContacts = async (contactImportInput: ContactImportInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactImportResult> => {
+export const importContacts = async (importContactsBody: ContactImportInput | ContactCsvInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactImportResult | ContactImportResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return customFetch<ContactImportResult>(getImportContactsUrl(),
+  return customFetch<ContactImportResult | ContactImportResponse>(getImportContactsUrl(),
   {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(contactImportInput)
+    method: 'POST'
+    ,
+    body: JSON.stringify(importContactsBody)
   }
 );}
 
@@ -1514,9 +1502,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ImportContactsMutationResult = NonNullable<Awaited<ReturnType<typeof importContacts>>>
-    export type ImportContactsMutationBody = BodyType<ContactImportInput>
+    export type ImportContactsMutationBody = BodyType<ContactImportInput | ContactCsvInput>
     export type ImportContactsMutationError = ErrorType<ApiError>
-    export type ImportContactsMutationVariables = {data: BodyType<ContactImportInput>}
+    export type ImportContactsMutationVariables = {data: BodyType<ContactImportInput | ContactCsvInput>}
 
     /**
  * @summary Import contacts for the authenticated tenant

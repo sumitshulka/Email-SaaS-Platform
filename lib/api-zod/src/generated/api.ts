@@ -328,6 +328,7 @@ export const listContactsResponseQuotaRemainingMin = 0;
 
 
 
+
 export const ListContactsResponse = zod.object({
   "contacts": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -349,6 +350,10 @@ export const ListContactsResponse = zod.object({
   "remaining": zod.number().int().min(listContactsResponseQuotaRemainingMin),
   "canAdd": zod.boolean(),
   "requiresSubscription": zod.boolean()
+}),
+  "uploadSettings": zod.object({
+  "maxFileSizeMb": zod.number().int().min(1),
+  "allowedFileTypes": zod.array(zod.string())
 })
 })
 
@@ -411,7 +416,7 @@ export const CreateContactResponse = zod.object({
 
 
 /**
- * Imports valid rows, skips duplicates, and reports invalid rows or rows blocked by quota.
+ * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
  * @summary Import contacts for the authenticated tenant
  */
 export const importContactsBodyContactsItemRowNumberMin = 2;
@@ -435,41 +440,65 @@ export const ImportContactsBody = zod.object({
 })).min(1).max(importContactsBodyContactsMax)
 })
 
-export const importContactsResponseImportedMin = 0;
+export const importContactsResponseOneImportedMin = 0;
 
-export const importContactsResponseDuplicateMin = 0;
+export const importContactsResponseOneDuplicateMin = 0;
 
-export const importContactsResponseInvalidMin = 0;
+export const importContactsResponseOneInvalidMin = 0;
 
-export const importContactsResponseLimitReachedMin = 0;
+export const importContactsResponseOneLimitReachedMin = 0;
 
-export const importContactsResponseIssuesItemRowNumberMin = 2;
+export const importContactsResponseOneIssuesItemRowNumberMin = 2;
 
-export const importContactsResponseQuotaUsedMin = 0;
+export const importContactsResponseOneQuotaUsedMin = 0;
 
-export const importContactsResponseQuotaLimitMin = 0;
+export const importContactsResponseOneQuotaLimitMin = 0;
 
-export const importContactsResponseQuotaRemainingMin = 0;
+export const importContactsResponseOneQuotaRemainingMin = 0;
+
+export const importContactsResponseTwoImportedMin = 0;
+
+export const importContactsResponseTwoRejectedItemRowNumberMin = 2;
+
+export const importContactsResponseTwoQuotaUsedMin = 0;
+
+export const importContactsResponseTwoQuotaLimitMin = 0;
+
+export const importContactsResponseTwoQuotaRemainingMin = 0;
 
 
 
-export const ImportContactsResponse = zod.object({
-  "imported": zod.number().int().min(importContactsResponseImportedMin),
-  "duplicate": zod.number().int().min(importContactsResponseDuplicateMin),
-  "invalid": zod.number().int().min(importContactsResponseInvalidMin),
-  "limitReached": zod.number().int().min(importContactsResponseLimitReachedMin),
+export const ImportContactsResponse = zod.union([zod.object({
+  "imported": zod.number().int().min(importContactsResponseOneImportedMin),
+  "duplicate": zod.number().int().min(importContactsResponseOneDuplicateMin),
+  "invalid": zod.number().int().min(importContactsResponseOneInvalidMin),
+  "limitReached": zod.number().int().min(importContactsResponseOneLimitReachedMin),
   "issues": zod.array(zod.object({
-  "rowNumber": zod.number().int().min(importContactsResponseIssuesItemRowNumberMin),
+  "rowNumber": zod.number().int().min(importContactsResponseOneIssuesItemRowNumberMin),
   "reason": zod.string()
 })),
   "quota": zod.object({
-  "used": zod.number().int().min(importContactsResponseQuotaUsedMin),
-  "limit": zod.number().int().min(importContactsResponseQuotaLimitMin),
-  "remaining": zod.number().int().min(importContactsResponseQuotaRemainingMin),
+  "used": zod.number().int().min(importContactsResponseOneQuotaUsedMin),
+  "limit": zod.number().int().min(importContactsResponseOneQuotaLimitMin),
+  "remaining": zod.number().int().min(importContactsResponseOneQuotaRemainingMin),
   "canAdd": zod.boolean(),
   "requiresSubscription": zod.boolean()
 })
+}),zod.object({
+  "imported": zod.number().int().min(importContactsResponseTwoImportedMin),
+  "rejected": zod.array(zod.object({
+  "rowNumber": zod.number().int().min(importContactsResponseTwoRejectedItemRowNumberMin),
+  "email": zod.string().nullable(),
+  "reason": zod.string()
+})),
+  "quota": zod.object({
+  "used": zod.number().int().min(importContactsResponseTwoQuotaUsedMin),
+  "limit": zod.number().int().min(importContactsResponseTwoQuotaLimitMin),
+  "remaining": zod.number().int().min(importContactsResponseTwoQuotaRemainingMin),
+  "canAdd": zod.boolean(),
+  "requiresSubscription": zod.boolean()
 })
+})])
 
 
 /**

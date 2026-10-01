@@ -355,20 +355,25 @@ paths:
       operationId: importContacts
       tags: [sending]
       summary: Import contacts for the authenticated tenant
-      description: Imports valid rows, skips duplicates, and reports invalid rows or rows blocked by quota.
+      description: Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/ContactImportInput"
+          text/csv:
+            schema:
+              $ref: "#/components/schemas/ContactCsvInput"
       responses:
         "200":
-          description: Import results, including partial successes and the updated contact quota
+          description: Import results for the submitted JSON batch or CSV file
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ContactImportResult"
+                oneOf:
+                  - $ref: "#/components/schemas/ContactImportResult"
+                  - $ref: "#/components/schemas/ContactImportResponse"
         "400":
           description: Malformed import request
           content:
@@ -383,6 +388,18 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "403":
           description: An active subscription is required to add contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: The CSV exceeds the configured upload size limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "415":
+          description: CSV import is disabled or the uploaded media type is unsupported
           content:
             application/json:
               schema:
@@ -1255,6 +1272,25 @@ components:
           items: { $ref: "#/components/schemas/ContactImportIssue" }
         quota: { $ref: "#/components/schemas/ContactQuota" }
       required: [imported, duplicate, invalid, limitReached, issues, quota]
+    ContactCsvInput:
+      type: string
+      description: UTF-8 CSV. Include email and either name or first_name/last_name columns.
+    ContactImportRejection:
+      type: object
+      properties:
+        rowNumber: { type: integer, minimum: 2 }
+        email: { type: ["string", "null"] }
+        reason: { type: string }
+      required: [rowNumber, email, reason]
+    ContactImportResponse:
+      type: object
+      properties:
+        imported: { type: integer, minimum: 0 }
+        rejected:
+          type: array
+          items: { $ref: "#/components/schemas/ContactImportRejection" }
+        quota: { $ref: "#/components/schemas/ContactQuota" }
+      required: [imported, rejected, quota]
     ContactList:
       type: object
       properties:
@@ -1554,7 +1590,14 @@ components:
           type: array
           items: { $ref: "#/components/schemas/Contact" }
         quota: { $ref: "#/components/schemas/ContactQuota" }
-      required: [contacts, quota]
+        uploadSettings: { $ref: "#/components/schemas/ContactUploadSettings" }
+      required: [contacts, quota, uploadSettings]
+    ContactUploadSettings:
+      type: object
+      properties:
+        maxFileSizeMb: { type: integer, minimum: 1 }
+        allowedFileTypes: { type: array, items: { type: string } }
+      required: [maxFileSizeMb, allowedFileTypes]
     CreateSubscriptionOrderInput:
       type: object
       properties:
