@@ -135,8 +135,8 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
     { label: 'Contacts', value: data.contacts, sub: 'In this workspace', icon: Users },
     { label: 'Active lists', value: data.activeLists, sub: 'Ready for campaign audiences', icon: Activity },
     { label: 'Emails sent', value: data.emailsSent, sub: 'Persisted recipient outcomes', icon: Send },
-    { label: 'Delivered', value: data.delivered, sub: 'Accepted by the SMTP provider', icon: ArrowUpRight },
-    { label: 'Bounced', value: data.bounced, sub: 'Could not be delivered', icon: ArrowDownLeft, accent: 'orange' as const },
+    { label: 'SMTP accepted', value: data.delivered, sub: 'Inbox delivery is not confirmed', icon: ArrowUpRight },
+    { label: 'Rejected / failed', value: data.bounced, sub: 'SMTP rejection or terminal send failure', icon: ArrowDownLeft, accent: 'orange' as const },
     { label: 'Remaining this hour', value: data.remainingThisHour, sub: 'Workspace send limit', icon: Clock3 },
   ];
   return <><PageHeading eyebrow="ACCOUNT OVERVIEW" title="Workspace" detail="A live view of your tenant's audience, campaigns, and delivery outcomes."/>
