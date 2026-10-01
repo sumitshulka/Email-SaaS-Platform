@@ -363,13 +363,116 @@ function AdminSettingsPage() {
   );
 }
 function ProfilePage({ user }: { user: AuthUser }) {
-  const qc = useQueryClient(); const update = useUpdateProfile(); const change = useChangePassword(); const [rotate, setRotate] = useState(new URLSearchParams(window.location.search).get('rotate') === '1' || user.mustChangeCredentials);
+  const qc = useQueryClient();
+  const update = useUpdateProfile();
+  const change = useChangePassword();
+  const [rotate, setRotate] = useState(new URLSearchParams(window.location.search).get('rotate') === '1' || user.mustChangeCredentials);
   const [, setLocation] = useLocation();
   const [profile, setProfile] = useState({ username: user.username, firstName: user.firstName, lastName: user.lastName, email: user.email, timezone: user.timezone });
   const [password, setPassword] = useState({ currentPassword: '', newPassword: '' });
-  const saveProfile = (e: FormEvent) => { e.preventDefault(); update.mutate({ data: profile }, { onSuccess: data => { qc.setQueryData(getGetCurrentUserQueryKey(), data); qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() }); if (user.emailVerified && !data.emailVerified) { sessionStorage.setItem('mailflow-verification-email', data.email); setLocation('/verify-email'); } } }); };
-  const savePassword = (e: FormEvent) => { e.preventDefault(); change.mutate({ data: password }, { onSuccess: () => { setPassword({ currentPassword: '', newPassword: '' }); qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() }); if (rotate) { setRotate(false); setLocation(user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'); } } }); };
-  return <AppShell user={user} admin={user.role === 'SUPERADMIN'}><><PageHeading eyebrow="ACCOUNT" title={rotate ? 'Secure your account' : 'Profile & security'} detail={rotate ? 'Your account must have new credentials before you can continue.' : 'Manage the identity and sign-in details attached to your account.'}/>{rotate && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#f0d4b9] bg-[#fff8f1] p-4"><KeyRound className="mt-0.5 h-4 w-4 text-[#b76325]"/><div><div className="text-[13px] font-semibold text-[#75431e]">Credential rotation required</div><div className="mt-1 text-[12px] leading-5 text-[#8a6445]">Set a new password to unlock the rest of the application.</div></div></div>}<div className="grid gap-5 xl:grid-cols-[1fr_.82fr]"><Panel className="p-5 md:p-6"><div className="mb-5"><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">PERSONAL DETAILS</div><h2 className="display mt-2 text-[18px] font-bold">Account profile</h2></div><form onSubmit={saveProfile} className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><Field label="First name" value={profile.firstName} onChange={v => setProfile(p => ({ ...p, firstName: v }))} testId="input-profile-first-name" required/><Field label="Last name" value={profile.lastName} onChange={v => setProfile(p => ({ ...p, lastName: v }))} testId="input-profile-last-name" required/></div><Field label="Username" value={profile.username} onChange={v => setProfile(p => ({ ...p, username: v }))} testId="input-profile-username" required hint="3–50 characters."/><Field label="Email address" value={profile.email} onChange={v => setProfile(p => ({ ...p, email: v }))} testId="input-profile-email" type="email" required/><Field label="Timezone" value={profile.timezone} onChange={v => setProfile(p => ({ ...p, timezone: v }))} testId="input-profile-timezone" required/><FormError message={update.isError ? getError(update.error) : undefined}/>{update.isSuccess && <div data-testid="status-profile-saved" className="text-[11px] text-[#245b9b]">Profile updated.</div>}<div className="flex justify-end pt-1"><Button type="submit" testId="button-save-profile" disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save profile'}<Check className="h-4 w-4"/></Button></div></form></Panel><Panel className="p-5 md:p-6"><div className="mb-5"><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">SIGN-IN SECURITY</div><h2 className="display mt-2 text-[18px] font-bold">Change password</h2></div><form onSubmit={savePassword} className="space-y-4"><Field label="Current password" value={password.currentPassword} onChange={v => setPassword(p => ({ ...p, currentPassword: v }))} testId="input-current-password" type="password" required autoComplete="current-password"/><Field label="New password" value={password.newPassword} onChange={v => setPassword(p => ({ ...p, newPassword: v }))} testId="input-change-new-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password"/><FormError message={change.isError ? getError(change.error) : undefined}/>{change.isSuccess && <div data-testid="status-password-changed" className="text-[11px] text-[#245b9b]">Password updated.</div>}<div className="flex justify-end pt-1"><Button type="submit" testId="button-change-password" disabled={change.isPending}>{change.isPending ? 'Updating…' : rotate ? 'Set new credentials' : 'Update password'}<LockKeyhole className="h-4 w-4"/></Button></div></form><div className="mt-7 border-t border-[#e9edf0] pt-5"><div className="flex items-start gap-3"><ShieldCheck className="h-4 w-4 text-[#245b9b]"/><div><div className="text-[12px] font-semibold">Account verification</div><div className="mt-1 text-[11px] text-[#7b8693]">{user.emailVerified ? 'Email address verified' : 'Email address not verified'}</div></div><StatusPill tone={user.emailVerified ? 'blue' : 'orange'}>{user.emailVerified ? 'Verified' : 'Pending'}</StatusPill></div></div></Panel></div></></AppShell>;
+  const saveProfile = (e: FormEvent) => {
+    e.preventDefault();
+    update.mutate(
+      { data: profile },
+      {
+        onSuccess: data => {
+          qc.setQueryData(getGetCurrentUserQueryKey(), data);
+          qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+          if (user.emailVerified && !data.emailVerified) {
+            sessionStorage.setItem('mailflow-verification-email', data.email);
+            setLocation('/verify-email');
+          }
+        },
+      },
+    );
+  };
+  const savePassword = (e: FormEvent) => {
+    e.preventDefault();
+    change.mutate(
+      { data: password },
+      {
+        onSuccess: () => {
+          setPassword({ currentPassword: '', newPassword: '' });
+          qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+          if (rotate) {
+            setRotate(false);
+            setLocation(user.role === 'SUPERADMIN' ? '/admin' : '/dashboard');
+          }
+        },
+      },
+    );
+  };
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="ACCOUNT"
+        title={rotate ? 'Secure your account' : 'Profile & security'}
+        detail={rotate ? 'Your account must have new credentials before you can continue.' : 'Manage the identity and sign-in details attached to your account.'}
+      />
+      {rotate && (
+        <div className="mb-5 flex items-start gap-3 rounded-md border border-[#f0d4b9] bg-[#fff8f1] p-4">
+          <KeyRound className="mt-0.5 h-4 w-4 text-[#b76325]"/>
+          <div>
+            <div className="text-[13px] font-semibold text-[#75431e]">Credential rotation required</div>
+            <div className="mt-1 text-[12px] leading-5 text-[#8a6445]">Set a new password to unlock the rest of the application.</div>
+          </div>
+        </div>
+      )}
+      <div className="grid gap-5 xl:grid-cols-[1fr_.82fr]">
+        <Panel className="p-5 md:p-6">
+          <div className="mb-5">
+            <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">PERSONAL DETAILS</div>
+            <h2 className="display mt-2 text-[18px] font-bold">Account profile</h2>
+          </div>
+          <form onSubmit={saveProfile} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="First name" value={profile.firstName} onChange={value => setProfile(current => ({ ...current, firstName: value }))} testId="input-profile-first-name" required/>
+              <Field label="Last name" value={profile.lastName} onChange={value => setProfile(current => ({ ...current, lastName: value }))} testId="input-profile-last-name" required/>
+            </div>
+            <Field label="Username" value={profile.username} onChange={value => setProfile(current => ({ ...current, username: value }))} testId="input-profile-username" required hint="3–50 characters."/>
+            <Field label="Email address" value={profile.email} onChange={value => setProfile(current => ({ ...current, email: value }))} testId="input-profile-email" type="email" required/>
+            <Field label="Timezone" value={profile.timezone} onChange={value => setProfile(current => ({ ...current, timezone: value }))} testId="input-profile-timezone" required/>
+            <FormError message={update.isError ? getError(update.error) : undefined}/>
+            {update.isSuccess && <div data-testid="status-profile-saved" className="text-[11px] text-[#245b9b]">Profile updated.</div>}
+            <div className="flex justify-end pt-1">
+              <Button type="submit" testId="button-save-profile" disabled={update.isPending}>
+                {update.isPending ? 'Saving…' : 'Save profile'}<Check className="h-4 w-4"/>
+              </Button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel className="p-5 md:p-6">
+          <div className="mb-5">
+            <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">SIGN-IN SECURITY</div>
+            <h2 className="display mt-2 text-[18px] font-bold">Change password</h2>
+          </div>
+          <form onSubmit={savePassword} className="space-y-4">
+            <Field label="Current password" value={password.currentPassword} onChange={value => setPassword(current => ({ ...current, currentPassword: value }))} testId="input-current-password" type="password" required autoComplete="current-password"/>
+            <Field label="New password" value={password.newPassword} onChange={value => setPassword(current => ({ ...current, newPassword: value }))} testId="input-change-new-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password"/>
+            <FormError message={change.isError ? getError(change.error) : undefined}/>
+            {change.isSuccess && <div data-testid="status-password-changed" className="text-[11px] text-[#245b9b]">Password updated.</div>}
+            <div className="flex justify-end pt-1">
+              <Button type="submit" testId="button-change-password" disabled={change.isPending}>
+                {change.isPending ? 'Updating…' : rotate ? 'Set new credentials' : 'Update password'}<LockKeyhole className="h-4 w-4"/>
+              </Button>
+            </div>
+          </form>
+          <div className="mt-7 border-t border-[#e9edf0] pt-5">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-4 w-4 text-[#245b9b]"/>
+              <div>
+                <div className="text-[12px] font-semibold">Account verification</div>
+                <div className="mt-1 text-[11px] text-[#7b8693]">{user.emailVerified ? 'Email address verified' : 'Email address not verified'}</div>
+              </div>
+              <StatusPill tone={user.emailVerified ? 'blue' : 'orange'}>{user.emailVerified ? 'Verified' : 'Pending'}</StatusPill>
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </>
+  );
 }
 function RouteGate({ admin, children }: { admin?: boolean; children: (u: AuthUser) => ReactNode }) { return <Gate admin={admin}>{children}</Gate>; }
 function RoutedErrorBoundary({ children }: { children: ReactNode }) { const [location] = useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
