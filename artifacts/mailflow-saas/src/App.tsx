@@ -45,11 +45,11 @@ function Button({ children, onClick, type = 'button', variant = 'primary', disab
   }[variant];
   return <button data-testid={testId} type={type} onClick={onClick} disabled={disabled} className={cn('inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55', style, className)}>{children}</button>;
 }
-function Field({ label, value, onChange, type = 'text', placeholder, testId, required = false, hint, autoComplete }: { label: string; value: string | number; onChange: (v: string) => void; type?: string; placeholder?: string; testId: string; required?: boolean; hint?: string; autoComplete?: string }) {
-  return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><input data-testid={testId} required={required} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"/>{hint && <span className="block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
+function Field({ label, value, onChange, type = 'text', placeholder, testId, required = false, hint, autoComplete, disabled = false }: { label: string; value: string | number; onChange: (v: string) => void; type?: string; placeholder?: string; testId: string; required?: boolean; hint?: string; autoComplete?: string; disabled?: boolean }) {
+  return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><input data-testid={testId} required={required} disabled={disabled} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3] disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#697584]"/>{hint && <span className="block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
 }
-function SelectField({ label, value, onChange, options, testId, required = false }: { label: string; value: string; onChange: (v: string) => void; options: string[]; testId: string; required?: boolean }) {
-  return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><select required={required} data-testid={testId} value={value} onChange={e => onChange(e.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]">{options.map(o => <option key={o} value={o}>{o || 'Select encryption'}</option>)}</select></label>;
+function SelectField({ label, value, onChange, options, testId, required = false, disabled = false }: { label: string; value: string; onChange: (v: string) => void; options: Array<string | { value: string; label: string }>; testId: string; required?: boolean; disabled?: boolean }) {
+  return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><select required={required} disabled={disabled} data-testid={testId} value={value} onChange={e => onChange(e.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#697584]">{options.map(option => { const optionValue = typeof option === 'string' ? option : option.value; const optionLabel = typeof option === 'string' ? (option || 'Select encryption') : option.label; return <option key={optionValue} value={optionValue}>{optionLabel}</option>; })}</select></label>;
 }
 function Panel({ children, className = '' }: { children: ReactNode; className?: string }) { return <section className={cn('rounded-lg border border-[#e0e4e9] bg-white', className)}>{children}</section>; }
 function PageHeading({ eyebrow, title, detail, trailing }: { eyebrow?: string; title: string; detail?: string; trailing?: ReactNode }) {
@@ -149,18 +149,218 @@ const settingGroups: Array<{ title: string; fields: Array<[keyof PlatformSetting
 function SettingsGroup({ title, fields, values, setValues }: { title: string; fields: Array<[keyof PlatformSettingsInput, string, 'text'|'number'|'boolean'|'list'|'select', string[]?]>; values: Fields; setValues: (v: Fields) => void }) {
   return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2></div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
 }
+type SmtpProvider = 'google_workspace' | 'gmail' | 'microsoft_365' | 'other';
+const SMTP_PROVIDER_OPTIONS = [
+  { value: 'google_workspace', label: 'Google Workspace' },
+  { value: 'gmail', label: 'Gmail' },
+  { value: 'microsoft_365', label: 'Microsoft 365' },
+  { value: 'other', label: 'Other SMTP provider' },
+];
+const SMTP_PROVIDER_PRESETS: Partial<Record<SmtpProvider, { host: string; port: string; encryption: 'tls' }>> = {
+  google_workspace: { host: 'smtp.gmail.com', port: '587', encryption: 'tls' },
+  gmail: { host: 'smtp.gmail.com', port: '587', encryption: 'tls' },
+  microsoft_365: { host: 'smtp.office365.com', port: '587', encryption: 'tls' },
+};
+
 function AdminSettingsPage() {
-  const q = useGetAdminSettings(); const emailQ = useGetApplicationEmailSettings(); const qc = useQueryClient();
-  const save = useUpdateAdminSettings(); const saveEmail = useUpdateApplicationEmailSettings(); const testSend = useSendApplicationEmailTest();
-  const [settings, setSettings] = useState<Fields | null>(null); const [smtp, setSmtp] = useState<Record<string,string>>({});
-  useEffect(() => { if (q.data) { const { updatedAt: _updatedAt, ...rest } = q.data; setSettings(rest as unknown as Fields); } }, [q.data]);
-  useEffect(() => { if (emailQ.data) setSmtp({ host: emailQ.data.host || '', port: emailQ.data.port == null ? '' : String(emailQ.data.port), encryption: emailQ.data.encryption || '', username: emailQ.data.username || '', fromName: emailQ.data.fromName || '', fromEmail: emailQ.data.fromEmail || '', replyTo: emailQ.data.replyTo || '', password: '' }); }, [emailQ.data]);
-  const savePlatform = (e: FormEvent) => { e.preventDefault(); if (!settings) return; save.mutate({ data: settings as unknown as PlatformSettingsInput }, { onSuccess: () => qc.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }) }); };
-  const saveSmtp = (e: FormEvent) => { e.preventDefault(); const body: ApplicationEmailSettingsInput = { host: smtp.host, port: Number(smtp.port), encryption: smtp.encryption as 'none'|'ssl'|'tls', username: smtp.username, fromName: smtp.fromName, fromEmail: smtp.fromEmail, ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}), ...(smtp.password ? { password: smtp.password } : {}) }; saveEmail.mutate({ data: body }, { onSuccess: () => { setSmtp(v => ({ ...v, password: '' })); qc.invalidateQueries({ queryKey: getGetApplicationEmailSettingsQueryKey() }); } }); };
-  const sendTest = (e: FormEvent) => { e.preventDefault(); const toEmail = (e.currentTarget as HTMLFormElement).elements.namedItem('toEmail') as HTMLInputElement; testSend.mutate({ data: { toEmail: toEmail.value } }); };
-  if (q.isLoading || emailQ.isLoading || !settings) return <LoadingPanel label="Loading platform settings"/>;
-  if (q.isError || emailQ.isError) return <QueryProblem retry={() => { q.refetch(); emailQ.refetch(); }}/>;
-  return <><PageHeading eyebrow="PLATFORM CONFIGURATION" title="Settings" detail="Operational controls are platform-wide. SMTP credentials are write-only and never returned by the API."/><form onSubmit={savePlatform} className="space-y-4">{settingGroups.map(g => <SettingsGroup key={g.title} {...g} values={settings} setValues={setSettings}/>)}<div className="flex justify-end"><Button type="submit" testId="button-save-platform-settings" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save platform settings'}<Check className="h-4 w-4"/></Button></div><FormError message={save.isError ? getError(save.error) : undefined}/>{save.isSuccess && <div data-testid="status-platform-settings-saved" className="text-right text-[11px] text-[#245b9b]">Platform settings saved.</div>}</form><Panel className="mt-8 p-5 md:p-6"><div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">APPLICATION DELIVERY</div><h2 className="display mt-2 text-[20px] font-bold">SMTP configuration</h2><p className="mt-1 text-[12px] text-[#778291]">Application-level mail for account verification and platform notices.</p></div><StatusPill tone={emailQ.data?.passwordConfigured ? 'blue' : 'orange'}>{emailQ.data?.passwordConfigured ? 'Password configured' : 'Password not configured'}</StatusPill></div><form onSubmit={saveSmtp} className="grid gap-4 sm:grid-cols-2"><Field label="SMTP host" value={smtp.host || ''} onChange={v => setSmtp(s => ({ ...s, host: v }))} testId="input-smtp-host" required/><Field label="Port" value={smtp.port || ''} onChange={v => setSmtp(s => ({ ...s, port: v }))} testId="input-smtp-port" type="number" required/><SelectField label="Encryption" value={smtp.encryption || ''} onChange={v => setSmtp(s => ({ ...s, encryption: v }))} options={['','none','ssl','tls']} testId="select-smtp-encryption" required/><Field label="SMTP username" value={smtp.username || ''} onChange={v => setSmtp(s => ({ ...s, username: v }))} testId="input-smtp-username"/><Field label="SMTP password" value={smtp.password || ''} onChange={v => setSmtp(s => ({ ...s, password: v }))} testId="input-smtp-password" type="password" hint="Write-only. Leave blank to retain the configured password." autoComplete="new-password"/><Field label="From name" value={smtp.fromName || ''} onChange={v => setSmtp(s => ({ ...s, fromName: v }))} testId="input-smtp-from-name" required/><Field label="From email" value={smtp.fromEmail || ''} onChange={v => setSmtp(s => ({ ...s, fromEmail: v }))} testId="input-smtp-from-email" type="email" required/><Field label="Reply-to address" value={smtp.replyTo || ''} onChange={v => setSmtp(s => ({ ...s, replyTo: v }))} testId="input-smtp-reply-to" type="email"/><div className="sm:col-span-2"><FormError message={saveEmail.isError ? getError(saveEmail.error) : undefined}/><div className="mt-3 flex justify-end"><Button type="submit" testId="button-save-smtp-settings" disabled={saveEmail.isPending}>{saveEmail.isPending ? 'Saving…' : 'Save SMTP settings'}<Check className="h-4 w-4"/></Button></div></div></form><form onSubmit={sendTest} className="mt-6 flex flex-col gap-3 border-t border-[#e9edf0] pt-5 sm:flex-row sm:items-end"><div className="flex-1"><Field label="Test-send recipient" value={smtp.testTo || ''} onChange={v => setSmtp(s => ({ ...s, testTo: v }))} testId="input-test-recipient" type="email" placeholder="operator@example.com" required/></div><Button type="submit" variant="outline" testId="button-send-test-email" disabled={testSend.isPending || !emailQ.data?.passwordConfigured}>{testSend.isPending ? 'Sending…' : 'Send test email'}<Send className="h-4 w-4"/></Button></form>{testSend.isError && <div className="mt-3"><FormError message={getError(testSend.error)}/></div>}{testSend.isSuccess && <div data-testid="status-test-email-sent" className="mt-3 text-[11px] text-[#245b9b]">Test email request completed.</div>}</Panel></>;
+  const q = useGetAdminSettings();
+  const emailQ = useGetApplicationEmailSettings();
+  const qc = useQueryClient();
+  const save = useUpdateAdminSettings();
+  const saveEmail = useUpdateApplicationEmailSettings();
+  const testSend = useSendApplicationEmailTest();
+  const [settings, setSettings] = useState<Fields | null>(null);
+  const [smtp, setSmtp] = useState<Record<string, string>>({ provider: 'other' });
+
+  useEffect(() => {
+    if (q.data) {
+      const { updatedAt: _updatedAt, ...rest } = q.data;
+      setSettings(rest as unknown as Fields);
+    }
+  }, [q.data]);
+
+  useEffect(() => {
+    if (emailQ.data) {
+      setSmtp((previous) => ({
+        ...previous,
+        provider: emailQ.data.provider,
+        host: emailQ.data.host || '',
+        port: emailQ.data.port == null ? '' : String(emailQ.data.port),
+        encryption: emailQ.data.encryption || '',
+        username: emailQ.data.username || '',
+        fromName: emailQ.data.fromName || '',
+        fromEmail: emailQ.data.fromEmail || '',
+        replyTo: emailQ.data.replyTo || '',
+        password: '',
+      }));
+    }
+  }, [emailQ.data]);
+
+  const savePlatform = (e: FormEvent) => {
+    e.preventDefault();
+    if (!settings) return;
+    save.mutate(
+      { data: settings as unknown as PlatformSettingsInput },
+      { onSuccess: () => qc.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }) },
+    );
+  };
+
+  const setSmtpProvider = (provider: SmtpProvider) => {
+    const preset = SMTP_PROVIDER_PRESETS[provider];
+    setSmtp((current) => ({
+      ...current,
+      provider,
+      host: preset?.host ?? '',
+      port: preset?.port ?? '',
+      encryption: preset?.encryption ?? '',
+    }));
+  };
+
+  const saveSmtp = (e: FormEvent) => {
+    e.preventDefault();
+    const body: ApplicationEmailSettingsInput = {
+      provider: smtp.provider as SmtpProvider,
+      host: smtp.host,
+      port: Number(smtp.port),
+      encryption: smtp.encryption as 'none' | 'ssl' | 'tls',
+      username: smtp.username,
+      fromName: smtp.fromName,
+      fromEmail: smtp.fromEmail,
+      ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
+      ...(smtp.password ? { password: smtp.password } : {}),
+    };
+    saveEmail.mutate(
+      { data: body },
+      {
+        onSuccess: () => {
+          setSmtp((current) => ({ ...current, password: '' }));
+          qc.invalidateQueries({ queryKey: getGetApplicationEmailSettingsQueryKey() });
+        },
+      },
+    );
+  };
+
+  const sendTest = (e: FormEvent) => {
+    e.preventDefault();
+    if (smtp.testTo) testSend.mutate({ data: { toEmail: smtp.testTo } });
+  };
+
+  if (q.isLoading || emailQ.isLoading || !settings) {
+    return <LoadingPanel label="Loading platform settings"/>;
+  }
+  if (q.isError || emailQ.isError || !emailQ.data) {
+    return <QueryProblem retry={() => { q.refetch(); emailQ.refetch(); }}/>;
+  }
+
+  const selectedProvider = smtp.provider as SmtpProvider;
+  const presetActive = selectedProvider !== 'other';
+  const providerNote = selectedProvider === 'google_workspace'
+    ? 'Uses smtp.gmail.com on port 587 with STARTTLS. Enter the full mailbox address and a Google app password. Workspace administrators may restrict app passwords; Workspace SMTP relay has tenant-specific settings.'
+    : selectedProvider === 'gmail'
+      ? 'Uses smtp.gmail.com on port 587 with STARTTLS. Enter the full Gmail address and a Google app password; Google requires 2-Step Verification for app passwords.'
+      : selectedProvider === 'microsoft_365'
+        ? 'Uses smtp.office365.com on port 587 with STARTTLS. SMTP AUTH must be enabled for the mailbox. This password-based form does not support Microsoft OAuth-only tenants.'
+        : 'Enter the server, port, encryption, and SMTP credentials provided by your email service.';
+
+  return (
+    <>
+      <PageHeading
+        eyebrow="PLATFORM CONFIGURATION"
+        title="Settings"
+        detail="Operational controls are platform-wide. SMTP credentials are write-only and never returned by the API."
+      />
+      <form onSubmit={savePlatform} className="space-y-4">
+        {settingGroups.map(group => (
+          <SettingsGroup key={group.title} {...group} values={settings} setValues={setSettings}/>
+        ))}
+        <div className="flex justify-end">
+          <Button type="submit" testId="button-save-platform-settings" disabled={save.isPending}>
+            {save.isPending ? 'Saving…' : 'Save platform settings'}<Check className="h-4 w-4"/>
+          </Button>
+        </div>
+        <FormError message={save.isError ? getError(save.error) : undefined}/>
+        {save.isSuccess && <div data-testid="status-platform-settings-saved" className="text-right text-[11px] text-[#245b9b]">Platform settings saved.</div>}
+      </form>
+
+      <Panel className="mt-8 p-5 md:p-6">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">APPLICATION DELIVERY</div>
+            <h2 className="display mt-2 text-[20px] font-bold">SMTP configuration</h2>
+            <p className="mt-1 text-[12px] text-[#778291]">Choose a provider to prefill its connection settings for account verification and platform notices.</p>
+          </div>
+          <StatusPill tone={emailQ.data.passwordConfigured ? 'blue' : 'orange'}>
+            {emailQ.data.passwordConfigured ? 'Password configured' : 'Password not configured'}
+          </StatusPill>
+        </div>
+
+        <form onSubmit={saveSmtp} className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <SelectField
+              label="Email provider"
+              value={selectedProvider}
+              onChange={value => setSmtpProvider(value as SmtpProvider)}
+              options={SMTP_PROVIDER_OPTIONS}
+              testId="select-smtp-provider"
+              required
+            />
+            <p className="mt-2 text-[11px] leading-5 text-[#778291]">{providerNote}</p>
+          </div>
+          <Field label="SMTP host" value={smtp.host || ''} onChange={value => setSmtp(state => ({ ...state, host: value }))} testId="input-smtp-host" required disabled={presetActive}/>
+          <Field label="Port" value={smtp.port || ''} onChange={value => setSmtp(state => ({ ...state, port: value }))} testId="input-smtp-port" type="number" required disabled={presetActive}/>
+          <SelectField label="Encryption" value={smtp.encryption || ''} onChange={value => setSmtp(state => ({ ...state, encryption: value }))} options={[{ value: '', label: 'Select encryption' }, { value: 'none', label: 'None' }, { value: 'ssl', label: 'SSL/TLS (implicit)' }, { value: 'tls', label: 'STARTTLS' }]} testId="select-smtp-encryption" required disabled={presetActive}/>
+          <Field
+            label="SMTP username"
+            value={smtp.username || ''}
+            onChange={value => setSmtp(state => ({ ...state, username: value }))}
+            testId="input-smtp-username"
+            required={!emailQ.data.passwordConfigured}
+            hint="Stored encrypted and returned only as a mask."
+          />
+          <Field
+            label="SMTP password or app password"
+            value={smtp.password || ''}
+            onChange={value => setSmtp(state => ({ ...state, password: value }))}
+            testId="input-smtp-password"
+            type="password"
+            required={!emailQ.data.passwordConfigured}
+            hint="Write-only. Leave blank to retain the configured credential. The app cannot know or prefill your mailbox password."
+            autoComplete="new-password"
+          />
+          <Field label="From name" value={smtp.fromName || ''} onChange={value => setSmtp(state => ({ ...state, fromName: value }))} testId="input-smtp-from-name" required/>
+          <Field label="From email" value={smtp.fromEmail || ''} onChange={value => setSmtp(state => ({ ...state, fromEmail: value }))} testId="input-smtp-from-email" type="email" required/>
+          <Field label="Reply-to address" value={smtp.replyTo || ''} onChange={value => setSmtp(state => ({ ...state, replyTo: value }))} testId="input-smtp-reply-to" type="email"/>
+          <div className="sm:col-span-2">
+            <FormError message={saveEmail.isError ? getError(saveEmail.error) : undefined}/>
+            <div className="mt-3 flex justify-end">
+              <Button type="submit" testId="button-save-smtp-settings" disabled={saveEmail.isPending}>
+                {saveEmail.isPending ? 'Saving…' : 'Save SMTP settings'}<Check className="h-4 w-4"/>
+              </Button>
+            </div>
+          </div>
+        </form>
+
+        <form onSubmit={sendTest} className="mt-6 flex flex-col gap-3 border-t border-[#e9edf0] pt-5 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <Field
+              label="Test-send recipient"
+              value={smtp.testTo || ''}
+              onChange={value => setSmtp(state => ({ ...state, testTo: value }))}
+              testId="input-test-recipient"
+              type="email"
+              placeholder="operator@example.com"
+              required
+            />
+          </div>
+          <Button type="submit" variant="outline" testId="button-send-test-email" disabled={testSend.isPending || !emailQ.data.passwordConfigured}>
+            {testSend.isPending ? 'Sending…' : 'Send test email'}<Send className="h-4 w-4"/>
+          </Button>
+        </form>
+        {testSend.isError && <div className="mt-3"><FormError message={getError(testSend.error)}/></div>}
+        {testSend.isSuccess && <div data-testid="status-test-email-sent" className="mt-3 text-[11px] text-[#245b9b]">Test email request completed.</div>}
+      </Panel>
+    </>
+  );
 }
 function ProfilePage({ user }: { user: AuthUser }) {
   const qc = useQueryClient(); const update = useUpdateProfile(); const change = useChangePassword(); const [rotate, setRotate] = useState(new URLSearchParams(window.location.search).get('rotate') === '1' || user.mustChangeCredentials);

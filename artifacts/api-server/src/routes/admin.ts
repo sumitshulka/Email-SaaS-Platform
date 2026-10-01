@@ -46,6 +46,12 @@ import { requireSuperadmin } from "../lib/session";
 
 const router: IRouter = Router();
 
+const SMTP_PROVIDER_PRESETS = {
+  google_workspace: { host: "smtp.gmail.com", port: 587, encryption: "tls" },
+  gmail: { host: "smtp.gmail.com", port: 587, encryption: "tls" },
+  microsoft_365: { host: "smtp.office365.com", port: 587, encryption: "tls" },
+} as const;
+
 function toAdminUser(user: typeof usersTable.$inferSelect) {
   return {
     id: user.id,
@@ -310,6 +316,7 @@ router.get("/admin/settings/email", requireSuperadmin, async (_req, res): Promis
     .where(eq(applicationEmailConfigurationTable.id, "platform"));
   res.json(
     GetApplicationEmailSettingsResponse.parse({
+      provider: config?.provider ?? "other",
       host: config?.host ?? null,
       port: config?.port ?? null,
       encryption: config?.encryption ?? null,
@@ -335,6 +342,13 @@ router.put("/admin/settings/email", requireSuperadmin, async (req, res): Promise
     .where(eq(applicationEmailConfigurationTable.id, "platform"));
   const suppliedUsername = parsed.data.username?.trim();
   const suppliedPassword = parsed.data.password?.trim();
+  const preset =
+    parsed.data.provider === "other"
+      ? null
+      : SMTP_PROVIDER_PRESETS[parsed.data.provider];
+  const host = preset?.host ?? parsed.data.host;
+  const port = preset?.port ?? parsed.data.port;
+  const encryption = preset?.encryption ?? parsed.data.encryption;
   if (!existing && (!suppliedPassword || !suppliedUsername)) {
     res.status(400).json({
       error: "Enter the SMTP username and password to configure application email.",
@@ -357,9 +371,10 @@ router.put("/admin/settings/email", requireSuperadmin, async (req, res): Promise
     .insert(applicationEmailConfigurationTable)
     .values({
       id: "platform",
-      host: parsed.data.host,
-      port: parsed.data.port,
-      encryption: parsed.data.encryption,
+      provider: parsed.data.provider,
+      host,
+      port,
+      encryption,
       username,
       passwordEncrypted,
       fromName: parsed.data.fromName,
@@ -370,9 +385,10 @@ router.put("/admin/settings/email", requireSuperadmin, async (req, res): Promise
     .onConflictDoUpdate({
       target: applicationEmailConfigurationTable.id,
       set: {
-        host: parsed.data.host,
-        port: parsed.data.port,
-        encryption: parsed.data.encryption,
+        provider: parsed.data.provider,
+        host,
+        port,
+        encryption,
         username,
         passwordEncrypted,
         fromName: parsed.data.fromName,
@@ -389,7 +405,8 @@ router.put("/admin/settings/email", requireSuperadmin, async (req, res): Promise
     entityId: "platform",
     ipAddress: req.ip,
     metadata: {
-      host: parsed.data.host,
+      host,
+      provider: parsed.data.provider,
       fromEmail: parsed.data.fromEmail,
       passwordChanged: Boolean(suppliedPassword),
     },
@@ -400,6 +417,7 @@ router.put("/admin/settings/email", requireSuperadmin, async (req, res): Promise
     .where(eq(applicationEmailConfigurationTable.id, "platform"));
   res.json(
     UpdateApplicationEmailSettingsResponse.parse({
+      provider: saved!.provider,
       host: saved!.host,
       port: saved!.port,
       encryption: saved!.encryption,

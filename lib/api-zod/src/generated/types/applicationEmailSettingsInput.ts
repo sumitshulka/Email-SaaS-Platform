@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ApplicationEmailSettingsInputEncryption } from './applicationEmailSettingsInputEncryption';
+import type { ApplicationEmailSettingsInputProvider } from './applicationEmailSettingsInputProvider';
 
 export interface ApplicationEmailSettingsInput {
+  provider: ApplicationEmailSettingsInputProvider;
   /**
      * @minLength 1
      * @maxLength 255

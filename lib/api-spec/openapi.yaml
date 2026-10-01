@@ -610,6 +610,7 @@ components:
     ApplicationEmailSettings:
       type: object
       properties:
+        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
         host: { type: ["string", "null"] }
         port: { type: ["integer", "null"] }
         encryption: { type: ["string", "null"], enum: [none, ssl, tls, null] }
@@ -619,10 +620,11 @@ components:
         fromEmail: { type: ["string", "null"] }
         replyTo: { type: ["string", "null"] }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [host, port, encryption, username, passwordConfigured, fromName, fromEmail, replyTo, updatedAt]
+      required: [provider, host, port, encryption, username, passwordConfigured, fromName, fromEmail, replyTo, updatedAt]
     ApplicationEmailSettingsInput:
       type: object
       properties:
+        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
         host: { type: string, minLength: 1, maxLength: 255 }
         port: { type: integer, minimum: 1, maximum: 65535 }
         encryption: { type: string, enum: [none, ssl, tls] }
@@ -631,7 +633,7 @@ components:
         fromName: { type: string, minLength: 1, maxLength: 120 }
         fromEmail: { type: string, format: email }
         replyTo: { type: string, format: email }
-      required: [host, port, encryption, fromName, fromEmail]
+      required: [provider, host, port, encryption, fromName, fromEmail]
     TestEmailInput:
       type: object
       properties:

@@ -14,6 +14,8 @@ export * from './applicationEmailSettings';
 export * from './applicationEmailSettingsEncryption';
 export * from './applicationEmailSettingsInput';
 export * from './applicationEmailSettingsInputEncryption';
+export * from './applicationEmailSettingsInputProvider';
+export * from './applicationEmailSettingsProvider';
 export * from './authResponse';
 export * from './authUser';
 export * from './authUserRole';

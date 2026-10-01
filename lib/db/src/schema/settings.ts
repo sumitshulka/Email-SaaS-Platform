@@ -26,6 +26,7 @@ export const applicationEmailConfigurationTable = pgTable(
   "application_email_configuration",
   {
     id: varchar("id", { length: 30 }).primaryKey().default("platform"),
+    provider: varchar("provider", { length: 32 }).notNull().default("other"),
     host: varchar("host", { length: 255 }).notNull(),
     port: integer("port").notNull(),
     encryption: varchar("encryption", { length: 10 }).notNull(),

@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ApplicationEmailSettingsEncryption } from './applicationEmailSettingsEncryption';
+import type { ApplicationEmailSettingsProvider } from './applicationEmailSettingsProvider';
 
 export interface ApplicationEmailSettings {
+  provider: ApplicationEmailSettingsProvider;
   /** @nullable */
   host: string | null;
   /** @nullable */

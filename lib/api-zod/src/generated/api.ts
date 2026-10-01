@@ -479,6 +479,7 @@ export const UpdateAdminSettingsResponse = zod.object({
  * @summary Get masked application SMTP configuration
  */
 export const GetApplicationEmailSettingsResponse = zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
   "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
@@ -507,6 +508,7 @@ export const updateApplicationEmailSettingsBodyFromNameMax = 120;
 
 
 export const UpdateApplicationEmailSettingsBody = zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().min(1).max(updateApplicationEmailSettingsBodyHostMax),
   "port": zod.number().int().min(1).max(updateApplicationEmailSettingsBodyPortMax),
   "encryption": zod.enum(['none', 'ssl', 'tls']),
@@ -518,6 +520,7 @@ export const UpdateApplicationEmailSettingsBody = zod.object({
 })
 
 export const UpdateApplicationEmailSettingsResponse = zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
   "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),

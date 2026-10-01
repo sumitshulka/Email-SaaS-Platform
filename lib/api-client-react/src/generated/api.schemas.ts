@@ -332,6 +332,16 @@ export interface PlatformSettingsInput {
   packageVisibility: PlatformSettingsInputPackageVisibility;
 }
 
+export type ApplicationEmailSettingsProvider = typeof ApplicationEmailSettingsProvider[keyof typeof ApplicationEmailSettingsProvider];
+
+
+export const ApplicationEmailSettingsProvider = {
+  google_workspace: 'google_workspace',
+  gmail: 'gmail',
+  microsoft_365: 'microsoft_365',
+  other: 'other',
+} as const;
+
 /**
  * @nullable
  */
@@ -345,6 +355,7 @@ export const ApplicationEmailSettingsEncryption = {
 } as const;
 
 export interface ApplicationEmailSettings {
+  provider: ApplicationEmailSettingsProvider;
   /** @nullable */
   host: string | null;
   /** @nullable */
@@ -364,6 +375,16 @@ export interface ApplicationEmailSettings {
   updatedAt: string | null;
 }
 
+export type ApplicationEmailSettingsInputProvider = typeof ApplicationEmailSettingsInputProvider[keyof typeof ApplicationEmailSettingsInputProvider];
+
+
+export const ApplicationEmailSettingsInputProvider = {
+  google_workspace: 'google_workspace',
+  gmail: 'gmail',
+  microsoft_365: 'microsoft_365',
+  other: 'other',
+} as const;
+
 export type ApplicationEmailSettingsInputEncryption = typeof ApplicationEmailSettingsInputEncryption[keyof typeof ApplicationEmailSettingsInputEncryption];
 
 
@@ -374,6 +395,7 @@ export const ApplicationEmailSettingsInputEncryption = {
 } as const;
 
 export interface ApplicationEmailSettingsInput {
+  provider: ApplicationEmailSettingsInputProvider;
   /**
      * @minLength 1
      * @maxLength 255
