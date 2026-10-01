@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreateSubscriptionOrderBody,
@@ -10,6 +10,9 @@ import {
   ListAdminSubscriptionPackagesResponse,
   ListAvailableSubscriptionPackagesResponse,
   ReceiveRazorpayWebhookResponse,
+  SetActiveRazorpayEnvironmentBody,
+  SetActiveRazorpayEnvironmentResponse,
+  TestRazorpayConnectionBody,
   TestRazorpayConnectionResponse,
   UpdateRazorpaySettingsBody,
   UpdateRazorpaySettingsResponse,
@@ -32,6 +35,8 @@ import { encryptSecret } from "../lib/security";
 import {
   createRazorpayOrder,
   getRazorpayConfiguration,
+  getStoredRazorpayCredentials,
+  inferLegacyRazorpayEnvironment,
   getRazorpayPayment,
   RazorpayApiError,
   testRazorpayConnection,
@@ -66,6 +71,64 @@ function isSupportedCurrency(currency: string): boolean {
   }
 }
 
+function serializeRazorpaySettings(
+  config: typeof razorpayConfigurationTable.$inferSelect | undefined,
+) {
+  const serializeEnvironment = (environment: "sandbox" | "production") => {
+    const stored = config
+      ? getStoredRazorpayCredentials(config, environment)
+      : {
+          keyId: null,
+          keySecretEncrypted: null,
+          webhookSecretEncrypted: null,
+        };
+    const legacyEnvironment = config
+      ? inferLegacyRazorpayEnvironment(config.keyId)
+      : null;
+    const environmentUpdatedAt =
+      environment === "sandbox"
+        ? config?.sandboxUpdatedAt ??
+          (legacyEnvironment === environment ? config?.updatedAt ?? null : null)
+        : config?.productionUpdatedAt ??
+          (legacyEnvironment === environment ? config?.updatedAt ?? null : null);
+    return {
+      keyId: stored.keyId,
+      keySecretConfigured: Boolean(stored.keySecretEncrypted),
+      webhookSecretConfigured: Boolean(stored.webhookSecretEncrypted),
+      configured: Boolean(
+        stored.keyId &&
+          stored.keySecretEncrypted &&
+          stored.webhookSecretEncrypted,
+      ),
+      updatedAt: environmentUpdatedAt?.toISOString() ?? null,
+    };
+  };
+  const activeEnvironment =
+    config?.activeEnvironment ??
+    (config ? inferLegacyRazorpayEnvironment(config.keyId) : null);
+  return {
+    activeEnvironment,
+    sandbox: serializeEnvironment("sandbox"),
+    production: serializeEnvironment("production"),
+    updatedAt: config?.updatedAt.toISOString() ?? null,
+  };
+}
+
+async function backfillUnassignedPaymentEnvironment(
+  environment: "sandbox" | "production" | null,
+): Promise<void> {
+  if (!environment) return;
+  await db
+    .update(paymentsTable)
+    .set({ razorpayEnvironment: environment })
+    .where(
+      and(
+        isNull(paymentsTable.razorpayEnvironment),
+        isNotNull(paymentsTable.razorpayOrderId),
+      ),
+    );
+}
+
 router.get(
   "/admin/billing/razorpay",
   requireSuperadmin,
@@ -75,14 +138,7 @@ router.get(
       .from(razorpayConfigurationTable)
       .where(eq(razorpayConfigurationTable.id, "platform"))
       .limit(1);
-    res.json(
-      GetRazorpaySettingsResponse.parse({
-        keyId: config?.keyId ?? null,
-        keySecretConfigured: Boolean(config?.keySecretEncrypted),
-        webhookSecretConfigured: Boolean(config?.webhookSecretEncrypted),
-        updatedAt: config?.updatedAt.toISOString() ?? null,
-      }),
-    );
+    res.json(GetRazorpaySettingsResponse.parse(serializeRazorpaySettings(config)));
   },
 );
 
@@ -92,7 +148,7 @@ router.put(
   async (req, res): Promise<void> => {
     const parsed = UpdateRazorpaySettingsBody.safeParse(req.body);
     if (!parsed.success) {
-      invalidInput(res, "Enter a valid Razorpay key ID and credentials.");
+      invalidInput(res, "Choose an environment and enter a valid Razorpay key ID and credentials.");
       return;
     }
 
@@ -101,13 +157,27 @@ router.put(
       .from(razorpayConfigurationTable)
       .where(eq(razorpayConfigurationTable.id, "platform"))
       .limit(1);
+    const environment = parsed.data.environment;
+    const savedCredentials = existing
+      ? getStoredRazorpayCredentials(existing, environment)
+      : {
+          keyId: null,
+          keySecretEncrypted: null,
+          webhookSecretEncrypted: null,
+        };
     const keyId = parsed.data.keyId.trim();
     const keySecret = parsed.data.keySecret?.trim();
     const webhookSecret = parsed.data.webhookSecret?.trim();
-    if (!keyId || (!existing && (!keySecret || !webhookSecret))) {
+    const replacingKeyId =
+      Boolean(savedCredentials.keyId) && keyId !== savedCredentials.keyId;
+    if (
+      !keyId ||
+      (!savedCredentials.keySecretEncrypted && !keySecret) ||
+      (!savedCredentials.webhookSecretEncrypted && !webhookSecret) ||
+      (replacingKeyId && (!keySecret || !webhookSecret))
+    ) {
       res.status(400).json({
-        error:
-          "Enter the Razorpay key secret and webhook secret when setting up the gateway for the first time.",
+        error: `Enter the key secret and webhook secret to configure the ${environment} environment.`,
         code: "RAZORPAY_CREDENTIALS_REQUIRED",
       });
       return;
@@ -115,35 +185,120 @@ router.put(
 
     const keySecretEncrypted = keySecret
       ? encryptSecret(keySecret)
-      : existing?.keySecretEncrypted;
+      : savedCredentials.keySecretEncrypted;
     const webhookSecretEncrypted = webhookSecret
       ? encryptSecret(webhookSecret)
-      : existing?.webhookSecretEncrypted;
+      : savedCredentials.webhookSecretEncrypted;
     if (!keySecretEncrypted || !webhookSecretEncrypted) {
       res.status(400).json({
-        error: "Both the Razorpay key secret and webhook secret are required.",
+        error: `Both secrets are required for the ${environment} environment.`,
         code: "RAZORPAY_CREDENTIALS_REQUIRED",
       });
       return;
     }
 
     const now = new Date();
+    const activeEnvironment =
+      existing?.activeEnvironment ??
+      (existing ? inferLegacyRazorpayEnvironment(existing.keyId) : null) ??
+      environment;
+    await backfillUnassignedPaymentEnvironment(
+      existing?.activeEnvironment ??
+        (existing ? inferLegacyRazorpayEnvironment(existing.keyId) : null),
+    );
+    const sandboxCredentials =
+      environment === "sandbox"
+        ? {
+            keyId,
+            keySecretEncrypted,
+            webhookSecretEncrypted,
+          }
+        : existing
+          ? getStoredRazorpayCredentials(existing, "sandbox")
+          : {
+              keyId: null,
+              keySecretEncrypted: null,
+              webhookSecretEncrypted: null,
+            };
+    const productionCredentials =
+      environment === "production"
+        ? {
+            keyId,
+            keySecretEncrypted,
+            webhookSecretEncrypted,
+          }
+        : existing
+          ? getStoredRazorpayCredentials(existing, "production")
+          : {
+              keyId: null,
+              keySecretEncrypted: null,
+              webhookSecretEncrypted: null,
+            };
+    const legacyEnvironment = existing
+      ? inferLegacyRazorpayEnvironment(existing.keyId)
+      : null;
+    const legacyActiveCredentials =
+      activeEnvironment === environment
+        ? { keyId, keySecretEncrypted, webhookSecretEncrypted }
+        : {
+            keyId: existing?.keyId ?? keyId,
+            keySecretEncrypted:
+              existing?.keySecretEncrypted ?? keySecretEncrypted,
+            webhookSecretEncrypted:
+              existing?.webhookSecretEncrypted ?? webhookSecretEncrypted,
+          };
     await db
       .insert(razorpayConfigurationTable)
       .values({
         id: "platform",
-        keyId,
-        keySecretEncrypted,
-        webhookSecretEncrypted,
+        ...legacyActiveCredentials,
+        activeEnvironment,
+        sandboxKeyId: sandboxCredentials.keyId,
+        sandboxKeySecretEncrypted: sandboxCredentials.keySecretEncrypted,
+        sandboxWebhookSecretEncrypted:
+          sandboxCredentials.webhookSecretEncrypted,
+        sandboxUpdatedAt:
+          environment === "sandbox"
+            ? now
+            : existing?.sandboxUpdatedAt ??
+              (legacyEnvironment === "sandbox" ? existing.updatedAt : null),
+        productionKeyId: productionCredentials.keyId,
+        productionKeySecretEncrypted:
+          productionCredentials.keySecretEncrypted,
+        productionWebhookSecretEncrypted:
+          productionCredentials.webhookSecretEncrypted,
+        productionUpdatedAt:
+          environment === "production"
+            ? now
+            : existing?.productionUpdatedAt ??
+              (legacyEnvironment === "production" ? existing.updatedAt : null),
         updatedBy: req.authUser!.id,
         updatedAt: now,
       })
       .onConflictDoUpdate({
         target: razorpayConfigurationTable.id,
         set: {
-          keyId,
-          keySecretEncrypted,
-          webhookSecretEncrypted,
+          ...legacyActiveCredentials,
+          activeEnvironment,
+          sandboxKeyId: sandboxCredentials.keyId,
+          sandboxKeySecretEncrypted: sandboxCredentials.keySecretEncrypted,
+          sandboxWebhookSecretEncrypted:
+            sandboxCredentials.webhookSecretEncrypted,
+          sandboxUpdatedAt:
+            environment === "sandbox"
+              ? now
+              : existing?.sandboxUpdatedAt ??
+                (legacyEnvironment === "sandbox" ? existing.updatedAt : null),
+          productionKeyId: productionCredentials.keyId,
+          productionKeySecretEncrypted:
+            productionCredentials.keySecretEncrypted,
+          productionWebhookSecretEncrypted:
+            productionCredentials.webhookSecretEncrypted,
+          productionUpdatedAt:
+            environment === "production"
+              ? now
+              : existing?.productionUpdatedAt ??
+                (legacyEnvironment === "production" ? existing.updatedAt : null),
           updatedBy: req.authUser!.id,
           updatedAt: now,
         },
@@ -156,6 +311,7 @@ router.put(
       entityId: "platform",
       ipAddress: req.ip,
       metadata: {
+        environment,
         keyId,
         keySecretChanged: Boolean(keySecret),
         webhookSecretChanged: Boolean(webhookSecret),
@@ -168,12 +324,74 @@ router.put(
       .where(eq(razorpayConfigurationTable.id, "platform"))
       .limit(1);
     res.json(
-      UpdateRazorpaySettingsResponse.parse({
-        keyId: saved!.keyId,
-        keySecretConfigured: true,
-        webhookSecretConfigured: true,
-        updatedAt: saved!.updatedAt.toISOString(),
-      }),
+      UpdateRazorpaySettingsResponse.parse(serializeRazorpaySettings(saved)),
+    );
+  },
+);
+
+router.put(
+  "/admin/billing/razorpay/active",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = SetActiveRazorpayEnvironmentBody.safeParse(req.body);
+    if (!parsed.success) {
+      invalidInput(res, "Choose sandbox or production as the active environment.");
+      return;
+    }
+    const environment = parsed.data.environment;
+    const [existing] = await db
+      .select()
+      .from(razorpayConfigurationTable)
+      .where(eq(razorpayConfigurationTable.id, "platform"))
+      .limit(1);
+    const credentials = existing
+      ? getStoredRazorpayCredentials(existing, environment)
+      : null;
+    if (
+      !credentials?.keyId ||
+      !credentials.keySecretEncrypted ||
+      !credentials.webhookSecretEncrypted
+    ) {
+      res.status(400).json({
+        error: `Configure all credentials for ${environment} before activating it.`,
+        code: "RAZORPAY_ENVIRONMENT_NOT_CONFIGURED",
+      });
+      return;
+    }
+
+    await backfillUnassignedPaymentEnvironment(
+      existing.activeEnvironment ??
+        inferLegacyRazorpayEnvironment(existing.keyId),
+    );
+    const now = new Date();
+    await db
+      .update(razorpayConfigurationTable)
+      .set({
+        activeEnvironment: environment,
+        keyId: credentials.keyId,
+        keySecretEncrypted: credentials.keySecretEncrypted,
+        webhookSecretEncrypted: credentials.webhookSecretEncrypted,
+        updatedBy: req.authUser!.id,
+        updatedAt: now,
+      })
+      .where(eq(razorpayConfigurationTable.id, "platform"));
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "razorpay_environment.activated",
+      entity: "razorpay_configuration",
+      entityId: "platform",
+      ipAddress: req.ip,
+      metadata: { environment },
+    });
+    const [saved] = await db
+      .select()
+      .from(razorpayConfigurationTable)
+      .where(eq(razorpayConfigurationTable.id, "platform"))
+      .limit(1);
+    res.json(
+      SetActiveRazorpayEnvironmentResponse.parse(
+        serializeRazorpaySettings(saved),
+      ),
     );
   },
 );
@@ -183,11 +401,16 @@ router.post(
   requireSuperadmin,
   async (req, res): Promise<void> => {
     try {
-      const config = await getRazorpayConfiguration();
+      const parsed = TestRazorpayConnectionBody.safeParse(req.body);
+      if (!parsed.success) {
+        invalidInput(res, "Choose which Razorpay environment to test.");
+        return;
+      }
+      const config = await getRazorpayConfiguration(parsed.data.environment);
       if (!config) {
         res.status(400).json({
-          error: "Save Razorpay credentials before testing the connection.",
-          code: "RAZORPAY_NOT_CONFIGURED",
+          error: `Save complete credentials for ${parsed.data.environment} before testing the connection.`,
+          code: "RAZORPAY_ENVIRONMENT_NOT_CONFIGURED",
         });
         return;
       }
@@ -399,6 +622,7 @@ router.post(
         amountMinor: pkg.amountMinor,
         currency: pkg.currency,
         status: "created",
+        razorpayEnvironment: config.environment,
       })
       .returning();
     try {
@@ -492,7 +716,9 @@ router.post(
       });
       return;
     }
-    const config = await getRazorpayConfiguration();
+    const config = await getRazorpayConfiguration(
+      payment.razorpayEnvironment ?? undefined,
+    );
     if (!config) {
       res.status(503).json({
         error: "Razorpay is not configured. Contact the platform administrator.",
@@ -602,9 +828,28 @@ router.post(
       return;
     }
 
+    const body = webhookEntity(req.body) ?? {};
+    const payload = webhookEntity(body.payload) ?? {};
+    const orderWrapper = webhookEntity(payload.order);
+    const paymentWrapper = webhookEntity(payload.payment);
+    const order = webhookEntity(orderWrapper?.entity);
+    const providerPayment = webhookEntity(paymentWrapper?.entity);
+    const providerOrderId =
+      webhookText(order?.id) ?? webhookText(providerPayment?.order_id);
+    const providerPaymentId = webhookText(providerPayment?.id);
+    const [paymentForWebhook] = providerOrderId
+      ? await db
+          .select()
+          .from(paymentsTable)
+          .where(eq(paymentsTable.razorpayOrderId, providerOrderId))
+          .limit(1)
+      : [];
+
     let config;
     try {
-      config = await getRazorpayConfiguration();
+      config = await getRazorpayConfiguration(
+        paymentForWebhook?.razorpayEnvironment ?? undefined,
+      );
     } catch (error) {
       req.log.error(
         { errorName: error instanceof Error ? error.name : "UnknownError" },
@@ -628,16 +873,7 @@ router.post(
       return;
     }
 
-    const body = webhookEntity(req.body) ?? {};
     const eventType = webhookText(body.event)?.slice(0, 100) ?? "unknown";
-    const payload = webhookEntity(body.payload) ?? {};
-    const orderWrapper = webhookEntity(payload.order);
-    const paymentWrapper = webhookEntity(payload.payment);
-    const order = webhookEntity(orderWrapper?.entity);
-    const providerPayment = webhookEntity(paymentWrapper?.entity);
-    const providerOrderId =
-      webhookText(order?.id) ?? webhookText(providerPayment?.order_id);
-    const providerPaymentId = webhookText(providerPayment?.id);
     const bodySha256 = createHash("sha256").update(rawBody).digest("hex");
     const providerEventId = req.header("x-razorpay-event-id");
     if (providerEventId && providerEventId.length > 128) {
@@ -727,11 +963,7 @@ router.post(
       return;
     }
 
-    const [payment] = await db
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.razorpayOrderId, providerOrderId))
-      .limit(1);
+    const payment = paymentForWebhook;
     if (!payment) {
       await db
         .update(razorpayWebhookEventsTable)

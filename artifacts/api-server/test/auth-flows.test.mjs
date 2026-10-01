@@ -21,6 +21,7 @@ memory.public.registerFunction({
 
 memory.public.none(`
   CREATE TYPE user_role AS ENUM ('SUPERADMIN', 'USER');
+  CREATE TYPE razorpay_environment AS ENUM ('sandbox', 'production');
   CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     username varchar(50) NOT NULL,
@@ -100,6 +101,29 @@ memory.public.none(`
     updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE razorpay_configuration (
+    id varchar(30) PRIMARY KEY DEFAULT 'platform',
+    key_id varchar(255) NOT NULL,
+    key_secret_encrypted text NOT NULL,
+    webhook_secret_encrypted text NOT NULL,
+    active_environment razorpay_environment,
+    sandbox_key_id varchar(255),
+    sandbox_key_secret_encrypted text,
+    sandbox_webhook_secret_encrypted text,
+    sandbox_updated_at timestamptz,
+    production_key_id varchar(255),
+    production_key_secret_encrypted text,
+    production_webhook_secret_encrypted text,
+    production_updated_at timestamptz,
+    updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE payments (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    razorpay_environment razorpay_environment,
+    razorpay_order_id varchar(80),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
   CREATE TABLE audit_logs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -149,11 +173,12 @@ const testDb = drizzle(memoryPool, { schema });
 const dbModule = await import("@workspace/db");
 dbModule.setTestDatabase(testDb);
 
-const [{ default: app }, emailModule, securityModule, seedModule] = await Promise.all([
+const [{ default: app }, emailModule, securityModule, seedModule, razorpayModule] = await Promise.all([
   import("../src/app.ts"),
   import("../src/lib/application-email.ts"),
   import("../src/lib/security.ts"),
   import("../src/lib/seed.ts"),
+  import("../src/lib/razorpay.ts"),
 ]);
 
 const { db, usersTable, userSessionsTable, loginAttemptsTable, otpVerificationsTable } =
@@ -185,6 +210,8 @@ after(async () => {
 
 beforeEach(async () => {
   await db.delete(dbModule.auditLogsTable);
+  await db.delete(dbModule.paymentsTable);
+  await db.delete(dbModule.razorpayConfigurationTable);
   await db.delete(dbModule.passwordResetTokensTable);
   await db.delete(dbModule.otpVerificationsTable);
   await db.delete(dbModule.userSessionsTable);
@@ -270,6 +297,104 @@ async function getEmailCode() {
   assert.ok(match, "verification email should contain a six-digit code");
   return match[1];
 }
+
+describe("Razorpay environment configuration", { concurrency: false }, () => {
+  it("keeps one active mode, preserves old payment mode, and tests saved inactive credentials", async () => {
+    const admin = await createUser({
+      username: "billing-admin",
+      role: "SUPERADMIN",
+    });
+    const session = await login(admin.email);
+    assert.equal(session.response.status, 200);
+
+    await db.insert(dbModule.razorpayConfigurationTable).values({
+      id: "platform",
+      keyId: "rzp_test_legacy",
+      keySecretEncrypted: securityModule.encryptSecret("legacy-key-secret"),
+      webhookSecretEncrypted: securityModule.encryptSecret("legacy-webhook-secret"),
+      updatedAt: new Date(),
+    });
+    memory.public.none(
+      `INSERT INTO payments (id, razorpay_order_id) VALUES ('${randomUUID()}', 'order_before_switch')`,
+    );
+
+    const productionSave = await api("/admin/billing/razorpay", {
+      method: "PUT",
+      cookie: session.cookie,
+      body: {
+        environment: "production",
+        keyId: "rzp_live_production",
+        keySecret: "production-key-secret",
+        webhookSecret: "production-webhook-secret",
+      },
+    });
+    assert.equal(productionSave.response.status, 200, JSON.stringify(productionSave.body));
+    assert.equal(productionSave.body.activeEnvironment, "sandbox");
+    assert.equal(productionSave.body.sandbox.configured, true);
+    assert.equal(productionSave.body.production.configured, true);
+    const responseJson = JSON.stringify(productionSave.body);
+    for (const secret of [
+      "legacy-key-secret",
+      "legacy-webhook-secret",
+      "production-key-secret",
+      "production-webhook-secret",
+    ]) {
+      assert.equal(responseJson.includes(secret), false, "gateway secrets must not be returned");
+    }
+
+    const [savedConfig] = await db
+      .select()
+      .from(dbModule.razorpayConfigurationTable);
+    assert.equal(savedConfig.activeEnvironment, "sandbox");
+    assert.equal(savedConfig.sandboxKeyId, "rzp_test_legacy");
+    assert.equal(savedConfig.productionKeyId, "rzp_live_production");
+    assert.notEqual(savedConfig.productionKeySecretEncrypted, "production-key-secret");
+
+    const activated = await api("/admin/billing/razorpay/active", {
+      method: "PUT",
+      cookie: session.cookie,
+      body: { environment: "production" },
+    });
+    assert.equal(activated.response.status, 200, JSON.stringify(activated.body));
+    assert.equal(activated.body.activeEnvironment, "production");
+    const activeConfig = await razorpayModule.getRazorpayConfiguration();
+    assert.equal(activeConfig.environment, "production");
+    assert.equal(activeConfig.keyId, "rzp_live_production");
+
+    const [oldPayment] = memory.public.many(
+      "SELECT razorpay_environment FROM payments WHERE razorpay_order_id = 'order_before_switch'",
+    );
+    assert.equal(oldPayment.razorpay_environment, "sandbox");
+
+    const originalFetch = globalThis.fetch;
+    let testedAuthorization;
+    globalThis.fetch = async (input, init) => {
+      if (String(input).startsWith("https://api.razorpay.com/v1/payments?count=1")) {
+        testedAuthorization = new Headers(init?.headers).get("authorization");
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return originalFetch(input, init);
+    };
+    try {
+      const tested = await api("/admin/billing/razorpay/test", {
+        method: "POST",
+        cookie: session.cookie,
+        body: { environment: "sandbox" },
+      });
+      assert.equal(tested.response.status, 200, JSON.stringify(tested.body));
+      assert.equal(tested.body.success, true);
+      assert.equal(
+        testedAuthorization,
+        `Basic ${Buffer.from("rzp_test_legacy:legacy-key-secret").toString("base64")}`,
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
 
 describe("authentication and account recovery", { concurrency: false }, () => {
   it("requires seeded superadmins to rotate the initial password before admin access", async () => {

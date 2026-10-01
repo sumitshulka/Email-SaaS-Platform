@@ -1,15 +1,24 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Activity, Check, CircleAlert, CreditCard, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck,
+  Activity, CircleAlert, CreditCard, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck,
 } from 'lucide-react';
 import {
   getGetRazorpaySettingsQueryKey, getListAdminSubscriptionPackagesQueryKey,
   getListAvailableSubscriptionPackagesQueryKey,
   useCreateSubscriptionPackage, useGetRazorpaySettings, useListAdminSubscriptionPackages,
-  useTestRazorpayConnection, useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
+  useSetActiveRazorpayEnvironment, useTestRazorpayConnection,
+  useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
 } from '@workspace/api-client-react';
 import type { SubscriptionPackage, SubscriptionPackageInput } from '@workspace/api-client-react';
+
+type GatewayEnvironment = 'sandbox' | 'production';
+type GatewayDraft = { keyId: string; keySecret: string; webhookSecret: string };
+const gatewayEnvironments: GatewayEnvironment[] = ['sandbox', 'production'];
+const gatewayLabels: Record<GatewayEnvironment, string> = {
+  sandbox: 'Sandbox / Test',
+  production: 'Production / Live',
+};
 
 type PackageDraft = {
   name: string;
@@ -66,13 +75,15 @@ export default function AdminBillingPage() {
   const packagesQuery = useListAdminSubscriptionPackages();
   const saveSettings = useUpdateRazorpaySettings();
   const testConnection = useTestRazorpayConnection();
+  const activateEnvironment = useSetActiveRazorpayEnvironment();
   const createPackage = useCreateSubscriptionPackage();
   const updatePackage = useUpdateSubscriptionPackage();
   const settings = settingsQuery.data;
   const packages = packagesQuery.data?.packages ?? [];
-  const [keyId, setKeyId] = useState('');
-  const [keySecret, setKeySecret] = useState('');
-  const [webhookSecret, setWebhookSecret] = useState('');
+  const [gatewayDrafts, setGatewayDrafts] = useState<Record<GatewayEnvironment, GatewayDraft>>({
+    sandbox: { keyId: '', keySecret: '', webhookSecret: '' },
+    production: { keyId: '', keySecret: '', webhookSecret: '' },
+  });
   const [draft, setDraft] = useState<PackageDraft>(blankDraft);
   const [editing, setEditing] = useState<SubscriptionPackage | null>(null);
   const [packageFormOpen, setPackageFormOpen] = useState(false);
@@ -114,20 +125,35 @@ export default function AdminBillingPage() {
     }
   };
 
-  const submitGateway = (event: FormEvent<HTMLFormElement>) => {
+  const updateGatewayDraft = (
+    environment: GatewayEnvironment,
+    field: keyof GatewayDraft,
+    value: string,
+  ) => setGatewayDrafts(current => ({
+    ...current,
+    [environment]: { ...current[environment], [field]: value },
+  }));
+
+  const submitGateway = (event: FormEvent<HTMLFormElement>, environment: GatewayEnvironment) => {
     event.preventDefault();
     setNotice(null);
+    const draft = gatewayDrafts[environment];
+    const saved = settings?.[environment];
     saveSettings.mutate({
       data: {
-        keyId: keyId.trim() || settings?.keyId || '',
-        ...(keySecret ? { keySecret } : {}),
-        ...(webhookSecret ? { webhookSecret } : {}),
+        environment,
+        keyId: draft.keyId.trim() || saved?.keyId || '',
+        ...(draft.keySecret ? { keySecret: draft.keySecret } : {}),
+        ...(draft.webhookSecret ? { webhookSecret: draft.webhookSecret } : {}),
       },
     }, {
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: getGetRazorpaySettingsQueryKey() });
-        setKeySecret(''); setWebhookSecret('');
-        announce('Razorpay credentials saved securely.');
+        setGatewayDrafts(current => ({
+          ...current,
+          [environment]: { ...current[environment], keySecret: '', webhookSecret: '' },
+        }));
+        announce(`${gatewayLabels[environment]} credentials saved securely.`);
       },
     });
   };
@@ -157,35 +183,51 @@ export default function AdminBillingPage() {
 
     <Panel className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9edf1] px-5 py-4 md:px-6">
-        <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><KeyRound className="h-[17px] w-[17px]"/></span><div><h2 className="text-[15px] font-bold text-[#1d2d40]">Razorpay gateway</h2><p className="mt-0.5 text-[11px] text-[#788696]">Use test keys first, then switch to live credentials when ready.</p></div></div>
-        <span data-testid="status-gateway-config" className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${settings?.keyId && settings.keySecretConfigured && settings.webhookSecretConfigured ? 'bg-[#eaf5ef] text-[#347452]' : 'bg-[#fff3e8] text-[#a85c21]'}`}>{settings?.keyId && settings.keySecretConfigured && settings.webhookSecretConfigured ? 'Credentials configured' : 'Setup required'}</span>
+        <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><KeyRound className="h-[17px] w-[17px]"/></span><div><h2 className="text-[15px] font-bold text-[#1d2d40]">Razorpay gateway</h2><p className="mt-0.5 text-[11px] text-[#788696]">Store separate test and live credentials; select one mode for new orders.</p></div></div>
+        <span data-testid="status-gateway-config" className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${settings?.activeEnvironment ? 'bg-[#eaf5ef] text-[#347452]' : 'bg-[#fff3e8] text-[#a85c21]'}`}>{settings?.activeEnvironment ? `Active · ${gatewayLabels[settings.activeEnvironment]}` : 'No active environment'}</span>
       </div>
-      <form onSubmit={submitGateway} className="grid gap-5 p-5 md:grid-cols-2 md:p-6">
-        <Field label="Public key ID" value={keyId || settings?.keyId || ''} onChange={setKeyId} testId="input-razorpay-key-id" placeholder="rzp_live_…" hint="The public key ID is used by Standard Checkout."/>
-        <Field label="Key secret" value={keySecret} onChange={setKeySecret} type="password" testId="input-razorpay-key-secret" placeholder={settings?.keySecretConfigured ? 'Saved — enter only to rotate' : 'Enter key secret'} hint={settings?.keySecretConfigured ? 'A blank value keeps the currently saved secret.' : 'Required to authorize server-side order creation.'}/>
-        <Field label="Webhook secret" value={webhookSecret} onChange={setWebhookSecret} type="password" testId="input-razorpay-webhook-secret" placeholder={settings?.webhookSecretConfigured ? 'Saved — enter only to rotate' : 'Enter webhook secret'} hint={settings?.webhookSecretConfigured ? 'A blank value keeps the saved webhook secret.' : 'Required for signed payment notifications. Never displayed after saving.'}/>
-        <div className="flex flex-wrap items-end gap-2">
-          <button data-testid="button-save-razorpay-settings" type="submit" disabled={saveSettings.isPending || !keyId.trim() && !settings?.keyId} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white transition hover:bg-[#103f7e] disabled:opacity-55">
-            {saveSettings.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}{saveSettings.isPending ? 'Saving credentials' : 'Save credentials'}
-          </button>
-          <button data-testid="button-test-razorpay-connection" type="button" onClick={() => { setNotice(null); testConnection.mutate(undefined, { onSuccess: result => setNotice({ text: result.message, bad: !result.success }), onError: error => setNotice({ text: errorText(error), bad: true }) }); }} disabled={testConnection.isPending || !settings?.keyId || !settings.keySecretConfigured} className="inline-flex h-10 items-center gap-2 rounded-md border border-[#d8e0e7] px-4 text-[12px] font-semibold text-[#344c63] hover:bg-[#f7f9fa] disabled:opacity-50">
-            {testConnection.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Activity className="h-4 w-4"/>}{testConnection.isPending ? 'Testing' : 'Test connection'}
-          </button>
-        </div>
-        {(saveSettings.isError || testConnection.isError) && <p role="alert" data-testid="status-gateway-error" className="text-[12px] text-[#a84926]">{errorText(saveSettings.error || testConnection.error)}</p>}
-        {settings?.updatedAt && <p data-testid="text-gateway-updated" className="self-end text-[11px] text-[#8994a0]">Last saved {new Date(settings.updatedAt).toLocaleString()}</p>}
-      </form>
-      <div className="grid gap-px border-t border-[#e9edf1] bg-[#e9edf1] sm:grid-cols-2">
-        {[['Key secret', settings?.keySecretConfigured], ['Webhook secret', settings?.webhookSecretConfigured]].map(([label, configured]) =>
-          <div key={String(label)} className="flex items-center justify-between bg-[#fbfcfd] px-5 py-3.5 text-[12px]">
-            <span className="text-[#647487]">{label}</span><span className="flex items-center gap-1.5 font-medium text-[#43586b]">{configured ? <><Check className="h-3.5 w-3.5 text-[#3b7c59]"/>Configured</> : 'Not configured'}</span>
-          </div>)}
+      <div className="border-b border-[#e9edf1] bg-[#f8fafb] px-5 py-3 text-[11px] leading-5 text-[#687b8d] md:px-6">
+        Only the active environment is used for new payments. Existing orders continue to use the environment and credentials saved when they were created.
       </div>
+      <div className="grid gap-4 p-5 md:grid-cols-2 md:p-6">
+        {gatewayEnvironments.map(environment => {
+          const saved = settings?.[environment];
+          const draft = gatewayDrafts[environment];
+          const active = settings?.activeEnvironment === environment;
+          const complete = Boolean(saved?.configured);
+          return <section key={environment} data-testid={`section-razorpay-${environment}`} className="min-w-0 rounded-lg border border-[#e1e6eb] bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf1] px-4 py-3.5">
+              <div><h3 className="text-[13px] font-bold text-[#1d2d40]">{gatewayLabels[environment]}</h3><p className="mt-1 text-[10px] text-[#788696]">{environment === 'sandbox' ? 'For test transactions' : 'For customer payments'}</p></div>
+              <span data-testid={`status-razorpay-${environment}`} className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${complete ? 'bg-[#eaf5ef] text-[#347452]' : 'bg-[#fff3e8] text-[#a85c21]'}`}>{complete ? 'Ready' : 'Setup required'}</span>
+            </div>
+            <form onSubmit={event => submitGateway(event, environment)} className="space-y-4 p-4">
+              <Field label="Public key ID" value={draft.keyId || saved?.keyId || ''} onChange={value => updateGatewayDraft(environment, 'keyId', value)} testId={`input-razorpay-${environment}-key-id`} placeholder={environment === 'sandbox' ? 'rzp_test_…' : 'rzp_live_…'} hint="Used by Razorpay Standard Checkout."/>
+              <Field label="Key secret" value={draft.keySecret} onChange={value => updateGatewayDraft(environment, 'keySecret', value)} type="password" testId={`input-razorpay-${environment}-key-secret`} placeholder={saved?.keySecretConfigured ? 'Saved — enter only to rotate' : 'Enter key secret'} hint={saved?.keySecretConfigured ? 'Leave blank to keep the saved secret.' : 'Required for server-side order creation.'}/>
+              <Field label="Webhook secret" value={draft.webhookSecret} onChange={value => updateGatewayDraft(environment, 'webhookSecret', value)} type="password" testId={`input-razorpay-${environment}-webhook-secret`} placeholder={saved?.webhookSecretConfigured ? 'Saved — enter only to rotate' : 'Enter webhook secret'} hint={saved?.webhookSecretConfigured ? 'Leave blank to keep the saved secret.' : 'Required for signed payment notifications.'}/>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button data-testid={`button-save-razorpay-${environment}`} type="submit" disabled={saveSettings.isPending || !(draft.keyId.trim() || saved?.keyId)} className="inline-flex h-9 items-center gap-2 rounded-md bg-[#174f99] px-3.5 text-[11px] font-semibold text-white transition hover:bg-[#103f7e] disabled:opacity-55">
+                  {saveSettings.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Save className="h-3.5 w-3.5"/>}{saveSettings.isPending ? 'Saving' : 'Save credentials'}
+                </button>
+                <button data-testid={`button-test-razorpay-${environment}`} type="button" onClick={() => { setNotice(null); testConnection.mutate({ data: { environment } }, { onSuccess: result => setNotice({ text: `${gatewayLabels[environment]}: ${result.message}`, bad: !result.success }), onError: error => setNotice({ text: errorText(error), bad: true }) }); }} disabled={testConnection.isPending || !complete} className="inline-flex h-9 items-center gap-2 rounded-md border border-[#d8e0e7] px-3.5 text-[11px] font-semibold text-[#344c63] hover:bg-[#f7f9fa] disabled:opacity-50">
+                  {testConnection.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Activity className="h-3.5 w-3.5"/>}{testConnection.isPending ? 'Testing' : 'Test connection'}
+                </button>
+                <button data-testid={`button-activate-razorpay-${environment}`} type="button" onClick={() => { setNotice(null); activateEnvironment.mutate({ data: { environment } }, { onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getGetRazorpaySettingsQueryKey() }); announce(`${gatewayLabels[environment]} is now active for new orders.`); }, onError: error => setNotice({ text: errorText(error), bad: true }) }); }} disabled={active || !complete || activateEnvironment.isPending} className={`inline-flex h-9 items-center gap-2 rounded-md border px-3.5 text-[11px] font-semibold disabled:opacity-50 ${active ? 'border-[#cee4d6] bg-[#f2f8f4] text-[#397451]' : 'border-[#d8e0e7] text-[#344c63] hover:bg-[#f7f9fa]'}`}>
+                  {activateEnvironment.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <ShieldCheck className="h-3.5 w-3.5"/>}{active ? 'Active' : 'Set active'}
+                </button>
+              </div>
+              {saved?.updatedAt && <p data-testid={`text-razorpay-${environment}-updated`} className="text-[10px] text-[#8994a0]">Credentials last saved {new Date(saved.updatedAt).toLocaleString()}</p>}
+            </form>
+          </section>;
+        })}
+      </div>
+      {(saveSettings.isError || testConnection.isError || activateEnvironment.isError) && <p role="alert" data-testid="status-gateway-error" className="px-5 pb-4 text-[12px] text-[#a84926]">{errorText(saveSettings.error || testConnection.error || activateEnvironment.error)}</p>}
       <div className="grid gap-3 border-t border-[#e9edf1] bg-[#fbfcfd] px-5 py-4 text-[11px] leading-5 text-[#6f7f8f] md:grid-cols-[1fr_1fr] md:px-6">
-        <p>In the Razorpay dashboard, set the webhook endpoint to your published app URL followed by <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">/api/webhooks/razorpay</code>.</p>
-        <p>Enable the <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">order.paid</code> and <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">payment.captured</code> events and enter the same webhook secret above.</p>
+        <p>In both Razorpay dashboards, set the webhook endpoint to your published app URL followed by <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">/api/webhooks/razorpay</code>.</p>
+        <p>Enable <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">order.paid</code> and <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">payment.captured</code> for each mode, and save that mode's matching webhook secret here.</p>
       </div>
     </Panel>
+
+    {notice && <div data-testid="status-billing-notice" role="status" className={`rounded-md border px-4 py-3 text-[12px] ${notice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{notice.text}</div>}
 
     <section>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -212,7 +254,6 @@ export default function AdminBillingPage() {
         </form>
       </Panel>}
 
-      {notice && <div data-testid="status-billing-notice" role="status" className={`mb-3 rounded-md border px-4 py-3 text-[12px] ${notice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{notice.text}</div>}
       {packages.length === 0 ? <Panel className="grid min-h-52 place-items-center p-8 text-center" data-testid="empty-subscription-packages"><div><CreditCard className="mx-auto h-7 w-7 text-[#8396a8]"/><h3 className="mt-3 text-[14px] font-semibold text-[#2b3c4e]">No subscription packages yet</h3><p className="mt-1 text-[12px] text-[#788796]">Create the first package to make billing available to customers.</p><button data-testid="button-create-first-package" onClick={() => { resetPackageForm(); setPackageFormOpen(true); setNotice(null); }} className="mt-4 rounded-md border border-[#d8e0e7] px-3 py-2 text-[11px] font-semibold text-[#315d84]">Create first package</button></div></Panel> :
         <Panel className="overflow-hidden">
           <div className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] gap-4 border-b border-[#e7ecf0] bg-[#f7f9fa] px-5 py-3 mono text-[9px] uppercase tracking-[.15em] text-[#83909d] md:grid"><span>Package</span><span>Rate & term</span><span>Visibility</span><span>Last updated</span><span className="text-right">Actions</span></div>

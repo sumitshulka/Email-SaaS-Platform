@@ -5,8 +5,10 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { RazorpayEnvironment } from './razorpayEnvironment';
 
 export interface RazorpaySettingsInput {
+  environment: RazorpayEnvironment;
   /**
      * @minLength 3
      * @maxLength 255

@@ -46,12 +46,14 @@ import type {
   RazorpayWebhookPayload,
   RegisterInput,
   ResetPasswordInput,
+  SetActiveRazorpayEnvironmentInput,
   SubscriptionOrderCreated,
   SubscriptionPackage,
   SubscriptionPackageInput,
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
   TestEmailInput,
+  TestRazorpayConnectionInput,
   UserDashboard,
   UserStatusInput,
   VerifyEmailInput,
@@ -1758,7 +1760,7 @@ export const getGetRazorpaySettingsUrl = () => {
 }
 
 /**
- * @summary Get masked Razorpay gateway configuration
+ * @summary Get masked sandbox and production Razorpay configuration
  */
 export const getRazorpaySettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<RazorpaySettings> => {
 
@@ -1805,7 +1807,7 @@ export type GetRazorpaySettingsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get masked Razorpay gateway configuration
+ * @summary Get masked sandbox and production Razorpay configuration
  */
 
 export function useGetRazorpaySettings<TData = Awaited<ReturnType<typeof getRazorpaySettings>>, TError = ErrorType<unknown>>(
@@ -1835,7 +1837,7 @@ export const getUpdateRazorpaySettingsUrl = () => {
 }
 
 /**
- * @summary Save Razorpay gateway credentials
+ * @summary Save Razorpay credentials for one environment
  */
 export const updateRazorpaySettings = async (razorpaySettingsInput: RazorpaySettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<RazorpaySettings> => {
 
@@ -1901,7 +1903,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateRazorpaySettingsMutationVariables = {data: BodyType<RazorpaySettingsInput>}
 
     /**
- * @summary Save Razorpay gateway credentials
+ * @summary Save Razorpay credentials for one environment
  */
 export const useUpdateRazorpaySettings = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRazorpaySettings>>, TError,UpdateRazorpaySettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1914,6 +1916,94 @@ export const useUpdateRazorpaySettings = <TError = ErrorType<unknown>,
       return useMutation(getUpdateRazorpaySettingsMutationOptions(options));
     }
 
+export const getSetActiveRazorpayEnvironmentUrl = () => {
+
+
+
+
+  return `/api/admin/billing/razorpay/active`
+}
+
+/**
+ * @summary Select the active Razorpay environment
+ */
+export const setActiveRazorpayEnvironment = async (setActiveRazorpayEnvironmentInput: SetActiveRazorpayEnvironmentInput, options?: Parameters<typeof customFetch>[1]): Promise<RazorpaySettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RazorpaySettings>(getSetActiveRazorpayEnvironmentUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setActiveRazorpayEnvironmentInput)
+  }
+);}
+
+
+
+
+
+export const getSetActiveRazorpayEnvironmentMutationKey = () => ['setActiveRazorpayEnvironment'] as const;
+
+export const getSetActiveRazorpayEnvironmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setActiveRazorpayEnvironment>>, TError,SetActiveRazorpayEnvironmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setActiveRazorpayEnvironment>>, TError,SetActiveRazorpayEnvironmentMutationVariables, TContext> => {
+
+const mutationKey = getSetActiveRazorpayEnvironmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setActiveRazorpayEnvironment>>, SetActiveRazorpayEnvironmentMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  setActiveRazorpayEnvironment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetActiveRazorpayEnvironmentMutationResult = NonNullable<Awaited<ReturnType<typeof setActiveRazorpayEnvironment>>>
+    export type SetActiveRazorpayEnvironmentMutationBody = BodyType<SetActiveRazorpayEnvironmentInput>
+    export type SetActiveRazorpayEnvironmentMutationError = ErrorType<unknown>
+    export type SetActiveRazorpayEnvironmentMutationVariables = {data: BodyType<SetActiveRazorpayEnvironmentInput>}
+
+    /**
+ * @summary Select the active Razorpay environment
+ */
+export const useSetActiveRazorpayEnvironment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setActiveRazorpayEnvironment>>, TError,SetActiveRazorpayEnvironmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setActiveRazorpayEnvironment>>,
+        TError,
+        SetActiveRazorpayEnvironmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetActiveRazorpayEnvironmentMutationOptions(options));
+    }
+
 export const getTestRazorpayConnectionUrl = () => {
 
 
@@ -1923,16 +2013,30 @@ export const getTestRazorpayConnectionUrl = () => {
 }
 
 /**
- * @summary Verify the saved Razorpay API credentials
+ * @summary Verify saved Razorpay API credentials for one environment
  */
-export const testRazorpayConnection = async ( options?: Parameters<typeof customFetch>[1]): Promise<RazorpayTestResponse> => {
+export const testRazorpayConnection = async (testRazorpayConnectionInput: TestRazorpayConnectionInput, options?: Parameters<typeof customFetch>[1]): Promise<RazorpayTestResponse> => {
 
-  return customFetch<RazorpayTestResponse>(getTestRazorpayConnectionUrl(),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RazorpayTestResponse>(getTestRazorpayConnectionUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(testRazorpayConnectionInput)
   }
 );}
 
@@ -1943,8 +2047,8 @@ export const testRazorpayConnection = async ( options?: Parameters<typeof custom
 export const getTestRazorpayConnectionMutationKey = () => ['testRazorpayConnection'] as const;
 
 export const getTestRazorpayConnectionMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testRazorpayConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof testRazorpayConnection>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testRazorpayConnection>>, TError,TestRazorpayConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testRazorpayConnection>>, TError,TestRazorpayConnectionMutationVariables, TContext> => {
 
 const mutationKey = getTestRazorpayConnectionMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -1956,10 +2060,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testRazorpayConnection>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testRazorpayConnection>>, TestRazorpayConnectionMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-
-          return  testRazorpayConnection(requestOptions)
+          return  testRazorpayConnection(data,requestOptions)
         }
 
 
@@ -1970,19 +2074,19 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type TestRazorpayConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testRazorpayConnection>>>
-
+    export type TestRazorpayConnectionMutationBody = BodyType<TestRazorpayConnectionInput>
     export type TestRazorpayConnectionMutationError = ErrorType<unknown>
-
+    export type TestRazorpayConnectionMutationVariables = {data: BodyType<TestRazorpayConnectionInput>}
 
     /**
- * @summary Verify the saved Razorpay API credentials
+ * @summary Verify saved Razorpay API credentials for one environment
  */
 export const useTestRazorpayConnection = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testRazorpayConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testRazorpayConnection>>, TError,TestRazorpayConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof testRazorpayConnection>>,
         TError,
-        void,
+        TestRazorpayConnectionMutationVariables,
         TContext
       > => {
       return useMutation(getTestRazorpayConnectionMutationOptions(options));

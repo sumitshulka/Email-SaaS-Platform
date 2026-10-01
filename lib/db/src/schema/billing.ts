@@ -27,6 +27,11 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "cancelled",
 ]);
 
+export const razorpayEnvironmentEnum = pgEnum("razorpay_environment", [
+  "sandbox",
+  "production",
+]);
+
 export const subscriptionPackagesTable = pgTable(
   "subscription_packages",
   {
@@ -62,6 +67,15 @@ export const razorpayConfigurationTable = pgTable("razorpay_configuration", {
   keyId: varchar("key_id", { length: 255 }).notNull(),
   keySecretEncrypted: text("key_secret_encrypted").notNull(),
   webhookSecretEncrypted: text("webhook_secret_encrypted").notNull(),
+  activeEnvironment: razorpayEnvironmentEnum("active_environment"),
+  sandboxKeyId: varchar("sandbox_key_id", { length: 255 }),
+  sandboxKeySecretEncrypted: text("sandbox_key_secret_encrypted"),
+  sandboxWebhookSecretEncrypted: text("sandbox_webhook_secret_encrypted"),
+  sandboxUpdatedAt: timestamp("sandbox_updated_at", { withTimezone: true }),
+  productionKeyId: varchar("production_key_id", { length: 255 }),
+  productionKeySecretEncrypted: text("production_key_secret_encrypted"),
+  productionWebhookSecretEncrypted: text("production_webhook_secret_encrypted"),
+  productionUpdatedAt: timestamp("production_updated_at", { withTimezone: true }),
   updatedBy: uuid("updated_by").references(() => usersTable.id, {
     onDelete: "set null",
   }),
@@ -85,6 +99,7 @@ export const paymentsTable = pgTable(
     amountMinor: integer("amount_minor").notNull(),
     currency: varchar("currency", { length: 3 }).notNull(),
     status: paymentStatusEnum("status").notNull().default("created"),
+    razorpayEnvironment: razorpayEnvironmentEnum("razorpay_environment"),
     razorpayOrderId: varchar("razorpay_order_id", { length: 80 }),
     razorpayPaymentId: varchar("razorpay_payment_id", { length: 80 }),
     createdAt: timestamp("created_at", { withTimezone: true })

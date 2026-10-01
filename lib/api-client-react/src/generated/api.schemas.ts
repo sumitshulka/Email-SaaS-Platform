@@ -427,16 +427,34 @@ export interface TestEmailInput {
   toEmail: string;
 }
 
-export interface RazorpaySettings {
+export type RazorpayEnvironment = typeof RazorpayEnvironment[keyof typeof RazorpayEnvironment];
+
+
+export const RazorpayEnvironment = {
+  sandbox: 'sandbox',
+  production: 'production',
+} as const;
+
+export interface RazorpayEnvironmentSettings {
   /** @nullable */
   keyId: string | null;
   keySecretConfigured: boolean;
   webhookSecretConfigured: boolean;
+  configured: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface RazorpaySettings {
+  activeEnvironment: RazorpayEnvironment | null;
+  sandbox: RazorpayEnvironmentSettings;
+  production: RazorpayEnvironmentSettings;
   /** @nullable */
   updatedAt: string | null;
 }
 
 export interface RazorpaySettingsInput {
+  environment: RazorpayEnvironment;
   /**
      * @minLength 3
      * @maxLength 255
@@ -452,6 +470,14 @@ export interface RazorpaySettingsInput {
      * @maxLength 512
      */
   webhookSecret?: string;
+}
+
+export interface SetActiveRazorpayEnvironmentInput {
+  environment: RazorpayEnvironment;
+}
+
+export interface TestRazorpayConnectionInput {
+  environment: RazorpayEnvironment;
 }
 
 export interface RazorpayTestResponse {

@@ -405,10 +405,10 @@ paths:
     get:
       operationId: getRazorpaySettings
       tags: [billing]
-      summary: Get masked Razorpay gateway configuration
+      summary: Get masked sandbox and production Razorpay configuration
       responses:
         "200":
-          description: Public key and write-only credential status
+          description: Masked credentials and the active Razorpay environment
           content:
             application/json:
               schema:
@@ -416,7 +416,7 @@ paths:
     put:
       operationId: updateRazorpaySettings
       tags: [billing]
-      summary: Save Razorpay gateway credentials
+      summary: Save Razorpay credentials for one environment
       requestBody:
         required: true
         content:
@@ -430,11 +430,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RazorpaySettings"
+  /admin/billing/razorpay/active:
+    put:
+      operationId: setActiveRazorpayEnvironment
+      tags: [billing]
+      summary: Select the active Razorpay environment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetActiveRazorpayEnvironmentInput"
+      responses:
+        "200":
+          description: Updated active environment and masked credential status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpaySettings"
   /admin/billing/razorpay/test:
     post:
       operationId: testRazorpayConnection
       tags: [billing]
-      summary: Verify the saved Razorpay API credentials
+      summary: Verify saved Razorpay API credentials for one environment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestRazorpayConnectionInput"
       responses:
         "200":
           description: Razorpay API connection result
@@ -813,21 +837,47 @@ components:
       properties:
         toEmail: { type: string, format: email }
       required: [toEmail]
-    RazorpaySettings:
+    RazorpayEnvironment:
+      type: string
+      enum: [sandbox, production]
+    RazorpayEnvironmentSettings:
       type: object
       properties:
         keyId: { type: ["string", "null"] }
         keySecretConfigured: { type: boolean }
         webhookSecretConfigured: { type: boolean }
+        configured: { type: boolean }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [keyId, keySecretConfigured, webhookSecretConfigured, updatedAt]
+      required: [keyId, keySecretConfigured, webhookSecretConfigured, configured, updatedAt]
+    RazorpaySettings:
+      type: object
+      properties:
+        activeEnvironment:
+          oneOf:
+            - $ref: "#/components/schemas/RazorpayEnvironment"
+            - type: "null"
+        sandbox: { $ref: "#/components/schemas/RazorpayEnvironmentSettings" }
+        production: { $ref: "#/components/schemas/RazorpayEnvironmentSettings" }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [activeEnvironment, sandbox, production, updatedAt]
     RazorpaySettingsInput:
       type: object
       properties:
+        environment: { $ref: "#/components/schemas/RazorpayEnvironment" }
         keyId: { type: string, minLength: 3, maxLength: 255 }
         keySecret: { type: string, minLength: 1, maxLength: 512 }
         webhookSecret: { type: string, minLength: 1, maxLength: 512 }
-      required: [keyId]
+      required: [environment, keyId]
+    SetActiveRazorpayEnvironmentInput:
+      type: object
+      properties:
+        environment: { $ref: "#/components/schemas/RazorpayEnvironment" }
+      required: [environment]
+    TestRazorpayConnectionInput:
+      type: object
+      properties:
+        environment: { $ref: "#/components/schemas/RazorpayEnvironment" }
+      required: [environment]
     RazorpayTestResponse:
       type: object
       properties:

@@ -5,11 +5,54 @@ import { constantTimeEqual, decryptSecret } from "./security";
 
 const API_BASE = "https://api.razorpay.com/v1";
 
+export type RazorpayEnvironment = "sandbox" | "production";
+
 export type RazorpayConfiguration = {
+  environment: RazorpayEnvironment;
   keyId: string;
   keySecret: string;
   webhookSecret: string;
 };
+
+type RazorpayConfigurationRow = typeof razorpayConfigurationTable.$inferSelect;
+
+export type StoredRazorpayCredentials = {
+  keyId: string | null;
+  keySecretEncrypted: string | null;
+  webhookSecretEncrypted: string | null;
+};
+
+export function inferLegacyRazorpayEnvironment(
+  keyId: string,
+): RazorpayEnvironment | null {
+  if (keyId.startsWith("rzp_test_")) return "sandbox";
+  if (keyId.startsWith("rzp_live_")) return "production";
+  return null;
+}
+
+export function getStoredRazorpayCredentials(
+  row: RazorpayConfigurationRow,
+  environment: RazorpayEnvironment,
+): StoredRazorpayCredentials {
+  const isSandbox = environment === "sandbox";
+  const legacyEnvironment = inferLegacyRazorpayEnvironment(row.keyId);
+  const canUseLegacy = legacyEnvironment === environment;
+  return {
+    keyId:
+      (isSandbox ? row.sandboxKeyId : row.productionKeyId) ??
+      (canUseLegacy ? row.keyId : null),
+    keySecretEncrypted:
+      (isSandbox
+        ? row.sandboxKeySecretEncrypted
+        : row.productionKeySecretEncrypted) ??
+      (canUseLegacy ? row.keySecretEncrypted : null),
+    webhookSecretEncrypted:
+      (isSandbox
+        ? row.sandboxWebhookSecretEncrypted
+        : row.productionWebhookSecretEncrypted) ??
+      (canUseLegacy ? row.webhookSecretEncrypted : null),
+  };
+}
 
 export type RazorpayOrder = {
   id: string;
@@ -37,17 +80,33 @@ export class RazorpayApiError extends Error {
   }
 }
 
-export async function getRazorpayConfiguration(): Promise<RazorpayConfiguration | null> {
+export async function getRazorpayConfiguration(
+  environment?: RazorpayEnvironment,
+): Promise<RazorpayConfiguration | null> {
   const [row] = await db
     .select()
     .from(razorpayConfigurationTable)
     .where(eq(razorpayConfigurationTable.id, "platform"))
     .limit(1);
   if (!row) return null;
+  const activeEnvironment =
+    environment ??
+    row.activeEnvironment ??
+    inferLegacyRazorpayEnvironment(row.keyId);
+  if (!activeEnvironment) return null;
+  const credentials = getStoredRazorpayCredentials(row, activeEnvironment);
+  if (
+    !credentials.keyId ||
+    !credentials.keySecretEncrypted ||
+    !credentials.webhookSecretEncrypted
+  ) {
+    return null;
+  }
   return {
-    keyId: row.keyId,
-    keySecret: decryptSecret(row.keySecretEncrypted),
-    webhookSecret: decryptSecret(row.webhookSecretEncrypted),
+    environment: activeEnvironment,
+    keyId: credentials.keyId,
+    keySecret: decryptSecret(credentials.keySecretEncrypted),
+    webhookSecret: decryptSecret(credentials.webhookSecretEncrypted),
   };
 }
 

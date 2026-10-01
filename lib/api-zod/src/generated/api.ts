@@ -546,18 +546,30 @@ export const SendApplicationEmailTestResponse = zod.object({
 
 
 /**
- * @summary Get masked Razorpay gateway configuration
+ * @summary Get masked sandbox and production Razorpay configuration
  */
 export const GetRazorpaySettingsResponse = zod.object({
+  "activeEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
+  "sandbox": zod.object({
   "keyId": zod.string().nullable(),
   "keySecretConfigured": zod.boolean(),
   "webhookSecretConfigured": zod.boolean(),
+  "configured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+}),
+  "production": zod.object({
+  "keyId": zod.string().nullable(),
+  "keySecretConfigured": zod.boolean(),
+  "webhookSecretConfigured": zod.boolean(),
+  "configured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+}),
   "updatedAt": zod.coerce.date().nullable()
 })
 
 
 /**
- * @summary Save Razorpay gateway credentials
+ * @summary Save Razorpay credentials for one environment
  */
 export const updateRazorpaySettingsBodyKeyIdMin = 3;
 export const updateRazorpaySettingsBodyKeyIdMax = 255;
@@ -569,22 +581,66 @@ export const updateRazorpaySettingsBodyWebhookSecretMax = 512;
 
 
 export const UpdateRazorpaySettingsBody = zod.object({
+  "environment": zod.enum(['sandbox', 'production']),
   "keyId": zod.string().min(updateRazorpaySettingsBodyKeyIdMin).max(updateRazorpaySettingsBodyKeyIdMax),
   "keySecret": zod.string().min(1).max(updateRazorpaySettingsBodyKeySecretMax).optional(),
   "webhookSecret": zod.string().min(1).max(updateRazorpaySettingsBodyWebhookSecretMax).optional()
 })
 
 export const UpdateRazorpaySettingsResponse = zod.object({
+  "activeEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
+  "sandbox": zod.object({
   "keyId": zod.string().nullable(),
   "keySecretConfigured": zod.boolean(),
   "webhookSecretConfigured": zod.boolean(),
+  "configured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+}),
+  "production": zod.object({
+  "keyId": zod.string().nullable(),
+  "keySecretConfigured": zod.boolean(),
+  "webhookSecretConfigured": zod.boolean(),
+  "configured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+}),
   "updatedAt": zod.coerce.date().nullable()
 })
 
 
 /**
- * @summary Verify the saved Razorpay API credentials
+ * @summary Select the active Razorpay environment
  */
+export const SetActiveRazorpayEnvironmentBody = zod.object({
+  "environment": zod.enum(['sandbox', 'production'])
+})
+
+export const SetActiveRazorpayEnvironmentResponse = zod.object({
+  "activeEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
+  "sandbox": zod.object({
+  "keyId": zod.string().nullable(),
+  "keySecretConfigured": zod.boolean(),
+  "webhookSecretConfigured": zod.boolean(),
+  "configured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+}),
+  "production": zod.object({
+  "keyId": zod.string().nullable(),
+  "keySecretConfigured": zod.boolean(),
+  "webhookSecretConfigured": zod.boolean(),
+  "configured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+}),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Verify saved Razorpay API credentials for one environment
+ */
+export const TestRazorpayConnectionBody = zod.object({
+  "environment": zod.enum(['sandbox', 'production'])
+})
+
 export const TestRazorpayConnectionResponse = zod.object({
   "success": zod.boolean(),
   "message": zod.string()
