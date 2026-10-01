@@ -73,6 +73,98 @@ export function getMinimumEmailSpacingSeconds(
   return Math.max(pollingSeconds, Math.ceil(3600 / hourlyCap));
 }
 
+export type CampaignQueueEstimateRecipient = {
+  campaignId: string;
+  nextAttemptAt: Date;
+  createdAt: Date;
+};
+
+type DeliveryForecastState = {
+  attempts: number[];
+  firstHourlyAttempt: number;
+  firstDailyAttempt: number;
+};
+
+function createDeliveryForecastState(attempts: Date[]): DeliveryForecastState {
+  return {
+    attempts: attempts.map((attempt) => attempt.getTime()).sort((a, b) => a - b),
+    firstHourlyAttempt: 0,
+    firstDailyAttempt: 0,
+  };
+}
+
+function scheduleForecastAttempt(
+  state: DeliveryForecastState,
+  eligibleAt: number,
+  settings: Pick<
+    PlatformSettingsInput,
+    "defaultEmailsPerHour" | "maxEmailsPerDay" | "queuePollingSeconds"
+  >,
+  nowMs: number,
+): number {
+  const spacing = getMinimumEmailSpacingSeconds(settings);
+  const hourlyLimit = Math.max(1, settings.defaultEmailsPerHour);
+  const dailyLimit = Math.max(1, settings.maxEmailsPerDay);
+  const pollingMs = Math.max(1, settings.queuePollingSeconds) * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+  const previousAttempt =
+    state.attempts.length > 0
+      ? state.attempts[state.attempts.length - 1]
+      : nowMs - spacing * 1000;
+  let nextAt = Math.max(nowMs, eligibleAt, previousAttempt + spacing * 1000);
+
+  while (true) {
+    while (
+      state.firstHourlyAttempt < state.attempts.length &&
+      state.attempts[state.firstHourlyAttempt] < nextAt - hourMs
+    ) {
+      state.firstHourlyAttempt += 1;
+    }
+    while (
+      state.firstDailyAttempt < state.attempts.length &&
+      state.attempts[state.firstDailyAttempt] < nextAt - dayMs
+    ) {
+      state.firstDailyAttempt += 1;
+    }
+
+    let delayedUntil = nextAt;
+    if (state.attempts.length - state.firstHourlyAttempt >= hourlyLimit) {
+      delayedUntil = Math.max(
+        delayedUntil,
+        state.attempts[state.attempts.length - hourlyLimit] + hourMs + pollingMs,
+      );
+    }
+    if (state.attempts.length - state.firstDailyAttempt >= dailyLimit) {
+      delayedUntil = Math.max(
+        delayedUntil,
+        state.attempts[state.attempts.length - dailyLimit] + dayMs + pollingMs,
+      );
+    }
+    if (delayedUntil === nextAt) break;
+    nextAt = delayedUntil;
+  }
+
+  state.attempts.push(nextAt);
+  return nextAt;
+}
+
+function forecastDurationSeconds(
+  lastScheduledAt: number,
+  nowMs: number,
+  settings: Pick<PlatformSettingsInput, "defaultEmailsPerHour" | "queuePollingSeconds">,
+  hasRecentAttempts: boolean,
+): number {
+  const completionBuffer =
+    hasRecentAttempts
+      ? Math.max(1, settings.queuePollingSeconds) * 1000
+      : getMinimumEmailSpacingSeconds(settings) * 1000;
+  return Math.max(
+    0,
+    Math.ceil((lastScheduledAt - nowMs + completionBuffer) / 1000),
+  );
+}
+
 export function estimateCampaignDeliverySeconds(
   recipientCount: number,
   settings: Pick<
@@ -85,70 +177,115 @@ export function estimateCampaignDeliverySeconds(
   const recipients = Math.max(0, Math.floor(recipientCount));
   if (recipients === 0) return 0;
 
-  const spacing = getMinimumEmailSpacingSeconds(settings);
-  const hourlyLimit = Math.max(1, settings.defaultEmailsPerHour);
-  const dailyLimit = Math.max(1, settings.maxEmailsPerDay);
-  const pollingMs = Math.max(1, settings.queuePollingSeconds) * 1000;
-  const hourMs = 60 * 60 * 1000;
-  const dayMs = 24 * hourMs;
   const nowMs = now.getTime();
-  const attempts = recentAttempts
-    .map((attempt) => attempt.getTime())
-    .filter((attemptAt) => attemptAt <= nowMs)
-    .sort((a, b) => a - b);
-  const hasRecentAttempts = attempts.length > 0;
-  let firstHourlyAttempt = 0;
-  let firstDailyAttempt = 0;
+  const historicalAttempts = recentAttempts.filter(
+    (attempt) => attempt.getTime() <= nowMs,
+  );
+  const state = createDeliveryForecastState(historicalAttempts);
+  let lastScheduledAt = nowMs;
 
   for (let index = 0; index < recipients; index += 1) {
-    let nextAt = Math.max(
+    lastScheduledAt = scheduleForecastAttempt(
+      state,
       nowMs,
-      attempts.length > 0
-        ? attempts[attempts.length - 1] + spacing * 1000
-        : nowMs,
+      settings,
+      nowMs,
     );
-
-    while (true) {
-      while (
-        firstHourlyAttempt < attempts.length &&
-        attempts[firstHourlyAttempt] < nextAt - hourMs
-      ) {
-        firstHourlyAttempt += 1;
-      }
-      while (
-        firstDailyAttempt < attempts.length &&
-        attempts[firstDailyAttempt] < nextAt - dayMs
-      ) {
-        firstDailyAttempt += 1;
-      }
-
-      let delayedUntil = nextAt;
-      if (attempts.length - firstHourlyAttempt >= hourlyLimit) {
-        delayedUntil = Math.max(
-          delayedUntil,
-          attempts[attempts.length - hourlyLimit] + hourMs + pollingMs,
-        );
-      }
-      if (attempts.length - firstDailyAttempt >= dailyLimit) {
-        delayedUntil = Math.max(
-          delayedUntil,
-          attempts[attempts.length - dailyLimit] + dayMs + pollingMs,
-        );
-      }
-      if (delayedUntil === nextAt) break;
-      nextAt = delayedUntil;
-    }
-
-    attempts.push(nextAt);
   }
 
-  const lastScheduledAt = attempts[attempts.length - 1];
-  const completionBuffer = hasRecentAttempts
-    ? pollingMs
-    : spacing * 1000;
-  return Math.max(
-    0,
-    Math.ceil((lastScheduledAt - nowMs + completionBuffer) / 1000),
+  return forecastDurationSeconds(
+    lastScheduledAt,
+    nowMs,
+    settings,
+    historicalAttempts.length > 0,
+  );
+}
+
+export function estimateCampaignQueueDeliverySeconds(
+  recipients: CampaignQueueEstimateRecipient[],
+  settings: Pick<
+    PlatformSettingsInput,
+    "defaultEmailsPerHour" | "maxEmailsPerDay" | "queuePollingSeconds"
+  >,
+  recentAttempts: Date[] = [],
+  now = new Date(),
+): {
+  durationSecondsByCampaign: Map<string, number>;
+  projectedAttemptTimes: Date[];
+} {
+  const nowMs = now.getTime();
+  const historicalAttempts = recentAttempts.filter(
+    (attempt) => attempt.getTime() <= nowMs,
+  );
+  const state = createDeliveryForecastState(historicalAttempts);
+  const orderedRecipients = recipients
+    .map((recipient, index) => ({ ...recipient, index }))
+    .sort(
+      (left, right) =>
+        left.nextAttemptAt.getTime() - right.nextAttemptAt.getTime() ||
+        left.createdAt.getTime() - right.createdAt.getTime() ||
+        left.index - right.index,
+    );
+  const durationSecondsByCampaign = new Map<string, number>();
+
+  for (const recipient of orderedRecipients) {
+    const scheduledAt = scheduleForecastAttempt(
+      state,
+      recipient.nextAttemptAt.getTime(),
+      settings,
+      nowMs,
+    );
+    const durationSeconds = forecastDurationSeconds(
+      scheduledAt,
+      nowMs,
+      settings,
+      historicalAttempts.length > 0,
+    );
+    durationSecondsByCampaign.set(
+      recipient.campaignId,
+      Math.max(
+        durationSecondsByCampaign.get(recipient.campaignId) ?? 0,
+        durationSeconds,
+      ),
+    );
+  }
+
+  return {
+    durationSecondsByCampaign,
+    projectedAttemptTimes: state.attempts.map((attempt) => new Date(attempt)),
+  };
+}
+
+export function estimateCampaignDeliveryAfterQueueSeconds(
+  recipientCount: number,
+  settings: Pick<
+    PlatformSettingsInput,
+    "defaultEmailsPerHour" | "maxEmailsPerDay" | "queuePollingSeconds"
+  >,
+  precedingAttemptTimes: Date[],
+  hasRecentAttempts: boolean,
+  now = new Date(),
+  earliestAttemptAt = now,
+): number {
+  const recipients = Math.max(0, Math.floor(recipientCount));
+  if (recipients === 0) return 0;
+
+  const nowMs = now.getTime();
+  const state = createDeliveryForecastState(precedingAttemptTimes);
+  let lastScheduledAt = nowMs;
+  for (let index = 0; index < recipients; index += 1) {
+    lastScheduledAt = scheduleForecastAttempt(
+      state,
+      earliestAttemptAt.getTime(),
+      settings,
+      nowMs,
+    );
+  }
+  return forecastDurationSeconds(
+    lastScheduledAt,
+    nowMs,
+    settings,
+    hasRecentAttempts,
   );
 }
 

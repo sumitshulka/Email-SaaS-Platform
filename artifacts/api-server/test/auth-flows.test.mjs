@@ -1621,7 +1621,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
 
     await db.insert(dbModule.systemConfigurationTable).values({
       key: "platform",
-      value: { defaultEmailsPerHour: 1, maxEmailsPerDay: 10 },
+      value: {
+        defaultEmailsPerHour: 1,
+        maxEmailsPerDay: 2,
+        maxConcurrentCampaigns: 2,
+      },
     });
     const queued = await api(`/campaigns/${campaign.body.id}/send`, {
       method: "POST",
@@ -1634,6 +1638,61 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     });
     assert.equal(queuedDashboard.body.pacing.emailsPerHour, 1);
     assert.equal(queuedDashboard.body.pacing.remainingEmails, 3);
+
+    const backlogCampaign = await api("/campaigns", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        name: "Campaign behind the queue",
+        subject: "A later workspace update",
+        textBody: "This message waits behind existing campaign work.",
+        listId: ownerList.body.id,
+      },
+    });
+    assert.equal(backlogCampaign.response.status, 201, JSON.stringify(backlogCampaign.body));
+    assert.ok(
+      backlogCampaign.body.estimatedDurationSeconds >
+        queuedDashboard.body.pacing.estimatedDurationSeconds,
+      "a draft estimate includes already queued work ahead of it",
+    );
+    const queuedBacklog = await api(`/campaigns/${backlogCampaign.body.id}/send`, {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(queuedBacklog.response.status, 202, JSON.stringify(queuedBacklog.body));
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({ createdAt: new Date(Date.now() + 60_000) })
+      .where(
+        eq(
+          dbModule.emailCampaignRecipientsTable.campaignId,
+          backlogCampaign.body.id,
+        ),
+      );
+    const campaignsWithBacklog = await api("/campaigns", {
+      cookie: owner.cookie,
+    });
+    const firstCampaignEstimate = campaignsWithBacklog.body.find(
+      (item) => item.id === campaign.body.id,
+    );
+    const laterCampaignEstimate = campaignsWithBacklog.body.find(
+      (item) => item.id === backlogCampaign.body.id,
+    );
+    assert.ok(
+      laterCampaignEstimate.estimatedDurationSeconds >
+        firstCampaignEstimate.estimatedDurationSeconds,
+      "a later campaign estimate includes earlier queued recipients and shared hourly/daily caps",
+    );
+    const backlogDashboard = await api(
+      `/campaigns/${backlogCampaign.body.id}`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(
+      backlogDashboard.body.pacing.estimatedDurationSeconds,
+      laterCampaignEstimate.estimatedDurationSeconds,
+    );
+    assert.ok(backlogDashboard.body.pacing.estimatedCompletionAt);
+
     const unsubscribed = await api(`/contacts/${ownerContacts[2].body.id}`, {
       method: "PATCH",
       cookie: owner.cookie,

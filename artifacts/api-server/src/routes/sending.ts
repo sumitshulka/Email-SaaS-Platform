@@ -69,7 +69,8 @@ import { sendTenantEmail } from "../lib/application-email";
 import { sanitizeCampaignHtml } from "../lib/campaign-template";
 import { encryptSecret } from "../lib/security";
 import {
-  estimateCampaignDeliverySeconds,
+  estimateCampaignDeliveryAfterQueueSeconds,
+  estimateCampaignQueueDeliverySeconds,
   getMinimumEmailSpacingSeconds,
   getPlatformSettings,
 } from "../lib/platform-settings";
@@ -282,6 +283,8 @@ async function campaignPayloads(userId: string) {
       .select({
         campaignId: emailCampaignRecipientsTable.campaignId,
         status: emailCampaignRecipientsTable.status,
+        nextAttemptAt: emailCampaignRecipientsTable.nextAttemptAt,
+        createdAt: emailCampaignRecipientsTable.createdAt,
       })
       .from(emailCampaignRecipientsTable)
       .where(eq(emailCampaignRecipientsTable.userId, userId)),
@@ -321,6 +324,49 @@ async function campaignPayloads(userId: string) {
       ),
     )
     .orderBy(asc(emailSendAttemptsTable.attemptedAt));
+  const activeCampaignIds = new Set(
+    campaigns
+      .filter(
+        (campaign) =>
+          campaign.status === "queued" || campaign.status === "sending",
+      )
+      .map((campaign) => campaign.id),
+  );
+  const inProgressCampaignIds = new Set(
+    recipients
+      .filter(
+        (recipient) =>
+          recipient.status === "sending" &&
+          activeCampaignIds.has(recipient.campaignId),
+      )
+      .map((recipient) => recipient.campaignId),
+  );
+  const queuedWorkStartAt = new Date(
+    estimateNow.getTime() +
+      (inProgressCampaignIds.size > 0
+        ? Math.max(1, settings.queuePollingSeconds) * 1000
+        : 0),
+  );
+  const queuedRecipients = recipients
+    .filter(
+      (recipient) =>
+        recipient.status === "queued" &&
+        activeCampaignIds.has(recipient.campaignId),
+    )
+    .map((recipient) => ({
+      campaignId: recipient.campaignId,
+      nextAttemptAt:
+        recipient.nextAttemptAt > queuedWorkStartAt
+          ? recipient.nextAttemptAt
+          : queuedWorkStartAt,
+      createdAt: recipient.createdAt,
+    }));
+  const queueForecast = estimateCampaignQueueDeliverySeconds(
+    queuedRecipients,
+    settings,
+    recentAttempts.map((attempt) => attempt.attemptedAt),
+    estimateNow,
+  );
   const counts = new Map<
     string,
     {
@@ -377,16 +423,29 @@ async function campaignPayloads(userId: string) {
         : campaign.status === "completed"
           ? 0
           : deliveryCounts.queued;
+    const estimatedDurationSeconds =
+      campaign.status === "completed"
+        ? 0
+        : campaign.status === "draft"
+          ? estimateCampaignDeliveryAfterQueueSeconds(
+              remainingRecipients,
+              settings,
+              queueForecast.projectedAttemptTimes,
+              recentAttempts.length > 0,
+              estimateNow,
+              queuedWorkStartAt,
+            )
+          : Math.max(
+              queueForecast.durationSecondsByCampaign.get(campaign.id) ?? 0,
+              inProgressCampaignIds.has(campaign.id)
+                ? Math.max(1, settings.queuePollingSeconds)
+                : 0,
+            );
     return {
       ...campaign,
       ...deliveryCounts,
       recipients,
-      estimatedDurationSeconds: estimateCampaignDeliverySeconds(
-        remainingRecipients,
-        settings,
-        recentAttempts.map((attempt) => attempt.attemptedAt),
-        estimateNow,
-      ),
+      estimatedDurationSeconds,
     };
   });
 }
