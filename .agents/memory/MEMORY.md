@@ -1,3 +1,4 @@
 - [Phase 1 scope language](phase-scope.md) — don't present future sending or billing capabilities as available until backed by working flows and real data.
 - [Isolated API helper checks](api-helper-tests.md) — avoid ESM test bundles that pull in PostgreSQL internals; CommonJS worked for temporary Node checks here.
 - [pg-mem with Drizzle](pg-mem-drizzle-adapter.md) — pg-mem's node-postgres adapter needs a small query shim for Drizzle's parser and array-row options.
+- [Schema push verification](schema-push-verification.md) — inspect SQL errors and actual schema; a successful command exit can accompany a partially applied schema push.

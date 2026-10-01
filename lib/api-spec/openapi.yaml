@@ -350,6 +350,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/import:
+    post:
+      operationId: importContacts
+      tags: [sending]
+      summary: Import contacts for the authenticated tenant
+      description: Imports valid rows, skips duplicates, and reports invalid rows or rows blocked by quota.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactImportInput"
+      responses:
+        "200":
+          description: Import results, including partial successes and the updated contact quota
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactImportResult"
+        "400":
+          description: Malformed import request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An active subscription is required to add contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/{contactId}:
     parameters:
       - name: contactId
@@ -1144,6 +1181,9 @@ components:
         name: { type: string }
         firstName: { type: string }
         lastName: { type: string }
+        companyName: { type: ["string", "null"], maxLength: 200 }
+        linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        phoneNumber: { type: ["string", "null"], maxLength: 40 }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
@@ -1154,20 +1194,67 @@ components:
       properties:
         email: { type: string, format: email, maxLength: 254 }
         name: { type: string, minLength: 1, maxLength: 120 }
-        firstName: { type: string, maxLength: 100 }
-        lastName: { type: string, maxLength: 100 }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        companyName: { type: string, maxLength: 200 }
+        linkedinUrl: { type: string, maxLength: 2048 }
+        phoneNumber: { type: string, maxLength: 40 }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
-      required: [email, name]
+      required: [email, firstName, lastName]
     ContactUpdate:
       type: object
       properties:
         email: { type: string, format: email, maxLength: 254 }
         name: { type: string, minLength: 1, maxLength: 120 }
-        firstName: { type: string, maxLength: 100 }
-        lastName: { type: string, maxLength: 100 }
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        companyName: { type: ["string", "null"], maxLength: 200 }
+        linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        phoneNumber: { type: ["string", "null"], maxLength: 40 }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
+    ContactImportRow:
+      type: object
+      properties:
+        rowNumber: { type: integer, minimum: 2 }
+        email: { type: string }
+        name: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        companyName: { type: string }
+        linkedinUrl: { type: string }
+        phoneNumber: { type: string }
+        subscribed: { type: boolean }
+        listIds: { type: array, items: { type: string } }
+      required: [rowNumber]
+    ContactImportInput:
+      type: object
+      properties:
+        contacts:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { $ref: "#/components/schemas/ContactImportRow" }
+      required: [contacts]
+    ContactImportIssue:
+      type: object
+      properties:
+        rowNumber: { type: integer, minimum: 2 }
+        reason: { type: string }
+      required: [rowNumber, reason]
+    ContactImportResult:
+      type: object
+      properties:
+        imported: { type: integer, minimum: 0 }
+        duplicate: { type: integer, minimum: 0 }
+        invalid: { type: integer, minimum: 0 }
+        limitReached: { type: integer, minimum: 0 }
+        issues:
+          type: array
+          items: { $ref: "#/components/schemas/ContactImportIssue" }
+        quota: { $ref: "#/components/schemas/ContactQuota" }
+      required: [imported, duplicate, invalid, limitReached, issues, quota]
     ContactList:
       type: object
       properties:

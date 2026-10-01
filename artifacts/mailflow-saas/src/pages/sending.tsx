@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity, AlertCircle, Check, CheckCircle2, CirclePlus, Clock3,
-  Edit3, Fingerprint, LoaderCircle, Mail, Search, Send,
+  Edit3, Fingerprint, LoaderCircle, Upload, Mail, Search, Send,
   ShieldCheck, Trash2, Users, X,
 } from 'lucide-react';
+import { ContactImportDialog } from '@/components/contact-import-dialog';
 import {
   getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
@@ -37,8 +38,8 @@ function Button({ children, onClick, variant = 'primary', disabled, type = 'butt
     : outlineButton;
   return <button type={type} data-testid={testId} onClick={onClick} disabled={disabled} className={cx(styles, className)}>{children}</button>;
 }
-function Field({ label, value, onChange, type = 'text', placeholder, required, hint, testId }: { label: string; value: string | number; onChange: (value: string) => void; type?: string; placeholder?: string; required?: boolean; hint?: string; testId: string }) {
-  return <label className="block"><span className={labelClass}>{label}</span><input data-testid={testId} className={inputClass} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} />{hint && <span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
+function Field({ label, value, onChange, type = 'text', placeholder, required, hint, testId, maxLength }: { label: string; value: string | number; onChange: (value: string) => void; type?: string; placeholder?: string; required?: boolean; hint?: string; testId: string; maxLength?: number }) {
+  return <label className="block"><span className={labelClass}>{label}</span><input data-testid={testId} className={inputClass} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} maxLength={maxLength} />{hint && <span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
 }
 function Notice({ kind = 'success', children, onDismiss }: { kind?: 'success' | 'error'; children: ReactNode; onDismiss: () => void }) {
   const error = kind === 'error';
@@ -158,8 +159,8 @@ export function SendingSettingsPage() {
   </></QueryState>;
 }
 
-type ContactForm = { email: string; firstName: string; lastName: string; subscribed: boolean; listIds: string[] };
-const emptyContact: ContactForm = { email: '', firstName: '', lastName: '', subscribed: true, listIds: [] };
+type ContactForm = { email: string; firstName: string; lastName: string; companyName: string; linkedinUrl: string; phoneNumber: string; subscribed: boolean; listIds: string[] };
+const emptyContact: ContactForm = { email: '', firstName: '', lastName: '', companyName: '', linkedinUrl: '', phoneNumber: '', subscribed: true, listIds: [] };
 
 export function ContactsPage() {
   const contactsQuery = useListContacts();
@@ -167,32 +168,31 @@ export function ContactsPage() {
   const create = useCreateContact(); const update = useUpdateContact(); const remove = useDeleteContact();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [search, setSearch] = useState(''); const [filter, setFilter] = useState('all');
-  const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact);
+  const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const contacts = contactsQuery.data?.contacts ?? [];
   const lists = (listsQuery.data || []) as ContactList[];
   const visible = useMemo(() => contacts.filter(c => {
     const term = search.trim().toLowerCase();
-    const matches = !term || `${c.email} ${c.firstName} ${c.lastName}`.toLowerCase().includes(term);
+    const matches = !term || `${c.email} ${c.firstName} ${c.lastName} ${c.companyName ?? ''} ${c.phoneNumber ?? ''} ${c.linkedinUrl ?? ''}`.toLowerCase().includes(term);
     return matches && (filter === 'all' || (filter === 'subscribed' ? c.subscribed : !c.subscribed));
   }), [contacts, search, filter]);
   const reload = () => { void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const openNew = () => { setEditing(null); setForm(emptyContact); };
-  const openEdit = (contact: Contact) => { setEditing(contact); setForm({ email: contact.email, firstName: contact.firstName, lastName: contact.lastName, subscribed: contact.subscribed, listIds: [...contact.listIds] }); };
+  const openEdit = (contact: Contact) => { setEditing(contact); setForm({ email: contact.email, firstName: contact.firstName, lastName: contact.lastName, companyName: contact.companyName ?? '', linkedinUrl: contact.linkedinUrl ?? '', phoneNumber: contact.phoneNumber ?? '', subscribed: contact.subscribed, listIds: [...contact.listIds] }); };
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const firstName = form.firstName.trim();
     const lastName = form.lastName.trim();
-    const data = {
-      ...form,
-      email: form.email.trim(),
-      firstName,
-      lastName,
-      name: [firstName, lastName].filter(Boolean).join(" "),
-    };
-    const done = () => { reload(); setEditing(null); setNotice({ kind: 'success', text: editing ? 'Contact changes saved.' : 'Contact added to your audience.' }); };
+    const email = form.email.trim();
+    if (!firstName || !lastName || !email) { setNotice({ kind: 'error', text: 'First name, last name, and email are required.' }); return; }
+    const done = () => { reload(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Contact changes saved.' : 'Contact added to your audience.' }); };
     const failed = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
-    if (editing) update.mutate({ contactId: editing.id, data }, { onSuccess: done, onError: failed });
-    else create.mutate({ data }, { onSuccess: done, onError: failed });
+    const companyName = form.companyName.trim(); const linkedinUrl = form.linkedinUrl.trim(); const phoneNumber = form.phoneNumber.trim();
+    if (editing) {
+      update.mutate({ contactId: editing.id, data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, companyName: companyName || null, linkedinUrl: linkedinUrl || null, phoneNumber: phoneNumber || null } }, { onSuccess: done, onError: failed });
+    } else {
+      create.mutate({ data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, ...(companyName ? { companyName } : {}), ...(linkedinUrl ? { linkedinUrl } : {}), ...(phoneNumber ? { phoneNumber } : {}) } }, { onSuccess: done, onError: failed });
+    }
   };
   const deleteContact = (contact: Contact) => {
     if (!window.confirm(`Delete ${contact.email} from this workspace?`)) return;
@@ -201,7 +201,7 @@ export function ContactsPage() {
   const toggleSub = (contact: Contact) => update.mutate({ contactId: contact.id, data: { subscribed: !contact.subscribed } }, { onSuccess: () => { reload(); setNotice({ kind: 'success', text: contact.subscribed ? 'Contact unsubscribed.' : 'Contact subscribed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
   const busy = create.isPending || update.isPending;
   return <QueryState loading={contactsQuery.isLoading || listsQuery.isLoading} error={contactsQuery.isError || listsQuery.isError} retry={() => { void contactsQuery.refetch(); void listsQuery.refetch(); }} label="contacts"><>
-    <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button>}/>
+    <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     <div className="mb-5 grid gap-3 sm:grid-cols-3">
       <div className={`${panelClass} p-4`}><div className="text-[11px] text-[#778291]">All contacts</div><div className="display mt-2 text-[26px] font-bold text-[#192638]">{contacts.length.toLocaleString()}</div></div>
@@ -212,12 +212,12 @@ export function ContactsPage() {
       <div className="flex flex-col gap-3 border-b border-[#e9edf0] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Audience directory</h2><p className="mt-1 text-[11px] text-[#788392]">{visible.length} of {contacts.length} contacts</p></div>
         <div className="flex flex-wrap gap-2">
-          <label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c97a3]"/><input data-testid="input-search-contacts" className={`${inputClass} w-full pl-9 sm:w-[230px]`} placeholder="Search name or email" value={search} onChange={e => setSearch(e.target.value)}/></label>
+          <label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c97a3]"/><input data-testid="input-search-contacts" className={`${inputClass} w-full pl-9 sm:w-[230px]`} placeholder="Search name, email, company, phone" value={search} onChange={e => setSearch(e.target.value)}/></label>
           <select data-testid="select-contact-status-filter" className={`${inputClass} w-auto min-w-[135px]`} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="subscribed">Subscribed</option><option value="unsubscribed">Unsubscribed</option></select>
         </div>
       </div>
       {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
-        <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span><span className="block text-[12px] font-semibold text-[#26364a]">{contact.firstName} {contact.lastName}</span><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
+        <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span><span className="block text-[12px] font-semibold text-[#26364a]">{contact.firstName} {contact.lastName}</span><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span>{(contact.companyName || contact.phoneNumber || contact.linkedinUrl) && <span data-testid={`text-contact-details-${contact.id}`} className="mt-0.5 block text-[11px] text-[#7c8794]">{[contact.companyName, contact.phoneNumber].filter(Boolean).join(' · ')}{contact.linkedinUrl && <>{(contact.companyName || contact.phoneNumber) ? ' · ' : ''}{/^https?:\/\//i.test(contact.linkedinUrl) ? <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-[#245b9b] hover:underline">LinkedIn</a> : contact.linkedinUrl}</>}</span>}</span></div></td>
         <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{contact.listIds.length ? contact.listIds.map(id => <span key={id} className="rounded bg-[#f1f4f7] px-2 py-1 text-[10px] text-[#5f6e7f]">{lists.find(l => l.id === id)?.name || 'List'}</span>) : <span className="text-[11px] text-[#9aa3ad]">No list</span>}</div></td>
         <td className="px-4 py-3.5"><button data-testid={`button-toggle-subscription-${contact.id}`} disabled={update.isPending} onClick={() => toggleSub(contact)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#dbe8f7] disabled:opacity-60"><Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status></button></td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
@@ -226,13 +226,16 @@ export function ContactsPage() {
     </section>
     {editing !== undefined && <Modal title={editing ? 'Edit contact' : 'Add contact'} subtitle="Contact details and list memberships for this workspace." close={() => setEditing(undefined)}>
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Email address" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} type="email" placeholder="person@company.com" required testId="input-contact-email"/>
-        <div className="grid gap-3 sm:grid-cols-2"><Field label="First name" value={form.firstName} onChange={v => setForm(f => ({ ...f, firstName: v }))} required testId="input-contact-first-name"/><Field label="Last name" value={form.lastName} onChange={v => setForm(f => ({ ...f, lastName: v }))} required testId="input-contact-last-name"/></div>
+        <Field label="Email address" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} type="email" placeholder="person@company.com" required maxLength={254} testId="input-contact-email"/>
+        <div className="grid gap-3 sm:grid-cols-2"><Field label="First name" value={form.firstName} onChange={v => setForm(f => ({ ...f, firstName: v }))} required maxLength={100} testId="input-contact-first-name"/><Field label="Last name" value={form.lastName} onChange={v => setForm(f => ({ ...f, lastName: v }))} required maxLength={100} testId="input-contact-last-name"/></div>
+        <Field label="Company name" value={form.companyName} onChange={v => setForm(f => ({ ...f, companyName: v }))} maxLength={200} placeholder="Optional" testId="input-contact-company"/>
+        <div className="grid gap-3 sm:grid-cols-2"><Field label="LinkedIn URL" value={form.linkedinUrl} onChange={v => setForm(f => ({ ...f, linkedinUrl: v }))} maxLength={2048} placeholder="Optional" testId="input-contact-linkedin"/><Field label="Phone number" value={form.phoneNumber} onChange={v => setForm(f => ({ ...f, phoneNumber: v }))} maxLength={40} placeholder="Optional" testId="input-contact-phone"/></div>
         <div className="rounded-md border border-[#e3e7eb] p-3"><div className="mb-2 text-[12px] font-semibold text-[#344154]">List memberships</div>{lists.length ? <div className="max-h-36 space-y-2 overflow-y-auto">{lists.map(list => <label key={list.id} className="flex items-center gap-2 text-[12px] text-[#536172]"><input data-testid={`checkbox-contact-list-${list.id}`} type="checkbox" checked={form.listIds.includes(list.id)} onChange={e => setForm(f => ({ ...f, listIds: e.target.checked ? [...f.listIds, list.id] : f.listIds.filter(id => id !== list.id) }))} className="accent-[#174f99]"/>{list.name}{!list.active && <span className="text-[10px] text-[#a0a8b3]">inactive</span>}</label>)}</div> : <p className="text-[11px] text-[#818d9a]">Create a list first to organize contacts.</p>}</div>
         <label className="flex items-center gap-2 text-[12px] font-medium text-[#445267]"><input data-testid="checkbox-contact-subscribed" type="checkbox" checked={form.subscribed} onChange={e => setForm(f => ({ ...f, subscribed: e.target.checked }))} className="accent-[#174f99]"/>Contact is subscribed and eligible for campaigns</label>
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-contact" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-contact" disabled={busy}>{busy && <LoaderCircle className="h-4 w-4 animate-spin"/>}{busy ? 'Saving contact' : editing ? 'Save changes' : 'Add contact'}</Button></div>
       </form>
     </Modal>}
+    {importing && <ContactImportDialog onClose={() => setImporting(false)} onChanged={reload}/>}
   </></QueryState>;
 }
 
@@ -302,7 +305,7 @@ export function CampaignsPage() {
     const success = () => { refresh(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
     const fail = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
     if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
-    else create.mutate({ data }, { onSuccess: success, onError: fail });
+    else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
   };
   const queue = (campaign: CampaignSummary) => {
     if (!window.confirm(`Queue “${campaign.name}” for ${campaign.recipients} recipients?`)) return;

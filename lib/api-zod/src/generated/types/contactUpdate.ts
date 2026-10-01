@@ -14,10 +14,31 @@ export interface ContactUpdate {
      * @maxLength 120
      */
   name?: string;
-  /** @maxLength 100 */
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
   firstName?: string;
-  /** @maxLength 100 */
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
   lastName?: string;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyName?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  linkedinUrl?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phoneNumber?: string | null;
   subscribed?: boolean;
   /** @maxItems 100 */
   listIds?: string[];

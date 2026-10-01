@@ -178,10 +178,13 @@ memory.public.none(`
   CREATE TABLE contacts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name varchar(120) NOT NULL DEFAULT '',
+    name varchar(201) NOT NULL DEFAULT '',
     email varchar(254) NOT NULL,
     first_name varchar(100) NOT NULL DEFAULT '',
     last_name varchar(100) NOT NULL DEFAULT '',
+    company_name varchar(200),
+    linkedin_url varchar(2048),
+    phone_number varchar(40),
     subscribed boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -597,14 +600,22 @@ describe("tenant contact management and package quotas", { concurrency: false },
     const first = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,
-      body: { name: "Alex Morgan", email: "ALEX@example.test" },
+      body: {
+        firstName: "Alex",
+        lastName: "Morgan",
+        email: "ALEX@example.test",
+      },
     });
     assert.equal(first.response.status, 201, JSON.stringify(first.body));
     assert.equal(first.body.email, "alex@example.test");
     const duplicate = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,
-      body: { name: "Alex Again", email: "alex@example.test" },
+      body: {
+        firstName: "Alex",
+        lastName: "Again",
+        email: "alex@example.test",
+      },
     });
     assert.equal(duplicate.response.status, 409);
     assert.equal(duplicate.body.code, "CONTACT_ALREADY_EXISTS");
@@ -612,13 +623,17 @@ describe("tenant contact management and package quotas", { concurrency: false },
     const second = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,
-      body: { name: "Jamie Lee", email: "jamie@example.test" },
+      body: { firstName: "Jamie", lastName: "Lee", email: "jamie@example.test" },
     });
     assert.equal(second.response.status, 201, JSON.stringify(second.body));
     const blockedByLimit = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,
-      body: { name: "Taylor Reed", email: "taylor@example.test" },
+      body: {
+        firstName: "Taylor",
+        lastName: "Reed",
+        email: "taylor@example.test",
+      },
     });
     assert.equal(blockedByLimit.response.status, 409);
     assert.equal(blockedByLimit.body.code, "CONTACT_LIMIT_REACHED");
@@ -644,7 +659,11 @@ describe("tenant contact management and package quotas", { concurrency: false },
     const subscriptionRequired = await api("/contacts", {
       method: "POST",
       cookie: other.cookie,
-      body: { name: "No Plan", email: "no-plan@example.test" },
+      body: {
+        firstName: "No",
+        lastName: "Plan",
+        email: "no-plan@example.test",
+      },
     });
     assert.equal(subscriptionRequired.response.status, 403);
     assert.equal(subscriptionRequired.body.code, "SUBSCRIPTION_REQUIRED");
@@ -662,9 +681,210 @@ describe("tenant contact management and package quotas", { concurrency: false },
     const allowedAfterDelete = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,
-      body: { name: "Taylor Reed", email: "taylor@example.test" },
+      body: {
+        firstName: "Taylor",
+        lastName: "Reed",
+        email: "taylor@example.test",
+      },
     });
     assert.equal(allowedAfterDelete.response.status, 201, JSON.stringify(allowedAfterDelete.body));
+  });
+
+  it("imports partial batches with required names, optional fields, duplicate protection, and quota results", async () => {
+    const owner = await loggedInUser({
+      username: "contact-import-owner",
+      email: "contact-import-owner@example.test",
+    });
+    const noPlan = await loggedInUser({
+      username: "contact-import-no-plan",
+      email: "contact-import-no-plan@example.test",
+    });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Two Contact Import Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 2,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "22222222-2222-4222-8222-222222222222",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const legacyNameOnly = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Legacy Name", email: "legacy@example.test" },
+    });
+    assert.equal(legacyNameOnly.response.status, 400);
+    const whitespaceName = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        firstName: "  ",
+        lastName: "Contact",
+        email: "blank-name@example.test",
+      },
+    });
+    assert.equal(whitespaceName.response.status, 400);
+
+    const existing = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        firstName: "Existing",
+        lastName: "Person",
+        name: "Ignored legacy name",
+        email: "existing@example.test",
+        companyName: "Original Company",
+        linkedinUrl: "https://linkedin.example/original",
+        phoneNumber: "555-0100",
+      },
+    });
+    assert.equal(existing.response.status, 201, JSON.stringify(existing.body));
+    assert.equal(existing.body.name, "Existing Person");
+
+    const unauthenticated = await api("/contacts/import", {
+      method: "POST",
+      body: { contacts: [{ rowNumber: 2 }] },
+    });
+    assert.equal(unauthenticated.response.status, 401);
+    const malformed = await api("/contacts/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { contacts: [] },
+    });
+    assert.equal(malformed.response.status, 400);
+    const subscriptionRequired = await api("/contacts/import", {
+      method: "POST",
+      cookie: noPlan.cookie,
+      body: {
+        contacts: [
+          {
+            rowNumber: 2,
+            firstName: "No",
+            lastName: "Plan",
+            email: "no-plan-import@example.test",
+          },
+        ],
+      },
+    });
+    assert.equal(subscriptionRequired.response.status, 403);
+
+    const imported = await api("/contacts/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        contacts: [
+          {
+            rowNumber: 2,
+            firstName: "Changed",
+            lastName: "Duplicate",
+            email: " EXISTING@EXAMPLE.TEST ",
+            companyName: "Replacement Company",
+          },
+          {
+            rowNumber: 3,
+            firstName: " New ",
+            lastName: " Contact ",
+            name: "Ignored import name",
+            email: " New@Example.Test ",
+            companyName: " Example Co ",
+            linkedinUrl: "",
+            phoneNumber: " 555-0199 ",
+          },
+          {
+            rowNumber: 4,
+            firstName: "   ",
+            lastName: "Invalid",
+            email: "invalid-name@example.test",
+          },
+          {
+            rowNumber: 5,
+            firstName: "Over",
+            lastName: "Limit",
+            email: "over-limit@example.test",
+          },
+          {
+            rowNumber: 6,
+            firstName: "Too",
+            lastName: "Long",
+            email: "too-long-company@example.test",
+            companyName: "C".repeat(201),
+          },
+        ],
+      },
+    });
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
+    assert.deepEqual(
+      {
+        imported: imported.body.imported,
+        duplicate: imported.body.duplicate,
+        invalid: imported.body.invalid,
+        limitReached: imported.body.limitReached,
+      },
+      { imported: 1, duplicate: 1, invalid: 2, limitReached: 1 },
+    );
+    assert.deepEqual(
+      imported.body.issues.map(({ rowNumber }) => rowNumber),
+      [2, 4, 5, 6],
+    );
+    assert.deepEqual(imported.body.quota, {
+      used: 2,
+      limit: 2,
+      remaining: 0,
+      canAdd: false,
+      requiresSubscription: false,
+    });
+
+    const contacts = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(contacts.response.status, 200);
+    const importedContact = contacts.body.contacts.find(
+      (contact) => contact.email === "new@example.test",
+    );
+    const unchangedDuplicate = contacts.body.contacts.find(
+      (contact) => contact.email === "existing@example.test",
+    );
+    assert.ok(importedContact);
+    assert.equal(importedContact.name, "New Contact");
+    assert.equal(importedContact.companyName, "Example Co");
+    assert.equal(importedContact.linkedinUrl, null);
+    assert.equal(importedContact.phoneNumber, "555-0199");
+    assert.equal(importedContact.subscribed, false);
+    assert.equal(unchangedDuplicate.companyName, "Original Company");
+    assert.equal(unchangedDuplicate.firstName, "Existing");
+
+    const blankUpdateName = await api(`/contacts/${importedContact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { firstName: "   " },
+    });
+    assert.equal(blankUpdateName.response.status, 400);
+    const clearedOptionalFields = await api(`/contacts/${importedContact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        companyName: null,
+        linkedinUrl: null,
+        phoneNumber: null,
+      },
+    });
+    assert.equal(
+      clearedOptionalFields.response.status,
+      200,
+      JSON.stringify(clearedOptionalFields.body),
+    );
+    assert.equal(clearedOptionalFields.body.companyName, null);
+    assert.equal(clearedOptionalFields.body.linkedinUrl, null);
+    assert.equal(clearedOptionalFields.body.phoneNumber, null);
   });
 });
 
@@ -942,6 +1162,35 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
   it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
     const owner = await loggedInUser({ username: "sending-owner" });
     const other = await loggedInUser({ username: "sending-other" });
+    const [sendingPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Sending Test Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 10,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values([
+      {
+        userId: owner.user.id,
+        packageId: sendingPackage.id,
+        paymentId: "33333333-3333-4333-8333-333333333333",
+        status: "active",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60 * 60_000),
+      },
+      {
+        userId: other.user.id,
+        packageId: sendingPackage.id,
+        paymentId: "44444444-4444-4444-8444-444444444444",
+        status: "active",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60 * 60_000),
+      },
+    ]);
 
     const ownerList = await api("/contact-lists", {
       method: "POST",
@@ -987,8 +1236,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
 
     const isolatedContacts = await api("/contacts", { cookie: owner.cookie });
     assert.equal(isolatedContacts.response.status, 200);
-    assert.equal(isolatedContacts.body.length, 3);
-    assert.ok(isolatedContacts.body.every((contact) => contact.email.endsWith("@owner.test")));
+    assert.equal(isolatedContacts.body.contacts.length, 3);
+    assert.ok(
+      isolatedContacts.body.contacts.every((contact) =>
+        contact.email.endsWith("@owner.test"),
+      ),
+    );
     const crossTenantMembership = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,

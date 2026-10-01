@@ -13,11 +13,23 @@ export interface ContactInput {
      * @minLength 1
      * @maxLength 120
      */
-  name: string;
-  /** @maxLength 100 */
-  firstName?: string;
-  /** @maxLength 100 */
-  lastName?: string;
+  name?: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  firstName: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  lastName: string;
+  /** @maxLength 200 */
+  companyName?: string;
+  /** @maxLength 2048 */
+  linkedinUrl?: string;
+  /** @maxLength 40 */
+  phoneNumber?: string;
   subscribed?: boolean;
   /** @maxItems 100 */
   listIds?: string[];

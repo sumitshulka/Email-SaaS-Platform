@@ -12,6 +12,21 @@ export interface Contact {
   name: string;
   firstName: string;
   lastName: string;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyName?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  linkedinUrl?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phoneNumber?: string | null;
   subscribed: boolean;
   listIds: string[];
   createdAt: Date;

@@ -35,7 +35,7 @@ export default function ContactsPage() {
   const createContact = useCreateContact();
   const deleteContact = useDeleteContact();
   const form = useForm<ContactInput>({
-    defaultValues: { name: "", email: "" },
+    defaultValues: { firstName: "", lastName: "", email: "" },
   });
   const data = contactsQuery.data;
   const progress = data && data.quota.limit > 0
@@ -44,7 +44,7 @@ export default function ContactsPage() {
 
   const submit = (values: ContactInput) => {
     createContact.mutate(
-      { data: { name: values.name.trim(), email: values.email.trim().toLowerCase() } },
+      { data: { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim().toLowerCase() } },
       {
         onSuccess: () => {
           form.reset();
@@ -180,7 +180,7 @@ export default function ContactsPage() {
                   className="flex items-center justify-between gap-4 px-5 py-4"
                 >
                   <div className="min-w-0">
-                    <h3 data-testid={`text-contact-name-${contact.id}`} className="truncate text-[13px] font-semibold text-[#26374a]">{contact.name}</h3>
+                    <h3 data-testid={`text-contact-name-${contact.id}`} className="truncate text-[13px] font-semibold text-[#26374a]">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.name}</h3>
                     <p data-testid={`text-contact-email-${contact.id}`} className="mt-1 truncate text-[11px] text-[#758394]">{contact.email}</p>
                     <p className="mt-1 text-[10px] text-[#8994a0]">Added {new Date(contact.createdAt).toLocaleDateString()}</p>
                   </div>
@@ -189,7 +189,7 @@ export default function ContactsPage() {
                     type="button"
                     onClick={() => remove(contact.id)}
                     disabled={deleteContact.isPending}
-                    aria-label={`Delete ${contact.name}`}
+                    aria-label={`Delete ${[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email}`}
                     className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[#e2e6ea] px-3 text-[11px] font-semibold text-[#7b4b42] hover:bg-[#fff6f3] disabled:opacity-50"
                   >
                     {deleteContact.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -213,23 +213,47 @@ export default function ContactsPage() {
             <form onSubmit={form.handleSubmit(submit)} className="mt-5 space-y-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="firstName"
                 rules={{
-                  required: "Enter a name.",
-                  maxLength: { value: 120, message: "Names can be up to 120 characters." },
-                  validate: value => value.trim().length > 0 || "Enter a name.",
+                  required: "Enter a first name.",
+                  maxLength: { value: 100, message: "Up to 100 characters." },
+                  validate: value => value.trim().length > 0 || "Enter a first name.",
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>First name</FormLabel>
                     <FormControl>
                       <input
                         {...field}
-                        data-testid="input-contact-name"
-                        autoComplete="name"
-                        maxLength={120}
+                        data-testid="input-contact-first-name"
+                        maxLength={100}
                         disabled={!quota.canAdd || createContact.isPending}
-                        placeholder="e.g. Alex Morgan"
+                        placeholder="e.g. Alex"
+                        className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8] disabled:bg-[#f3f5f7]"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="lastName"
+                rules={{
+                  required: "Enter a last name.",
+                  maxLength: { value: 100, message: "Up to 100 characters." },
+                  validate: value => value.trim().length > 0 || "Enter a last name.",
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last name</FormLabel>
+                    <FormControl>
+                      <input
+                        {...field}
+                        data-testid="input-contact-last-name"
+                        maxLength={100}
+                        disabled={!quota.canAdd || createContact.isPending}
+                        placeholder="e.g. Morgan"
                         className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8] disabled:bg-[#f3f5f7]"
                       />
                     </FormControl>

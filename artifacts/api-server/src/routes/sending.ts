@@ -26,6 +26,8 @@ import {
   DeleteContactResponse,
   GetTenantSendingSettingsResponse,
   GetUserDashboardResponse,
+  ImportContactsBody,
+  ImportContactsResponse,
   ListCampaignsResponse,
   ListContactListsResponse,
   ListContactsResponse,
@@ -66,6 +68,33 @@ import { requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
 const MASKED_CREDENTIAL = "••••••";
+const contactTextFields = [
+  "email",
+  "firstName",
+  "lastName",
+  "companyName",
+  "linkedinUrl",
+  "phoneNumber",
+] as const;
+
+function normalizedContactInput(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const normalized = { ...(input as Record<string, unknown>) };
+  // `name` is retained in the contract for legacy clients, but is always derived
+  // from the structured name fields.
+  delete normalized.name;
+  for (const field of contactTextFields) {
+    if (typeof normalized[field] === "string") {
+      normalized[field] = normalized[field].trim();
+    }
+  }
+  return normalized;
+}
+
+function optionalContactValue(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
 
 function sendingSettingsResponse(
   config: typeof tenantSendingConfigurationTable.$inferSelect | undefined,
@@ -453,29 +482,17 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
 });
 
 router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
-  const parsed = CreateContactBody.safeParse(req.body);
+  const parsed = CreateContactBody.safeParse(normalizedContactInput(req.body));
   if (!parsed.success) {
     res.status(400).json({ error: "Some contact details are invalid.", code: "INVALID_INPUT" });
     return;
   }
   const userId = req.authUser!.id;
   const listIds = parsed.data.listIds ?? [];
-  const suppliedName = parsed.data.name?.trim() ?? "";
-  const firstName = parsed.data.firstName?.trim() ?? "";
-  const lastName = parsed.data.lastName?.trim() ?? "";
-  const fallbackName = [firstName, lastName].filter(Boolean).join(" ");
-  const name = suppliedName || fallbackName;
-  if (!name || name.length > 120) {
-    res.status(400).json({
-      error: "Enter a contact name and a valid email address.",
-      code: "INVALID_INPUT",
-    });
-    return;
-  }
-  const legacyNameParts = suppliedName.split(/\s+/);
-  const storedFirstName = firstName || legacyNameParts.shift() || "";
-  const storedLastName = lastName || legacyNameParts.join(" ");
-  const email = parsed.data.email.trim().toLowerCase();
+  const firstName = parsed.data.firstName;
+  const lastName = parsed.data.lastName;
+  const name = `${firstName} ${lastName}`;
+  const email = parsed.data.email.toLowerCase();
   const subscribed = parsed.data.subscribed ?? true;
   const settings = await getPlatformSettings();
   if (!(await isValidTenantListSelection(userId, listIds))) {
@@ -546,8 +563,11 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
         userId,
         name,
         email,
-        firstName: storedFirstName,
-        lastName: storedLastName,
+        firstName,
+        lastName,
+        companyName: optionalContactValue(parsed.data.companyName),
+        linkedinUrl: optionalContactValue(parsed.data.linkedinUrl),
+        phoneNumber: optionalContactValue(parsed.data.phoneNumber),
         subscribed,
       })
       .onConflictDoNothing({
@@ -601,12 +621,246 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
   );
 });
 
+router.post(
+  "/contacts/import",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const requestBody =
+      req.body && typeof req.body === "object" && !Array.isArray(req.body)
+        ? {
+            ...(req.body as Record<string, unknown>),
+            contacts: Array.isArray((req.body as Record<string, unknown>).contacts)
+              ? ((req.body as Record<string, unknown>).contacts as unknown[]).map(
+                  normalizedContactInput,
+                )
+              : (req.body as Record<string, unknown>).contacts,
+          }
+        : req.body;
+    const parsed = ImportContactsBody.safeParse(requestBody);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Provide between 1 and 200 contact rows with valid row numbers.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const rows = parsed.data.contacts.map((row) => {
+      const { rowNumber, ...contactInput } = row;
+      const validated = CreateContactBody.safeParse(contactInput);
+      return validated.success
+        ? { valid: true as const, rowNumber, data: validated.data }
+        : {
+            valid: false as const,
+            rowNumber,
+            reason: validated.error.issues
+              .map((issue) => `${issue.path.join(".") || "contact"}: ${issue.message}`)
+              .join("; "),
+          };
+    });
+    const userId = req.authUser!.id;
+    const settings = await getPlatformSettings();
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1)
+        .for("update");
+      if (!lockedUser) return { kind: "user_missing" as const };
+
+      const now = new Date();
+      const [activeSubscription] = await tx
+        .select({ contactLimit: subscriptionPackagesTable.contactLimit })
+        .from(userSubscriptionsTable)
+        .innerJoin(
+          subscriptionPackagesTable,
+          eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+        )
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, userId),
+            eq(userSubscriptionsTable.status, "active"),
+            lte(userSubscriptionsTable.startsAt, now),
+            gt(userSubscriptionsTable.endsAt, now),
+          ),
+        )
+        .orderBy(desc(userSubscriptionsTable.endsAt))
+        .limit(1);
+      if (!activeSubscription && !settings.allowUserWithoutSubscription) {
+        return { kind: "subscription_required" as const };
+      }
+
+      const limit = Math.min(
+        activeSubscription?.contactLimit ?? settings.maxContactsPerUser,
+        settings.maxContactsPerUser,
+      );
+      const [{ value: initialUsed }] = await tx
+        .select({ value: count() })
+        .from(contactsTable)
+        .where(eq(contactsTable.userId, userId));
+      let used = Number(initialUsed);
+      let imported = 0;
+      let duplicate = 0;
+      let invalid = 0;
+      let limitReached = 0;
+      const issues: { rowNumber: number; reason: string }[] = [];
+
+      for (const row of rows) {
+        if (!row.valid) {
+          invalid += 1;
+          issues.push({ rowNumber: row.rowNumber, reason: row.reason });
+          continue;
+        }
+        const { data } = row;
+        const email = data.email.toLowerCase();
+        const listIds = data.listIds ?? [];
+        const uniqueListIds = [...new Set(listIds)];
+        if (uniqueListIds.length !== listIds.length) {
+          invalid += 1;
+          issues.push({
+            rowNumber: row.rowNumber,
+            reason: "A contact cannot be added to the same list more than once.",
+          });
+          continue;
+        }
+        if (uniqueListIds.length > 0) {
+          const tenantLists = await tx
+            .select({ id: contactListsTable.id })
+            .from(contactListsTable)
+            .where(
+              and(
+                eq(contactListsTable.userId, userId),
+                inArray(contactListsTable.id, uniqueListIds),
+              ),
+            );
+          if (tenantLists.length !== uniqueListIds.length) {
+            invalid += 1;
+            issues.push({
+              rowNumber: row.rowNumber,
+              reason: "Choose only contact lists from your workspace.",
+            });
+            continue;
+          }
+        }
+
+        const [existing] = await tx
+          .select({ id: contactsTable.id })
+          .from(contactsTable)
+          .where(
+            and(
+              eq(contactsTable.userId, userId),
+              eq(contactsTable.email, email),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          duplicate += 1;
+          issues.push({
+            rowNumber: row.rowNumber,
+            reason: "A contact with this email already exists in your workspace.",
+          });
+          continue;
+        }
+        if (used >= limit) {
+          limitReached += 1;
+          issues.push({
+            rowNumber: row.rowNumber,
+            reason: "The workspace contact limit has been reached.",
+          });
+          continue;
+        }
+
+        const firstName = data.firstName;
+        const lastName = data.lastName;
+        const [created] = await tx
+          .insert(contactsTable)
+          .values({
+            userId,
+            name: `${firstName} ${lastName}`,
+            email,
+            firstName,
+            lastName,
+            companyName: optionalContactValue(data.companyName),
+            linkedinUrl: optionalContactValue(data.linkedinUrl),
+            phoneNumber: optionalContactValue(data.phoneNumber),
+            subscribed: data.subscribed ?? false,
+          })
+          .onConflictDoNothing({
+            target: [contactsTable.userId, contactsTable.email],
+          })
+          .returning();
+        if (!created) {
+          duplicate += 1;
+          issues.push({
+            rowNumber: row.rowNumber,
+            reason: "A contact with this email already exists in your workspace.",
+          });
+          continue;
+        }
+        if (uniqueListIds.length > 0) {
+          await tx.insert(contactListMembersTable).values(
+            uniqueListIds.map((listId) => ({
+              userId,
+              listId,
+              contactId: created.id,
+            })),
+          );
+        }
+        imported += 1;
+        used += 1;
+      }
+
+      return {
+        kind: "imported" as const,
+        imported,
+        duplicate,
+        invalid,
+        limitReached,
+        issues,
+        quota: {
+          used,
+          limit,
+          remaining: Math.max(0, limit - used),
+          canAdd: used < limit,
+          requiresSubscription: false,
+        },
+      };
+    });
+
+    if (result.kind === "user_missing") {
+      res.status(401).json({
+        error: "Please sign in to continue.",
+        code: "UNAUTHENTICATED",
+      });
+      return;
+    }
+    if (result.kind === "subscription_required") {
+      res.status(403).json({
+        error: "An active subscription is required to add contacts.",
+        code: "SUBSCRIPTION_REQUIRED",
+      });
+      return;
+    }
+    res.json(
+      ImportContactsResponse.parse({
+        imported: result.imported,
+        duplicate: result.duplicate,
+        invalid: result.invalid,
+        limitReached: result.limitReached,
+        issues: result.issues,
+        quota: result.quota,
+      }),
+    );
+  },
+);
+
 router.patch(
   "/contacts/:contactId",
   requireUserRole,
   async (req, res): Promise<void> => {
     const params = UpdateContactParams.safeParse(req.params);
-    const parsed = UpdateContactBody.safeParse(req.body);
+    const parsed = UpdateContactBody.safeParse(normalizedContactInput(req.body));
     if (!params.success || !parsed.success || Object.keys(parsed.data ?? {}).length === 0) {
       res.status(400).json({ error: "Some contact details are invalid.", code: "INVALID_INPUT" });
       return;
@@ -629,7 +883,7 @@ router.patch(
         .where(
           and(
             eq(contactsTable.userId, userId),
-            eq(contactsTable.email, parsed.data.email.trim().toLowerCase()),
+            eq(contactsTable.email, parsed.data.email.toLowerCase()),
             ne(contactsTable.id, params.data.contactId),
           ),
         )
@@ -644,20 +898,41 @@ router.patch(
     }
 
     const updateResult = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({
+          id: contactsTable.id,
+          name: contactsTable.name,
+          firstName: contactsTable.firstName,
+          lastName: contactsTable.lastName,
+        })
+        .from(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.id, params.data.contactId),
+            eq(contactsTable.userId, userId),
+          ),
+        )
+        .for("update");
+      if (!existing) return null;
+      const firstName = parsed.data.firstName ?? existing.firstName;
+      const lastName = parsed.data.lastName ?? existing.lastName;
       const [updated] = await tx
         .update(contactsTable)
         .set({
-          ...(parsed.data.name !== undefined
-            ? { name: parsed.data.name.trim() }
-            : {}),
+          name: `${firstName} ${lastName}`.trim() || existing.name,
           ...(parsed.data.email
-            ? { email: parsed.data.email.trim().toLowerCase() }
+            ? { email: parsed.data.email.toLowerCase() }
             : {}),
-          ...(parsed.data.firstName !== undefined
-            ? { firstName: parsed.data.firstName.trim() }
+          firstName,
+          lastName,
+          ...(parsed.data.companyName !== undefined
+            ? { companyName: optionalContactValue(parsed.data.companyName) }
             : {}),
-          ...(parsed.data.lastName !== undefined
-            ? { lastName: parsed.data.lastName.trim() }
+          ...(parsed.data.linkedinUrl !== undefined
+            ? { linkedinUrl: optionalContactValue(parsed.data.linkedinUrl) }
+            : {}),
+          ...(parsed.data.phoneNumber !== undefined
+            ? { phoneNumber: optionalContactValue(parsed.data.phoneNumber) }
             : {}),
           ...(parsed.data.subscribed !== undefined
             ? { subscribed: parsed.data.subscribed }

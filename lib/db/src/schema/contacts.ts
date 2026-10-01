@@ -18,10 +18,13 @@ export const contactsTable = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 120 }).notNull().default(""),
+    name: varchar("name", { length: 201 }).notNull().default(""),
     email: varchar("email", { length: 254 }).notNull(),
     firstName: varchar("first_name", { length: 100 }).notNull().default(""),
     lastName: varchar("last_name", { length: 100 }).notNull().default(""),
+    companyName: varchar("company_name", { length: 200 }),
+    linkedinUrl: varchar("linkedin_url", { length: 2048 }),
+    phoneNumber: varchar("phone_number", { length: 40 }),
     subscribed: boolean("subscribed").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
