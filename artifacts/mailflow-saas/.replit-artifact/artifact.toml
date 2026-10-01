@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Mailflow SaaS"
+description = "A secure multi-tenant email sending SaaS for individual professionals, with tenant-isolated contact management, scheduled personalized campaigns, subscriptions, and superadmin operations."
+version = "1.0.0"
+id = "artifacts/mailflow-saas"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20633
+
+[services.development]
+run = "pnpm --filter @workspace/mailflow-saas run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mailflow-saas", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mailflow-saas/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20633"
+BASE_PATH = "/"
