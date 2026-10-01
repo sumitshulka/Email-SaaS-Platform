@@ -4,9 +4,13 @@ import {
   desc,
   eq,
   gte,
+  gt,
+  inArray,
   ilike,
   isNull,
+  lte,
   or,
+  sql,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
@@ -31,7 +35,10 @@ import {
   applicationEmailConfigurationTable,
   auditLogsTable,
   db,
+  paymentsTable,
+  subscriptionPackagesTable,
   systemConfigurationTable,
+  userSubscriptionsTable,
   userSessionsTable,
   usersTable,
 } from "@workspace/db";
@@ -42,6 +49,7 @@ import {
 } from "../lib/security";
 import { sendApplicationEmail } from "../lib/application-email";
 import { getPlatformSettings } from "../lib/platform-settings";
+import { getCurrentSubscriptionForUser } from "../lib/billing";
 import { requireSuperadmin } from "../lib/session";
 
 const router: IRouter = Router();
@@ -52,7 +60,10 @@ const SMTP_PROVIDER_PRESETS = {
   microsoft_365: { host: "smtp.office365.com", port: 587, encryption: "tls" },
 } as const;
 
-function toAdminUser(user: typeof usersTable.$inferSelect) {
+function toAdminUser(
+  user: typeof usersTable.$inferSelect,
+  subscriptionStatus: string | null = null,
+) {
   return {
     id: user.id,
     username: user.username,
@@ -63,8 +74,40 @@ function toAdminUser(user: typeof usersTable.$inferSelect) {
     active: user.active,
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    subscriptionStatus: null,
+    subscriptionStatus,
   };
+}
+
+async function toAdminUsers(users: Array<typeof usersTable.$inferSelect>) {
+  if (users.length === 0) return [];
+  const now = new Date();
+  const subscriptionRows = await db
+    .select({
+      userId: userSubscriptionsTable.userId,
+      packageName: subscriptionPackagesTable.name,
+      endsAt: userSubscriptionsTable.endsAt,
+    })
+    .from(userSubscriptionsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+    )
+    .where(
+      and(
+        inArray(userSubscriptionsTable.userId, users.map((user) => user.id)),
+        eq(userSubscriptionsTable.status, "active"),
+        lte(userSubscriptionsTable.startsAt, now),
+        gt(userSubscriptionsTable.endsAt, now),
+      ),
+    )
+    .orderBy(desc(userSubscriptionsTable.endsAt));
+  const statusByUser = new Map<string, string>();
+  for (const row of subscriptionRows) {
+    if (!statusByUser.has(row.userId)) {
+      statusByUser.set(row.userId, `Active · ${row.packageName}`);
+    }
+  }
+  return users.map((user) => toAdminUser(user, statusByUser.get(user.id) ?? null));
 }
 
 router.get("/dashboard", async (req, res): Promise<void> => {
@@ -73,8 +116,14 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Please sign in to continue.", code: "UNAUTHENTICATED" });
     return;
   }
+  const { subscription } = await getCurrentSubscriptionForUser(userId);
   res.json({
-    subscriptionStatus: "inactive",
+    subscriptionStatus:
+      subscription?.status === "active"
+        ? "active"
+        : subscription?.status === "expired"
+          ? "expired"
+          : "inactive",
     contacts: 0,
     activeLists: 0,
     emailsSent: 0,
@@ -121,6 +170,34 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
     .where(liveUsers)
     .orderBy(desc(usersTable.createdAt))
     .limit(5);
+  const now = new Date();
+  const [subscriptionCount] = await db
+    .select({ value: count() })
+    .from(userSubscriptionsTable)
+    .where(
+      and(
+        eq(userSubscriptionsTable.status, "active"),
+        lte(userSubscriptionsTable.startsAt, now),
+        gt(userSubscriptionsTable.endsAt, now),
+      ),
+    );
+  const platformSettings = await getPlatformSettings();
+  const [revenue] = await db
+    .select({
+      value: sql<number>`coalesce(sum(${paymentsTable.amountMinor}), 0)`,
+    })
+    .from(paymentsTable)
+    .where(
+      and(
+        eq(paymentsTable.status, "captured"),
+        eq(paymentsTable.currency, platformSettings.defaultCurrency),
+        gte(paymentsTable.updatedAt, monthStart),
+      ),
+    );
+  const minorUnitDigits = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: platformSettings.defaultCurrency,
+  }).resolvedOptions().maximumFractionDigits;
 
   res.json(
     GetAdminDashboardResponse.parse({
@@ -129,10 +206,11 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       pendingUsers: pendingCount?.value ?? 0,
       disabledUsers: disabledCount?.value ?? 0,
       newUsersThisMonth: newCount?.value ?? 0,
-      activeSubscriptions: 0,
-      revenueThisMonth: 0,
+      activeSubscriptions: subscriptionCount?.value ?? 0,
+      revenueThisMonth:
+        Number(revenue?.value ?? 0) / 10 ** (minorUnitDigits ?? 2),
       emailsSent: 0,
-      recentUsers: recent.map(toAdminUser),
+      recentUsers: await toAdminUsers(recent),
     }),
   );
 });
@@ -181,7 +259,7 @@ router.get("/admin/users", requireSuperadmin, async (req, res): Promise<void> =>
 
   res.json(
     ListAdminUsersResponse.parse({
-      items: rows.map(toAdminUser),
+      items: await toAdminUsers(rows),
       total: totalResult?.value ?? 0,
       page,
       pageSize,

@@ -157,6 +157,7 @@ const maintenanceAllowedPaths = new Set([
   "/auth/logout",
   "/auth/forgot-password",
   "/auth/reset-password",
+  "/webhooks/razorpay",
 ]);
 
 export async function enforcePlatformMaintenance(

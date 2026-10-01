@@ -14,6 +14,7 @@ tags:
   - name: profile
   - name: admin
   - name: settings
+  - name: billing
 paths:
   /healthz:
     get:
@@ -400,6 +401,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+  /admin/billing/razorpay:
+    get:
+      operationId: getRazorpaySettings
+      tags: [billing]
+      summary: Get masked Razorpay gateway configuration
+      responses:
+        "200":
+          description: Public key and write-only credential status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpaySettings"
+    put:
+      operationId: updateRazorpaySettings
+      tags: [billing]
+      summary: Save Razorpay gateway credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RazorpaySettingsInput"
+      responses:
+        "200":
+          description: Masked Razorpay configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpaySettings"
+  /admin/billing/razorpay/test:
+    post:
+      operationId: testRazorpayConnection
+      tags: [billing]
+      summary: Verify the saved Razorpay API credentials
+      responses:
+        "200":
+          description: Razorpay API connection result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpayTestResponse"
+  /admin/billing/packages:
+    get:
+      operationId: listAdminSubscriptionPackages
+      tags: [billing]
+      summary: List all subscription packages for administration
+      responses:
+        "200":
+          description: Subscription package catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPackageList"
+    post:
+      operationId: createSubscriptionPackage
+      tags: [billing]
+      summary: Create a subscription package
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionPackageInput"
+      responses:
+        "201":
+          description: Created subscription package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPackage"
+  /admin/billing/packages/{packageId}:
+    patch:
+      operationId: updateSubscriptionPackage
+      tags: [billing]
+      summary: Update a subscription package
+      parameters:
+        - name: packageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionPackageUpdateInput"
+      responses:
+        "200":
+          description: Updated subscription package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPackage"
+  /subscriptions/packages:
+    get:
+      operationId: listAvailableSubscriptionPackages
+      tags: [billing]
+      summary: List packages available to the authenticated customer
+      responses:
+        "200":
+          description: Purchasable subscription packages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPackageList"
+  /subscriptions/current:
+    get:
+      operationId: getCurrentSubscription
+      tags: [billing]
+      summary: Get the authenticated customer's current subscription
+      responses:
+        "200":
+          description: Current subscription, if any
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentSubscription"
+  /subscriptions/orders:
+    post:
+      operationId: createSubscriptionOrder
+      tags: [billing]
+      summary: Create a server-priced Razorpay order for a package
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionOrderInput"
+      responses:
+        "201":
+          description: Razorpay order and Checkout details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionOrderCreated"
+  /subscriptions/verify:
+    post:
+      operationId: verifyRazorpayPayment
+      tags: [billing]
+      summary: Verify a Checkout response and confirm captured payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRazorpayPaymentInput"
+      responses:
+        "200":
+          description: Payment verification status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentVerificationResult"
+  /webhooks/razorpay:
+    post:
+      operationId: receiveRazorpayWebhook
+      tags: [billing]
+      summary: Receive signed Razorpay payment events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RazorpayWebhookPayload"
+      responses:
+        "200":
+          description: Webhook accepted or safely ignored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
 components:
   schemas:
     HealthStatus:
@@ -639,4 +813,119 @@ components:
       properties:
         toEmail: { type: string, format: email }
       required: [toEmail]
+    RazorpaySettings:
+      type: object
+      properties:
+        keyId: { type: ["string", "null"] }
+        keySecretConfigured: { type: boolean }
+        webhookSecretConfigured: { type: boolean }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [keyId, keySecretConfigured, webhookSecretConfigured, updatedAt]
+    RazorpaySettingsInput:
+      type: object
+      properties:
+        keyId: { type: string, minLength: 3, maxLength: 255 }
+        keySecret: { type: string, minLength: 1, maxLength: 512 }
+        webhookSecret: { type: string, minLength: 1, maxLength: 512 }
+      required: [keyId]
+    RazorpayTestResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+      required: [success, message]
+    SubscriptionPackage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        amountMinor: { type: integer }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        periodDays: { type: integer }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, description, amountMinor, currency, periodDays, active, createdAt, updatedAt]
+    SubscriptionPackageList:
+      type: object
+      properties:
+        packages:
+          type: array
+          items: { $ref: "#/components/schemas/SubscriptionPackage" }
+      required: [packages]
+    SubscriptionPackageInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        amountMinor: { type: integer, minimum: 1, maximum: 100000000 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        periodDays: { type: integer, minimum: 1, maximum: 3660 }
+        active: { type: boolean }
+      required: [name, description, amountMinor, currency, periodDays, active]
+    SubscriptionPackageUpdateInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        amountMinor: { type: integer, minimum: 1, maximum: 100000000 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        periodDays: { type: integer, minimum: 1, maximum: 3660 }
+        active: { type: boolean }
+    CreateSubscriptionOrderInput:
+      type: object
+      properties:
+        packageId: { type: string, format: uuid }
+      required: [packageId]
+    SubscriptionOrderCreated:
+      type: object
+      properties:
+        paymentId: { type: string, format: uuid }
+        orderId: { type: string }
+        amountMinor: { type: integer }
+        currency: { type: string }
+        keyId: { type: string }
+        packageName: { type: string }
+        customerName: { type: string }
+        customerEmail: { type: string, format: email }
+      required: [paymentId, orderId, amountMinor, currency, keyId, packageName, customerName, customerEmail]
+    SubscriptionSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, superseded, cancelled, expired] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        package: { $ref: "#/components/schemas/SubscriptionPackage" }
+      required: [id, status, startsAt, endsAt, package]
+    CurrentSubscription:
+      type: object
+      properties:
+        subscription:
+          oneOf:
+            - $ref: "#/components/schemas/SubscriptionSummary"
+            - type: "null"
+      required: [subscription]
+    VerifyRazorpayPaymentInput:
+      type: object
+      properties:
+        paymentId: { type: string, format: uuid }
+        razorpayOrderId: { type: string, minLength: 1, maxLength: 80 }
+        razorpayPaymentId: { type: string, minLength: 1, maxLength: 80 }
+        razorpaySignature: { type: string, minLength: 64, maxLength: 64 }
+      required: [paymentId, razorpayOrderId, razorpayPaymentId, razorpaySignature]
+    PaymentVerificationResult:
+      type: object
+      properties:
+        status: { type: string, enum: [pending, active] }
+        message: { type: string }
+        subscription:
+          oneOf:
+            - $ref: "#/components/schemas/SubscriptionSummary"
+            - type: "null"
+      required: [status, message, subscription]
+    RazorpayWebhookPayload:
+      type: object
+      additionalProperties: true
 

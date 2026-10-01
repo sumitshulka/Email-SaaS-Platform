@@ -427,6 +427,176 @@ export interface TestEmailInput {
   toEmail: string;
 }
 
+export interface RazorpaySettings {
+  /** @nullable */
+  keyId: string | null;
+  keySecretConfigured: boolean;
+  webhookSecretConfigured: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface RazorpaySettingsInput {
+  /**
+     * @minLength 3
+     * @maxLength 255
+     */
+  keyId: string;
+  /**
+     * @minLength 1
+     * @maxLength 512
+     */
+  keySecret?: string;
+  /**
+     * @minLength 1
+     * @maxLength 512
+     */
+  webhookSecret?: string;
+}
+
+export interface RazorpayTestResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface SubscriptionPackage {
+  id: string;
+  name: string;
+  description: string;
+  amountMinor: number;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+  periodDays: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubscriptionPackageList {
+  packages: SubscriptionPackage[];
+}
+
+export interface SubscriptionPackageInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  /** @maxLength 2000 */
+  description: string;
+  /**
+     * @minimum 1
+     * @maximum 100000000
+     */
+  amountMinor: number;
+  /** @pattern ^[A-Z]{3}$ */
+  currency: string;
+  /**
+     * @minimum 1
+     * @maximum 3660
+     */
+  periodDays: number;
+  active: boolean;
+}
+
+export interface SubscriptionPackageUpdateInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name?: string;
+  /** @maxLength 2000 */
+  description?: string;
+  /**
+     * @minimum 1
+     * @maximum 100000000
+     */
+  amountMinor?: number;
+  /** @pattern ^[A-Z]{3}$ */
+  currency?: string;
+  /**
+     * @minimum 1
+     * @maximum 3660
+     */
+  periodDays?: number;
+  active?: boolean;
+}
+
+export interface CreateSubscriptionOrderInput {
+  packageId: string;
+}
+
+export interface SubscriptionOrderCreated {
+  paymentId: string;
+  orderId: string;
+  amountMinor: number;
+  currency: string;
+  keyId: string;
+  packageName: string;
+  customerName: string;
+  customerEmail: string;
+}
+
+export type SubscriptionSummaryStatus = typeof SubscriptionSummaryStatus[keyof typeof SubscriptionSummaryStatus];
+
+
+export const SubscriptionSummaryStatus = {
+  active: 'active',
+  superseded: 'superseded',
+  cancelled: 'cancelled',
+  expired: 'expired',
+} as const;
+
+export interface SubscriptionSummary {
+  id: string;
+  status: SubscriptionSummaryStatus;
+  startsAt: string;
+  endsAt: string;
+  package: SubscriptionPackage;
+}
+
+export interface CurrentSubscription {
+  subscription: SubscriptionSummary | null;
+}
+
+export interface VerifyRazorpayPaymentInput {
+  paymentId: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  razorpayOrderId: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  razorpayPaymentId: string;
+  /**
+     * @minLength 64
+     * @maxLength 64
+     */
+  razorpaySignature: string;
+}
+
+export type PaymentVerificationResultStatus = typeof PaymentVerificationResultStatus[keyof typeof PaymentVerificationResultStatus];
+
+
+export const PaymentVerificationResultStatus = {
+  pending: 'pending',
+  active: 'active',
+} as const;
+
+export interface PaymentVerificationResult {
+  status: PaymentVerificationResultStatus;
+  message: string;
+  subscription: SubscriptionSummary | null;
+}
+
+export interface RazorpayWebhookPayload { [key: string]: unknown }
+
 export type ListAdminUsersParams = {
 search?: string;
 status?: ListAdminUsersStatus;

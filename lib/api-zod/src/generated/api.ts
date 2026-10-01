@@ -545,3 +545,288 @@ export const SendApplicationEmailTestResponse = zod.object({
 })
 
 
+/**
+ * @summary Get masked Razorpay gateway configuration
+ */
+export const GetRazorpaySettingsResponse = zod.object({
+  "keyId": zod.string().nullable(),
+  "keySecretConfigured": zod.boolean(),
+  "webhookSecretConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save Razorpay gateway credentials
+ */
+export const updateRazorpaySettingsBodyKeyIdMin = 3;
+export const updateRazorpaySettingsBodyKeyIdMax = 255;
+
+export const updateRazorpaySettingsBodyKeySecretMax = 512;
+
+export const updateRazorpaySettingsBodyWebhookSecretMax = 512;
+
+
+
+export const UpdateRazorpaySettingsBody = zod.object({
+  "keyId": zod.string().min(updateRazorpaySettingsBodyKeyIdMin).max(updateRazorpaySettingsBodyKeyIdMax),
+  "keySecret": zod.string().min(1).max(updateRazorpaySettingsBodyKeySecretMax).optional(),
+  "webhookSecret": zod.string().min(1).max(updateRazorpaySettingsBodyWebhookSecretMax).optional()
+})
+
+export const UpdateRazorpaySettingsResponse = zod.object({
+  "keyId": zod.string().nullable(),
+  "keySecretConfigured": zod.boolean(),
+  "webhookSecretConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Verify the saved Razorpay API credentials
+ */
+export const TestRazorpayConnectionResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary List all subscription packages for administration
+ */
+export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin = 3;
+export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
+
+
+
+export const ListAdminSubscriptionPackagesResponse = zod.object({
+  "packages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax),
+  "periodDays": zod.number().int(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a subscription package
+ */
+export const createSubscriptionPackageBodyNameMin = 2;
+export const createSubscriptionPackageBodyNameMax = 120;
+
+export const createSubscriptionPackageBodyDescriptionMax = 2000;
+
+export const createSubscriptionPackageBodyAmountMinorMax = 100000000;
+
+export const createSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const createSubscriptionPackageBodyPeriodDaysMax = 3660;
+
+
+
+export const CreateSubscriptionPackageBody = zod.object({
+  "name": zod.string().min(createSubscriptionPackageBodyNameMin).max(createSubscriptionPackageBodyNameMax),
+  "description": zod.string().max(createSubscriptionPackageBodyDescriptionMax),
+  "amountMinor": zod.number().int().min(1).max(createSubscriptionPackageBodyAmountMinorMax),
+  "currency": zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
+  "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
+  "active": zod.boolean()
+})
+
+export const createSubscriptionPackageResponseCurrencyMin = 3;
+export const createSubscriptionPackageResponseCurrencyMax = 3;
+
+
+
+export const CreateSubscriptionPackageResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(createSubscriptionPackageResponseCurrencyMin).max(createSubscriptionPackageResponseCurrencyMax),
+  "periodDays": zod.number().int(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a subscription package
+ */
+export const UpdateSubscriptionPackageParams = zod.object({
+  "packageId": zod.coerce.string().uuid()
+})
+
+export const updateSubscriptionPackageBodyNameMin = 2;
+export const updateSubscriptionPackageBodyNameMax = 120;
+
+export const updateSubscriptionPackageBodyDescriptionMax = 2000;
+
+export const updateSubscriptionPackageBodyAmountMinorMax = 100000000;
+
+export const updateSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const updateSubscriptionPackageBodyPeriodDaysMax = 3660;
+
+
+
+export const UpdateSubscriptionPackageBody = zod.object({
+  "name": zod.string().min(updateSubscriptionPackageBodyNameMin).max(updateSubscriptionPackageBodyNameMax).optional(),
+  "description": zod.string().max(updateSubscriptionPackageBodyDescriptionMax).optional(),
+  "amountMinor": zod.number().int().min(1).max(updateSubscriptionPackageBodyAmountMinorMax).optional(),
+  "currency": zod.string().regex(updateSubscriptionPackageBodyCurrencyRegExp).optional(),
+  "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
+  "active": zod.boolean().optional()
+})
+
+export const updateSubscriptionPackageResponseCurrencyMin = 3;
+export const updateSubscriptionPackageResponseCurrencyMax = 3;
+
+
+
+export const UpdateSubscriptionPackageResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(updateSubscriptionPackageResponseCurrencyMin).max(updateSubscriptionPackageResponseCurrencyMax),
+  "periodDays": zod.number().int(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List packages available to the authenticated customer
+ */
+export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin = 3;
+export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
+
+
+
+export const ListAvailableSubscriptionPackagesResponse = zod.object({
+  "packages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax),
+  "periodDays": zod.number().int(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Get the authenticated customer's current subscription
+ */
+export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin = 3;
+export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax = 3;
+
+
+
+export const GetCurrentSubscriptionResponse = zod.object({
+  "subscription": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "package": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax),
+  "periodDays": zod.number().int(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+}),zod.null()])
+})
+
+
+/**
+ * @summary Create a server-priced Razorpay order for a package
+ */
+export const CreateSubscriptionOrderBody = zod.object({
+  "packageId": zod.string().uuid()
+})
+
+export const CreateSubscriptionOrderResponse = zod.object({
+  "paymentId": zod.string().uuid(),
+  "orderId": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string(),
+  "keyId": zod.string(),
+  "packageName": zod.string(),
+  "customerName": zod.string(),
+  "customerEmail": zod.string().email()
+})
+
+
+/**
+ * @summary Verify a Checkout response and confirm captured payment
+ */
+export const verifyRazorpayPaymentBodyRazorpayOrderIdMax = 80;
+
+export const verifyRazorpayPaymentBodyRazorpayPaymentIdMax = 80;
+
+export const verifyRazorpayPaymentBodyRazorpaySignatureMin = 64;
+export const verifyRazorpayPaymentBodyRazorpaySignatureMax = 64;
+
+
+
+export const VerifyRazorpayPaymentBody = zod.object({
+  "paymentId": zod.string().uuid(),
+  "razorpayOrderId": zod.string().min(1).max(verifyRazorpayPaymentBodyRazorpayOrderIdMax),
+  "razorpayPaymentId": zod.string().min(1).max(verifyRazorpayPaymentBodyRazorpayPaymentIdMax),
+  "razorpaySignature": zod.string().min(verifyRazorpayPaymentBodyRazorpaySignatureMin).max(verifyRazorpayPaymentBodyRazorpaySignatureMax)
+})
+
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin = 3;
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax = 3;
+
+
+
+export const VerifyRazorpayPaymentResponse = zod.object({
+  "status": zod.enum(['pending', 'active']),
+  "message": zod.string(),
+  "subscription": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "package": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax),
+  "periodDays": zod.number().int(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+}),zod.null()])
+})
+
+
+/**
+ * @summary Receive signed Razorpay payment events
+ */
+export const ReceiveRazorpayWebhookBody = zod.record(zod.string(), zod.unknown())
+
+export const ReceiveRazorpayWebhookResponse = zod.object({
+  "message": zod.string()
+})
+
+

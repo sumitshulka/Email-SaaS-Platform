@@ -21,3 +21,4 @@ export * from "./users";
 export * from "./auth";
 export * from "./settings";
 export * from "./audit";
+export * from "./billing";
