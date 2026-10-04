@@ -85,6 +85,8 @@ import type {
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
   SubscriptionSummary,
+  TenantSendingConnectionTestInput,
+  TenantSendingConnectionTestResponse,
   TenantSendingSettings,
   TenantSendingSettingsInput,
   TenantSendingTestInput,
@@ -1220,7 +1222,7 @@ export const getTestTenantSendingSettingsUrl = () => {
 }
 
 /**
- * @summary Send a test message using the tenant's own SMTP credentials
+ * @summary Send a test message using the tenant's current SMTP settings
  */
 export const testTenantSendingSettings = async (tenantSendingTestInput: TenantSendingTestInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingTestResponse> => {
 
@@ -1286,7 +1288,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type TestTenantSendingSettingsMutationVariables = {data: BodyType<TenantSendingTestInput>}
 
     /**
- * @summary Send a test message using the tenant's own SMTP credentials
+ * @summary Send a test message using the tenant's current SMTP settings
  */
 export const useTestTenantSendingSettings = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingSettings>>, TError,TestTenantSendingSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1297,6 +1299,94 @@ export const useTestTenantSendingSettings = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getTestTenantSendingSettingsMutationOptions(options));
+    }
+
+export const getTestTenantSendingConnectionUrl = () => {
+
+
+
+
+  return `/api/sending/settings/connection-test`
+}
+
+/**
+ * @summary Verify the tenant's current SMTP connection without sending email
+ */
+export const testTenantSendingConnection = async (tenantSendingConnectionTestInput: TenantSendingConnectionTestInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingConnectionTestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantSendingConnectionTestResponse>(getTestTenantSendingConnectionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tenantSendingConnectionTestInput)
+  }
+);}
+
+
+
+
+
+export const getTestTenantSendingConnectionMutationKey = () => ['testTenantSendingConnection'] as const;
+
+export const getTestTenantSendingConnectionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingConnection>>, TError,TestTenantSendingConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingConnection>>, TError,TestTenantSendingConnectionMutationVariables, TContext> => {
+
+const mutationKey = getTestTenantSendingConnectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testTenantSendingConnection>>, TestTenantSendingConnectionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  testTenantSendingConnection(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestTenantSendingConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testTenantSendingConnection>>>
+    export type TestTenantSendingConnectionMutationBody = BodyType<TenantSendingConnectionTestInput>
+    export type TestTenantSendingConnectionMutationError = ErrorType<ApiError>
+    export type TestTenantSendingConnectionMutationVariables = {data: BodyType<TenantSendingConnectionTestInput>}
+
+    /**
+ * @summary Verify the tenant's current SMTP connection without sending email
+ */
+export const useTestTenantSendingConnection = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingConnection>>, TError,TestTenantSendingConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testTenantSendingConnection>>,
+        TError,
+        TestTenantSendingConnectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getTestTenantSendingConnectionMutationOptions(options));
     }
 
 export const getGetGmailMailboxConnectionUrl = () => {

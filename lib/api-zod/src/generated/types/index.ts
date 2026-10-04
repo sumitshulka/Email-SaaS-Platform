@@ -126,6 +126,8 @@ export * from './subscriptionPackageList';
 export * from './subscriptionPackageUpdateInput';
 export * from './subscriptionSummary';
 export * from './subscriptionSummaryStatus';
+export * from './tenantSendingConnectionTestInput';
+export * from './tenantSendingConnectionTestResponse';
 export * from './tenantSendingSettings';
 export * from './tenantSendingSettingsEncryption';
 export * from './tenantSendingSettingsInput';

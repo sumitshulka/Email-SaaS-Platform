@@ -47,7 +47,26 @@ export type TenantEmailResult = {
 
 type TenantEmailTransport = (
   message: TenantEmailMessage,
+  configuration: TenantSendingEmailConfiguration,
 ) => Promise<TenantEmailResult>;
+
+export type TenantSendingEmailConfiguration = Pick<
+  TenantSendingConfiguration,
+  | "userId"
+  | "provider"
+  | "host"
+  | "port"
+  | "encryption"
+  | "usernameEncrypted"
+  | "passwordEncrypted"
+  | "fromName"
+  | "fromEmail"
+  | "replyTo"
+>;
+
+type TenantEmailVerifier = (
+  configuration: TenantSendingEmailConfiguration,
+) => Promise<void>;
 
 export async function getApplicationEmailConfig() {
   const [config] = await db
@@ -97,7 +116,7 @@ export async function sendApplicationEmail(
 }
 
 export async function sendTenantEmail(
-  configuration: TenantSendingConfiguration,
+  configuration: TenantSendingEmailConfiguration,
   to: string,
   subject: string,
   text: string,
@@ -113,24 +132,10 @@ export async function sendTenantEmail(
     ...(tracking ? { tracking } : {}),
   };
   if (tenantTestTransport) {
-    return tenantTestTransport(message);
+    return tenantTestTransport(message, configuration);
   }
 
-  const transport = nodemailer.createTransport({
-    host: configuration.host,
-    port: configuration.port,
-    secure: configuration.encryption === "ssl",
-    requireTLS: configuration.encryption === "tls",
-    auth: {
-      user: decryptSecret(configuration.usernameEncrypted),
-      pass: decryptSecret(configuration.passwordEncrypted),
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
-    logger: false,
-    debug: false,
-  });
+  const transport = createTenantTransport(configuration);
 
   try {
     const info = await transport.sendMail({
@@ -195,9 +200,48 @@ export async function sendTenantEmail(
   }
 }
 
+export async function verifyTenantEmailConnection(
+  configuration: TenantSendingEmailConfiguration,
+): Promise<void> {
+  if (tenantTestTransport) {
+    if (!tenantTestVerifier) {
+      throw new Error(
+        "A tenant SMTP verification transport is not configured in test mode.",
+      );
+    }
+    await tenantTestVerifier(configuration);
+    return;
+  }
+
+  const transport = createTenantTransport(configuration);
+  try {
+    await transport.verify();
+  } finally {
+    transport.close();
+  }
+}
+
+function createTenantTransport(configuration: TenantSendingEmailConfiguration) {
+  return nodemailer.createTransport({
+    host: configuration.host,
+    port: configuration.port,
+    secure: configuration.encryption === "ssl",
+    requireTLS: configuration.encryption === "tls",
+    auth: {
+      user: decryptSecret(configuration.usernameEncrypted),
+      pass: decryptSecret(configuration.passwordEncrypted),
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
+    logger: false,
+    debug: false,
+  });
+}
+
 function safeSmtpResponse(
   value: unknown,
-  configuration: TenantSendingConfiguration,
+  configuration: TenantSendingEmailConfiguration,
 ): string | undefined {
   if (typeof value !== "string" || value.length === 0) return undefined;
   let safe = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ");
@@ -219,6 +263,17 @@ export function setTenantEmailTransportForTests(
   tenantTestTransport = transport ?? undefined;
 }
 
+export function setTenantEmailVerifierForTests(
+  verifier: TenantEmailVerifier | null,
+): void {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error(
+      "A tenant email verifier can only be configured in test mode.",
+    );
+  }
+  tenantTestVerifier = verifier ?? undefined;
+}
+
 export function setApplicationEmailTransportForTests(
   transport: ((message: ApplicationEmailMessage) => Promise<void>) | null,
 ): void {
@@ -232,3 +287,4 @@ let testTransport:
   | ((message: ApplicationEmailMessage) => Promise<void>)
   | undefined;
 let tenantTestTransport: TenantEmailTransport | undefined;
+let tenantTestVerifier: TenantEmailVerifier | undefined;

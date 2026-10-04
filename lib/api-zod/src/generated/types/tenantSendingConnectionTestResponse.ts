@@ -6,8 +6,6 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface TenantSendingTestResponse {
+export interface TenantSendingConnectionTestResponse {
   message: string;
-  /** @nullable */
-  verifiedAt: Date | null;
 }

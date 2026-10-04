@@ -42,6 +42,8 @@ import {
   PreviewCampaignResponse,
   SendCampaignParams,
   SendCampaignResponse,
+  TestTenantSendingConnectionBody,
+  TestTenantSendingConnectionResponse,
   TestTenantSendingSettingsBody,
   TestTenantSendingSettingsResponse,
   UpdateCampaignBody,
@@ -56,6 +58,7 @@ import {
   UpdateTenantSendingSettingsBody,
   UpdateTenantSendingSettingsResponse,
 } from "@workspace/api-zod";
+import type { TenantSendingSettingsInput } from "@workspace/api-zod";
 import {
   contactListMembersTable,
   contactListsTable,
@@ -69,12 +72,16 @@ import {
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
-import { sendTenantEmail } from "../lib/application-email";
+import {
+  sendTenantEmail,
+  verifyTenantEmailConnection,
+  type TenantSendingEmailConfiguration,
+} from "../lib/application-email";
 import {
   renderCampaignForContact,
   sanitizeCampaignHtml,
 } from "../lib/campaign-template";
-import { encryptSecret } from "../lib/security";
+import { decryptSecret, encryptSecret } from "../lib/security";
 import {
   estimateCampaignDeliveryAfterQueueSeconds,
   estimateCampaignQueueDeliverySeconds,
@@ -143,6 +150,59 @@ function normalizedContactInput(input: unknown): unknown {
 function optionalContactValue(value?: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function tenantSendingEmailConfiguration(
+  userId: string,
+  settings: TenantSendingSettingsInput,
+  existing?: typeof tenantSendingConfigurationTable.$inferSelect,
+): TenantSendingEmailConfiguration | null {
+  const username =
+    settings.username?.trim() ||
+    (existing ? decryptSecret(existing.usernameEncrypted) : "");
+  const password =
+    settings.password?.trim() ||
+    (existing ? decryptSecret(existing.passwordEncrypted) : "");
+  if (!username || !password) return null;
+
+  return {
+    userId,
+    provider: settings.provider,
+    host: settings.host.trim(),
+    port: settings.port,
+    encryption: settings.encryption,
+    usernameEncrypted:
+      settings.username?.trim() || !existing
+        ? encryptSecret(username)
+        : existing.usernameEncrypted,
+    passwordEncrypted:
+      settings.password?.trim() || !existing
+        ? encryptSecret(password)
+        : existing.passwordEncrypted,
+    fromName: settings.fromName.trim(),
+    fromEmail: settings.fromEmail.trim().toLowerCase(),
+    replyTo: optionalContactValue(settings.replyTo)?.toLowerCase() ?? null,
+  };
+}
+
+function matchesSavedTenantSendingConfiguration(
+  saved: typeof tenantSendingConfigurationTable.$inferSelect,
+  tested: TenantSendingEmailConfiguration,
+): boolean {
+  return (
+    saved.provider === tested.provider &&
+    saved.host === tested.host &&
+    saved.port === tested.port &&
+    saved.encryption === tested.encryption &&
+    decryptSecret(saved.usernameEncrypted) ===
+      decryptSecret(tested.usernameEncrypted) &&
+    decryptSecret(saved.passwordEncrypted) ===
+      decryptSecret(tested.passwordEncrypted) &&
+    saved.fromName === tested.fromName &&
+    saved.fromEmail.toLowerCase() === tested.fromEmail.toLowerCase() &&
+    (saved.replyTo?.toLowerCase() ?? null) ===
+      (tested.replyTo?.toLowerCase() ?? null)
+  );
 }
 
 function contactEnrichmentPatch(
@@ -663,26 +723,86 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
 });
 
 router.post(
+  "/sending/settings/connection-test",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = TestTenantSendingConnectionBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Enter valid SMTP and sender settings.",
+        code: "INVALID_SENDING_SETTINGS",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    const [existing] = await db
+      .select()
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, userId));
+    const config = tenantSendingEmailConfiguration(
+      userId,
+      parsed.data.settings,
+      existing,
+    );
+    if (!config) {
+      res.status(400).json({
+        error: "Enter SMTP username and password before checking the connection.",
+        code: "SMTP_CREDENTIALS_REQUIRED",
+      });
+      return;
+    }
+
+    try {
+      await verifyTenantEmailConnection(config);
+      res.json(
+        TestTenantSendingConnectionResponse.parse({
+          message:
+            "SMTP connection and authentication succeeded. No email was sent, and saved settings were not changed.",
+        }),
+      );
+    } catch (error) {
+      req.log.warn(
+        {
+          userId,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Tenant SMTP connection check failed",
+      );
+      res.status(502).json({
+        error: "The SMTP connection check failed. Verify your host, port, encryption, and credentials.",
+        code: "SMTP_CONNECTION_TEST_FAILED",
+      });
+    }
+  },
+);
+
+router.post(
   "/sending/settings/test",
   requireUserRole,
   async (req, res): Promise<void> => {
     const parsed = TestTenantSendingSettingsBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: "Enter a valid destination email.",
+        error: "Enter valid SMTP settings and a destination email.",
         code: "INVALID_INPUT",
       });
       return;
     }
     const userId = req.authUser!.id;
-    const [config] = await db
+    const [existing] = await db
       .select()
       .from(tenantSendingConfigurationTable)
       .where(eq(tenantSendingConfigurationTable.userId, userId));
+    const config = tenantSendingEmailConfiguration(
+      userId,
+      parsed.data.settings,
+      existing,
+    );
     if (!config) {
       res.status(400).json({
-        error: "Save your sending settings before sending a test.",
-        code: "SMTP_NOT_CONFIGURED",
+        error: "Enter SMTP username and password before sending a test email.",
+        code: "SMTP_CREDENTIALS_REQUIRED",
       });
       return;
     }
@@ -701,15 +821,21 @@ router.post(
         });
         return;
       }
-      const verifiedAt = new Date();
-      await db
-        .update(tenantSendingConfigurationTable)
-        .set({ verifiedAt, updatedAt: verifiedAt })
-        .where(eq(tenantSendingConfigurationTable.userId, userId));
+
+      const settingsMatch =
+        existing && matchesSavedTenantSendingConfiguration(existing, config);
+      const verifiedAt = settingsMatch ? new Date() : null;
+      if (verifiedAt) {
+        await db
+          .update(tenantSendingConfigurationTable)
+          .set({ verifiedAt, updatedAt: verifiedAt })
+          .where(eq(tenantSendingConfigurationTable.userId, userId));
+      }
       res.json(
         TestTenantSendingSettingsResponse.parse({
-          message:
-            "The SMTP server accepted the test message; inbox delivery is not confirmed.",
+          message: settingsMatch
+            ? "The SMTP server accepted the test message; inbox delivery is not confirmed."
+            : "The SMTP server accepted the test message, but saved settings were not changed or verified because they differ from the values tested.",
           verifiedAt,
         }),
       );

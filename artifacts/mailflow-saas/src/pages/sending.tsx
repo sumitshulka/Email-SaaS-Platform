@@ -18,7 +18,7 @@ import {
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetCampaignDashboard, useGetTenantSendingSettings,
   useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, usePreviewCampaign, useSendCampaign,
-  useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact,
+  useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
@@ -95,6 +95,7 @@ export function SendingSettingsPage() {
   const query = useGetTenantSendingSettings();
   const update = useUpdateTenantSendingSettings();
   const test = useTestTenantSendingSettings();
+  const connectionTest = useTestTenantSendingConnection();
   const gmailConnection = useGetGmailMailboxConnection({
     query: {
       queryKey: getGetGmailMailboxConnectionQueryKey(),
@@ -138,20 +139,40 @@ export function SendingSettingsPage() {
   const change = (key: keyof typeof form, value: string) => setForm(current => ({ ...current, [key]: value }));
   const save = (e: FormEvent) => {
     e.preventDefault();
-    const data: TenantSendingSettingsInput = {
-      provider: form.provider, host: form.host.trim(), port: Number(form.port), encryption: form.encryption,
-      ...(form.username.trim() ? { username: form.username.trim() } : {}), ...(form.password ? { password: form.password } : {}),
-      fromName: form.fromName.trim(), fromEmail: form.fromEmail.trim(), ...(form.replyTo.trim() ? { replyTo: form.replyTo.trim() } : {}),
-    };
+    const data: TenantSendingSettingsInput = currentSendingSettings();
     update.mutate({ data }, {
       onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); setForm(v => ({ ...v, password: '' })); setNotice({ kind: 'success', text: 'Sender identity saved. Your credentials remain encrypted in this workspace.' }); },
       onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
     });
   };
+  const currentSendingSettings = (): TenantSendingSettingsInput => ({
+      provider: form.provider, host: form.host.trim(), port: Number(form.port), encryption: form.encryption,
+      ...(form.username.trim() ? { username: form.username.trim() } : {}), ...(form.password ? { password: form.password } : {}),
+      fromName: form.fromName.trim(), fromEmail: form.fromEmail.trim(), ...(form.replyTo.trim() ? { replyTo: form.replyTo.trim() } : {}),
+  });
+  const canTestSmtp = Boolean(
+    form.host.trim() &&
+    Number(form.port) > 0 &&
+    form.fromName.trim() &&
+    form.fromEmail.trim() &&
+    (settings?.credentialsConfigured || (form.username.trim() && form.password)),
+  );
+  const runConnectionTest = () => {
+    connectionTest.mutate({ data: { settings: currentSendingSettings() } }, {
+      onSuccess: response => setNotice({ kind: 'success', text: response.message }),
+      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+    });
+  };
   const runTest = (e: FormEvent) => {
     e.preventDefault();
-    test.mutate({ data: { toEmail: testEmail.trim() } }, {
-      onSuccess: response => { void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); setNotice({ kind: 'success', text: response.message || 'SMTP accepted the test message; check the recipient mailbox to confirm it arrived.' }); },
+    test.mutate({ data: { settings: currentSendingSettings(), toEmail: testEmail.trim() } }, {
+      onSuccess: response => {
+        if (response.verifiedAt) {
+          void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+        }
+        setNotice({ kind: 'success', text: response.message || 'SMTP accepted the test message; check the recipient mailbox to confirm it arrived.' });
+      },
       onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
     });
   };
@@ -211,12 +232,16 @@ export function SendingSettingsPage() {
         </div>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={update.isPending}>{update.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}{update.isPending ? 'Saving settings' : 'Save sender settings'}</Button></div>
       </form>
-      <div className={`${panelClass} overflow-hidden`}>
-        <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Send a test message</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">A test confirms the SMTP server accepts this workspace's credentials. Check the recipient mailbox to confirm arrival.</p></div>
+       <div className={`${panelClass} overflow-hidden`}>
+         <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Test SMTP settings</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">Use the values currently in the form. You can check login without sending, or send a real test email to confirm the server accepts a message.</p></div>
         <form onSubmit={runTest} className="space-y-4 p-5">
           <Field label="Deliver test to" value={testEmail} onChange={setTestEmail} type="email" placeholder="you@company.com" required testId="input-test-recipient"/>
-          <Button type="submit" testId="button-test-sending-settings" disabled={test.isPending || !settings?.credentialsConfigured} className="w-full">{test.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}{test.isPending ? 'Sending test' : 'Send test email'}</Button>
-          {!settings?.credentialsConfigured && <p className="text-[11px] leading-5 text-[#8a6a4e]">Save SMTP credentials before running a connection test.</p>}
+           <div className="grid gap-2 sm:grid-cols-2">
+             <Button type="button" variant="outline" testId="button-check-smtp-connection" onClick={runConnectionTest} disabled={!canTestSmtp || connectionTest.isPending || test.isPending} className="w-full">{connectionTest.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <ShieldCheck className="h-4 w-4"/>}{connectionTest.isPending ? 'Checking connection' : 'Check connection'}</Button>
+             <Button type="submit" testId="button-test-sending-settings" disabled={!canTestSmtp || !testEmail.trim() || test.isPending || connectionTest.isPending} className="w-full">{test.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}{test.isPending ? 'Sending test' : 'Send test email'}</Button>
+           </div>
+           {!canTestSmtp && <p className="text-[11px] leading-5 text-[#8a6a4e]">Enter SMTP details and credentials here, or configure credentials in saved settings, before testing.</p>}
+           <p className="text-[11px] leading-5 text-[#788392]">The connection check sends no email and never saves draft values. Sending a test email marks saved settings verified only when every tested value matches them.</p>
           {settings?.verified && settings.verifiedAt && <div className="flex items-start gap-2 border-t border-[#edf0f2] pt-4 text-[11px] leading-5 text-[#647365]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#52815d]"/>Verified {formatDate(settings.verifiedAt)}</div>}
         </form>
       </div>

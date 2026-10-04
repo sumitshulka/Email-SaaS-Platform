@@ -2335,8 +2335,79 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(securityModule.decryptSecret(storedSender.usernameEncrypted), "smtp-owner-user");
     assert.equal(securityModule.decryptSecret(storedSender.passwordEncrypted), "smtp-owner-secret");
 
-    emailModule.setTenantEmailTransportForTests(async (message) => {
+    const verifiedConnections = [];
+    emailModule.setTenantEmailVerifierForTests(async (configuration) => {
+      verifiedConnections.push(configuration);
+    });
+    const deliveriesBeforeConnectionCheck = tenantDeliveries.length;
+    const connectionCheck = await api("/sending/settings/connection-test", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        settings: {
+          provider: "other",
+          host: "smtp.draft.owner.test",
+          port: 2526,
+          encryption: "tls",
+          fromName: "Draft Owner Mail",
+          fromEmail: "draft@owner.test",
+        },
+      },
+    });
+    assert.equal(connectionCheck.response.status, 200, JSON.stringify(connectionCheck.body));
+    assert.match(connectionCheck.body.message, /No email was sent/);
+    assert.equal(tenantDeliveries.length, deliveriesBeforeConnectionCheck);
+    assert.equal(verifiedConnections.length, 1);
+    assert.equal(verifiedConnections[0].host, "smtp.draft.owner.test");
+    assert.equal(verifiedConnections[0].port, 2526);
+    assert.equal(
+      securityModule.decryptSecret(verifiedConnections[0].usernameEncrypted),
+      "smtp-owner-user",
+    );
+    const unsavedConnectionCheck = await api("/sending/settings/connection-test", {
+      method: "POST",
+      cookie: other.cookie,
+      body: {
+        settings: {
+          provider: "other",
+          host: "smtp.new-owner.test",
+          port: 587,
+          encryption: "tls",
+          username: "new-owner-user",
+          password: "new-owner-secret",
+          fromName: "New Owner",
+          fromEmail: "new-owner@owner.test",
+        },
+      },
+    });
+    assert.equal(
+      unsavedConnectionCheck.response.status,
+      200,
+      JSON.stringify(unsavedConnectionCheck.body),
+    );
+    assert.equal(verifiedConnections.length, 2);
+    assert.equal(verifiedConnections[1].userId, other.user.id);
+    assert.equal(verifiedConnections[1].host, "smtp.new-owner.test");
+    assert.equal(
+      securityModule.decryptSecret(verifiedConnections[1].usernameEncrypted),
+      "new-owner-user",
+    );
+    const [otherSavedSenderAfterConnectionCheck] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, other.user.id));
+    assert.equal(otherSavedSenderAfterConnectionCheck, undefined);
+    const [senderAfterConnectionCheck] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, owner.user.id));
+    assert.equal(senderAfterConnectionCheck.host, "smtp.owner.test");
+    assert.equal(senderAfterConnectionCheck.verifiedAt, null);
+
+    const testedEmailConfigurations = [];
+    emailModule.setTenantEmailTransportForTests(async (message, configuration) => {
       tenantDeliveries.push(message);
+      testedEmailConfigurations.push(configuration);
       if (message.subject === "Mailflow sender identity test") {
         return { accepted: true };
       }
@@ -2356,13 +2427,83 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         enhancedStatus: "5.1.1",
       };
     });
+    const unsavedEmailTest = await api("/sending/settings/test", {
+      method: "POST",
+      cookie: other.cookie,
+      body: {
+        toEmail: "new-owner@owner.test",
+        settings: {
+          provider: "other",
+          host: "smtp.new-owner.test",
+          port: 587,
+          encryption: "tls",
+          username: "new-owner-user",
+          password: "new-owner-secret",
+          fromName: "New Owner",
+          fromEmail: "new-owner@owner.test",
+        },
+      },
+    });
+    assert.equal(
+      unsavedEmailTest.response.status,
+      200,
+      JSON.stringify(unsavedEmailTest.body),
+    );
+    assert.equal(unsavedEmailTest.body.verifiedAt, null);
+    assert.equal(testedEmailConfigurations.at(-1).host, "smtp.new-owner.test");
+    const [otherSavedSenderAfterEmailTest] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, other.user.id));
+    assert.equal(otherSavedSenderAfterEmailTest, undefined);
     const testedSender = await api("/sending/settings/test", {
       method: "POST",
       cookie: owner.cookie,
-      body: { toEmail: "owner@owner.test" },
+      body: {
+        toEmail: "draft@owner.test",
+        settings: {
+          provider: "other",
+          host: "smtp.draft.owner.test",
+          port: 2526,
+          encryption: "tls",
+          fromName: "Draft Owner Mail",
+          fromEmail: "draft@owner.test",
+        },
+      },
     });
     assert.equal(testedSender.response.status, 200, JSON.stringify(testedSender.body));
-    assert.ok(testedSender.body.verifiedAt);
+    assert.equal(testedSender.body.verifiedAt, null);
+    assert.equal(testedEmailConfigurations.at(-1).host, "smtp.draft.owner.test");
+    assert.equal(testedEmailConfigurations.at(-1).fromName, "Draft Owner Mail");
+    const [senderAfterDraftTest] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, owner.user.id));
+    assert.equal(senderAfterDraftTest.host, "smtp.owner.test");
+    assert.equal(senderAfterDraftTest.verifiedAt, null);
+
+    const testedSavedSender = await api("/sending/settings/test", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        toEmail: "owner@owner.test",
+        settings: {
+          provider: "other",
+          host: "smtp.owner.test",
+          port: 2525,
+          encryption: "none",
+          fromName: "Owner Mail",
+          fromEmail: "mail@owner.test",
+        },
+      },
+    });
+    assert.equal(testedSavedSender.response.status, 200, JSON.stringify(testedSavedSender.body));
+    assert.ok(testedSavedSender.body.verifiedAt);
+    assert.equal(testedEmailConfigurations.at(-1).host, "smtp.owner.test");
+    assert.ok(
+      testedEmailConfigurations.at(-1).usernameEncrypted,
+      "saved SMTP credentials should be available to the transient test",
+    );
     assert.equal(emails.length, 0, "tenant test mail must not use platform notification SMTP");
     const otherSender = await api("/sending/settings", { cookie: other.cookie });
     assert.equal(otherSender.body.credentialsConfigured, false);

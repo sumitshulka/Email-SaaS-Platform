@@ -406,11 +406,21 @@ export interface Microsoft365TraceConnection {
 
 export interface TenantSendingTestInput {
   toEmail: string;
+  settings: TenantSendingSettingsInput;
 }
 
 export interface TenantSendingTestResponse {
   message: string;
-  verifiedAt: string;
+  /** @nullable */
+  verifiedAt: string | null;
+}
+
+export interface TenantSendingConnectionTestInput {
+  settings: TenantSendingSettingsInput;
+}
+
+export interface TenantSendingConnectionTestResponse {
+  message: string;
 }
 
 export interface Contact {

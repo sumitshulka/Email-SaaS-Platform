@@ -7,7 +7,6 @@
  */
 import type { TenantSendingSettingsInput } from './tenantSendingSettingsInput';
 
-export interface TenantSendingTestInput {
-  toEmail: string;
+export interface TenantSendingConnectionTestInput {
   settings: TenantSendingSettingsInput;
 }

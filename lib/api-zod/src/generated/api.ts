@@ -299,15 +299,72 @@ export const UpdateTenantSendingSettingsResponse = zod.object({
 
 
 /**
- * @summary Send a test message using the tenant's own SMTP credentials
+ * @summary Send a test message using the tenant's current SMTP settings
  */
+export const testTenantSendingSettingsBodySettingsHostMax = 255;
+
+export const testTenantSendingSettingsBodySettingsPortMax = 65535;
+
+export const testTenantSendingSettingsBodySettingsUsernameMax = 254;
+
+export const testTenantSendingSettingsBodySettingsPasswordMax = 512;
+
+export const testTenantSendingSettingsBodySettingsFromNameMax = 120;
+
+
+
 export const TestTenantSendingSettingsBody = zod.object({
-  "toEmail": zod.string().email()
+  "toEmail": zod.string().email(),
+  "settings": zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().min(1).max(testTenantSendingSettingsBodySettingsHostMax),
+  "port": zod.number().int().min(1).max(testTenantSendingSettingsBodySettingsPortMax),
+  "encryption": zod.enum(['none', 'ssl', 'tls']),
+  "username": zod.string().min(1).max(testTenantSendingSettingsBodySettingsUsernameMax).optional(),
+  "password": zod.string().max(testTenantSendingSettingsBodySettingsPasswordMax).optional(),
+  "fromName": zod.string().min(1).max(testTenantSendingSettingsBodySettingsFromNameMax),
+  "fromEmail": zod.string().email(),
+  "replyTo": zod.string().email().optional()
+})
 })
 
 export const TestTenantSendingSettingsResponse = zod.object({
   "message": zod.string(),
-  "verifiedAt": zod.coerce.date()
+  "verifiedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Verify the tenant's current SMTP connection without sending email
+ */
+export const testTenantSendingConnectionBodySettingsHostMax = 255;
+
+export const testTenantSendingConnectionBodySettingsPortMax = 65535;
+
+export const testTenantSendingConnectionBodySettingsUsernameMax = 254;
+
+export const testTenantSendingConnectionBodySettingsPasswordMax = 512;
+
+export const testTenantSendingConnectionBodySettingsFromNameMax = 120;
+
+
+
+export const TestTenantSendingConnectionBody = zod.object({
+  "settings": zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().min(1).max(testTenantSendingConnectionBodySettingsHostMax),
+  "port": zod.number().int().min(1).max(testTenantSendingConnectionBodySettingsPortMax),
+  "encryption": zod.enum(['none', 'ssl', 'tls']),
+  "username": zod.string().min(1).max(testTenantSendingConnectionBodySettingsUsernameMax).optional(),
+  "password": zod.string().max(testTenantSendingConnectionBodySettingsPasswordMax).optional(),
+  "fromName": zod.string().min(1).max(testTenantSendingConnectionBodySettingsFromNameMax),
+  "fromEmail": zod.string().email(),
+  "replyTo": zod.string().email().optional()
+})
+})
+
+export const TestTenantSendingConnectionResponse = zod.object({
+  "message": zod.string()
 })
 
 

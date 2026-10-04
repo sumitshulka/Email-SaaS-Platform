@@ -277,7 +277,7 @@ paths:
     post:
       operationId: testTenantSendingSettings
       tags: [sending]
-      summary: Send a test message using the tenant's own SMTP credentials
+      summary: Send a test message using the tenant's current SMTP settings
       requestBody:
         required: true
         content:
@@ -299,6 +299,36 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "502":
           description: Tenant SMTP test send failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/settings/connection-test:
+    post:
+      operationId: testTenantSendingConnection
+      tags: [sending]
+      summary: Verify the tenant's current SMTP connection without sending email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantSendingConnectionTestInput"
+      responses:
+        "200":
+          description: SMTP connection and authentication succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingConnectionTestResponse"
+        "400":
+          description: Sender settings or SMTP credentials are missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Tenant SMTP connection check failed
           content:
             application/json:
               schema:
@@ -1720,13 +1750,26 @@ components:
       type: object
       properties:
         toEmail: { type: string, format: email }
-      required: [toEmail]
+        settings:
+          $ref: "#/components/schemas/TenantSendingSettingsInput"
+      required: [toEmail, settings]
     TenantSendingTestResponse:
       type: object
       properties:
         message: { type: string }
-        verifiedAt: { type: string, format: date-time }
+        verifiedAt: { type: ["string", "null"], format: date-time }
       required: [message, verifiedAt]
+    TenantSendingConnectionTestInput:
+      type: object
+      properties:
+        settings:
+          $ref: "#/components/schemas/TenantSendingSettingsInput"
+      required: [settings]
+    TenantSendingConnectionTestResponse:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
     Contact:
       type: object
       properties:
