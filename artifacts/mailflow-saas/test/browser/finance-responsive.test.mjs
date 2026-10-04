@@ -64,6 +64,44 @@ const payment = {
   },
 };
 
+const filterablePayments = Array.from({ length: 20 }, (_, index) => {
+  const reference = String(index + 1).padStart(2, '0');
+  const accountNumber = String(20 - index).padStart(2, '0');
+  const capturedAt = new Date(Date.UTC(2026, 8, 20 + index, 12)).toISOString();
+
+  return {
+    ...payment,
+    id: `finance-filter-payment-${reference}`,
+    receipt: `finance-filter-receipt-${reference}`,
+    status: index % 5 === 2 ? 'refunded' : 'captured',
+    amountMinor: 1000 + (index + 1) * 100,
+    currency: index % 2 === 0 ? 'USD' : 'EUR',
+    razorpayOrderId: `finance-filter-order-${reference}`,
+    razorpayPaymentId: `finance-filter-gateway-payment-${reference}`,
+    capturedAt,
+    account: {
+      ...payment.account,
+      id: `finance-filter-account-${reference}`,
+      username: `customer-${accountNumber}`,
+      firstName: 'Customer',
+      lastName: accountNumber,
+      fullName: `Customer ${accountNumber}`,
+      email: `customer-${accountNumber}@example.test`,
+      registeredAt: '2026-01-15T10:00:00.000Z',
+    },
+    subscriptionPackage: {
+      ...payment.subscriptionPackage,
+      name: `Plan ${reference}`,
+    },
+    subscription: {
+      ...payment.subscription,
+      id: `finance-filter-subscription-${reference}`,
+      startsAt: capturedAt,
+      endsAt: new Date(Date.parse(capturedAt) + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  };
+});
+
 let serverProcess;
 let serverOutput = '';
 let browser;
@@ -133,7 +171,84 @@ async function stopWebServer() {
   }
 }
 
-function installApiFixtures(context) {
+function makeFinancePage(records, searchParams) {
+  let rows = [...records];
+  const status = searchParams.get('status') ?? 'captured';
+  if (status !== 'all') {
+    rows = rows.filter(record => record.status === status);
+  }
+
+  const currency = searchParams.get('currency');
+  if (currency) rows = rows.filter(record => record.currency === currency);
+
+  const search = searchParams.get('search')?.trim().toLocaleLowerCase();
+  if (search) {
+    rows = rows.filter(record => [
+      record.account.fullName,
+      record.account.username,
+      record.account.email,
+      record.subscriptionPackage.name,
+      record.id,
+      record.subscription.id,
+      record.receipt,
+      record.razorpayOrderId,
+      record.razorpayPaymentId,
+    ].some(value => value.toLocaleLowerCase().includes(search)));
+  }
+
+  const fromDate = searchParams.get('fromDate');
+  const toDate = searchParams.get('toDate');
+  if (fromDate) rows = rows.filter(record => record.capturedAt.slice(0, 10) >= fromDate);
+  if (toDate) rows = rows.filter(record => record.capturedAt.slice(0, 10) <= toDate);
+
+  const sortBy = searchParams.get('sortBy') ?? 'capturedAt';
+  const sortDirection = searchParams.get('sortDirection') ?? 'desc';
+  const sortValues = {
+    capturedAt: record => record.capturedAt,
+    account: record => record.account.fullName.toLocaleLowerCase(),
+    subscription: record => record.subscriptionPackage.name.toLocaleLowerCase(),
+    amount: record => record.amountMinor,
+  };
+  const getSortValue = sortValues[sortBy] ?? sortValues.capturedAt;
+  const direction = sortDirection === 'asc' ? 1 : -1;
+  rows.sort((left, right) => {
+    const leftValue = getSortValue(left);
+    const rightValue = getSortValue(right);
+    const comparison = typeof leftValue === 'number'
+      ? leftValue - rightValue
+      : leftValue.localeCompare(rightValue);
+    return comparison * direction;
+  });
+
+  const page = Number(searchParams.get('page') ?? 1);
+  const pageSize = Number(searchParams.get('pageSize') ?? 25);
+  const offset = (page - 1) * pageSize;
+  const summaryByCurrency = [...new Set(records.map(record => record.currency))].sort().map(value => {
+    const currencyRows = rows.filter(record => record.currency === value);
+    const capturedRows = currencyRows.filter(record => record.status === 'captured');
+    const refundedRows = currencyRows.filter(record => record.status === 'refunded');
+    return {
+      currency: value,
+      paymentCount: currencyRows.length,
+      capturedCount: capturedRows.length,
+      refundedCount: refundedRows.length,
+      capturedAmountMinor: String(capturedRows.reduce((sum, record) => sum + record.amountMinor, 0)),
+      refundedAmountMinor: String(refundedRows.reduce((sum, record) => sum + record.amountMinor, 0)),
+    };
+  });
+
+  return {
+    rows: rows.slice(offset, offset + pageSize),
+    total: rows.length,
+    page,
+    pageSize,
+    pageCount: Math.ceil(rows.length / pageSize),
+    currencies: [...new Set(records.map(record => record.currency))].sort(),
+    summaryByCurrency,
+  };
+}
+
+function installApiFixtures(context, { financeRecords } = {}) {
   return context.route('**/api/**', async route => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -173,6 +288,14 @@ function installApiFixtures(context) {
       return;
     }
     if (pathname === '/api/admin/finance/payments') {
+      if (financeRecords) {
+        const searchParams = new URL(request.url()).searchParams;
+        await route.fulfill({
+          status: 200,
+          json: makeFinancePage(financeRecords, searchParams),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         json: {
@@ -202,9 +325,9 @@ function installApiFixtures(context) {
   });
 }
 
-async function signInAndOpenFinance(viewport) {
+async function signInAndOpenFinance(viewport, fixtureOptions) {
   const context = await browser.newContext({ viewport });
-  await installApiFixtures(context);
+  await installApiFixtures(context, fixtureOptions);
   const page = await context.newPage();
 
   await page.goto(baseUrl);
@@ -215,9 +338,44 @@ async function signInAndOpenFinance(viewport) {
 
   await page.goto(`${baseUrl}/admin/finance`);
   await page.getByRole('heading', { name: 'Payment ledger' }).waitFor();
-  await page.getByTestId('row-finance-payment').waitFor();
+  await page.getByTestId('row-finance-payment').first().waitFor();
 
   return { context, page };
+}
+
+function waitForFinanceRequest(page, expectedParams) {
+  return page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/admin/finance/payments' &&
+      Object.entries(expectedParams).every(([key, value]) => url.searchParams.get(key) === String(value));
+  });
+}
+
+async function triggerFinanceRequest(page, expectedParams, action) {
+  const responsePromise = waitForFinanceRequest(page, expectedParams);
+  await action();
+  const response = await responsePromise;
+  assert.equal(response.status(), 200, `finance request failed: ${response.url()}`);
+
+  const url = new URL(response.url());
+  for (const [key, value] of Object.entries(expectedParams)) {
+    assert.equal(url.searchParams.get(key), String(value), `unexpected finance query parameter: ${key}`);
+  }
+}
+
+async function assertVisibleFinanceNames(page, expectedNames) {
+  await page.waitForFunction(names => {
+    const rows = Array.from(document.querySelectorAll('[data-testid="row-finance-payment"]'));
+    const visibleNames = rows.map(row => row.querySelectorAll('td')[1]?.querySelector('span')?.textContent?.trim());
+    return visibleNames.length === names.length &&
+      visibleNames.every((name, index) => name === names[index]);
+  }, expectedNames);
+
+  const rows = await page.getByTestId('row-finance-payment').all();
+  const visibleNames = await Promise.all(rows.map(row =>
+    row.locator('td').nth(1).locator('span').first().innerText(),
+  ));
+  assert.deepEqual(visibleNames, expectedNames);
 }
 
 describe('authenticated superadmin finance ledger at responsive widths', { concurrency: false }, () => {
@@ -310,5 +468,109 @@ describe('authenticated superadmin finance ledger at responsive widths', { concu
     } finally {
       await context.close();
     }
+  });
+
+  it('applies search, status, currency, date, sorting, and page changes to finance results', async () => {
+    const defaults = {
+      accountStatus: 'any',
+      sortBy: 'capturedAt',
+      sortDirection: 'desc',
+      page: '1',
+      pageSize: '25',
+    };
+
+    const withFinancePage = async action => {
+      const { context, page } = await signInAndOpenFinance(
+        { width: 1440, height: 1000 },
+        { financeRecords: filterablePayments },
+      );
+      try {
+        await action(page);
+      } finally {
+        await context.close();
+      }
+    };
+
+    await withFinancePage(async page => {
+      await triggerFinanceRequest(page, { ...defaults, status: 'captured', search: 'Customer 12' }, () =>
+        page.getByTestId('input-finance-search').fill('Customer 12'),
+      );
+      await assertVisibleFinanceNames(page, ['Customer 12']);
+      assert.match(await page.getByTestId('text-finance-results-count').innerText(), /^1 records$/);
+    });
+
+    await withFinancePage(async page => {
+      await triggerFinanceRequest(page, { ...defaults, status: 'refunded' }, () =>
+        page.getByTestId('select-finance-status').selectOption('refunded'),
+      );
+      await assertVisibleFinanceNames(page, ['Customer 03', 'Customer 08', 'Customer 13', 'Customer 18']);
+      const rows = await page.getByTestId('row-finance-payment').all();
+      for (const row of rows) assert.match(await row.innerText(), /refunded/i);
+    });
+
+    await withFinancePage(async page => {
+      await triggerFinanceRequest(page, { ...defaults, status: 'captured', currency: 'EUR' }, () =>
+        page.getByTestId('select-finance-currency').selectOption('EUR'),
+      );
+      await assertVisibleFinanceNames(page, [
+        'Customer 01', 'Customer 05', 'Customer 07', 'Customer 09',
+        'Customer 11', 'Customer 15', 'Customer 17', 'Customer 19',
+      ]);
+      const rows = await page.getByTestId('row-finance-payment').all();
+      for (const row of rows) assert.match(await row.innerText(), /EUR/);
+    });
+
+    await withFinancePage(async page => {
+      await triggerFinanceRequest(page, {
+        ...defaults,
+        status: 'captured',
+        fromDate: '2026-09-28',
+        toDate: '2026-09-28',
+      }, async () => {
+        await page.getByTestId('input-finance-from-date').fill('2026-09-28');
+        await page.getByTestId('input-finance-to-date').fill('2026-09-28');
+      });
+      await assertVisibleFinanceNames(page, ['Customer 12']);
+    });
+
+    await withFinancePage(async page => {
+      await triggerFinanceRequest(page, {
+        ...defaults,
+        status: 'captured',
+        sortBy: 'account',
+      }, () => page.getByRole('button', { name: 'Customer account' }).click());
+      await assertVisibleFinanceNames(page, [
+        'Customer 20', 'Customer 19', 'Customer 17', 'Customer 16',
+        'Customer 15', 'Customer 14', 'Customer 12', 'Customer 11',
+        'Customer 10', 'Customer 09', 'Customer 07', 'Customer 06',
+        'Customer 05', 'Customer 04', 'Customer 02', 'Customer 01',
+      ]);
+    });
+
+    await withFinancePage(async page => {
+      await triggerFinanceRequest(page, {
+        ...defaults,
+        status: 'captured',
+        pageSize: '10',
+      }, () => page.getByTestId('select-finance-page-size').selectOption('10'));
+      await assertVisibleFinanceNames(page, [
+        'Customer 01', 'Customer 02', 'Customer 04', 'Customer 05',
+        'Customer 06', 'Customer 07', 'Customer 09', 'Customer 10',
+        'Customer 11', 'Customer 12',
+      ]);
+      assert.match(await page.getByTestId('text-finance-page-range').innerText(), /Showing 1–10 of 16 · page 1 of 2/);
+
+      await triggerFinanceRequest(page, {
+        ...defaults,
+        status: 'captured',
+        page: '2',
+        pageSize: '10',
+      }, () => page.getByTestId('button-finance-next-page').click());
+      await assertVisibleFinanceNames(page, [
+        'Customer 14', 'Customer 15', 'Customer 16',
+        'Customer 17', 'Customer 19', 'Customer 20',
+      ]);
+      assert.match(await page.getByTestId('text-finance-page-range').innerText(), /Showing 11–16 of 16 · page 2 of 2/);
+    });
   });
 });
