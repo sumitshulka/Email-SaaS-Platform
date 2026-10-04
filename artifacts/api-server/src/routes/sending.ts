@@ -1360,6 +1360,7 @@ router.post(
             companyName: optionalContactValue(data.companyName),
             linkedinUrl: optionalContactValue(data.linkedinUrl),
             phoneNumber: optionalContactValue(data.phoneNumber),
+            ...contactEnrichmentPatch(data),
             subscribed: data.subscribed ?? false,
           })
           .onConflictDoNothing({

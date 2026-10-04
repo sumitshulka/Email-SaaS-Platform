@@ -958,6 +958,9 @@ export interface ContactUpdate {
   listIds?: string[];
 }
 
+/**
+ * Contact values are validated individually after the batch is accepted so one bad row does not reject the entire import.
+ */
 export interface ContactImportRow {
   /** @minimum 2 */
   rowNumber: number;
@@ -968,6 +971,34 @@ export interface ContactImportRow {
   companyName?: string;
   linkedinUrl?: string;
   phoneNumber?: string;
+  jobTitle?: string;
+  department?: string;
+  seniority?: string;
+  mobilePhone?: string;
+  websiteUrl?: string;
+  twitterUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  location?: string;
+  preferredLanguage?: string;
+  timeZone?: string;
+  lifecycleStage?: string;
+  leadStatus?: string;
+  leadSource?: string;
+  interests?: string;
+  goals?: string;
+  painPoints?: string;
+  personalizationContext?: string;
+  notes?: string;
+  companyWebsiteUrl?: string;
+  companyDomain?: string;
+  companyIndustry?: string;
+  companySize?: string;
+  companyRevenueRange?: string;
+  companyDescription?: string;
+  companyPhoneNumber?: string;
+  companyLinkedinUrl?: string;
+  companyLocation?: string;
   subscribed?: boolean;
   listIds?: string[];
 }
@@ -1011,7 +1042,7 @@ export interface ContactImportResult {
 }
 
 /**
- * UTF-8 CSV. Include email and either name or first_name/last_name columns.
+ * UTF-8 CSV. Include email and either name or first_name/last_name columns. Optional contact and company enrichment columns supported by ContactInput are also imported.
  */
 export type ContactCsvInput = string;
 

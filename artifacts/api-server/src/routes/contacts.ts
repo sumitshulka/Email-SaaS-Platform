@@ -35,6 +35,53 @@ import {
 const router: IRouter = Router();
 export const contactImportRouter: IRouter = Router();
 
+const contactCsvEnrichmentFields = [
+  { key: "companyName", label: "Company name", aliases: ["companyname", "company", "organization", "organisation", "employer"], maxLength: 200 },
+  { key: "linkedinUrl", label: "LinkedIn URL", aliases: ["linkedin", "linkedinurl", "linkedinprofile", "linkedinprofileurl"], maxLength: 2048 },
+  { key: "phoneNumber", label: "Phone number", aliases: ["phonenumber", "phone", "telephone", "tel"], maxLength: 40 },
+  { key: "jobTitle", label: "Job title", aliases: ["jobtitle", "title", "position"], maxLength: 200 },
+  { key: "department", label: "Department", aliases: ["department", "team"], maxLength: 120 },
+  { key: "seniority", label: "Seniority", aliases: ["seniority", "senioritylevel"], maxLength: 80 },
+  { key: "mobilePhone", label: "Mobile phone", aliases: ["mobilephone", "mobile", "mobilenumber", "cellphone"], maxLength: 40 },
+  { key: "websiteUrl", label: "Personal website URL", aliases: ["websiteurl", "personalwebsite", "personalwebsiteurl", "website"], maxLength: 2048 },
+  { key: "twitterUrl", label: "Twitter URL", aliases: ["twitter", "twitterurl", "twitterprofile", "twitterprofileurl"], maxLength: 2048 },
+  { key: "facebookUrl", label: "Facebook URL", aliases: ["facebook", "facebookurl", "facebookprofile", "facebookprofileurl"], maxLength: 2048 },
+  { key: "instagramUrl", label: "Instagram URL", aliases: ["instagram", "instagramurl", "instagramprofile", "instagramprofileurl"], maxLength: 2048 },
+  { key: "location", label: "Location", aliases: ["location", "contactlocation"], maxLength: 200 },
+  { key: "preferredLanguage", label: "Preferred language", aliases: ["preferredlanguage", "language"], maxLength: 80 },
+  { key: "timeZone", label: "Time zone", aliases: ["timezone", "tz"], maxLength: 100 },
+  { key: "lifecycleStage", label: "Lifecycle stage", aliases: ["lifecyclestage", "stage"], maxLength: 80 },
+  { key: "leadStatus", label: "Lead status", aliases: ["leadstatus"], maxLength: 80 },
+  { key: "leadSource", label: "Lead source", aliases: ["leadsource"], maxLength: 120 },
+  { key: "interests", label: "Interests", aliases: ["interests"], maxLength: 10000 },
+  { key: "goals", label: "Goals", aliases: ["goals"], maxLength: 10000 },
+  { key: "painPoints", label: "Pain points", aliases: ["painpoints"], maxLength: 10000 },
+  { key: "personalizationContext", label: "Personalization context", aliases: ["personalizationcontext"], maxLength: 10000 },
+  { key: "notes", label: "Notes", aliases: ["notes"], maxLength: 10000 },
+  { key: "companyWebsiteUrl", label: "Company website URL", aliases: ["companywebsite", "companywebsiteurl", "organizationwebsite", "organizationwebsiteurl"], maxLength: 2048 },
+  { key: "companyDomain", label: "Company domain", aliases: ["companydomain", "domain"], maxLength: 255 },
+  { key: "companyIndustry", label: "Company industry", aliases: ["companyindustry", "industry"], maxLength: 120 },
+  { key: "companySize", label: "Company size", aliases: ["companysize", "employees"], maxLength: 80 },
+  { key: "companyRevenueRange", label: "Company revenue range", aliases: ["companyrevenuerange", "revenuerange", "revenue"], maxLength: 80 },
+  { key: "companyDescription", label: "Company description", aliases: ["companydescription"], maxLength: 10000 },
+  { key: "companyPhoneNumber", label: "Company phone number", aliases: ["companyphone", "companyphonenumber"], maxLength: 40 },
+  { key: "companyLinkedinUrl", label: "Company LinkedIn URL", aliases: ["companylinkedin", "companylinkedinurl", "linkedincompanyurl", "companylinkedinprofile"], maxLength: 2048 },
+  { key: "companyLocation", label: "Company location", aliases: ["companylocation", "headquarters"], maxLength: 200 },
+] as const satisfies readonly {
+  key: keyof typeof contactsTable.$inferInsert;
+  label: string;
+  aliases: readonly string[];
+  maxLength: number;
+}[];
+const csvEnrichmentFieldByHeader = new Map<
+  string,
+  (typeof contactCsvEnrichmentFields)[number]
+>(
+  contactCsvEnrichmentFields.flatMap((field) =>
+    field.aliases.map((alias) => [alias, field] as const),
+  ),
+);
+
 async function getContactQuota(userId: string) {
   const now = new Date();
   const [activeSubscription] = await db
@@ -340,11 +387,34 @@ async function importContactCsv(
     res.status(400).json({ error: "The CSV file is empty.", code: "INVALID_CSV" });
     return;
   }
-  const headers = headerRecord.cells.map(normalizeCsvHeader);
+  const headers = headerRecord.cells.map((header) =>
+    normalizeCsvHeader(header).replace(/[^a-z0-9]/g, ""),
+  );
   const emailIndex = headers.indexOf("email");
   const nameIndex = headers.indexOf("name");
-  const firstNameIndex = headers.indexOf("first_name");
-  const lastNameIndex = headers.indexOf("last_name");
+  const firstNameIndex = headers.findIndex((header) =>
+    ["firstname", "first", "givenname", "forename"].includes(header),
+  );
+  const lastNameIndex = headers.findIndex((header) =>
+    ["lastname", "last", "surname", "familyname"].includes(header),
+  );
+  const enrichmentColumnIndices = new Map<
+    (typeof contactCsvEnrichmentFields)[number]["key"],
+    number
+  >();
+  for (const [index, header] of headers.entries()) {
+    const field = csvEnrichmentFieldByHeader.get(header);
+    if (field) {
+      if (enrichmentColumnIndices.has(field.key)) {
+        res.status(400).json({
+          error: `Include at most one column for ${field.label}.`,
+          code: "INVALID_CSV_HEADERS",
+        });
+        return;
+      }
+      enrichmentColumnIndices.set(field.key, index);
+    }
+  }
   if (
     new Set(headers).size !== headers.length ||
     emailIndex < 0 ||
@@ -385,6 +455,7 @@ async function importContactCsv(
     name: string;
     firstName: string;
     lastName: string;
+    enrichment: Partial<typeof contactsTable.$inferInsert>;
   }> = [];
 
   for (const record of dataRecords) {
@@ -448,7 +519,28 @@ async function importContactCsv(
       continue;
     }
 
-    validatedRows.push({ rowNumber: record.rowNumber, email, name, firstName, lastName });
+    const enrichment: Partial<typeof contactsTable.$inferInsert> = {};
+    const fieldProblems: string[] = [];
+    for (const field of contactCsvEnrichmentFields) {
+      const columnIndex = enrichmentColumnIndices.get(field.key);
+      if (columnIndex === undefined) continue;
+      const value = record.cells[columnIndex]?.trim() ?? "";
+      if (value.length > field.maxLength) {
+        fieldProblems.push(`${field.label} can be up to ${field.maxLength} characters.`);
+      } else if (value) {
+        Object.assign(enrichment, { [field.key]: value });
+      }
+    }
+    if (fieldProblems.length > 0) {
+      rejected.push({
+        rowNumber: record.rowNumber,
+        email,
+        reason: fieldProblems.join(" "),
+      });
+      continue;
+    }
+
+    validatedRows.push({ rowNumber: record.rowNumber, email, name, firstName, lastName, enrichment });
   }
 
   const userId = req.authUser!.id;
@@ -547,6 +639,7 @@ async function importContactCsv(
         email: contact.email,
         firstName: contact.firstName,
         lastName: contact.lastName,
+        ...contact.enrichment,
         subscribed: true,
       });
     }

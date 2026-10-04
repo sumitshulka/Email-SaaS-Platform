@@ -4,10 +4,23 @@ import { readSheet } from 'read-excel-file/browser';
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_ROWS = 10000;
 export const BATCH_SIZE = 200;
-export const TEMPLATE_HEADERS = ['First Name', 'Last Name', 'Email', 'Company Name', 'LinkedIn', 'Phone Number'] as const;
-
-export type ImportField = 'firstName' | 'lastName' | 'email' | 'companyName' | 'linkedinUrl' | 'phoneNumber';
-export type ParsedRow = { rowNumber: number; email: string; firstName: string; lastName: string; companyName: string | null; linkedinUrl: string | null; phoneNumber: string | null };
+export const OPTIONAL_IMPORT_FIELDS = [
+  'companyName', 'linkedinUrl', 'phoneNumber', 'jobTitle', 'department', 'seniority',
+  'mobilePhone', 'websiteUrl', 'twitterUrl', 'facebookUrl', 'instagramUrl', 'location',
+  'preferredLanguage', 'timeZone', 'lifecycleStage', 'leadStatus', 'leadSource',
+  'interests', 'goals', 'painPoints', 'personalizationContext', 'notes',
+  'companyWebsiteUrl', 'companyDomain', 'companyIndustry', 'companySize',
+  'companyRevenueRange', 'companyDescription', 'companyPhoneNumber',
+  'companyLinkedinUrl', 'companyLocation',
+] as const;
+export type OptionalImportField = typeof OPTIONAL_IMPORT_FIELDS[number];
+export type ImportField = 'firstName' | 'lastName' | 'email' | OptionalImportField;
+export type ParsedRow = {
+  rowNumber: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+} & Partial<Record<OptionalImportField, string | null>>;
 export type RowError = { rowNumber: number; reason: string };
 export type ParsedImport = {
   fileName: string; kind: 'csv' | 'xlsx'; sheetNote: string;
@@ -20,21 +33,135 @@ const ALIASES: Record<ImportField, string[]> = {
   email: ['email', 'emailaddress', 'mail'],
   companyName: ['companyname', 'company', 'organization', 'organisation', 'employer'],
   linkedinUrl: ['linkedin', 'linkedinurl', 'linkedinprofile', 'linkedinprofileurl'],
-  phoneNumber: ['phonenumber', 'phone', 'mobile', 'mobilenumber', 'telephone', 'tel'],
+  phoneNumber: ['phonenumber', 'phone', 'telephone', 'tel'],
+  jobTitle: ['jobtitle', 'title', 'position'],
+  department: ['department', 'team'],
+  seniority: ['seniority', 'senioritylevel'],
+  mobilePhone: ['mobilephone', 'mobile', 'mobilenumber', 'cellphone'],
+  websiteUrl: ['websiteurl', 'personalwebsite', 'personalwebsiteurl', 'website'],
+  twitterUrl: ['twitter', 'twitterurl', 'twitterprofile', 'twitterprofileurl'],
+  facebookUrl: ['facebook', 'facebookurl', 'facebookprofile', 'facebookprofileurl'],
+  instagramUrl: ['instagram', 'instagramurl', 'instagramprofile', 'instagramprofileurl'],
+  location: ['location', 'contactlocation'],
+  preferredLanguage: ['preferredlanguage', 'language'],
+  timeZone: ['timezone', 'tz'],
+  lifecycleStage: ['lifecyclestage', 'stage'],
+  leadStatus: ['leadstatus'],
+  leadSource: ['leadsource'],
+  interests: ['interests'],
+  goals: ['goals'],
+  painPoints: ['painpoints'],
+  personalizationContext: ['personalizationcontext'],
+  notes: ['notes'],
+  companyWebsiteUrl: ['companywebsite', 'companywebsiteurl', 'organizationwebsite', 'organizationwebsiteurl'],
+  companyDomain: ['companydomain', 'domain'],
+  companyIndustry: ['companyindustry', 'industry'],
+  companySize: ['companysize', 'employees'],
+  companyRevenueRange: ['companyrevenuerange', 'revenuerange', 'revenue'],
+  companyDescription: ['companydescription'],
+  companyPhoneNumber: ['companyphone', 'companyphonenumber'],
+  companyLinkedinUrl: ['companylinkedin', 'companylinkedinurl', 'linkedincompanyurl', 'companylinkedinprofile'],
+  companyLocation: ['companylocation', 'headquarters'],
 };
 const FIELD_LOOKUP = new Map<string, ImportField>();
 (Object.keys(ALIASES) as ImportField[]).forEach(f => ALIASES[f].forEach(a => FIELD_LOOKUP.set(a, f)));
-const LABELS: Record<ImportField, string> = { firstName: 'First Name', lastName: 'Last Name', email: 'Email', companyName: 'Company Name', linkedinUrl: 'LinkedIn', phoneNumber: 'Phone Number' };
+const LABELS: Record<ImportField, string> = {
+  firstName: 'First Name',
+  lastName: 'Last Name',
+  email: 'Email',
+  companyName: 'Company Name',
+  linkedinUrl: 'LinkedIn URL',
+  phoneNumber: 'Phone Number',
+  jobTitle: 'Job Title',
+  department: 'Department',
+  seniority: 'Seniority',
+  mobilePhone: 'Mobile Phone',
+  websiteUrl: 'Personal Website URL',
+  twitterUrl: 'Twitter URL',
+  facebookUrl: 'Facebook URL',
+  instagramUrl: 'Instagram URL',
+  location: 'Location',
+  preferredLanguage: 'Preferred Language',
+  timeZone: 'Time Zone',
+  lifecycleStage: 'Lifecycle Stage',
+  leadStatus: 'Lead Status',
+  leadSource: 'Lead Source',
+  interests: 'Interests',
+  goals: 'Goals',
+  painPoints: 'Pain Points',
+  personalizationContext: 'Personalization Context',
+  notes: 'Notes',
+  companyWebsiteUrl: 'Company Website URL',
+  companyDomain: 'Company Domain',
+  companyIndustry: 'Company Industry',
+  companySize: 'Company Size',
+  companyRevenueRange: 'Company Revenue Range',
+  companyDescription: 'Company Description',
+  companyPhoneNumber: 'Company Phone Number',
+  companyLinkedinUrl: 'Company LinkedIn URL',
+  companyLocation: 'Company Location',
+};
 const REQUIRED: ImportField[] = ['firstName', 'lastName', 'email'];
-const LIMITS: Record<ImportField, number> = { firstName: 100, lastName: 100, email: 254, companyName: 200, linkedinUrl: 2048, phoneNumber: 40 };
+const LIMITS: Record<ImportField, number> = {
+  firstName: 100, lastName: 100, email: 254, companyName: 200, linkedinUrl: 2048,
+  phoneNumber: 40, jobTitle: 200, department: 120, seniority: 80, mobilePhone: 40,
+  websiteUrl: 2048, twitterUrl: 2048, facebookUrl: 2048, instagramUrl: 2048,
+  location: 200, preferredLanguage: 80, timeZone: 100, lifecycleStage: 80,
+  leadStatus: 80, leadSource: 120, interests: 10000, goals: 10000, painPoints: 10000,
+  personalizationContext: 10000, notes: 10000, companyWebsiteUrl: 2048,
+  companyDomain: 255, companyIndustry: 120, companySize: 80, companyRevenueRange: 80,
+  companyDescription: 10000, companyPhoneNumber: 40, companyLinkedinUrl: 2048,
+  companyLocation: 200,
+};
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const TEMPLATE_HEADERS = [
+  'First Name', 'Last Name', 'Email',
+  ...OPTIONAL_IMPORT_FIELDS.map(field => LABELS[field]),
+] as const;
 
 export class ImportFileError extends Error {}
 
 const normalizeHeader = (h: string) => h.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export function templateCsv() {
-  return '\uFEFF' + TEMPLATE_HEADERS.join(',') + '\r\n' + 'Mara,Linden,mara.linden@example.com,Linden Freight,https://www.linkedin.com/in/maralinden,+44 20 7946 0123\r\n';
+  const sample: Record<ImportField, string> = {
+    firstName: 'Mara',
+    lastName: 'Linden',
+    email: 'mara.linden@example.com',
+    companyName: 'Linden Freight',
+    linkedinUrl: 'https://www.linkedin.com/in/maralinden',
+    phoneNumber: '+44 20 7946 0123',
+    jobTitle: '',
+    department: '',
+    seniority: '',
+    mobilePhone: '',
+    websiteUrl: '',
+    twitterUrl: '',
+    facebookUrl: '',
+    instagramUrl: '',
+    location: '',
+    preferredLanguage: '',
+    timeZone: '',
+    lifecycleStage: '',
+    leadStatus: '',
+    leadSource: '',
+    interests: '',
+    goals: '',
+    painPoints: '',
+    personalizationContext: '',
+    notes: '',
+    companyWebsiteUrl: '',
+    companyDomain: '',
+    companyIndustry: '',
+    companySize: '',
+    companyRevenueRange: '',
+    companyDescription: '',
+    companyPhoneNumber: '',
+    companyLinkedinUrl: '',
+    companyLocation: '',
+  };
+  const fields: ImportField[] = ['firstName', 'lastName', 'email', ...OPTIONAL_IMPORT_FIELDS];
+  return '\uFEFF' + TEMPLATE_HEADERS.join(',') + '\r\n' + fields.map(field => sample[field]).join(',') + '\r\n';
 }
 
 function mapHeaders(header: string[]) {
@@ -90,7 +217,10 @@ function buildRows(records: string[][], fileName: string, kind: 'csv' | 'xlsx', 
       if (first) problems.push(`Duplicate of row ${first} in this file`); else seenEmails.set(key, rowNumber);
     }
     if (problems.length) { errors.push({ rowNumber, reason: problems.join('; ') }); continue; }
-    valid.push({ rowNumber, email, firstName: get('firstName'), lastName: get('lastName'), companyName: get('companyName') || null, linkedinUrl: get('linkedinUrl') || null, phoneNumber: get('phoneNumber') || null });
+    const enrichment = Object.fromEntries(
+      OPTIONAL_IMPORT_FIELDS.map(field => [field, get(field) || null]),
+    ) as Partial<Record<OptionalImportField, string | null>>;
+    valid.push({ rowNumber, email, firstName: get('firstName'), lastName: get('lastName'), ...enrichment });
   }
   if (!total) throw new ImportFileError('The file has headers but no contact rows.');
   return { fileName, kind, sheetNote, valid, errors, totalRows: total, ignoredHeaders: ignored, warnings: extraWarnings };

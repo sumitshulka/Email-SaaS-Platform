@@ -1970,6 +1970,7 @@ components:
         listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
     ContactImportRow:
       type: object
+      description: Contact values are validated individually after the batch is accepted so one bad row does not reject the entire import.
       properties:
         rowNumber: { type: integer, minimum: 2 }
         email: { type: string }
@@ -1979,6 +1980,34 @@ components:
         companyName: { type: string }
         linkedinUrl: { type: string }
         phoneNumber: { type: string }
+        jobTitle: { type: string }
+        department: { type: string }
+        seniority: { type: string }
+        mobilePhone: { type: string }
+        websiteUrl: { type: string }
+        twitterUrl: { type: string }
+        facebookUrl: { type: string }
+        instagramUrl: { type: string }
+        location: { type: string }
+        preferredLanguage: { type: string }
+        timeZone: { type: string }
+        lifecycleStage: { type: string }
+        leadStatus: { type: string }
+        leadSource: { type: string }
+        interests: { type: string }
+        goals: { type: string }
+        painPoints: { type: string }
+        personalizationContext: { type: string }
+        notes: { type: string }
+        companyWebsiteUrl: { type: string }
+        companyDomain: { type: string }
+        companyIndustry: { type: string }
+        companySize: { type: string }
+        companyRevenueRange: { type: string }
+        companyDescription: { type: string }
+        companyPhoneNumber: { type: string }
+        companyLinkedinUrl: { type: string }
+        companyLocation: { type: string }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string } }
       required: [rowNumber]
@@ -2011,7 +2040,7 @@ components:
       required: [imported, duplicate, invalid, limitReached, issues, quota]
     ContactCsvInput:
       type: string
-      description: UTF-8 CSV. Include email and either name or first_name/last_name columns.
+      description: UTF-8 CSV. Include email and either name or first_name/last_name columns. Optional contact and company enrichment columns supported by ContactInput are also imported.
     ContactImportRejection:
       type: object
       properties:

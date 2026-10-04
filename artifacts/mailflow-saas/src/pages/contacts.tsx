@@ -417,6 +417,13 @@ export default function ContactsPage() {
               <span className="font-medium text-[#526579]">last_name</span>. Maximum file size:{" "}
               {data.uploadSettings.maxFileSizeMb} MB. Duplicate, invalid, and over-quota rows will be listed below.
             </p>
+            <p className="mt-1 text-[11px] leading-5 text-[#788696]">
+              Optional CRM columns can include any contact or company detail field, such as{" "}
+              <span className="font-medium text-[#526579]">job_title</span>,{" "}
+              <span className="font-medium text-[#526579]">linkedin_url</span>,{" "}
+              <span className="font-medium text-[#526579]">company_domain</span>, and{" "}
+              <span className="font-medium text-[#526579]">company_linkedin_url</span>. Headers also accept spaces or camelCase.
+            </p>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-start gap-3">

@@ -984,9 +984,37 @@ export const ImportContactsBody = zod.object({
   "companyName": zod.string().optional(),
   "linkedinUrl": zod.string().optional(),
   "phoneNumber": zod.string().optional(),
+  "jobTitle": zod.string().optional(),
+  "department": zod.string().optional(),
+  "seniority": zod.string().optional(),
+  "mobilePhone": zod.string().optional(),
+  "websiteUrl": zod.string().optional(),
+  "twitterUrl": zod.string().optional(),
+  "facebookUrl": zod.string().optional(),
+  "instagramUrl": zod.string().optional(),
+  "location": zod.string().optional(),
+  "preferredLanguage": zod.string().optional(),
+  "timeZone": zod.string().optional(),
+  "lifecycleStage": zod.string().optional(),
+  "leadStatus": zod.string().optional(),
+  "leadSource": zod.string().optional(),
+  "interests": zod.string().optional(),
+  "goals": zod.string().optional(),
+  "painPoints": zod.string().optional(),
+  "personalizationContext": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "companyWebsiteUrl": zod.string().optional(),
+  "companyDomain": zod.string().optional(),
+  "companyIndustry": zod.string().optional(),
+  "companySize": zod.string().optional(),
+  "companyRevenueRange": zod.string().optional(),
+  "companyDescription": zod.string().optional(),
+  "companyPhoneNumber": zod.string().optional(),
+  "companyLinkedinUrl": zod.string().optional(),
+  "companyLocation": zod.string().optional(),
   "subscribed": zod.boolean().optional(),
   "listIds": zod.array(zod.string()).optional()
-})).min(1).max(importContactsBodyContactsMax)
+}).describe('Contact values are validated individually after the batch is accepted so one bad row does not reject the entire import.')).min(1).max(importContactsBodyContactsMax)
 })
 
 export const importContactsResponseOneImportedMin = 0;

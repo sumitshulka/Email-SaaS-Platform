@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, LoaderCircle, Upl
 import { useImportContacts } from '@workspace/api-client-react';
 import type { ContactImportInput } from '@workspace/api-client-react';
 import {
-  BATCH_SIZE, ImportFileError, MAX_ROWS, parseContactFile, templateCsv,
+  BATCH_SIZE, ImportFileError, MAX_ROWS, OPTIONAL_IMPORT_FIELDS, parseContactFile, templateCsv,
   type ParsedImport, type RowError,
 } from '@/lib/contact-import';
 
@@ -51,12 +51,15 @@ export function ContactImportDialog({ onClose, onChanged }: { onClose: () => voi
     if (!parsed || submitting.current || !parsed.valid.length) return;
     submitting.current = true; setRunning(true);
     const rows: Row[] = parsed.valid.map(r => ({
-      rowNumber: r.rowNumber, email: r.email, firstName: r.firstName, lastName: r.lastName,
-      ...(r.companyName ? { companyName: r.companyName } : {}),
-      ...(r.linkedinUrl ? { linkedinUrl: r.linkedinUrl } : {}),
-      ...(r.phoneNumber ? { phoneNumber: r.phoneNumber } : {}),
+      rowNumber: r.rowNumber,
+      email: r.email,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      ...Object.fromEntries(
+        OPTIONAL_IMPORT_FIELDS.flatMap(field => r[field] ? [[field, r[field]]] : []),
+      ),
       subscribed,
-    }));
+    } as Row));
     const acc: Report = { imported: 0, duplicate: 0, invalid: parsed.errors.length, limitReached: 0, notSubmitted: 0, unconfirmed: 0, issues: [...parsed.errors], quotaText: '', failure: null };
     setProgress({ done: 0, total: rows.length });
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
@@ -100,7 +103,7 @@ export function ContactImportDialog({ onClose, onChanged }: { onClose: () => voi
 
       {!report && <>
         <div className="rounded-md border border-[#e3e7eb] bg-[#fafbfc] p-4 text-[12px] leading-5 text-[#5f6e7f]">
-          <p>Required columns: <b>First Name, Last Name, Email</b>. Optional: Company Name, LinkedIn, Phone Number. Common variants such as firstName or linkedinUrl are recognised.</p>
+          <p>Required columns: <b>First Name, Last Name, Email</b>. Optional columns include every contact and company detail field, such as Job Title, LinkedIn URL, Company Domain, Lifecycle Stage, and Company LinkedIn URL. Headers match case-insensitively in spaces, snake_case, or camelCase.</p>
           <p className="mt-1">Limits: 5 MB and {MAX_ROWS.toLocaleString()} rows per file. For .xlsx only the first sheet is read; legacy .xls is not supported. Format phone columns as text in Excel to keep leading zeros.</p>
           <button type="button" data-testid="button-download-template" onClick={downloadTemplate} className="mt-2 inline-flex items-center gap-1.5 font-semibold text-[#245b9b] hover:underline"><Download className="h-3.5 w-3.5"/>Download CSV template</button>
         </div>

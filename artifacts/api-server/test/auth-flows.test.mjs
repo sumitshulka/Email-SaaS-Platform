@@ -1266,6 +1266,11 @@ describe("tenant contact management and package quotas", { concurrency: false },
             companyName: " Example Co ",
             linkedinUrl: "",
             phoneNumber: " 555-0199 ",
+            jobTitle: " Product Lead ",
+            websiteUrl: "https://people.example.test/alex?profile=full",
+            companyDomain: " example.test ",
+            companyLinkedinUrl: "https://www.linkedin.com/company/example-inc",
+            interests: " Product strategy ",
           },
           {
             rowNumber: 4,
@@ -1324,6 +1329,17 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(importedContact.companyName, "Example Co");
     assert.equal(importedContact.linkedinUrl, null);
     assert.equal(importedContact.phoneNumber, "555-0199");
+    assert.equal(importedContact.jobTitle, "Product Lead");
+    assert.equal(
+      importedContact.websiteUrl,
+      "https://people.example.test/alex?profile=full",
+    );
+    assert.equal(importedContact.companyDomain, "example.test");
+    assert.equal(
+      importedContact.companyLinkedinUrl,
+      "https://www.linkedin.com/company/example-inc",
+    );
+    assert.equal(importedContact.interests, "Product strategy");
     assert.equal(importedContact.subscribed, false);
     assert.equal(unchangedDuplicate.companyName, "Original Company");
     assert.equal(unchangedDuplicate.firstName, "Existing");
@@ -1427,6 +1443,144 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(cleared.response.status, 200);
     assert.equal(cleared.body.jobTitle, null);
     assert.equal(cleared.body.websiteUrl, null);
+  });
+
+  it("imports CRM enrichment fields from CSV and rejects overlong field values per row", async () => {
+    const owner = await loggedInUser({
+      username: "csv-enrichment-owner",
+      email: "csv-enrichment-owner@example.test",
+    });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "CRM CSV Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 5,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "44444444-4444-4444-8444-444444444444",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const source = {
+      first_name: " Avery ",
+      last_name: " Chen ",
+      email: " Avery.CRM@Example.Test ",
+      company_name: " Northwind Analytics ",
+      linkedin_url: " https://www.linkedin.com/in/avery-chen?view=full ",
+      phone_number: " +1-555-0100 ",
+      job_title: " Director of Product ",
+      department: " Product ",
+      seniority: " Director ",
+      mobile_phone: " +1-555-0101 ",
+      website_url: " https://avery.example.test/profile?source=crm ",
+      twitter_url: " https://x.example.test/avery ",
+      facebook_url: " https://facebook.example.test/avery ",
+      instagram_url: " https://instagram.example.test/avery ",
+      location: " Toronto, ON ",
+      preferred_language: " English ",
+      time_zone: " America/Toronto ",
+      lifecycle_stage: " Customer ",
+      lead_status: " Qualified ",
+      lead_source: " Partner referral ",
+      interests: " AI; accessibility ",
+      goals: " Improve onboarding ",
+      pain_points: " Manual entry, repetitive exports ",
+      personalization_context: " Mention their new product ",
+      notes: " Follow up in Q4 ",
+      company_website_url: " https://northwind.example.test/about ",
+      company_domain: " northwind.example.test ",
+      company_industry: " Software ",
+      company_size: " 201-500 ",
+      company_revenue_range: " $10M-$50M ",
+      company_description: " Builds workflow software, with a focus on analytics ",
+      company_phone_number: " +1-555-0199 ",
+      company_linkedin_url: " https://www.linkedin.com/company/northwind?tab=about ",
+      company_location: " Toronto, Canada ",
+    };
+    const invalidSource = {
+      first_name: "Over",
+      last_name: "Limit",
+      email: "overlong-field@example.test",
+      job_title: "J".repeat(201),
+    };
+    const csvCell = (value) => `"${String(value).replaceAll('"', '""')}"`;
+    const headers = [...new Set([...Object.keys(source), ...Object.keys(invalidSource)])];
+    const csv = [
+      headers.map(csvCell).join(","),
+      [source, invalidSource]
+        .map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(","))
+        .join("\n"),
+    ].join("\n");
+
+    const imported = await uploadCsv("/contacts/import", csv, owner.cookie);
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
+    assert.equal(imported.body.imported, 1);
+    assert.equal(imported.body.rejected.length, 1);
+    assert.equal(imported.body.rejected[0].rowNumber, 3);
+    assert.match(imported.body.rejected[0].reason, /job title can be up to 200 characters/i);
+
+    const contacts = await api("/contacts", { cookie: owner.cookie });
+    assert.equal(contacts.response.status, 200);
+    assert.equal(contacts.body.contacts.length, 1);
+    const saved = contacts.body.contacts[0];
+    const expected = {
+      firstName: "Avery",
+      lastName: "Chen",
+      email: "avery.crm@example.test",
+      companyName: "Northwind Analytics",
+      linkedinUrl: "https://www.linkedin.com/in/avery-chen?view=full",
+      phoneNumber: "+1-555-0100",
+      jobTitle: "Director of Product",
+      department: "Product",
+      seniority: "Director",
+      mobilePhone: "+1-555-0101",
+      websiteUrl: "https://avery.example.test/profile?source=crm",
+      twitterUrl: "https://x.example.test/avery",
+      facebookUrl: "https://facebook.example.test/avery",
+      instagramUrl: "https://instagram.example.test/avery",
+      location: "Toronto, ON",
+      preferredLanguage: "English",
+      timeZone: "America/Toronto",
+      lifecycleStage: "Customer",
+      leadStatus: "Qualified",
+      leadSource: "Partner referral",
+      interests: "AI; accessibility",
+      goals: "Improve onboarding",
+      painPoints: "Manual entry, repetitive exports",
+      personalizationContext: "Mention their new product",
+      notes: "Follow up in Q4",
+      companyWebsiteUrl: "https://northwind.example.test/about",
+      companyDomain: "northwind.example.test",
+      companyIndustry: "Software",
+      companySize: "201-500",
+      companyRevenueRange: "$10M-$50M",
+      companyDescription: "Builds workflow software, with a focus on analytics",
+      companyPhoneNumber: "+1-555-0199",
+      companyLinkedinUrl: "https://www.linkedin.com/company/northwind?tab=about",
+      companyLocation: "Toronto, Canada",
+    };
+    for (const [field, value] of Object.entries(expected)) {
+      assert.equal(saved[field], value, `${field} should be imported and returned`);
+    }
+    const detail = await api(`/contacts/${saved.id}`, { cookie: owner.cookie });
+    assert.equal(detail.response.status, 200, JSON.stringify(detail.body));
+    assert.equal(
+      detail.body.linkedinUrl,
+      "https://www.linkedin.com/in/avery-chen?view=full",
+    );
+    assert.equal(
+      detail.body.companyLinkedinUrl,
+      "https://www.linkedin.com/company/northwind?tab=about",
+    );
   });
 
   it("imports CSV rows without crossing tenant or package limits", async () => {

@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Contact values are validated individually after the batch is accepted so one bad row does not reject the entire import.
+ */
 export interface ContactImportRow {
   /** @minimum 2 */
   rowNumber: number;
@@ -16,6 +19,34 @@ export interface ContactImportRow {
   companyName?: string;
   linkedinUrl?: string;
   phoneNumber?: string;
+  jobTitle?: string;
+  department?: string;
+  seniority?: string;
+  mobilePhone?: string;
+  websiteUrl?: string;
+  twitterUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  location?: string;
+  preferredLanguage?: string;
+  timeZone?: string;
+  lifecycleStage?: string;
+  leadStatus?: string;
+  leadSource?: string;
+  interests?: string;
+  goals?: string;
+  painPoints?: string;
+  personalizationContext?: string;
+  notes?: string;
+  companyWebsiteUrl?: string;
+  companyDomain?: string;
+  companyIndustry?: string;
+  companySize?: string;
+  companyRevenueRange?: string;
+  companyDescription?: string;
+  companyPhoneNumber?: string;
+  companyLinkedinUrl?: string;
+  companyLocation?: string;
   subscribed?: boolean;
   listIds?: string[];
 }

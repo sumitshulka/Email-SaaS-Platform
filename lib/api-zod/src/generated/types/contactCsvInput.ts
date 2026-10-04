@@ -7,6 +7,6 @@
  */
 
 /**
- * UTF-8 CSV. Include email and either name or first_name/last_name columns.
+ * UTF-8 CSV. Include email and either name or first_name/last_name columns. Optional contact and company enrichment columns supported by ContactInput are also imported.
  */
 export type ContactCsvInput = string;
