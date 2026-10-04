@@ -614,6 +614,29 @@ paths:
         schema:
           type: string
           format: uuid
+    get:
+      operationId: getContact
+      tags: [sending]
+      summary: Get a contact owned by the authenticated tenant
+      responses:
+        "200":
+          description: Contact details and tenant-owned list memberships
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          description: Invalid contact identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     patch:
       operationId: updateContact
       tags: [sending]
@@ -1715,11 +1738,39 @@ components:
         companyName: { type: ["string", "null"], maxLength: 200 }
         linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         phoneNumber: { type: ["string", "null"], maxLength: 40 }
+        jobTitle: { type: ["string", "null"], maxLength: 200 }
+        department: { type: ["string", "null"], maxLength: 120 }
+        seniority: { type: ["string", "null"], maxLength: 80 }
+        mobilePhone: { type: ["string", "null"], maxLength: 40 }
+        websiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        twitterUrl: { type: ["string", "null"], maxLength: 2048 }
+        facebookUrl: { type: ["string", "null"], maxLength: 2048 }
+        instagramUrl: { type: ["string", "null"], maxLength: 2048 }
+        location: { type: ["string", "null"], maxLength: 200 }
+        preferredLanguage: { type: ["string", "null"], maxLength: 80 }
+        timeZone: { type: ["string", "null"], maxLength: 100 }
+        lifecycleStage: { type: ["string", "null"], maxLength: 80 }
+        leadStatus: { type: ["string", "null"], maxLength: 80 }
+        leadSource: { type: ["string", "null"], maxLength: 120 }
+        interests: { type: ["string", "null"], maxLength: 10000 }
+        goals: { type: ["string", "null"], maxLength: 10000 }
+        painPoints: { type: ["string", "null"], maxLength: 10000 }
+        personalizationContext: { type: ["string", "null"], maxLength: 10000 }
+        notes: { type: ["string", "null"], maxLength: 10000 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, subscribed, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, listIds, createdAt, updatedAt]
     ContactEmailHistoryItem:
       type: object
       properties:
@@ -1762,6 +1813,34 @@ components:
         companyName: { type: string, maxLength: 200 }
         linkedinUrl: { type: string, maxLength: 2048 }
         phoneNumber: { type: string, maxLength: 40 }
+        jobTitle: { type: string, maxLength: 200 }
+        department: { type: string, maxLength: 120 }
+        seniority: { type: string, maxLength: 80 }
+        mobilePhone: { type: string, maxLength: 40 }
+        websiteUrl: { type: string, maxLength: 2048 }
+        twitterUrl: { type: string, maxLength: 2048 }
+        facebookUrl: { type: string, maxLength: 2048 }
+        instagramUrl: { type: string, maxLength: 2048 }
+        location: { type: string, maxLength: 200 }
+        preferredLanguage: { type: string, maxLength: 80 }
+        timeZone: { type: string, maxLength: 100 }
+        lifecycleStage: { type: string, maxLength: 80 }
+        leadStatus: { type: string, maxLength: 80 }
+        leadSource: { type: string, maxLength: 120 }
+        interests: { type: string, maxLength: 10000 }
+        goals: { type: string, maxLength: 10000 }
+        painPoints: { type: string, maxLength: 10000 }
+        personalizationContext: { type: string, maxLength: 10000 }
+        notes: { type: string, maxLength: 10000 }
+        companyWebsiteUrl: { type: string, maxLength: 2048 }
+        companyDomain: { type: string, maxLength: 255 }
+        companyIndustry: { type: string, maxLength: 120 }
+        companySize: { type: string, maxLength: 80 }
+        companyRevenueRange: { type: string, maxLength: 80 }
+        companyDescription: { type: string, maxLength: 10000 }
+        companyPhoneNumber: { type: string, maxLength: 40 }
+        companyLinkedinUrl: { type: string, maxLength: 2048 }
+        companyLocation: { type: string, maxLength: 200 }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
       required: [email, firstName, lastName]
@@ -1775,6 +1854,34 @@ components:
         companyName: { type: ["string", "null"], maxLength: 200 }
         linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         phoneNumber: { type: ["string", "null"], maxLength: 40 }
+        jobTitle: { type: ["string", "null"], maxLength: 200 }
+        department: { type: ["string", "null"], maxLength: 120 }
+        seniority: { type: ["string", "null"], maxLength: 80 }
+        mobilePhone: { type: ["string", "null"], maxLength: 40 }
+        websiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        twitterUrl: { type: ["string", "null"], maxLength: 2048 }
+        facebookUrl: { type: ["string", "null"], maxLength: 2048 }
+        instagramUrl: { type: ["string", "null"], maxLength: 2048 }
+        location: { type: ["string", "null"], maxLength: 200 }
+        preferredLanguage: { type: ["string", "null"], maxLength: 80 }
+        timeZone: { type: ["string", "null"], maxLength: 100 }
+        lifecycleStage: { type: ["string", "null"], maxLength: 80 }
+        leadStatus: { type: ["string", "null"], maxLength: 80 }
+        leadSource: { type: ["string", "null"], maxLength: 120 }
+        interests: { type: ["string", "null"], maxLength: 10000 }
+        goals: { type: ["string", "null"], maxLength: 10000 }
+        painPoints: { type: ["string", "null"], maxLength: 10000 }
+        personalizationContext: { type: ["string", "null"], maxLength: 10000 }
+        notes: { type: ["string", "null"], maxLength: 10000 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
         subscribed: { type: boolean }
         listIds: { type: array, items: { type: string, format: uuid }, maxItems: 100 }
     ContactImportRow:

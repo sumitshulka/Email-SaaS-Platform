@@ -21,6 +21,8 @@ import {
   CreateContactResponse,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
+  GetContactParams,
+  GetContactResponse,
   GetContactEmailHistoryParams,
   GetContactEmailHistoryResponse,
   DeleteCampaignParams,
@@ -84,6 +86,36 @@ import { requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
 const MASKED_CREDENTIAL = "••••••";
+const contactEnrichmentFields = [
+  "jobTitle",
+  "department",
+  "seniority",
+  "mobilePhone",
+  "websiteUrl",
+  "twitterUrl",
+  "facebookUrl",
+  "instagramUrl",
+  "location",
+  "preferredLanguage",
+  "timeZone",
+  "lifecycleStage",
+  "leadStatus",
+  "leadSource",
+  "interests",
+  "goals",
+  "painPoints",
+  "personalizationContext",
+  "notes",
+  "companyWebsiteUrl",
+  "companyDomain",
+  "companyIndustry",
+  "companySize",
+  "companyRevenueRange",
+  "companyDescription",
+  "companyPhoneNumber",
+  "companyLinkedinUrl",
+  "companyLocation",
+] as const;
 const contactTextFields = [
   "email",
   "firstName",
@@ -91,6 +123,7 @@ const contactTextFields = [
   "companyName",
   "linkedinUrl",
   "phoneNumber",
+  ...contactEnrichmentFields,
 ] as const;
 
 function normalizedContactInput(input: unknown): unknown {
@@ -110,6 +143,22 @@ function normalizedContactInput(input: unknown): unknown {
 function optionalContactValue(value?: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function contactEnrichmentPatch(
+  input: Record<string, unknown>,
+): Partial<typeof contactsTable.$inferInsert> {
+  const patch: Partial<typeof contactsTable.$inferInsert> = {};
+  for (const field of contactEnrichmentFields) {
+    if (input[field] === undefined) continue;
+    const value = input[field];
+    if (value === null) {
+      patch[field] = null;
+    } else if (typeof value === "string") {
+      patch[field] = value.trim() || null;
+    }
+  }
+  return patch;
 }
 
 function sendingSettingsResponse(
@@ -757,6 +806,40 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
 });
 
 router.get(
+  "/contacts/:contactId",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetContactParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({
+        error: "Invalid contact identifier.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [contact] = await db
+      .select()
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({
+        error: "Contact not found.",
+        code: "CONTACT_NOT_FOUND",
+      });
+      return;
+    }
+    res.json(GetContactResponse.parse(await getContactPayload(userId, contact)));
+  },
+);
+
+router.get(
   "/contacts/:contactId/email-history",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -898,6 +981,7 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
         companyName: optionalContactValue(parsed.data.companyName),
         linkedinUrl: optionalContactValue(parsed.data.linkedinUrl),
         phoneNumber: optionalContactValue(parsed.data.phoneNumber),
+        ...contactEnrichmentPatch(parsed.data),
         subscribed,
       })
       .onConflictDoNothing({
@@ -1264,6 +1348,7 @@ router.patch(
           ...(parsed.data.phoneNumber !== undefined
             ? { phoneNumber: optionalContactValue(parsed.data.phoneNumber) }
             : {}),
+          ...contactEnrichmentPatch(parsed.data),
           ...(parsed.data.subscribed !== undefined
             ? { subscribed: parsed.data.subscribed }
             : {}),

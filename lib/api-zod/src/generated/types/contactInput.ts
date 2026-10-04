@@ -30,6 +30,62 @@ export interface ContactInput {
   linkedinUrl?: string;
   /** @maxLength 40 */
   phoneNumber?: string;
+  /** @maxLength 200 */
+  jobTitle?: string;
+  /** @maxLength 120 */
+  department?: string;
+  /** @maxLength 80 */
+  seniority?: string;
+  /** @maxLength 40 */
+  mobilePhone?: string;
+  /** @maxLength 2048 */
+  websiteUrl?: string;
+  /** @maxLength 2048 */
+  twitterUrl?: string;
+  /** @maxLength 2048 */
+  facebookUrl?: string;
+  /** @maxLength 2048 */
+  instagramUrl?: string;
+  /** @maxLength 200 */
+  location?: string;
+  /** @maxLength 80 */
+  preferredLanguage?: string;
+  /** @maxLength 100 */
+  timeZone?: string;
+  /** @maxLength 80 */
+  lifecycleStage?: string;
+  /** @maxLength 80 */
+  leadStatus?: string;
+  /** @maxLength 120 */
+  leadSource?: string;
+  /** @maxLength 10000 */
+  interests?: string;
+  /** @maxLength 10000 */
+  goals?: string;
+  /** @maxLength 10000 */
+  painPoints?: string;
+  /** @maxLength 10000 */
+  personalizationContext?: string;
+  /** @maxLength 10000 */
+  notes?: string;
+  /** @maxLength 2048 */
+  companyWebsiteUrl?: string;
+  /** @maxLength 255 */
+  companyDomain?: string;
+  /** @maxLength 120 */
+  companyIndustry?: string;
+  /** @maxLength 80 */
+  companySize?: string;
+  /** @maxLength 80 */
+  companyRevenueRange?: string;
+  /** @maxLength 10000 */
+  companyDescription?: string;
+  /** @maxLength 40 */
+  companyPhoneNumber?: string;
+  /** @maxLength 2048 */
+  companyLinkedinUrl?: string;
+  /** @maxLength 200 */
+  companyLocation?: string;
   subscribed?: boolean;
   /** @maxItems 100 */
   listIds?: string[];

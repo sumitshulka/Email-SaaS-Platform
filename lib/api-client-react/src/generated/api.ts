@@ -2267,6 +2267,83 @@ export const useImportContacts = <TError = ErrorType<ApiError>,
       return useMutation(getImportContactsMutationOptions(options));
     }
 
+export const getGetContactUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}`
+}
+
+/**
+ * @summary Get a contact owned by the authenticated tenant
+ */
+export const getContact = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<Contact> => {
+
+  return customFetch<Contact>(getGetContactUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}`
+    ] as const;
+    }
+
+
+export const getGetContactQueryOptions = <TData = Awaited<ReturnType<typeof getContact>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContact>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContact>>> = ({ signal }) => getContact(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContact>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactQueryResult = NonNullable<Awaited<ReturnType<typeof getContact>>>
+export type GetContactQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get a contact owned by the authenticated tenant
+ */
+
+export function useGetContact<TData = Awaited<ReturnType<typeof getContact>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContact>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getUpdateContactUrl = (contactId: string,) => {
 
 
@@ -5507,3 +5584,4 @@ export const useReceiveRazorpayWebhook = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getReceiveRazorpayWebhookMutationOptions(options));
     }
+

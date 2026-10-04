@@ -524,6 +524,62 @@ export const listContactsResponseContactsItemOneLinkedinUrlMax = 2048;
 
 export const listContactsResponseContactsItemOnePhoneNumberMax = 40;
 
+export const listContactsResponseContactsItemOneJobTitleMax = 200;
+
+export const listContactsResponseContactsItemOneDepartmentMax = 120;
+
+export const listContactsResponseContactsItemOneSeniorityMax = 80;
+
+export const listContactsResponseContactsItemOneMobilePhoneMax = 40;
+
+export const listContactsResponseContactsItemOneWebsiteUrlMax = 2048;
+
+export const listContactsResponseContactsItemOneTwitterUrlMax = 2048;
+
+export const listContactsResponseContactsItemOneFacebookUrlMax = 2048;
+
+export const listContactsResponseContactsItemOneInstagramUrlMax = 2048;
+
+export const listContactsResponseContactsItemOneLocationMax = 200;
+
+export const listContactsResponseContactsItemOnePreferredLanguageMax = 80;
+
+export const listContactsResponseContactsItemOneTimeZoneMax = 100;
+
+export const listContactsResponseContactsItemOneLifecycleStageMax = 80;
+
+export const listContactsResponseContactsItemOneLeadStatusMax = 80;
+
+export const listContactsResponseContactsItemOneLeadSourceMax = 120;
+
+export const listContactsResponseContactsItemOneInterestsMax = 10000;
+
+export const listContactsResponseContactsItemOneGoalsMax = 10000;
+
+export const listContactsResponseContactsItemOnePainPointsMax = 10000;
+
+export const listContactsResponseContactsItemOnePersonalizationContextMax = 10000;
+
+export const listContactsResponseContactsItemOneNotesMax = 10000;
+
+export const listContactsResponseContactsItemOneCompanyWebsiteUrlMax = 2048;
+
+export const listContactsResponseContactsItemOneCompanyDomainMax = 255;
+
+export const listContactsResponseContactsItemOneCompanyIndustryMax = 120;
+
+export const listContactsResponseContactsItemOneCompanySizeMax = 80;
+
+export const listContactsResponseContactsItemOneCompanyRevenueRangeMax = 80;
+
+export const listContactsResponseContactsItemOneCompanyDescriptionMax = 10000;
+
+export const listContactsResponseContactsItemOneCompanyPhoneNumberMax = 40;
+
+export const listContactsResponseContactsItemOneCompanyLinkedinUrlMax = 2048;
+
+export const listContactsResponseContactsItemOneCompanyLocationMax = 200;
+
 export const listContactsResponseContactsItemTwoLastEmailOneAttemptsMin = 0;
 
 export const listContactsResponseQuotaUsedMin = 0;
@@ -542,9 +598,37 @@ export const ListContactsResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "companyName": zod.string().max(listContactsResponseContactsItemOneCompanyNameMax).nullish(),
-  "linkedinUrl": zod.string().max(listContactsResponseContactsItemOneLinkedinUrlMax).nullish(),
-  "phoneNumber": zod.string().max(listContactsResponseContactsItemOnePhoneNumberMax).nullish(),
+  "companyName": zod.string().max(listContactsResponseContactsItemOneCompanyNameMax).nullable(),
+  "linkedinUrl": zod.string().max(listContactsResponseContactsItemOneLinkedinUrlMax).nullable(),
+  "phoneNumber": zod.string().max(listContactsResponseContactsItemOnePhoneNumberMax).nullable(),
+  "jobTitle": zod.string().max(listContactsResponseContactsItemOneJobTitleMax).nullable(),
+  "department": zod.string().max(listContactsResponseContactsItemOneDepartmentMax).nullable(),
+  "seniority": zod.string().max(listContactsResponseContactsItemOneSeniorityMax).nullable(),
+  "mobilePhone": zod.string().max(listContactsResponseContactsItemOneMobilePhoneMax).nullable(),
+  "websiteUrl": zod.string().max(listContactsResponseContactsItemOneWebsiteUrlMax).nullable(),
+  "twitterUrl": zod.string().max(listContactsResponseContactsItemOneTwitterUrlMax).nullable(),
+  "facebookUrl": zod.string().max(listContactsResponseContactsItemOneFacebookUrlMax).nullable(),
+  "instagramUrl": zod.string().max(listContactsResponseContactsItemOneInstagramUrlMax).nullable(),
+  "location": zod.string().max(listContactsResponseContactsItemOneLocationMax).nullable(),
+  "preferredLanguage": zod.string().max(listContactsResponseContactsItemOnePreferredLanguageMax).nullable(),
+  "timeZone": zod.string().max(listContactsResponseContactsItemOneTimeZoneMax).nullable(),
+  "lifecycleStage": zod.string().max(listContactsResponseContactsItemOneLifecycleStageMax).nullable(),
+  "leadStatus": zod.string().max(listContactsResponseContactsItemOneLeadStatusMax).nullable(),
+  "leadSource": zod.string().max(listContactsResponseContactsItemOneLeadSourceMax).nullable(),
+  "interests": zod.string().max(listContactsResponseContactsItemOneInterestsMax).nullable(),
+  "goals": zod.string().max(listContactsResponseContactsItemOneGoalsMax).nullable(),
+  "painPoints": zod.string().max(listContactsResponseContactsItemOnePainPointsMax).nullable(),
+  "personalizationContext": zod.string().max(listContactsResponseContactsItemOnePersonalizationContextMax).nullable(),
+  "notes": zod.string().max(listContactsResponseContactsItemOneNotesMax).nullable(),
+  "companyWebsiteUrl": zod.string().max(listContactsResponseContactsItemOneCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(listContactsResponseContactsItemOneCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(listContactsResponseContactsItemOneCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(listContactsResponseContactsItemOneCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(listContactsResponseContactsItemOneCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(listContactsResponseContactsItemOneCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(listContactsResponseContactsItemOneCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(listContactsResponseContactsItemOneCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(listContactsResponseContactsItemOneCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
@@ -600,6 +684,62 @@ export const createContactBodyLinkedinUrlMax = 2048;
 
 export const createContactBodyPhoneNumberMax = 40;
 
+export const createContactBodyJobTitleMax = 200;
+
+export const createContactBodyDepartmentMax = 120;
+
+export const createContactBodySeniorityMax = 80;
+
+export const createContactBodyMobilePhoneMax = 40;
+
+export const createContactBodyWebsiteUrlMax = 2048;
+
+export const createContactBodyTwitterUrlMax = 2048;
+
+export const createContactBodyFacebookUrlMax = 2048;
+
+export const createContactBodyInstagramUrlMax = 2048;
+
+export const createContactBodyLocationMax = 200;
+
+export const createContactBodyPreferredLanguageMax = 80;
+
+export const createContactBodyTimeZoneMax = 100;
+
+export const createContactBodyLifecycleStageMax = 80;
+
+export const createContactBodyLeadStatusMax = 80;
+
+export const createContactBodyLeadSourceMax = 120;
+
+export const createContactBodyInterestsMax = 10000;
+
+export const createContactBodyGoalsMax = 10000;
+
+export const createContactBodyPainPointsMax = 10000;
+
+export const createContactBodyPersonalizationContextMax = 10000;
+
+export const createContactBodyNotesMax = 10000;
+
+export const createContactBodyCompanyWebsiteUrlMax = 2048;
+
+export const createContactBodyCompanyDomainMax = 255;
+
+export const createContactBodyCompanyIndustryMax = 120;
+
+export const createContactBodyCompanySizeMax = 80;
+
+export const createContactBodyCompanyRevenueRangeMax = 80;
+
+export const createContactBodyCompanyDescriptionMax = 10000;
+
+export const createContactBodyCompanyPhoneNumberMax = 40;
+
+export const createContactBodyCompanyLinkedinUrlMax = 2048;
+
+export const createContactBodyCompanyLocationMax = 200;
+
 export const createContactBodyListIdsMax = 100;
 
 
@@ -612,6 +752,34 @@ export const CreateContactBody = zod.object({
   "companyName": zod.string().max(createContactBodyCompanyNameMax).optional(),
   "linkedinUrl": zod.string().max(createContactBodyLinkedinUrlMax).optional(),
   "phoneNumber": zod.string().max(createContactBodyPhoneNumberMax).optional(),
+  "jobTitle": zod.string().max(createContactBodyJobTitleMax).optional(),
+  "department": zod.string().max(createContactBodyDepartmentMax).optional(),
+  "seniority": zod.string().max(createContactBodySeniorityMax).optional(),
+  "mobilePhone": zod.string().max(createContactBodyMobilePhoneMax).optional(),
+  "websiteUrl": zod.string().max(createContactBodyWebsiteUrlMax).optional(),
+  "twitterUrl": zod.string().max(createContactBodyTwitterUrlMax).optional(),
+  "facebookUrl": zod.string().max(createContactBodyFacebookUrlMax).optional(),
+  "instagramUrl": zod.string().max(createContactBodyInstagramUrlMax).optional(),
+  "location": zod.string().max(createContactBodyLocationMax).optional(),
+  "preferredLanguage": zod.string().max(createContactBodyPreferredLanguageMax).optional(),
+  "timeZone": zod.string().max(createContactBodyTimeZoneMax).optional(),
+  "lifecycleStage": zod.string().max(createContactBodyLifecycleStageMax).optional(),
+  "leadStatus": zod.string().max(createContactBodyLeadStatusMax).optional(),
+  "leadSource": zod.string().max(createContactBodyLeadSourceMax).optional(),
+  "interests": zod.string().max(createContactBodyInterestsMax).optional(),
+  "goals": zod.string().max(createContactBodyGoalsMax).optional(),
+  "painPoints": zod.string().max(createContactBodyPainPointsMax).optional(),
+  "personalizationContext": zod.string().max(createContactBodyPersonalizationContextMax).optional(),
+  "notes": zod.string().max(createContactBodyNotesMax).optional(),
+  "companyWebsiteUrl": zod.string().max(createContactBodyCompanyWebsiteUrlMax).optional(),
+  "companyDomain": zod.string().max(createContactBodyCompanyDomainMax).optional(),
+  "companyIndustry": zod.string().max(createContactBodyCompanyIndustryMax).optional(),
+  "companySize": zod.string().max(createContactBodyCompanySizeMax).optional(),
+  "companyRevenueRange": zod.string().max(createContactBodyCompanyRevenueRangeMax).optional(),
+  "companyDescription": zod.string().max(createContactBodyCompanyDescriptionMax).optional(),
+  "companyPhoneNumber": zod.string().max(createContactBodyCompanyPhoneNumberMax).optional(),
+  "companyLinkedinUrl": zod.string().max(createContactBodyCompanyLinkedinUrlMax).optional(),
+  "companyLocation": zod.string().max(createContactBodyCompanyLocationMax).optional(),
   "subscribed": zod.boolean().optional(),
   "listIds": zod.array(zod.string().uuid()).max(createContactBodyListIdsMax).optional()
 })
@@ -622,6 +790,62 @@ export const createContactResponseLinkedinUrlMax = 2048;
 
 export const createContactResponsePhoneNumberMax = 40;
 
+export const createContactResponseJobTitleMax = 200;
+
+export const createContactResponseDepartmentMax = 120;
+
+export const createContactResponseSeniorityMax = 80;
+
+export const createContactResponseMobilePhoneMax = 40;
+
+export const createContactResponseWebsiteUrlMax = 2048;
+
+export const createContactResponseTwitterUrlMax = 2048;
+
+export const createContactResponseFacebookUrlMax = 2048;
+
+export const createContactResponseInstagramUrlMax = 2048;
+
+export const createContactResponseLocationMax = 200;
+
+export const createContactResponsePreferredLanguageMax = 80;
+
+export const createContactResponseTimeZoneMax = 100;
+
+export const createContactResponseLifecycleStageMax = 80;
+
+export const createContactResponseLeadStatusMax = 80;
+
+export const createContactResponseLeadSourceMax = 120;
+
+export const createContactResponseInterestsMax = 10000;
+
+export const createContactResponseGoalsMax = 10000;
+
+export const createContactResponsePainPointsMax = 10000;
+
+export const createContactResponsePersonalizationContextMax = 10000;
+
+export const createContactResponseNotesMax = 10000;
+
+export const createContactResponseCompanyWebsiteUrlMax = 2048;
+
+export const createContactResponseCompanyDomainMax = 255;
+
+export const createContactResponseCompanyIndustryMax = 120;
+
+export const createContactResponseCompanySizeMax = 80;
+
+export const createContactResponseCompanyRevenueRangeMax = 80;
+
+export const createContactResponseCompanyDescriptionMax = 10000;
+
+export const createContactResponseCompanyPhoneNumberMax = 40;
+
+export const createContactResponseCompanyLinkedinUrlMax = 2048;
+
+export const createContactResponseCompanyLocationMax = 200;
+
 
 
 export const CreateContactResponse = zod.object({
@@ -630,9 +854,37 @@ export const CreateContactResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "companyName": zod.string().max(createContactResponseCompanyNameMax).nullish(),
-  "linkedinUrl": zod.string().max(createContactResponseLinkedinUrlMax).nullish(),
-  "phoneNumber": zod.string().max(createContactResponsePhoneNumberMax).nullish(),
+  "companyName": zod.string().max(createContactResponseCompanyNameMax).nullable(),
+  "linkedinUrl": zod.string().max(createContactResponseLinkedinUrlMax).nullable(),
+  "phoneNumber": zod.string().max(createContactResponsePhoneNumberMax).nullable(),
+  "jobTitle": zod.string().max(createContactResponseJobTitleMax).nullable(),
+  "department": zod.string().max(createContactResponseDepartmentMax).nullable(),
+  "seniority": zod.string().max(createContactResponseSeniorityMax).nullable(),
+  "mobilePhone": zod.string().max(createContactResponseMobilePhoneMax).nullable(),
+  "websiteUrl": zod.string().max(createContactResponseWebsiteUrlMax).nullable(),
+  "twitterUrl": zod.string().max(createContactResponseTwitterUrlMax).nullable(),
+  "facebookUrl": zod.string().max(createContactResponseFacebookUrlMax).nullable(),
+  "instagramUrl": zod.string().max(createContactResponseInstagramUrlMax).nullable(),
+  "location": zod.string().max(createContactResponseLocationMax).nullable(),
+  "preferredLanguage": zod.string().max(createContactResponsePreferredLanguageMax).nullable(),
+  "timeZone": zod.string().max(createContactResponseTimeZoneMax).nullable(),
+  "lifecycleStage": zod.string().max(createContactResponseLifecycleStageMax).nullable(),
+  "leadStatus": zod.string().max(createContactResponseLeadStatusMax).nullable(),
+  "leadSource": zod.string().max(createContactResponseLeadSourceMax).nullable(),
+  "interests": zod.string().max(createContactResponseInterestsMax).nullable(),
+  "goals": zod.string().max(createContactResponseGoalsMax).nullable(),
+  "painPoints": zod.string().max(createContactResponsePainPointsMax).nullable(),
+  "personalizationContext": zod.string().max(createContactResponsePersonalizationContextMax).nullable(),
+  "notes": zod.string().max(createContactResponseNotesMax).nullable(),
+  "companyWebsiteUrl": zod.string().max(createContactResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(createContactResponseCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(createContactResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(createContactResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(createContactResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(createContactResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(createContactResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(createContactResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(createContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
@@ -737,6 +989,121 @@ export const ImportContactsResponse = zod.union([zod.object({
 
 
 /**
+ * @summary Get a contact owned by the authenticated tenant
+ */
+export const GetContactParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const getContactResponseCompanyNameMax = 200;
+
+export const getContactResponseLinkedinUrlMax = 2048;
+
+export const getContactResponsePhoneNumberMax = 40;
+
+export const getContactResponseJobTitleMax = 200;
+
+export const getContactResponseDepartmentMax = 120;
+
+export const getContactResponseSeniorityMax = 80;
+
+export const getContactResponseMobilePhoneMax = 40;
+
+export const getContactResponseWebsiteUrlMax = 2048;
+
+export const getContactResponseTwitterUrlMax = 2048;
+
+export const getContactResponseFacebookUrlMax = 2048;
+
+export const getContactResponseInstagramUrlMax = 2048;
+
+export const getContactResponseLocationMax = 200;
+
+export const getContactResponsePreferredLanguageMax = 80;
+
+export const getContactResponseTimeZoneMax = 100;
+
+export const getContactResponseLifecycleStageMax = 80;
+
+export const getContactResponseLeadStatusMax = 80;
+
+export const getContactResponseLeadSourceMax = 120;
+
+export const getContactResponseInterestsMax = 10000;
+
+export const getContactResponseGoalsMax = 10000;
+
+export const getContactResponsePainPointsMax = 10000;
+
+export const getContactResponsePersonalizationContextMax = 10000;
+
+export const getContactResponseNotesMax = 10000;
+
+export const getContactResponseCompanyWebsiteUrlMax = 2048;
+
+export const getContactResponseCompanyDomainMax = 255;
+
+export const getContactResponseCompanyIndustryMax = 120;
+
+export const getContactResponseCompanySizeMax = 80;
+
+export const getContactResponseCompanyRevenueRangeMax = 80;
+
+export const getContactResponseCompanyDescriptionMax = 10000;
+
+export const getContactResponseCompanyPhoneNumberMax = 40;
+
+export const getContactResponseCompanyLinkedinUrlMax = 2048;
+
+export const getContactResponseCompanyLocationMax = 200;
+
+
+
+export const GetContactResponse = zod.object({
+  "id": zod.string().uuid(),
+  "email": zod.string().email(),
+  "name": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().max(getContactResponseCompanyNameMax).nullable(),
+  "linkedinUrl": zod.string().max(getContactResponseLinkedinUrlMax).nullable(),
+  "phoneNumber": zod.string().max(getContactResponsePhoneNumberMax).nullable(),
+  "jobTitle": zod.string().max(getContactResponseJobTitleMax).nullable(),
+  "department": zod.string().max(getContactResponseDepartmentMax).nullable(),
+  "seniority": zod.string().max(getContactResponseSeniorityMax).nullable(),
+  "mobilePhone": zod.string().max(getContactResponseMobilePhoneMax).nullable(),
+  "websiteUrl": zod.string().max(getContactResponseWebsiteUrlMax).nullable(),
+  "twitterUrl": zod.string().max(getContactResponseTwitterUrlMax).nullable(),
+  "facebookUrl": zod.string().max(getContactResponseFacebookUrlMax).nullable(),
+  "instagramUrl": zod.string().max(getContactResponseInstagramUrlMax).nullable(),
+  "location": zod.string().max(getContactResponseLocationMax).nullable(),
+  "preferredLanguage": zod.string().max(getContactResponsePreferredLanguageMax).nullable(),
+  "timeZone": zod.string().max(getContactResponseTimeZoneMax).nullable(),
+  "lifecycleStage": zod.string().max(getContactResponseLifecycleStageMax).nullable(),
+  "leadStatus": zod.string().max(getContactResponseLeadStatusMax).nullable(),
+  "leadSource": zod.string().max(getContactResponseLeadSourceMax).nullable(),
+  "interests": zod.string().max(getContactResponseInterestsMax).nullable(),
+  "goals": zod.string().max(getContactResponseGoalsMax).nullable(),
+  "painPoints": zod.string().max(getContactResponsePainPointsMax).nullable(),
+  "personalizationContext": zod.string().max(getContactResponsePersonalizationContextMax).nullable(),
+  "notes": zod.string().max(getContactResponseNotesMax).nullable(),
+  "companyWebsiteUrl": zod.string().max(getContactResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(getContactResponseCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(getContactResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(getContactResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(getContactResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(getContactResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(getContactResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(getContactResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(getContactResponseCompanyLocationMax).nullable(),
+  "subscribed": zod.boolean(),
+  "listIds": zod.array(zod.string().uuid()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Update a contact owned by the authenticated tenant
  */
 export const UpdateContactParams = zod.object({
@@ -757,6 +1124,62 @@ export const updateContactBodyLinkedinUrlMax = 2048;
 
 export const updateContactBodyPhoneNumberMax = 40;
 
+export const updateContactBodyJobTitleMax = 200;
+
+export const updateContactBodyDepartmentMax = 120;
+
+export const updateContactBodySeniorityMax = 80;
+
+export const updateContactBodyMobilePhoneMax = 40;
+
+export const updateContactBodyWebsiteUrlMax = 2048;
+
+export const updateContactBodyTwitterUrlMax = 2048;
+
+export const updateContactBodyFacebookUrlMax = 2048;
+
+export const updateContactBodyInstagramUrlMax = 2048;
+
+export const updateContactBodyLocationMax = 200;
+
+export const updateContactBodyPreferredLanguageMax = 80;
+
+export const updateContactBodyTimeZoneMax = 100;
+
+export const updateContactBodyLifecycleStageMax = 80;
+
+export const updateContactBodyLeadStatusMax = 80;
+
+export const updateContactBodyLeadSourceMax = 120;
+
+export const updateContactBodyInterestsMax = 10000;
+
+export const updateContactBodyGoalsMax = 10000;
+
+export const updateContactBodyPainPointsMax = 10000;
+
+export const updateContactBodyPersonalizationContextMax = 10000;
+
+export const updateContactBodyNotesMax = 10000;
+
+export const updateContactBodyCompanyWebsiteUrlMax = 2048;
+
+export const updateContactBodyCompanyDomainMax = 255;
+
+export const updateContactBodyCompanyIndustryMax = 120;
+
+export const updateContactBodyCompanySizeMax = 80;
+
+export const updateContactBodyCompanyRevenueRangeMax = 80;
+
+export const updateContactBodyCompanyDescriptionMax = 10000;
+
+export const updateContactBodyCompanyPhoneNumberMax = 40;
+
+export const updateContactBodyCompanyLinkedinUrlMax = 2048;
+
+export const updateContactBodyCompanyLocationMax = 200;
+
 export const updateContactBodyListIdsMax = 100;
 
 
@@ -769,6 +1192,34 @@ export const UpdateContactBody = zod.object({
   "companyName": zod.string().max(updateContactBodyCompanyNameMax).nullish(),
   "linkedinUrl": zod.string().max(updateContactBodyLinkedinUrlMax).nullish(),
   "phoneNumber": zod.string().max(updateContactBodyPhoneNumberMax).nullish(),
+  "jobTitle": zod.string().max(updateContactBodyJobTitleMax).nullish(),
+  "department": zod.string().max(updateContactBodyDepartmentMax).nullish(),
+  "seniority": zod.string().max(updateContactBodySeniorityMax).nullish(),
+  "mobilePhone": zod.string().max(updateContactBodyMobilePhoneMax).nullish(),
+  "websiteUrl": zod.string().max(updateContactBodyWebsiteUrlMax).nullish(),
+  "twitterUrl": zod.string().max(updateContactBodyTwitterUrlMax).nullish(),
+  "facebookUrl": zod.string().max(updateContactBodyFacebookUrlMax).nullish(),
+  "instagramUrl": zod.string().max(updateContactBodyInstagramUrlMax).nullish(),
+  "location": zod.string().max(updateContactBodyLocationMax).nullish(),
+  "preferredLanguage": zod.string().max(updateContactBodyPreferredLanguageMax).nullish(),
+  "timeZone": zod.string().max(updateContactBodyTimeZoneMax).nullish(),
+  "lifecycleStage": zod.string().max(updateContactBodyLifecycleStageMax).nullish(),
+  "leadStatus": zod.string().max(updateContactBodyLeadStatusMax).nullish(),
+  "leadSource": zod.string().max(updateContactBodyLeadSourceMax).nullish(),
+  "interests": zod.string().max(updateContactBodyInterestsMax).nullish(),
+  "goals": zod.string().max(updateContactBodyGoalsMax).nullish(),
+  "painPoints": zod.string().max(updateContactBodyPainPointsMax).nullish(),
+  "personalizationContext": zod.string().max(updateContactBodyPersonalizationContextMax).nullish(),
+  "notes": zod.string().max(updateContactBodyNotesMax).nullish(),
+  "companyWebsiteUrl": zod.string().max(updateContactBodyCompanyWebsiteUrlMax).nullish(),
+  "companyDomain": zod.string().max(updateContactBodyCompanyDomainMax).nullish(),
+  "companyIndustry": zod.string().max(updateContactBodyCompanyIndustryMax).nullish(),
+  "companySize": zod.string().max(updateContactBodyCompanySizeMax).nullish(),
+  "companyRevenueRange": zod.string().max(updateContactBodyCompanyRevenueRangeMax).nullish(),
+  "companyDescription": zod.string().max(updateContactBodyCompanyDescriptionMax).nullish(),
+  "companyPhoneNumber": zod.string().max(updateContactBodyCompanyPhoneNumberMax).nullish(),
+  "companyLinkedinUrl": zod.string().max(updateContactBodyCompanyLinkedinUrlMax).nullish(),
+  "companyLocation": zod.string().max(updateContactBodyCompanyLocationMax).nullish(),
   "subscribed": zod.boolean().optional(),
   "listIds": zod.array(zod.string().uuid()).max(updateContactBodyListIdsMax).optional()
 })
@@ -779,6 +1230,62 @@ export const updateContactResponseLinkedinUrlMax = 2048;
 
 export const updateContactResponsePhoneNumberMax = 40;
 
+export const updateContactResponseJobTitleMax = 200;
+
+export const updateContactResponseDepartmentMax = 120;
+
+export const updateContactResponseSeniorityMax = 80;
+
+export const updateContactResponseMobilePhoneMax = 40;
+
+export const updateContactResponseWebsiteUrlMax = 2048;
+
+export const updateContactResponseTwitterUrlMax = 2048;
+
+export const updateContactResponseFacebookUrlMax = 2048;
+
+export const updateContactResponseInstagramUrlMax = 2048;
+
+export const updateContactResponseLocationMax = 200;
+
+export const updateContactResponsePreferredLanguageMax = 80;
+
+export const updateContactResponseTimeZoneMax = 100;
+
+export const updateContactResponseLifecycleStageMax = 80;
+
+export const updateContactResponseLeadStatusMax = 80;
+
+export const updateContactResponseLeadSourceMax = 120;
+
+export const updateContactResponseInterestsMax = 10000;
+
+export const updateContactResponseGoalsMax = 10000;
+
+export const updateContactResponsePainPointsMax = 10000;
+
+export const updateContactResponsePersonalizationContextMax = 10000;
+
+export const updateContactResponseNotesMax = 10000;
+
+export const updateContactResponseCompanyWebsiteUrlMax = 2048;
+
+export const updateContactResponseCompanyDomainMax = 255;
+
+export const updateContactResponseCompanyIndustryMax = 120;
+
+export const updateContactResponseCompanySizeMax = 80;
+
+export const updateContactResponseCompanyRevenueRangeMax = 80;
+
+export const updateContactResponseCompanyDescriptionMax = 10000;
+
+export const updateContactResponseCompanyPhoneNumberMax = 40;
+
+export const updateContactResponseCompanyLinkedinUrlMax = 2048;
+
+export const updateContactResponseCompanyLocationMax = 200;
+
 
 
 export const UpdateContactResponse = zod.object({
@@ -787,9 +1294,37 @@ export const UpdateContactResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "companyName": zod.string().max(updateContactResponseCompanyNameMax).nullish(),
-  "linkedinUrl": zod.string().max(updateContactResponseLinkedinUrlMax).nullish(),
-  "phoneNumber": zod.string().max(updateContactResponsePhoneNumberMax).nullish(),
+  "companyName": zod.string().max(updateContactResponseCompanyNameMax).nullable(),
+  "linkedinUrl": zod.string().max(updateContactResponseLinkedinUrlMax).nullable(),
+  "phoneNumber": zod.string().max(updateContactResponsePhoneNumberMax).nullable(),
+  "jobTitle": zod.string().max(updateContactResponseJobTitleMax).nullable(),
+  "department": zod.string().max(updateContactResponseDepartmentMax).nullable(),
+  "seniority": zod.string().max(updateContactResponseSeniorityMax).nullable(),
+  "mobilePhone": zod.string().max(updateContactResponseMobilePhoneMax).nullable(),
+  "websiteUrl": zod.string().max(updateContactResponseWebsiteUrlMax).nullable(),
+  "twitterUrl": zod.string().max(updateContactResponseTwitterUrlMax).nullable(),
+  "facebookUrl": zod.string().max(updateContactResponseFacebookUrlMax).nullable(),
+  "instagramUrl": zod.string().max(updateContactResponseInstagramUrlMax).nullable(),
+  "location": zod.string().max(updateContactResponseLocationMax).nullable(),
+  "preferredLanguage": zod.string().max(updateContactResponsePreferredLanguageMax).nullable(),
+  "timeZone": zod.string().max(updateContactResponseTimeZoneMax).nullable(),
+  "lifecycleStage": zod.string().max(updateContactResponseLifecycleStageMax).nullable(),
+  "leadStatus": zod.string().max(updateContactResponseLeadStatusMax).nullable(),
+  "leadSource": zod.string().max(updateContactResponseLeadSourceMax).nullable(),
+  "interests": zod.string().max(updateContactResponseInterestsMax).nullable(),
+  "goals": zod.string().max(updateContactResponseGoalsMax).nullable(),
+  "painPoints": zod.string().max(updateContactResponsePainPointsMax).nullable(),
+  "personalizationContext": zod.string().max(updateContactResponsePersonalizationContextMax).nullable(),
+  "notes": zod.string().max(updateContactResponseNotesMax).nullable(),
+  "companyWebsiteUrl": zod.string().max(updateContactResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(updateContactResponseCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(updateContactResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(updateContactResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(updateContactResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(updateContactResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(updateContactResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(updateContactResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(updateContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
@@ -2080,4 +2615,5 @@ export const ReceiveRazorpayWebhookBody = zod.record(zod.string(), zod.unknown()
 export const ReceiveRazorpayWebhookResponse = zod.object({
   "message": zod.string()
 })
+
 

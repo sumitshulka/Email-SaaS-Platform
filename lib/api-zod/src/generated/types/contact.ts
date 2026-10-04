@@ -16,17 +16,157 @@ export interface Contact {
      * @maxLength 200
      * @nullable
      */
-  companyName?: string | null;
+  companyName: string | null;
   /**
      * @maxLength 2048
      * @nullable
      */
-  linkedinUrl?: string | null;
+  linkedinUrl: string | null;
   /**
      * @maxLength 40
      * @nullable
      */
-  phoneNumber?: string | null;
+  phoneNumber: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  jobTitle: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  department: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  seniority: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  mobilePhone: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  websiteUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  twitterUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  facebookUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  instagramUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  location: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  preferredLanguage: string | null;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  timeZone: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  lifecycleStage: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  leadStatus: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  leadSource: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  interests: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  goals: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  painPoints: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  personalizationContext: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  notes: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation: string | null;
   subscribed: boolean;
   listIds: string[];
   createdAt: Date;

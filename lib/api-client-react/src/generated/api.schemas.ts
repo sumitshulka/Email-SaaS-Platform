@@ -423,17 +423,157 @@ export interface Contact {
      * @maxLength 200
      * @nullable
      */
-  companyName?: string | null;
+  companyName: string | null;
   /**
      * @maxLength 2048
      * @nullable
      */
-  linkedinUrl?: string | null;
+  linkedinUrl: string | null;
   /**
      * @maxLength 40
      * @nullable
      */
-  phoneNumber?: string | null;
+  phoneNumber: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  jobTitle: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  department: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  seniority: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  mobilePhone: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  websiteUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  twitterUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  facebookUrl: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  instagramUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  location: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  preferredLanguage: string | null;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  timeZone: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  lifecycleStage: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  leadStatus: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  leadSource: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  interests: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  goals: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  painPoints: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  personalizationContext: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  notes: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation: string | null;
   subscribed: boolean;
   listIds: string[];
   createdAt: string;
@@ -545,6 +685,62 @@ export interface ContactInput {
   linkedinUrl?: string;
   /** @maxLength 40 */
   phoneNumber?: string;
+  /** @maxLength 200 */
+  jobTitle?: string;
+  /** @maxLength 120 */
+  department?: string;
+  /** @maxLength 80 */
+  seniority?: string;
+  /** @maxLength 40 */
+  mobilePhone?: string;
+  /** @maxLength 2048 */
+  websiteUrl?: string;
+  /** @maxLength 2048 */
+  twitterUrl?: string;
+  /** @maxLength 2048 */
+  facebookUrl?: string;
+  /** @maxLength 2048 */
+  instagramUrl?: string;
+  /** @maxLength 200 */
+  location?: string;
+  /** @maxLength 80 */
+  preferredLanguage?: string;
+  /** @maxLength 100 */
+  timeZone?: string;
+  /** @maxLength 80 */
+  lifecycleStage?: string;
+  /** @maxLength 80 */
+  leadStatus?: string;
+  /** @maxLength 120 */
+  leadSource?: string;
+  /** @maxLength 10000 */
+  interests?: string;
+  /** @maxLength 10000 */
+  goals?: string;
+  /** @maxLength 10000 */
+  painPoints?: string;
+  /** @maxLength 10000 */
+  personalizationContext?: string;
+  /** @maxLength 10000 */
+  notes?: string;
+  /** @maxLength 2048 */
+  companyWebsiteUrl?: string;
+  /** @maxLength 255 */
+  companyDomain?: string;
+  /** @maxLength 120 */
+  companyIndustry?: string;
+  /** @maxLength 80 */
+  companySize?: string;
+  /** @maxLength 80 */
+  companyRevenueRange?: string;
+  /** @maxLength 10000 */
+  companyDescription?: string;
+  /** @maxLength 40 */
+  companyPhoneNumber?: string;
+  /** @maxLength 2048 */
+  companyLinkedinUrl?: string;
+  /** @maxLength 200 */
+  companyLocation?: string;
   subscribed?: boolean;
   /** @maxItems 100 */
   listIds?: string[];
@@ -583,6 +779,146 @@ export interface ContactUpdate {
      * @nullable
      */
   phoneNumber?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  jobTitle?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  department?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  seniority?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  mobilePhone?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  websiteUrl?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  twitterUrl?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  facebookUrl?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  instagramUrl?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  location?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  preferredLanguage?: string | null;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  timeZone?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  lifecycleStage?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  leadStatus?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  leadSource?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  interests?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  goals?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  painPoints?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  personalizationContext?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  notes?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl?: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation?: string | null;
   subscribed?: boolean;
   /** @maxItems 100 */
   listIds?: string[];
@@ -1717,3 +2053,4 @@ export const ListAdminUsersStatus = {
   inactive: 'inactive',
   pending: 'pending',
 } as const;
+

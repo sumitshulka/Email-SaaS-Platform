@@ -194,6 +194,34 @@ memory.public.none(`
     company_name varchar(200),
     linkedin_url varchar(2048),
     phone_number varchar(40),
+    job_title varchar(200),
+    department varchar(120),
+    seniority varchar(80),
+    mobile_phone varchar(40),
+    website_url varchar(2048),
+    twitter_url varchar(2048),
+    facebook_url varchar(2048),
+    instagram_url varchar(2048),
+    location varchar(200),
+    preferred_language varchar(80),
+    time_zone varchar(100),
+    lifecycle_stage varchar(80),
+    lead_status varchar(80),
+    lead_source varchar(120),
+    interests text,
+    goals text,
+    pain_points text,
+    personalization_context text,
+    notes text,
+    company_website_url varchar(2048),
+    company_domain varchar(255),
+    company_industry varchar(120),
+    company_size varchar(80),
+    company_revenue_range varchar(80),
+    company_description text,
+    company_phone_number varchar(40),
+    company_linkedin_url varchar(2048),
+    company_location varchar(200),
     subscribed boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -1236,6 +1264,82 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(clearedOptionalFields.body.companyName, null);
     assert.equal(clearedOptionalFields.body.linkedinUrl, null);
     assert.equal(clearedOptionalFields.body.phoneNumber, null);
+  });
+
+  it("reads and updates tenant-scoped contact enrichment", async () => {
+    const owner = await loggedInUser({
+      username: "contact-detail-owner",
+      email: "contact-detail-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "contact-detail-other",
+      email: "contact-detail-other@example.test",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "enriched@example.test",
+        name: "Avery Chen",
+        firstName: "Avery",
+        lastName: "Chen",
+      })
+      .returning();
+
+    const ownDetail = await api(`/contacts/${contact.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(ownDetail.response.status, 200, JSON.stringify(ownDetail.body));
+    assert.equal(ownDetail.body.id, contact.id);
+    assert.equal(ownDetail.body.jobTitle, null);
+    assert.deepEqual(ownDetail.body.listIds, []);
+
+    const otherTenantDetail = await api(`/contacts/${contact.id}`, {
+      cookie: other.cookie,
+    });
+    assert.equal(otherTenantDetail.response.status, 404);
+
+    const updated = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        jobTitle: " Product Lead ",
+        department: " Product ",
+        websiteUrl: "https://people.example.test/avery-chen?profile=full",
+        companyDomain: " example.test ",
+        companyLinkedinUrl: "https://www.linkedin.com/company/example-inc",
+        interests: "Accessibility; product strategy",
+        notes: "Prefers concise product updates.",
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.jobTitle, "Product Lead");
+    assert.equal(updated.body.department, "Product");
+    assert.equal(
+      updated.body.websiteUrl,
+      "https://people.example.test/avery-chen?profile=full",
+    );
+    assert.equal(updated.body.companyDomain, "example.test");
+    assert.equal(
+      updated.body.companyLinkedinUrl,
+      "https://www.linkedin.com/company/example-inc",
+    );
+    assert.equal(updated.body.interests, "Accessibility; product strategy");
+
+    const saved = await api(`/contacts/${contact.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(saved.response.status, 200);
+    assert.equal(saved.body.notes, "Prefers concise product updates.");
+
+    const cleared = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { jobTitle: null, websiteUrl: "  " },
+    });
+    assert.equal(cleared.response.status, 200);
+    assert.equal(cleared.body.jobTitle, null);
+    assert.equal(cleared.body.websiteUrl, null);
   });
 
   it("imports CSV rows without crossing tenant or package limits", async () => {
