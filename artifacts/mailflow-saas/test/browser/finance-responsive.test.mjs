@@ -23,6 +23,13 @@ const admin = {
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
+const regularUser = {
+  ...admin,
+  id: 'browser-test-regular-user-id',
+  username: 'finance-browser-user',
+  role: 'USER',
+};
+
 const references = [
   'payment-record-reference-123',
   'customer-account-reference-123',
@@ -248,7 +255,7 @@ function makeFinancePage(records, searchParams) {
   };
 }
 
-function installApiFixtures(context, { financeRecords } = {}) {
+function installApiFixtures(context, { financeRecords, user = admin } = {}) {
   return context.route('**/api/**', async route => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -269,7 +276,7 @@ function installApiFixtures(context, { financeRecords } = {}) {
         headers: {
           'set-cookie': 'mailflow_session=finance-browser-test; Path=/; SameSite=Lax',
         },
-        json: { user: admin },
+        json: { user },
       });
       return;
     }
@@ -280,7 +287,7 @@ function installApiFixtures(context, { financeRecords } = {}) {
     }
 
     if (pathname === '/api/auth/me') {
-      await route.fulfill({ status: 200, json: admin });
+      await route.fulfill({ status: 200, json: user });
       return;
     }
     if (pathname === '/api/admin/billing/packages') {
@@ -323,6 +330,16 @@ function installApiFixtures(context, { financeRecords } = {}) {
       json: { error: `Unexpected API request: ${request.method()} ${pathname}` },
     });
   });
+}
+
+function watchFinanceResponses(page) {
+  const responses = [];
+  page.on('response', response => {
+    if (new URL(response.url()).pathname === '/api/admin/finance/payments') {
+      responses.push({ status: response.status(), url: response.url() });
+    }
+  });
+  return responses;
 }
 
 async function signInAndOpenFinance(viewport, fixtureOptions) {
@@ -378,7 +395,7 @@ async function assertVisibleFinanceNames(page, expectedNames) {
   assert.deepEqual(visibleNames, expectedNames);
 }
 
-describe('authenticated superadmin finance ledger at responsive widths', { concurrency: false }, () => {
+describe('finance ledger access and responsive behavior', { concurrency: false }, () => {
   before(async () => {
     await startWebServer();
     const executablePath =
@@ -393,6 +410,48 @@ describe('authenticated superadmin finance ledger at responsive widths', { concu
   after(async () => {
     await browser?.close();
     await stopWebServer();
+  });
+
+  it('redirects signed-out visitors to sign-in without requesting finance records', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const financeResponses = watchFinanceResponses(page);
+
+      await page.goto(`${baseUrl}/admin/finance`);
+      await page.getByTestId('input-identifier').waitFor({ state: 'visible' });
+      await page.waitForLoadState('networkidle');
+
+      assert.equal(new URL(page.url()).pathname, '/', 'signed-out visitor should land on sign-in');
+      assert.deepEqual(financeResponses, [], 'signed-out visitor must not receive finance records');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('redirects regular users away without requesting finance records', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { user: regularUser });
+      await context.addCookies([{
+        name: 'mailflow_session',
+        value: 'finance-browser-test',
+        url: baseUrl,
+        sameSite: 'Lax',
+      }]);
+      const page = await context.newPage();
+      const financeResponses = watchFinanceResponses(page);
+
+      await page.goto(`${baseUrl}/admin/finance`);
+      await page.waitForURL(url => url.pathname === '/dashboard');
+      await page.waitForLoadState('networkidle');
+
+      assert.equal(new URL(page.url()).pathname, '/dashboard', 'regular user should be redirected to their dashboard');
+      assert.deepEqual(financeResponses, [], 'regular user must not receive finance records');
+    } finally {
+      await context.close();
+    }
   });
 
   it('keeps table scrolling inside the records area and exposes references only in keyboard-opened details on phone', async () => {
