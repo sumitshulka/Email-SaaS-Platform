@@ -207,12 +207,12 @@ export default function AdminFinancePage() {
           <span>Scroll horizontally to see all columns. Select a row to view full payment references.</span>
         </div>
         <div data-testid="finance-table-scroll" className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <table className="w-full min-w-[980px] table-fixed text-left">
+          <table className="w-full min-w-[900px] table-fixed text-left">
             <colgroup>
-              <col style={{ width: '20%' }}/>
-              <col style={{ width: '29%' }}/>
-              <col style={{ width: '32%' }}/>
               <col style={{ width: '19%' }}/>
+              <col style={{ width: '26%' }}/>
+              <col style={{ width: '31%' }}/>
+              <col style={{ width: '24%' }}/>
             </colgroup>
             <thead className="sticky top-0 z-10 border-b border-[#e8ece7] bg-[#f5f7f2]">
               <tr>
