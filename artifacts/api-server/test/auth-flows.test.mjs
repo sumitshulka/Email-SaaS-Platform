@@ -2531,6 +2531,80 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
     });
   });
 
+  it("keeps a saved mailbox and grant untouched when replacement identity verification fails", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-replacement-owner" });
+      const savedRefreshToken = "saved-google-refresh-token";
+      const replacementAccessToken = "replacement-google-access-token";
+      const replacementRefreshToken = "replacement-google-refresh-token";
+      await db.insert(dbModule.gmailMailboxConnectionsTable).values({
+        userId: owner.user.id,
+        emailAddress: "saved-mailbox@example.test",
+        refreshTokenEncrypted: securityModule.encryptSecret(savedRefreshToken),
+        historyId: "saved-mailbox-history",
+      });
+      const [before] = await db
+        .select()
+        .from(dbModule.gmailMailboxConnectionsTable)
+        .where(eq(dbModule.gmailMailboxConnectionsTable.userId, owner.user.id));
+      const googleRequests = [];
+
+      await withGoogleFetch(async (url, init) => {
+        googleRequests.push({ url, init });
+        if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+          return googleJson({
+            access_token: replacementAccessToken,
+            refresh_token: replacementRefreshToken,
+          });
+        }
+        if (url.hostname === "openidconnect.googleapis.com") {
+          return googleJson({
+            email: "replacement-mailbox@example.test",
+            email_verified: false,
+          });
+        }
+        throw new Error(`Unexpected Google request: ${url}`);
+      }, async () => {
+        const flow = await startGmailOAuth(owner.cookie);
+        const callback = await finishGmailOAuth(owner.cookie, flow);
+        assert.equal(callback.response.status, 303);
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get("gmail"),
+          "failed",
+        );
+        assert.equal(
+          googleRequests.filter(
+            ({ url }) =>
+              url.hostname === "oauth2.googleapis.com" && url.pathname === "/revoke",
+          ).length,
+          0,
+          "rejecting an unverified replacement must not revoke a Google grant",
+        );
+
+        const [after] = await db
+          .select()
+          .from(dbModule.gmailMailboxConnectionsTable)
+          .where(eq(dbModule.gmailMailboxConnectionsTable.userId, owner.user.id));
+        assert.equal(after.id, before.id);
+        assert.equal(after.emailAddress, before.emailAddress);
+        assert.equal(after.refreshTokenEncrypted, before.refreshTokenEncrypted);
+        assert.equal(after.historyId, before.historyId);
+
+        const callbackContent = JSON.stringify({
+          location: callback.response.headers.get("location"),
+          body: callback.body,
+        });
+        for (const token of [
+          savedRefreshToken,
+          replacementRefreshToken,
+          replacementAccessToken,
+        ]) {
+          assert.equal(callbackContent.includes(token), false);
+        }
+      });
+    });
+  });
+
   it("rejects invalid OAuth state and identity failures while revoking unverified grants", async () => {
     await withGmailOAuthConfig(async () => {
       const owner = await loggedInUser({ username: "gmail-state-owner" });

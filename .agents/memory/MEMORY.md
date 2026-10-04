@@ -10,3 +10,4 @@
 - [Shared company linking](company-linking.md) — auto-link only on compatible domains; preserve manual unlink intent and never move contacts implicitly.
 - [Contact list workflow](contact-list-management.md) — users should be able to assign existing contacts to a list from the Contact Lists page.
 - [Google OAuth admin setup](google-oauth-admin-config.md) — keep Gmail OAuth credentials in superadmin-managed app settings, not Replit Secrets.
+- [Gmail mailbox replacement](gmail-mailbox-replacement.md) — an unverified replacement must not trigger revocation when a saved mailbox already exists.

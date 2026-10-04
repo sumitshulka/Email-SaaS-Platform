@@ -255,7 +255,15 @@ export function createGmailMailboxRouter(): IRouter {
 
     let identityVerified = false;
     let newlyIssuedGoogleToken: string | null = null;
+    let hadSavedConnection = false;
     try {
+      const [savedConnection] = await db
+        .select({ userId: gmailMailboxConnectionsTable.userId })
+        .from(gmailMailboxConnectionsTable)
+        .where(eq(gmailMailboxConnectionsTable.userId, params.userId))
+        .limit(1);
+      hadSavedConnection = Boolean(savedConnection);
+
       const tokenResponse = await postOAuthForm({
         code: req.query.code,
         client_id: config.clientId,
@@ -358,7 +366,7 @@ export function createGmailMailboxRouter(): IRouter {
         });
       redirectToSettings(req, res, "connected", config.redirectUri);
     } catch (error) {
-      if (!identityVerified && newlyIssuedGoogleToken) {
+      if (!identityVerified && newlyIssuedGoogleToken && !hadSavedConnection) {
         await revokeGoogleToken(newlyIssuedGoogleToken);
       }
       logger.warn(
