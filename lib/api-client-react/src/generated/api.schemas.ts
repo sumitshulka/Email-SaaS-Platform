@@ -184,6 +184,17 @@ export const TenantSendingSettingsEncryption = {
   tls: 'tls',
 } as const;
 
+/**
+ * @nullable
+ */
+export type TenantSendingSettingsConnectionCheckStatus = typeof TenantSendingSettingsConnectionCheckStatus[keyof typeof TenantSendingSettingsConnectionCheckStatus] | null;
+
+
+export const TenantSendingSettingsConnectionCheckStatus = {
+  success: 'success',
+  failure: 'failure',
+} as const;
+
 export interface TenantSendingSettings {
   provider: TenantSendingSettingsProvider;
   /** @nullable */
@@ -204,6 +215,10 @@ export interface TenantSendingSettings {
   verified: boolean;
   /** @nullable */
   verifiedAt: string | null;
+  /** @nullable */
+  connectionCheckStatus: TenantSendingSettingsConnectionCheckStatus;
+  /** @nullable */
+  connectionCheckAt: string | null;
   /** @nullable */
   updatedAt: string | null;
 }
@@ -421,6 +436,15 @@ export interface TenantSendingConnectionTestInput {
 
 export interface TenantSendingConnectionTestResponse {
   message: string;
+  checkedAt: string;
+  savedSettingsUpdated: boolean;
+}
+
+export interface TenantSendingConnectionTestFailure {
+  error: string;
+  code: string;
+  checkedAt: string;
+  savedSettingsUpdated: boolean;
 }
 
 export interface Contact {

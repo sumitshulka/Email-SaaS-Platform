@@ -182,6 +182,8 @@ memory.public.none(`
     from_email varchar(254) NOT NULL,
     reply_to varchar(254),
     verified_at timestamptz,
+    connection_check_status varchar(16),
+    connection_check_at timestamptz,
     updated_at timestamptz NOT NULL DEFAULT now()
   );
   CREATE TABLE contacts (
@@ -2355,7 +2357,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       },
     });
     assert.equal(connectionCheck.response.status, 200, JSON.stringify(connectionCheck.body));
-    assert.match(connectionCheck.body.message, /No email was sent/);
+    assert.match(connectionCheck.body.message, /No email was sent/i);
     assert.equal(tenantDeliveries.length, deliveriesBeforeConnectionCheck);
     assert.equal(verifiedConnections.length, 1);
     assert.equal(verifiedConnections[0].host, "smtp.draft.owner.test");
@@ -2403,6 +2405,88 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .where(eq(dbModule.tenantSendingConfigurationTable.userId, owner.user.id));
     assert.equal(senderAfterConnectionCheck.host, "smtp.owner.test");
     assert.equal(senderAfterConnectionCheck.verifiedAt, null);
+    assert.equal(senderAfterConnectionCheck.connectionCheckStatus, null);
+    assert.equal(senderAfterConnectionCheck.connectionCheckAt, null);
+
+    const savedConnectionSettings = {
+      provider: "other",
+      host: "smtp.owner.test",
+      port: 2525,
+      encryption: "none",
+      fromName: "Owner Mail",
+      fromEmail: "mail@owner.test",
+    };
+    emailModule.setTenantEmailVerifierForTests(async () => {
+      throw new Error("SMTP authentication rejected");
+    });
+    const failedSavedConnectionCheck = await api(
+      "/sending/settings/connection-test",
+      {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { settings: savedConnectionSettings },
+      },
+    );
+    assert.equal(
+      failedSavedConnectionCheck.response.status,
+      502,
+      JSON.stringify(failedSavedConnectionCheck.body),
+    );
+    assert.equal(failedSavedConnectionCheck.body.savedSettingsUpdated, true);
+    const [senderAfterFailedConnectionCheck] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, owner.user.id));
+    assert.equal(
+      senderAfterFailedConnectionCheck.connectionCheckStatus,
+      "failure",
+    );
+    assert.ok(senderAfterFailedConnectionCheck.connectionCheckAt);
+    const failedConnectionCheckAt = new Date(
+      senderAfterFailedConnectionCheck.connectionCheckAt,
+    ).getTime();
+    assert.equal(
+      new Date(senderAfterFailedConnectionCheck.connectionCheckAt).toISOString(),
+      failedSavedConnectionCheck.body.checkedAt,
+    );
+    assert.equal(senderAfterFailedConnectionCheck.verifiedAt, null);
+
+    emailModule.setTenantEmailVerifierForTests(async () => {});
+    const successfulSavedConnectionCheck = await api(
+      "/sending/settings/connection-test",
+      {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { settings: savedConnectionSettings },
+      },
+    );
+    assert.equal(
+      successfulSavedConnectionCheck.response.status,
+      200,
+      JSON.stringify(successfulSavedConnectionCheck.body),
+    );
+    assert.equal(
+      successfulSavedConnectionCheck.body.savedSettingsUpdated,
+      true,
+    );
+    const [senderAfterSuccessfulConnectionCheck] = await db
+      .select()
+      .from(dbModule.tenantSendingConfigurationTable)
+      .where(eq(dbModule.tenantSendingConfigurationTable.userId, owner.user.id));
+    assert.equal(
+      senderAfterSuccessfulConnectionCheck.connectionCheckStatus,
+      "success",
+    );
+    assert.equal(
+      new Date(senderAfterSuccessfulConnectionCheck.connectionCheckAt).toISOString(),
+      successfulSavedConnectionCheck.body.checkedAt,
+    );
+    assert.ok(
+      new Date(senderAfterSuccessfulConnectionCheck.connectionCheckAt).getTime() >=
+        failedConnectionCheckAt,
+    );
+    assert.equal(senderAfterSuccessfulConnectionCheck.verifiedAt, null);
+    assert.equal(tenantDeliveries.length, deliveriesBeforeConnectionCheck);
 
     const testedEmailConfigurations = [];
     emailModule.setTenantEmailTransportForTests(async (message, configuration) => {

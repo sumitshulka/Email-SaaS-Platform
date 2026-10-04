@@ -332,7 +332,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiError"
+                $ref: "#/components/schemas/TenantSendingConnectionTestFailure"
   /sending/gmail/connection:
     get:
       operationId: getGmailMailboxConnection
@@ -1671,8 +1671,10 @@ components:
         replyTo: { type: ["string", "null"] }
         verified: { type: boolean }
         verifiedAt: { type: ["string", "null"], format: date-time }
+        connectionCheckStatus: { type: ["string", "null"], enum: [success, failure, null] }
+        connectionCheckAt: { type: ["string", "null"], format: date-time }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [provider, host, port, encryption, username, credentialsConfigured, fromName, fromEmail, replyTo, verified, verifiedAt, updatedAt]
+      required: [provider, host, port, encryption, username, credentialsConfigured, fromName, fromEmail, replyTo, verified, verifiedAt, connectionCheckStatus, connectionCheckAt, updatedAt]
     TenantSendingSettingsInput:
       type: object
       properties:
@@ -1769,7 +1771,17 @@ components:
       type: object
       properties:
         message: { type: string }
-      required: [message]
+        checkedAt: { type: string, format: date-time }
+        savedSettingsUpdated: { type: boolean }
+      required: [message, checkedAt, savedSettingsUpdated]
+    TenantSendingConnectionTestFailure:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }
+        checkedAt: { type: string, format: date-time }
+        savedSettingsUpdated: { type: boolean }
+      required: [error, code, checkedAt, savedSettingsUpdated]
     Contact:
       type: object
       properties:

@@ -251,6 +251,8 @@ export const GetTenantSendingSettingsResponse = zod.object({
   "replyTo": zod.string().nullable(),
   "verified": zod.boolean(),
   "verifiedAt": zod.coerce.date().nullable(),
+  "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
+  "connectionCheckAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -294,6 +296,8 @@ export const UpdateTenantSendingSettingsResponse = zod.object({
   "replyTo": zod.string().nullable(),
   "verified": zod.boolean(),
   "verifiedAt": zod.coerce.date().nullable(),
+  "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
+  "connectionCheckAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -364,7 +368,9 @@ export const TestTenantSendingConnectionBody = zod.object({
 })
 
 export const TestTenantSendingConnectionResponse = zod.object({
-  "message": zod.string()
+  "message": zod.string(),
+  "checkedAt": zod.coerce.date(),
+  "savedSettingsUpdated": zod.boolean()
 })
 
 

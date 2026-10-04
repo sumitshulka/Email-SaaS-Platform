@@ -85,6 +85,7 @@ import type {
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
   SubscriptionSummary,
+  TenantSendingConnectionTestFailure,
   TenantSendingConnectionTestInput,
   TenantSendingConnectionTestResponse,
   TenantSendingSettings,
@@ -1343,7 +1344,7 @@ return customFetch<TenantSendingConnectionTestResponse>(getTestTenantSendingConn
 
 export const getTestTenantSendingConnectionMutationKey = () => ['testTenantSendingConnection'] as const;
 
-export const getTestTenantSendingConnectionMutationOptions = <TError = ErrorType<ApiError>,
+export const getTestTenantSendingConnectionMutationOptions = <TError = ErrorType<ApiError | TenantSendingConnectionTestFailure>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingConnection>>, TError,TestTenantSendingConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingConnection>>, TError,TestTenantSendingConnectionMutationVariables, TContext> => {
 
@@ -1372,13 +1373,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type TestTenantSendingConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testTenantSendingConnection>>>
     export type TestTenantSendingConnectionMutationBody = BodyType<TenantSendingConnectionTestInput>
-    export type TestTenantSendingConnectionMutationError = ErrorType<ApiError>
+    export type TestTenantSendingConnectionMutationError = ErrorType<ApiError | TenantSendingConnectionTestFailure>
     export type TestTenantSendingConnectionMutationVariables = {data: BodyType<TenantSendingConnectionTestInput>}
 
     /**
  * @summary Verify the tenant's current SMTP connection without sending email
  */
-export const useTestTenantSendingConnection = <TError = ErrorType<ApiError>,
+export const useTestTenantSendingConnection = <TError = ErrorType<ApiError | TenantSendingConnectionTestFailure>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantSendingConnection>>, TError,TestTenantSendingConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof testTenantSendingConnection>>,

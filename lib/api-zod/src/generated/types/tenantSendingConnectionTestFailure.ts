@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface TenantSendingConnectionTestResponse {
-  message: string;
+export interface TenantSendingConnectionTestFailure {
+  error: string;
+  code: string;
   checkedAt: Date;
   savedSettingsUpdated: boolean;
 }

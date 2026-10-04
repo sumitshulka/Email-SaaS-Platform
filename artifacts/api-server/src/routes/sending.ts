@@ -236,6 +236,8 @@ function sendingSettingsResponse(
     replyTo: config?.replyTo ?? null,
     verified: Boolean(config?.verifiedAt),
     verifiedAt: config?.verifiedAt ?? null,
+    connectionCheckStatus: config?.connectionCheckStatus ?? null,
+    connectionCheckAt: config?.connectionCheckAt ?? null,
     updatedAt: config?.updatedAt ?? null,
   };
 }
@@ -691,6 +693,8 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
     fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
     replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
     verifiedAt: null,
+    connectionCheckStatus: null,
+    connectionCheckAt: null,
     updatedAt: new Date(),
   };
   await db
@@ -709,6 +713,8 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
         fromEmail: values.fromEmail,
         replyTo: values.replyTo,
         verifiedAt: null,
+        connectionCheckStatus: null,
+        connectionCheckAt: null,
         updatedAt: values.updatedAt,
       },
     });
@@ -753,15 +759,41 @@ router.post(
       return;
     }
 
+    const savedSettingsMatch = Boolean(
+      existing && matchesSavedTenantSendingConfiguration(existing, config),
+    );
     try {
       await verifyTenantEmailConnection(config);
+      const checkedAt = new Date();
+      if (savedSettingsMatch) {
+        await db
+          .update(tenantSendingConfigurationTable)
+          .set({
+            connectionCheckStatus: "success",
+            connectionCheckAt: checkedAt,
+          })
+          .where(eq(tenantSendingConfigurationTable.userId, userId));
+      }
       res.json(
         TestTenantSendingConnectionResponse.parse({
-          message:
-            "SMTP connection and authentication succeeded. No email was sent, and saved settings were not changed.",
+          message: savedSettingsMatch
+            ? "Connection successful. SMTP authentication passed; no email was sent. The saved connection-check details were updated."
+            : "Connection successful. SMTP authentication passed; no email was sent. Saved check details were unchanged because the tested values differ from saved settings.",
+          checkedAt,
+          savedSettingsUpdated: savedSettingsMatch,
         }),
       );
     } catch (error) {
+      const checkedAt = new Date();
+      if (savedSettingsMatch) {
+        await db
+          .update(tenantSendingConfigurationTable)
+          .set({
+            connectionCheckStatus: "failure",
+            connectionCheckAt: checkedAt,
+          })
+          .where(eq(tenantSendingConfigurationTable.userId, userId));
+      }
       req.log.warn(
         {
           userId,
@@ -770,8 +802,12 @@ router.post(
         "Tenant SMTP connection check failed",
       );
       res.status(502).json({
-        error: "The SMTP connection check failed. Verify your host, port, encryption, and credentials.",
+        error: savedSettingsMatch
+          ? "Connection failed. Verify the saved SMTP host, port, encryption, and credentials. The failed check and time were recorded."
+          : "Connection failed. Verify the SMTP host, port, encryption, and credentials. Saved check details were unchanged because the tested values differ from saved settings.",
         code: "SMTP_CONNECTION_TEST_FAILED",
+        checkedAt,
+        savedSettingsUpdated: savedSettingsMatch,
       });
     }
   },

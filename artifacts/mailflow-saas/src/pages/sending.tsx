@@ -109,6 +109,12 @@ export function SendingSettingsPage() {
   const [form, setForm] = useState(blankSettings);
   const [initialized, setInitialized] = useState(false);
   const [testEmail, setTestEmail] = useState('');
+  const [connectionResult, setConnectionResult] = useState<{
+    kind: 'success' | 'failure';
+    message: string;
+    checkedAt: string;
+    savedSettingsUpdated: boolean;
+  } | null>(null);
   const settings = query.data as TenantSendingSettings | undefined;
   useEffect(() => {
     if (!settings || initialized) return;
@@ -158,9 +164,47 @@ export function SendingSettingsPage() {
     (settings?.credentialsConfigured || (form.username.trim() && form.password)),
   );
   const runConnectionTest = () => {
+    setConnectionResult(null);
     connectionTest.mutate({ data: { settings: currentSendingSettings() } }, {
-      onSuccess: response => setNotice({ kind: 'success', text: response.message }),
-      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+      onSuccess: response => {
+        setConnectionResult({
+          kind: 'success',
+          message: response.message,
+          checkedAt: response.checkedAt,
+          savedSettingsUpdated: response.savedSettingsUpdated,
+        });
+        void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+        setNotice({ kind: 'success', text: response.message });
+      },
+      onError: error => {
+        const message = mutationError(error);
+        const errorData =
+          error &&
+          typeof error === 'object' &&
+          'data' in error &&
+          error.data &&
+          typeof error.data === 'object'
+            ? error.data
+            : null;
+        setConnectionResult({
+          kind: 'failure',
+          message,
+          checkedAt:
+            errorData &&
+            'checkedAt' in errorData &&
+            typeof errorData.checkedAt === 'string'
+              ? errorData.checkedAt
+              : new Date().toISOString(),
+          savedSettingsUpdated:
+            Boolean(
+              errorData &&
+              'savedSettingsUpdated' in errorData &&
+              errorData.savedSettingsUpdated === true,
+            ),
+        });
+        void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+        setNotice({ kind: 'error', text: message });
+      },
     });
   };
   const runTest = (e: FormEvent) => {
@@ -241,7 +285,11 @@ export function SendingSettingsPage() {
              <Button type="submit" testId="button-test-sending-settings" disabled={!canTestSmtp || !testEmail.trim() || test.isPending || connectionTest.isPending} className="w-full">{test.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}{test.isPending ? 'Sending test' : 'Send test email'}</Button>
            </div>
            {!canTestSmtp && <p className="text-[11px] leading-5 text-[#8a6a4e]">Enter SMTP details and credentials here, or configure credentials in saved settings, before testing.</p>}
-           <p className="text-[11px] leading-5 text-[#788392]">The connection check sends no email and never saves draft values. Sending a test email marks saved settings verified only when every tested value matches them.</p>
+           {connectionResult && <div data-testid="smtp-connection-result" role={connectionResult.kind === 'failure' ? 'alert' : 'status'} className={cx('rounded-md border p-3 text-[11px] leading-5', connectionResult.kind === 'success' ? 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]' : 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]')}>
+             <div className="flex items-start gap-2">{connectionResult.kind === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>}<div><strong>{connectionResult.kind === 'success' ? 'SMTP connection successful' : 'SMTP connection failed'}</strong><p>{connectionResult.message}</p><p className="mt-1">Checked {formatDate(connectionResult.checkedAt)}{connectionResult.savedSettingsUpdated ? ' · Saved check details updated' : ' · Saved check details unchanged'}</p></div></div>
+           </div>}
+           {settings?.connectionCheckAt && settings.connectionCheckStatus && <div data-testid="text-last-smtp-connection-check" className="flex flex-wrap items-center gap-2 border-t border-[#edf0f2] pt-3 text-[11px] text-[#647365]"><span>Last saved-settings connection check:</span><Status tone={settings.connectionCheckStatus === 'success' ? 'green' : 'orange'}>{settings.connectionCheckStatus === 'success' ? 'Successful' : 'Failed'}</Status><span>{formatDate(settings.connectionCheckAt)}</span></div>}
+           <p className="text-[11px] leading-5 text-[#788392]">A connection check sends no email and does not mark the sender verified for campaigns. Matching saved settings keep a separate result and date; draft values are never saved. Sending a test email marks matching saved settings verified.</p>
           {settings?.verified && settings.verifiedAt && <div className="flex items-start gap-2 border-t border-[#edf0f2] pt-4 text-[11px] leading-5 text-[#647365]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#52815d]"/>Verified {formatDate(settings.verifiedAt)}</div>}
         </form>
       </div>

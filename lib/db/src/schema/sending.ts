@@ -43,6 +43,8 @@ export const tenantSendingConfigurationTable = pgTable(
     fromEmail: varchar("from_email", { length: 254 }).notNull(),
     replyTo: varchar("reply_to", { length: 254 }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    connectionCheckStatus: varchar("connection_check_status", { length: 16 }),
+    connectionCheckAt: timestamp("connection_check_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
