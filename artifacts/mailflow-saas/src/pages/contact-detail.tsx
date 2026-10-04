@@ -7,6 +7,7 @@ import {
   useGetContact, useListCompanies, useListContactLists, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Contact, ContactUpdate } from '@workspace/api-client-react';
+import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement } from '@/components/company-link-confirmation';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -92,6 +93,8 @@ export function ContactDetailPage() {
   const [editingProfiles, setEditingProfiles] = useState<Set<NullableField>>(() => new Set());
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [companyChoice, setCompanyChoice] = useState('');
+  const [replacement, setReplacement] = useState<CompanyLinkReplacement | null>(null);
+  const [companyNotice, setCompanyNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const contact = query.data as Contact | undefined;
 
   // Reinitialize when a contact is first loaded or the server returns a newer revision.
@@ -118,7 +121,7 @@ export function ContactDetailPage() {
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
-        setNotice({ kind: 'success', text: 'Contact changes saved.' });
+        setNotice({ kind: 'success', text: 'Contact changes saved. This save does not change the company association.' });
       },
       onError: error => setNotice({ kind: 'error', text: errorText(error) }),
     });
@@ -141,21 +144,36 @@ export function ContactDetailPage() {
     else next.add(key);
     return next;
   });
-  const changeCompany = (companyId: string | null) => {
-    update.mutate({ contactId: contact.id, data: { companyId } }, {
+  const changeCompany = (companyId: string | null, confirmed = false) => {
+    const targetCompany = companiesQuery.data?.companies.find(item => item.id === companyId);
+    setCompanyNotice(null);
+    setNotice(null);
+    update.mutate({ contactId: contact.id, data: {
+      companyId, ...(confirmed ? { replaceLegacyCompanyProfile: true } : {}),
+    } }, {
       onSuccess: linkedContact => {
+        setReplacement(null);
+        qc.setQueryData(getGetContactQueryKey(contact.id), linkedContact);
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
         void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
         if (contact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(contact.companyId) });
         if (linkedContact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(linkedContact.companyId) });
+        if (linkedContact.companyId !== companyId) {
+          setCompanyNotice({ kind: 'error', text: 'The server did not confirm the company association. Refresh and try again.' });
+          return;
+        }
         setCompanyChoice('');
-        setNotice({ kind: 'success', text: linkedContact.companyId ? 'Shared company profile linked. Company details now come from the shared record.' : 'Company unlinked. The company profile was preserved on this contact.' });
+        setCompanyNotice({ kind: 'success', text: linkedContact.companyId ? 'Shared company profile linked. Company details now come from the shared record.' : 'Company unlinked. The company profile was preserved on this contact.' });
       },
       onError: error => {
+        setReplacement(!confirmed && targetCompany && isCompanyProfileConflict(error) ? {
+          contactId: contact.id, contactName: contact.name, legacyCompanyName: contact.companyName,
+          companyId: targetCompany.id, companyName: targetCompany.companyName,
+        } : null);
         const text = errorText(error);
         const conflict = /conflict|domain|company profile/i.test(text);
-        setNotice({ kind: 'error', text: conflict
+        setCompanyNotice({ kind: 'error', text: conflict
           ? `This contact could not be linked because of a company profile or domain conflict. No contact or company data was discarded. ${text}`
           : text });
       },
@@ -163,6 +181,13 @@ export function ContactDetailPage() {
   };
 
   return <div className="fade-in">
+    <CompanyLinkConfirmation replacement={replacement} pending={update.isPending}
+      onCancel={() => setReplacement(null)} onConfirm={target => {
+        if (target.contactId === contact.id) changeCompany(target.companyId, true);
+        else setReplacement(null);
+      }} />
+    {companyNotice && <div role={companyNotice.kind === 'error' ? 'alert' : 'status'} data-testid="status-contact-company"
+      className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${companyNotice.kind === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{companyNotice.text}</div>}
     <div className="mb-5"><Link href="/contacts" data-testid="link-back-contacts" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Back to contacts</Link></div>
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-4">

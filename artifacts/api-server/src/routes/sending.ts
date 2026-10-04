@@ -1512,6 +1512,13 @@ router.patch(
       res.status(400).json({ error: "Some contact details are invalid.", code: "INVALID_INPUT" });
       return;
     }
+    if (parsed.data.replaceLegacyCompanyProfile && !parsed.data.companyId) {
+      res.status(400).json({
+        error: "Choose a company before confirming replacement of legacy details.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
     const userId = req.authUser!.id;
     if (
       parsed.data.listIds &&
@@ -1564,6 +1571,14 @@ router.patch(
         .for("update");
       if (!existing) return { kind: "not_found" as const };
 
+      // Confirmation replaces only legacy fields, never another shared association.
+      if (
+        parsed.data.replaceLegacyCompanyProfile &&
+        existing.companyId &&
+        existing.companyId !== parsed.data.companyId
+      ) {
+        return { kind: "company_already_linked" as const };
+      }
       let nextCompanyId = parsed.data.companyId === undefined
         ? existing.companyId
         : parsed.data.companyId;
@@ -1584,7 +1599,7 @@ router.patch(
 
         const mergedProfile = mergeCompatibleCompanyProfiles([
           companyProfileFrom(company),
-          companyProfileFrom(existing),
+          companyProfileFrom(parsed.data.replaceLegacyCompanyProfile ? {} : existing),
           companyProfileFrom(parsed.data),
         ]);
         if (!mergedProfile?.companyName) {
@@ -1732,6 +1747,13 @@ router.patch(
     });
     if (updateResult.kind === "company_not_found") {
       res.status(404).json({ error: "Company not found in this workspace.", code: "COMPANY_NOT_FOUND" });
+      return;
+    }
+    if (updateResult.kind === "company_already_linked") {
+      res.status(409).json({
+        error: "This contact is already linked to another company. Unlink it before choosing a replacement.",
+        code: "CONTACT_ALREADY_LINKED",
+      });
       return;
     }
     if (updateResult.kind === "company_profile_conflict") {

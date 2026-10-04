@@ -11,6 +11,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Company } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
+import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement } from '@/components/company-link-confirmation';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const errorText = (error: unknown) => error && typeof error === 'object' && 'message' in error
@@ -34,6 +35,7 @@ export function CompanyDetailPage() {
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedContactId, setSelectedContactId] = useState('');
+  const [replacement, setReplacement] = useState<CompanyLinkReplacement | null>(null);
   const company = query.data?.company;
   const linked = query.data?.contacts ?? [];
   const unlinked = useMemo(() => (contactsQuery.data?.contacts ?? [])
@@ -41,21 +43,37 @@ export function CompanyDetailPage() {
     .filter(contact => `${contact.name} ${contact.email} ${contact.jobTitle || ''}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name)), [contactsQuery.data?.contacts, search]);
 
-  const attach = () => {
-    if (!selectedContactId || !company) return;
-    updateContact.mutate({ contactId: selectedContactId, data: { companyId: company.id } }, {
+  const linkContact = (target: CompanyLinkReplacement, confirmed = false) => {
+    setNotice(null);
+    updateContact.mutate({ contactId: target.contactId, data: {
+      companyId: target.companyId,
+      ...(confirmed ? { replaceLegacyCompanyProfile: true } : {}),
+    } }, {
       onSuccess: contact => {
-        void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) });
+        setReplacement(null);
+        void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(target.companyId) });
         void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
+        if (contact.companyId !== target.companyId) {
+          setNotice({ type: 'error', text: 'The server did not confirm the company association. Refresh and try again.' });
+          return;
+        }
         setSelectedContactId('');
-        setNotice({ type: 'success', text: `${contact.name} is now linked to ${company.companyName}.` });
+        setNotice({ type: 'success', text: `${contact.name} is now linked to ${target.companyName}.` });
       },
-      onError: error => setNotice({
-        type: 'error',
-        text: `The contact could not be attached. No legacy profile data was changed. ${errorText(error)}`,
-      }),
+      onError: error => {
+        setReplacement(!confirmed && isCompanyProfileConflict(error) ? target : null);
+        setNotice({ type: 'error', text: `The contact has not been linked. ${errorText(error)}` });
+      },
+    });
+  };
+  const attach = () => {
+    const contact = unlinked.find(item => item.id === selectedContactId);
+    if (!contact || !company) return;
+    linkContact({
+      contactId: contact.id, contactName: contact.name, legacyCompanyName: contact.companyName,
+      companyId: company.id, companyName: company.companyName,
     });
   };
 
@@ -74,6 +92,8 @@ export function CompanyDetailPage() {
   };
 
   return <div className="fade-in">
+    <CompanyLinkConfirmation replacement={replacement} pending={updateContact.isPending}
+      onCancel={() => setReplacement(null)} onConfirm={target => linkContact(target, true)} />
     <Link href="/companies" data-testid="link-back-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Company directory</Link>
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] text-[#245b9b]"><Building2 className="h-5 w-5"/></span><div className="min-w-0"><div className="mono mb-1 text-[9px] uppercase tracking-[.16em] text-[#7d8794]">SHARED COMPANY / {company.id.slice(0, 8)}</div><h1 data-testid="text-company-name" className="display break-words text-[28px] font-bold leading-tight text-[#172334]">{company.companyName}</h1><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#758394]"><span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5"/>{company.companyDomain || 'Domain not provided'}</span>{company.companyLocation && <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{company.companyLocation}</span>}</div></div></div>
@@ -95,7 +115,7 @@ export function CompanyDetailPage() {
           {linked.length ? <div className="divide-y divide-[#edf0f2]">{linked.map(contact => <Link key={contact.id} href={`/contacts/${contact.id}`} data-testid={`link-company-contact-${contact.id}`} className="flex items-center gap-3 px-5 py-3 no-underline hover:bg-[#f8fafb]"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#edf2f7] text-[10px] font-bold text-[#526a82]">{(contact.name[0] || '?').toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#36495d]">{contact.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#8793a0]">{contact.email}{contact.jobTitle ? ` · ${contact.jobTitle}` : ''}</span></span><span className="text-[10px] font-semibold text-[#55708e]">View</span></Link>)}</div> : <div data-testid="empty-company-contacts" className="px-5 py-8 text-center"><p className="text-[12px] font-semibold text-[#45566a]">No contacts associated</p><p className="mt-1 text-[10px] text-[#8995a2]">Attach an existing unlinked contact below.</p></div>}
         </section>
         <section className={`${panel} overflow-hidden`} data-testid="panel-attach-contact">
-          <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">SAFE ASSOCIATION</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Attach an existing contact</h2><p className="mt-1 text-[11px] text-[#7f8b99]">Only unlinked contacts are eligible. Compatible legacy company details merge into this profile; conflicts are rejected without overwriting data.</p></header>
+          <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">SAFE ASSOCIATION</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Attach an existing contact</h2><p className="mt-1 text-[11px] text-[#7f8b99]">Only unlinked contacts are eligible. Compatible legacy details merge into this profile. Conflicting legacy details can be replaced only after you confirm.</p></header>
           <div className="p-5">
             {contactsQuery.isLoading ? <div aria-label="Loading unlinked contacts" data-testid="loading-unlinked-contacts" className="space-y-3"><div className="h-9 animate-pulse rounded bg-[#f1f3f5]"/><div className="h-9 animate-pulse rounded bg-[#f1f3f5]"/></div> : contactsQuery.isError ? <div role="alert" data-testid="error-unlinked-contacts" className="flex items-center justify-between gap-3 text-[11px] text-[#99501e]"><span>Contacts could not be loaded.</span><button type="button" data-testid="button-retry-unlinked-contacts" onClick={() => void contactsQuery.refetch()} className="font-semibold text-[#245b9b]">Retry</button></div> : unlinked.length ? <>
               <label className="relative mb-3 block"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search unlinked contacts" data-testid="input-search-unlinked-contacts" value={search} onChange={event => setSearch(event.target.value)} placeholder="Find by name, email, or title" className="h-9 w-full rounded-md border border-[#dce2e8] bg-white pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label>

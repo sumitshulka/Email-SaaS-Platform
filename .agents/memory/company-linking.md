@@ -9,6 +9,10 @@ Manual unlinking restores the shared company profile to the contact's legacy fie
 
 From a company details page, offer only currently unlinked contacts for direct attachment. Moving a contact from another company must be a separate, explicit action.
 
+When legacy company details conflict with a selected shared company, offer replacement after an explicit confirmation. Explain that confirming permanently removes the legacy profile and uses the selected shared company instead. Cancelling must leave both records unchanged.
+
+**Why:** The user chose confirmed replacement rather than permanently blocking links to a different company. Ordinary linking must still preserve legacy details or reject conflicts; the replacement decision must never be inferred from a normal contact save.
+
 **Why:** Domain-only matching avoids guessing between similarly named organizations. Preserving profile data on unlink prevents data loss, and not moving already-linked contacts implicitly protects existing relationships.
 
 **How to apply:** Keep backfill rules, contact association behavior, and the Companies UI consistent with these constraints. Do not weaken matching to company names, silently replace conflicting values, or silently move an existing company link.

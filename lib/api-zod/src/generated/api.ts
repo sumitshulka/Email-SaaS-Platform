@@ -1677,6 +1677,7 @@ export const UpdateContactBody = zod.object({
   "firstName": zod.string().min(1).max(updateContactBodyFirstNameMax).optional(),
   "lastName": zod.string().min(1).max(updateContactBodyLastNameMax).optional(),
   "companyId": zod.string().uuid().nullish(),
+  "replaceLegacyCompanyProfile": zod.boolean().optional().describe('Explicit confirmation to discard the legacy company profile when linking an unlinked contact to a shared company. Requires a non-null companyId; never moves an existing shared association.'),
   "companyName": zod.string().max(updateContactBodyCompanyNameMax).nullish(),
   "linkedinUrl": zod.string().max(updateContactBodyLinkedinUrlMax).nullish(),
   "phoneNumber": zod.string().max(updateContactBodyPhoneNumberMax).nullish(),

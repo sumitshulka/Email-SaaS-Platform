@@ -1725,6 +1725,68 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(tooLarge.body.code, "FILE_TOO_LARGE");
   });
 
+  it("replaces conflicting legacy company details only on confirmed linking and persists the association", async () => {
+    const owner = await loggedInUser({ username: "confirmed-company-owner" });
+    const other = await loggedInUser({ username: "confirmed-company-other" });
+    const [company] = await db.insert(dbModule.companiesTable).values({
+      userId: owner.user.id, companyName: "Tomahawk Corporation Inc",
+      companyDomain: "tomahawk.test", companyDomainKey: "tomahawk.test",
+      companyIndustry: "Electrical",
+    }).returning();
+    const [foreign] = await db.insert(dbModule.companiesTable).values({
+      userId: other.user.id, companyName: "Foreign Company",
+    }).returning();
+    const [another] = await db.insert(dbModule.companiesTable).values({
+      userId: owner.user.id, companyName: "Another Company",
+    }).returning();
+    const [contact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id, name: "Casey Contact", firstName: "Casey", lastName: "Contact",
+      email: "casey@company-confirmation.test", companyName: "Linden Freight",
+      companyDomain: "linden.test", companyIndustry: "Freight", notes: "Keep my contact notes",
+    }).returning();
+    const patch = (body) => api(`/contacts/${contact.id}`, { method: "PATCH", cookie: owner.cookie, body });
+    const rejected = await patch({ companyId: company.id });
+    assert.equal(rejected.response.status, 409);
+    assert.equal(rejected.body.code, "COMPANY_PROFILE_CONFLICT");
+    const unchanged = await api(`/contacts/${contact.id}`, { cookie: owner.cookie });
+    assert.equal(unchanged.body.companyId, null);
+    assert.equal(unchanged.body.companyName, "Linden Freight");
+    assert.equal(unchanged.body.companyDomain, "linden.test");
+    const unconfirmed = await patch({ companyId: company.id, replaceLegacyCompanyProfile: false });
+    assert.equal(unconfirmed.response.status, 409);
+    for (const companyId of [undefined, null]) {
+      const invalid = await patch({ companyId, replaceLegacyCompanyProfile: true });
+      assert.equal(invalid.response.status, 400);
+    }
+    const inaccessible = await patch({ companyId: foreign.id, replaceLegacyCompanyProfile: true });
+    assert.equal(inaccessible.response.status, 404);
+    const wrongTenant = await api(`/contacts/${contact.id}`, {
+      method: "PATCH", cookie: other.cookie, body: { companyId: foreign.id, replaceLegacyCompanyProfile: true },
+    });
+    assert.equal(wrongTenant.response.status, 404);
+    const confirmed = await patch({ companyId: company.id, replaceLegacyCompanyProfile: true });
+    assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.body));
+    assert.equal(confirmed.body.companyId, company.id);
+    assert.equal(confirmed.body.company.id, company.id);
+    assert.equal(confirmed.body.company.companyName, "Tomahawk Corporation Inc");
+    assert.equal(confirmed.body.companyName, null);
+    assert.equal(confirmed.body.companyDomain, null);
+    assert.equal(confirmed.body.notes, "Keep my contact notes");
+    const reloaded = await api(`/contacts/${contact.id}`, { cookie: owner.cookie });
+    assert.equal(reloaded.body.companyId, company.id);
+    const detail = await api(`/companies/${company.id}`, { cookie: owner.cookie });
+    assert.deepEqual(detail.body.contacts.map(item => item.id), [contact.id]);
+    assert.equal(detail.body.company.companyIndustry, "Electrical");
+    assert.equal(detail.body.company.companyDomain, "tomahawk.test");
+    const directory = await api("/companies", { cookie: owner.cookie });
+    assert.equal(directory.body.companies.find(item => item.id === company.id).contactCount, 1);
+    const move = await patch({ companyId: another.id, replaceLegacyCompanyProfile: true });
+    assert.equal(move.response.status, 409);
+    assert.equal(move.body.code, "CONTACT_ALREADY_LINKED");
+    const afterMove = await api(`/contacts/${contact.id}`, { cookie: owner.cookie });
+    assert.equal(afterMove.body.companyId, company.id);
+  });
+
   it("creates tenant-scoped shared companies from matching domains and preserves conflicts", async () => {
     const owner = await loggedInUser({ username: "company-owner" });
     const other = await loggedInUser({ username: "company-other" });

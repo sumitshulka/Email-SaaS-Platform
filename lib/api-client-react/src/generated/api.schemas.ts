@@ -966,6 +966,8 @@ export interface ContactUpdate {
   lastName?: string;
   /** @nullable */
   companyId?: string | null;
+  /** Explicit confirmation to discard the legacy company profile when linking an unlinked contact to a shared company. Requires a non-null companyId; never moves an existing shared association. */
+  replaceLegacyCompanyProfile?: boolean;
   /**
      * @maxLength 200
      * @nullable

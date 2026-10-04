@@ -2154,6 +2154,9 @@ components:
         firstName: { type: string, minLength: 1, maxLength: 100 }
         lastName: { type: string, minLength: 1, maxLength: 100 }
         companyId: { type: ["string", "null"], format: uuid }
+        replaceLegacyCompanyProfile:
+          type: boolean
+          description: Explicit confirmation to discard the legacy company profile when linking an unlinked contact to a shared company. Requires a non-null companyId; never moves an existing shared association.
         companyName: { type: ["string", "null"], maxLength: 200 }
         linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         phoneNumber: { type: ["string", "null"], maxLength: 40 }
