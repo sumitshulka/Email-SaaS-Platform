@@ -1,9 +1,13 @@
-import { Fragment, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, FileUp, Info, LoaderCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, FileUp, Info, LoaderCircle, RefreshCw, Unlink } from 'lucide-react';
 import {
+  getGetMicrosoft365TraceConnectionQueryKey,
   getGetCampaignDashboardQueryKey, getGetCampaignDeliveryReportQueryKey, getGetUserDashboardQueryKey,
-  getListCampaignsQueryKey, getListContactsQueryKey, useGetCampaignDeliveryReport, useImportDeliveryReport,
+  getListCampaignsQueryKey, getListContactsQueryKey, useBackfillMicrosoft365Traces,
+  useConnectMicrosoft365Trace, useDisconnectMicrosoft365Trace,
+  useGetCampaignDeliveryReport, useGetMicrosoft365TraceConnection,
+  useImportDeliveryReport, useTriggerMicrosoft365TraceSync,
 } from '@workspace/api-client-react';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
@@ -36,6 +40,12 @@ export function EvidencePill({ label, tone }: { label: string; tone: Tone }) {
 
 type ReportFields = { reportOutcome?: string | null; reportSource?: string | null; reportEvidenceVerification?: string | null; reportDiagnostic?: string | null; reportAt?: string | null; lastError?: string | null; messageId?: string | null; smtpResponse?: string | null };
 
+function evidenceSourceLabel(verification: string | null | undefined): string {
+  if (verification === 'gmail_authorized') return 'Google-authorized mailbox';
+  if (verification === 'microsoft365_authorized') return 'Microsoft 365 tenant-authorized trace';
+  return 'User-imported';
+}
+
 /** Compact report line for contact latest-email / history, kept distinct from transport status. */
 export function ContactReportEvidence({ item, detailed = false, id }: { item: ReportFields; detailed?: boolean; id: string }) {
   const meta = reportOutcomeMeta(item.reportOutcome);
@@ -48,7 +58,7 @@ export function ContactReportEvidence({ item, detailed = false, id }: { item: Re
     </div>
     {detailed && <dl className="mt-2 space-y-1 rounded-md bg-[#f7f9fb] p-2.5 text-[11px] text-[#5c6877]">
       {item.reportDiagnostic && <div><dt className="inline font-semibold">Report diagnostic: </dt><dd className="inline break-words">{item.reportDiagnostic}</dd></div>}
-      {item.reportSource && <div><dt className="inline font-semibold">Source: </dt><dd className="inline">{item.reportEvidenceVerification === 'gmail_authorized' ? 'Google-authorized mailbox · ' : 'User-imported · '}{item.reportSource.replace(/_/g, ' ')}</dd></div>}
+      {item.reportSource && <div><dt className="inline font-semibold">Source: </dt><dd className="inline">{evidenceSourceLabel(item.reportEvidenceVerification)} · {item.reportSource.replace(/_/g, ' ')}</dd></div>}
       {item.lastError && <div><dt className="inline font-semibold">SMTP error: </dt><dd className="inline break-words">{item.lastError}</dd></div>}
       {item.smtpResponse && <div><dt className="inline font-semibold">SMTP response: </dt><dd className="mono inline break-all">{item.smtpResponse}</dd></div>}
       {item.messageId && <div><dt className="inline font-semibold">Message-ID: </dt><dd className="mono inline break-all">{item.messageId}</dd></div>}
@@ -155,6 +165,110 @@ function ImportPanel({ campaignId }: { campaignId: string }) {
   </div>;
 }
 
+function Microsoft365TracePanel({ campaignId }: { campaignId: string }) {
+  const qc = useQueryClient();
+  const connectionQuery = useGetMicrosoft365TraceConnection({
+    query: { queryKey: getGetMicrosoft365TraceConnectionQueryKey(), refetchInterval: 30_000, staleTime: 10_000 },
+  });
+  const connect = useConnectMicrosoft365Trace();
+  const disconnect = useDisconnectMicrosoft365Trace();
+  const sync = useTriggerMicrosoft365TraceSync();
+  const backfill = useBackfillMicrosoft365Traces();
+  const [tenantId, setTenantId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [adminConsentConfirmed, setAdminConsentConfirmed] = useState(false);
+  const [days, setDays] = useState(90);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const connection = connectionQuery.data;
+  const busy = connect.isPending || disconnect.isPending || sync.isPending || backfill.isPending;
+
+  const refreshEvidence = () => {
+    void qc.invalidateQueries({ queryKey: getGetMicrosoft365TraceConnectionQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetCampaignDeliveryReportQueryKey(campaignId) });
+    void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) });
+    void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+  };
+  const submitConnect = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null); setNotice(null);
+    connect.mutate({ data: { tenantId: tenantId.trim(), clientId: clientId.trim(), clientSecret, adminConsentConfirmed: true } }, {
+      onSuccess: () => {
+        setClientSecret('');
+        setNotice('Microsoft Graph accepted a trace request. The rolling 90-day backfill is queued.');
+        refreshEvidence();
+      },
+      onError: err => setError(err instanceof Error ? err.message : 'Microsoft trace access could not be verified.'),
+    });
+  };
+  const runSync = () => {
+    setError(null); setNotice(null);
+    sync.mutate(undefined, {
+      onSuccess: () => { setNotice('A trace sync is queued.'); refreshEvidence(); },
+      onError: err => setError(err instanceof Error ? err.message : 'The sync could not be queued.'),
+    });
+  };
+  const runBackfill = () => {
+    setError(null); setNotice(null);
+    backfill.mutate({ data: { days } }, {
+      onSuccess: () => { setNotice(`A ${days}-day trace backfill is queued.`); refreshEvidence(); },
+      onError: err => setError(err instanceof Error ? err.message : 'The backfill could not be queued.'),
+    });
+  };
+  const removeConnection = () => {
+    if (!window.confirm('Disconnect Microsoft 365 trace collection? Saved delivery evidence will stay, but credentials and queued trace work will be removed.')) return;
+    setError(null); setNotice(null);
+    disconnect.mutate(undefined, {
+      onSuccess: () => { setNotice('Microsoft 365 trace collection is disconnected. Previously recorded evidence remains.'); refreshEvidence(); },
+      onError: err => setError(err instanceof Error ? err.message : 'The connection could not be removed.'),
+    });
+  };
+
+  return <div data-testid="section-microsoft365-trace" className="border-t border-[#e9edf0] px-5 py-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><h3 className="text-[13px] font-semibold text-[#26364a]">Microsoft 365 message trace</h3>
+        <p className="mt-0.5 max-w-3xl text-[11px] leading-5 text-[#788392]">Connect a tenant-authorized Microsoft Graph app to collect trace events automatically. This is separate from your SMTP credentials and does not confirm inbox placement or reading.</p></div>
+      {connection?.connected && <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${connection.syncStatus === 'error' ? 'bg-[#fff3e8] text-[#a95218]' : 'bg-[#edf7f0] text-[#397050]'}`}>{connection.syncStatus === 'error' ? <AlertCircle className="h-3.5 w-3.5"/> : <CheckCircle2 className="h-3.5 w-3.5"/>}{connection.syncStatus === 'error' ? 'Sync needs attention' : 'Trace access verified'}</span>}
+    </div>
+    {connectionQuery.isError && <div role="alert" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">Connection health could not be loaded. Retry by refreshing this page.</div>}
+    {connection?.connected ? <div className="mt-3 space-y-3">
+      <div className="grid gap-3 rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#5c6877] sm:grid-cols-2">
+        <div><span className="font-semibold text-[#344154]">Tenant:</span> <span className="mono break-all">{connection.tenantId}</span></div>
+        <div><span className="font-semibold text-[#344154]">Authenticated source:</span> Microsoft Graph · {connection.permission}</div>
+        <div><span className="font-semibold text-[#344154]">Last successful sync:</span> {connection.lastSuccessAt ? new Date(connection.lastSuccessAt).toLocaleString() : 'Not yet synced'}</div>
+        <div><span className="font-semibold text-[#344154]">Backfill:</span> {connection.backfillStartAt ? `Working from ${new Date(connection.backfillStartAt).toLocaleDateString()} through ${connection.backfillEndAt ? new Date(connection.backfillEndAt).toLocaleDateString() : 'now'}` : connection.backfillCompletedAt ? `Complete · ${new Date(connection.backfillCompletedAt).toLocaleString()}` : 'Incremental sync is active'}</div>
+      </div>
+      {connection.lastError && <div role="status" data-testid="text-microsoft365-sync-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{connection.lastError}</div>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>
+        <label className="flex items-center gap-2 text-[11px] text-[#5c6877]">Backfill
+          <select data-testid="select-microsoft365-backfill-days" className="h-9 rounded-md border border-[#d8dde4] bg-white px-2 text-[12px]" value={days} onChange={e => setDays(Number(e.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select>
+        </label>
+        <button type="button" data-testid="button-backfill-microsoft365" className={outlineBtn} disabled={busy} onClick={runBackfill}>Start backfill</button>
+        <button type="button" data-testid="button-disconnect-microsoft365" className={outlineBtn} disabled={busy} onClick={removeConnection}><Unlink className="h-3.5 w-3.5"/>Disconnect</button>
+      </div>
+    </div> : <form className="mt-3 space-y-3" onSubmit={submitConnect}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block"><span className="mb-1 block text-[11px] font-semibold text-[#344154]">Microsoft Entra tenant ID</span><input data-testid="input-microsoft365-tenant-id" className={cx(inputCls, 'h-9 mono')} autoComplete="off" spellCheck={false} required maxLength={36} value={tenantId} onChange={e => setTenantId(e.target.value)} placeholder="Tenant (directory) ID"/></label>
+        <label className="block"><span className="mb-1 block text-[11px] font-semibold text-[#344154]">App registration client ID</span><input data-testid="input-microsoft365-client-id" className={cx(inputCls, 'h-9 mono')} autoComplete="off" spellCheck={false} required maxLength={36} value={clientId} onChange={e => setClientId(e.target.value)} placeholder="Application (client) ID"/></label>
+      </div>
+      <label className="block"><span className="mb-1 block text-[11px] font-semibold text-[#344154]">App registration client secret</span><input data-testid="input-microsoft365-client-secret" className={cx(inputCls, 'h-9 mono')} type="password" autoComplete="new-password" required minLength={8} maxLength={4096} value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Secret value (not the secret ID)"/></label>
+      <Disclosure testId="help-microsoft365-trace-setup" title="Required tenant setup and permission">
+        <p>In Microsoft Entra, create an app registration, add the Microsoft Graph <span className="mono">ExchangeMessageTrace.Read.All</span> <b>application permission</b>, then grant tenant admin consent. The connection is verified by a real trace query; SMTP login details do not provide this access.</p>
+        <p>Microsoft also requires its trace API service principal in your tenant. An administrator can provision it with Microsoft Graph PowerShell using <span className="mono break-all">New-MgServicePrincipal -AppId 8bd644d1-64a1-4d4b-ae52-2e0cbf64e373</span>. Provisioning may take several hours.</p>
+        <p>Microsoft limits traces to the last 90 days, 10-day query windows, 5,000 results per page, and 100 list requests and 100 detail requests per five minutes. Sync uses those limits and saves paging checkpoints.</p>
+        <a className="text-[#245b9b] underline" href="https://learn.microsoft.com/en-us/exchange/monitoring/trace-an-email-message/graph-api-message-trace" target="_blank" rel="noreferrer">Microsoft’s Graph message trace setup guide</a>
+      </Disclosure>
+      <label className="flex items-start gap-2 text-[11px] leading-5 text-[#5f6c7c]"><input data-testid="checkbox-microsoft365-admin-consent" type="checkbox" required checked={adminConsentConfirmed} onChange={e => setAdminConsentConfirmed(e.target.checked)} className="mt-1 accent-[#174f99]"/>A tenant administrator has granted <span className="mono">ExchangeMessageTrace.Read.All</span> application permission and completed the required trace service-principal setup.</label>
+      {error && <div role="alert" data-testid="error-microsoft365-connect" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{error}</div>}
+      <button type="submit" data-testid="button-connect-microsoft365" className={primaryBtn} disabled={busy || !adminConsentConfirmed || !tenantId.trim() || !clientId.trim() || clientSecret.length < 8}>{connect.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}{connect.isPending ? 'Verifying access' : 'Verify and connect'}</button>
+    </form>}
+    {notice && <p role="status" data-testid="notice-microsoft365-connection" className="mt-3 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] text-[#31674b]">{notice}</p>}
+    {error && connection?.connected && <div role="alert" data-testid="error-microsoft365-control" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">{error}</div>}
+  </div>;
+}
+
 export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: string; active: boolean }) {
   const [offset, setOffset] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -176,7 +290,7 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
   ];
   return <section data-testid="section-delivery-evidence" className="mb-5 overflow-hidden rounded-lg border border-[#e0e4e9] bg-white">
     <div className="border-b border-[#e9edf0] px-5 py-4"><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery evidence</h2>
-      <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#788392]">SMTP acceptance means your provider took the message, not that it reached an inbox. DSN requests are best effort and providers may ignore them. Authorized Gmail sync can collect some bounce notices; the absence of a notice never means delivered, placed in an inbox, or read.</p></div>
+      <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#788392]">SMTP acceptance means your provider took the message, not that it reached an inbox. DSN requests are best effort and providers may ignore them. Authorized Gmail and Microsoft 365 trace connections can collect provider events; the absence of an event never means delivered, placed in an inbox, or read.</p></div>
     {query.isLoading ? <div aria-label="Loading delivery evidence" className="space-y-3 p-5"><div className="h-16 animate-pulse rounded-md bg-[#edf0f3]"/><div className="h-40 animate-pulse rounded-md bg-[#f1f3f5]"/></div>
       : query.isError || !data ? <div role="alert" className="m-5 flex items-center justify-between gap-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4"><p className="text-[12px] text-[#99501e]">We couldn't load delivery evidence for this campaign.</p><button type="button" data-testid="button-retry-delivery-report" className={outlineBtn} onClick={() => void query.refetch()}>Retry</button></div>
       : <>
@@ -189,17 +303,17 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
               return <Fragment key={r.id}><tr data-testid={`row-evidence-${r.id}`} className="align-top">
                 <td className="px-5 py-3 text-[12px] font-semibold text-[#26364a]">{r.email}<div className="mt-0.5 text-[10px] font-normal text-[#8a95a2]">{r.attempts} {r.attempts === 1 ? 'attempt' : 'attempts'}</div></td>
                 <td className="px-4 py-3"><EvidencePill label={accepted ? 'SMTP accepted' : r.status === 'bounced' ? 'Send failed' : r.status.charAt(0).toUpperCase() + r.status.slice(1)} tone={accepted ? 'green' : r.status === 'bounced' ? 'orange' : r.status === 'queued' || r.status === 'sending' ? 'blue' : 'gray'}/>{r.smtpAcceptedAt && <div className="mt-1 text-[10px] text-[#8a95a2]">{new Date(r.smtpAcceptedAt).toLocaleString()}</div>}</td>
-                <td className="px-4 py-3">{meta ? <><EvidencePill label={meta.label} tone={meta.tone}/><div className="mt-1 text-[10px] text-[#8a95a2]">{r.evidenceVerification === 'gmail_authorized' ? 'Google-authorized mailbox' : 'User-imported'} · {r.reportAt ? new Date(r.reportAt).toLocaleString() : 'Report time unavailable'}</div></> : <EvidencePill label="Unconfirmed" tone="gray"/>}</td>
+                <td className="px-4 py-3">{meta ? <><EvidencePill label={meta.label} tone={meta.tone}/><div className="mt-1 text-[10px] text-[#8a95a2]">{evidenceSourceLabel(r.evidenceVerification)} · {r.reportAt ? new Date(r.reportAt).toLocaleString() : 'Report time unavailable'}</div></> : <EvidencePill label="Unconfirmed" tone="gray"/>}</td>
                 <td className="px-4 py-3 text-[11px] text-[#66717e]">{r.dsnRequested ? 'Requested (best effort)' : 'Not requested'}</td>
                 <td className="px-5 py-3 text-right"><button type="button" data-testid={`button-inspect-evidence-${r.id}`} aria-expanded={isOpen} className={outlineBtn} onClick={() => setOpenId(isOpen ? null : r.id)}>{isOpen ? 'Hide' : 'Inspect'}</button></td></tr>
                 {isOpen && <tr key={`${r.id}-d`} data-testid={`detail-evidence-${r.id}`} className="bg-[#f9fafb]"><td colSpan={5} className="px-5 py-4"><dl className="grid gap-x-8 gap-y-2 text-[11px] text-[#5c6877] md:grid-cols-2">
-                  {([['Message-ID', r.latestMessageId], ['SMTP response', [r.latestSmtpCode, r.latestSmtpResponse].filter(Boolean).join(' ') || null], ['Last send error', r.lastError], ['Report diagnostic', r.reportDiagnostic], ['Report status code', r.reportStatusCode], ['Report source', r.reportSource ? r.reportSource.replace(/_/g, ' ') : null], ['Delivery scope', r.reportDeliveryScope === 'mailbox' ? 'Mailbox, as reported by the provider (not a guaranteed inbox folder or read)' : r.reportDeliveryScope === 'receiving_server' ? 'Receiving server only' : r.reportDeliveryScope], ['Verification', r.evidenceVerification === 'gmail_authorized' ? 'Retrieved through this tenant’s authorized Gmail connection' : r.evidenceVerification === 'user_imported' ? 'User-imported, not provider authenticated' : null]] as Array<[string, string | null | undefined]>).map(([k, v]) => <div key={k}><dt className="font-semibold text-[#344154]">{k}</dt><dd className="mono mt-0.5 break-all">{v || 'None recorded'}</dd></div>)}
+                  {([['Message-ID', r.latestMessageId], ['SMTP response', [r.latestSmtpCode, r.latestSmtpResponse].filter(Boolean).join(' ') || null], ['Last send error', r.lastError], ['Report diagnostic', r.reportDiagnostic], ['Report status code', r.reportStatusCode], ['Report source', r.reportSource ? r.reportSource.replace(/_/g, ' ') : null], ['Delivery scope', r.reportDeliveryScope === 'mailbox' ? 'Mailbox, as reported by the provider (not a guaranteed inbox folder or read)' : r.reportDeliveryScope === 'receiving_server' ? 'Receiving server only' : r.reportDeliveryScope], ['Verification', r.evidenceVerification ? evidenceSourceLabel(r.evidenceVerification) : null]] as Array<[string, string | null | undefined]>).map(([k, v]) => <div key={k}><dt className="font-semibold text-[#344154]">{k}</dt><dd className="mono mt-0.5 break-all">{v || 'None recorded'}</dd></div>)}
                 </dl></td></tr>}</Fragment>;
             })}</tbody></table></div>}
         <div className="flex items-center justify-between border-t border-[#e9edf0] px-5 py-3 text-[11px] text-[#788392]"><span data-testid="text-evidence-range">{total ? `${offset + 1}-${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}` : '0 recipients'}</span>
           <div className="flex gap-2"><button type="button" data-testid="button-evidence-prev" className={outlineBtn} disabled={offset === 0 || query.isFetching} onClick={() => { setOpenId(null); setOffset(Math.max(0, offset - PAGE)); }}><ChevronLeft className="h-4 w-4"/>Previous</button><button type="button" data-testid="button-evidence-next" className={outlineBtn} disabled={offset + PAGE >= total || query.isFetching} onClick={() => { setOpenId(null); setOffset(offset + PAGE); }}>Next<ChevronRight className="h-4 w-4"/></button></div></div>
       </>}
-    <ImportPanel campaignId={campaignId}/>
+     <Microsoft365TracePanel campaignId={campaignId}/><ImportPanel campaignId={campaignId}/>
   </section>;
 }
 
@@ -210,6 +324,7 @@ export function DeliveryCapabilityNotes() {
     <div className="mt-4 grid gap-4 md:grid-cols-2 text-[12px] leading-5 text-[#5f6c7c]">
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">SMTP and DSN</h3><p className="mt-1">Mailflow records the SMTP response for every send and requests a delivery status notification (DSN) when the server supports it. This is best effort: a provider may ignore the request. Acceptance by SMTP is not inbox delivery, and no bounce never means delivered.</p></div>
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">Gmail and Google Workspace</h3><p className="mt-1">A tenant owner can authorize Gmail bounce monitoring from sending settings. Mailflow polls new-message history, reads only metadata for ordinary messages, and fetches content only when Gmail identifies a delivery-status notice. Connection health and any history gap are shown in settings. No bounce is not evidence of delivery, inbox placement, or reading.</p></div>
+      <div><h3 className="text-[13px] font-semibold text-[#26364a]">Microsoft 365</h3><p className="mt-1">A tenant administrator can authorize Exchange message-trace collection with the required Graph application permission and service principal. Microsoft’s SEND event means transmission to another server; DELIVER is mailbox-level evidence, not proof of inbox placement or reading. Trace windows cover up to 90 days and outcomes use event times, not the initial received time.</p></div>
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">Imported reports</h3><p className="mt-1">Reports are matched by this workspace, a tracked message ID and the recipient. They are user-supplied evidence and are not authenticated by the provider.</p></div>
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">Older sends</h3><p className="mt-1">Messages sent before tracking IDs were stored cannot be matched and will be reported as unmatched.</p></div>
     </div>

@@ -88,6 +88,95 @@ export const gmailMailboxConnectionsTable = pgTable(
   ],
 );
 
+export const microsoft365TraceConnectionsTable = pgTable(
+  "microsoft365_trace_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .unique()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    tenantId: varchar("tenant_id", { length: 36 }).notNull(),
+    clientId: varchar("client_id", { length: 36 }).notNull(),
+    clientSecretEncrypted: text("client_secret_encrypted").notNull(),
+    syncStatus: varchar("sync_status", { length: 32 })
+      .notNull()
+      .default("connected"),
+    backfillStartAt: timestamp("backfill_start_at", { withTimezone: true }),
+    backfillEndAt: timestamp("backfill_end_at", { withTimezone: true }),
+    pageNextLink: text("page_next_link"),
+    backfillCompletedAt: timestamp("backfill_completed_at", {
+      withTimezone: true,
+    }),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    nextSyncAt: timestamp("next_sync_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("microsoft365_trace_connections_due_sync_idx").on(
+      table.syncStatus,
+      table.nextSyncAt,
+      table.leaseExpiresAt,
+    ),
+  ],
+);
+
+export const microsoft365MessageTracesTable = pgTable(
+  "microsoft365_message_traces",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => microsoft365TraceConnectionsTable.id, {
+        onDelete: "cascade",
+      }),
+    traceId: varchar("trace_id", { length: 128 }).notNull(),
+    messageId: varchar("message_id", { length: 512 }).notNull(),
+    recipientAddress: varchar("recipient_address", { length: 254 }).notNull(),
+    receivedDateTime: timestamp("received_date_time", {
+      withTimezone: true,
+    }).notNull(),
+    providerStatus: varchar("provider_status", { length: 32 }),
+    detailsCheckedAt: timestamp("details_checked_at", { withTimezone: true }),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("microsoft365_message_traces_connection_trace_recipient_unique").on(
+      table.connectionId,
+      table.traceId,
+      table.recipientAddress,
+    ),
+    index("microsoft365_message_traces_due_details_idx").on(
+      table.connectionId,
+      table.nextAttemptAt,
+    ),
+  ],
+);
+
 export const contactListsTable = pgTable(
   "contact_lists",
   {
@@ -308,6 +397,11 @@ export const emailDeliveryReportsTable = pgTable(
       () => gmailMailboxConnectionsTable.id,
       { onDelete: "set null" },
     ),
+    microsoft365TraceConnectionId: uuid(
+      "microsoft365_trace_connection_id",
+    ).references(() => microsoft365TraceConnectionsTable.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [
     uniqueIndex("email_delivery_reports_user_fingerprint_unique").on(

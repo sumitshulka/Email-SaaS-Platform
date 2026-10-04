@@ -286,6 +286,41 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE microsoft365_trace_connections (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id varchar(36) NOT NULL,
+    client_id varchar(36) NOT NULL,
+    client_secret_encrypted text NOT NULL,
+    sync_status varchar(32) NOT NULL DEFAULT 'connected',
+    backfill_start_at timestamptz,
+    backfill_end_at timestamptz,
+    page_next_link text,
+    backfill_completed_at timestamptz,
+    last_sync_at timestamptz,
+    last_success_at timestamptz,
+    next_sync_at timestamptz NOT NULL DEFAULT now(),
+    lease_expires_at timestamptz,
+    last_error text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE microsoft365_message_traces (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    connection_id uuid NOT NULL REFERENCES microsoft365_trace_connections(id) ON DELETE CASCADE,
+    trace_id varchar(128) NOT NULL,
+    message_id varchar(512) NOT NULL,
+    recipient_address varchar(254) NOT NULL,
+    received_date_time timestamptz NOT NULL,
+    provider_status varchar(32),
+    details_checked_at timestamptz,
+    next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    attempt_count integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (connection_id, trace_id, recipient_address)
+  );
   CREATE TABLE email_delivery_reports (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -301,6 +336,7 @@ memory.public.none(`
     delivery_scope varchar(24) NOT NULL DEFAULT 'unspecified',
     evidence_verification varchar(32) NOT NULL DEFAULT 'user_imported',
     gmail_mailbox_connection_id uuid REFERENCES gmail_mailbox_connections(id) ON DELETE SET NULL,
+    microsoft365_trace_connection_id uuid REFERENCES microsoft365_trace_connections(id) ON DELETE SET NULL,
     UNIQUE (user_id, fingerprint)
   );
 `);
@@ -1508,6 +1544,26 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(gmailStatus.body.connected, false);
     assert.equal(gmailStatus.body.syncStatus, "disconnected");
     assert.equal(gmailStatus.body.pollIntervalSeconds, 120);
+    const microsoftStatus = await api("/sending/microsoft-365/connection", {
+      cookie: owner.cookie,
+    });
+    assert.equal(microsoftStatus.response.status, 200);
+    assert.equal(microsoftStatus.body.connected, false);
+    assert.equal(microsoftStatus.body.syncStatus, "disconnected");
+    assert.equal(microsoftStatus.body.permission, "ExchangeMessageTrace.Read.All");
+    assert.equal(microsoftStatus.body.source, "microsoft_365_graph");
+    assert.equal(microsoftStatus.body.maxHistoryDays, 90);
+    assert.equal(
+      (await api("/sending/microsoft-365/connection")).response.status,
+      401,
+    );
+    assert.equal(
+      (await api("/sending/microsoft-365/sync", {
+        method: "POST",
+        cookie: owner.cookie,
+      })).response.status,
+      404,
+    );
     const anonymousGmailStatus = await api("/sending/gmail/connection");
     assert.equal(anonymousGmailStatus.response.status, 401);
     const gmailConnect = await api("/sending/gmail/connect", {

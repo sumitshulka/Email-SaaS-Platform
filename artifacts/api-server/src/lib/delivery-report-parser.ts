@@ -12,6 +12,7 @@ export type ParsedDeliveryReport = {
   source:
     | "dsn"
     | "microsoft_365_csv"
+    | "microsoft_365_graph"
     | "google_workspace_csv"
     | "generic_csv";
   diagnostic: string | null;

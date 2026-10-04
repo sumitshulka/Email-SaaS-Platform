@@ -361,6 +361,129 @@ paths:
       responses:
         "302":
           description: Redirect back to sending settings with a connection result
+  /sending/microsoft-365/connection:
+    get:
+      operationId: getMicrosoft365TraceConnection
+      tags: [sending]
+      summary: Get tenant-authorized Microsoft 365 trace connection and sync health
+      responses:
+        "200":
+          description: Connection health and authenticated source metadata without credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Microsoft365TraceConnection"
+    delete:
+      operationId: disconnectMicrosoft365Trace
+      tags: [sending]
+      summary: Disconnect Microsoft 365 trace collection for the authenticated tenant
+      responses:
+        "204":
+          description: Credentials and queued trace work removed; imported evidence is retained
+  /sending/microsoft-365/connect:
+    post:
+      operationId: connectMicrosoft365Trace
+      tags: [sending]
+      summary: Verify tenant-admin-authorized Microsoft 365 message-trace access
+      description: SMTP credentials do not authorize trace access. This app-only connection requires an Entra application with ExchangeMessageTrace.Read.All application permission and tenant admin consent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Microsoft365TraceConnectInput"
+      responses:
+        "200":
+          description: Microsoft Graph accepted a permission-checked trace request and a 90-day backfill was scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Microsoft365TraceConnection"
+        "400":
+          description: Invalid tenant or application credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Missing Exchange trace permission, tenant admin consent, or trace service-principal setup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Disconnect the current tenant before switching to a different one
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Microsoft identity or trace service could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/microsoft-365/sync:
+    post:
+      operationId: triggerMicrosoft365TraceSync
+      tags: [sending]
+      summary: Schedule an immediate Microsoft 365 trace sync
+      responses:
+        "200":
+          description: Tenant sync has been queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Microsoft365TraceConnection"
+        "404":
+          description: No Microsoft 365 trace connection exists for this tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A tenant sync is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/microsoft-365/backfill:
+    post:
+      operationId: backfillMicrosoft365Traces
+      tags: [sending]
+      summary: Schedule a Microsoft 365 trace backfill
+      description: Backfill start dates must be within the provider's rolling 90-day retention window. Requests are split into provider-supported windows of at most 10 days.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Microsoft365TraceBackfillInput"
+      responses:
+        "200":
+          description: Backfill checkpoint reset and scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Microsoft365TraceConnection"
+        "400":
+          description: Backfill range is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No Microsoft 365 trace connection exists for this tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A tenant sync is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts:
     get:
       operationId: listContacts
@@ -1509,6 +1632,45 @@ components:
       properties:
         authorizationUrl: { type: string, format: uri }
       required: [authorizationUrl]
+    Microsoft365TraceConnectInput:
+      type: object
+      description: Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.
+      properties:
+        tenantId: { type: string, format: uuid }
+        clientId: { type: string, format: uuid }
+        clientSecret: { type: string, minLength: 8, maxLength: 4096 }
+        adminConsentConfirmed: { type: boolean, enum: [true] }
+      required: [tenantId, clientId, clientSecret, adminConsentConfirmed]
+    Microsoft365TraceBackfillInput:
+      type: object
+      properties:
+        days: { type: integer, minimum: 1, maximum: 90, default: 90 }
+      required: [days]
+    Microsoft365TraceConnection:
+      type: object
+      properties:
+        configured: { type: boolean }
+        connected: { type: boolean }
+        tenantId: { type: ["string", "null"], format: uuid }
+        syncStatus: { type: string, enum: [disconnected, connected, error] }
+        source: { type: string, enum: [microsoft_365_graph] }
+        evidenceVerification: { type: string, enum: [microsoft365_authorized] }
+        permission: { type: string, enum: [ExchangeMessageTrace.Read.All] }
+        tenantAdminConsentRequired: { type: boolean, enum: [true] }
+        exchangeTraceServicePrincipalAppId: { type: string, format: uuid }
+        backfillStartAt: { type: ["string", "null"], format: date-time }
+        backfillEndAt: { type: ["string", "null"], format: date-time }
+        backfillCompletedAt: { type: ["string", "null"], format: date-time }
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+        lastSuccessAt: { type: ["string", "null"], format: date-time }
+        nextSyncAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+        pollIntervalSeconds: { type: integer, minimum: 30 }
+        maxHistoryDays: { type: integer, enum: [90] }
+        maxQueryWindowDays: { type: integer, enum: [10] }
+        maxPageSize: { type: integer, enum: [5000] }
+        requestsPerFiveMinutes: { type: integer, enum: [100] }
+      required: [configured, connected, tenantId, syncStatus, source, evidenceVerification, permission, tenantAdminConsentRequired, exchangeTraceServicePrincipalAppId, backfillStartAt, backfillEndAt, backfillCompletedAt, lastSyncAt, lastSuccessAt, nextSyncAt, lastError, pollIntervalSeconds, maxHistoryDays, maxQueryWindowDays, maxPageSize, requestsPerFiveMinutes]
     TenantSendingTestInput:
       type: object
       properties:
@@ -1551,7 +1713,7 @@ components:
         deliveredAt: { type: ["string", "null"], format: date-time }
         reportOutcome: { type: string, enum: [unconfirmed, delivered, bounced, delayed, failed] }
         reportSource: { type: ["string", "null"], enum: [dsn, microsoft_365_csv, google_workspace_csv, generic_csv, null] }
-        reportEvidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, null] }
+        reportEvidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, microsoft365_authorized, null] }
         reportDiagnostic: { type: ["string", "null"] }
         reportAt: { type: ["string", "null"], format: date-time }
         lastError: { type: ["string", "null"] }
@@ -1760,7 +1922,7 @@ components:
         smtpAcceptedAt: { type: ["string", "null"], format: date-time }
         lastError: { type: ["string", "null"] }
         reportOutcome: { type: string, enum: [unconfirmed, delivered, bounced, delayed, failed] }
-        reportSource: { type: ["string", "null"], enum: [dsn, microsoft_365_csv, google_workspace_csv, generic_csv, null] }
+        reportSource: { type: ["string", "null"], enum: [dsn, microsoft_365_csv, microsoft_365_graph, google_workspace_csv, generic_csv, null] }
         reportDiagnostic: { type: ["string", "null"] }
         reportStatusCode: { type: ["string", "null"] }
         reportAt: { type: ["string", "null"], format: date-time }
@@ -1769,7 +1931,7 @@ components:
         latestSmtpResponse: { type: ["string", "null"] }
         latestSmtpCode: { type: ["integer", "null"] }
         dsnRequested: { type: boolean }
-        evidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, null] }
+        evidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, microsoft365_authorized, null] }
       required: [id, email, status, attempts, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
     CampaignTargetList:
       type: object

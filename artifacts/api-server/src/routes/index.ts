@@ -6,6 +6,7 @@ import adminRouter from "./admin";
 import billingRouter from "./billing";
 import sendingRouter from "./sending";
 import sendingReportsRouter from "./sending-reports";
+import microsoft365TraceRouter from "../lib/microsoft365-trace";
 import gmailMailboxRouter from "../lib/gmail-mailbox";
 import { contactImportRouter } from "./contacts";
 
@@ -17,6 +18,7 @@ router.use(billingRouter);
 router.use(contactImportRouter);
 router.use(sendingRouter);
 router.use(sendingReportsRouter);
+router.use(microsoft365TraceRouter);
 router.use(gmailMailboxRouter);
 router.use(adminRouter);
 export default router;

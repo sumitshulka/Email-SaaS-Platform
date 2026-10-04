@@ -291,6 +291,19 @@ export interface GmailOAuthStart {
   authorizationUrl: string;
 }
 
+/**
+ * Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.
+ */
+export interface Microsoft365TraceConnectInput {
+  tenantId: string;
+  clientId: string;
+  /**
+     * @minLength 8
+     * @maxLength 4096
+     */
+  clientSecret: string;
+  adminConsentConfirmed: true;
+}
 export interface TenantSendingTestInput {
   toEmail: string;
 }
@@ -372,6 +385,7 @@ export type ContactEmailHistoryItemReportEvidenceVerification = typeof ContactEm
 export const ContactEmailHistoryItemReportEvidenceVerification = {
   user_imported: 'user_imported',
   gmail_authorized: 'gmail_authorized',
+  microsoft365_authorized: 'microsoft365_authorized',
 } as const;
 
 export interface ContactEmailHistoryItem {
@@ -720,6 +734,7 @@ export type DeliveryRecipientReportSource = typeof DeliveryRecipientReportSource
 export const DeliveryRecipientReportSource = {
   dsn: 'dsn',
   microsoft_365_csv: 'microsoft_365_csv',
+  microsoft_365_graph: 'microsoft_365_graph',
   google_workspace_csv: 'google_workspace_csv',
   generic_csv: 'generic_csv',
 } as const;
@@ -745,6 +760,7 @@ export type DeliveryRecipientEvidenceVerification = typeof DeliveryRecipientEvid
 export const DeliveryRecipientEvidenceVerification = {
   user_imported: 'user_imported',
   gmail_authorized: 'gmail_authorized',
+  microsoft365_authorized: 'microsoft365_authorized',
 } as const;
 
 export interface DeliveryRecipient {
@@ -1597,3 +1613,94 @@ export const ListAdminUsersStatus = {
   pending: 'pending',
 } as const;
 
+
+export const Microsoft365TraceConnectionMaxQueryWindowDays = {
+  NUMBER_10: 10,
+} as const;
+
+export const Microsoft365TraceConnectionMaxHistoryDays = {
+  NUMBER_90: 90,
+} as const;
+
+export type Microsoft365TraceConnectionSource = typeof Microsoft365TraceConnectionSource[keyof typeof Microsoft365TraceConnectionSource];
+
+export type Microsoft365TraceConnectionRequestsPerFiveMinutes = typeof Microsoft365TraceConnectionRequestsPerFiveMinutes[keyof typeof Microsoft365TraceConnectionRequestsPerFiveMinutes];
+
+export interface Microsoft365TraceBackfillInput {
+  /**
+     * @minimum 1
+     * @maximum 90
+     */
+  days: number;
+}
+
+export type Microsoft365TraceConnectionEvidenceVerification = typeof Microsoft365TraceConnectionEvidenceVerification[keyof typeof Microsoft365TraceConnectionEvidenceVerification];
+
+export const Microsoft365TraceConnectionSource = {
+  microsoft_365_graph: 'microsoft_365_graph',
+} as const;
+
+export const Microsoft365TraceConnectionEvidenceVerification = {
+  microsoft365_authorized: 'microsoft365_authorized',
+} as const;
+
+export const Microsoft365TraceConnectionSyncStatus = {
+  disconnected: 'disconnected',
+  connected: 'connected',
+  error: 'error',
+} as const;
+
+export type Microsoft365TraceConnectionMaxPageSize = typeof Microsoft365TraceConnectionMaxPageSize[keyof typeof Microsoft365TraceConnectionMaxPageSize];
+
+export interface Microsoft365TraceConnection {
+  configured: boolean;
+  connected: boolean;
+  /** @nullable */
+  tenantId: string | null;
+  syncStatus: Microsoft365TraceConnectionSyncStatus;
+  source: Microsoft365TraceConnectionSource;
+  evidenceVerification: Microsoft365TraceConnectionEvidenceVerification;
+  permission: Microsoft365TraceConnectionPermission;
+  tenantAdminConsentRequired: true;
+  exchangeTraceServicePrincipalAppId: string;
+  /** @nullable */
+  backfillStartAt: string | null;
+  /** @nullable */
+  backfillEndAt: string | null;
+  /** @nullable */
+  backfillCompletedAt: string | null;
+  /** @nullable */
+  lastSyncAt: string | null;
+  /** @nullable */
+  lastSuccessAt: string | null;
+  /** @nullable */
+  nextSyncAt: string | null;
+  /** @nullable */
+  lastError: string | null;
+  /** @minimum 30 */
+  pollIntervalSeconds: number;
+  maxHistoryDays: Microsoft365TraceConnectionMaxHistoryDays;
+  maxQueryWindowDays: Microsoft365TraceConnectionMaxQueryWindowDays;
+  maxPageSize: Microsoft365TraceConnectionMaxPageSize;
+  requestsPerFiveMinutes: Microsoft365TraceConnectionRequestsPerFiveMinutes;
+}
+
+export const Microsoft365TraceConnectionPermission = {
+  ExchangeMessageTraceReadAll: 'ExchangeMessageTrace.Read.All',
+} as const;
+
+export type Microsoft365TraceConnectionMaxQueryWindowDays = typeof Microsoft365TraceConnectionMaxQueryWindowDays[keyof typeof Microsoft365TraceConnectionMaxQueryWindowDays];
+
+export type Microsoft365TraceConnectionSyncStatus = typeof Microsoft365TraceConnectionSyncStatus[keyof typeof Microsoft365TraceConnectionSyncStatus];
+
+export const Microsoft365TraceConnectionMaxPageSize = {
+  NUMBER_5000: 5000,
+} as const;
+
+export type Microsoft365TraceConnectionPermission = typeof Microsoft365TraceConnectionPermission[keyof typeof Microsoft365TraceConnectionPermission];
+
+export const Microsoft365TraceConnectionRequestsPerFiveMinutes = {
+  NUMBER_100: 100,
+} as const;
+
+export type Microsoft365TraceConnectionMaxHistoryDays = typeof Microsoft365TraceConnectionMaxHistoryDays[keyof typeof Microsoft365TraceConnectionMaxHistoryDays];

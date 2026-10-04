@@ -15,4 +15,5 @@ export type ContactEmailHistoryItemReportEvidenceVerification = typeof ContactEm
 export const ContactEmailHistoryItemReportEvidenceVerification = {
   user_imported: 'user_imported',
   gmail_authorized: 'gmail_authorized',
+  microsoft365_authorized: 'microsoft365_authorized',
 } as const;

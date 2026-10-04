@@ -15,6 +15,7 @@ export type DeliveryRecipientReportSource = typeof DeliveryRecipientReportSource
 export const DeliveryRecipientReportSource = {
   dsn: 'dsn',
   microsoft_365_csv: 'microsoft_365_csv',
+  microsoft_365_graph: 'microsoft_365_graph',
   google_workspace_csv: 'google_workspace_csv',
   generic_csv: 'generic_csv',
 } as const;

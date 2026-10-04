@@ -7,12 +7,14 @@ import {
   emailDeliveryReportsTable,
   emailSendAttemptsTable,
   gmailMailboxConnectionsTable,
+  microsoft365TraceConnectionsTable,
 } from "@workspace/db";
 import type { ParsedDeliveryReport } from "./delivery-report-parser";
 
 export type DeliveryEvidenceVerification =
   | "user_imported"
-  | "gmail_authorized";
+  | "gmail_authorized"
+  | "microsoft365_authorized";
 
 export type DeliveryReportIngestionResult = {
   imported: number;
@@ -65,8 +67,9 @@ function shouldApplyReportProjection(
   }
 
   return (
-    incomingVerification === "gmail_authorized" &&
-    current.reportEvidenceVerification !== "gmail_authorized"
+    incomingVerification !== "user_imported" &&
+    (current.reportEvidenceVerification === "user_imported" ||
+      current.reportEvidenceVerification === null)
   );
 }
 
@@ -77,6 +80,8 @@ export async function ingestDeliveryReports(options: {
   campaignId?: string;
   verification?: DeliveryEvidenceVerification;
   gmailMailboxConnectionId?: string;
+  microsoft365TraceConnectionId?: string;
+  microsoft365TenantId?: string;
 }): Promise<DeliveryReportIngestionResult> {
   const {
     userId,
@@ -84,9 +89,19 @@ export async function ingestDeliveryReports(options: {
     campaignId,
     verification = "user_imported",
     gmailMailboxConnectionId = null,
+    microsoft365TraceConnectionId = null,
+    microsoft365TenantId = null,
   } = options;
   if (verification === "gmail_authorized" && !gmailMailboxConnectionId) {
     throw new Error("Gmail-authenticated evidence requires its mailbox connection.");
+  }
+  if (
+    verification === "microsoft365_authorized" &&
+    (!microsoft365TraceConnectionId || !microsoft365TenantId)
+  ) {
+    throw new Error(
+      "Microsoft 365-authenticated evidence requires its tenant trace connection.",
+    );
   }
 
   let imported = 0;
@@ -141,6 +156,24 @@ export async function ingestDeliveryReports(options: {
             and(
               eq(gmailMailboxConnectionsTable.id, gmailMailboxConnectionId),
               eq(gmailMailboxConnectionsTable.userId, userId),
+            ),
+          )
+          .for("update")
+          .limit(1);
+        if (!connection) return { status: "connection_missing" as const };
+      }
+      if (microsoft365TraceConnectionId && microsoft365TenantId) {
+        const [connection] = await tx
+          .select({ id: microsoft365TraceConnectionsTable.id })
+          .from(microsoft365TraceConnectionsTable)
+          .where(
+            and(
+              eq(
+                microsoft365TraceConnectionsTable.id,
+                microsoft365TraceConnectionId,
+              ),
+              eq(microsoft365TraceConnectionsTable.userId, userId),
+              eq(microsoft365TraceConnectionsTable.tenantId, microsoft365TenantId),
             ),
           )
           .for("update")
@@ -235,6 +268,8 @@ export async function ingestDeliveryReports(options: {
         deliveryScope: report.deliveryScope,
         verification,
         gmailMailboxConnectionId,
+        microsoft365TraceConnectionId,
+        microsoft365TenantId,
       });
       const fingerprint = createHash("sha256").update(canonical).digest("hex");
       const [existingEvent] = await tx
@@ -265,6 +300,7 @@ export async function ingestDeliveryReports(options: {
           deliveryScope: report.deliveryScope,
           evidenceVerification: verification,
           gmailMailboxConnectionId,
+          microsoft365TraceConnectionId,
         })
         .onConflictDoNothing({
           target: [
