@@ -34,6 +34,7 @@ const OAUTH_STATE_PURPOSE = "gmail-mailbox-oauth-state";
 const OAUTH_COOKIE_PATH = "/api/sending/gmail/oauth/callback";
 let workerTimer: ReturnType<typeof setInterval> | null = null;
 let workerRunning = false;
+const consumedOAuthNonces = new Map<string, number>();
 
 type OAuthConfig = {
   clientId: string;
@@ -95,10 +96,24 @@ function parseOAuthState(state: string, cookieNonce: string | undefined) {
     ) {
       return null;
     }
-    return { userId: value.userId };
+    return {
+      userId: value.userId,
+      nonce: value.nonce,
+      expiresAt: value.expiresAt,
+    };
   } catch {
     return null;
   }
+}
+
+function consumeOAuthNonce(nonce: string, expiresAt: number): boolean {
+  const now = Date.now();
+  for (const [consumedNonce, consumedExpiresAt] of consumedOAuthNonces) {
+    if (consumedExpiresAt < now) consumedOAuthNonces.delete(consumedNonce);
+  }
+  if (consumedOAuthNonces.has(nonce)) return false;
+  consumedOAuthNonces.set(nonce, expiresAt);
+  return true;
 }
 
 async function postOAuthForm(
@@ -237,6 +252,10 @@ router.get(
       typeof req.query.code !== "string" ||
       req.query.error
     ) {
+      redirectToSettings(req, res, "failed");
+      return;
+    }
+    if (!consumeOAuthNonce(params.nonce, params.expiresAt)) {
       redirectToSettings(req, res, "failed");
       return;
     }

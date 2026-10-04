@@ -395,6 +395,7 @@ const [
   campaignWorkerModule,
   deliveryReportIngestionModule,
   deliveryParserModule,
+  gmailMailboxModule,
 ] = await Promise.all([
   import("../src/app.ts"),
   import("../src/lib/application-email.ts"),
@@ -404,6 +405,7 @@ const [
   import("../src/lib/campaign-worker.ts"),
   import("../src/lib/delivery-report-ingestion.ts"),
   import("../src/lib/delivery-report-parser.ts"),
+  import("../src/lib/gmail-mailbox.ts"),
 ]);
 
 const { db, usersTable, userSessionsTable, loginAttemptsTable, otpVerificationsTable } =
@@ -474,7 +476,10 @@ beforeEach(async () => {
   tenantDeliveries.length = 0;
 });
 
-async function api(path, { method = "GET", body, cookie } = {}) {
+async function api(
+  path,
+  { method = "GET", body, cookie, redirect = "follow" } = {},
+) {
   const headers = {};
   if (body !== undefined) headers["content-type"] = "application/json";
   if (cookie) headers.cookie = cookie;
@@ -482,14 +487,104 @@ async function api(path, { method = "GET", body, cookie } = {}) {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
+    redirect,
   });
   const text = await response.text();
   const setCookie = response.headers.getSetCookie?.()[0] ?? response.headers.get("set-cookie");
+  const responseBody = text
+    ? response.headers.get("content-type")?.includes("application/json")
+      ? JSON.parse(text)
+      : text
+    : undefined;
   return {
     response,
-    body: text ? JSON.parse(text) : undefined,
+    body: responseBody,
     cookie: setCookie?.split(";", 1)[0],
   };
+}
+
+async function withGmailOAuthConfig(run) {
+  const keys = {
+    GOOGLE_OAUTH_CLIENT_ID: "mailflow-test-client",
+    GOOGLE_OAUTH_CLIENT_SECRET: "mailflow-test-secret",
+    GOOGLE_OAUTH_REDIRECT_URI:
+      "http://localhost/api/sending/gmail/oauth/callback",
+  };
+  const previous = Object.fromEntries(
+    Object.keys(keys).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, keys);
+  try {
+    return await run();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+async function withGoogleFetch(handler, run) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (
+      ["oauth2.googleapis.com", "openidconnect.googleapis.com", "gmail.googleapis.com"].includes(
+        url.hostname,
+      )
+    ) {
+      return handler(url, init);
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function googleJson(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function startGmailOAuth(sessionCookie) {
+  const connected = await api("/sending/gmail/connect", {
+    method: "POST",
+    cookie: sessionCookie,
+  });
+  assert.equal(connected.response.status, 200, JSON.stringify(connected.body));
+  assert.ok(connected.cookie);
+  const setCookie = connected.response.headers.get("set-cookie") ?? "";
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Lax/i);
+  assert.match(setCookie, /Path=\/api\/sending\/gmail\/oauth\/callback/i);
+  const oauthCookieValue = connected.cookie.slice(
+    connected.cookie.indexOf("=") + 1,
+  );
+  return {
+    authorizationUrl: connected.body.authorizationUrl,
+    state: new URL(connected.body.authorizationUrl).searchParams.get("state"),
+    cookie: connected.cookie,
+    nonce: oauthCookieValue,
+  };
+}
+
+async function finishGmailOAuth(
+  sessionCookie,
+  flow,
+  { state = flow.state, oauthCookie = flow.cookie, code = "gmail-auth-code" } = {},
+) {
+  const query = new URLSearchParams({ code, state });
+  return api(`/sending/gmail/oauth/callback?${query}`, {
+    cookie: oauthCookie
+      ? `${sessionCookie}; ${oauthCookie}`
+      : sessionCookie,
+    redirect: "manual",
+  });
 }
 
 async function uploadCsv(path, csvText, cookie) {
@@ -1530,6 +1625,343 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(deletedSession.revokedAt);
     const deletedAgain = await login(deletedUser.email);
     assert.equal(deletedAgain.response.status, 401);
+  });
+});
+
+describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () => {
+  it("exchanges consent, protects the saved token, rejects replay, and revokes on disconnect", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-oauth-owner" });
+      const accessToken = "mock-google-access-token";
+      const refreshToken = "mock-google-refresh-token";
+      const googleRequests = [];
+
+      await withGoogleFetch(async (url, init) => {
+        googleRequests.push({ url, init });
+        if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+          const fields = new URLSearchParams(init?.body);
+          assert.equal(fields.get("grant_type"), "authorization_code");
+          assert.equal(fields.get("code"), "gmail-auth-code");
+          assert.equal(fields.get("client_id"), "mailflow-test-client");
+          assert.equal(fields.get("client_secret"), "mailflow-test-secret");
+          assert.equal(
+            fields.get("redirect_uri"),
+            "http://localhost/api/sending/gmail/oauth/callback",
+          );
+          return googleJson({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            token_type: "Bearer",
+          });
+        }
+        if (url.hostname === "openidconnect.googleapis.com") {
+          assert.equal(
+            new Headers(init?.headers).get("authorization"),
+            `Bearer ${accessToken}`,
+          );
+          return googleJson({
+            email: owner.user.email.toUpperCase(),
+            email_verified: true,
+          });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/users/me/profile")
+        ) {
+          assert.equal(
+            new Headers(init?.headers).get("authorization"),
+            `Bearer ${accessToken}`,
+          );
+          return googleJson({
+            emailAddress: owner.user.email,
+            historyId: "gmail-history-baseline",
+          });
+        }
+        if (
+          url.hostname === "oauth2.googleapis.com" &&
+          url.pathname === "/revoke"
+        ) {
+          assert.equal(init?.method, "POST");
+          assert.equal(url.searchParams.get("token"), refreshToken);
+          return new Response(null, { status: 200 });
+        }
+        throw new Error(`Unexpected Google request: ${url}`);
+      }, async () => {
+        const flow = await startGmailOAuth(owner.cookie);
+        const authorizationUrl = new URL(flow.authorizationUrl);
+        assert.equal(
+          authorizationUrl.searchParams.get("access_type"),
+          "offline",
+        );
+        assert.equal(authorizationUrl.searchParams.get("prompt"), "consent");
+        assert.match(authorizationUrl.searchParams.get("scope"), /openid/);
+        assert.match(authorizationUrl.searchParams.get("scope"), /email/);
+        assert.match(authorizationUrl.searchParams.get("scope"), /gmail\.readonly/);
+
+        const callback = await finishGmailOAuth(owner.cookie, flow);
+        assert.equal(
+          callback.response.status,
+          303,
+          JSON.stringify(callback.body),
+        );
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "connected",
+        );
+        assert.match(
+          callback.response.headers.get("set-cookie") ?? "",
+          /mailflow_gmail_oauth_state=;/,
+        );
+        assert.equal(
+          googleRequests.filter(
+            ({ url }) =>
+              url.hostname === "oauth2.googleapis.com" &&
+              url.pathname === "/token",
+          ).length,
+          1,
+        );
+
+        const [saved] = await db
+          .select()
+          .from(dbModule.gmailMailboxConnectionsTable)
+          .where(eq(dbModule.gmailMailboxConnectionsTable.userId, owner.user.id));
+        assert.equal(saved.emailAddress, owner.user.email);
+        assert.match(saved.refreshTokenEncrypted, /^v1\./);
+        assert.notEqual(saved.refreshTokenEncrypted, refreshToken);
+        assert.equal(
+          securityModule.decryptSecret(saved.refreshTokenEncrypted),
+          refreshToken,
+        );
+
+        const status = await api("/sending/gmail/connection", {
+          cookie: owner.cookie,
+        });
+        assert.equal(status.response.status, 200);
+        assert.equal(status.body.connected, true);
+        const statusJson = JSON.stringify(status.body);
+        assert.equal(statusJson.includes(refreshToken), false);
+        assert.equal(statusJson.toLowerCase().includes("refreshtoken"), false);
+
+        const replay = await finishGmailOAuth(owner.cookie, flow);
+        assert.equal(replay.response.status, 303);
+        assert.equal(
+          new URL(replay.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(
+          googleRequests.filter(
+            ({ url }) =>
+              url.hostname === "oauth2.googleapis.com" &&
+              url.pathname === "/token",
+          ).length,
+          1,
+          "a consumed OAuth state must not exchange a second authorization code",
+        );
+        const [stillSaved] = await db
+          .select()
+          .from(dbModule.gmailMailboxConnectionsTable)
+          .where(eq(dbModule.gmailMailboxConnectionsTable.userId, owner.user.id));
+        assert.equal(stillSaved.id, saved.id);
+
+        const disconnected = await api("/sending/gmail/connection", {
+          method: "DELETE",
+          cookie: owner.cookie,
+        });
+        assert.equal(disconnected.response.status, 204);
+        assert.equal(
+          await db
+            .select()
+            .from(dbModule.gmailMailboxConnectionsTable)
+            .where(eq(dbModule.gmailMailboxConnectionsTable.userId, owner.user.id))
+            .then((rows) => rows.length),
+          0,
+        );
+        assert.equal(
+          googleRequests.filter(
+            ({ url }) =>
+              url.hostname === "oauth2.googleapis.com" &&
+              url.pathname === "/revoke",
+          ).length,
+          1,
+        );
+      });
+    });
+  });
+
+  it("rejects mismatched, expired, and replayed state plus unverified or mismatched mailbox identities", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-state-owner" });
+      const other = await loggedInUser({ username: "gmail-state-other" });
+      const externalRequests = [];
+      let identityMode = "unverified";
+
+      await withGoogleFetch(async (url, init) => {
+        externalRequests.push({ url, init });
+        if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+          return googleJson({
+            access_token: "identity-check-access-token",
+            refresh_token: "identity-check-refresh-token",
+          });
+        }
+        if (url.hostname === "openidconnect.googleapis.com") {
+          return googleJson({
+            email: owner.user.email,
+            email_verified: identityMode !== "unverified",
+          });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/users/me/profile")
+        ) {
+          return googleJson({
+            emailAddress:
+              identityMode === "mailbox-mismatch"
+                ? "different-mailbox@example.test"
+                : owner.user.email,
+            historyId: "gmail-identity-history",
+          });
+        }
+        throw new Error(`Unexpected Google request: ${url}`);
+      }, async () => {
+        const mismatchedCookieFlow = await startGmailOAuth(owner.cookie);
+        const badCookie = `${mismatchedCookieFlow.cookie.split("=")[0]}=wrong-nonce`;
+        let callback = await finishGmailOAuth(owner.cookie, mismatchedCookieFlow, {
+          oauthCookie: badCookie,
+        });
+        assert.equal(
+          callback.response.status,
+          303,
+          JSON.stringify(callback.body),
+        );
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(externalRequests.length, 0);
+
+        const expiredFlow = await startGmailOAuth(owner.cookie);
+        const expiredPayload = Buffer.from(
+          JSON.stringify({
+            userId: owner.user.id,
+            nonce: expiredFlow.nonce,
+            expiresAt: Date.now() - 1,
+          }),
+        ).toString("base64url");
+        const expiredState = `${expiredPayload}.${securityModule.hmac(
+          expiredPayload,
+          "gmail-mailbox-oauth-state",
+        )}`;
+        callback = await finishGmailOAuth(owner.cookie, expiredFlow, {
+          state: expiredState,
+        });
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(externalRequests.length, 0);
+
+        const wrongUserFlow = await startGmailOAuth(owner.cookie);
+        callback = await finishGmailOAuth(other.cookie, wrongUserFlow);
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(externalRequests.length, 0);
+
+        const unverifiedFlow = await startGmailOAuth(owner.cookie);
+        identityMode = "unverified";
+        callback = await finishGmailOAuth(owner.cookie, unverifiedFlow);
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(
+          externalRequests.some(
+            ({ url }) =>
+              url.hostname === "gmail.googleapis.com" &&
+              url.pathname.endsWith("/users/me/profile"),
+          ),
+          false,
+          "an unverified account must be rejected before mailbox metadata is trusted",
+        );
+
+        const mismatchedMailboxFlow = await startGmailOAuth(owner.cookie);
+        identityMode = "mailbox-mismatch";
+        callback = await finishGmailOAuth(owner.cookie, mismatchedMailboxFlow);
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(
+          await db
+            .select()
+            .from(dbModule.gmailMailboxConnectionsTable)
+            .then((rows) => rows.length),
+          0,
+        );
+      });
+    });
+  });
+
+  it("requires reconnection after refresh failure without advancing the Gmail checkpoint", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-refresh-owner" });
+      const refreshToken = "refresh-token-that-google-rejects";
+      const originalHistoryId = "gmail-history-before-refresh-failure";
+      await db.insert(dbModule.gmailMailboxConnectionsTable).values({
+        userId: owner.user.id,
+        emailAddress: owner.user.email,
+        refreshTokenEncrypted: securityModule.encryptSecret(refreshToken),
+        historyId: originalHistoryId,
+        syncStatus: "connected",
+        nextSyncAt: new Date(Date.now() - 60_000),
+      });
+
+      const refreshRequests = [];
+      await withGoogleFetch(async (url, init) => {
+        refreshRequests.push({ url, init });
+        assert.equal(url.hostname, "oauth2.googleapis.com");
+        assert.equal(url.pathname, "/token");
+        const fields = new URLSearchParams(init?.body);
+        assert.equal(fields.get("grant_type"), "refresh_token");
+        assert.equal(fields.get("refresh_token"), refreshToken);
+        return googleJson({ error: "invalid_grant" }, 400);
+      }, async () => {
+        await gmailMailboxModule.syncDueGmailMailboxes();
+      });
+
+      assert.equal(refreshRequests.length, 1);
+      const [afterFailure] = await db
+        .select()
+        .from(dbModule.gmailMailboxConnectionsTable)
+        .where(eq(dbModule.gmailMailboxConnectionsTable.userId, owner.user.id));
+      assert.equal(afterFailure.syncStatus, "reauthorization_required");
+      assert.equal(afterFailure.historyId, originalHistoryId);
+      assert.match(afterFailure.lastError, /Reconnect the mailbox/i);
+      assert.ok(afterFailure.nextSyncAt.getTime() > Date.now());
+
+      const status = await api("/sending/gmail/connection", {
+        cookie: owner.cookie,
+      });
+      assert.equal(status.response.status, 200);
+      assert.equal(status.body.syncStatus, "reauthorization_required");
+      assert.match(status.body.lastError, /Reconnect the mailbox/i);
+      assert.equal(JSON.stringify(status.body).includes(refreshToken), false);
+    });
   });
 });
 
