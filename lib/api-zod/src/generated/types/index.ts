@@ -79,6 +79,8 @@ export * from './getCampaignDeliveryReportParams';
 export * from './gmailMailboxConnection';
 export * from './gmailMailboxConnectionSyncStatus';
 export * from './gmailOAuthStart';
+export * from './googleOAuthSettings';
+export * from './googleOAuthSettingsInput';
 export * from './healthStatus';
 export * from './importContactsParams';
 export * from './listAdminFinancePaymentsAccountStatus';

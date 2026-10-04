@@ -1601,6 +1601,35 @@ export interface ApplicationEmailSettingsInput {
   replyTo?: string;
 }
 
+export interface GoogleOAuthSettings {
+  configured: boolean;
+  /** @nullable */
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  /** @nullable */
+  redirectUri: string | null;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface GoogleOAuthSettingsInput {
+  /**
+     * @minLength 1
+     * @maxLength 512
+     */
+  clientId: string;
+  /**
+     * @minLength 1
+     * @maxLength 512
+     */
+  clientSecret?: string;
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     */
+  redirectUri: string;
+}
+
 export interface TestEmailInput {
   toEmail: string;
 }

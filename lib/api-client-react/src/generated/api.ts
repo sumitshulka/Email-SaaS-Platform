@@ -58,6 +58,8 @@ import type {
   GetCampaignDeliveryReportParams,
   GmailMailboxConnection,
   GmailOAuthStart,
+  GoogleOAuthSettings,
+  GoogleOAuthSettingsInput,
   HealthStatus,
   ImportContactsParams,
   ListAdminFinancePaymentsParams,
@@ -4485,6 +4487,171 @@ export const useUpdateApplicationEmailSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateApplicationEmailSettingsMutationOptions(options));
+    }
+
+export const getGetGoogleOAuthSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/google-oauth`
+}
+
+/**
+ * @summary Get masked Google OAuth configuration
+ */
+export const getGoogleOAuthSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<GoogleOAuthSettings> => {
+
+  return customFetch<GoogleOAuthSettings>(getGetGoogleOAuthSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGoogleOAuthSettingsQueryKey = () => {
+    return [
+    `/api/admin/settings/google-oauth`
+    ] as const;
+    }
+
+
+export const getGetGoogleOAuthSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getGoogleOAuthSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoogleOAuthSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGoogleOAuthSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGoogleOAuthSettings>>> = ({ signal }) => getGoogleOAuthSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGoogleOAuthSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGoogleOAuthSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getGoogleOAuthSettings>>>
+export type GetGoogleOAuthSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get masked Google OAuth configuration
+ */
+
+export function useGetGoogleOAuthSettings<TData = Awaited<ReturnType<typeof getGoogleOAuthSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoogleOAuthSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGoogleOAuthSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateGoogleOAuthSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/google-oauth`
+}
+
+/**
+ * @summary Save Google OAuth credentials and callback URL
+ */
+export const updateGoogleOAuthSettings = async (googleOAuthSettingsInput: GoogleOAuthSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<GoogleOAuthSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GoogleOAuthSettings>(getUpdateGoogleOAuthSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(googleOAuthSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateGoogleOAuthSettingsMutationKey = () => ['updateGoogleOAuthSettings'] as const;
+
+export const getUpdateGoogleOAuthSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGoogleOAuthSettings>>, TError,UpdateGoogleOAuthSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGoogleOAuthSettings>>, TError,UpdateGoogleOAuthSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateGoogleOAuthSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGoogleOAuthSettings>>, UpdateGoogleOAuthSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateGoogleOAuthSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGoogleOAuthSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateGoogleOAuthSettings>>>
+    export type UpdateGoogleOAuthSettingsMutationBody = BodyType<GoogleOAuthSettingsInput>
+    export type UpdateGoogleOAuthSettingsMutationError = ErrorType<unknown>
+    export type UpdateGoogleOAuthSettingsMutationVariables = {data: BodyType<GoogleOAuthSettingsInput>}
+
+    /**
+ * @summary Save Google OAuth credentials and callback URL
+ */
+export const useUpdateGoogleOAuthSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGoogleOAuthSettings>>, TError,UpdateGoogleOAuthSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGoogleOAuthSettings>>,
+        TError,
+        UpdateGoogleOAuthSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateGoogleOAuthSettingsMutationOptions(options));
     }
 
 export const getSendApplicationEmailTestUrl = () => {

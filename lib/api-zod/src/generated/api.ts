@@ -2267,6 +2267,44 @@ export const UpdateApplicationEmailSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get masked Google OAuth configuration
+ */
+export const GetGoogleOAuthSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "clientId": zod.string().nullable(),
+  "clientSecretConfigured": zod.boolean(),
+  "redirectUri": zod.string().url().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save Google OAuth credentials and callback URL
+ */
+export const updateGoogleOAuthSettingsBodyClientIdMax = 512;
+
+export const updateGoogleOAuthSettingsBodyClientSecretMax = 512;
+
+export const updateGoogleOAuthSettingsBodyRedirectUriMax = 2048;
+
+
+
+export const UpdateGoogleOAuthSettingsBody = zod.object({
+  "clientId": zod.string().min(1).max(updateGoogleOAuthSettingsBodyClientIdMax),
+  "clientSecret": zod.string().min(1).max(updateGoogleOAuthSettingsBodyClientSecretMax).optional(),
+  "redirectUri": zod.string().url().min(1).max(updateGoogleOAuthSettingsBodyRedirectUriMax)
+})
+
+export const UpdateGoogleOAuthSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "clientId": zod.string().nullable(),
+  "clientSecretConfigured": zod.boolean(),
+  "redirectUri": zod.string().url().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Send a test message using the application SMTP account
  */
 export const SendApplicationEmailTestBody = zod.object({

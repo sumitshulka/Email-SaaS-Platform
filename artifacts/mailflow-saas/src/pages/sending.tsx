@@ -237,8 +237,11 @@ export function SendingSettingsPage() {
       </div>
       {gmailConnection.isLoading ? <p className="mt-4 text-[12px] text-[#778291]">Checking Gmail connection status…</p>
         : gmailConnection.isError || !gmailConnection.data ? <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[12px] text-[#99501e]"><span>Gmail connection status could not be loaded.</span><button type="button" className={outlineButton} onClick={() => void gmailConnection.refetch()}>Retry</button></div>
-        : <div className="mt-4 rounded-md bg-[#f7f9fb] p-4">
-          {!gmailConnection.data.configured && <p data-testid="text-gmail-oauth-setup" className="text-[12px] leading-5 text-[#99501e]">Google OAuth is not configured for this app. Set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI in workspace secrets/settings. Register this callback URI in the Google OAuth client: <span className="mono break-all">{gmailConnection.data.redirectUri || 'Configure GOOGLE_OAUTH_REDIRECT_URI first; expected path /api/sending/gmail/oauth/callback.'}</span> Google’s restricted Gmail read-only scope may require Google verification before external users can consent.</p>}
+        : !gmailConnection.data.configured
+          ? <div className="mt-4 rounded-md border border-[#e4e8ed] bg-[#f7f9fb] p-4">
+            <p data-testid="text-gmail-oauth-setup" className="text-[12px] leading-5 text-[#596777]">Gmail bounce monitoring is not available yet. Your platform administrator will enable mailbox connections when setup is complete.</p>
+          </div>
+          : <div className="mt-4 rounded-md bg-[#f7f9fb] p-4">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#596777]">
             <span>Status: <strong className="text-[#26364a]">{gmailConnection.data.syncStatus.replace(/_/g, ' ')}</strong></span>
             {gmailConnection.data.emailAddress && <span>Mailbox: <strong className="text-[#26364a]">{gmailConnection.data.emailAddress}</strong></span>}

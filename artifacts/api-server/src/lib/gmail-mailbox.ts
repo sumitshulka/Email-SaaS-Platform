@@ -18,6 +18,7 @@ import {
   gmailOAuthStatesTable,
   gmailMailboxConnectionsTable,
 } from "@workspace/db";
+import { getGoogleOAuthConfiguration } from "./google-oauth-configuration";
 import { decryptSecret, encryptSecret, hmac, randomToken, constantTimeEqual } from "./security";
 import { logger } from "./logger";
 import { requireUserRole } from "./session";
@@ -35,31 +36,6 @@ const OAUTH_STATE_PURPOSE = "gmail-mailbox-oauth-state";
 const OAUTH_COOKIE_PATH = "/api/sending/gmail/oauth/callback";
 let workerTimer: ReturnType<typeof setInterval> | null = null;
 let workerRunning = false;
-
-type OAuthConfig = {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-};
-
-function readOAuthConfig(): OAuthConfig | null {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim();
-  if (!clientId || !clientSecret || !redirectUri) return null;
-  try {
-    const parsed = new URL(redirectUri);
-    if (
-      parsed.protocol !== "https:" &&
-      !(parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname))
-    ) {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-  return { clientId, clientSecret, redirectUri };
-}
 
 function oauthCookieOptions(secure: boolean) {
   return {
@@ -166,8 +142,8 @@ function redirectToSettings(
   req: Request,
   res: ExpressResponse,
   result: "connected" | "failed",
+  callbackUri?: string | null,
 ) {
-  const callbackUri = readOAuthConfig()?.redirectUri;
   const callback = callbackUri ? new URL(callbackUri) : null;
   const basePath = process.env.BASE_PATH?.replace(/\/+$/, "") ?? "";
   const callbackSuffix = "/api/sending/gmail/oauth/callback";
@@ -195,10 +171,10 @@ export function createGmailMailboxRouter(): IRouter {
       .from(gmailMailboxConnectionsTable)
       .where(eq(gmailMailboxConnectionsTable.userId, userId))
       .limit(1);
-    const config = readOAuthConfig();
+    const config = await getGoogleOAuthConfiguration();
     res.json({
       configured: config !== null,
-      redirectUri: config?.redirectUri ?? null,
+      redirectUri: null,
       connected: Boolean(connection),
       emailAddress: connection?.emailAddress ?? null,
       syncStatus: connection?.syncStatus ?? "disconnected",
@@ -215,10 +191,10 @@ export function createGmailMailboxRouter(): IRouter {
   "/sending/gmail/connect",
   requireUserRole,
   async (req, res): Promise<void> => {
-    const config = readOAuthConfig();
+    const config = await getGoogleOAuthConfiguration();
     if (!config) {
       res.status(503).json({
-        error: "Google OAuth is not configured for this application.",
+        error: "Gmail bounce monitoring is not available yet. Contact the platform administrator.",
         code: "GMAIL_OAUTH_NOT_CONFIGURED",
       });
       return;
@@ -252,7 +228,7 @@ export function createGmailMailboxRouter(): IRouter {
   "/sending/gmail/oauth/callback",
   requireUserRole,
   async (req, res): Promise<void> => {
-    const config = readOAuthConfig();
+    const config = await getGoogleOAuthConfiguration();
     const state =
       typeof req.query.state === "string" ? req.query.state : "";
     const params = parseOAuthState(state, req.cookies?.[OAUTH_COOKIE]);
@@ -269,11 +245,11 @@ export function createGmailMailboxRouter(): IRouter {
       typeof req.query.code !== "string" ||
       req.query.error
     ) {
-      redirectToSettings(req, res, "failed");
+      redirectToSettings(req, res, "failed", config?.redirectUri);
       return;
     }
     if (!(await consumeOAuthNonce(params.nonce))) {
-      redirectToSettings(req, res, "failed");
+      redirectToSettings(req, res, "failed", config?.redirectUri);
       return;
     }
 
@@ -380,7 +356,7 @@ export function createGmailMailboxRouter(): IRouter {
             updatedAt: now,
           },
         });
-      redirectToSettings(req, res, "connected");
+      redirectToSettings(req, res, "connected", config.redirectUri);
     } catch (error) {
       if (!identityVerified && newlyIssuedGoogleToken) {
         await revokeGoogleToken(newlyIssuedGoogleToken);
@@ -392,7 +368,7 @@ export function createGmailMailboxRouter(): IRouter {
         },
         "Gmail mailbox connection failed",
       );
-      redirectToSettings(req, res, "failed");
+      redirectToSettings(req, res, "failed", config.redirectUri);
     }
   },
 );
@@ -420,7 +396,7 @@ export function createGmailMailboxRouter(): IRouter {
 }
 
 async function getAccessToken(refreshToken: string): Promise<string> {
-  const config = readOAuthConfig();
+  const config = await getGoogleOAuthConfiguration();
   if (!config) throw new Error("Google OAuth configuration is incomplete.");
   const response = await postOAuthForm({
     client_id: config.clientId,

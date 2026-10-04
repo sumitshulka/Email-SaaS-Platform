@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
-import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Save, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck } from 'lucide-react';
 import { getGetContactQueryKey, getListContactsQueryKey, useGetContact, useListContactLists, useUpdateContact } from '@workspace/api-client-react';
 import type { Contact, ContactUpdate } from '@workspace/api-client-react';
 
@@ -40,11 +40,30 @@ function DataField({ label: title, value, testId }: { label: string; value: stri
 function InputField({ title, value, onChange, testId, type = 'text' }: { title: string; value: string; onChange: (value: string) => void; testId: string; type?: string }) {
   return <label className="block min-w-0"><span className={label}>{title}</span><input className={input} type={type} data-testid={testId} value={value} onChange={event => onChange(event.target.value)} /></label>;
 }
-function TextAreaField({ title, value, onChange, testId, preview = false }: { title: string; value: string; onChange: (value: string) => void; testId: string; preview?: boolean }) {
+function TextAreaField({ title, value, onChange, testId }: { title: string; value: string; onChange: (value: string) => void; testId: string }) {
   return <label className="block min-w-0"><span className={label}>{title}</span>
-    {preview && <span data-testid={`${testId}-full-value`} className="mb-2 block min-h-8 break-all rounded-md border border-[#e8edf1] bg-[#f8fafb] px-3 py-2 font-mono text-[11px] leading-5 text-[#3e536b]">{value || <span className="font-sans text-[#a0a8b3]">Not provided</span>}</span>}
     <textarea className="min-h-[84px] w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 font-mono text-[12px] leading-5 text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:font-sans placeholder:text-[#a0a8b3]" data-testid={testId} value={value} onChange={event => onChange(event.target.value)} wrap="soft" />
   </label>;
+}
+function OnlineProfileField({ title, value, onChange, testId, editing, onToggleEdit }: {
+  title: string;
+  value: string;
+  onChange: (value: string) => void;
+  testId: string;
+  editing: boolean;
+  onToggleEdit: () => void;
+}) {
+  return <div className="min-w-0">
+    <div className="mb-1.5 flex items-center justify-between gap-3">
+      <span className={label}>{title}</span>
+      <button type="button" aria-label={`${editing ? 'Finish editing' : 'Edit'} ${title}`} onClick={onToggleEdit} className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[10px] font-semibold text-[#55708e] hover:bg-[#edf4fc] hover:text-[#174f99]">
+        {editing ? 'Done' : <><Pencil className="h-3 w-3"/>Edit</>}
+      </button>
+    </div>
+    {editing
+      ? <input aria-label={title} className={input} type="text" data-testid={testId} value={value} onChange={event => onChange(event.target.value)} />
+      : <div data-testid={`${testId}-full-value`} className="min-h-10 break-all rounded-md border border-[#e8edf1] bg-[#f8fafb] px-3 py-2 font-mono text-[11px] leading-5 text-[#3e536b]">{value || <span className="font-sans text-[#a0a8b3]">Not provided</span>}</div>}
+  </div>;
 }
 function Section({ title, eyebrow, children }: { title: string; eyebrow: string; children: ReactNode }) {
   return <section className={`${panel} overflow-hidden`}>
@@ -66,12 +85,16 @@ export function ContactDetailPage() {
   const update = useUpdateContact();
   const qc = useQueryClient();
   const [form, setForm] = useState<Editable | null>(null);
+  const [editingProfiles, setEditingProfiles] = useState<Set<NullableField>>(() => new Set());
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const contact = query.data as Contact | undefined;
 
   // Reinitialize when a contact is first loaded or the server returns a newer revision.
   useEffect(() => {
-    if (contact) setForm(fromContact(contact));
+    if (contact) {
+      setForm(fromContact(contact));
+      setEditingProfiles(new Set());
+    }
   }, [contact?.id, contact?.updatedAt]);
 
   const change = (key: keyof Editable, value: string | boolean) =>
@@ -107,6 +130,12 @@ export function ContactDetailPage() {
 
   const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
   const setString = (key: Exclude<keyof Editable, 'subscribed'>) => (value: string) => change(key, value);
+  const toggleProfileEdit = (key: NullableField) => setEditingProfiles(current => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
 
   return <div className="fade-in">
     <div className="mb-5"><Link href="/contacts" data-testid="link-back-contacts" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Back to contacts</Link></div>
@@ -168,15 +197,15 @@ export function ContactDetailPage() {
         </Section>
         <Section title="Online profiles" eyebrow="WEB / SOCIAL">
           <div className="grid gap-4">
-            <TextAreaField title="LinkedIn URL" value={form.linkedinUrl} onChange={setString('linkedinUrl')} testId="input-detail-linkedin" preview/>
-            <TextAreaField title="Personal website URL" value={form.websiteUrl} onChange={setString('websiteUrl')} testId="input-detail-website" preview/>
-            <TextAreaField title="Twitter URL" value={form.twitterUrl} onChange={setString('twitterUrl')} testId="input-detail-twitter" preview/>
-            <TextAreaField title="Facebook URL" value={form.facebookUrl} onChange={setString('facebookUrl')} testId="input-detail-facebook" preview/>
-            <TextAreaField title="Instagram URL" value={form.instagramUrl} onChange={setString('instagramUrl')} testId="input-detail-instagram" preview/>
-            <TextAreaField title="Company website URL" value={form.companyWebsiteUrl} onChange={setString('companyWebsiteUrl')} testId="input-detail-company-website" preview/>
-            <TextAreaField title="Company LinkedIn URL" value={form.companyLinkedinUrl} onChange={setString('companyLinkedinUrl')} testId="input-detail-company-linkedin" preview/>
+            <OnlineProfileField title="LinkedIn URL" value={form.linkedinUrl} onChange={setString('linkedinUrl')} testId="input-detail-linkedin" editing={editingProfiles.has('linkedinUrl')} onToggleEdit={() => toggleProfileEdit('linkedinUrl')}/>
+            <OnlineProfileField title="Personal website URL" value={form.websiteUrl} onChange={setString('websiteUrl')} testId="input-detail-website" editing={editingProfiles.has('websiteUrl')} onToggleEdit={() => toggleProfileEdit('websiteUrl')}/>
+            <OnlineProfileField title="Twitter URL" value={form.twitterUrl} onChange={setString('twitterUrl')} testId="input-detail-twitter" editing={editingProfiles.has('twitterUrl')} onToggleEdit={() => toggleProfileEdit('twitterUrl')}/>
+            <OnlineProfileField title="Facebook URL" value={form.facebookUrl} onChange={setString('facebookUrl')} testId="input-detail-facebook" editing={editingProfiles.has('facebookUrl')} onToggleEdit={() => toggleProfileEdit('facebookUrl')}/>
+            <OnlineProfileField title="Instagram URL" value={form.instagramUrl} onChange={setString('instagramUrl')} testId="input-detail-instagram" editing={editingProfiles.has('instagramUrl')} onToggleEdit={() => toggleProfileEdit('instagramUrl')}/>
+            <OnlineProfileField title="Company website URL" value={form.companyWebsiteUrl} onChange={setString('companyWebsiteUrl')} testId="input-detail-company-website" editing={editingProfiles.has('companyWebsiteUrl')} onToggleEdit={() => toggleProfileEdit('companyWebsiteUrl')}/>
+            <OnlineProfileField title="Company LinkedIn URL" value={form.companyLinkedinUrl} onChange={setString('companyLinkedinUrl')} testId="input-detail-company-linkedin" editing={editingProfiles.has('companyLinkedinUrl')} onToggleEdit={() => toggleProfileEdit('companyLinkedinUrl')}/>
           </div>
-          <p className="mt-3 break-words text-[10px] leading-4 text-[#8a95a2]">Each full saved address is shown above its editable field. Values remain plain text and wrap across lines.</p>
+          <p className="mt-3 text-[10px] leading-4 text-[#8a95a2]">Select Edit to add or change a profile, then save your contact changes.</p>
         </Section>
         <Section title="Workspace controls" eyebrow="CONSENT / MEMBERSHIP">
           <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#e7ebef] bg-[#fbfcfd] p-3">

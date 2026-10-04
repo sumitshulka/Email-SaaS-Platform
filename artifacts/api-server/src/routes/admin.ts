@@ -17,6 +17,7 @@ import {
   GetAdminDashboardResponse,
   GetAdminSettingsResponse,
   GetApplicationEmailSettingsResponse,
+  GetGoogleOAuthSettingsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
   SendApplicationEmailTestBody,
@@ -30,6 +31,8 @@ import {
   DeleteAdminUserResponse,
   UpdateApplicationEmailSettingsBody,
   UpdateApplicationEmailSettingsResponse,
+  UpdateGoogleOAuthSettingsBody,
+  UpdateGoogleOAuthSettingsResponse,
 } from "@workspace/api-zod";
 import {
   applicationEmailConfigurationTable,
@@ -51,6 +54,11 @@ import {
 import { sendApplicationEmail } from "../lib/application-email";
 import { getPlatformSettings } from "../lib/platform-settings";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
+import {
+  getGoogleOAuthSettingsStatus,
+  isValidGoogleOAuthRedirectUri,
+  saveGoogleOAuthConfiguration,
+} from "../lib/google-oauth-configuration";
 import { requireSuperadmin } from "../lib/session";
 
 const router: IRouter = Router();
@@ -524,5 +532,73 @@ router.post("/admin/settings/email/test", requireSuperadmin, async (req, res): P
     });
   }
 });
+
+router.get(
+  "/admin/settings/google-oauth",
+  requireSuperadmin,
+  async (_req, res): Promise<void> => {
+    res.json(
+      GetGoogleOAuthSettingsResponse.parse(
+        await getGoogleOAuthSettingsStatus(),
+      ),
+    );
+  },
+);
+
+router.put(
+  "/admin/settings/google-oauth",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = UpdateGoogleOAuthSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Some Google OAuth settings are invalid.",
+        code: "INVALID_GOOGLE_OAUTH_SETTINGS",
+      });
+      return;
+    }
+
+    const clientId = parsed.data.clientId.trim();
+    const redirectUri = parsed.data.redirectUri.trim();
+    const clientSecret = parsed.data.clientSecret?.trim();
+    if (!clientId || !isValidGoogleOAuthRedirectUri(redirectUri)) {
+      res.status(400).json({
+        error:
+          "Enter a client ID and an HTTPS callback URL ending in /api/sending/gmail/oauth/callback.",
+        code: "INVALID_GOOGLE_OAUTH_SETTINGS",
+      });
+      return;
+    }
+
+    const currentStatus = await getGoogleOAuthSettingsStatus();
+    if (!clientSecret && !currentStatus.clientSecretConfigured) {
+      res.status(400).json({
+        error: "Enter the Google OAuth client secret to finish setup.",
+        code: "GOOGLE_OAUTH_SECRET_REQUIRED",
+      });
+      return;
+    }
+
+    await saveGoogleOAuthConfiguration({
+      clientId,
+      clientSecret,
+      redirectUri,
+      updatedBy: req.authUser!.id,
+    });
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "google_oauth_configuration.updated",
+      entity: "system_configuration",
+      entityId: "google_oauth",
+      ipAddress: req.ip,
+      metadata: { clientSecretChanged: Boolean(clientSecret) },
+    });
+    res.json(
+      UpdateGoogleOAuthSettingsResponse.parse(
+        await getGoogleOAuthSettingsStatus(),
+      ),
+    );
+  },
+);
 
 export default router;

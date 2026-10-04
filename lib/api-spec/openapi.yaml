@@ -1320,6 +1320,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApplicationEmailSettings"
+  /admin/settings/google-oauth:
+    get:
+      operationId: getGoogleOAuthSettings
+      tags: [settings]
+      summary: Get masked Google OAuth configuration
+      responses:
+        "200":
+          description: Google OAuth setup status without the client secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleOAuthSettings"
+    put:
+      operationId: updateGoogleOAuthSettings
+      tags: [settings]
+      summary: Save Google OAuth credentials and callback URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleOAuthSettingsInput"
+      responses:
+        "200":
+          description: Saved Google OAuth setup status without the client secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleOAuthSettings"
   /admin/settings/email/test:
     post:
       operationId: sendApplicationEmailTest
@@ -2305,6 +2334,22 @@ components:
         fromEmail: { type: string, format: email }
         replyTo: { type: string, format: email }
       required: [provider, host, port, encryption, fromName, fromEmail]
+    GoogleOAuthSettings:
+      type: object
+      properties:
+        configured: { type: boolean }
+        clientId: { type: ["string", "null"] }
+        clientSecretConfigured: { type: boolean }
+        redirectUri: { type: ["string", "null"], format: uri }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [configured, clientId, clientSecretConfigured, redirectUri, updatedAt]
+    GoogleOAuthSettingsInput:
+      type: object
+      properties:
+        clientId: { type: string, minLength: 1, maxLength: 512 }
+        clientSecret: { type: string, minLength: 1, maxLength: 512 }
+        redirectUri: { type: string, format: uri, minLength: 1, maxLength: 2048 }
+      required: [clientId, redirectUri]
     TestEmailInput:
       type: object
       properties:

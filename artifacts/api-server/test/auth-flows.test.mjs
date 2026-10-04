@@ -548,23 +548,25 @@ async function api(
 }
 
 async function withGmailOAuthConfig(run) {
-  const keys = {
-    GOOGLE_OAUTH_CLIENT_ID: "mailflow-test-client",
-    GOOGLE_OAUTH_CLIENT_SECRET: "mailflow-test-secret",
-    GOOGLE_OAUTH_REDIRECT_URI:
-      "http://localhost/api/sending/gmail/oauth/callback",
+  const key = "google_oauth";
+  const value = {
+    clientId: "mailflow-test-client",
+    clientSecretEncrypted: securityModule.encryptSecret("mailflow-test-secret"),
+    redirectUri: "http://localhost/api/sending/gmail/oauth/callback",
   };
-  const previous = Object.fromEntries(
-    Object.keys(keys).map((key) => [key, process.env[key]]),
-  );
-  Object.assign(process.env, keys);
+  await db
+    .insert(dbModule.systemConfigurationTable)
+    .values({ key, value })
+    .onConflictDoUpdate({
+      target: dbModule.systemConfigurationTable.key,
+      set: { value, updatedAt: new Date() },
+    });
   try {
     return await run();
   } finally {
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
+    await db
+      .delete(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, key));
   }
 }
 
@@ -1814,6 +1816,109 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(deletedSession.revokedAt);
     const deletedAgain = await login(deletedUser.email);
     assert.equal(deletedAgain.response.status, 401);
+  });
+});
+
+describe("superadmin Google OAuth setup", { concurrency: false }, () => {
+  it("restricts setup to superadmins, encrypts credentials, and enables user connection only after saving", async () => {
+    const admin = await loggedInUser({
+      username: "google-oauth-superadmin",
+      role: "SUPERADMIN",
+    });
+    const user = await loggedInUser({ username: "google-oauth-regular-user" });
+    const settingsPath = "/admin/settings/google-oauth";
+
+    const deniedRead = await api(settingsPath, { cookie: user.cookie });
+    assert.equal(deniedRead.response.status, 403);
+    const initial = await api(settingsPath, { cookie: admin.cookie });
+    assert.equal(initial.response.status, 200);
+    assert.equal(initial.body.configured, false);
+    assert.equal(initial.body.clientSecretConfigured, false);
+
+    const rejectedCallback = await api(settingsPath, {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: {
+        clientId: "mailflow-test-client",
+        clientSecret: "mailflow-test-secret",
+        redirectUri: "https://example.test/not-the-google-callback",
+      },
+    });
+    assert.equal(rejectedCallback.response.status, 400);
+
+    const input = {
+      clientId: "mailflow-test-client",
+      clientSecret: "mailflow-test-secret",
+      redirectUri: "http://localhost/api/sending/gmail/oauth/callback",
+    };
+    const saved = await api(settingsPath, {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: input,
+    });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.configured, true);
+    assert.equal(saved.body.clientSecretConfigured, true);
+    assert.equal(Object.hasOwn(saved.body, "clientSecret"), false);
+    assert.equal(JSON.stringify(saved.body).includes(input.clientSecret), false);
+
+    const [stored] = await db
+      .select()
+      .from(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, "google_oauth"));
+    assert.ok(stored);
+    assert.notEqual(stored.value.clientSecretEncrypted, input.clientSecret);
+    assert.equal(Object.hasOwn(stored.value, "clientSecret"), false);
+    assert.equal(JSON.stringify(stored.value).includes(input.clientSecret), false);
+
+    const deniedWrite = await api(settingsPath, {
+      method: "PUT",
+      cookie: user.cookie,
+      body: input,
+    });
+    assert.equal(deniedWrite.response.status, 403);
+
+    const connectionStatus = await api("/sending/gmail/connection", {
+      cookie: user.cookie,
+    });
+    assert.equal(connectionStatus.body.configured, true);
+    assert.equal(connectionStatus.body.redirectUri, null);
+    assert.equal(Object.hasOwn(connectionStatus.body, "clientId"), false);
+
+    const connect = await api("/sending/gmail/connect", {
+      method: "POST",
+      cookie: user.cookie,
+    });
+    assert.equal(connect.response.status, 200);
+    const authorizationUrl = new URL(connect.body.authorizationUrl);
+    assert.equal(
+      authorizationUrl.searchParams.get("client_id"),
+      input.clientId,
+    );
+    assert.equal(
+      authorizationUrl.searchParams.get("redirect_uri"),
+      input.redirectUri,
+    );
+
+    const updated = await api(settingsPath, {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: {
+        clientId: "mailflow-updated-client",
+        redirectUri: input.redirectUri,
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.configured, true);
+    const [updatedStored] = await db
+      .select()
+      .from(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, "google_oauth"));
+    assert.equal(
+      updatedStored.value.clientSecretEncrypted,
+      stored.value.clientSecretEncrypted,
+      "leaving the secret blank should preserve the existing encrypted secret",
+    );
   });
 });
 
