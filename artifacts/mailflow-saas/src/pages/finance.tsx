@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
-  ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleAlert, CreditCard,
+  ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleAlert, CreditCard,
   Filter, Landmark, RefreshCw, Search, ShieldCheck, SlidersHorizontal,
 } from 'lucide-react';
+import {
+  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
+} from '@/components/ui/sheet';
 import {
   getListAdminFinancePaymentsQueryKey, useListAdminFinancePayments,
   useListAdminSubscriptionPackages,
@@ -73,7 +76,7 @@ function AccountState({ status }: { status: AdminFinancePayment['account']['stat
 function EvidenceId({ label, value }: { label: string; value: string | null }) {
   return <div className="min-w-0">
     <div className="text-[9px] font-semibold uppercase tracking-[.08em] text-[#89938e]">{label}</div>
-    <div className="mono mt-1 truncate text-[10px] text-[#40524d]" title={value || undefined}>{value || 'Not recorded'}</div>
+    <div className="mono mt-1 break-all text-[10px] text-[#40524d]" title={value || undefined}>{value || 'Not recorded'}</div>
   </div>;
 }
 
@@ -88,6 +91,7 @@ function SortControl({ label, field, active, direction, onSort, disabled = false
 
 export default function AdminFinancePage() {
   const [filters, setFilters] = useState<FinanceFilters>(defaults);
+  const [selectedPayment, setSelectedPayment] = useState<AdminFinancePayment | null>(null);
   const params = useMemo<ListAdminFinancePaymentsParams>(() => ({
     ...(filters.search.trim() ? { search: filters.search.trim() } : {}),
     ...(filters.packageId ? { packageId: filters.packageId } : {}),
@@ -195,43 +199,69 @@ export default function AdminFinancePage() {
     </section> : <>
       <section className="overflow-hidden rounded-lg border border-[#dfe6e1] bg-[#fffefa]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8ece7] px-4 py-3.5 md:px-5">
-          <div><h2 className="text-[13px] font-bold text-[#2d423b]">Payment records</h2><p className="mt-1 text-[10px] text-[#7f8983]">Evidence, customer identity, and term data are shown together.</p></div>
+          <div><h2 className="text-[13px] font-bold text-[#2d423b]">Payment records</h2><p className="mt-1 text-[10px] text-[#7f8983]">Customer, subscription, and payment details open when you select a record.</p></div>
           <div data-testid="text-finance-results-count" className="mono rounded-md bg-[#eef3ee] px-2.5 py-1.5 text-[10px] text-[#566c61]">{data.total.toLocaleString()} records</div>
         </div>
-        <div className="hidden grid-cols-[minmax(150px,1.25fr)_minmax(185px,1.45fr)_minmax(145px,1.1fr)_minmax(190px,1.55fr)_minmax(118px,.85fr)] gap-4 border-b border-[#e8ece7] bg-[#f5f7f2] px-5 py-3 lg:grid">
-          <div className="flex items-center"><SortControl label="Captured" field="capturedAt" active={filters.sortBy === 'capturedAt'} direction={filters.sortDirection} onSort={sortBy}/></div>
-          <div className="flex items-center"><SortControl label="Customer account" field="account" active={filters.sortBy === 'account'} direction={filters.sortDirection} onSort={sortBy}/></div>
-          <div className="flex items-center"><SortControl label="Subscription" field="subscription" active={filters.sortBy === 'subscription'} direction={filters.sortDirection} onSort={sortBy}/></div>
-          <div className="mono text-[9px] font-medium uppercase tracking-[.13em] text-[#7f8b83]">Payment evidence</div>
-          <div className="flex items-center justify-end"><SortControl label="Amount" field="amount" active={filters.sortBy === 'amount'} direction={filters.sortDirection} onSort={sortBy} disabled={!filters.currency}/></div>
+        <div className="flex items-center gap-1.5 border-b border-[#e8ece7] bg-[#f5f7f2] px-4 py-2 text-[10px] text-[#78847d] md:px-5">
+          <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-[#548077]"/>
+          <span>Scroll horizontally to see all columns. Select a row to view full payment references.</span>
         </div>
-        <div className="divide-y divide-[#edf0eb]">
-          {data.rows.map(payment => <article key={payment.id} data-testid={`row-finance-payment-${payment.id}`} className="grid gap-4 px-4 py-4 transition-colors hover:bg-[#fbfcf8] lg:grid-cols-[minmax(150px,1.25fr)_minmax(185px,1.45fr)_minmax(145px,1.1fr)_minmax(190px,1.55fr)_minmax(118px,.85fr)] lg:items-center lg:px-5">
-            <div className="flex items-start justify-between gap-3 lg:block">
-              <div><div className="mono text-[10px] font-semibold text-[#3b544b]">{formatDate(payment.capturedAt)}</div><div className="mt-1.5 flex items-center gap-2"><PaymentStatus status={payment.status}/><span className="text-[9px] text-[#89938d]">{payment.razorpayEnvironment || 'environment unrecorded'}</span></div></div>
-              <div className="text-right lg:hidden"><div className="display text-[19px] font-bold text-[#25473d]">{formatMinor(payment.amountMinor, payment.currency)}</div>{payment.status === 'refunded' && <div className="text-[9px] text-[#a15d45]">Refunded</div>}</div>
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><span className="truncate text-[12px] font-bold text-[#293e37]">{payment.account.fullName || `${payment.account.firstName} ${payment.account.lastName}`}</span><AccountState status={payment.account.status}/></div>
-              <div className="mt-1 truncate text-[10px] text-[#687a71]">{payment.account.email}</div>
-              <div className="mt-1 flex flex-wrap gap-x-2 text-[9px] text-[#8b958f]"><span>@{payment.account.username}</span><span>Account {payment.account.id}</span><span>Joined {dateOnly(payment.account.registeredAt)}</span></div>
-            </div>
-            <div className="min-w-0 rounded-md bg-[#f6f8f3] px-3 py-2 lg:bg-transparent lg:px-0 lg:py-0">
-              <div className="text-[11px] font-semibold text-[#455e53]">{payment.subscriptionPackage.name}</div>
-              <div className="mono mt-1 text-[9px] text-[#8b958e]">Package {payment.subscriptionPackage.id}</div>
-              {payment.subscription ? <div className="mt-2 border-t border-[#e7ebe4] pt-2 lg:border-0 lg:pt-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="rounded bg-[#e9f1eb] px-1.5 py-0.5 text-[9px] font-semibold capitalize text-[#527366]">{payment.subscription.status}</span><span className="mono text-[9px] text-[#8a948d]">Sub {payment.subscription.id}</span></div>
-                <div className="mt-1 text-[9px] text-[#77847c]">{dateOnly(payment.subscription.startsAt)} — {dateOnly(payment.subscription.endsAt)}</div>
-              </div> : <div className="mt-2 text-[9px] italic text-[#929b94]">No linked subscription</div>}
-            </div>
-            <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 rounded-md border border-[#edf0ea] bg-[#fcfcf8] p-2.5 lg:border-0 lg:bg-transparent lg:p-0">
-              <EvidenceId label="Receipt" value={payment.receipt}/>
-              <EvidenceId label="Payment record" value={payment.id}/>
-              <EvidenceId label="Razorpay order" value={payment.razorpayOrderId}/>
-              <EvidenceId label="Razorpay payment" value={payment.razorpayPaymentId}/>
-            </div>
-            <div className="hidden text-right lg:block"><div className="display text-[19px] font-bold tracking-[-.04em] text-[#25473d]">{formatMinor(payment.amountMinor, payment.currency)}</div><div className="mt-1 text-[9px] text-[#829087]">{payment.currency}{payment.status === 'refunded' ? ' · refund recorded' : ' · captured'}</div></div>
-          </article>)}
+        <div data-testid="finance-table-scroll" className="overflow-x-auto overscroll-x-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <table className="w-full min-w-[980px] table-fixed text-left">
+            <colgroup>
+              <col style={{ width: '20%' }}/>
+              <col style={{ width: '29%' }}/>
+              <col style={{ width: '32%' }}/>
+              <col style={{ width: '19%' }}/>
+            </colgroup>
+            <thead className="sticky top-0 z-10 border-b border-[#e8ece7] bg-[#f5f7f2]">
+              <tr>
+                <th scope="col" className="px-5 py-3"><SortControl label="Captured" field="capturedAt" active={filters.sortBy === 'capturedAt'} direction={filters.sortDirection} onSort={sortBy}/></th>
+                <th scope="col" className="px-5 py-3"><SortControl label="Customer account" field="account" active={filters.sortBy === 'account'} direction={filters.sortDirection} onSort={sortBy}/></th>
+                <th scope="col" className="px-5 py-3"><SortControl label="Subscription" field="subscription" active={filters.sortBy === 'subscription'} direction={filters.sortDirection} onSort={sortBy}/></th>
+                <th scope="col" className="px-5 py-3 text-right"><SortControl label="Amount" field="amount" active={filters.sortBy === 'amount'} direction={filters.sortDirection} onSort={sortBy} disabled={!filters.currency}/></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#edf0eb]">
+              {data.rows.map(payment => <tr
+                key={payment.id}
+                data-testid="row-finance-payment"
+                tabIndex={0}
+                aria-label={`Open payment details for ${payment.account.email}`}
+                aria-haspopup="dialog"
+                title="Select to view payment details"
+                onClick={() => setSelectedPayment(payment)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedPayment(payment);
+                  }
+                }}
+                className="cursor-pointer transition-colors hover:bg-[#fbfcf8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#32847a]"
+              >
+                <td className="px-5 py-4 align-middle">
+                  <div className="mono text-[10px] font-semibold text-[#3b544b]">{formatDate(payment.capturedAt)}</div>
+                  <div className="mt-1.5 flex items-center gap-2"><PaymentStatus status={payment.status}/><span className="text-[9px] text-[#89938d]">{payment.razorpayEnvironment || 'environment unrecorded'}</span></div>
+                </td>
+                <td className="min-w-0 px-5 py-4 align-middle">
+                  <div className="flex flex-wrap items-center gap-2"><span className="truncate text-[12px] font-bold text-[#293e37]">{payment.account.fullName || `${payment.account.firstName} ${payment.account.lastName}`}</span><AccountState status={payment.account.status}/></div>
+                  <div className="mt-1 truncate text-[10px] text-[#687a71]">{payment.account.email}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-2 text-[9px] text-[#8b958f]"><span>@{payment.account.username}</span><span>Joined {dateOnly(payment.account.registeredAt)}</span></div>
+                </td>
+                <td className="min-w-0 px-5 py-4 align-middle">
+                  <div className="text-[11px] font-semibold text-[#455e53]">{payment.subscriptionPackage.name}</div>
+                  {payment.subscription ? <>
+                    <div className="mt-1"><span className="rounded bg-[#e9f1eb] px-1.5 py-0.5 text-[9px] font-semibold capitalize text-[#527366]">{payment.subscription.status}</span></div>
+                    <div className="mt-1 text-[9px] text-[#77847c]">{dateOnly(payment.subscription.startsAt)} — {dateOnly(payment.subscription.endsAt)}</div>
+                  </> : <div className="mt-2 text-[9px] italic text-[#929b94]">No linked subscription</div>}
+                </td>
+                <td className="px-5 py-4 text-right align-middle">
+                  <div className="display text-[19px] font-bold tracking-[-.04em] text-[#25473d]">{formatMinor(payment.amountMinor, payment.currency)}</div>
+                  <div className="mt-1 text-[9px] text-[#829087]">{payment.currency}{payment.status === 'refunded' ? ' · refund recorded' : ' · captured'}</div>
+                </td>
+              </tr>)}
+            </tbody>
+          </table>
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8ece7] bg-[#f7f9f5] px-4 py-3 md:px-5">
           <div data-testid="text-finance-page-range" className="text-[10px] text-[#77847d]">Showing <strong className="text-[#43594f]">{firstItem}–{lastItem}</strong> of {data.total.toLocaleString()} · page {page} of {Math.max(pageCount, 1)}</div>
@@ -242,6 +272,58 @@ export default function AdminFinancePage() {
         </footer>
       </section>
       <div className="flex items-start gap-2 px-1 text-[10px] leading-5 text-[#87918a]"><Check className="mt-0.5 h-3 w-3 shrink-0 text-[#4d8c70]"/>Amounts and dates are presented from the payment ledger response. Capture-date filters use inclusive UTC calendar dates.</div>
+      <Sheet open={selectedPayment !== null} onOpenChange={open => { if (!open) setSelectedPayment(null); }}>
+        <SheetContent side="right" className="w-full overflow-y-auto border-l border-[#dce6de] bg-[#fffefa] p-0 sm:max-w-xl">
+          {selectedPayment && <>
+            <SheetHeader className="border-b border-[#e8ece7] bg-[#f5f7f2] px-6 py-5 pr-14 text-left">
+              <SheetTitle className="text-[16px] font-bold text-[#2d423b]">Payment details</SheetTitle>
+              <SheetDescription className="text-[11px] leading-5 text-[#748078]">Full payment, customer, and subscription references for this ledger entry.</SheetDescription>
+            </SheetHeader>
+            <div className="space-y-6 p-6">
+              <div className="rounded-lg border border-[#dfe8df] bg-[#f8faf5] p-4">
+                <div className="text-[9px] font-semibold uppercase tracking-[.1em] text-[#89938e]">Payment amount</div>
+                <div className="display mt-1 text-[25px] font-bold tracking-[-.04em] text-[#25473d]">{formatMinor(selectedPayment.amountMinor, selectedPayment.currency)}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2"><PaymentStatus status={selectedPayment.status}/><span className="text-[10px] text-[#78847d]">{selectedPayment.currency} · {selectedPayment.razorpayEnvironment || 'environment unrecorded'}</span></div>
+              </div>
+
+              <section aria-label="Customer account details">
+                <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[.1em] text-[#748078]">Customer account</h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <EvidenceId label="Name" value={selectedPayment.account.fullName || `${selectedPayment.account.firstName} ${selectedPayment.account.lastName}`}/>
+                  <EvidenceId label="Account status" value={selectedPayment.account.status}/>
+                  <EvidenceId label="Email" value={selectedPayment.account.email}/>
+                  <EvidenceId label="Username" value={selectedPayment.account.username ? `@${selectedPayment.account.username}` : null}/>
+                  <EvidenceId label="Registered" value={dateOnly(selectedPayment.account.registeredAt)}/>
+                  <EvidenceId label="Account ID" value={selectedPayment.account.id}/>
+                </div>
+              </section>
+
+              <section aria-label="Subscription details">
+                <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[.1em] text-[#748078]">Subscription</h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <EvidenceId label="Package" value={selectedPayment.subscriptionPackage.name}/>
+                  <EvidenceId label="Package ID" value={selectedPayment.subscriptionPackage.id}/>
+                  <EvidenceId label="Subscription status" value={selectedPayment.subscription?.status ?? 'No linked subscription'}/>
+                  <EvidenceId label="Subscription ID" value={selectedPayment.subscription?.id ?? null}/>
+                  <EvidenceId label="Term starts" value={selectedPayment.subscription ? dateOnly(selectedPayment.subscription.startsAt) : null}/>
+                  <EvidenceId label="Term ends" value={selectedPayment.subscription ? dateOnly(selectedPayment.subscription.endsAt) : null}/>
+                </div>
+              </section>
+
+              <section aria-label="Payment references">
+                <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[.1em] text-[#748078]">Payment references</h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <EvidenceId label="Payment record ID" value={selectedPayment.id}/>
+                  <EvidenceId label="Receipt" value={selectedPayment.receipt}/>
+                  <EvidenceId label="Razorpay order ID" value={selectedPayment.razorpayOrderId}/>
+                  <EvidenceId label="Razorpay payment ID" value={selectedPayment.razorpayPaymentId}/>
+                  <EvidenceId label="Captured at" value={formatDate(selectedPayment.capturedAt)}/>
+                </div>
+              </section>
+            </div>
+          </>}
+        </SheetContent>
+      </Sheet>
     </>}
   </div>;
 }
