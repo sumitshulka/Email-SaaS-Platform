@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { ensureSeedSuperadmin } from "./lib/seed";
 import { requireSessionSecret } from "./lib/security";
 import { startCampaignWorker } from "./lib/campaign-worker";
+import { startGmailMailboxWorker } from "./lib/gmail-mailbox";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +23,7 @@ try {
   requireSessionSecret();
   await ensureSeedSuperadmin();
   startCampaignWorker();
+  startGmailMailboxWorker();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");

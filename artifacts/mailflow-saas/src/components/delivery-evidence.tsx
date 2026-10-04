@@ -34,7 +34,7 @@ export function EvidencePill({ label, tone }: { label: string; tone: Tone }) {
   return <span className={cx('inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold', toneClass[tone])}><span className={cx('h-1.5 w-1.5 rounded-full', dotClass[tone])}/>{label}</span>;
 }
 
-type ReportFields = { reportOutcome?: string | null; reportSource?: string | null; reportDiagnostic?: string | null; reportAt?: string | null; lastError?: string | null; messageId?: string | null; smtpResponse?: string | null };
+type ReportFields = { reportOutcome?: string | null; reportSource?: string | null; reportEvidenceVerification?: string | null; reportDiagnostic?: string | null; reportAt?: string | null; lastError?: string | null; messageId?: string | null; smtpResponse?: string | null };
 
 /** Compact report line for contact latest-email / history, kept distinct from transport status. */
 export function ContactReportEvidence({ item, detailed = false, id }: { item: ReportFields; detailed?: boolean; id: string }) {
@@ -48,7 +48,7 @@ export function ContactReportEvidence({ item, detailed = false, id }: { item: Re
     </div>
     {detailed && <dl className="mt-2 space-y-1 rounded-md bg-[#f7f9fb] p-2.5 text-[11px] text-[#5c6877]">
       {item.reportDiagnostic && <div><dt className="inline font-semibold">Report diagnostic: </dt><dd className="inline break-words">{item.reportDiagnostic}</dd></div>}
-      {item.reportSource && <div><dt className="inline font-semibold">Source: </dt><dd className="inline">User-imported {item.reportSource.replace(/_/g, ' ')}</dd></div>}
+      {item.reportSource && <div><dt className="inline font-semibold">Source: </dt><dd className="inline">{item.reportEvidenceVerification === 'gmail_authorized' ? 'Google-authorized mailbox · ' : 'User-imported · '}{item.reportSource.replace(/_/g, ' ')}</dd></div>}
       {item.lastError && <div><dt className="inline font-semibold">SMTP error: </dt><dd className="inline break-words">{item.lastError}</dd></div>}
       {item.smtpResponse && <div><dt className="inline font-semibold">SMTP response: </dt><dd className="mono inline break-all">{item.smtpResponse}</dd></div>}
       {item.messageId && <div><dt className="inline font-semibold">Message-ID: </dt><dd className="mono inline break-all">{item.messageId}</dd></div>}
@@ -168,15 +168,15 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
   const cells: Array<[string, number | undefined, string]> = [
     ['SMTP accepted', s?.smtpAccepted, 'Server took the message. Not inbox proof.'],
     ['Send failed', s?.sendFailed, 'Rejected by SMTP or failed to send.'],
-    ['Reported delivered', s?.reportedDelivered, 'From an imported report.'],
-    ['Reported bounce', s?.reportedBounced, 'From an imported report.'],
-    ['Reported delay', s?.reportedDelayed, 'From an imported report.'],
-    ['Reported failure', s?.reportedFailed, 'From an imported report.'],
+    ['Reported delivered', s?.reportedDelivered, 'A report said delivered; not proof of inbox placement or reading.'],
+    ['Reported bounce', s?.reportedBounced, 'A delivery-status report recorded a bounce.'],
+    ['Reported delay', s?.reportedDelayed, 'A delivery-status report recorded a delay.'],
+    ['Reported failure', s?.reportedFailed, 'A delivery-status report recorded a failure.'],
     ['Unconfirmed', s?.unconfirmed, 'No report. Not the same as delivered.'],
   ];
   return <section data-testid="section-delivery-evidence" className="mb-5 overflow-hidden rounded-lg border border-[#e0e4e9] bg-white">
     <div className="border-b border-[#e9edf0] px-5 py-4"><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery evidence</h2>
-      <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#788392]">SMTP acceptance means your provider took the message, not that it reached an inbox. DSN requests are best effort and providers may ignore them. No automatic Google or Microsoft sync is configured, and a lack of bounces never means delivered.</p></div>
+      <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#788392]">SMTP acceptance means your provider took the message, not that it reached an inbox. DSN requests are best effort and providers may ignore them. Authorized Gmail sync can collect some bounce notices; the absence of a notice never means delivered, placed in an inbox, or read.</p></div>
     {query.isLoading ? <div aria-label="Loading delivery evidence" className="space-y-3 p-5"><div className="h-16 animate-pulse rounded-md bg-[#edf0f3]"/><div className="h-40 animate-pulse rounded-md bg-[#f1f3f5]"/></div>
       : query.isError || !data ? <div role="alert" className="m-5 flex items-center justify-between gap-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4"><p className="text-[12px] text-[#99501e]">We couldn't load delivery evidence for this campaign.</p><button type="button" data-testid="button-retry-delivery-report" className={outlineBtn} onClick={() => void query.refetch()}>Retry</button></div>
       : <>
@@ -189,11 +189,11 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
               return <Fragment key={r.id}><tr data-testid={`row-evidence-${r.id}`} className="align-top">
                 <td className="px-5 py-3 text-[12px] font-semibold text-[#26364a]">{r.email}<div className="mt-0.5 text-[10px] font-normal text-[#8a95a2]">{r.attempts} {r.attempts === 1 ? 'attempt' : 'attempts'}</div></td>
                 <td className="px-4 py-3"><EvidencePill label={accepted ? 'SMTP accepted' : r.status === 'bounced' ? 'Send failed' : r.status.charAt(0).toUpperCase() + r.status.slice(1)} tone={accepted ? 'green' : r.status === 'bounced' ? 'orange' : r.status === 'queued' || r.status === 'sending' ? 'blue' : 'gray'}/>{r.smtpAcceptedAt && <div className="mt-1 text-[10px] text-[#8a95a2]">{new Date(r.smtpAcceptedAt).toLocaleString()}</div>}</td>
-                <td className="px-4 py-3">{meta ? <><EvidencePill label={meta.label} tone={meta.tone}/><div className="mt-1 text-[10px] text-[#8a95a2]">User-imported · {r.reportAt ? new Date(r.reportAt).toLocaleString() : 'Report time unavailable'}</div></> : <EvidencePill label="Unconfirmed" tone="gray"/>}</td>
+                <td className="px-4 py-3">{meta ? <><EvidencePill label={meta.label} tone={meta.tone}/><div className="mt-1 text-[10px] text-[#8a95a2]">{r.evidenceVerification === 'gmail_authorized' ? 'Google-authorized mailbox' : 'User-imported'} · {r.reportAt ? new Date(r.reportAt).toLocaleString() : 'Report time unavailable'}</div></> : <EvidencePill label="Unconfirmed" tone="gray"/>}</td>
                 <td className="px-4 py-3 text-[11px] text-[#66717e]">{r.dsnRequested ? 'Requested (best effort)' : 'Not requested'}</td>
                 <td className="px-5 py-3 text-right"><button type="button" data-testid={`button-inspect-evidence-${r.id}`} aria-expanded={isOpen} className={outlineBtn} onClick={() => setOpenId(isOpen ? null : r.id)}>{isOpen ? 'Hide' : 'Inspect'}</button></td></tr>
                 {isOpen && <tr key={`${r.id}-d`} data-testid={`detail-evidence-${r.id}`} className="bg-[#f9fafb]"><td colSpan={5} className="px-5 py-4"><dl className="grid gap-x-8 gap-y-2 text-[11px] text-[#5c6877] md:grid-cols-2">
-                  {([['Message-ID', r.latestMessageId], ['SMTP response', [r.latestSmtpCode, r.latestSmtpResponse].filter(Boolean).join(' ') || null], ['Last send error', r.lastError], ['Report diagnostic', r.reportDiagnostic], ['Report status code', r.reportStatusCode], ['Report source', r.reportSource ? r.reportSource.replace(/_/g, ' ') : null], ['Delivery scope', r.reportDeliveryScope === 'mailbox' ? 'Mailbox, as reported by the provider (not a guaranteed inbox folder or read)' : r.reportDeliveryScope === 'receiving_server' ? 'Receiving server only' : r.reportDeliveryScope], ['Verification', r.evidenceVerification === 'user_imported' ? 'User-imported, not provider authenticated' : null]] as Array<[string, string | null | undefined]>).map(([k, v]) => <div key={k}><dt className="font-semibold text-[#344154]">{k}</dt><dd className="mono mt-0.5 break-all">{v || 'None recorded'}</dd></div>)}
+                  {([['Message-ID', r.latestMessageId], ['SMTP response', [r.latestSmtpCode, r.latestSmtpResponse].filter(Boolean).join(' ') || null], ['Last send error', r.lastError], ['Report diagnostic', r.reportDiagnostic], ['Report status code', r.reportStatusCode], ['Report source', r.reportSource ? r.reportSource.replace(/_/g, ' ') : null], ['Delivery scope', r.reportDeliveryScope === 'mailbox' ? 'Mailbox, as reported by the provider (not a guaranteed inbox folder or read)' : r.reportDeliveryScope === 'receiving_server' ? 'Receiving server only' : r.reportDeliveryScope], ['Verification', r.evidenceVerification === 'gmail_authorized' ? 'Retrieved through this tenant’s authorized Gmail connection' : r.evidenceVerification === 'user_imported' ? 'User-imported, not provider authenticated' : null]] as Array<[string, string | null | undefined]>).map(([k, v]) => <div key={k}><dt className="font-semibold text-[#344154]">{k}</dt><dd className="mono mt-0.5 break-all">{v || 'None recorded'}</dd></div>)}
                 </dl></td></tr>}</Fragment>;
             })}</tbody></table></div>}
         <div className="flex items-center justify-between border-t border-[#e9edf0] px-5 py-3 text-[11px] text-[#788392]"><span data-testid="text-evidence-range">{total ? `${offset + 1}-${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}` : '0 recipients'}</span>
@@ -209,7 +209,7 @@ export function DeliveryCapabilityNotes() {
     <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">What your provider can tell Mailflow</h2>
     <div className="mt-4 grid gap-4 md:grid-cols-2 text-[12px] leading-5 text-[#5f6c7c]">
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">SMTP and DSN</h3><p className="mt-1">Mailflow records the SMTP response for every send and requests a delivery status notification (DSN) when the server supports it. This is best effort: a provider may ignore the request. Acceptance by SMTP is not inbox delivery, and no bounce never means delivered.</p></div>
-      <div><h3 className="text-[13px] font-semibold text-[#26364a]">Gmail, Google Workspace, Microsoft 365</h3><p className="mt-1">No automatic Google or Microsoft sync is configured, because Mailflow has no OAuth authorization to read those mailboxes or logs. Download a failure notice or message log yourself and import it from the campaign page.</p></div>
+      <div><h3 className="text-[13px] font-semibold text-[#26364a]">Gmail and Google Workspace</h3><p className="mt-1">A tenant owner can authorize Gmail bounce monitoring from sending settings. Mailflow polls new-message history, reads only metadata for ordinary messages, and fetches content only when Gmail identifies a delivery-status notice. Connection health and any history gap are shown in settings. No bounce is not evidence of delivery, inbox placement, or reading.</p></div>
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">Imported reports</h3><p className="mt-1">Reports are matched by this workspace, a tracked message ID and the recipient. They are user-supplied evidence and are not authenticated by the provider.</p></div>
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">Older sends</h3><p className="mt-1">Messages sent before tracking IDs were stored cannot be matched and will be reported as unmatched.</p></div>
     </div>

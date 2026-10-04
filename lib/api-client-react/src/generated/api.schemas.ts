@@ -256,6 +256,41 @@ export interface TenantSendingSettingsInput {
   replyTo?: string;
 }
 
+export type GmailMailboxConnectionSyncStatus = typeof GmailMailboxConnectionSyncStatus[keyof typeof GmailMailboxConnectionSyncStatus];
+
+
+export const GmailMailboxConnectionSyncStatus = {
+  disconnected: 'disconnected',
+  connected: 'connected',
+  reauthorization_required: 'reauthorization_required',
+  history_expired: 'history_expired',
+  error: 'error',
+} as const;
+
+export interface GmailMailboxConnection {
+  configured: boolean;
+  /** @nullable */
+  redirectUri: string | null;
+  connected: boolean;
+  /** @nullable */
+  emailAddress: string | null;
+  syncStatus: GmailMailboxConnectionSyncStatus;
+  /** @nullable */
+  lastSyncAt: string | null;
+  /** @nullable */
+  lastSuccessAt: string | null;
+  /** @nullable */
+  nextSyncAt: string | null;
+  /** @nullable */
+  lastError: string | null;
+  /** @minimum 30 */
+  pollIntervalSeconds: number;
+}
+
+export interface GmailOAuthStart {
+  authorizationUrl: string;
+}
+
 export interface TenantSendingTestInput {
   toEmail: string;
 }
@@ -328,6 +363,17 @@ export const ContactEmailHistoryItemReportSource = {
   generic_csv: 'generic_csv',
 } as const;
 
+/**
+ * @nullable
+ */
+export type ContactEmailHistoryItemReportEvidenceVerification = typeof ContactEmailHistoryItemReportEvidenceVerification[keyof typeof ContactEmailHistoryItemReportEvidenceVerification] | null;
+
+
+export const ContactEmailHistoryItemReportEvidenceVerification = {
+  user_imported: 'user_imported',
+  gmail_authorized: 'gmail_authorized',
+} as const;
+
 export interface ContactEmailHistoryItem {
   id: string;
   campaignId: string;
@@ -340,19 +386,21 @@ export interface ContactEmailHistoryItem {
   lastAttemptAt: string | null;
   /** @nullable */
   deliveredAt: string | null;
-  reportOutcome?: ContactEmailHistoryItemReportOutcome;
+  reportOutcome: ContactEmailHistoryItemReportOutcome;
   /** @nullable */
-  reportSource?: ContactEmailHistoryItemReportSource;
+  reportSource: ContactEmailHistoryItemReportSource;
   /** @nullable */
-  reportDiagnostic?: string | null;
+  reportEvidenceVerification: ContactEmailHistoryItemReportEvidenceVerification;
   /** @nullable */
-  reportAt?: string | null;
+  reportDiagnostic: string | null;
   /** @nullable */
-  lastError?: string | null;
+  reportAt: string | null;
   /** @nullable */
-  messageId?: string | null;
+  lastError: string | null;
   /** @nullable */
-  smtpResponse?: string | null;
+  messageId: string | null;
+  /** @nullable */
+  smtpResponse: string | null;
 }
 
 export type ContactDirectoryItem = Contact & ({
@@ -696,6 +744,7 @@ export type DeliveryRecipientEvidenceVerification = typeof DeliveryRecipientEvid
 
 export const DeliveryRecipientEvidenceVerification = {
   user_imported: 'user_imported',
+  gmail_authorized: 'gmail_authorized',
 } as const;
 
 export interface DeliveryRecipient {
@@ -1289,6 +1338,12 @@ export interface PaymentVerificationResult {
 }
 
 export interface RazorpayWebhookPayload { [key: string]: unknown }
+
+export type CompleteGmailMailboxConnectionParams = {
+code?: string;
+state?: string;
+error?: string;
+};
 
 export type ImportContactsParams = {
 /**

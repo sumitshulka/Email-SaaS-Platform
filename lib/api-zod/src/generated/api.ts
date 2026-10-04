@@ -312,6 +312,53 @@ export const TestTenantSendingSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get Gmail bounce-monitoring connection and sync health
+ */
+export const getGmailMailboxConnectionResponsePollIntervalSecondsMin = 30;
+
+
+
+export const GetGmailMailboxConnectionResponse = zod.object({
+  "configured": zod.boolean(),
+  "redirectUri": zod.string().nullable(),
+  "connected": zod.boolean(),
+  "emailAddress": zod.string().email().nullable(),
+  "syncStatus": zod.enum(['disconnected', 'connected', 'reauthorization_required', 'history_expired', 'error']),
+  "lastSyncAt": zod.coerce.date().nullable(),
+  "lastSuccessAt": zod.coerce.date().nullable(),
+  "nextSyncAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable(),
+  "pollIntervalSeconds": zod.number().int().min(getGmailMailboxConnectionResponsePollIntervalSecondsMin)
+})
+
+
+/**
+ * @summary Disconnect the tenant's authorized Gmail mailbox
+ */
+export const DisconnectGmailMailboxResponse = zod.void()
+
+
+/**
+ * @summary Start least-privilege Gmail OAuth consent for the tenant mailbox
+ */
+export const StartGmailMailboxConnectionResponse = zod.object({
+  "authorizationUrl": zod.string().url()
+})
+
+
+/**
+ * @summary Complete the tenant's Google OAuth authorization
+ */
+export const CompleteGmailMailboxConnectionQueryParams = zod.object({
+  "code": zod.coerce.string().optional(),
+  "state": zod.coerce.string().optional(),
+  "error": zod.coerce.string().optional()
+})
+
+export const CompleteGmailMailboxConnectionResponse = zod.void()
+
+
+/**
  * @summary List contacts and quota for the authenticated tenant
  */
 export const listContactsResponseContactsItemOneCompanyNameMax = 200;
@@ -355,13 +402,14 @@ export const ListContactsResponse = zod.object({
   "attempts": zod.number().int().min(listContactsResponseContactsItemTwoLastEmailOneAttemptsMin),
   "lastAttemptAt": zod.coerce.date().nullable(),
   "deliveredAt": zod.coerce.date().nullable(),
-  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']).optional(),
-  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullish(),
-  "reportDiagnostic": zod.string().nullish(),
-  "reportAt": zod.coerce.date().nullish(),
-  "lastError": zod.string().nullish(),
-  "messageId": zod.string().nullish(),
-  "smtpResponse": zod.string().nullish()
+  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']),
+  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullable(),
+  "reportEvidenceVerification": zod.union([zod.literal('user_imported'),zod.literal('gmail_authorized'),zod.literal(null)]).nullable(),
+  "reportDiagnostic": zod.string().nullable(),
+  "reportAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable(),
+  "messageId": zod.string().nullable(),
+  "smtpResponse": zod.string().nullable()
 }),zod.null()])
 }))),
   "quota": zod.object({
@@ -622,13 +670,14 @@ export const GetContactEmailHistoryResponseItem = zod.object({
   "attempts": zod.number().int().min(getContactEmailHistoryResponseAttemptsMin),
   "lastAttemptAt": zod.coerce.date().nullable(),
   "deliveredAt": zod.coerce.date().nullable(),
-  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']).optional(),
-  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullish(),
-  "reportDiagnostic": zod.string().nullish(),
-  "reportAt": zod.coerce.date().nullish(),
-  "lastError": zod.string().nullish(),
-  "messageId": zod.string().nullish(),
-  "smtpResponse": zod.string().nullish()
+  "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']),
+  "reportSource": zod.union([zod.literal('dsn'),zod.literal('microsoft_365_csv'),zod.literal('google_workspace_csv'),zod.literal('generic_csv'),zod.literal(null)]).nullable(),
+  "reportEvidenceVerification": zod.union([zod.literal('user_imported'),zod.literal('gmail_authorized'),zod.literal(null)]).nullable(),
+  "reportDiagnostic": zod.string().nullable(),
+  "reportAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable(),
+  "messageId": zod.string().nullable(),
+  "smtpResponse": zod.string().nullable()
 })
 export const GetContactEmailHistoryResponse = zod.array(GetContactEmailHistoryResponseItem)
 
@@ -977,7 +1026,7 @@ export const GetCampaignDeliveryReportResponse = zod.object({
   "latestSmtpResponse": zod.string().nullable(),
   "latestSmtpCode": zod.number().int().nullable(),
   "dsnRequested": zod.boolean(),
-  "evidenceVerification": zod.union([zod.literal('user_imported'),zod.literal(null)]).nullable()
+  "evidenceVerification": zod.union([zod.literal('user_imported'),zod.literal('gmail_authorized'),zod.literal(null)]).nullable()
 })),
   "total": zod.number().int().min(getCampaignDeliveryReportResponseTotalMin),
   "limit": zod.number().int().min(1).max(getCampaignDeliveryReportResponseLimitMax),

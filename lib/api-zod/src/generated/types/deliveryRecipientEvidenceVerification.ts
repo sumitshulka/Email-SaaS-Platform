@@ -14,4 +14,5 @@ export type DeliveryRecipientEvidenceVerification = typeof DeliveryRecipientEvid
 
 export const DeliveryRecipientEvidenceVerification = {
   user_imported: 'user_imported',
+  gmail_authorized: 'gmail_authorized',
 } as const;

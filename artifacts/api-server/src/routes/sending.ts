@@ -202,6 +202,8 @@ async function getTenantContactEmailHistory(userId: string, contactId?: string) 
       deliveredAt: emailCampaignRecipientsTable.deliveredAt,
       reportOutcome: emailCampaignRecipientsTable.reportOutcome,
       reportSource: emailCampaignRecipientsTable.reportSource,
+      reportEvidenceVerification:
+        emailCampaignRecipientsTable.reportEvidenceVerification,
       reportDiagnostic: emailCampaignRecipientsTable.reportDiagnostic,
       reportAt: emailCampaignRecipientsTable.reportAt,
       lastError: emailCampaignRecipientsTable.lastError,
@@ -234,6 +236,7 @@ async function getTenantContactEmailHistory(userId: string, contactId?: string) 
       emailCampaignRecipientsTable.deliveredAt,
       emailCampaignRecipientsTable.reportOutcome,
       emailCampaignRecipientsTable.reportSource,
+      emailCampaignRecipientsTable.reportEvidenceVerification,
       emailCampaignRecipientsTable.reportDiagnostic,
       emailCampaignRecipientsTable.reportAt,
       emailCampaignRecipientsTable.lastError,
@@ -733,6 +736,9 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
             deliveredAt: email.deliveredAt,
             reportOutcome: email.reportOutcome,
             reportSource: email.reportSource,
+            reportEvidenceVerification:
+              email.reportEvidenceVerification ??
+              (email.reportOutcome === "unconfirmed" ? null : "user_imported"),
             reportDiagnostic: email.reportDiagnostic,
             reportAt: email.reportAt,
             lastError: email.lastError,
@@ -791,6 +797,9 @@ router.get(
           deliveredAt: email.deliveredAt,
           reportOutcome: email.reportOutcome,
           reportSource: email.reportSource,
+          reportEvidenceVerification:
+            email.reportEvidenceVerification ??
+            (email.reportOutcome === "unconfirmed" ? null : "user_imported"),
           reportDiagnostic: email.reportDiagnostic,
           reportAt: email.reportAt,
           lastError: email.lastError,

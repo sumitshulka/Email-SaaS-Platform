@@ -303,6 +303,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /sending/gmail/connection:
+    get:
+      operationId: getGmailMailboxConnection
+      tags: [sending]
+      summary: Get Gmail bounce-monitoring connection and sync health
+      responses:
+        "200":
+          description: OAuth setup and mailbox sync status without credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailMailboxConnection"
+    delete:
+      operationId: disconnectGmailMailbox
+      tags: [sending]
+      summary: Disconnect the tenant's authorized Gmail mailbox
+      responses:
+        "204":
+          description: Mailbox disconnected and stored refresh token removed
+  /sending/gmail/connect:
+    post:
+      operationId: startGmailMailboxConnection
+      tags: [sending]
+      summary: Start least-privilege Gmail OAuth consent for the tenant mailbox
+      responses:
+        "200":
+          description: Google OAuth authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailOAuthStart"
+        "503":
+          description: Google OAuth application settings are incomplete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/gmail/oauth/callback:
+    get:
+      operationId: completeGmailMailboxConnection
+      tags: [sending]
+      summary: Complete the tenant's Google OAuth authorization
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect back to sending settings with a connection result
   /contacts:
     get:
       operationId: listContacts
@@ -1351,6 +1409,27 @@ components:
         fromEmail: { type: string, format: email }
         replyTo: { type: string, format: email }
       required: [provider, host, port, encryption, fromName, fromEmail]
+    GmailMailboxConnection:
+      type: object
+      properties:
+        configured: { type: boolean }
+        redirectUri: { type: ["string", "null"] }
+        connected: { type: boolean }
+        emailAddress: { type: ["string", "null"], format: email }
+        syncStatus:
+          type: string
+          enum: [disconnected, connected, reauthorization_required, history_expired, error]
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+        lastSuccessAt: { type: ["string", "null"], format: date-time }
+        nextSyncAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+        pollIntervalSeconds: { type: integer, minimum: 30 }
+      required: [configured, redirectUri, connected, emailAddress, syncStatus, lastSyncAt, lastSuccessAt, nextSyncAt, lastError, pollIntervalSeconds]
+    GmailOAuthStart:
+      type: object
+      properties:
+        authorizationUrl: { type: string, format: uri }
+      required: [authorizationUrl]
     TenantSendingTestInput:
       type: object
       properties:
@@ -1393,12 +1472,13 @@ components:
         deliveredAt: { type: ["string", "null"], format: date-time }
         reportOutcome: { type: string, enum: [unconfirmed, delivered, bounced, delayed, failed] }
         reportSource: { type: ["string", "null"], enum: [dsn, microsoft_365_csv, google_workspace_csv, generic_csv, null] }
+        reportEvidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, null] }
         reportDiagnostic: { type: ["string", "null"] }
         reportAt: { type: ["string", "null"], format: date-time }
         lastError: { type: ["string", "null"] }
         messageId: { type: ["string", "null"] }
         smtpResponse: { type: ["string", "null"] }
-      required: [id, campaignId, campaignName, subject, status, attempts, lastAttemptAt, deliveredAt]
+      required: [id, campaignId, campaignName, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
     ContactDirectoryItem:
       allOf:
         - $ref: "#/components/schemas/Contact"
@@ -1610,7 +1690,7 @@ components:
         latestSmtpResponse: { type: ["string", "null"] }
         latestSmtpCode: { type: ["integer", "null"] }
         dsnRequested: { type: boolean }
-        evidenceVerification: { type: ["string", "null"], enum: [user_imported, null] }
+        evidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, null] }
       required: [id, email, status, attempts, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
     CampaignTargetList:
       type: object

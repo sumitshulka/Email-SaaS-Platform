@@ -244,6 +244,7 @@ memory.public.none(`
     report_status_code varchar(64),
     report_at timestamptz,
     report_delivery_scope varchar(24),
+    report_evidence_verification varchar(32),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
@@ -261,6 +262,21 @@ memory.public.none(`
     attempted_at timestamptz NOT NULL DEFAULT now(),
     completed_at timestamptz
   );
+  CREATE TABLE gmail_mailbox_connections (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    email_address varchar(254) NOT NULL,
+    refresh_token_encrypted text NOT NULL,
+    history_id varchar(64) NOT NULL,
+    sync_status varchar(32) NOT NULL DEFAULT 'connected',
+    last_sync_at timestamptz,
+    last_success_at timestamptz,
+    next_sync_at timestamptz NOT NULL DEFAULT now(),
+    lease_expires_at timestamptz,
+    last_error text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
   CREATE TABLE email_delivery_reports (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -274,6 +290,8 @@ memory.public.none(`
     occurred_at timestamptz,
     received_at timestamptz NOT NULL DEFAULT now(),
     delivery_scope varchar(24) NOT NULL DEFAULT 'unspecified',
+    evidence_verification varchar(32) NOT NULL DEFAULT 'user_imported',
+    gmail_mailbox_connection_id uuid REFERENCES gmail_mailbox_connections(id) ON DELETE SET NULL,
     UNIQUE (user_id, fingerprint)
   );
 `);
@@ -330,6 +348,8 @@ const [
   seedModule,
   razorpayModule,
   campaignWorkerModule,
+  deliveryReportIngestionModule,
+  deliveryParserModule,
 ] = await Promise.all([
   import("../src/app.ts"),
   import("../src/lib/application-email.ts"),
@@ -337,6 +357,8 @@ const [
   import("../src/lib/seed.ts"),
   import("../src/lib/razorpay.ts"),
   import("../src/lib/campaign-worker.ts"),
+  import("../src/lib/delivery-report-ingestion.ts"),
+  import("../src/lib/delivery-report-parser.ts"),
 ]);
 
 const { db, usersTable, userSessionsTable, loginAttemptsTable, otpVerificationsTable } =
@@ -373,6 +395,7 @@ after(async () => {
 
 beforeEach(async () => {
   await db.delete(dbModule.emailDeliveryReportsTable);
+  await db.delete(dbModule.gmailMailboxConnectionsTable);
   await db.delete(dbModule.emailSendAttemptsTable);
   await db.delete(dbModule.emailCampaignRecipientsTable);
   await db.delete(dbModule.emailCampaignsTable);
@@ -1453,6 +1476,36 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
   it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
     const owner = await loggedInUser({ username: "sending-owner" });
     const other = await loggedInUser({ username: "sending-other" });
+    const gmailStatus = await api("/sending/gmail/connection", {
+      cookie: owner.cookie,
+    });
+    assert.equal(gmailStatus.response.status, 200);
+    assert.equal(gmailStatus.body.connected, false);
+    assert.equal(gmailStatus.body.syncStatus, "disconnected");
+    assert.equal(gmailStatus.body.pollIntervalSeconds, 120);
+    const anonymousGmailStatus = await api("/sending/gmail/connection");
+    assert.equal(anonymousGmailStatus.response.status, 401);
+    const gmailConnect = await api("/sending/gmail/connect", {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    if (gmailStatus.body.configured) {
+      assert.equal(gmailConnect.response.status, 200);
+      const authorizationUrl = new URL(gmailConnect.body.authorizationUrl);
+      assert.match(
+        authorizationUrl.searchParams.get("scope"),
+        /gmail\.readonly/,
+      );
+      assert.equal(authorizationUrl.searchParams.get("access_type"), "offline");
+      assert.equal(authorizationUrl.searchParams.get("prompt"), "consent");
+    } else {
+      assert.equal(gmailConnect.response.status, 503);
+    }
+    const gmailDisconnect = await api("/sending/gmail/connection", {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(gmailDisconnect.response.status, 204);
     const [sendingPackage] = await db
       .insert(dbModule.subscriptionPackagesTable)
       .values({
@@ -2006,6 +2059,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(otherTenantImport.body.imported, 0);
     assert.equal(otherTenantImport.body.unmatched, 1);
 
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({ reportEvidenceVerification: null })
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, deliveredRecipient.id));
     const reportedDeliveryPage = await api(
       `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=0`,
       { cookie: owner.cookie },
@@ -2018,6 +2075,64 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       reportedDeliveryPage.body.recipients[0].evidenceVerification,
       "user_imported",
     );
+    const legacyContactHistory = await api(
+      `/contacts/${ownerContacts[0].body.id}/email-history`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(
+      legacyContactHistory.body[0].reportEvidenceVerification,
+      "user_imported",
+    );
+    const [gmailConnection] = await db
+      .insert(dbModule.gmailMailboxConnectionsTable)
+      .values({
+        userId: owner.user.id,
+        emailAddress: "bounces@owner.test",
+        refreshTokenEncrypted: "test-only-encrypted-token",
+        historyId: "gmail-history-100",
+      })
+      .returning();
+    const parsedGmailReport = deliveryParserModule.parseDeliveryReports(
+      "dsn",
+      dsnReport,
+    ).reports;
+    const authorizedIngestion =
+      await deliveryReportIngestionModule.ingestDeliveryReports({
+        userId: owner.user.id,
+        reports: parsedGmailReport,
+        campaignId: campaign.body.id,
+        verification: "gmail_authorized",
+        gmailMailboxConnectionId: gmailConnection.id,
+      });
+    assert.equal(authorizedIngestion.imported, 1);
+    const replayedGmailIngestion =
+      await deliveryReportIngestionModule.ingestDeliveryReports({
+        userId: owner.user.id,
+        reports: parsedGmailReport,
+        campaignId: campaign.body.id,
+        verification: "gmail_authorized",
+        gmailMailboxConnectionId: gmailConnection.id,
+      });
+    assert.equal(replayedGmailIngestion.duplicates, 1);
+    const crossTenantGmailIngestion =
+      await deliveryReportIngestionModule.ingestDeliveryReports({
+        userId: other.user.id,
+        reports: parsedGmailReport,
+        campaignId: campaign.body.id,
+        verification: "gmail_authorized",
+        gmailMailboxConnectionId: gmailConnection.id,
+      });
+    assert.equal(crossTenantGmailIngestion.imported, 0);
+    assert.equal(crossTenantGmailIngestion.unmatched, 1);
+    const authorizedDeliveryPage = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=0`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(
+      authorizedDeliveryPage.body.recipients[0].evidenceVerification,
+      "gmail_authorized",
+    );
+    assert.equal(authorizedDeliveryPage.body.recipients[0].reportSource, "dsn");
     const secondDeliveryPage = await api(
       `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=1`,
       { cookie: owner.cookie },
@@ -2105,6 +2220,20 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(sameSecondRfcBounce.response.status, 200);
     assert.equal(sameSecondRfcBounce.body.imported, 1);
     assert.equal(sameSecondRfcBounce.body.ignored, 0);
+    const sameSecondCsvBounce = await api("/sending/reports/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        format: "generic_csv",
+        content: [
+          "message_id,recipient_email,status,occurred_at",
+          `${deliveredAttempt.messageId},${deliveredRecipient.email},bounced,${attemptWholeSecond.toISOString()}`,
+        ].join("\n"),
+      },
+    });
+    assert.equal(sameSecondCsvBounce.response.status, 200);
+    assert.equal(sameSecondCsvBounce.body.imported, 0);
+    assert.equal(sameSecondCsvBounce.body.ignored, 1);
     const precedingSecondRfcBounce = await importDsn(
       makeDsn({
         outcome: "bounced",

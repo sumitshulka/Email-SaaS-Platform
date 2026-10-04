@@ -13,6 +13,8 @@ import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
+  getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
+  useGetGmailMailboxConnection, useStartGmailMailboxConnection,
   getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetCampaignDashboard, useGetTenantSendingSettings,
   useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, usePreviewCampaign, useSendCampaign,
@@ -93,6 +95,14 @@ export function SendingSettingsPage() {
   const query = useGetTenantSendingSettings();
   const update = useUpdateTenantSendingSettings();
   const test = useTestTenantSendingSettings();
+  const gmailConnection = useGetGmailMailboxConnection({
+    query: {
+      queryKey: getGetGmailMailboxConnectionQueryKey(),
+      refetchInterval: 30_000,
+    },
+  });
+  const startGmailConnection = useStartGmailMailboxConnection();
+  const disconnectGmailConnection = useDisconnectGmailMailbox();
   const qc = useQueryClient();
   const { notice, setNotice, dismiss } = useNotice();
   const [form, setForm] = useState(blankSettings);
@@ -104,6 +114,27 @@ export function SendingSettingsPage() {
     setForm({ provider: settings.provider, host: settings.host || '', port: String(settings.port || 587), encryption: settings.encryption || 'tls', username: '', password: '', fromName: settings.fromName || '', fromEmail: settings.fromEmail || '', replyTo: settings.replyTo || '' });
     setInitialized(true);
   }, [settings, initialized]);
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get('gmail');
+    if (result === 'connected') {
+      setNotice({ kind: 'success', text: 'Gmail bounce monitoring is connected. Initial sync will begin shortly.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (result === 'failed') {
+      setNotice({ kind: 'error', text: 'Gmail connection did not complete. Check Google consent and try again.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [setNotice]);
+  const connectGmail = () => startGmailConnection.mutate(undefined, {
+    onSuccess: result => { window.location.assign(result.authorizationUrl); },
+    onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+  });
+  const disconnectGmail = () => disconnectGmailConnection.mutate(undefined, {
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: getGetGmailMailboxConnectionQueryKey() });
+      setNotice({ kind: 'success', text: 'Gmail mailbox disconnected and saved access removed.' });
+    },
+    onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+  });
   const change = (key: keyof typeof form, value: string) => setForm(current => ({ ...current, [key]: value }));
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -127,6 +158,34 @@ export function SendingSettingsPage() {
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => void query.refetch()} label="sender settings"><>
     <Heading eyebrow="SENDING / IDENTITY" title="Sending settings" detail="Configure the SMTP identity this workspace uses to deliver customer campaigns."/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
+    <section data-testid="section-gmail-bounce-monitor" className={`${panelClass} mb-5 p-5 sm:p-6`}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-3xl">
+          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">BOUNCE MONITORING</div>
+          <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">Gmail and Google Workspace</h2>
+          <p className="mt-2 text-[12px] leading-5 text-[#687484]">Connect a mailbox with its owner’s Google consent. Mailflow checks new-message headers and fetches message content only when Gmail identifies a delivery-status notice. It does not scan unrelated mailbox content.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {gmailConnection.data?.connected && <Button variant="outline" testId="button-disconnect-gmail" disabled={disconnectGmailConnection.isPending} onClick={disconnectGmail}>{disconnectGmailConnection.isPending ? 'Disconnecting…' : 'Disconnect mailbox'}</Button>}
+          <Button testId="button-connect-gmail" disabled={!gmailConnection.data?.configured || startGmailConnection.isPending} onClick={connectGmail}>{startGmailConnection.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : null}{gmailConnection.data?.connected ? 'Reconnect Google account' : 'Connect Google account'}</Button>
+        </div>
+      </div>
+      {gmailConnection.isLoading ? <p className="mt-4 text-[12px] text-[#778291]">Checking Gmail connection status…</p>
+        : gmailConnection.isError || !gmailConnection.data ? <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[12px] text-[#99501e]"><span>Gmail connection status could not be loaded.</span><button type="button" className={outlineButton} onClick={() => void gmailConnection.refetch()}>Retry</button></div>
+        : <div className="mt-4 rounded-md bg-[#f7f9fb] p-4">
+          {!gmailConnection.data.configured && <p data-testid="text-gmail-oauth-setup" className="text-[12px] leading-5 text-[#99501e]">Google OAuth is not configured for this app. Set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI in workspace secrets/settings. Register this callback URI in the Google OAuth client: <span className="mono break-all">{gmailConnection.data.redirectUri || 'Configure GOOGLE_OAUTH_REDIRECT_URI first; expected path /api/sending/gmail/oauth/callback.'}</span> Google’s restricted Gmail read-only scope may require Google verification before external users can consent.</p>}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#596777]">
+            <span>Status: <strong className="text-[#26364a]">{gmailConnection.data.syncStatus.replace(/_/g, ' ')}</strong></span>
+            {gmailConnection.data.emailAddress && <span>Mailbox: <strong className="text-[#26364a]">{gmailConnection.data.emailAddress}</strong></span>}
+            <span>Polling: every {Math.round(gmailConnection.data.pollIntervalSeconds / 60)} min</span>
+            <span>Last checked: <strong className="text-[#26364a]">{formatDate(gmailConnection.data.lastSyncAt)}</strong></span>
+          </div>
+          {gmailConnection.data.lastSuccessAt && <p className="mt-2 text-[11px] text-[#718091]">Last successful sync: {formatDate(gmailConnection.data.lastSuccessAt)} · Next check: {formatDate(gmailConnection.data.nextSyncAt)}</p>}
+          {gmailConnection.data.lastError && <p data-testid="text-gmail-sync-error" role="status" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{gmailConnection.data.lastError}</p>}
+          {gmailConnection.data.syncStatus === 'history_expired' && <p className="mt-2 text-[11px] leading-5 text-[#99501e]">Reconnect to restart monitoring from a new checkpoint. Gmail cannot recover notices from the expired-history gap automatically.</p>}
+        </div>}
+      <p className="mt-3 text-[11px] leading-5 text-[#788392]">Only matched DSNs become bounce evidence. No bounce is not proof of delivery, inbox placement, or reading. Disconnecting removes Mailflow’s refresh token and asks Google to revoke it.</p>
+    </section>
     <div className="mb-5 grid gap-3 sm:grid-cols-3">
       <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fc] text-[#245b9b]"><Fingerprint className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Identity status</div><div className="mt-1"><Status tone={settings?.verified ? 'green' : 'orange'}>{settings?.verified ? 'Verified' : 'Verification needed'}</Status></div></div></div>
       <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#f0f3f6] text-[#657488]"><ShieldCheck className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">SMTP credentials</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{settings?.credentialsConfigured ? 'Configured · protected' : 'Not configured'}</div></div></div>

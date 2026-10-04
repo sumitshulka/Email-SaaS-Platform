@@ -50,6 +50,44 @@ export const tenantSendingConfigurationTable = pgTable(
   },
 );
 
+export const gmailMailboxConnectionsTable = pgTable(
+  "gmail_mailbox_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .unique()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    emailAddress: varchar("email_address", { length: 254 }).notNull(),
+    refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+    historyId: varchar("history_id", { length: 64 }).notNull(),
+    syncStatus: varchar("sync_status", { length: 32 })
+      .notNull()
+      .default("connected"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    nextSyncAt: timestamp("next_sync_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("gmail_mailbox_connections_due_sync_idx").on(
+      table.syncStatus,
+      table.nextSyncAt,
+      table.leaseExpiresAt,
+    ),
+  ],
+);
+
 export const contactListsTable = pgTable(
   "contact_lists",
   {
@@ -171,6 +209,9 @@ export const emailCampaignRecipientsTable = pgTable(
     reportStatusCode: varchar("report_status_code", { length: 64 }),
     reportAt: timestamp("report_at", { withTimezone: true }),
     reportDeliveryScope: varchar("report_delivery_scope", { length: 24 }),
+    reportEvidenceVerification: varchar("report_evidence_verification", {
+      length: 32,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -260,6 +301,13 @@ export const emailDeliveryReportsTable = pgTable(
     deliveryScope: varchar("delivery_scope", { length: 24 })
       .notNull()
       .default("unspecified"),
+    evidenceVerification: varchar("evidence_verification", { length: 32 })
+      .notNull()
+      .default("user_imported"),
+    gmailMailboxConnectionId: uuid("gmail_mailbox_connection_id").references(
+      () => gmailMailboxConnectionsTable.id,
+      { onDelete: "set null" },
+    ),
   },
   (table) => [
     uniqueIndex("email_delivery_reports_user_fingerprint_unique").on(
