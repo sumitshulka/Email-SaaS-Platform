@@ -1,6 +1,7 @@
 import { createInsertSchema } from "drizzle-zod";
 import {
   boolean,
+  foreignKey,
   index,
   pgTable,
   text,
@@ -10,6 +11,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
+import { companiesTable } from "./companies";
 import { usersTable } from "./users";
 
 export const contactsTable = pgTable(
@@ -19,6 +21,10 @@ export const contactsTable = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id"),
+    companyLinkSuppressed: boolean("company_link_suppressed")
+      .notNull()
+      .default(false),
     name: varchar("name", { length: 201 }).notNull().default(""),
     email: varchar("email", { length: 254 }).notNull(),
     firstName: varchar("first_name", { length: 100 }).notNull().default(""),
@@ -64,6 +70,11 @@ export const contactsTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    foreignKey({
+      columns: [table.companyId, table.userId],
+      foreignColumns: [companiesTable.id, companiesTable.userId],
+      name: "contacts_company_tenant_fk",
+    }).onDelete("restrict"),
     uniqueIndex("contacts_user_email_unique").on(table.userId, table.email),
     uniqueIndex("contacts_id_user_unique").on(table.id, table.userId),
     index("contacts_user_created_idx").on(table.userId, table.createdAt),

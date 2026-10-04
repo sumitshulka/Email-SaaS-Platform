@@ -60,6 +60,7 @@ import {
 } from "@workspace/api-zod";
 import type { TenantSendingSettingsInput } from "@workspace/api-zod";
 import {
+  companiesTable,
   contactListMembersTable,
   contactListsTable,
   contactsTable,
@@ -90,6 +91,12 @@ import {
 } from "../lib/platform-settings";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import { requireUserRole } from "../lib/session";
+import {
+  companyDomainKey,
+  companyProfileFields,
+  companyProfileFrom,
+  mergeCompatibleCompanyProfiles,
+} from "../lib/company-profile";
 
 const router: IRouter = Router();
 const MASKED_CREDENTIAL = "••••••";
@@ -207,9 +214,11 @@ function matchesSavedTenantSendingConfiguration(
 
 function contactEnrichmentPatch(
   input: Record<string, unknown>,
+  includeCompanyProfile = true,
 ): Partial<typeof contactsTable.$inferInsert> {
   const patch: Partial<typeof contactsTable.$inferInsert> = {};
   for (const field of contactEnrichmentFields) {
+    if (!includeCompanyProfile && companyProfileFields.includes(field as (typeof companyProfileFields)[number])) continue;
     if (input[field] === undefined) continue;
     const value = input[field];
     if (value === null) {
@@ -219,6 +228,47 @@ function contactEnrichmentPatch(
     }
   }
   return patch;
+}
+
+function clearLegacyCompanyProfile(): Partial<typeof contactsTable.$inferInsert> {
+  return {
+    companyName: null,
+    companyWebsiteUrl: null,
+    companyDomain: null,
+    companyIndustry: null,
+    companySize: null,
+    companyRevenueRange: null,
+    companyDescription: null,
+    companyPhoneNumber: null,
+    companyLinkedinUrl: null,
+    companyLocation: null,
+  };
+}
+
+function contactCompanyPatch(
+  profile: ReturnType<typeof companyProfileFrom>,
+): Partial<typeof contactsTable.$inferInsert> {
+  return {
+    companyName: profile.companyName,
+    companyWebsiteUrl: profile.companyWebsiteUrl,
+    companyDomain: profile.companyDomain,
+    companyIndustry: profile.companyIndustry,
+    companySize: profile.companySize,
+    companyRevenueRange: profile.companyRevenueRange,
+    companyDescription: profile.companyDescription,
+    companyPhoneNumber: profile.companyPhoneNumber,
+    companyLinkedinUrl: profile.companyLinkedinUrl,
+    companyLocation: profile.companyLocation,
+  };
+}
+
+function publicCompanyPayload(company: typeof companiesTable.$inferSelect) {
+  const {
+    userId: _userId,
+    companyDomainKey: _companyDomainKey,
+    ...publicCompany
+  } = company;
+  return publicCompany;
 }
 
 function sendingSettingsResponse(
@@ -275,17 +325,32 @@ async function getContactPayload(
   userId: string,
   contact: typeof contactsTable.$inferSelect,
 ) {
-  const memberships = await db
-    .select({ listId: contactListMembersTable.listId })
-    .from(contactListMembersTable)
-    .where(
-      and(
-        eq(contactListMembersTable.userId, userId),
-        eq(contactListMembersTable.contactId, contact.id),
+  const [memberships, companyRows] = await Promise.all([
+    db
+      .select({ listId: contactListMembersTable.listId })
+      .from(contactListMembersTable)
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          eq(contactListMembersTable.contactId, contact.id),
+        ),
       ),
-    );
+    contact.companyId
+      ? db
+          .select()
+          .from(companiesTable)
+          .where(
+            and(
+              eq(companiesTable.id, contact.companyId),
+              eq(companiesTable.userId, userId),
+            ),
+          )
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
   return {
     ...contact,
+    company: companyRows[0] ? publicCompanyPayload(companyRows[0]) : null,
     name:
       [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
       contact.name,
@@ -893,7 +958,7 @@ router.post(
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const userId = req.authUser!.id;
-  const [contacts, quota, memberships, emailHistory] = await Promise.all([
+  const [contacts, quota, memberships, emailHistory, companies] = await Promise.all([
     db
       .select()
       .from(contactsTable)
@@ -908,6 +973,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       .from(contactListMembersTable)
       .where(eq(contactListMembersTable.userId, userId)),
     getTenantContactEmailHistory(userId),
+    db.select().from(companiesTable).where(eq(companiesTable.userId, userId)),
   ]);
   const uploadSettings = await getPlatformSettings();
   const listIdsByContact = new Map<string, string[]>();
@@ -925,10 +991,14 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       lastEmailByContact.set(email.contactId, email);
     }
   }
+  const companiesById = new Map(companies.map((company) => [company.id, company]));
   res.json(
     ListContactsResponse.parse({
       contacts: contacts.map((contact) => ({
         ...contact,
+        company: contact.companyId
+          ? publicCompanyPayload(companiesById.get(contact.companyId)!)
+          : null,
         name:
           [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
           contact.name,
@@ -1475,13 +1545,15 @@ router.patch(
     }
 
     const updateResult = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1)
+        .for("update");
+      if (!lockedUser) return { kind: "not_found" as const };
       const [existing] = await tx
-        .select({
-          id: contactsTable.id,
-          name: contactsTable.name,
-          firstName: contactsTable.firstName,
-          lastName: contactsTable.lastName,
-        })
+        .select()
         .from(contactsTable)
         .where(
           and(
@@ -1490,7 +1562,91 @@ router.patch(
           ),
         )
         .for("update");
-      if (!existing) return null;
+      if (!existing) return { kind: "not_found" as const };
+
+      let nextCompanyId = parsed.data.companyId === undefined
+        ? existing.companyId
+        : parsed.data.companyId;
+      let companyProfilePatch: Partial<typeof contactsTable.$inferInsert> = {};
+      if (nextCompanyId) {
+        const [company] = await tx
+          .select()
+          .from(companiesTable)
+          .where(
+            and(
+              eq(companiesTable.id, nextCompanyId),
+              eq(companiesTable.userId, userId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!company) return { kind: "company_not_found" as const };
+
+        const mergedProfile = mergeCompatibleCompanyProfiles([
+          companyProfileFrom(company),
+          companyProfileFrom(existing),
+          companyProfileFrom(parsed.data),
+        ]);
+        if (!mergedProfile?.companyName) {
+          return { kind: "company_profile_conflict" as const };
+        }
+        const domainKey = companyDomainKey(mergedProfile);
+        if (domainKey) {
+          const [duplicateCompany] = await tx
+            .select({ id: companiesTable.id })
+            .from(companiesTable)
+            .where(
+              and(
+                eq(companiesTable.userId, userId),
+                eq(companiesTable.companyDomainKey, domainKey),
+                ne(companiesTable.id, company.id),
+              ),
+            )
+            .limit(1);
+          if (duplicateCompany) {
+            return { kind: "company_domain_conflict" as const };
+          }
+        }
+        await tx
+          .update(companiesTable)
+          .set({
+            ...mergedProfile,
+            companyName: mergedProfile.companyName,
+            companyDomainKey: domainKey,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(companiesTable.id, company.id),
+              eq(companiesTable.userId, userId),
+            ),
+          );
+        companyProfilePatch = {
+          ...clearLegacyCompanyProfile(),
+          companyLinkSuppressed: false,
+        };
+      } else if (existing.companyId) {
+        const [previousCompany] = await tx
+          .select()
+          .from(companiesTable)
+          .where(
+            and(
+              eq(companiesTable.id, existing.companyId),
+              eq(companiesTable.userId, userId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!previousCompany) return { kind: "company_not_found" as const };
+        companyProfilePatch = {
+          ...contactCompanyPatch(companyProfileFrom(previousCompany)),
+          companyLinkSuppressed: true,
+        };
+      }
+
+      const wasLinked = existing.companyId !== null;
+      const shouldWriteLegacyProfile =
+        nextCompanyId === null && !wasLinked;
       const firstName = parsed.data.firstName ?? existing.firstName;
       const lastName = parsed.data.lastName ?? existing.lastName;
       const [updated] = await tx
@@ -1502,7 +1658,7 @@ router.patch(
             : {}),
           firstName,
           lastName,
-          ...(parsed.data.companyName !== undefined
+          ...(shouldWriteLegacyProfile && parsed.data.companyName !== undefined
             ? { companyName: optionalContactValue(parsed.data.companyName) }
             : {}),
           ...(parsed.data.linkedinUrl !== undefined
@@ -1511,7 +1667,11 @@ router.patch(
           ...(parsed.data.phoneNumber !== undefined
             ? { phoneNumber: optionalContactValue(parsed.data.phoneNumber) }
             : {}),
-          ...contactEnrichmentPatch(parsed.data),
+          ...contactEnrichmentPatch(parsed.data, shouldWriteLegacyProfile),
+          ...(parsed.data.companyId !== undefined
+            ? { companyId: nextCompanyId }
+            : {}),
+          ...companyProfilePatch,
           ...(parsed.data.subscribed !== undefined
             ? { subscribed: parsed.data.subscribed }
             : {}),
@@ -1524,7 +1684,7 @@ router.patch(
           ),
         )
         .returning();
-      if (!updated) return null;
+      if (!updated) return { kind: "not_found" as const };
       if (parsed.data.listIds !== undefined) {
         await tx
           .delete(contactListMembersTable)
@@ -1565,11 +1725,30 @@ router.patch(
               })
           : [];
       return {
+        kind: "updated" as const,
         contact: updated,
         campaignIds: suppressed.map((recipient) => recipient.campaignId),
       };
     });
-    if (!updateResult) {
+    if (updateResult.kind === "company_not_found") {
+      res.status(404).json({ error: "Company not found in this workspace.", code: "COMPANY_NOT_FOUND" });
+      return;
+    }
+    if (updateResult.kind === "company_profile_conflict") {
+      res.status(409).json({
+        error: "This contact has company details that conflict with the selected company. Resolve the profile details before linking.",
+        code: "COMPANY_PROFILE_CONFLICT",
+      });
+      return;
+    }
+    if (updateResult.kind === "company_domain_conflict") {
+      res.status(409).json({
+        error: "Another company already uses this domain.",
+        code: "COMPANY_DOMAIN_EXISTS",
+      });
+      return;
+    }
+    if (updateResult.kind === "not_found") {
       res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
       return;
     }

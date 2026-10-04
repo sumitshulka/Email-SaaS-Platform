@@ -188,9 +188,30 @@ memory.public.none(`
     connection_check_at timestamptz,
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE companies (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company_name varchar(200) NOT NULL,
+    company_website_url varchar(2048),
+    company_domain varchar(255),
+    company_domain_key varchar(255),
+    company_industry varchar(120),
+    company_size varchar(80),
+    company_revenue_range varchar(80),
+    company_description text,
+    company_phone_number varchar(40),
+    company_linkedin_url varchar(2048),
+    company_location varchar(200),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (id, user_id),
+    UNIQUE (user_id, company_domain_key)
+  );
   CREATE TABLE contacts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company_id uuid,
+    company_link_suppressed boolean NOT NULL DEFAULT false,
     name varchar(201) NOT NULL DEFAULT '',
     email varchar(254) NOT NULL,
     first_name varchar(100) NOT NULL DEFAULT '',
@@ -230,7 +251,8 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, email),
-    UNIQUE (id, user_id)
+    UNIQUE (id, user_id),
+    FOREIGN KEY (company_id, user_id) REFERENCES companies(id, user_id) ON DELETE RESTRICT
   );
   CREATE TABLE contact_lists (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -492,6 +514,7 @@ beforeEach(async () => {
   await db.delete(dbModule.emailCampaignsTable);
   await db.delete(dbModule.contactListMembersTable);
   await db.delete(dbModule.contactsTable);
+  await db.delete(dbModule.companiesTable);
   await db.delete(dbModule.contactListsTable);
   await db.delete(dbModule.tenantSendingConfigurationTable);
   await db.delete(dbModule.auditLogsTable);
@@ -1700,6 +1723,152 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
     assert.equal(tooLarge.response.status, 413);
     assert.equal(tooLarge.body.code, "FILE_TOO_LARGE");
+  });
+
+  it("creates tenant-scoped shared companies from matching domains and preserves conflicts", async () => {
+    const owner = await loggedInUser({ username: "company-owner" });
+    const other = await loggedInUser({ username: "company-other" });
+    const [companyTestPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Shared Company Test Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 10,
+      })
+      .returning();
+    for (const [userId, paymentId] of [
+      [owner.user.id, "66666666-6666-4666-8666-666666666666"],
+      [other.user.id, "77777777-7777-4777-8777-777777777777"],
+    ]) {
+      await db.insert(dbModule.userSubscriptionsTable).values({
+        userId,
+        packageId: companyTestPackage.id,
+        paymentId,
+        status: "active",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60 * 60_000),
+      });
+    }
+    const createLegacyContact = (cookie, email, companyName) =>
+      api("/contacts", {
+        method: "POST",
+        cookie,
+        body: {
+          email,
+          firstName: "Casey",
+          lastName: "Contact",
+          companyName,
+          companyDomain: "HTTPS://WWW.acme-company.test/about",
+          companyIndustry: "Software",
+        },
+      });
+
+    const first = await createLegacyContact(owner.cookie, "first@acme.test", "Acme");
+    const second = await createLegacyContact(owner.cookie, "second@acme.test", "ACME");
+    for (const result of [first, second]) {
+      assert.equal(result.response.status, 201, JSON.stringify(result.body));
+    }
+
+    const backfill = await api("/companies/backfill", {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(backfill.response.status, 200, JSON.stringify(backfill.body));
+    assert.deepEqual(backfill.body, {
+      linkedContacts: 2,
+      createdCompanies: 1,
+      skippedContacts: 0,
+    });
+
+    const conflict = await createLegacyContact(owner.cookie, "conflict@acme.test", "Different Co");
+    const otherContact = await createLegacyContact(other.cookie, "other@acme.test", "Acme");
+    for (const result of [conflict, otherContact]) {
+      assert.equal(result.response.status, 201, JSON.stringify(result.body));
+    }
+    const secondBackfill = await api("/companies/backfill", {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(secondBackfill.response.status, 200, JSON.stringify(secondBackfill.body));
+    assert.deepEqual(secondBackfill.body, {
+      linkedContacts: 0,
+      createdCompanies: 0,
+      skippedContacts: 1,
+    });
+
+    const companies = await api("/companies", { cookie: owner.cookie });
+    assert.equal(companies.response.status, 200, JSON.stringify(companies.body));
+    assert.equal(companies.body.companies.length, 1);
+    const company = companies.body.companies[0];
+    assert.equal(company.companyDomain, "HTTPS://WWW.acme-company.test/about");
+    assert.equal(company.contactCount, 2);
+
+    const otherBackfill = await api("/companies/backfill", {
+      method: "POST",
+      cookie: other.cookie,
+    });
+    assert.equal(otherBackfill.response.status, 200, JSON.stringify(otherBackfill.body));
+    assert.equal(otherBackfill.body.createdCompanies, 1);
+    const otherCompanies = await api("/companies", { cookie: other.cookie });
+    assert.equal(otherCompanies.body.companies.length, 1);
+    assert.notEqual(otherCompanies.body.companies[0].id, company.id);
+
+    const ownerContacts = await api("/contacts", { cookie: owner.cookie });
+    const linked = ownerContacts.body.contacts.find((contact) => contact.email === "first@acme.test");
+    const unlinked = ownerContacts.body.contacts.find((contact) => contact.email === "conflict@acme.test");
+    assert.equal(linked.companyId, company.id);
+    assert.equal(linked.company.companyName, "Acme");
+    assert.equal(unlinked.companyId, null);
+    assert.equal(unlinked.company, null);
+    assert.equal(unlinked.companyName, "Different Co");
+
+    const linkConflict = await api(`/contacts/${unlinked.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { companyId: company.id },
+    });
+    assert.equal(linkConflict.response.status, 409);
+    assert.equal(linkConflict.body.code, "COMPANY_PROFILE_CONFLICT");
+
+    const blockedDelete = await api(`/companies/${company.id}`, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(blockedDelete.response.status, 409);
+    assert.equal(blockedDelete.body.code, "COMPANY_HAS_CONTACTS");
+
+    for (const email of ["first@acme.test", "second@acme.test"]) {
+      const contact = ownerContacts.body.contacts.find((item) => item.email === email);
+      const unlinkedResult = await api(`/contacts/${contact.id}`, {
+        method: "PATCH",
+        cookie: owner.cookie,
+        body: { companyId: null },
+      });
+      assert.equal(unlinkedResult.response.status, 200, JSON.stringify(unlinkedResult.body));
+      assert.equal(unlinkedResult.body.companyId, null);
+      assert.equal(unlinkedResult.body.companyName, "Acme");
+      assert.equal(
+        unlinkedResult.body.companyDomain,
+        "HTTPS://WWW.acme-company.test/about",
+      );
+    }
+    const backfillAfterUnlink = await api("/companies/backfill", {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.deepEqual(backfillAfterUnlink.body, {
+      linkedContacts: 0,
+      createdCompanies: 0,
+      skippedContacts: 1,
+    });
+    const deleted = await api(`/companies/${company.id}`, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(deleted.response.status, 204);
   });
 });
 

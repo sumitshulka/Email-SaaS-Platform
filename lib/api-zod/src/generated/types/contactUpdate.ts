@@ -24,6 +24,8 @@ export interface ContactUpdate {
      * @maxLength 100
      */
   lastName?: string;
+  /** @nullable */
+  companyId?: string | null;
   /**
      * @maxLength 200
      * @nullable

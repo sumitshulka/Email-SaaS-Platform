@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
-import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck } from 'lucide-react';
-import { getGetContactQueryKey, getListContactsQueryKey, useGetContact, useListContactLists, useUpdateContact } from '@workspace/api-client-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2 } from 'lucide-react';
+import {
+  getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
+  useGetContact, useListCompanies, useListContactLists, useUpdateContact,
+} from '@workspace/api-client-react';
 import type { Contact, ContactUpdate } from '@workspace/api-client-react';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
@@ -82,11 +85,13 @@ export function ContactDetailPage() {
     query: { enabled: !!contactId, queryKey: getGetContactQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
   });
   const listsQuery = useListContactLists();
+  const companiesQuery = useListCompanies();
   const update = useUpdateContact();
   const qc = useQueryClient();
   const [form, setForm] = useState<Editable | null>(null);
   const [editingProfiles, setEditingProfiles] = useState<Set<NullableField>>(() => new Set());
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [companyChoice, setCompanyChoice] = useState('');
   const contact = query.data as Contact | undefined;
 
   // Reinitialize when a contact is first loaded or the server returns a newer revision.
@@ -136,6 +141,26 @@ export function ContactDetailPage() {
     else next.add(key);
     return next;
   });
+  const changeCompany = (companyId: string | null) => {
+    update.mutate({ contactId: contact.id, data: { companyId } }, {
+      onSuccess: linkedContact => {
+        void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
+        void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+        if (contact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(contact.companyId) });
+        if (linkedContact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(linkedContact.companyId) });
+        setCompanyChoice('');
+        setNotice({ kind: 'success', text: linkedContact.companyId ? 'Shared company profile linked. Company details now come from the shared record.' : 'Company unlinked. The company profile was preserved on this contact.' });
+      },
+      onError: error => {
+        const text = errorText(error);
+        const conflict = /conflict|domain|company profile/i.test(text);
+        setNotice({ kind: 'error', text: conflict
+          ? `This contact could not be linked because of a company profile or domain conflict. No contact or company data was discarded. ${text}`
+          : text });
+      },
+    });
+  };
 
   return <div className="fade-in">
     <div className="mb-5"><Link href="/contacts" data-testid="link-back-contacts" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Back to contacts</Link></div>
@@ -184,7 +209,25 @@ export function ContactDetailPage() {
       </div>
       <div className="space-y-5">
         <Section title="Company profile" eyebrow="ORGANIZATION / ACCOUNT">
-          <div className="grid gap-4 sm:grid-cols-2">
+          {contact.company ? <div data-testid="panel-linked-company" className="rounded-md border border-[#dce6ef] bg-[#f7fafc] p-4">
+            <div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#e8f0f8] text-[#245b9b]"><Building2 className="h-4 w-4"/></span><div className="min-w-0 flex-1"><div className="text-[13px] font-bold text-[#26384b]">{contact.company.companyName}</div><div className="mt-1 break-all text-[11px] text-[#718196]">{contact.company.companyDomain || 'Domain not provided'}{contact.company.companyIndustry ? ` · ${contact.company.companyIndustry}` : ''}</div></div></div>
+            {contact.company.companyDescription && <p className="mt-3 whitespace-pre-wrap text-[11px] leading-5 text-[#647589]">{contact.company.companyDescription}</p>}
+            <dl className="mt-3 grid gap-2 border-t border-[#e3eaf0] pt-3 text-[10px]">
+              <div><dt className="mb-1 font-semibold uppercase tracking-wide text-[#8a96a4]">Website URL</dt><dd data-testid="text-linked-company-website" className="break-all font-mono text-[#3e6284]">{contact.company.companyWebsiteUrl || 'Not provided'}</dd></div>
+              <div><dt className="mb-1 font-semibold uppercase tracking-wide text-[#8a96a4]">LinkedIn URL</dt><dd data-testid="text-linked-company-linkedin" className="break-all font-mono text-[#3e6284]">{contact.company.companyLinkedinUrl || 'Not provided'}</dd></div>
+               <div className="grid grid-cols-2 gap-3">
+                 <DataField label="Company size" value={contact.company.companySize} testId="text-linked-company-size"/>
+                 <DataField label="Revenue range" value={contact.company.companyRevenueRange} testId="text-linked-company-revenue"/>
+                 <DataField label="Phone" value={contact.company.companyPhoneNumber} testId="text-linked-company-phone"/>
+                 <DataField label="Location" value={contact.company.companyLocation} testId="text-linked-company-location"/>
+               </div>
+            </dl>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] text-[#7c8998]">Shared across contacts in this workspace</span><button type="button" data-testid="button-unlink-company" disabled={update.isPending} onClick={() => changeCompany(null)} className="inline-flex items-center gap-1.5 rounded-md border border-[#d8e0e7] bg-white px-3 py-2 text-[10px] font-semibold text-[#52667b] hover:bg-[#f1f5f8] disabled:opacity-50"><Unlink2 className="h-3.5 w-3.5"/>{update.isPending ? 'Updating…' : 'Unlink company'}</button></div>
+          </div> : <div className="mb-4 rounded-md border border-[#e6eaf0] bg-[#fbfcfd] p-3.5"><div className="flex items-start gap-2.5"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#8a96a4]"/><div><div className="text-[11px] font-semibold text-[#536477]">{form.companyName ? `Legacy profile: ${form.companyName}` : 'No shared company linked'}</div><p className="mt-1 text-[10px] leading-4 text-[#8793a0]">{form.companyName ? 'This contact’s existing company profile stays visible and unchanged until you choose to link a shared record.' : 'Choose a shared company profile to associate this contact.'}</p></div></div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row"><select aria-label="Choose company" data-testid="select-contact-company" value={companyChoice} onChange={event => setCompanyChoice(event.target.value)} className="h-10 min-w-0 flex-1 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] text-[#344154] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"><option value="">Choose a company…</option>{(companiesQuery.data?.companies || []).map(company => <option key={company.id} value={company.id}>{company.companyName}{company.companyDomain ? ` · ${company.companyDomain}` : ''}</option>)}</select><button type="button" data-testid="button-link-company" disabled={!companyChoice || update.isPending || companiesQuery.isLoading} onClick={() => changeCompany(companyChoice)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-[#174f99] bg-[#174f99] px-3 text-[10px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50"><Link2 className="h-3.5 w-3.5"/>Link company</button></div>
+            {companiesQuery.isError && <p role="alert" className="mt-2 text-[10px] text-[#a45b30]">Company options could not be loaded. Retry from the Companies page.</p>}
+          </div>}
+          {!contact.company && <div className="grid gap-4 sm:grid-cols-2">
             <InputField title="Company" value={form.companyName} onChange={setString('companyName')} testId="input-detail-company"/>
             <InputField title="Domain" value={form.companyDomain} onChange={setString('companyDomain')} testId="input-detail-company-domain"/>
             <InputField title="Industry" value={form.companyIndustry} onChange={setString('companyIndustry')} testId="input-detail-company-industry"/>
@@ -193,17 +236,19 @@ export function ContactDetailPage() {
             <InputField title="Company phone" value={form.companyPhoneNumber} onChange={setString('companyPhoneNumber')} testId="input-detail-company-phone"/>
             <InputField title="Company location" value={form.companyLocation} onChange={setString('companyLocation')} testId="input-detail-company-location"/>
             <div className="sm:col-span-2"><TextAreaField title="Company description" value={form.companyDescription} onChange={setString('companyDescription')} testId="input-detail-company-description"/></div>
-          </div>
+          </div>}
         </Section>
         <Section title="Online profiles" eyebrow="WEB / SOCIAL">
-          <div className="grid gap-4">
+           <div className="grid gap-4">
             <OnlineProfileField title="LinkedIn URL" value={form.linkedinUrl} onChange={setString('linkedinUrl')} testId="input-detail-linkedin" editing={editingProfiles.has('linkedinUrl')} onToggleEdit={() => toggleProfileEdit('linkedinUrl')}/>
             <OnlineProfileField title="Personal website URL" value={form.websiteUrl} onChange={setString('websiteUrl')} testId="input-detail-website" editing={editingProfiles.has('websiteUrl')} onToggleEdit={() => toggleProfileEdit('websiteUrl')}/>
             <OnlineProfileField title="Twitter URL" value={form.twitterUrl} onChange={setString('twitterUrl')} testId="input-detail-twitter" editing={editingProfiles.has('twitterUrl')} onToggleEdit={() => toggleProfileEdit('twitterUrl')}/>
             <OnlineProfileField title="Facebook URL" value={form.facebookUrl} onChange={setString('facebookUrl')} testId="input-detail-facebook" editing={editingProfiles.has('facebookUrl')} onToggleEdit={() => toggleProfileEdit('facebookUrl')}/>
             <OnlineProfileField title="Instagram URL" value={form.instagramUrl} onChange={setString('instagramUrl')} testId="input-detail-instagram" editing={editingProfiles.has('instagramUrl')} onToggleEdit={() => toggleProfileEdit('instagramUrl')}/>
-            <OnlineProfileField title="Company website URL" value={form.companyWebsiteUrl} onChange={setString('companyWebsiteUrl')} testId="input-detail-company-website" editing={editingProfiles.has('companyWebsiteUrl')} onToggleEdit={() => toggleProfileEdit('companyWebsiteUrl')}/>
-            <OnlineProfileField title="Company LinkedIn URL" value={form.companyLinkedinUrl} onChange={setString('companyLinkedinUrl')} testId="input-detail-company-linkedin" editing={editingProfiles.has('companyLinkedinUrl')} onToggleEdit={() => toggleProfileEdit('companyLinkedinUrl')}/>
+             {!contact.company && <>
+               <OnlineProfileField title="Company website URL" value={form.companyWebsiteUrl} onChange={setString('companyWebsiteUrl')} testId="input-detail-company-website" editing={editingProfiles.has('companyWebsiteUrl')} onToggleEdit={() => toggleProfileEdit('companyWebsiteUrl')}/>
+               <OnlineProfileField title="Company LinkedIn URL" value={form.companyLinkedinUrl} onChange={setString('companyLinkedinUrl')} testId="input-detail-company-linkedin" editing={editingProfiles.has('companyLinkedinUrl')} onToggleEdit={() => toggleProfileEdit('companyLinkedinUrl')}/>
+             </>}
           </div>
           <p className="mt-3 text-[10px] leading-4 text-[#8a95a2]">Select Edit to add or change a profile, then save your contact changes.</p>
         </Section>

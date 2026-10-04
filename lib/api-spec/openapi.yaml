@@ -561,6 +561,138 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [contacts]
+      summary: List companies and their linked-contact counts for the authenticated tenant
+      responses:
+        "200":
+          description: Tenant-owned company records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyCollection"
+    post:
+      operationId: createCompany
+      tags: [contacts]
+      summary: Create a company record for the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyInput"
+      responses:
+        "201":
+          description: Company created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          description: Invalid company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A company with this domain already exists in the tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /companies/backfill:
+    post:
+      operationId: backfillCompanyProfiles
+      tags: [contacts]
+      summary: Move safely matched legacy contact company profiles into shared company records
+      responses:
+        "200":
+          description: Backfill result; ambiguous and incomplete profiles remain on contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyBackfillResult"
+  /companies/{companyId}:
+    parameters:
+      - name: companyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getCompany
+      tags: [contacts]
+      summary: Get a company and its linked contacts
+      responses:
+        "200":
+          description: Company profile and associated contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyDetail"
+        "404":
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      operationId: updateCompany
+      tags: [contacts]
+      summary: Update a company profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyUpdate"
+      responses:
+        "200":
+          description: Updated company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "400":
+          description: Invalid company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A company with this domain already exists in the tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteCompany
+      tags: [contacts]
+      summary: Delete a company that has no linked contacts
+      responses:
+        "204":
+          description: Company deleted
+        "409":
+          description: Unlink the company's contacts before deleting it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/import:
     post:
       operationId: importContacts
@@ -1811,6 +1943,87 @@ components:
         checkedAt: { type: string, format: date-time }
         savedSettingsUpdated: { type: boolean }
       required: [error, code, checkedAt, savedSettingsUpdated]
+    Company:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        companyName: { type: string, maxLength: 200 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+    CompanyListItem:
+      allOf:
+        - $ref: "#/components/schemas/Company"
+        - type: object
+          properties:
+            contactCount: { type: integer, minimum: 0 }
+          required: [contactCount]
+    CompanyContact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        jobTitle: { type: ["string", "null"] }
+      required: [id, name, email, jobTitle]
+    CompanyDetail:
+      type: object
+      properties:
+        company: { $ref: "#/components/schemas/Company" }
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/CompanyContact" }
+      required: [company, contacts]
+    CompanyCollection:
+      type: object
+      properties:
+        companies:
+          type: array
+          items: { $ref: "#/components/schemas/CompanyListItem" }
+      required: [companies]
+    CompanyInput:
+      type: object
+      properties:
+        companyName: { type: string, minLength: 1, maxLength: 200 }
+        companyWebsiteUrl: { type: string, maxLength: 2048 }
+        companyDomain: { type: string, maxLength: 255 }
+        companyIndustry: { type: string, maxLength: 120 }
+        companySize: { type: string, maxLength: 80 }
+        companyRevenueRange: { type: string, maxLength: 80 }
+        companyDescription: { type: string, maxLength: 10000 }
+        companyPhoneNumber: { type: string, maxLength: 40 }
+        companyLinkedinUrl: { type: string, maxLength: 2048 }
+        companyLocation: { type: string, maxLength: 200 }
+      required: [companyName]
+    CompanyUpdate:
+      type: object
+      properties:
+        companyName: { type: string, minLength: 1, maxLength: 200 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
+    CompanyBackfillResult:
+      type: object
+      properties:
+        linkedContacts: { type: integer, minimum: 0 }
+        createdCompanies: { type: integer, minimum: 0 }
+        skippedContacts: { type: integer, minimum: 0 }
+      required: [linkedContacts, createdCompanies, skippedContacts]
     Contact:
       type: object
       properties:
@@ -1819,6 +2032,11 @@ components:
         name: { type: string }
         firstName: { type: string }
         lastName: { type: string }
+        companyId: { type: ["string", "null"], format: uuid }
+        company:
+          anyOf:
+            - $ref: "#/components/schemas/Company"
+            - type: "null"
         companyName: { type: ["string", "null"], maxLength: 200 }
         linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         phoneNumber: { type: ["string", "null"], maxLength: 40 }
@@ -1854,7 +2072,7 @@ components:
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, listIds, createdAt, updatedAt]
     ContactEmailHistoryItem:
       type: object
       properties:
@@ -1935,6 +2153,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         firstName: { type: string, minLength: 1, maxLength: 100 }
         lastName: { type: string, minLength: 1, maxLength: 100 }
+        companyId: { type: ["string", "null"], format: uuid }
         companyName: { type: ["string", "null"], maxLength: 200 }
         linkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         phoneNumber: { type: ["string", "null"], maxLength: 40 }

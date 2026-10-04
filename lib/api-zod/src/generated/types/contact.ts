@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { Company } from './company';
 
 export interface Contact {
   id: string;
@@ -12,6 +13,9 @@ export interface Contact {
   name: string;
   firstName: string;
   lastName: string;
+  /** @nullable */
+  companyId: string | null;
+  company: Company | null;
   /**
      * @maxLength 200
      * @nullable

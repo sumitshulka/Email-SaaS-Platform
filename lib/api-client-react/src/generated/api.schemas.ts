@@ -447,12 +447,178 @@ export interface TenantSendingConnectionTestFailure {
   savedSettingsUpdated: boolean;
 }
 
+export interface Company {
+  id: string;
+  /** @maxLength 200 */
+  companyName: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CompanyListItem = Company & {
+  /** @minimum 0 */
+  contactCount: number;
+};
+
+export interface CompanyContact {
+  id: string;
+  name: string;
+  email: string;
+  /** @nullable */
+  jobTitle: string | null;
+}
+
+export interface CompanyDetail {
+  company: Company;
+  contacts: CompanyContact[];
+}
+
+export interface CompanyCollection {
+  companies: CompanyListItem[];
+}
+
+export interface CompanyInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  companyName: string;
+  /** @maxLength 2048 */
+  companyWebsiteUrl?: string;
+  /** @maxLength 255 */
+  companyDomain?: string;
+  /** @maxLength 120 */
+  companyIndustry?: string;
+  /** @maxLength 80 */
+  companySize?: string;
+  /** @maxLength 80 */
+  companyRevenueRange?: string;
+  /** @maxLength 10000 */
+  companyDescription?: string;
+  /** @maxLength 40 */
+  companyPhoneNumber?: string;
+  /** @maxLength 2048 */
+  companyLinkedinUrl?: string;
+  /** @maxLength 200 */
+  companyLocation?: string;
+}
+
+export interface CompanyUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  companyName?: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl?: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation?: string | null;
+}
+
+export interface CompanyBackfillResult {
+  /** @minimum 0 */
+  linkedContacts: number;
+  /** @minimum 0 */
+  createdCompanies: number;
+  /** @minimum 0 */
+  skippedContacts: number;
+}
+
 export interface Contact {
   id: string;
   email: string;
   name: string;
   firstName: string;
   lastName: string;
+  /** @nullable */
+  companyId: string | null;
+  company: Company | null;
   /**
      * @maxLength 200
      * @nullable
@@ -798,6 +964,8 @@ export interface ContactUpdate {
      * @maxLength 100
      */
   lastName?: string;
+  /** @nullable */
+  companyId?: string | null;
   /**
      * @maxLength 200
      * @nullable
