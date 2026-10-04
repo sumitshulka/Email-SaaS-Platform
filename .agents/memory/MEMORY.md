@@ -3,3 +3,4 @@
 - [pg-mem with Drizzle](pg-mem-drizzle-adapter.md) — pg-mem's node-postgres adapter needs a small query shim for Drizzle's parser and array-row options.
 - [Schema push verification](schema-push-verification.md) — inspect SQL errors and actual schema; a successful command exit can accompany a partially applied schema push.
 - [Provider report semantics](provider-report-semantics.md) — provider receipt timestamps and relay events are not final delivery; validate native exports before adding adapters.
+- [Payment capture timestamps](payment-capture-timestamps.md) — use subscription creation time for captures when available; payment-row updates can be unrelated backfills.

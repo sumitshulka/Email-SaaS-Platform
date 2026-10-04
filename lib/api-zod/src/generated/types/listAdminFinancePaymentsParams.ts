@@ -19,17 +19,31 @@ search?: string;
 packageId?: string;
 /**
  * Inclusive UTC calendar date for capture time.
+ * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
  */
-fromDate?: Date;
+fromDate?: string;
 /**
  * Inclusive UTC calendar date for capture time.
+ * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
  */
-toDate?: Date;
+toDate?: string;
 status?: ListAdminFinancePaymentsStatus;
 /**
  * @pattern ^[A-Z]{3}$
  */
 currency?: string;
+/**
+ * Inclusive minimum amount in the selected currency's smallest unit.
+ * @minimum 0
+ * @maximum 2147483647
+ */
+minAmountMinor?: number;
+/**
+ * Inclusive maximum amount in the selected currency's smallest unit.
+ * @minimum 0
+ * @maximum 2147483647
+ */
+maxAmountMinor?: number;
 environment?: ListAdminFinancePaymentsEnvironment;
 accountStatus?: ListAdminFinancePaymentsAccountStatus;
 sortBy?: ListAdminFinancePaymentsSortBy;

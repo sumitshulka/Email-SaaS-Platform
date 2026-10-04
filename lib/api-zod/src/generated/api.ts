@@ -1129,8 +1129,16 @@ export const GetAdminDashboardResponse = zod.object({
  */
 export const listAdminFinancePaymentsQuerySearchMax = 160;
 
+export const listAdminFinancePaymentsQueryFromDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const listAdminFinancePaymentsQueryToDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const listAdminFinancePaymentsQueryStatusDefault = `captured`;
 export const listAdminFinancePaymentsQueryCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const listAdminFinancePaymentsQueryMinAmountMinorMin = 0;
+export const listAdminFinancePaymentsQueryMinAmountMinorMax = 2147483647;
+
+export const listAdminFinancePaymentsQueryMaxAmountMinorMin = 0;
+export const listAdminFinancePaymentsQueryMaxAmountMinorMax = 2147483647;
+
 export const listAdminFinancePaymentsQueryAccountStatusDefault = `any`;
 export const listAdminFinancePaymentsQuerySortByDefault = `capturedAt`;
 export const listAdminFinancePaymentsQuerySortDirectionDefault = `desc`;
@@ -1145,10 +1153,12 @@ export const listAdminFinancePaymentsQueryPageSizeMax = 100;
 export const ListAdminFinancePaymentsQueryParams = zod.object({
   "search": zod.coerce.string().max(listAdminFinancePaymentsQuerySearchMax).optional(),
   "packageId": zod.coerce.string().uuid().optional(),
-  "fromDate": zod.date().optional().describe('Inclusive UTC calendar date for capture time.'),
-  "toDate": zod.date().optional().describe('Inclusive UTC calendar date for capture time.'),
+  "fromDate": zod.coerce.string().regex(listAdminFinancePaymentsQueryFromDateRegExp).optional().describe('Inclusive UTC calendar date for capture time.'),
+  "toDate": zod.coerce.string().regex(listAdminFinancePaymentsQueryToDateRegExp).optional().describe('Inclusive UTC calendar date for capture time.'),
   "status": zod.enum(['captured', 'refunded', 'all']).default(listAdminFinancePaymentsQueryStatusDefault),
   "currency": zod.coerce.string().regex(listAdminFinancePaymentsQueryCurrencyRegExp).optional(),
+  "minAmountMinor": zod.coerce.number().int().min(listAdminFinancePaymentsQueryMinAmountMinorMin).max(listAdminFinancePaymentsQueryMinAmountMinorMax).optional().describe('Inclusive minimum amount in the selected currency\'s smallest unit.'),
+  "maxAmountMinor": zod.coerce.number().int().min(listAdminFinancePaymentsQueryMaxAmountMinorMin).max(listAdminFinancePaymentsQueryMaxAmountMinorMax).optional().describe('Inclusive maximum amount in the selected currency\'s smallest unit.'),
   "environment": zod.enum(['sandbox', 'production', 'unrecorded']).optional(),
   "accountStatus": zod.enum(['any', 'active', 'disabled', 'deleted']).default(listAdminFinancePaymentsQueryAccountStatusDefault),
   "sortBy": zod.enum(['capturedAt', 'account', 'subscription', 'amount']).default(listAdminFinancePaymentsQuerySortByDefault),

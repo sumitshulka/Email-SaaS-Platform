@@ -1,5 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreateSubscriptionOrderBody,
@@ -9,6 +25,8 @@ import {
   GetRazorpaySettingsResponse,
   ListAdminSubscriptionPackagesResponse,
   ListAvailableSubscriptionPackagesResponse,
+  ListAdminFinancePaymentsQueryParams,
+  ListAdminFinancePaymentsResponse,
   ReceiveRazorpayWebhookResponse,
   SetActiveRazorpayEnvironmentBody,
   SetActiveRazorpayEnvironmentResponse,
@@ -28,6 +46,8 @@ import {
   razorpayConfigurationTable,
   razorpayWebhookEventsTable,
   subscriptionPackagesTable,
+  userSubscriptionsTable,
+  usersTable,
 } from "@workspace/db";
 import { activateCapturedPayment, getCurrentSubscriptionForUser, serializePackage } from "../lib/billing";
 import { writeAuditLog } from "../lib/audit";
@@ -47,6 +67,284 @@ import { getPlatformSettings } from "../lib/platform-settings";
 import { requireSuperadmin, requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
+
+function utcDayStart(value: string): Date | null {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
+    ? null
+    : date;
+}
+
+router.get(
+  "/admin/finance/payments",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = ListAdminFinancePaymentsQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      invalidInput(res, "One or more finance filters are invalid.");
+      return;
+    }
+
+    const filters = parsed.data;
+    const fromDate = filters.fromDate
+      ? utcDayStart(filters.fromDate)
+      : null;
+    const toDate = filters.toDate ? utcDayStart(filters.toDate) : null;
+    if (
+      (filters.fromDate && !fromDate) ||
+      (filters.toDate && !toDate) ||
+      (fromDate && toDate && fromDate > toDate)
+    ) {
+      invalidInput(res, "Enter a valid UTC date range.");
+      return;
+    }
+    if (
+      (filters.minAmountMinor !== undefined ||
+        filters.maxAmountMinor !== undefined) &&
+      !filters.currency
+    ) {
+      invalidInput(res, "Choose a currency when filtering by amount.");
+      return;
+    }
+    if (filters.sortBy === "amount" && !filters.currency) {
+      invalidInput(res, "Choose a currency before sorting by amount.");
+      return;
+    }
+    if (
+      filters.minAmountMinor !== undefined &&
+      filters.maxAmountMinor !== undefined &&
+      filters.minAmountMinor > filters.maxAmountMinor
+    ) {
+      invalidInput(res, "Minimum amount cannot exceed maximum amount.");
+      return;
+    }
+
+    const conditions: SQL[] = [eq(usersTable.role, "USER")];
+    if (filters.status === "all") {
+      conditions.push(inArray(paymentsTable.status, ["captured", "refunded"]));
+    } else {
+      conditions.push(eq(paymentsTable.status, filters.status));
+    }
+    if (filters.packageId) {
+      conditions.push(eq(paymentsTable.packageId, filters.packageId));
+    }
+    if (filters.currency) {
+      conditions.push(eq(paymentsTable.currency, filters.currency));
+    }
+    if (filters.minAmountMinor !== undefined) {
+      conditions.push(gte(paymentsTable.amountMinor, filters.minAmountMinor));
+    }
+    if (filters.maxAmountMinor !== undefined) {
+      conditions.push(lte(paymentsTable.amountMinor, filters.maxAmountMinor));
+    }
+    if (filters.environment === "unrecorded") {
+      conditions.push(isNull(paymentsTable.razorpayEnvironment));
+    } else if (filters.environment) {
+      conditions.push(
+        eq(paymentsTable.razorpayEnvironment, filters.environment),
+      );
+    }
+    if (filters.accountStatus === "deleted") {
+      conditions.push(isNotNull(usersTable.deletedAt));
+    } else if (filters.accountStatus === "disabled") {
+      conditions.push(
+        and(isNull(usersTable.deletedAt), eq(usersTable.active, false))!,
+      );
+    } else if (filters.accountStatus === "active") {
+      conditions.push(
+        and(isNull(usersTable.deletedAt), eq(usersTable.active, true))!,
+      );
+    }
+    const capturedAtExpression = sql<Date>`COALESCE(
+      ${userSubscriptionsTable.createdAt}, ${paymentsTable.updatedAt}
+    )`;
+    if (fromDate) {
+      conditions.push(gte(capturedAtExpression, fromDate));
+    }
+    if (toDate) {
+      conditions.push(
+        lt(capturedAtExpression, new Date(toDate.getTime() + 24 * 60 * 60 * 1000)),
+      );
+    }
+    const search = filters.search?.trim();
+    if (search) {
+      const escaped = search.replace(/[\\%_]/g, (value) => `\\${value}`);
+      const term = `%${escaped}%`;
+      const accountFullName = sql<string>`${usersTable.firstName} || ' ' || ${usersTable.lastName}`;
+      conditions.push(
+        or(
+          ilike(accountFullName, term),
+          ilike(usersTable.firstName, term),
+          ilike(usersTable.lastName, term),
+          ilike(usersTable.username, term),
+          ilike(usersTable.email, term),
+          ilike(subscriptionPackagesTable.name, term),
+          ilike(sql<string>`${paymentsTable.id}::text`, term),
+          ilike(sql<string>`${userSubscriptionsTable.id}::text`, term),
+          ilike(paymentsTable.receipt, term),
+          ilike(paymentsTable.razorpayOrderId, term),
+          ilike(paymentsTable.razorpayPaymentId, term),
+        )!,
+      );
+    }
+    const where = and(...conditions);
+
+    const sortColumn = {
+      capturedAt: capturedAtExpression,
+      amount: paymentsTable.amountMinor,
+      account: sql<string>`lower(${usersTable.firstName} || ' ' || ${usersTable.lastName})`,
+      subscription: sql<string>`lower(${subscriptionPackagesTable.name})`,
+    }[filters.sortBy];
+    const primaryOrder =
+      filters.sortDirection === "asc" ? asc(sortColumn) : desc(sortColumn);
+    const offset = (filters.page - 1) * filters.pageSize;
+
+    const [countResult, paymentRows, currencyRows, groupedSummaryRows] =
+      await Promise.all([
+        db
+          .select({ total: count() })
+          .from(paymentsTable)
+          .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
+          .innerJoin(
+            subscriptionPackagesTable,
+            eq(paymentsTable.packageId, subscriptionPackagesTable.id),
+          )
+          .leftJoin(
+            userSubscriptionsTable,
+            eq(userSubscriptionsTable.paymentId, paymentsTable.id),
+          )
+          .where(where),
+        db
+          .select({
+            payment: paymentsTable,
+            account: usersTable,
+            subscriptionPackage: subscriptionPackagesTable,
+            subscription: userSubscriptionsTable,
+          })
+          .from(paymentsTable)
+          .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
+          .innerJoin(
+            subscriptionPackagesTable,
+            eq(paymentsTable.packageId, subscriptionPackagesTable.id),
+          )
+          .leftJoin(
+            userSubscriptionsTable,
+            eq(userSubscriptionsTable.paymentId, paymentsTable.id),
+          )
+          .where(where)
+          .orderBy(primaryOrder, asc(paymentsTable.id))
+          .limit(filters.pageSize)
+          .offset(offset),
+        db
+          .selectDistinct({ currency: paymentsTable.currency })
+          .from(paymentsTable)
+          .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
+          .where(
+            and(
+              eq(usersTable.role, "USER"),
+              inArray(paymentsTable.status, ["captured", "refunded"]),
+            ),
+          )
+          .orderBy(asc(paymentsTable.currency)),
+        db
+          .select({
+            currency: paymentsTable.currency,
+            status: paymentsTable.status,
+            paymentCount: count(),
+            amountMinor: sql<string>`COALESCE(SUM(${paymentsTable.amountMinor}), 0)::text`,
+          })
+          .from(paymentsTable)
+          .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
+          .innerJoin(
+            subscriptionPackagesTable,
+            eq(paymentsTable.packageId, subscriptionPackagesTable.id),
+          )
+          .leftJoin(
+            userSubscriptionsTable,
+            eq(userSubscriptionsTable.paymentId, paymentsTable.id),
+          )
+          .where(where)
+          .groupBy(paymentsTable.currency, paymentsTable.status)
+          .orderBy(asc(paymentsTable.currency)),
+      ]);
+
+    const summaryByCurrency = new Map<
+      string,
+      {
+        currency: string;
+        paymentCount: number;
+        capturedCount: number;
+        refundedCount: number;
+        capturedAmountMinor: string;
+        refundedAmountMinor: string;
+      }
+    >();
+    for (const row of groupedSummaryRows) {
+      const summary = summaryByCurrency.get(row.currency) ?? {
+        currency: row.currency,
+        paymentCount: 0,
+        capturedCount: 0,
+        refundedCount: 0,
+        capturedAmountMinor: "0",
+        refundedAmountMinor: "0",
+      };
+      summary.paymentCount += row.paymentCount;
+      if (row.status === "captured") {
+        summary.capturedCount = row.paymentCount;
+        summary.capturedAmountMinor = String(row.amountMinor);
+      } else if (row.status === "refunded") {
+        summary.refundedCount = row.paymentCount;
+        summary.refundedAmountMinor = String(row.amountMinor);
+      }
+      summaryByCurrency.set(row.currency, summary);
+    }
+
+    const total = countResult[0]?.total ?? 0;
+    res.json(
+      ListAdminFinancePaymentsResponse.parse({
+        rows: paymentRows.map(({ payment, account, subscriptionPackage, subscription }) => ({
+          id: payment.id,
+          receipt: payment.receipt,
+          status: payment.status,
+          amountMinor: payment.amountMinor,
+          currency: payment.currency,
+          razorpayEnvironment: payment.razorpayEnvironment,
+          razorpayOrderId: payment.razorpayOrderId,
+          razorpayPaymentId: payment.razorpayPaymentId,
+          capturedAt: (subscription?.createdAt ?? payment.updatedAt).toISOString(),
+          account: {
+            id: account.id,
+            username: account.username,
+            firstName: account.firstName,
+            lastName: account.lastName,
+            fullName: `${account.firstName} ${account.lastName}`.trim(),
+            email: account.email,
+            status: account.deletedAt ? "deleted" : account.active ? "active" : "disabled",
+            registeredAt: account.createdAt.toISOString(),
+          },
+          subscriptionPackage: {
+            id: subscriptionPackage.id,
+            name: subscriptionPackage.name,
+          },
+          subscription: subscription
+            ? {
+                id: subscription.id,
+                status: subscription.status,
+                startsAt: subscription.startsAt.toISOString(),
+                endsAt: subscription.endsAt.toISOString(),
+              }
+            : null,
+        })),
+        total,
+        page: filters.page,
+        pageSize: filters.pageSize,
+        pageCount: Math.ceil(total / filters.pageSize),
+        currencies: currencyRows.map(({ currency }) => currency),
+        summaryByCurrency: [...summaryByCurrency.values()],
+      }),
+    );
+  },
+);
 
 function invalidInput(res: Response, message: string): void {
   res.status(400).json({ error: message, code: "INVALID_INPUT" });

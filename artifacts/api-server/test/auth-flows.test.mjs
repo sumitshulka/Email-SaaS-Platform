@@ -21,6 +21,7 @@ memory.public.registerFunction({
 
 memory.public.none(`
   CREATE TYPE user_role AS ENUM ('SUPERADMIN', 'USER');
+  CREATE TYPE payment_status AS ENUM ('created', 'authorized', 'captured', 'failed', 'refunded');
   CREATE TYPE razorpay_environment AS ENUM ('sandbox', 'production');
   CREATE TYPE subscription_status AS ENUM ('active', 'superseded', 'cancelled');
   CREATE TABLE users (
@@ -135,8 +136,16 @@ memory.public.none(`
   );
   CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    package_id uuid NOT NULL REFERENCES subscription_packages(id) ON DELETE RESTRICT,
+    receipt varchar(40) NOT NULL,
+    amount_minor integer NOT NULL,
+    currency varchar(3) NOT NULL,
+    status payment_status NOT NULL DEFAULT 'created',
     razorpay_environment razorpay_environment,
     razorpay_order_id varchar(80),
+    razorpay_payment_id varchar(80),
+    created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
   CREATE TABLE user_subscriptions (
@@ -525,9 +534,25 @@ describe("Razorpay environment configuration", { concurrency: false }, () => {
       webhookSecretEncrypted: securityModule.encryptSecret("legacy-webhook-secret"),
       updatedAt: new Date(),
     });
-    memory.public.none(
-      `INSERT INTO payments (id, razorpay_order_id) VALUES ('${randomUUID()}', 'order_before_switch')`,
-    );
+    const [legacyPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Legacy payment package",
+        description: "",
+        amountMinor: 9900,
+        currency: "INR",
+        periodDays: 30,
+      })
+      .returning();
+    await db.insert(dbModule.paymentsTable).values({
+      userId: admin.id,
+      packageId: legacyPackage.id,
+      receipt: "legacy-order-test",
+      amountMinor: 9900,
+      currency: "INR",
+      status: "created",
+      razorpayOrderId: "order_before_switch",
+    });
 
     const productionSave = await api("/admin/billing/razorpay", {
       method: "PUT",
@@ -2439,5 +2464,244 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(terminalUnknownReport.body.summary.sendFailed, 1);
     assert.equal(terminalUnknownReport.body.summary.smtpAccepted, 0);
+  });
+});
+
+describe("superadmin finance payment ledger", { concurrency: false }, () => {
+  it("limits finance records to customer captures and applies server-side filters", async () => {
+    const admin = await loggedInUser({
+      username: "finance-ledger-admin",
+      role: "SUPERADMIN",
+    });
+    const customer = await loggedInUser({
+      username: "finance-ledger-customer",
+      email: "customer.finance@example.test",
+    });
+    const disabledCustomer = await createUser({
+      username: "finance-ledger-disabled",
+      email: "disabled.finance@example.test",
+      active: false,
+    });
+    const [launchPackage, growthPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values([
+        {
+          name: "Finance Launch",
+          description: "",
+          amountMinor: 9900,
+          currency: "INR",
+          periodDays: 30,
+        },
+        {
+          name: "Finance Growth",
+          description: "",
+          amountMinor: 4999,
+          currency: "USD",
+          periodDays: 90,
+        },
+      ])
+      .returning();
+    const baseDay = new Date(
+      (Math.floor(Date.now() / 86_400_000) + 1) * 86_400_000,
+    );
+    const capture = async ({
+      user,
+      pkg,
+      status = "captured",
+      at,
+      environment = "production",
+      amountMinor,
+    }) => {
+      const tag = `${user.id.slice(0, 8)}-${status}-${amountMinor}`;
+      const [payment] = await dbModule.db
+        .insert(dbModule.paymentsTable)
+        .values({
+          userId: user.id,
+          packageId: pkg.id,
+          receipt: `finance-${tag}`,
+          amountMinor,
+          currency: pkg.currency,
+          status,
+          razorpayEnvironment: environment,
+          razorpayOrderId: `order-${tag}`,
+          razorpayPaymentId: `payment-${tag}`,
+          createdAt: at,
+          updatedAt: at,
+        })
+        .returning();
+      if (status === "captured" || status === "refunded") {
+        await dbModule.db.insert(dbModule.userSubscriptionsTable).values({
+          userId: user.id,
+          packageId: pkg.id,
+          paymentId: payment.id,
+          status: status === "refunded" ? "cancelled" : "active",
+          startsAt: at,
+          endsAt: new Date(at.getTime() + pkg.periodDays * 86_400_000),
+          createdAt: at,
+        });
+      }
+    };
+
+    await capture({
+      user: customer.user,
+      pkg: launchPackage,
+      at: new Date(baseDay.getTime() + 60 * 60_000),
+      amountMinor: 9900,
+    });
+    await capture({
+      user: customer.user,
+      pkg: growthPackage,
+      status: "refunded",
+      at: new Date(baseDay.getTime() + 12 * 60 * 60_000),
+      environment: "sandbox",
+      amountMinor: 4999,
+    });
+    await capture({
+      user: disabledCustomer,
+      pkg: growthPackage,
+      at: new Date(baseDay.getTime() + 26 * 60 * 60_000),
+      environment: null,
+      amountMinor: 4999,
+    });
+    await capture({
+      user: customer.user,
+      pkg: launchPackage,
+      status: "failed",
+      at: new Date(baseDay.getTime() + 18 * 60 * 60_000),
+      amountMinor: 9900,
+    });
+    await capture({
+      user: admin.user,
+      pkg: launchPackage,
+      at: new Date(baseDay.getTime() + 6 * 60 * 60_000),
+      amountMinor: 999999,
+    });
+
+    const unauthorized = await api("/admin/finance/payments");
+    assert.equal(unauthorized.response.status, 401);
+    const customerDenied = await api("/admin/finance/payments", {
+      cookie: customer.cookie,
+    });
+    assert.equal(customerDenied.response.status, 403);
+
+    const defaultPage = await api("/admin/finance/payments", {
+      cookie: admin.cookie,
+    });
+    assert.equal(defaultPage.response.status, 200, JSON.stringify(defaultPage.body));
+    assert.equal(defaultPage.body.total, 2);
+    assert.deepEqual(
+      defaultPage.body.rows.map((row) => row.status),
+      ["captured", "captured"],
+    );
+    assert.equal(defaultPage.body.rows[0].account.status, "disabled");
+    assert.equal(defaultPage.body.rows[0].subscriptionPackage.name, "Finance Growth");
+    assert.deepEqual(defaultPage.body.currencies, ["INR", "USD"]);
+    assert.deepEqual(
+      defaultPage.body.summaryByCurrency.map((summary) => [
+        summary.currency,
+        summary.capturedCount,
+        summary.refundedCount,
+        summary.capturedAmountMinor,
+      ]),
+      [
+        ["INR", 1, 0, "9900"],
+        ["USD", 1, 0, "4999"],
+      ],
+    );
+
+    const allSuccessful = await api(
+      "/admin/finance/payments?status=all&pageSize=100",
+      { cookie: admin.cookie },
+    );
+    assert.equal(allSuccessful.body.total, 3);
+    assert.equal(
+      allSuccessful.body.summaryByCurrency.find(
+        (summary) => summary.currency === "USD",
+      ).refundedAmountMinor,
+      "4999",
+    );
+
+    const subscriptionId = allSuccessful.body.rows.find(
+      (row) => row.subscription?.id,
+    ).subscription.id;
+    const subscriptionSearch = await api(
+      `/admin/finance/payments?search=${subscriptionId}&status=all`,
+      { cookie: admin.cookie },
+    );
+    assert.equal(subscriptionSearch.body.total, 1);
+
+    const planAndAccountSearch = await api(
+      `/admin/finance/payments?search=Growth&status=all&packageId=${growthPackage.id}`,
+      { cookie: admin.cookie },
+    );
+    assert.equal(planAndAccountSearch.body.total, 2);
+
+    const amountRange = await api(
+      "/admin/finance/payments?currency=USD&status=all&minAmountMinor=4999&maxAmountMinor=4999",
+      { cookie: admin.cookie },
+    );
+    assert.equal(amountRange.body.total, 2);
+    const amountWithoutCurrency = await api(
+      "/admin/finance/payments?minAmountMinor=4999",
+      { cookie: admin.cookie },
+    );
+    assert.equal(amountWithoutCurrency.response.status, 400);
+    const reversedAmountRange = await api(
+      "/admin/finance/payments?currency=USD&minAmountMinor=5000&maxAmountMinor=4999",
+      { cookie: admin.cookie },
+    );
+    assert.equal(reversedAmountRange.response.status, 400);
+    const amountSortWithoutCurrency = await api(
+      "/admin/finance/payments?sortBy=amount",
+      { cookie: admin.cookie },
+    );
+    assert.equal(amountSortWithoutCurrency.response.status, 400);
+
+    const customerSearch = await api(
+      "/admin/finance/payments?search=finance-ledger-customer&status=all",
+      { cookie: admin.cookie },
+    );
+    assert.equal(customerSearch.body.total, 2);
+
+    const oneUtcDay = await api(
+      `/admin/finance/payments?fromDate=${baseDay.toISOString().slice(0, 10)}&toDate=${baseDay.toISOString().slice(0, 10)}&status=all&pageSize=100`,
+      { cookie: admin.cookie },
+    );
+    assert.equal(oneUtcDay.body.total, 2);
+
+    const disabledOnly = await api(
+      "/admin/finance/payments?accountStatus=disabled",
+      { cookie: admin.cookie },
+    );
+    assert.equal(disabledOnly.body.total, 1);
+    const unrecordedEnvironment = await api(
+      "/admin/finance/payments?environment=unrecorded",
+      { cookie: admin.cookie },
+    );
+    assert.equal(unrecordedEnvironment.body.total, 1);
+    const refundedOnly = await api(
+      "/admin/finance/payments?status=refunded&currency=USD",
+      { cookie: admin.cookie },
+    );
+    assert.equal(refundedOnly.body.total, 1);
+
+    const secondPage = await api(
+      "/admin/finance/payments?page=2&pageSize=1&sortBy=amount&sortDirection=asc&currency=USD&status=all",
+      { cookie: admin.cookie },
+    );
+    assert.equal(secondPage.body.total, 2);
+    assert.equal(secondPage.body.rows.length, 1);
+    assert.equal(secondPage.body.rows[0].amountMinor, 4999);
+
+    const invalidDate = await api(
+      "/admin/finance/payments?fromDate=2026-02-30",
+      { cookie: admin.cookie },
+    );
+    assert.equal(invalidDate.response.status, 400);
+    const invalidRange = await api(
+      "/admin/finance/payments?fromDate=2026-02-03&toDate=2026-02-02",
+      { cookie: admin.cookie },
+    );
+    assert.equal(invalidRange.response.status, 400);
   });
 });
