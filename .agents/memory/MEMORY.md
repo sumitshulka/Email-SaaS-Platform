@@ -7,3 +7,4 @@
 - [Gift subscription semantics](gift-subscriptions.md) — gifts share paid access without a recipient-facing gift label, but never create payment revenue.
 - [Radix and Vite HMR](radix-vite-hmr.md) — if a Radix import triggers an invalid-hook error after dependency optimization, verify React deduping and restart the web workflow once before changing packages.
 - [Contact enrichment scope](contact-enrichment.md) — keep enrichment business-focused and show full social/profile URLs as visible plain text.
+- [Contact list workflow](contact-list-management.md) — users should be able to assign existing contacts to a list from the Contact Lists page.
