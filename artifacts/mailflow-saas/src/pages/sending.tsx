@@ -354,10 +354,14 @@ export function ListsPage() {
   const [, setLocation] = useLocation();
   const query = useListContactLists(); const contactsQuery = useListContacts();
   const create = useCreateContactList(); const update = useUpdateContactList(); const remove = useDeleteContactList();
+  const updateContact = useUpdateContact();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<ContactList | null | undefined>(undefined); const [name, setName] = useState('');
   const [listToDelete, setListToDelete] = useState<ContactList | null>(null);
   const [viewingList, setViewingList] = useState<ContactList | null>(null);
+  const [contactSearch, setContactSearch] = useState('');
+  const [pendingMembershipIds, setPendingMembershipIds] = useState<Set<string>>(() => new Set());
+  const [membershipFeedback, setMembershipFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const lists = (query.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts ?? [];
   const viewingContacts = viewingList
@@ -365,7 +369,53 @@ export function ListsPage() {
         .filter(contact => contact.listIds.includes(viewingList.id))
         .sort((left, right) => left.email.localeCompare(right.email))
     : [];
-  const refresh = () => { void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
+  const availableContacts = viewingList
+    ? contacts
+        .filter(contact => !contact.listIds.includes(viewingList.id))
+        .filter(contact => {
+          const search = contactSearch.trim().toLowerCase();
+          return !search || [contact.firstName, contact.lastName, contact.name, contact.email, contact.companyName]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(search);
+        })
+        .sort((left, right) => left.email.localeCompare(right.email))
+    : [];
+  const refresh = () => Promise.all([
+    qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }),
+    qc.invalidateQueries({ queryKey: getListContactsQueryKey() }),
+    qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }),
+  ]);
+  const openListContacts = (list: ContactList) => {
+    setViewingList(list);
+    setContactSearch('');
+    setMembershipFeedback(null);
+    void contactsQuery.refetch();
+  };
+  const addContactToList = async (contact: (typeof contacts)[number]) => {
+    const list = viewingList;
+    if (!list || contactsQuery.isFetching || contact.listIds.includes(list.id)) return;
+    setPendingMembershipIds(current => new Set(current).add(contact.id));
+    setMembershipFeedback(null);
+    try {
+      await updateContact.mutateAsync({
+        contactId: contact.id,
+        data: { listIds: [...new Set([...contact.listIds, list.id])] },
+      });
+      await refresh();
+      setMembershipFeedback({ kind: 'success', text: `${contact.email} was added to ${list.name}.` });
+    } catch (error) {
+      setMembershipFeedback({ kind: 'error', text: mutationError(error) });
+      await refresh();
+    } finally {
+      setPendingMembershipIds(current => {
+        const next = new Set(current);
+        next.delete(contact.id);
+        return next;
+      });
+    }
+  };
   const save = (e: FormEvent) => {
     e.preventDefault();
     const success = () => { refresh(); setEditing(undefined); setName(''); setNotice({ kind: 'success', text: editing ? 'List changes saved.' : 'Contact list created.' }); };
@@ -394,7 +444,7 @@ export function ListsPage() {
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#edf4fc] text-[#245b9b]"><Users className="h-5 w-5"/></div>
           <div className="min-w-[180px] flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="display text-[18px] font-bold text-[#1c2b3d]">{list.name}</h2><Status tone={list.active ? 'green' : 'gray'}>{list.active ? 'Active' : 'Inactive'}</Status></div><p className="mt-1 text-[11px] text-[#7c8794]">Created {new Date(list.createdAt).toLocaleDateString()} · updated {new Date(list.updatedAt).toLocaleDateString()}</p></div>
           <div className="min-w-[125px] rounded-md bg-[#f7f9fb] px-3 py-2"><div className="text-[10px] text-[#7e8996]">Contacts</div><div className="mt-0.5 text-[16px] font-bold text-[#26364a]">{memberCount.toLocaleString()} <span className="text-[10px] font-normal text-[#84909d]">members</span></div></div>
-            <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button variant="outline" testId={`button-view-list-contacts-${list.id}`} onClick={() => setViewingList(list)}><Users className="h-3.5 w-3.5"/>View contacts</Button><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} disabled={remove.isPending} onClick={() => setListToDelete(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div>
+             <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button variant="outline" testId={`button-view-list-contacts-${list.id}`} onClick={() => openListContacts(list)}><Users className="h-3.5 w-3.5"/>Manage contacts</Button><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} disabled={remove.isPending} onClick={() => setListToDelete(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div>
         </div>
         <div className="flex items-center justify-between border-t border-[#edf0f2] bg-[#fcfcfd] px-5 py-2.5"><span className="mono text-[9px] tracking-[.1em] text-[#9aa3ad]">LIST {String(index + 1).padStart(2, '0')}</span><span className="text-[10px] text-[#87919d]">{list.active ? 'Available for campaign targeting' : 'Hidden from campaign queueing'}</span></div>
       </section>;
@@ -404,8 +454,32 @@ export function ListsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-list" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-list" disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save list' : 'Create list'}</Button></div>
       </form>
     </Modal>}
-    {viewingList && <Modal wide title={`Contacts in ${viewingList.name}`} subtitle={`${viewingContacts.length.toLocaleString()} contact${viewingContacts.length === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
-      {viewingContacts.length ? <div className="max-h-[60vh] overflow-y-auto rounded-md border border-[#e7ebef]">
+    {viewingList && <Modal wide title={`Manage contacts · ${viewingList.name}`} subtitle={`${viewingContacts.length.toLocaleString()} contact${viewingContacts.length === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
+      <section className="mb-4 rounded-md border border-[#e3e7eb] bg-[#fafbfc] p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div><h3 className="text-[12px] font-semibold text-[#344154]">Add existing contacts</h3><p className="mt-1 text-[10px] text-[#7b8794]">Choose a contact to add it to this list. Existing list memberships are preserved.</p></div>
+          <span className="text-[10px] text-[#7b8794]">{contacts.filter(contact => !contact.listIds.includes(viewingList.id)).length} available</span>
+        </div>
+        <label className="relative mt-3 block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a95a2]"/>
+          <input data-testid={`input-search-list-contacts-${viewingList.id}`} aria-label="Search contacts to add" className={`${inputClass} h-9 pl-9 text-[12px]`} type="search" placeholder="Search by name, email, or company" value={contactSearch} onChange={event => setContactSearch(event.target.value)}/>
+        </label>
+        {membershipFeedback && <p role={membershipFeedback.kind === 'error' ? 'alert' : 'status'} data-testid="status-list-membership" className={`mt-3 rounded-md border px-3 py-2 text-[11px] ${membershipFeedback.kind === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{membershipFeedback.text}</p>}
+        {contactsQuery.isFetching && <p className="mt-3 text-[10px] text-[#7b8794]">Refreshing contacts…</p>}
+        {availableContacts.length ? <div className="mt-3 max-h-48 divide-y divide-[#edf0f2] overflow-y-auto rounded-md border border-[#e7ebef] bg-white">
+          {availableContacts.map(contact => {
+            const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
+            const pending = pendingMembershipIds.has(contact.id);
+            return <div key={contact.id} data-testid={`row-add-contact-to-list-${contact.id}`} className="flex items-center gap-3 px-3 py-2.5">
+              <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#29384a]">{displayName}</div><div className="truncate text-[10px] text-[#7c8794]">{contact.email}{contact.companyName ? ` · ${contact.companyName}` : ''}</div></div>
+              <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId={`button-add-contact-to-list-${contact.id}`} disabled={pending || contactsQuery.isFetching} onClick={() => void addContactToList(contact)}>{pending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <CirclePlus className="h-3.5 w-3.5"/>}{pending ? 'Adding' : 'Add'}</Button>
+            </div>;
+          })}
+        </div> : contacts.length === 0 ? <div className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center"><p className="text-[11px] text-[#7b8794]">No contacts are in this workspace yet.</p><Button variant="outline" className="mt-3" testId="button-go-to-contacts-to-create" onClick={() => { setViewingList(null); setLocation('/contacts'); }}>Go to Contacts</Button></div> : <p className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center text-[11px] text-[#7b8794]">{contactSearch.trim() ? 'No contacts match your search.' : 'All workspace contacts already belong to this list.'}</p>}
+      </section>
+      <section>
+        <h3 className="mb-2 text-[12px] font-semibold text-[#344154]">Contacts in this list</h3>
+      {viewingContacts.length ? <div className="max-h-[36vh] overflow-y-auto rounded-md border border-[#e7ebef]">
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-3 border-b border-[#e7ebef] bg-[#f8fafb] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-[#7e8996]"><span>Contact</span><span>Email</span><span>Status</span></div>
         {viewingContacts.map(contact => {
           const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
@@ -415,10 +489,10 @@ export function ListsPage() {
             <Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status>
           </div>;
         })}
-      </div> : <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-8 text-center">
-        <Users className="mx-auto h-5 w-5 text-[#7f8ea0]"/><p className="mt-3 text-[13px] font-semibold text-[#344154]">No contacts in this list yet</p><p className="mt-1 text-[11px] text-[#7b8794]">Add or import contacts and assign them to this list.</p>
-        <div className="mt-4"><Button variant="outline" testId="button-add-contacts-to-list" onClick={() => { setViewingList(null); setLocation('/contacts'); }}>Go to contacts</Button></div>
+      </div> : <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-6 text-center">
+        <Users className="mx-auto h-5 w-5 text-[#7f8ea0]"/><p className="mt-2 text-[12px] font-semibold text-[#344154]">No contacts in this list yet</p><p className="mt-1 text-[10px] text-[#7b8794]">Use the search above to add contacts from your workspace.</p>
       </div>}
+      </section>
     </Modal>}
      <ConfirmActionDialog
        open={Boolean(listToDelete)}
