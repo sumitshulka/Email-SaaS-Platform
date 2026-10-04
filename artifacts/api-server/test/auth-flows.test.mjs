@@ -424,6 +424,7 @@ const [
   deliveryReportIngestionModule,
   deliveryParserModule,
   gmailMailboxModule,
+  microsoft365TraceModule,
 ] = await Promise.all([
   import("../src/app.ts"),
   import("../src/lib/application-email.ts"),
@@ -434,6 +435,7 @@ const [
   import("../src/lib/delivery-report-ingestion.ts"),
   import("../src/lib/delivery-report-parser.ts"),
   import("../src/lib/gmail-mailbox.ts"),
+  import("../src/lib/microsoft365-trace.ts"),
 ]);
 
 const { db, usersTable, userSessionsTable, loginAttemptsTable, otpVerificationsTable } =
@@ -470,6 +472,8 @@ after(async () => {
 
 beforeEach(async () => {
   await db.delete(dbModule.emailDeliveryReportsTable);
+  await db.delete(dbModule.microsoft365MessageTracesTable);
+  await db.delete(dbModule.microsoft365TraceConnectionsTable);
   await db.delete(dbModule.gmailMailboxConnectionsTable);
   await db.delete(dbModule.emailSendAttemptsTable);
   await db.delete(dbModule.emailCampaignRecipientsTable);
@@ -572,10 +576,36 @@ async function withGoogleFetch(handler, run) {
   }
 }
 
+async function withMicrosoft365Fetch(handler, run) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (
+      url.hostname === "login.microsoftonline.com" ||
+      url.hostname === "graph.microsoft.com"
+    ) {
+      return handler(url, init);
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 function googleJson(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
+  });
+}
+
+function microsoftJson(body, status = 200, headers = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json", ...headers },
   });
 }
 
@@ -667,6 +697,49 @@ async function loggedInUser(options = {}) {
   assert.equal(result.response.status, 200, JSON.stringify(result.body));
   assert.ok(result.cookie, "login should set the session cookie");
   return { user, cookie: result.cookie };
+}
+
+async function createMicrosoft365Connection(userId, overrides = {}) {
+  const [connection] = await db
+    .insert(dbModule.microsoft365TraceConnectionsTable)
+    .values({
+      userId,
+      tenantId: "12345678-1234-4234-8234-123456789abc",
+      clientId: "22345678-1234-4234-8234-123456789abc",
+      clientSecretEncrypted: securityModule.encryptSecret("m365-test-secret"),
+      syncStatus: "connected",
+      nextSyncAt: new Date(Date.now() - 60_000),
+      ...overrides,
+    })
+    .returning();
+  return connection;
+}
+
+async function createMicrosoft365Candidate(userId, { email, messageId }) {
+  const [campaign] = await db
+    .insert(dbModule.emailCampaignsTable)
+    .values({
+      userId,
+      name: `Microsoft trace ${messageId}`,
+      subject: "Test message",
+      textBody: "Test message body",
+    })
+    .returning();
+  const [recipient] = await db
+    .insert(dbModule.emailCampaignRecipientsTable)
+    .values({ campaignId: campaign.id, userId, email })
+    .returning();
+  const [attempt] = await db
+    .insert(dbModule.emailSendAttemptsTable)
+    .values({
+      userId,
+      recipientId: recipient.id,
+      messageId,
+      outcome: "sent",
+      attemptedAt: new Date(Date.now() - 3 * 60_000),
+    })
+    .returning();
+  return { campaign, recipient, attempt };
 }
 
 async function getEmailCode() {
@@ -3056,6 +3129,396 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(terminalUnknownReport.body.summary.sendFailed, 1);
     assert.equal(terminalUnknownReport.body.summary.smtpAccepted, 0);
+  });
+});
+
+describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
+  it("preserves a failed backfill page checkpoint and deduplicates replayed traces", async () => {
+    const owner = await loggedInUser({ username: "m365-checkpoint-owner" });
+    const candidate = await createMicrosoft365Candidate(owner.user.id, {
+      email: "checkpoint@example.test",
+      messageId: "<checkpoint-message@example.test>",
+    });
+    const backfillStartAt = new Date(Date.now() - 24 * 60 * 60_000);
+    const backfillEndAt = new Date();
+    const secondPage =
+      "https://graph.microsoft.com/v1.0/admin/exchange/tracing/messageTraces?$skiptoken=page-two";
+    const firstTrace = {
+      id: "checkpoint-trace-1",
+      messageId: candidate.attempt.messageId,
+      recipientAddress: candidate.recipient.email,
+      receivedDateTime: new Date(Date.now() - 60 * 60_000).toISOString(),
+      status: "Delivered",
+    };
+    const connection = await createMicrosoft365Connection(owner.user.id, {
+      backfillStartAt,
+      backfillEndAt,
+    });
+    let listRequests = 0;
+
+    await withMicrosoft365Fetch(async (url) => {
+      if (url.hostname === "login.microsoftonline.com") {
+        return microsoftJson({ access_token: "m365-worker-test-token" });
+      }
+      if (url.pathname.includes("/getDetailsByRecipient(")) {
+        return microsoftJson({ value: [] });
+      }
+      listRequests += 1;
+      if (listRequests === 1) {
+        return microsoftJson({
+          value: [firstTrace],
+          "@odata.nextLink": secondPage,
+        });
+      }
+      assert.equal(url.toString(), secondPage);
+      if (listRequests === 2) {
+        return microsoftJson({ error: { code: "ServiceUnavailable" } }, 503);
+      }
+      return microsoftJson({
+        value: [
+          firstTrace,
+          {
+            ...firstTrace,
+            id: "checkpoint-trace-2",
+          },
+        ],
+      });
+    }, async () => {
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      let [afterFirstPage] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      assert.equal(afterFirstPage.pageNextLink, secondPage);
+      assert.equal(
+        afterFirstPage.backfillStartAt.toISOString(),
+        backfillStartAt.toISOString(),
+      );
+      assert.equal(afterFirstPage.syncStatus, "connected");
+
+      await db
+        .update(dbModule.microsoft365TraceConnectionsTable)
+        .set({ nextSyncAt: new Date(Date.now() - 60_000) })
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      let [afterPageFailure] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      assert.equal(afterPageFailure.pageNextLink, secondPage);
+      assert.equal(
+        afterPageFailure.backfillStartAt.toISOString(),
+        backfillStartAt.toISOString(),
+      );
+      assert.equal(afterPageFailure.syncStatus, "error");
+      assert.match(afterPageFailure.lastError, /status 503/i);
+      assert.ok(afterPageFailure.nextSyncAt.getTime() > Date.now());
+      assert.equal(afterPageFailure.leaseExpiresAt, null);
+
+      await db
+        .update(dbModule.microsoft365TraceConnectionsTable)
+        .set({ nextSyncAt: new Date(Date.now() - 60_000) })
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+
+      [afterFirstPage] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      const traces = await db
+        .select()
+        .from(dbModule.microsoft365MessageTracesTable)
+        .where(eq(dbModule.microsoft365MessageTracesTable.connectionId, connection.id));
+      assert.equal(listRequests, 3);
+      assert.equal(traces.length, 2, "the replayed first-page trace must be unique");
+      assert.equal(afterFirstPage.pageNextLink, null);
+      assert.equal(afterFirstPage.backfillStartAt, null);
+      assert.ok(afterFirstPage.backfillCompletedAt instanceof Date);
+    });
+  });
+
+  it("bounds throttled and transient retries without hiding the last successful health state", async () => {
+    const owner = await loggedInUser({ username: "m365-retry-owner" });
+    const previousSuccess = new Date(Date.now() - 60 * 60_000);
+    const connection = await createMicrosoft365Connection(owner.user.id, {
+      lastSuccessAt: previousSuccess,
+    });
+    let graphRequests = 0;
+
+    await withMicrosoft365Fetch(async (url) => {
+      if (url.hostname === "login.microsoftonline.com") {
+        return microsoftJson({ access_token: "m365-worker-test-token" });
+      }
+      graphRequests += 1;
+      if (graphRequests === 1) {
+        return microsoftJson(
+          { error: { code: "TooManyRequests" } },
+          429,
+          { "retry-after": "7200" },
+        );
+      }
+      if (graphRequests === 2) {
+        return microsoftJson(
+          { error: { code: "TooManyRequests" } },
+          429,
+          { "retry-after": "0" },
+        );
+      }
+      throw new Error("Temporary network failure");
+    }, async () => {
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      let [afterLongThrottle] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      let retryIn = afterLongThrottle.nextSyncAt.getTime() - Date.now();
+      assert.ok(retryIn > 59 * 60_000 && retryIn <= 60 * 60_000);
+      assert.equal(afterLongThrottle.syncStatus, "error");
+      assert.equal(afterLongThrottle.lastSuccessAt.toISOString(), previousSuccess.toISOString());
+      assert.match(afterLongThrottle.lastError, /throttling/i);
+
+      await db
+        .update(dbModule.microsoft365TraceConnectionsTable)
+        .set({ nextSyncAt: new Date(Date.now() - 60_000) })
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      let [afterShortThrottle] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      retryIn = afterShortThrottle.nextSyncAt.getTime() - Date.now();
+      assert.ok(retryIn > 28_000 && retryIn <= 30_000);
+      assert.equal(afterShortThrottle.syncStatus, "error");
+      assert.equal(afterShortThrottle.lastSuccessAt.toISOString(), previousSuccess.toISOString());
+
+      await db
+        .update(dbModule.microsoft365TraceConnectionsTable)
+        .set({ nextSyncAt: new Date(Date.now() - 60_000) })
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      const [afterTransientFailure] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      retryIn = afterTransientFailure.nextSyncAt.getTime() - Date.now();
+      assert.ok(retryIn > 295_000 && retryIn <= 5 * 60_000);
+      assert.equal(afterTransientFailure.syncStatus, "error");
+      assert.equal(afterTransientFailure.lastSuccessAt.toISOString(), previousSuccess.toISOString());
+      assert.match(afterTransientFailure.lastError, /could not reach/i);
+
+      const visibleHealth = await api("/sending/microsoft-365/connection", {
+        cookie: owner.cookie,
+      });
+      assert.equal(visibleHealth.response.status, 200);
+      assert.equal(visibleHealth.body.syncStatus, "error");
+      assert.match(visibleHealth.body.lastError, /could not reach/i);
+      assert.equal(
+        new Date(visibleHealth.body.lastSuccessAt).toISOString(),
+        previousSuccess.toISOString(),
+      );
+      assert.equal(graphRequests, 3);
+    });
+  });
+
+  it("uses the persisted lease to prevent overlapping syncs", async () => {
+    const owner = await loggedInUser({ username: "m365-lease-owner" });
+    const connection = await createMicrosoft365Connection(owner.user.id, {
+      backfillStartAt: new Date(Date.now() - 24 * 60 * 60_000),
+      backfillEndAt: new Date(),
+    });
+    let signalTokenRequest;
+    let releaseTokenRequest;
+    const tokenRequestEntered = new Promise((resolve) => {
+      signalTokenRequest = resolve;
+    });
+    const tokenRequestGate = new Promise((resolve) => {
+      releaseTokenRequest = resolve;
+    });
+    let tokenRequests = 0;
+    let listRequests = 0;
+
+    await withMicrosoft365Fetch(async (url) => {
+      if (url.hostname === "login.microsoftonline.com") {
+        tokenRequests += 1;
+        signalTokenRequest();
+        await tokenRequestGate;
+        return microsoftJson({ access_token: "m365-worker-test-token" });
+      }
+      listRequests += 1;
+      return microsoftJson({ value: [] });
+    }, async () => {
+      const firstSync = microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      await tokenRequestEntered;
+      try {
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+        assert.equal(tokenRequests, 1);
+        assert.equal(listRequests, 0);
+      } finally {
+        releaseTokenRequest();
+      }
+      await firstSync;
+      assert.equal(tokenRequests, 1);
+      assert.equal(listRequests, 1);
+      const [afterSync] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      assert.equal(afterSync.leaseExpiresAt, null);
+      assert.equal(afterSync.syncStatus, "connected");
+    });
+  });
+
+  it("isolates trace candidates by tenant and preserves event projection semantics", async () => {
+    const owner = await loggedInUser({ username: "m365-projection-owner" });
+    const other = await loggedInUser({ username: "m365-projection-other" });
+    const connection = await createMicrosoft365Connection(owner.user.id);
+    const eventCases = [
+      {
+        event: "SEND",
+        outcome: "delivered",
+        deliveryScope: "receiving_server",
+        email: "send@example.test",
+        messageId: "<send@example.test>",
+      },
+      {
+        event: "DELIVER",
+        outcome: "delivered",
+        deliveryScope: "mailbox",
+        email: "deliver@example.test",
+        messageId: "<deliver@example.test>",
+      },
+      {
+        event: "FAIL",
+        outcome: "failed",
+        deliveryScope: "unspecified",
+        email: "fail@example.test",
+        messageId: "<fail@example.test>",
+      },
+      {
+        event: "DEFER",
+        outcome: "delayed",
+        deliveryScope: "unspecified",
+        email: "defer@example.test",
+        messageId: "<defer@example.test>",
+      },
+    ];
+    const candidates = new Map();
+    for (const testCase of eventCases) {
+      candidates.set(
+        testCase.event,
+        await createMicrosoft365Candidate(owner.user.id, testCase),
+      );
+    }
+    const foreignCandidate = await createMicrosoft365Candidate(other.user.id, {
+      email: "foreign@example.test",
+      messageId: "<foreign-message@example.test>",
+    });
+    const traces = [
+      ...eventCases.map((testCase) => ({
+        id: `trace-${testCase.event.toLowerCase()}`,
+        messageId: testCase.messageId,
+        recipientAddress: testCase.email,
+        receivedDateTime: new Date(Date.now() - 60_000).toISOString(),
+        status: "Delivered",
+      })),
+      {
+        id: "trace-foreign-candidate",
+        messageId: foreignCandidate.attempt.messageId,
+        recipientAddress: foreignCandidate.recipient.email,
+        receivedDateTime: new Date(Date.now() - 60_000).toISOString(),
+        status: "Delivered",
+      },
+    ];
+    const detailsByTraceId = new Map(
+      eventCases.map((testCase) => [
+        `trace-${testCase.event.toLowerCase()}`,
+        testCase.event,
+      ]),
+    );
+    let detailRequests = 0;
+    let listRequests = 0;
+
+    await withMicrosoft365Fetch(async (url) => {
+      if (url.hostname === "login.microsoftonline.com") {
+        return microsoftJson({ access_token: "m365-worker-test-token" });
+      }
+      if (url.pathname.includes("/getDetailsByRecipient(")) {
+        detailRequests += 1;
+        const traceId = [...detailsByTraceId.keys()].find((id) =>
+          url.pathname.includes(`/${id}/getDetailsByRecipient(`),
+        );
+        assert.ok(traceId, `unexpected details request: ${url.pathname}`);
+        const trace = traces.find((item) => item.id === traceId);
+        return microsoftJson({
+          value: [
+            {
+              messageId: trace.messageId,
+              event: detailsByTraceId.get(traceId),
+              dateTime: new Date(Date.now() - 30_000).toISOString(),
+            },
+          ],
+        });
+      }
+      listRequests += 1;
+      return microsoftJson({ value: traces });
+    }, async () => {
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+
+      const savedTraces = await db
+        .select()
+        .from(dbModule.microsoft365MessageTracesTable)
+        .where(eq(dbModule.microsoft365MessageTracesTable.connectionId, connection.id));
+      assert.equal(savedTraces.length, 4);
+      assert.equal(
+        savedTraces.some((trace) => trace.traceId === "trace-foreign-candidate"),
+        false,
+      );
+
+      for (const testCase of eventCases) {
+        const candidate = candidates.get(testCase.event);
+        const [projected] = await db
+          .select()
+          .from(dbModule.emailCampaignRecipientsTable)
+          .where(eq(dbModule.emailCampaignRecipientsTable.id, candidate.recipient.id));
+        assert.equal(projected.reportOutcome, testCase.outcome, testCase.event);
+        assert.equal(projected.reportDeliveryScope, testCase.deliveryScope, testCase.event);
+        assert.equal(projected.reportSource, "microsoft_365_graph");
+        assert.equal(projected.reportEvidenceVerification, "microsoft365_authorized");
+
+        const [storedTrace] = savedTraces.filter(
+          (trace) => trace.traceId === `trace-${testCase.event.toLowerCase()}`,
+        );
+        if (testCase.event === "DEFER") {
+          assert.ok(storedTrace.nextAttemptAt.getTime() > Date.now() + 14 * 60_000);
+        } else {
+          assert.ok(storedTrace.nextAttemptAt.getUTCFullYear() >= 9999);
+        }
+      }
+
+      const [untouchedForeignRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, foreignCandidate.recipient.id));
+      assert.equal(untouchedForeignRecipient.reportOutcome, "unconfirmed");
+      const reports = await db
+        .select()
+        .from(dbModule.emailDeliveryReportsTable)
+        .where(eq(dbModule.emailDeliveryReportsTable.userId, owner.user.id));
+      assert.equal(reports.length, 4);
+      assert.equal(detailRequests, 4);
+
+      await db
+        .update(dbModule.microsoft365TraceConnectionsTable)
+        .set({ nextSyncAt: new Date(Date.now() - 60_000) })
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.equal(listRequests, 2);
+      assert.equal(
+        detailRequests,
+        4,
+        "terminal traces and the deferred trace must not be polled again before their recheck time",
+      );
+    });
   });
 });
 
