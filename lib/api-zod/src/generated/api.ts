@@ -1125,6 +1125,113 @@ export const GetAdminDashboardResponse = zod.object({
 
 
 /**
+ * @summary Search, summarize, and paginate successful customer payments
+ */
+export const listAdminFinancePaymentsQuerySearchMax = 160;
+
+export const listAdminFinancePaymentsQueryStatusDefault = `captured`;
+export const listAdminFinancePaymentsQueryCurrencyRegExp = new RegExp('^[A-Z]{3}$');
+export const listAdminFinancePaymentsQueryAccountStatusDefault = `any`;
+export const listAdminFinancePaymentsQuerySortByDefault = `capturedAt`;
+export const listAdminFinancePaymentsQuerySortDirectionDefault = `desc`;
+export const listAdminFinancePaymentsQueryPageDefault = 1;
+export const listAdminFinancePaymentsQueryPageMax = 100000;
+
+export const listAdminFinancePaymentsQueryPageSizeDefault = 25;
+export const listAdminFinancePaymentsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminFinancePaymentsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminFinancePaymentsQuerySearchMax).optional(),
+  "packageId": zod.coerce.string().uuid().optional(),
+  "fromDate": zod.date().optional().describe('Inclusive UTC calendar date for capture time.'),
+  "toDate": zod.date().optional().describe('Inclusive UTC calendar date for capture time.'),
+  "status": zod.enum(['captured', 'refunded', 'all']).default(listAdminFinancePaymentsQueryStatusDefault),
+  "currency": zod.coerce.string().regex(listAdminFinancePaymentsQueryCurrencyRegExp).optional(),
+  "environment": zod.enum(['sandbox', 'production', 'unrecorded']).optional(),
+  "accountStatus": zod.enum(['any', 'active', 'disabled', 'deleted']).default(listAdminFinancePaymentsQueryAccountStatusDefault),
+  "sortBy": zod.enum(['capturedAt', 'account', 'subscription', 'amount']).default(listAdminFinancePaymentsQuerySortByDefault),
+  "sortDirection": zod.enum(['asc', 'desc']).default(listAdminFinancePaymentsQuerySortDirectionDefault),
+  "page": zod.coerce.number().int().min(1).max(listAdminFinancePaymentsQueryPageMax).default(listAdminFinancePaymentsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminFinancePaymentsQueryPageSizeMax).default(listAdminFinancePaymentsQueryPageSizeDefault)
+})
+
+export const listAdminFinancePaymentsResponseRowsItemCurrencyMin = 3;
+export const listAdminFinancePaymentsResponseRowsItemCurrencyMax = 3;
+
+export const listAdminFinancePaymentsResponseTotalMin = 0;
+
+
+export const listAdminFinancePaymentsResponsePageSizeMax = 100;
+
+export const listAdminFinancePaymentsResponsePageCountMin = 0;
+
+export const listAdminFinancePaymentsResponseCurrenciesItemMin = 3;
+export const listAdminFinancePaymentsResponseCurrenciesItemMax = 3;
+
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemCurrencyMin = 3;
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemCurrencyMax = 3;
+
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemPaymentCountMin = 0;
+
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemCapturedCountMin = 0;
+
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemRefundedCountMin = 0;
+
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemCapturedAmountMinorRegExp = new RegExp('^[0-9]+$');
+export const listAdminFinancePaymentsResponseSummaryByCurrencyItemRefundedAmountMinorRegExp = new RegExp('^[0-9]+$');
+
+
+export const ListAdminFinancePaymentsResponse = zod.object({
+  "rows": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "receipt": zod.string(),
+  "status": zod.enum(['captured', 'refunded']),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(listAdminFinancePaymentsResponseRowsItemCurrencyMin).max(listAdminFinancePaymentsResponseRowsItemCurrencyMax),
+  "razorpayEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
+  "razorpayOrderId": zod.string().nullable(),
+  "razorpayPaymentId": zod.string().nullable(),
+  "capturedAt": zod.coerce.date(),
+  "account": zod.object({
+  "id": zod.string().uuid(),
+  "username": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "fullName": zod.string(),
+  "email": zod.string().email(),
+  "status": zod.enum(['active', 'disabled', 'deleted']),
+  "registeredAt": zod.coerce.date()
+}),
+  "subscriptionPackage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string()
+}),
+  "subscription": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['active', 'superseded', 'cancelled']),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date()
+}),zod.null()])
+})),
+  "total": zod.number().int().min(listAdminFinancePaymentsResponseTotalMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(listAdminFinancePaymentsResponsePageSizeMax),
+  "pageCount": zod.number().int().min(listAdminFinancePaymentsResponsePageCountMin),
+  "currencies": zod.array(zod.string().min(listAdminFinancePaymentsResponseCurrenciesItemMin).max(listAdminFinancePaymentsResponseCurrenciesItemMax)),
+  "summaryByCurrency": zod.array(zod.object({
+  "currency": zod.string().min(listAdminFinancePaymentsResponseSummaryByCurrencyItemCurrencyMin).max(listAdminFinancePaymentsResponseSummaryByCurrencyItemCurrencyMax),
+  "paymentCount": zod.number().int().min(listAdminFinancePaymentsResponseSummaryByCurrencyItemPaymentCountMin),
+  "capturedCount": zod.number().int().min(listAdminFinancePaymentsResponseSummaryByCurrencyItemCapturedCountMin),
+  "refundedCount": zod.number().int().min(listAdminFinancePaymentsResponseSummaryByCurrencyItemRefundedCountMin),
+  "capturedAmountMinor": zod.string().regex(listAdminFinancePaymentsResponseSummaryByCurrencyItemCapturedAmountMinorRegExp),
+  "refundedAmountMinor": zod.string().regex(listAdminFinancePaymentsResponseSummaryByCurrencyItemRefundedAmountMinorRegExp)
+}))
+})
+
+
+/**
  * @summary Search and paginate tenant accounts
  */
 export const listAdminUsersQueryStatusDefault = `all`;

@@ -931,6 +931,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminDashboard"
+  /admin/finance/payments:
+    get:
+      operationId: listAdminFinancePayments
+      tags: [admin]
+      summary: Search, summarize, and paginate successful customer payments
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 160 }
+        - name: packageId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: fromDate
+          in: query
+          description: Inclusive UTC calendar date for capture time.
+          schema: { type: string, format: date }
+        - name: toDate
+          in: query
+          description: Inclusive UTC calendar date for capture time.
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [captured, refunded, all]
+            default: captured
+        - name: currency
+          in: query
+          schema: { type: string, pattern: "^[A-Z]{3}$" }
+        - name: environment
+          in: query
+          schema:
+            type: string
+            enum: [sandbox, production, unrecorded]
+        - name: accountStatus
+          in: query
+          schema:
+            type: string
+            enum: [any, active, disabled, deleted]
+            default: any
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [capturedAt, account, subscription, amount]
+            default: capturedAt
+        - name: sortDirection
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: A filtered page of customer payments and currency-specific totals.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminFinancePaymentPage"
+        "400":
+          description: Invalid filter or pagination value.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -1888,6 +1959,83 @@ components:
     RazorpayEnvironment:
       type: string
       enum: [sandbox, production]
+    AdminFinancePayment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        receipt: { type: string }
+        status: { type: string, enum: [captured, refunded] }
+        amountMinor: { type: integer }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        razorpayEnvironment:
+          anyOf:
+            - $ref: "#/components/schemas/RazorpayEnvironment"
+            - type: "null"
+        razorpayOrderId: { type: ["string", "null"] }
+        razorpayPaymentId: { type: ["string", "null"] }
+        capturedAt: { type: string, format: date-time }
+        account:
+          $ref: "#/components/schemas/AdminFinanceAccount"
+        subscriptionPackage:
+          $ref: "#/components/schemas/AdminFinancePackage"
+        subscription:
+          anyOf:
+            - $ref: "#/components/schemas/AdminFinanceSubscription"
+            - type: "null"
+      required: [id, receipt, status, amountMinor, currency, razorpayEnvironment, razorpayOrderId, razorpayPaymentId, capturedAt, account, subscriptionPackage, subscription]
+    AdminFinanceAccount:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        status: { type: string, enum: [active, disabled, deleted] }
+        registeredAt: { type: string, format: date-time }
+      required: [id, username, firstName, lastName, fullName, email, status, registeredAt]
+    AdminFinancePackage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+      required: [id, name]
+    AdminFinanceSubscription:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, superseded, cancelled] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+      required: [id, status, startsAt, endsAt]
+    AdminFinanceCurrencySummary:
+      type: object
+      properties:
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        paymentCount: { type: integer, minimum: 0 }
+        capturedCount: { type: integer, minimum: 0 }
+        refundedCount: { type: integer, minimum: 0 }
+        capturedAmountMinor: { type: string, pattern: "^[0-9]+$" }
+        refundedAmountMinor: { type: string, pattern: "^[0-9]+$" }
+      required: [currency, paymentCount, capturedCount, refundedCount, capturedAmountMinor, refundedAmountMinor]
+    AdminFinancePaymentPage:
+      type: object
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/AdminFinancePayment" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        pageCount: { type: integer, minimum: 0 }
+        currencies:
+          type: array
+          items: { type: string, minLength: 3, maxLength: 3 }
+        summaryByCurrency:
+          type: array
+          items: { $ref: "#/components/schemas/AdminFinanceCurrencySummary" }
+      required: [rows, total, page, pageSize, pageCount, currencies, summaryByCurrency]
     RazorpayEnvironmentSettings:
       type: object
       properties:

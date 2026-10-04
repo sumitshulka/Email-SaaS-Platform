@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminDashboard,
+  AdminFinancePaymentPage,
   AdminUser,
   AdminUserPage,
   ApiError,
@@ -59,6 +60,7 @@ import type {
   GmailOAuthStart,
   HealthStatus,
   ImportContactsParams,
+  ListAdminFinancePaymentsParams,
   ListAdminUsersParams,
   LoginInput,
   MessageResponse,
@@ -3236,6 +3238,90 @@ export function useGetAdminDashboard<TData = Awaited<ReturnType<typeof getAdminD
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAdminFinancePaymentsUrl = (params?: ListAdminFinancePaymentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/finance/payments?${stringifiedParams}` : `/api/admin/finance/payments`
+}
+
+/**
+ * @summary Search, summarize, and paginate successful customer payments
+ */
+export const listAdminFinancePayments = async (params?: ListAdminFinancePaymentsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminFinancePaymentPage> => {
+
+  return customFetch<AdminFinancePaymentPage>(getListAdminFinancePaymentsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminFinancePaymentsQueryKey = (params?: ListAdminFinancePaymentsParams,) => {
+    return [
+    `/api/admin/finance/payments`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminFinancePaymentsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminFinancePayments>>, TError = ErrorType<ApiError>>(params?: ListAdminFinancePaymentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminFinancePayments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminFinancePaymentsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminFinancePayments>>> = ({ signal }) => listAdminFinancePayments(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminFinancePayments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminFinancePaymentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminFinancePayments>>>
+export type ListAdminFinancePaymentsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Search, summarize, and paginate successful customer payments
+ */
+
+export function useListAdminFinancePayments<TData = Awaited<ReturnType<typeof listAdminFinancePayments>>, TError = ErrorType<ApiError>>(
+ params?: ListAdminFinancePaymentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminFinancePayments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminFinancePaymentsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

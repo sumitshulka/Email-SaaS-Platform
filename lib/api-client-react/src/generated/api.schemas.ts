@@ -1127,6 +1127,115 @@ export const RazorpayEnvironment = {
   production: 'production',
 } as const;
 
+export type AdminFinancePaymentStatus = typeof AdminFinancePaymentStatus[keyof typeof AdminFinancePaymentStatus];
+
+
+export const AdminFinancePaymentStatus = {
+  captured: 'captured',
+  refunded: 'refunded',
+} as const;
+
+export type AdminFinanceAccountStatus = typeof AdminFinanceAccountStatus[keyof typeof AdminFinanceAccountStatus];
+
+
+export const AdminFinanceAccountStatus = {
+  active: 'active',
+  disabled: 'disabled',
+  deleted: 'deleted',
+} as const;
+
+export interface AdminFinanceAccount {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  status: AdminFinanceAccountStatus;
+  registeredAt: string;
+}
+
+export interface AdminFinancePackage {
+  id: string;
+  name: string;
+}
+
+export type AdminFinanceSubscriptionStatus = typeof AdminFinanceSubscriptionStatus[keyof typeof AdminFinanceSubscriptionStatus];
+
+
+export const AdminFinanceSubscriptionStatus = {
+  active: 'active',
+  superseded: 'superseded',
+  cancelled: 'cancelled',
+} as const;
+
+export interface AdminFinanceSubscription {
+  id: string;
+  status: AdminFinanceSubscriptionStatus;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface AdminFinancePayment {
+  id: string;
+  receipt: string;
+  status: AdminFinancePaymentStatus;
+  amountMinor: number;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+  razorpayEnvironment: RazorpayEnvironment | null;
+  /** @nullable */
+  razorpayOrderId: string | null;
+  /** @nullable */
+  razorpayPaymentId: string | null;
+  capturedAt: string;
+  account: AdminFinanceAccount;
+  subscriptionPackage: AdminFinancePackage;
+  subscription: AdminFinanceSubscription | null;
+}
+
+export interface AdminFinanceCurrencySummary {
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+  /** @minimum 0 */
+  paymentCount: number;
+  /** @minimum 0 */
+  capturedCount: number;
+  /** @minimum 0 */
+  refundedCount: number;
+  /** @pattern ^[0-9]+$ */
+  capturedAmountMinor: string;
+  /** @pattern ^[0-9]+$ */
+  refundedAmountMinor: string;
+}
+
+export interface AdminFinancePaymentPage {
+  rows: AdminFinancePayment[];
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+  /** @minimum 0 */
+  pageCount: number;
+  /**
+     * @items.minLength 3
+     * @items.maxLength 3
+     */
+  currencies: string[];
+  summaryByCurrency: AdminFinanceCurrencySummary[];
+}
+
 export interface RazorpayEnvironmentSettings {
   /** @nullable */
   keyId: string | null;
@@ -1368,6 +1477,87 @@ limit?: number;
  */
 offset?: number;
 };
+
+export type ListAdminFinancePaymentsParams = {
+/**
+ * @maxLength 160
+ */
+search?: string;
+packageId?: string;
+/**
+ * Inclusive UTC calendar date for capture time.
+ */
+fromDate?: string;
+/**
+ * Inclusive UTC calendar date for capture time.
+ */
+toDate?: string;
+status?: ListAdminFinancePaymentsStatus;
+/**
+ * @pattern ^[A-Z]{3}$
+ */
+currency?: string;
+environment?: ListAdminFinancePaymentsEnvironment;
+accountStatus?: ListAdminFinancePaymentsAccountStatus;
+sortBy?: ListAdminFinancePaymentsSortBy;
+sortDirection?: ListAdminFinancePaymentsSortDirection;
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type ListAdminFinancePaymentsStatus = typeof ListAdminFinancePaymentsStatus[keyof typeof ListAdminFinancePaymentsStatus];
+
+
+export const ListAdminFinancePaymentsStatus = {
+  captured: 'captured',
+  refunded: 'refunded',
+  all: 'all',
+} as const;
+
+export type ListAdminFinancePaymentsEnvironment = typeof ListAdminFinancePaymentsEnvironment[keyof typeof ListAdminFinancePaymentsEnvironment];
+
+
+export const ListAdminFinancePaymentsEnvironment = {
+  sandbox: 'sandbox',
+  production: 'production',
+  unrecorded: 'unrecorded',
+} as const;
+
+export type ListAdminFinancePaymentsAccountStatus = typeof ListAdminFinancePaymentsAccountStatus[keyof typeof ListAdminFinancePaymentsAccountStatus];
+
+
+export const ListAdminFinancePaymentsAccountStatus = {
+  any: 'any',
+  active: 'active',
+  disabled: 'disabled',
+  deleted: 'deleted',
+} as const;
+
+export type ListAdminFinancePaymentsSortBy = typeof ListAdminFinancePaymentsSortBy[keyof typeof ListAdminFinancePaymentsSortBy];
+
+
+export const ListAdminFinancePaymentsSortBy = {
+  capturedAt: 'capturedAt',
+  account: 'account',
+  subscription: 'subscription',
+  amount: 'amount',
+} as const;
+
+export type ListAdminFinancePaymentsSortDirection = typeof ListAdminFinancePaymentsSortDirection[keyof typeof ListAdminFinancePaymentsSortDirection];
+
+
+export const ListAdminFinancePaymentsSortDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
 
 export type ListAdminUsersParams = {
 search?: string;
