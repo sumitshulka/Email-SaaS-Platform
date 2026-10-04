@@ -2103,19 +2103,23 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
     });
   });
 
-  it("rejects mismatched, expired, and replayed state plus unverified or mismatched mailbox identities", async () => {
+  it("rejects invalid OAuth state and identity failures while revoking unverified grants", async () => {
     await withGmailOAuthConfig(async () => {
       const owner = await loggedInUser({ username: "gmail-state-owner" });
       const other = await loggedInUser({ username: "gmail-state-other" });
       const externalRequests = [];
       let identityMode = "unverified";
+      const accessToken = "identity-check-access-token";
+      const refreshToken = "identity-check-refresh-token";
 
       await withGoogleFetch(async (url, init) => {
         externalRequests.push({ url, init });
         if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
           return googleJson({
-            access_token: "identity-check-access-token",
-            refresh_token: "identity-check-refresh-token",
+            access_token: accessToken,
+            ...(identityMode === "profile-error"
+              ? {}
+              : { refresh_token: refreshToken }),
           });
         }
         if (url.hostname === "openidconnect.googleapis.com") {
@@ -2128,6 +2132,9 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
           url.hostname === "gmail.googleapis.com" &&
           url.pathname.endsWith("/users/me/profile")
         ) {
+          if (identityMode === "profile-error") {
+            return googleJson({ error: "profile unavailable" }, 503);
+          }
           return googleJson({
             emailAddress:
               identityMode === "mailbox-mismatch"
@@ -2135,6 +2142,20 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
                 : owner.user.email,
             historyId: "gmail-identity-history",
           });
+        }
+        if (
+          url.hostname === "oauth2.googleapis.com" &&
+          url.pathname === "/revoke"
+        ) {
+          assert.equal(init?.method, "POST");
+          assert.equal(
+            url.searchParams.get("token"),
+            identityMode === "profile-error" ? accessToken : refreshToken,
+          );
+          if (identityMode === "mailbox-mismatch") {
+            throw new Error("simulated Google revocation outage");
+          }
+          return new Response(null, { status: 200 });
         }
         throw new Error(`Unexpected Google request: ${url}`);
       }, async () => {
@@ -2191,6 +2212,7 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 
         const unverifiedFlow = await startGmailOAuth(owner.cookie);
         identityMode = "unverified";
+        const unverifiedRequestStart = externalRequests.length;
         callback = await finishGmailOAuth(owner.cookie, unverifiedFlow);
         assert.equal(
           new URL(callback.response.headers.get("location")).searchParams.get(
@@ -2200,22 +2222,113 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
         );
         assert.equal(
           externalRequests.some(
-            ({ url }) =>
+            ({ url }, index) =>
+              index >= unverifiedRequestStart &&
               url.hostname === "gmail.googleapis.com" &&
               url.pathname.endsWith("/users/me/profile"),
           ),
           false,
           "an unverified account must be rejected before mailbox metadata is trusted",
         );
+        assert.equal(
+          externalRequests.filter(
+            ({ url }, index) =>
+              index >= unverifiedRequestStart &&
+              url.hostname === "oauth2.googleapis.com" &&
+              url.pathname === "/revoke",
+          ).length,
+          1,
+          "an unverified grant must be revoked",
+        );
+        assert.equal(
+          JSON.stringify({
+            location: callback.response.headers.get("location"),
+            body: callback.body,
+          }).includes(refreshToken),
+          false,
+          "the callback must not expose the refresh token",
+        );
+        assert.equal(
+          JSON.stringify({
+            location: callback.response.headers.get("location"),
+            body: callback.body,
+          }).includes(accessToken),
+          false,
+          "the callback must not expose the access token",
+        );
 
         const mismatchedMailboxFlow = await startGmailOAuth(owner.cookie);
         identityMode = "mailbox-mismatch";
+        const mismatchRequestStart = externalRequests.length;
         callback = await finishGmailOAuth(owner.cookie, mismatchedMailboxFlow);
         assert.equal(
           new URL(callback.response.headers.get("location")).searchParams.get(
             "gmail",
           ),
           "failed",
+        );
+        assert.equal(
+          externalRequests.filter(
+            ({ url }, index) =>
+              index >= mismatchRequestStart &&
+              url.hostname === "oauth2.googleapis.com" &&
+              url.pathname === "/revoke",
+          ).length,
+          1,
+          "a mailbox mismatch must attempt revocation even if Google is unavailable",
+        );
+        assert.equal(
+          JSON.stringify({
+            location: callback.response.headers.get("location"),
+            body: callback.body,
+          }).includes(refreshToken),
+          false,
+          "the callback must not expose the refresh token",
+        );
+        assert.equal(
+          JSON.stringify({
+            location: callback.response.headers.get("location"),
+            body: callback.body,
+          }).includes(accessToken),
+          false,
+          "the callback must not expose the access token",
+        );
+
+        const profileErrorFlow = await startGmailOAuth(owner.cookie);
+        identityMode = "profile-error";
+        const profileErrorRequestStart = externalRequests.length;
+        callback = await finishGmailOAuth(owner.cookie, profileErrorFlow);
+        assert.equal(
+          new URL(callback.response.headers.get("location")).searchParams.get(
+            "gmail",
+          ),
+          "failed",
+        );
+        assert.equal(
+          externalRequests.filter(
+            ({ url }, index) =>
+              index >= profileErrorRequestStart &&
+              url.hostname === "oauth2.googleapis.com" &&
+              url.pathname === "/revoke",
+          ).length,
+          1,
+          "a Gmail profile error must attempt revocation",
+        );
+        assert.equal(
+          JSON.stringify({
+            location: callback.response.headers.get("location"),
+            body: callback.body,
+          }).includes(refreshToken),
+          false,
+          "the callback must not expose the refresh token",
+        );
+        assert.equal(
+          JSON.stringify({
+            location: callback.response.headers.get("location"),
+            body: callback.body,
+          }).includes(accessToken),
+          false,
+          "the callback must not expose the access token",
         );
         assert.equal(
           await db

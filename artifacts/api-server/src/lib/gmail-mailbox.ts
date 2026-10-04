@@ -277,6 +277,8 @@ export function createGmailMailboxRouter(): IRouter {
       return;
     }
 
+    let identityVerified = false;
+    let newlyIssuedGoogleToken: string | null = null;
     try {
       const tokenResponse = await postOAuthForm({
         code: req.query.code,
@@ -293,6 +295,7 @@ export function createGmailMailboxRouter(): IRouter {
         typeof tokenResponse.refresh_token === "string"
           ? tokenResponse.refresh_token
           : null;
+      newlyIssuedGoogleToken = refreshToken ?? accessToken;
       if (!accessToken) throw new Error("OAuth response omitted its access token.");
 
       const userInfoResponse = await fetch(
@@ -331,6 +334,7 @@ export function createGmailMailboxRouter(): IRouter {
       ) {
         throw new Error("Google account and Gmail mailbox identity did not match.");
       }
+      identityVerified = true;
 
       const [existing] = await db
         .select()
@@ -378,6 +382,9 @@ export function createGmailMailboxRouter(): IRouter {
         });
       redirectToSettings(req, res, "connected");
     } catch (error) {
+      if (!identityVerified && newlyIssuedGoogleToken) {
+        await revokeGoogleToken(newlyIssuedGoogleToken);
+      }
       logger.warn(
         {
           userId: params.userId,
