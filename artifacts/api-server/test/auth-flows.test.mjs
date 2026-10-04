@@ -5,6 +5,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { DataType, newDb } from "pg-mem";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { and, desc, eq } from "drizzle-orm";
+import express from "express";
+import cookieParser from "cookie-parser";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://mailflow-test:mailflow-test@127.0.0.1/mailflow_test";
@@ -316,6 +318,13 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE gmail_oauth_states (
+    nonce varchar(64) PRIMARY KEY,
+    expires_at timestamptz NOT NULL,
+    consumed_at timestamptz
+  );
+  CREATE INDEX gmail_oauth_states_expiry_idx
+    ON gmail_oauth_states(expires_at);
   CREATE TABLE microsoft365_trace_connections (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -476,6 +485,7 @@ beforeEach(async () => {
   await db.delete(dbModule.emailDeliveryReportsTable);
   await db.delete(dbModule.microsoft365MessageTracesTable);
   await db.delete(dbModule.microsoft365TraceConnectionsTable);
+  await db.delete(dbModule.gmailOAuthStatesTable);
   await db.delete(dbModule.gmailMailboxConnectionsTable);
   await db.delete(dbModule.emailSendAttemptsTable);
   await db.delete(dbModule.emailCampaignRecipientsTable);
@@ -1808,6 +1818,128 @@ describe("authentication and account recovery", { concurrency: false }, () => {
 });
 
 describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () => {
+  it("atomically rejects a callback replay sent to an independent app instance", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-replica-owner" });
+      const tokenCodes = [];
+      const expiredNonce = "expired-gmail-oauth-nonce";
+      await db.insert(dbModule.gmailOAuthStatesTable).values({
+        nonce: expiredNonce,
+        expiresAt: new Date(Date.now() - 60_000),
+        consumedAt: new Date(Date.now() - 120_000),
+      });
+
+      const startReplica = async () => {
+        const replicaApp = express();
+        replicaApp.use(cookieParser());
+        replicaApp.use((req, _res, next) => {
+          req.authUser = owner.user;
+          next();
+        });
+        replicaApp.use(gmailMailboxModule.createGmailMailboxRouter());
+        const replicaServer = replicaApp.listen(0);
+        await once(replicaServer, "listening");
+        return {
+          baseUrl: `http://127.0.0.1:${replicaServer.address().port}`,
+          close: () =>
+            new Promise((resolve, reject) => {
+              replicaServer.close((error) =>
+                error ? reject(error) : resolve(),
+              );
+            }),
+        };
+      };
+
+      const replicas = await Promise.all([startReplica(), startReplica()]);
+      try {
+        await withGoogleFetch(async (url, init) => {
+          if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+            const fields = new URLSearchParams(init?.body);
+            tokenCodes.push(fields.get("code"));
+            return googleJson({
+              access_token: "replica-test-access-token",
+              refresh_token: "replica-test-refresh-token",
+            });
+          }
+          if (url.hostname === "openidconnect.googleapis.com") {
+            return googleJson({
+              email: owner.user.email,
+              email_verified: true,
+            });
+          }
+          if (
+            url.hostname === "gmail.googleapis.com" &&
+            url.pathname.endsWith("/users/me/profile")
+          ) {
+            return googleJson({
+              emailAddress: owner.user.email,
+              historyId: "replica-test-history",
+            });
+          }
+          throw new Error(`Unexpected Google request: ${url}`);
+        }, async () => {
+          const connectResponse = await fetch(
+            `${replicas[0].baseUrl}/sending/gmail/connect`,
+            { method: "POST" },
+          );
+          assert.equal(connectResponse.status, 200);
+          const { authorizationUrl } = await connectResponse.json();
+          const state = new URL(authorizationUrl).searchParams.get("state");
+          const setCookie = connectResponse.headers.getSetCookie()[0];
+          const oauthCookie = setCookie.split(";", 1)[0];
+          const nonce = oauthCookie.slice(oauthCookie.indexOf("=") + 1);
+
+          const callback = (replica, code) => {
+            const query = new URLSearchParams({ code, state });
+            return fetch(
+              `${replica.baseUrl}/sending/gmail/oauth/callback?${query}`,
+              {
+                headers: { cookie: oauthCookie },
+                redirect: "manual",
+              },
+            );
+          };
+          const [first, second] = await Promise.all([
+            callback(replicas[0], "replica-code-one"),
+            callback(replicas[1], "replica-code-two"),
+          ]);
+          const results = [first, second].map((response) =>
+            new URL(response.headers.get("location")).searchParams.get("gmail"),
+          );
+          assert.deepEqual(results.sort(), ["connected", "failed"]);
+          assert.equal(tokenCodes.length, 1);
+          assert.ok(
+            ["replica-code-one", "replica-code-two"].includes(tokenCodes[0]),
+          );
+
+          const replay = await callback(replicas[1], "replay-authorization-code");
+          assert.equal(
+            new URL(replay.headers.get("location")).searchParams.get("gmail"),
+            "failed",
+          );
+          assert.equal(
+            tokenCodes.length,
+            1,
+            "a replay on another app instance must not exchange a second authorization code",
+          );
+
+          const consumedStates = await db
+            .select()
+            .from(dbModule.gmailOAuthStatesTable);
+          assert.equal(consumedStates.length, 1);
+          assert.equal(consumedStates[0].nonce, nonce);
+          assert.ok(consumedStates[0].consumedAt);
+          assert.ok(
+            !consumedStates.some((entry) => entry.nonce === expiredNonce),
+            "expired consumed-state records should be cleaned during consumption",
+          );
+        });
+      } finally {
+        await Promise.all(replicas.map((replica) => replica.close()));
+      }
+    });
+  });
+
   it("exchanges consent, protects the saved token, rejects replay, and revokes on disconnect", async () => {
     await withGmailOAuthConfig(async () => {
       const owner = await loggedInUser({ username: "gmail-oauth-owner" });

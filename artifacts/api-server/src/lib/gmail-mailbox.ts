@@ -1,6 +1,7 @@
 import {
   and,
   eq,
+  gt,
   inArray,
   isNull,
   lte,
@@ -14,6 +15,7 @@ import {
 } from "express";
 import {
   db,
+  gmailOAuthStatesTable,
   gmailMailboxConnectionsTable,
 } from "@workspace/db";
 import { decryptSecret, encryptSecret, hmac, randomToken, constantTimeEqual } from "./security";
@@ -26,7 +28,6 @@ import {
 } from "./gmail-api";
 import { ingestDeliveryReports } from "./delivery-report-ingestion";
 
-const router: IRouter = Router();
 const POLL_INTERVAL_MS = 2 * 60_000;
 const OAUTH_STATE_MAX_AGE_MS = 10 * 60_000;
 const OAUTH_COOKIE = "mailflow_gmail_oauth_state";
@@ -34,7 +35,6 @@ const OAUTH_STATE_PURPOSE = "gmail-mailbox-oauth-state";
 const OAUTH_COOKIE_PATH = "/api/sending/gmail/oauth/callback";
 let workerTimer: ReturnType<typeof setInterval> | null = null;
 let workerRunning = false;
-const consumedOAuthNonces = new Map<string, number>();
 
 type OAuthConfig = {
   clientId: string;
@@ -106,14 +106,23 @@ function parseOAuthState(state: string, cookieNonce: string | undefined) {
   }
 }
 
-function consumeOAuthNonce(nonce: string, expiresAt: number): boolean {
-  const now = Date.now();
-  for (const [consumedNonce, consumedExpiresAt] of consumedOAuthNonces) {
-    if (consumedExpiresAt < now) consumedOAuthNonces.delete(consumedNonce);
-  }
-  if (consumedOAuthNonces.has(nonce)) return false;
-  consumedOAuthNonces.set(nonce, expiresAt);
-  return true;
+async function consumeOAuthNonce(nonce: string): Promise<boolean> {
+  const now = new Date();
+  await db
+    .delete(gmailOAuthStatesTable)
+    .where(lte(gmailOAuthStatesTable.expiresAt, now));
+  const [consumed] = await db
+    .update(gmailOAuthStatesTable)
+    .set({ consumedAt: now })
+    .where(
+      and(
+        eq(gmailOAuthStatesTable.nonce, nonce),
+        isNull(gmailOAuthStatesTable.consumedAt),
+        gt(gmailOAuthStatesTable.expiresAt, now),
+      ),
+    )
+    .returning({ nonce: gmailOAuthStatesTable.nonce });
+  return Boolean(consumed);
 }
 
 async function postOAuthForm(
@@ -173,7 +182,10 @@ function redirectToSettings(
   res.redirect(303, target.toString());
 }
 
-router.get(
+export function createGmailMailboxRouter(): IRouter {
+  const router: IRouter = Router();
+
+  router.get(
   "/sending/gmail/connection",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -199,7 +211,7 @@ router.get(
   },
 );
 
-router.post(
+  router.post(
   "/sending/gmail/connect",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -212,11 +224,16 @@ router.post(
       return;
     }
     const nonce = randomToken(24);
+    const expiresAt = Date.now() + OAUTH_STATE_MAX_AGE_MS;
     const state = signedOAuthState(
       req.authUser!.id,
       nonce,
-      Date.now() + OAUTH_STATE_MAX_AGE_MS,
+      expiresAt,
     );
+    await db.insert(gmailOAuthStatesTable).values({
+      nonce,
+      expiresAt: new Date(expiresAt),
+    });
     res.cookie(OAUTH_COOKIE, nonce, oauthCookieOptions(req.secure));
     const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authorization.searchParams.set("client_id", config.clientId);
@@ -231,7 +248,7 @@ router.post(
   },
 );
 
-router.get(
+  router.get(
   "/sending/gmail/oauth/callback",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -255,7 +272,7 @@ router.get(
       redirectToSettings(req, res, "failed");
       return;
     }
-    if (!consumeOAuthNonce(params.nonce, params.expiresAt)) {
+    if (!(await consumeOAuthNonce(params.nonce))) {
       redirectToSettings(req, res, "failed");
       return;
     }
@@ -373,7 +390,7 @@ router.get(
   },
 );
 
-router.delete(
+  router.delete(
   "/sending/gmail/connection",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -390,7 +407,10 @@ router.delete(
     }
     res.status(204).end();
   },
-);
+  );
+
+  return router;
+}
 
 async function getAccessToken(refreshToken: string): Promise<string> {
   const config = readOAuthConfig();
@@ -554,5 +574,7 @@ export function startGmailMailboxWorker(): void {
   void tick();
   workerTimer = setInterval(() => void tick(), 30_000);
 }
+
+const router = createGmailMailboxRouter();
 
 export default router;

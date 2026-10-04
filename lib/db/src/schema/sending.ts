@@ -90,6 +90,18 @@ export const gmailMailboxConnectionsTable = pgTable(
   ],
 );
 
+export const gmailOAuthStatesTable = pgTable(
+  "gmail_oauth_states",
+  {
+    nonce: varchar("nonce", { length: 64 }).primaryKey(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("gmail_oauth_states_expiry_idx").on(table.expiresAt),
+  ],
+);
+
 export const microsoft365TraceConnectionsTable = pgTable(
   "microsoft365_trace_connections",
   {
