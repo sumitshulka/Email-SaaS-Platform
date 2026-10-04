@@ -1,16 +1,17 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Activity, CircleAlert, CreditCard, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck,
+  Activity, CircleAlert, CreditCard, Gift, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck, X,
 } from 'lucide-react';
 import {
-  getGetRazorpaySettingsQueryKey, getListAdminSubscriptionPackagesQueryKey,
+  getGetRazorpaySettingsQueryKey, getListAdminSubscriptionPackagesQueryKey, getListAdminUsersQueryKey,
   getListAvailableSubscriptionPackagesQueryKey,
-  useCreateSubscriptionPackage, useGetRazorpaySettings, useListAdminSubscriptionPackages,
+  useCreateSubscriptionPackage, useGetRazorpaySettings, useGiftAdminSubscription, useListAdminSubscriptionPackages,
+  useListAdminUsers,
   useSetActiveRazorpayEnvironment, useTestRazorpayConnection,
   useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
 } from '@workspace/api-client-react';
-import type { SubscriptionPackage, SubscriptionPackageInput } from '@workspace/api-client-react';
+import type { AdminUser, SubscriptionPackage, SubscriptionPackageInput } from '@workspace/api-client-react';
 
 type GatewayEnvironment = 'sandbox' | 'production';
 type GatewayDraft = { keyId: string; keySecret: string; webhookSecret: string };
@@ -37,8 +38,8 @@ const blankDraft: PackageDraft = {
 const errorText = (error: unknown) =>
   error && typeof error === 'object' && 'message' in error ? String(error.message) : 'The request could not be completed. Please try again.';
 
-function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-lg border border-[#e1e6eb] bg-white ${className}`}>{children}</section>;
+function Panel({ children, className = '', testId }: { children: ReactNode; className?: string; testId?: string }) {
+  return <section data-testid={testId} className={`rounded-lg border border-[#e1e6eb] bg-white ${className}`}>{children}</section>;
 }
 
 function Field({
@@ -80,8 +81,26 @@ export default function AdminBillingPage() {
   const activateEnvironment = useSetActiveRazorpayEnvironment();
   const createPackage = useCreateSubscriptionPackage();
   const updatePackage = useUpdateSubscriptionPackage();
+  const giftSubscription = useGiftAdminSubscription();
   const settings = settingsQuery.data;
   const packages = packagesQuery.data?.packages ?? [];
+  const [giftSearch, setGiftSearch] = useState('');
+  const [giftRecipient, setGiftRecipient] = useState<AdminUser | null>(null);
+  const [giftPackageId, setGiftPackageId] = useState('');
+  const [giftConfirmed, setGiftConfirmed] = useState(false);
+  const [giftNotice, setGiftNotice] = useState<{ text: string; bad?: boolean } | null>(null);
+  const giftUserSearchParams = {
+    search: giftSearch.trim(),
+    status: 'all',
+    page: 1,
+    pageSize: 8,
+  } as const;
+  const giftUsersQuery = useListAdminUsers(giftUserSearchParams, {
+    query: {
+      enabled: giftSearch.trim().length >= 2 && !giftRecipient,
+      queryKey: getListAdminUsersQueryKey(giftUserSearchParams),
+    },
+  });
   const [gatewayDrafts, setGatewayDrafts] = useState<Record<GatewayEnvironment, GatewayDraft>>({
     sandbox: { keyId: '', keySecret: '', webhookSecret: '' },
     production: { keyId: '', keySecret: '', webhookSecret: '' },
@@ -127,6 +146,29 @@ export default function AdminBillingPage() {
         onSuccess: () => { void refreshPackages(); announce('Subscription package created.'); resetPackageForm(); },
       });
     }
+  };
+
+  const submitGift = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!giftRecipient || !giftPackageId || !giftConfirmed) return;
+    const recipient = giftRecipient;
+    giftSubscription.mutate({
+      data: { userId: recipient.id, packageId: giftPackageId },
+    }, {
+      onSuccess: result => {
+        void queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+        const startsOn = new Date(result.startsAt).toLocaleDateString();
+        const endsOn = new Date(result.endsAt).toLocaleDateString();
+        setGiftNotice({
+          text: `Subscription granted to ${recipient.email}. Term: ${startsOn}–${endsOn}.`,
+        });
+        setGiftRecipient(null);
+        setGiftSearch('');
+        setGiftPackageId('');
+        setGiftConfirmed(false);
+      },
+      onError: error => setGiftNotice({ text: errorText(error), bad: true }),
+    });
   };
 
   const updateGatewayDraft = (
@@ -184,6 +226,83 @@ export default function AdminBillingPage() {
       </div>
       <div className="flex items-center gap-2 rounded-md border border-[#dfe7ed] bg-[#f6f9fb] px-3 py-2 text-[11px] text-[#53677b]"><ShieldCheck className="h-4 w-4 text-[#3374a9]"/>Secrets stay server-side</div>
     </header>
+
+    <Panel className="overflow-hidden" testId="gift-subscription-panel">
+      <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6">
+        <span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><Gift className="h-[17px] w-[17px]"/></span>
+        <div>
+          <h2 className="text-[15px] font-bold text-[#1d2d40]">Gift a subscription</h2>
+          <p className="mt-0.5 text-[11px] text-[#788696]">Grant a package term to any tenant account without collecting or recording a payment.</p>
+        </div>
+      </div>
+      <form onSubmit={submitGift} className="space-y-4 p-5 md:p-6">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="gift-account-search" className="block text-[12px] font-semibold text-[#35445a]">Tenant account</label>
+            {giftRecipient ? <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-[#d8dfe6] bg-[#f8fafb] px-3 py-2" data-testid="selected-gift-recipient">
+              <div className="min-w-0">
+                <div className="truncate text-[12px] font-semibold text-[#23364b]">{giftRecipient.firstName} {giftRecipient.lastName}</div>
+                <div className="truncate text-[11px] text-[#748292]">{giftRecipient.email} · {giftRecipient.subscriptionStatus ?? 'No active subscription'}</div>
+              </div>
+              <button type="button" data-testid="button-clear-gift-recipient" aria-label="Choose a different account" onClick={() => { setGiftRecipient(null); setGiftConfirmed(false); setGiftNotice(null); }} className="grid h-8 w-8 shrink-0 place-items-center rounded text-[#718093] hover:bg-white hover:text-[#294d70]"><X className="h-4 w-4"/></button>
+            </div> : <>
+              <input
+                id="gift-account-search"
+                data-testid="input-gift-account-search"
+                type="search"
+                value={giftSearch}
+                onChange={event => { setGiftSearch(event.target.value); setGiftConfirmed(false); setGiftNotice(null); }}
+                placeholder="Search by name, email, or username"
+                autoComplete="off"
+                className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"
+              />
+              {giftSearch.trim().length >= 2 && <div className="max-h-52 overflow-y-auto rounded-md border border-[#e1e6eb] bg-white" data-testid="gift-account-results">
+                {giftUsersQuery.isLoading || giftUsersQuery.isFetching ? <p className="px-3 py-2.5 text-[11px] text-[#788696]">Searching accounts…</p>
+                  : giftUsersQuery.isError ? <p role="alert" className="px-3 py-2.5 text-[11px] text-[#a84926]">{errorText(giftUsersQuery.error)}</p>
+                    : giftUsersQuery.data?.items.length ? giftUsersQuery.data.items.map(user => <button
+                      type="button"
+                      key={user.id}
+                      data-testid={`button-gift-account-${user.id}`}
+                      onClick={() => { setGiftRecipient(user); setGiftSearch(''); setGiftConfirmed(false); setGiftNotice(null); }}
+                      className="block w-full border-b border-[#edf0f2] px-3 py-2.5 text-left last:border-0 hover:bg-[#f7f9fa]"
+                    >
+                      <span className="block text-[12px] font-semibold text-[#26374a]">{user.firstName} {user.lastName}</span>
+                      <span className="mt-0.5 block text-[11px] text-[#788696]">{user.email} · {user.subscriptionStatus ?? 'No active subscription'}</span>
+                    </button>) : <p className="px-3 py-2.5 text-[11px] text-[#788696]">No matching tenant accounts.</p>}
+              </div>}
+              <p className="text-[10px] text-[#85909c]">Search includes active, disabled, and pending tenant accounts.</p>
+            </>}
+          </div>
+          <label className="block min-w-0 space-y-1.5">
+            <span className="text-[12px] font-semibold text-[#35445a]">Subscription package</span>
+            <select
+              data-testid="select-gift-package"
+              value={giftPackageId}
+              onChange={event => { setGiftPackageId(event.target.value); setGiftConfirmed(false); setGiftNotice(null); }}
+              className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"
+            >
+              <option value="">Choose a package</option>
+              {packages.map(pkg => <option key={pkg.id} value={pkg.id}>
+                {pkg.name} · {pkg.periodDays} days · {formatMinor(pkg.amountMinor, pkg.currency)}{pkg.active ? '' : ' · hidden'}
+              </option>)}
+            </select>
+            <span className="block text-[10px] text-[#85909c]">Hidden packages can also be gifted. The configured package term and contact limit apply.</span>
+          </label>
+        </div>
+        {giftRecipient && giftPackageId && <label className="flex cursor-pointer items-start gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] p-3 text-[11px] leading-5 text-[#53677b]">
+          <input data-testid="checkbox-confirm-gift" type="checkbox" checked={giftConfirmed} onChange={event => setGiftConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#174f99]"/>
+          <span>I confirm granting this package to {giftRecipient.email}. Any current subscription term will finish first.</span>
+        </label>}
+        {giftNotice && <p data-testid="status-gift-subscription" role={giftNotice.bad ? 'alert' : 'status'} className={`rounded-md border px-3 py-2.5 text-[11px] ${giftNotice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{giftNotice.text}</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-4">
+          <p className="max-w-xl text-[10px] leading-5 text-[#788696]">The recipient gets the same subscription access and account experience as a paid subscriber. Gifts do not create a payment or revenue entry.</p>
+          <button data-testid="button-grant-gift-subscription" type="submit" disabled={!giftRecipient || !giftPackageId || !giftConfirmed || giftSubscription.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
+            {giftSubscription.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Gift className="h-4 w-4"/>}
+            {giftSubscription.isPending ? 'Granting subscription…' : 'Grant subscription'}
+          </button>
+        </div>
+      </form>
+    </Panel>
 
     <Panel className="overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9edf1] px-5 py-4 md:px-6">

@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, lte } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte } from "drizzle-orm";
 import {
   db,
   paymentsTable,
@@ -37,6 +37,16 @@ function serializeSubscription(
     endsAt: subscription.endsAt.toISOString(),
     package: serializePackage(pkg),
   };
+}
+
+function getSubscriptionTerm(
+  periodDays: number,
+  previousEnd: Date | undefined,
+  now: Date,
+) {
+  const startsAt = previousEnd && previousEnd > now ? previousEnd : now;
+  const endsAt = new Date(startsAt.getTime() + periodDays * 24 * 60 * 60 * 1000);
+  return { startsAt, endsAt };
 }
 
 export async function getCurrentSubscriptionForUser(userId: string) {
@@ -174,13 +184,10 @@ export async function activateCapturedPayment(input: {
       .limit(1)
       .for("update");
 
-    let startsAt = now;
-    if (latestActive) {
-      startsAt = latestActive.endsAt;
-    }
-
-    const endsAt = new Date(
-      startsAt.getTime() + pkg.periodDays * 24 * 60 * 60 * 1000,
+    const { startsAt, endsAt } = getSubscriptionTerm(
+      pkg.periodDays,
+      latestActive?.endsAt,
+      now,
     );
     const [subscription] = await tx
       .insert(userSubscriptionsTable)
@@ -201,6 +208,67 @@ export async function activateCapturedPayment(input: {
         updatedAt: now,
       })
       .where(eq(paymentsTable.id, payment.id));
+    return serializeSubscription(subscription!, pkg);
+  });
+}
+
+export async function grantAdminGiftSubscription(input: {
+  userId: string;
+  packageId: string;
+}) {
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(
+        and(
+          eq(usersTable.id, input.userId),
+          eq(usersTable.role, "USER"),
+          isNull(usersTable.deletedAt),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!user) return null;
+
+    const [pkg] = await tx
+      .select()
+      .from(subscriptionPackagesTable)
+      .where(eq(subscriptionPackagesTable.id, input.packageId))
+      .limit(1);
+    if (!pkg) return null;
+
+    const now = new Date();
+    const [latestActive] = await tx
+      .select()
+      .from(userSubscriptionsTable)
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, user.id),
+          eq(userSubscriptionsTable.status, "active"),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1)
+      .for("update");
+    const { startsAt, endsAt } = getSubscriptionTerm(
+      pkg.periodDays,
+      latestActive?.endsAt,
+      now,
+    );
+
+    const [subscription] = await tx
+      .insert(userSubscriptionsTable)
+      .values({
+        userId: user.id,
+        packageId: pkg.id,
+        paymentId: null,
+        status: "active",
+        startsAt,
+        endsAt,
+      })
+      .returning();
     return serializeSubscription(subscription!, pkg);
   });
 }

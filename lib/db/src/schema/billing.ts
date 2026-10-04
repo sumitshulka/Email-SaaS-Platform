@@ -135,7 +135,6 @@ export const userSubscriptionsTable = pgTable(
       .notNull()
       .references(() => subscriptionPackagesTable.id, { onDelete: "restrict" }),
     paymentId: uuid("payment_id")
-      .notNull()
       .references(() => paymentsTable.id, { onDelete: "restrict" }),
     status: subscriptionStatusEnum("status").notNull().default("active"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),

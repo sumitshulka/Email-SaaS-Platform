@@ -118,6 +118,7 @@ export * from './razorpayWebhookPayload';
 export * from './registerInput';
 export * from './resetPasswordInput';
 export * from './setActiveRazorpayEnvironmentInput';
+export * from './subscriptionGiftInput';
 export * from './subscriptionOrderCreated';
 export * from './subscriptionPackage';
 export * from './subscriptionPackageInput';

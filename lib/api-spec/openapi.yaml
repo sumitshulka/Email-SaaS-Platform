@@ -1404,6 +1404,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SubscriptionPackage"
+  /admin/billing/subscriptions/gift:
+    post:
+      operationId: giftAdminSubscription
+      tags: [billing]
+      summary: Grant a subscription term to a tenant account without collecting payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionGiftInput"
+      responses:
+        "201":
+          description: Granted subscription term
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionSummary"
+        "400":
+          description: Invalid gift request
+        "404":
+          description: Tenant account or subscription package not found
   /subscriptions/packages:
     get:
       operationId: listAvailableSubscriptionPackages
@@ -2282,6 +2304,12 @@ components:
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         active: { type: boolean }
       required: [name, description, amountMinor, currency, periodDays, contactLimit, active]
+    SubscriptionGiftInput:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        packageId: { type: string, format: uuid }
+      required: [userId, packageId]
     SubscriptionPackageUpdateInput:
       type: object
       properties:

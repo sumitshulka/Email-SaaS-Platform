@@ -21,6 +21,8 @@ import {
   CreateSubscriptionOrderBody,
   CreateSubscriptionPackageBody,
   CreateSubscriptionPackageResponse,
+  GiftAdminSubscriptionBody,
+  GiftAdminSubscriptionResponse,
   GetCurrentSubscriptionResponse,
   GetRazorpaySettingsResponse,
   ListAdminSubscriptionPackagesResponse,
@@ -49,7 +51,12 @@ import {
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
-import { activateCapturedPayment, getCurrentSubscriptionForUser, serializePackage } from "../lib/billing";
+import {
+  activateCapturedPayment,
+  getCurrentSubscriptionForUser,
+  grantAdminGiftSubscription,
+  serializePackage,
+} from "../lib/billing";
 import { writeAuditLog } from "../lib/audit";
 import { encryptSecret } from "../lib/security";
 import {
@@ -754,6 +761,43 @@ router.get(
         packages: packages.map(serializePackage),
       }),
     );
+  },
+);
+
+router.post(
+  "/admin/billing/subscriptions/gift",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = GiftAdminSubscriptionBody.safeParse(req.body);
+    if (!parsed.success) {
+      invalidInput(res, "Choose a tenant account and subscription package.");
+      return;
+    }
+    const subscription = await grantAdminGiftSubscription(parsed.data);
+    if (!subscription) {
+      res.status(404).json({
+        error: "Tenant account or subscription package not found.",
+        code: "NOT_FOUND",
+      });
+      return;
+    }
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "subscription.gifted",
+      entity: "user_subscription",
+      entityId: subscription.id,
+      ipAddress: req.ip,
+      metadata: {
+        userId: parsed.data.userId,
+        packageId: subscription.package.id,
+        packageName: subscription.package.name,
+        startsAt: subscription.startsAt,
+        endsAt: subscription.endsAt,
+      },
+    });
+    res
+      .status(201)
+      .json(GiftAdminSubscriptionResponse.parse(subscription));
   },
 );
 
