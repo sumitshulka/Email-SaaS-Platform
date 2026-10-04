@@ -457,6 +457,7 @@ const [
   deliveryReportIngestionModule,
   deliveryParserModule,
   gmailMailboxModule,
+  loggerModule,
   microsoft365TraceModule,
 ] = await Promise.all([
   import("../src/app.ts"),
@@ -468,6 +469,7 @@ const [
   import("../src/lib/delivery-report-ingestion.ts"),
   import("../src/lib/delivery-report-parser.ts"),
   import("../src/lib/gmail-mailbox.ts"),
+  import("../src/lib/logger.ts"),
   import("../src/lib/microsoft365-trace.ts"),
 ]);
 
@@ -2902,6 +2904,79 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
           0,
         );
       });
+    });
+  });
+
+  it("warns safely when grant revocation fails without changing the failed callback result", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-revocation-warning-owner" });
+      const originalWarn = loggerModule.logger.warn;
+      const warnings = [];
+      loggerModule.logger.warn = (...args) => warnings.push(args);
+
+      try {
+        for (const failureType of ["network", "http"]) {
+          const accessToken = `revocation-warning-access-${failureType}`;
+          const refreshToken = `revocation-warning-refresh-${failureType}`;
+          await withGoogleFetch(async (url) => {
+            if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+              return googleJson({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+            }
+            if (url.hostname === "openidconnect.googleapis.com") {
+              return googleJson({
+                email: owner.user.email,
+                email_verified: false,
+              });
+            }
+            if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/revoke") {
+              assert.equal(url.searchParams.get("token"), refreshToken);
+              if (failureType === "network") {
+                throw new Error(`revocation request failed: ${url.toString()}`);
+              }
+              return new Response(null, { status: 503 });
+            }
+            throw new Error(`Unexpected Google request: ${url}`);
+          }, async () => {
+            const flow = await startGmailOAuth(owner.cookie);
+            const callback = await finishGmailOAuth(owner.cookie, flow);
+            assert.equal(callback.response.status, 303);
+            assert.equal(
+              new URL(callback.response.headers.get("location")).searchParams.get("gmail"),
+              "failed",
+            );
+          });
+        }
+      } finally {
+        loggerModule.logger.warn = originalWarn;
+      }
+
+      const revocationWarnings = warnings.filter(
+        ([, message]) => message === "Google grant revocation failed",
+      );
+      assert.equal(revocationWarnings.length, 2);
+      assert.deepEqual(
+        revocationWarnings.map(([fields]) => fields),
+        [
+          { failureType: "network" },
+          { failureType: "http", statusCode: 503 },
+        ],
+      );
+      const serializedWarnings = JSON.stringify(warnings);
+      for (const token of [
+        "revocation-warning-access-network",
+        "revocation-warning-refresh-network",
+        "revocation-warning-access-http",
+        "revocation-warning-refresh-http",
+      ]) {
+        assert.equal(serializedWarnings.includes(token), false);
+      }
+      assert.equal(
+        serializedWarnings.includes("https://oauth2.googleapis.com/revoke?token="),
+        false,
+      );
     });
   });
 

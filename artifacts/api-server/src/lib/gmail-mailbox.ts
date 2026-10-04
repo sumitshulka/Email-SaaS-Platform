@@ -128,13 +128,25 @@ async function postOAuthForm(
 }
 
 async function revokeGoogleToken(token: string): Promise<void> {
+  let response: globalThis.Response;
   try {
-    await fetch(
+    response = await fetch(
       `https://oauth2.googleapis.com/revoke?${new URLSearchParams({ token })}`,
       { method: "POST", signal: AbortSignal.timeout(5_000) },
     );
   } catch {
+    logger.warn(
+      { failureType: "network" },
+      "Google grant revocation failed",
+    );
     // The local credential is still removed; the user can also revoke access in Google.
+    return;
+  }
+  if (!response.ok) {
+    logger.warn(
+      { failureType: "http", statusCode: response.status },
+      "Google grant revocation failed",
+    );
   }
 }
 
