@@ -163,9 +163,10 @@ export default function PlansPage() {
               setPaymentState({ kind: 'dismissed', message: 'Checkout was closed before a payment was confirmed. You can try again whenever you are ready.' });
             } },
           });
-          trackPaidCheckoutOutcome('started');
           checkout.open();
+          trackPaidCheckoutOutcome('started');
         } catch (error) {
+          trackPaidCheckoutOutcome('setup_failed');
           setCheckoutOrder(null);
           setPaymentState({ kind: 'error', message: errorText(error) });
         } finally {
@@ -173,6 +174,7 @@ export default function PlansPage() {
         }
       },
       onError: error => {
+        trackPaidCheckoutOutcome('setup_failed');
         setStartingPackage(null);
         setPaymentState({ kind: 'error', message: errorText(error) });
       },

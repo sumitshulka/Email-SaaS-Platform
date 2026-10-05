@@ -26,10 +26,11 @@ export function trackPaidVerificationOutcome(outcome: 'pending' | 'failed'): voi
   );
 }
 
-export function trackPaidCheckoutOutcome(outcome: 'started' | 'dismissed'): void {
-  trackEvent(
-    outcome === 'started'
-      ? 'paid_checkout_started'
-      : 'paid_checkout_dismissed',
-  );
+export function trackPaidCheckoutOutcome(outcome: 'started' | 'dismissed' | 'setup_failed'): void {
+  const eventName = {
+    started: 'paid_checkout_started',
+    dismissed: 'paid_checkout_dismissed',
+    setup_failed: 'paid_checkout_setup_failed',
+  }[outcome];
+  trackEvent(eventName);
 }

@@ -135,12 +135,14 @@ async function stopWebServer() {
 async function installFixtures(context, {
   activationStatus = 200,
   verificationStatus = 200,
+  orderStatus = 201,
   verificationResult = {
     status: 'active',
     message: 'Payment verified.',
     subscription: paidSubscription,
   },
   checkoutAction = null,
+  checkoutScriptFailure = false,
   packages = [freePackage],
 } = {}) {
   await context.addCookies([{
@@ -165,15 +167,20 @@ async function installFixtures(context, {
     if (checkoutAction) {
       window.Razorpay = function(options) {
         this.open = () => {
-          if (checkoutAction === 'dismiss') {
-            options.modal.ondismiss();
-          } else if (checkoutAction === 'complete') {
-            options.handler({
-              razorpay_payment_id: 'pay_browser_test',
-              razorpay_order_id: orderId,
-              razorpay_signature: 's'.repeat(64),
-            });
+          if (checkoutAction === 'throw-on-open') {
+            throw new Error('Checkout could not open.');
           }
+          window.setTimeout(() => {
+            if (checkoutAction === 'dismiss') {
+              options.modal.ondismiss();
+            } else if (checkoutAction === 'complete') {
+              options.handler({
+                razorpay_payment_id: 'pay_browser_test',
+                razorpay_order_id: orderId,
+                razorpay_signature: 's'.repeat(64),
+              });
+            }
+          }, 0);
         };
       };
     }
@@ -193,6 +200,9 @@ async function installFixtures(context, {
       return response;
     };
   }, { checkoutAction, orderId: paidOrder.orderId });
+  if (checkoutScriptFailure) {
+    await context.route('https://checkout.razorpay.com/v1/checkout.js', route => route.abort());
+  }
   await context.route('**/api/**', async route => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -215,7 +225,10 @@ async function installFixtures(context, {
       return;
     }
     if (pathname === '/api/subscriptions/orders' && request.method() === 'POST') {
-      await route.fulfill({ status: 201, json: paidOrder });
+      await route.fulfill({
+        status: orderStatus,
+        json: orderStatus === 201 ? paidOrder : { error: 'Order creation failed.' },
+      });
       return;
     }
     if (pathname === '/api/subscriptions/verify' && request.method() === 'POST') {
@@ -431,6 +444,63 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         },
       ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks order creation failure without counting a checkout start or dismissal', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      orderStatus: 500,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Order creation failed.').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_checkout_setup_failed', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [],
+      }]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks checkout script failure without counting a checkout start or dismissal', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutScriptFailure: true,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Payment needs attention').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_checkout_setup_failed', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [],
+      }]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not count a checkout whose open call throws as started or dismissed', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'throw-on-open',
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Payment needs attention').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_checkout_setup_failed', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [],
+      }]);
     } finally {
       await context.close();
     }
