@@ -120,6 +120,8 @@ function ContactEmailHistorySection({ contactId, email }: { contactId: string; e
       enabled: !!contactId,
       queryKey: getGetContactEmailHistoryQueryKey(contactId),
       refetchInterval: 30_000,
+      staleTime: 0,
+      refetchOnMount: 'always',
     },
   });
 
