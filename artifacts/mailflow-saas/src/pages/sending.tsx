@@ -7,6 +7,13 @@ import {
   ShieldCheck, Trash2, Users, X,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
+import {
+  CONTACT_FILTER_NONE,
+  CONTACT_FILTER_UNSET,
+  ContactDirectoryFiltersPanel,
+  emptyContactDirectoryFilters,
+  type ContactDirectoryFilterValues,
+} from '@/components/contact-directory-filters';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection } from '@/components/delivery-evidence';
@@ -78,6 +85,15 @@ function Status({ children, tone = 'gray' }: { children: ReactNode; tone?: 'blue
 }
 function formatDate(date: string | null | undefined) {
   return date ? new Date(date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+}
+function distinctContactValues(values: Array<string | null | undefined>) {
+  return [...new Set(values.map(value => value?.trim()).filter((value): value is string => Boolean(value)))]
+    .sort((left, right) => left.localeCompare(right));
+}
+function contactFieldMatchesFilter(selected: string, value: string | null | undefined) {
+  if (selected === 'all') return true;
+  if (selected === CONTACT_FILTER_UNSET) return !value?.trim();
+  return value?.trim() === selected;
 }
 function roundUpToMinute(date: Date) {
   return new Date(Math.ceil(date.getTime() / 60_000) * 60_000);
@@ -351,17 +367,47 @@ export function ContactsPage() {
   const listsQuery = useListContactLists();
   const create = useCreateContact(); const update = useUpdateContact(); const remove = useDeleteContact();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
-  const [search, setSearch] = useState(''); const [filter, setFilter] = useState('all');
+  const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const contacts = contactsQuery.data?.contacts ?? [];
   const lists = (listsQuery.data || []) as ContactList[];
+  const companies = useMemo(() => distinctContactValues(contacts.map(contact => contact.companyName)), [contacts]);
+  const lifecycleStages = useMemo(() => distinctContactValues(contacts.map(contact => contact.lifecycleStage)), [contacts]);
+  const leadStatuses = useMemo(() => distinctContactValues(contacts.map(contact => contact.leadStatus)), [contacts]);
+  const leadSources = useMemo(() => distinctContactValues(contacts.map(contact => contact.leadSource)), [contacts]);
   const visible = useMemo(() => contacts.filter(c => {
-    const term = search.trim().toLowerCase();
-    const matches = !term || `${c.email} ${c.firstName} ${c.lastName} ${c.companyName ?? ''} ${c.phoneNumber ?? ''} ${c.linkedinUrl ?? ''}`.toLowerCase().includes(term);
-    return matches && (filter === 'all' || (filter === 'subscribed' ? c.subscribed : !c.subscribed));
-  }), [contacts, search, filter]);
+    const terms = filters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const searchableText = [
+      c.name, c.email, c.firstName, c.lastName, c.companyName, c.jobTitle, c.department,
+      c.seniority, c.phoneNumber, c.mobilePhone, c.linkedinUrl, c.websiteUrl, c.twitterUrl,
+      c.facebookUrl, c.instagramUrl, c.location, c.preferredLanguage, c.timeZone,
+      c.lifecycleStage, c.leadStatus, c.leadSource, c.companyIndustry, c.companyDomain,
+    ].filter((value): value is string => Boolean(value)).join(' ').toLowerCase();
+    const matchesSearch = terms.every(term => searchableText.includes(term));
+    const matchesStatus = filters.status === 'all' || (filters.status === 'subscribed' ? c.subscribed : !c.subscribed);
+    const matchesList = filters.listId === 'all'
+      || (filters.listId === CONTACT_FILTER_NONE ? c.listIds.length === 0 : c.listIds.includes(filters.listId));
+    const companyName = c.companyName?.trim() ?? '';
+    const matchesCompany = filters.companyName === 'all'
+      || (filters.companyName === CONTACT_FILTER_NONE
+        ? !companyName && !c.companyId
+        : companyName === filters.companyName);
+    const matchesLifecycle = contactFieldMatchesFilter(filters.lifecycleStage, c.lifecycleStage);
+    const matchesLeadStatus = contactFieldMatchesFilter(filters.leadStatus, c.leadStatus);
+    const matchesLeadSource = contactFieldMatchesFilter(filters.leadSource, c.leadSource);
+    const days = filters.addedWithin === 'any' ? 0 : Number(filters.addedWithin);
+    const addedCutoff = days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
+    const createdAt = Date.parse(c.createdAt);
+    const matchesAdded = addedCutoff === null || (Number.isFinite(createdAt) && createdAt >= addedCutoff);
+    return matchesSearch && matchesStatus && matchesList && matchesCompany
+      && matchesLifecycle && matchesLeadStatus && matchesLeadSource && matchesAdded;
+  }), [contacts, filters]);
+  const hasActiveFilters = filters.search.trim() !== '' || filters.status !== 'all'
+    || filters.listId !== 'all' || filters.companyName !== 'all'
+    || filters.lifecycleStage !== 'all' || filters.leadStatus !== 'all'
+    || filters.leadSource !== 'all' || filters.addedWithin !== 'any';
   const reload = () => { void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const openNew = () => { setEditing(null); setForm(emptyContact); };
   const openEdit = (contact: Contact) => { setEditing(contact); setForm({ email: contact.email, firstName: contact.firstName, lastName: contact.lastName, companyName: contact.companyName ?? '', linkedinUrl: contact.linkedinUrl ?? '', phoneNumber: contact.phoneNumber ?? '', subscribed: contact.subscribed, listIds: [...contact.listIds] }); };
@@ -394,17 +440,28 @@ export function ContactsPage() {
     <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     <div className="mb-5 grid gap-3 sm:grid-cols-3">
-      <div className={`${panelClass} p-4`}><div className="text-[11px] text-[#778291]">All contacts</div><div className="display mt-2 text-[26px] font-bold text-[#192638]">{contacts.length.toLocaleString()}</div></div>
-      <div className={`${panelClass} p-4`}><div className="text-[11px] text-[#778291]">Subscribed</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{contacts.filter(c => c.subscribed).length.toLocaleString()}</div></div>
-      <div className={`${panelClass} p-4`}><div className="text-[11px] text-[#778291]">Lists in workspace</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{lists.length.toLocaleString()}</div></div>
+      <div data-testid="summary-contact-total" className={`${panelClass} p-4`} style={{ backgroundColor: '#eaf3ff', borderColor: '#c9dcf3' }}>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#536984]">All contacts</div><div className="display mt-2 text-[26px] font-bold text-[#1d3e65]">{contacts.length.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#647b97]">Across this workspace</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8e9ff] text-[#2862a1]"><Users className="h-4 w-4"/></span></div>
+      </div>
+      <div data-testid="summary-contact-subscribed" className={`${panelClass} p-4`} style={{ backgroundColor: '#eaf5ee', borderColor: '#cde4d5' }}>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#4d7059]">Subscribed</div><div className="display mt-2 text-[26px] font-bold text-[#285e3c]">{contacts.filter(c => c.subscribed).length.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#64816d]">Eligible for campaigns</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8ecdf] text-[#397050]"><CheckCircle2 className="h-4 w-4"/></span></div>
+      </div>
+      <div data-testid="summary-contact-lists" className={`${panelClass} p-4`} style={{ backgroundColor: '#f1edff', borderColor: '#ded6f7' }}>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#655b83]">Lists in workspace</div><div className="display mt-2 text-[26px] font-bold text-[#4f4384]">{lists.length.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#766c93]">Available for audience filters</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#e3dcfb] text-[#6856a4]"><Activity className="h-4 w-4"/></span></div>
+      </div>
     </div>
     <section className={panelClass}>
-      <div className="flex flex-col gap-3 border-b border-[#e9edf0] p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Audience directory</h2><p className="mt-1 text-[11px] text-[#788392]">{visible.length} of {contacts.length} contacts</p></div>
-        <div className="flex flex-wrap gap-2">
-          <label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c97a3]"/><input data-testid="input-search-contacts" className={`${inputClass} w-full pl-9 sm:w-[230px]`} placeholder="Search name, email, company, phone" value={search} onChange={e => setSearch(e.target.value)}/></label>
-          <select data-testid="select-contact-status-filter" className={`${inputClass} w-auto min-w-[135px]`} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All statuses</option><option value="subscribed">Subscribed</option><option value="unsubscribed">Unsubscribed</option></select>
-        </div>
+      <div className="space-y-4 border-b border-[#e9edf0] p-4 sm:p-5">
+        <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Audience directory</h2><p className="mt-1 text-[11px] text-[#788392]">Showing {visible.length} of {contacts.length} contacts</p></div>
+        <ContactDirectoryFiltersPanel
+          filters={filters}
+          onChange={setFilters}
+          lists={lists}
+          companies={companies}
+          lifecycleStages={lifecycleStages}
+          leadStatuses={leadStatuses}
+          leadSources={leadSources}
+        />
       </div>
        {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
         <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="block text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span>{(contact.companyName || contact.phoneNumber || contact.linkedinUrl) && <span data-testid={`text-contact-details-${contact.id}`} className="mt-0.5 block break-all text-[11px] text-[#7c8794]">{[contact.companyName, contact.phoneNumber, contact.linkedinUrl].filter(Boolean).join(' · ')}</span>}</span></div></td>
@@ -413,7 +470,7 @@ export function ContactsPage() {
          <td className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.subject}>{contact.lastEmail.subject}</div><div className="mt-1 truncate text-[10px] text-[#7c8794]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div className="mt-1.5 flex flex-wrap items-center gap-2"><Status tone={emailStatusTone(contact.lastEmail.status)}>{emailStatusLabel(contact.lastEmail.status)}</Status><span className="text-[10px] text-[#87919d]">{formatDate(contact.lastEmail.lastAttemptAt)}</span></div><ContactReportEvidence id={contact.lastEmail.id} item={contact.lastEmail}/></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
          <td className="px-5 py-3.5"><div className="flex justify-end gap-1"><Button variant="quiet" testId={`button-contact-history-${contact.id}`} onClick={() => setHistoryContact(contact)}><Clock3 className="h-3.5 w-3.5"/>History</Button><Button variant="quiet" testId={`button-edit-contact-${contact.id}`} onClick={() => openEdit(contact)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-contact-${contact.id}`} disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div></td>
-      </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={search || filter !== 'all' ? 'No matching contacts' : 'Your audience starts here'} detail={search || filter !== 'all' ? 'Try a different search or status filter.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={!contacts.length ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
+       </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={hasActiveFilters ? 'No matching contacts' : 'Your audience starts here'} detail={hasActiveFilters ? 'Try removing a filter or broadening your search.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={!contacts.length ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
     </section>
     {editing !== undefined && <Modal title={editing ? 'Edit contact' : 'Add contact'} subtitle="Contact details and list memberships for this workspace." close={() => setEditing(undefined)}>
       <form onSubmit={submit} className="space-y-4">

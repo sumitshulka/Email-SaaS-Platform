@@ -1,0 +1,258 @@
+import { useState } from 'react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
+import type { ContactList } from '@workspace/api-client-react';
+
+export const CONTACT_FILTER_NONE = '__none__';
+export const CONTACT_FILTER_UNSET = '__unset__';
+
+export type ContactDirectoryFilterValues = {
+  search: string;
+  status: string;
+  listId: string;
+  companyName: string;
+  lifecycleStage: string;
+  leadStatus: string;
+  leadSource: string;
+  addedWithin: string;
+};
+
+export const emptyContactDirectoryFilters: ContactDirectoryFilterValues = {
+  search: '',
+  status: 'all',
+  listId: 'all',
+  companyName: 'all',
+  lifecycleStage: 'all',
+  leadStatus: 'all',
+  leadSource: 'all',
+  addedWithin: 'any',
+};
+
+type FilterOption = { value: string; label: string };
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  testId,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: FilterOption[];
+  testId: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-[11px] font-semibold text-[#415166]">{label}</span>
+      <select
+        data-testid={testId}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="h-10 w-full rounded-md border border-[#d3dce7] bg-white px-3 text-[12px] text-[#29394c] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"
+      >
+        {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+export function ContactDirectoryFiltersPanel({
+  filters,
+  onChange,
+  lists,
+  companies,
+  lifecycleStages,
+  leadStatuses,
+  leadSources,
+}: {
+  filters: ContactDirectoryFilterValues;
+  onChange: (filters: ContactDirectoryFilterValues) => void;
+  lists: ContactList[];
+  companies: string[];
+  lifecycleStages: string[];
+  leadStatuses: string[];
+  leadSources: string[];
+}) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const setFilter = (key: keyof ContactDirectoryFilterValues, value: string) => {
+    onChange({ ...filters, [key]: value });
+  };
+
+  const activeLabels: string[] = [];
+  if (filters.search.trim()) activeLabels.push(`Search: ${filters.search.trim()}`);
+  if (filters.status !== 'all') activeLabels.push(`Status: ${filters.status === 'subscribed' ? 'Subscribed' : 'Unsubscribed'}`);
+  if (filters.listId === CONTACT_FILTER_NONE) activeLabels.push('List: No list');
+  else if (filters.listId !== 'all') activeLabels.push(`List: ${lists.find(list => list.id === filters.listId)?.name || 'Selected list'}`);
+  if (filters.companyName === CONTACT_FILTER_NONE) activeLabels.push('Company: No company');
+  else if (filters.companyName !== 'all') activeLabels.push(`Company: ${filters.companyName}`);
+  if (filters.lifecycleStage === CONTACT_FILTER_UNSET) activeLabels.push('Lifecycle: Not set');
+  else if (filters.lifecycleStage !== 'all') activeLabels.push(`Lifecycle: ${filters.lifecycleStage}`);
+  if (filters.leadStatus === CONTACT_FILTER_UNSET) activeLabels.push('Lead status: Not set');
+  else if (filters.leadStatus !== 'all') activeLabels.push(`Lead status: ${filters.leadStatus}`);
+  if (filters.leadSource === CONTACT_FILTER_UNSET) activeLabels.push('Lead source: Not set');
+  else if (filters.leadSource !== 'all') activeLabels.push(`Lead source: ${filters.leadSource}`);
+  if (filters.addedWithin !== 'any') activeLabels.push(`Added: Last ${filters.addedWithin} days`);
+
+  const advancedCount = [
+    filters.lifecycleStage !== 'all',
+    filters.leadStatus !== 'all',
+    filters.leadSource !== 'all',
+    filters.addedWithin !== 'any',
+  ].filter(Boolean).length;
+
+  return (
+    <div
+      aria-label="Contact filters"
+      data-testid="contact-filter-panel"
+      className="rounded-lg border border-[#dce5ef] p-4 sm:p-5"
+      style={{ backgroundColor: '#f5f8fc' }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="mono text-[9px] font-semibold uppercase tracking-[.15em] text-[#64758a]">Filter audience</div>
+          <p className="mt-1 text-[11px] text-[#718095]">Search across contact details, then combine filters to narrow results.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span aria-live="polite" className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-[#63738a]">
+            {activeLabels.length} active
+          </span>
+          <button
+            type="button"
+            data-testid="button-toggle-more-contact-filters"
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen(open => !open)}
+            className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#cbd8e7] bg-white px-3 text-[11px] font-semibold text-[#3e5875] transition hover:bg-[#edf3fa]"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5"/>
+            {advancedOpen ? 'Fewer filters' : 'More filters'}
+            {advancedCount > 0 && <span className="rounded-full bg-[#e8f0fa] px-1.5 py-0.5 text-[9px]">{advancedCount}</span>}
+          </button>
+          {activeLabels.length > 0 && (
+            <button
+              type="button"
+              data-testid="button-clear-contact-filters"
+              onClick={() => onChange(emptyContactDirectoryFilters)}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold text-[#69798d] transition hover:bg-white hover:text-[#27384c]"
+            >
+              <X className="h-3.5 w-3.5"/>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <label className="block min-w-0 xl:col-span-1">
+          <span className="mb-1.5 block text-[11px] font-semibold text-[#415166]">Search contacts</span>
+          <span className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8795a5]"/>
+            <input
+              data-testid="input-search-contacts"
+              value={filters.search}
+              onChange={event => setFilter('search', event.target.value)}
+              placeholder="Name, email, title, company…"
+              className="h-10 w-full rounded-md border border-[#d3dce7] bg-white pl-9 pr-3 text-[12px] text-[#29394c] outline-none transition placeholder:text-[#9aa6b4] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"
+            />
+          </span>
+        </label>
+        <FilterSelect
+          label="Subscription"
+          value={filters.status}
+          testId="select-contact-status-filter"
+          onChange={value => setFilter('status', value)}
+          options={[
+            { value: 'all', label: 'All statuses' },
+            { value: 'subscribed', label: 'Subscribed' },
+            { value: 'unsubscribed', label: 'Unsubscribed' },
+          ]}
+        />
+        <FilterSelect
+          label="List membership"
+          value={filters.listId}
+          testId="select-contact-list-filter"
+          onChange={value => setFilter('listId', value)}
+          options={[
+            { value: 'all', label: 'Any list' },
+            { value: CONTACT_FILTER_NONE, label: 'No list' },
+            ...lists.map(list => ({ value: list.id, label: list.name })),
+          ]}
+        />
+        <FilterSelect
+          label="Company"
+          value={filters.companyName}
+          testId="select-contact-company-filter"
+          onChange={value => setFilter('companyName', value)}
+          options={[
+            { value: 'all', label: 'Any company' },
+            { value: CONTACT_FILTER_NONE, label: 'No company' },
+            ...companies.map(company => ({ value: company, label: company })),
+          ]}
+        />
+      </div>
+
+      {advancedOpen && (
+        <div data-testid="contact-advanced-filters" className="mt-3 grid gap-3 border-t border-[#dce5ef] pt-3 sm:grid-cols-2 xl:grid-cols-4">
+          <FilterSelect
+            label="Lifecycle stage"
+            value={filters.lifecycleStage}
+            testId="select-contact-lifecycle-filter"
+            onChange={value => setFilter('lifecycleStage', value)}
+            options={[
+              { value: 'all', label: 'Any stage' },
+              { value: CONTACT_FILTER_UNSET, label: 'Not set' },
+              ...lifecycleStages.map(stage => ({ value: stage, label: stage })),
+            ]}
+          />
+          <FilterSelect
+            label="Lead status"
+            value={filters.leadStatus}
+            testId="select-contact-lead-status-filter"
+            onChange={value => setFilter('leadStatus', value)}
+            options={[
+              { value: 'all', label: 'Any status' },
+              { value: CONTACT_FILTER_UNSET, label: 'Not set' },
+              ...leadStatuses.map(status => ({ value: status, label: status })),
+            ]}
+          />
+          <FilterSelect
+            label="Lead source"
+            value={filters.leadSource}
+            testId="select-contact-lead-source-filter"
+            onChange={value => setFilter('leadSource', value)}
+            options={[
+              { value: 'all', label: 'Any source' },
+              { value: CONTACT_FILTER_UNSET, label: 'Not set' },
+              ...leadSources.map(source => ({ value: source, label: source })),
+            ]}
+          />
+          <FilterSelect
+            label="Added"
+            value={filters.addedWithin}
+            testId="select-contact-added-filter"
+            onChange={value => setFilter('addedWithin', value)}
+            options={[
+              { value: 'any', label: 'Any time' },
+              { value: '7', label: 'Last 7 days' },
+              { value: '30', label: 'Last 30 days' },
+              { value: '90', label: 'Last 90 days' },
+            ]}
+          />
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#dce5ef] pt-3">
+        <p className="text-[10px] text-[#718095]">All selected filters apply together. Search matches partial words across professional and CRM details.</p>
+        {activeLabels.length > 0 && (
+          <div data-testid="contact-active-filters" className="flex flex-wrap gap-1.5">
+            {activeLabels.map((label, index) => (
+              <span key={`${label}-${index}`} className="max-w-[240px] truncate rounded-full border border-[#d9e2ec] bg-white px-2.5 py-1 text-[9px] font-medium text-[#5f7086]">
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

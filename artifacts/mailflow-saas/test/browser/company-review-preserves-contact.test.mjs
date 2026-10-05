@@ -102,6 +102,71 @@ let serverOutput = '';
 let browser;
 let baseUrl;
 const contactUpdates = [];
+const filterList = {
+  id: 'browser-filter-list',
+  name: 'Lifecycle audience',
+  active: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  contactCount: 2,
+};
+
+function contactDirectoryFixtures() {
+  return [
+    {
+      ...contact,
+      id: contactId,
+      email: 'casey.rivera@example.test',
+      name: 'Casey Rivera',
+      firstName: 'Casey',
+      lastName: 'Rivera',
+      companyId: null,
+      company: null,
+      companyName: 'Northstar Labs',
+      subscribed: true,
+      listIds: [filterList.id],
+      lifecycleStage: 'Lead',
+      leadStatus: 'Qualified',
+      leadSource: 'Referral',
+      createdAt: '2026-10-05T10:00:00.000Z',
+    },
+    {
+      ...contact,
+      id: 'browser-filter-customer-id',
+      email: 'morgan.lee@example.test',
+      name: 'Morgan Lee',
+      firstName: 'Morgan',
+      lastName: 'Lee',
+      companyId: null,
+      company: null,
+      companyName: 'Juniper Labs',
+      jobTitle: 'Product manager',
+      subscribed: false,
+      listIds: [filterList.id],
+      lifecycleStage: 'Customer',
+      leadStatus: 'Active',
+      leadSource: 'Partner',
+      createdAt: '2026-10-01T10:00:00.000Z',
+    },
+    {
+      ...contact,
+      id: 'browser-filter-unassigned-id',
+      email: 'jordan.park@example.test',
+      name: 'Jordan Park',
+      firstName: 'Jordan',
+      lastName: 'Park',
+      companyId: null,
+      company: null,
+      companyName: null,
+      subscribed: true,
+      listIds: [],
+      lifecycleStage: null,
+      leadStatus: null,
+      leadSource: null,
+      createdAt: '2026-09-01T10:00:00.000Z',
+    },
+  ];
+}
 
 async function getAvailablePort() {
   const server = createServer();
@@ -115,6 +180,14 @@ async function getAvailablePort() {
 }
 
 async function startWebServer() {
+  if (process.env.MAILFLOW_BROWSER_TEST_BASE_URL) {
+    baseUrl = process.env.MAILFLOW_BROWSER_TEST_BASE_URL;
+    const response = await fetch(baseUrl);
+    if (!response.ok) {
+      throw new Error(`Browser test server returned HTTP ${response.status} at ${baseUrl}`);
+    }
+    return;
+  }
   const port = await getAvailablePort();
   baseUrl = `http://127.0.0.1:${port}`;
   serverProcess = spawn('pnpm', ['run', 'dev'], {
@@ -217,7 +290,18 @@ async function installApiFixtures(context) {
       return;
     }
     if (pathname === '/api/contact-lists' && method === 'GET') {
-      await route.fulfill({ status: 200, json: [] });
+      await route.fulfill({ status: 200, json: [filterList] });
+      return;
+    }
+    if (pathname === '/api/contacts' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          contacts: contactDirectoryFixtures(),
+          quota: { used: 3, limit: 100, remaining: 97, canAdd: true, requiresSubscription: false },
+          uploadSettings: { maxFileSizeMb: 10, allowedFileTypes: ['csv'] },
+        },
+      });
       return;
     }
     if (pathname === `/api/contacts/${contactId}` && method === 'GET') {
@@ -280,6 +364,54 @@ describe('company profile review and contact data preservation', { concurrency: 
   after(async () => {
     await browser?.close();
     await stopWebServer();
+  });
+
+  it('filters the contacts directory by search, list, subscription, and CRM fields', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/contacts`);
+
+      const rows = page.locator('tr[data-testid^="row-contact-"]');
+      await page.getByTestId('row-contact-browser-filter-customer-id').waitFor({ state: 'visible' });
+      assert.equal(await rows.count(), 3, 'all contacts should appear before filtering');
+      await page.screenshot({ path: '/tmp/mailflow-contacts-directory-desktop.png', fullPage: true });
+
+      await page.getByTestId('select-contact-list-filter').selectOption(filterList.id);
+      assert.equal(await rows.count(), 2, 'list membership narrows the directory');
+
+      await page.getByTestId('select-contact-status-filter').selectOption('unsubscribed');
+      assert.equal(await rows.count(), 1, 'subscription status combines with list membership');
+      assert.equal(await page.getByTestId('row-contact-browser-filter-customer-id').isVisible(), true);
+
+      await page.getByTestId('button-toggle-more-contact-filters').click();
+      await page.screenshot({ path: '/tmp/mailflow-contacts-directory-advanced.png', fullPage: true });
+      await page.getByTestId('select-contact-lifecycle-filter').selectOption('Customer');
+      await page.getByTestId('select-contact-lead-source-filter').selectOption('Partner');
+      await page.getByTestId('input-search-contacts').fill('morgan juniper product partner');
+      assert.equal(await rows.count(), 1, 'search and CRM fields combine with the other filters');
+
+      await page.getByTestId('select-contact-lead-source-filter').selectOption('Referral');
+      assert.equal(await rows.count(), 0, 'conflicting filter criteria produce an empty result');
+      await page.getByTestId('button-clear-contact-filters').click();
+      assert.equal(await rows.count(), 3, 'clear resets every filter and search term');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForFunction(() => {
+        const sidebar = document.querySelector('aside');
+        return !sidebar || sidebar.getBoundingClientRect().right <= 1;
+      });
+      const pageOverflowsHorizontally = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      assert.equal(pageOverflowsHorizontally, false, 'the mobile contacts page should not have page-level horizontal overflow');
+      await page.screenshot({ path: '/tmp/mailflow-contacts-directory-mobile.png', fullPage: true });
+    } finally {
+      await context.close();
+    }
   });
 
   it('shows the unlinked profile and reason, preserves it on save, and links only after an explicit choice', async () => {
