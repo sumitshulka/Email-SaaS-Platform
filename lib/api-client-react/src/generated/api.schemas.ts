@@ -217,6 +217,87 @@ export interface UserDashboard {
   setupStepsTotal: number;
 }
 
+export interface UserNotification {
+  id: string;
+  title: string;
+  message: string;
+  startsAt: string;
+  expiresAt: string;
+  createdAt: string;
+  /** @nullable */
+  readAt: string | null;
+}
+
+export interface UserNotificationsResponse {
+  unread: UserNotification[];
+  history: UserNotification[];
+}
+
+export interface UserNotificationReadResponse {
+  notificationId: string;
+  readAt: string;
+}
+
+export type NotificationAudience = typeof NotificationAudience[keyof typeof NotificationAudience];
+
+
+export const NotificationAudience = {
+  broadcast: 'broadcast',
+  focused: 'focused',
+} as const;
+
+export type AdminNotificationStatus = typeof AdminNotificationStatus[keyof typeof AdminNotificationStatus];
+
+
+export const AdminNotificationStatus = {
+  scheduled: 'scheduled',
+  active: 'active',
+  expired: 'expired',
+  disabled: 'disabled',
+} as const;
+
+export interface AdminNotification {
+  id: string;
+  title: string;
+  message: string;
+  audience: NotificationAudience;
+  enabled: boolean;
+  status: AdminNotificationStatus;
+  startsAt: string;
+  expiresAt: string;
+  /** @minimum 0 */
+  recipientCount: number;
+  /** @minimum 0 */
+  readCount: number;
+  createdAt: string;
+}
+
+export interface AdminNotificationsResponse {
+  items: AdminNotification[];
+}
+
+export interface AdminNotificationInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  message: string;
+  audience: NotificationAudience;
+  /** @maxItems 1000 */
+  recipientUserIds: string[];
+  startsAt: string;
+  expiresAt: string;
+}
+
+export interface AdminNotificationStatusInput {
+  enabled: boolean;
+}
+
 export type TenantSendingSettingsProvider = typeof TenantSendingSettingsProvider[keyof typeof TenantSendingSettingsProvider];
 
 

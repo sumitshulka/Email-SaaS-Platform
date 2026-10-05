@@ -291,6 +291,44 @@ export const GetUserDashboardResponse = zod.object({
 
 
 /**
+ * @summary List active unread notifications and read history for the authenticated account
+ */
+export const GetUserNotificationsResponse = zod.object({
+  "unread": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "startsAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable()
+})),
+  "history": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "startsAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Mark an active notification as read for the authenticated account
+ */
+export const MarkUserNotificationReadParams = zod.object({
+  "notificationId": zod.coerce.string().uuid()
+})
+
+export const MarkUserNotificationReadResponse = zod.object({
+  "notificationId": zod.string().uuid(),
+  "readAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get the authenticated tenant's sending identity
  */
 export const GetTenantSendingSettingsResponse = zod.object({
@@ -2546,6 +2584,105 @@ export const GetAdminDashboardResponse = zod.object({
   "lastLoginAt": zod.coerce.date().nullable(),
   "subscriptionStatus": zod.string().nullable()
 }))
+})
+
+
+/**
+ * @summary List platform notifications with recipient and read counts
+ */
+export const listAdminNotificationsResponseItemsItemRecipientCountMin = 0;
+
+export const listAdminNotificationsResponseItemsItemReadCountMin = 0;
+
+
+
+export const ListAdminNotificationsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "audience": zod.enum(['broadcast', 'focused']),
+  "enabled": zod.boolean(),
+  "status": zod.enum(['scheduled', 'active', 'expired', 'disabled']),
+  "startsAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "recipientCount": zod.number().int().min(listAdminNotificationsResponseItemsItemRecipientCountMin),
+  "readCount": zod.number().int().min(listAdminNotificationsResponseItemsItemReadCountMin),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a broadcast or account-focused notification
+ */
+export const createAdminNotificationBodyTitleMax = 120;
+
+export const createAdminNotificationBodyMessageMax = 5000;
+
+export const createAdminNotificationBodyRecipientUserIdsMax = 1000;
+
+
+
+export const CreateAdminNotificationBody = zod.object({
+  "title": zod.string().min(1).max(createAdminNotificationBodyTitleMax),
+  "message": zod.string().min(1).max(createAdminNotificationBodyMessageMax),
+  "audience": zod.enum(['broadcast', 'focused']),
+  "recipientUserIds": zod.array(zod.string().uuid()).max(createAdminNotificationBodyRecipientUserIdsMax),
+  "startsAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date()
+})
+
+export const createAdminNotificationResponseRecipientCountMin = 0;
+
+export const createAdminNotificationResponseReadCountMin = 0;
+
+
+
+export const CreateAdminNotificationResponse = zod.object({
+  "id": zod.string().uuid(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "audience": zod.enum(['broadcast', 'focused']),
+  "enabled": zod.boolean(),
+  "status": zod.enum(['scheduled', 'active', 'expired', 'disabled']),
+  "startsAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "recipientCount": zod.number().int().min(createAdminNotificationResponseRecipientCountMin),
+  "readCount": zod.number().int().min(createAdminNotificationResponseReadCountMin),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Enable or disable a notification
+ */
+export const UpdateAdminNotificationStatusParams = zod.object({
+  "notificationId": zod.coerce.string().uuid()
+})
+
+export const UpdateAdminNotificationStatusBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const updateAdminNotificationStatusResponseRecipientCountMin = 0;
+
+export const updateAdminNotificationStatusResponseReadCountMin = 0;
+
+
+
+export const UpdateAdminNotificationStatusResponse = zod.object({
+  "id": zod.string().uuid(),
+  "title": zod.string(),
+  "message": zod.string(),
+  "audience": zod.enum(['broadcast', 'focused']),
+  "enabled": zod.boolean(),
+  "status": zod.enum(['scheduled', 'active', 'expired', 'disabled']),
+  "startsAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "recipientCount": zod.number().int().min(updateAdminNotificationStatusResponseRecipientCountMin),
+  "readCount": zod.number().int().min(updateAdminNotificationStatusResponseReadCountMin),
+  "createdAt": zod.coerce.date()
 })
 
 

@@ -238,6 +238,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserDashboard"
+  /notifications:
+    get:
+      operationId: getUserNotifications
+      tags: [notifications]
+      summary: List active unread notifications and read history for the authenticated account
+      responses:
+        "200":
+          description: Notifications for the authenticated account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserNotificationsResponse"
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markUserNotificationRead
+      tags: [notifications]
+      summary: Mark an active notification as read for the authenticated account
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Notification read state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserNotificationReadResponse"
+        "404":
+          description: Notification is not available to this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /sending/settings:
     get:
       operationId: getTenantSendingSettings
@@ -1319,6 +1354,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminDashboard"
+  /admin/notifications:
+    get:
+      operationId: listAdminNotifications
+      tags: [admin]
+      summary: List platform notifications with recipient and read counts
+      responses:
+        "200":
+          description: Recent notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminNotificationsResponse"
+    post:
+      operationId: createAdminNotification
+      tags: [admin]
+      summary: Create a broadcast or account-focused notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminNotificationInput"
+      responses:
+        "201":
+          description: Notification created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminNotification"
+        "400":
+          description: Invalid notification or recipient selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/notifications/{notificationId}/status:
+    patch:
+      operationId: updateAdminNotificationStatus
+      tags: [admin]
+      summary: Enable or disable a notification
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminNotificationStatusInput"
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminNotification"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/finance/payments:
     get:
       operationId: listAdminFinancePayments
@@ -1925,6 +2024,76 @@ components:
         setupStepsCompleted: { type: integer }
         setupStepsTotal: { type: integer }
       required: [subscriptionStatus, contacts, companies, activeLists, amountSpentByCurrency, lifecycleStages, leadStatuses, campaigns, setupStepsCompleted, setupStepsTotal]
+    UserNotification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        message: { type: string }
+        startsAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: ["string", "null"], format: date-time }
+      required: [id, title, message, startsAt, expiresAt, createdAt, readAt]
+    UserNotificationsResponse:
+      type: object
+      properties:
+        unread:
+          type: array
+          items: { $ref: "#/components/schemas/UserNotification" }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/UserNotification" }
+      required: [unread, history]
+    UserNotificationReadResponse:
+      type: object
+      properties:
+        notificationId: { type: string, format: uuid }
+        readAt: { type: string, format: date-time }
+      required: [notificationId, readAt]
+    NotificationAudience:
+      type: string
+      enum: [broadcast, focused]
+    AdminNotification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        message: { type: string }
+        audience: { $ref: "#/components/schemas/NotificationAudience" }
+        enabled: { type: boolean }
+        status: { type: string, enum: [scheduled, active, expired, disabled] }
+        startsAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        recipientCount: { type: integer, minimum: 0 }
+        readCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+      required: [id, title, message, audience, enabled, status, startsAt, expiresAt, recipientCount, readCount, createdAt]
+    AdminNotificationsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminNotification" }
+      required: [items]
+    AdminNotificationInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        message: { type: string, minLength: 1, maxLength: 5000 }
+        audience: { $ref: "#/components/schemas/NotificationAudience" }
+        recipientUserIds:
+          type: array
+          maxItems: 1000
+          items: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+      required: [title, message, audience, recipientUserIds, startsAt, expiresAt]
+    AdminNotificationStatusInput:
+      type: object
+      properties:
+        enabled: { type: boolean }
+      required: [enabled]
     DashboardAmountByCurrency:
       type: object
       properties:

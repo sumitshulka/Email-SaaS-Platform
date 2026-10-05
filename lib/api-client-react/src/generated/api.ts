@@ -22,6 +22,10 @@ import type {
 import type {
   AdminDashboard,
   AdminFinancePaymentPage,
+  AdminNotification,
+  AdminNotificationInput,
+  AdminNotificationStatusInput,
+  AdminNotificationsResponse,
   AdminUser,
   AdminUserPage,
   ApiError,
@@ -107,6 +111,8 @@ import type {
   TestRazorpayConnectionInput,
   UnlinkedCompanyProfileCollection,
   UserDashboard,
+  UserNotificationReadResponse,
+  UserNotificationsResponse,
   UserStatusInput,
   VerifyEmailInput,
   VerifyRazorpayPaymentInput
@@ -1060,6 +1066,157 @@ export function useGetUserDashboard<TData = Awaited<ReturnType<typeof getUserDas
 
 
 
+
+export const getGetUserNotificationsUrl = () => {
+
+
+
+
+  return `/api/notifications`
+}
+
+/**
+ * @summary List active unread notifications and read history for the authenticated account
+ */
+export const getUserNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<UserNotificationsResponse> => {
+
+  return customFetch<UserNotificationsResponse>(getGetUserNotificationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserNotificationsQueryKey = () => {
+    return [
+    `/api/notifications`
+    ] as const;
+    }
+
+
+export const getGetUserNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof getUserNotifications>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserNotificationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserNotifications>>> = ({ signal }) => getUserNotifications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof getUserNotifications>>>
+export type GetUserNotificationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List active unread notifications and read history for the authenticated account
+ */
+
+export function useGetUserNotifications<TData = Awaited<ReturnType<typeof getUserNotifications>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserNotificationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkUserNotificationReadUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/notifications/${notificationId}/read`
+}
+
+/**
+ * @summary Mark an active notification as read for the authenticated account
+ */
+export const markUserNotificationRead = async (notificationId: string, options?: Parameters<typeof customFetch>[1]): Promise<UserNotificationReadResponse> => {
+
+  return customFetch<UserNotificationReadResponse>(getMarkUserNotificationReadUrl(notificationId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkUserNotificationReadMutationKey = () => ['markUserNotificationRead'] as const;
+
+export const getMarkUserNotificationReadMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markUserNotificationRead>>, TError,MarkUserNotificationReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markUserNotificationRead>>, TError,MarkUserNotificationReadMutationVariables, TContext> => {
+
+const mutationKey = getMarkUserNotificationReadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markUserNotificationRead>>, MarkUserNotificationReadMutationVariables> = (props) => {
+          const {notificationId} = props ?? {};
+
+          return  markUserNotificationRead(notificationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkUserNotificationReadMutationResult = NonNullable<Awaited<ReturnType<typeof markUserNotificationRead>>>
+
+    export type MarkUserNotificationReadMutationError = ErrorType<ApiError>
+    export type MarkUserNotificationReadMutationVariables = {notificationId: string}
+
+    /**
+ * @summary Mark an active notification as read for the authenticated account
+ */
+export const useMarkUserNotificationRead = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markUserNotificationRead>>, TError,MarkUserNotificationReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markUserNotificationRead>>,
+        TError,
+        MarkUserNotificationReadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkUserNotificationReadMutationOptions(options));
+    }
 
 export const getGetTenantSendingSettingsUrl = () => {
 
@@ -4632,6 +4789,260 @@ export function useGetAdminDashboard<TData = Awaited<ReturnType<typeof getAdminD
 
 
 
+
+export const getListAdminNotificationsUrl = () => {
+
+
+
+
+  return `/api/admin/notifications`
+}
+
+/**
+ * @summary List platform notifications with recipient and read counts
+ */
+export const listAdminNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminNotificationsResponse> => {
+
+  return customFetch<AdminNotificationsResponse>(getListAdminNotificationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminNotificationsQueryKey = () => {
+    return [
+    `/api/admin/notifications`
+    ] as const;
+    }
+
+
+export const getListAdminNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminNotifications>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminNotificationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminNotifications>>> = ({ signal }) => listAdminNotifications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminNotifications>>>
+export type ListAdminNotificationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List platform notifications with recipient and read counts
+ */
+
+export function useListAdminNotifications<TData = Awaited<ReturnType<typeof listAdminNotifications>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminNotificationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAdminNotificationUrl = () => {
+
+
+
+
+  return `/api/admin/notifications`
+}
+
+/**
+ * @summary Create a broadcast or account-focused notification
+ */
+export const createAdminNotification = async (adminNotificationInput: AdminNotificationInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotification> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminNotification>(getCreateAdminNotificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminNotificationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminNotificationMutationKey = () => ['createAdminNotification'] as const;
+
+export const getCreateAdminNotificationMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminNotification>>, TError,CreateAdminNotificationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminNotification>>, TError,CreateAdminNotificationMutationVariables, TContext> => {
+
+const mutationKey = getCreateAdminNotificationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminNotification>>, CreateAdminNotificationMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminNotification(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminNotification>>>
+    export type CreateAdminNotificationMutationBody = BodyType<AdminNotificationInput>
+    export type CreateAdminNotificationMutationError = ErrorType<ApiError>
+    export type CreateAdminNotificationMutationVariables = {data: BodyType<AdminNotificationInput>}
+
+    /**
+ * @summary Create a broadcast or account-focused notification
+ */
+export const useCreateAdminNotification = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminNotification>>, TError,CreateAdminNotificationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminNotification>>,
+        TError,
+        CreateAdminNotificationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAdminNotificationMutationOptions(options));
+    }
+
+export const getUpdateAdminNotificationStatusUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/admin/notifications/${notificationId}/status`
+}
+
+/**
+ * @summary Enable or disable a notification
+ */
+export const updateAdminNotificationStatus = async (notificationId: string,
+    adminNotificationStatusInput: AdminNotificationStatusInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotification> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminNotification>(getUpdateAdminNotificationStatusUrl(notificationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminNotificationStatusInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminNotificationStatusMutationKey = () => ['updateAdminNotificationStatus'] as const;
+
+export const getUpdateAdminNotificationStatusMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotificationStatus>>, TError,UpdateAdminNotificationStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotificationStatus>>, TError,UpdateAdminNotificationStatusMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminNotificationStatusMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminNotificationStatus>>, UpdateAdminNotificationStatusMutationVariables> = (props) => {
+          const {notificationId,data} = props ?? {};
+
+          return  updateAdminNotificationStatus(notificationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminNotificationStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminNotificationStatus>>>
+    export type UpdateAdminNotificationStatusMutationBody = BodyType<AdminNotificationStatusInput>
+    export type UpdateAdminNotificationStatusMutationError = ErrorType<ApiError>
+    export type UpdateAdminNotificationStatusMutationVariables = {notificationId: string;data: BodyType<AdminNotificationStatusInput>}
+
+    /**
+ * @summary Enable or disable a notification
+ */
+export const useUpdateAdminNotificationStatus = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminNotificationStatus>>, TError,UpdateAdminNotificationStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminNotificationStatus>>,
+        TError,
+        UpdateAdminNotificationStatusMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminNotificationStatusMutationOptions(options));
+    }
 
 export const getListAdminFinancePaymentsUrl = (params?: ListAdminFinancePaymentsParams,) => {
   const normalizedParams = new URLSearchParams();
