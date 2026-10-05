@@ -9,14 +9,38 @@ import {
   getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
   useDeleteCompany, useGetCompany, useListContacts, useUpdateContact,
 } from '@workspace/api-client-react';
-import type { Company } from '@workspace/api-client-react';
+import type { Company, Contact } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
-import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement } from '@/components/company-link-confirmation';
+import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const errorText = (error: unknown) => error && typeof error === 'object' && 'message' in error
   ? String(error.message) : 'Something went wrong. Please try again.';
 const prettyDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const profileFromContact = (contact: Contact): CompanyProfileSnapshot => ({
+  companyName: contact.companyName,
+  companyWebsiteUrl: contact.companyWebsiteUrl,
+  companyDomain: contact.companyDomain,
+  companyIndustry: contact.companyIndustry,
+  companySize: contact.companySize,
+  companyRevenueRange: contact.companyRevenueRange,
+  companyDescription: contact.companyDescription,
+  companyPhoneNumber: contact.companyPhoneNumber,
+  companyLinkedinUrl: contact.companyLinkedinUrl,
+  companyLocation: contact.companyLocation,
+});
+const profileFromCompany = (company: Company): CompanyProfileSnapshot => ({
+  companyName: company.companyName,
+  companyWebsiteUrl: company.companyWebsiteUrl,
+  companyDomain: company.companyDomain,
+  companyIndustry: company.companyIndustry,
+  companySize: company.companySize,
+  companyRevenueRange: company.companyRevenueRange,
+  companyDescription: company.companyDescription,
+  companyPhoneNumber: company.companyPhoneNumber,
+  companyLinkedinUrl: company.companyLinkedinUrl,
+  companyLocation: company.companyLocation,
+});
 const profileFields = [
   ['Website', 'companyWebsiteUrl'], ['Domain', 'companyDomain'], ['Industry', 'companyIndustry'],
   ['Location', 'companyLocation'], ['Company size', 'companySize'], ['Revenue range', 'companyRevenueRange'],
@@ -74,6 +98,7 @@ export function CompanyDetailPage() {
     linkContact({
       contactId: contact.id, contactName: contact.name, legacyCompanyName: contact.companyName,
       companyId: company.id, companyName: company.companyName,
+      legacyProfile: profileFromContact(contact), sharedProfile: profileFromCompany(company),
     });
   };
 

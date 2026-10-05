@@ -38,7 +38,16 @@ const legacyCompanyProfile = {
 
 const company = {
   id: 'browser-review-shared-company-id',
-  ...legacyCompanyProfile,
+  companyName: legacyCompanyProfile.companyName,
+  companyWebsiteUrl: 'https://northstar.example',
+  companyDomain: 'northstar.example',
+  companyIndustry: 'Biotechnology',
+  companySize: '51-200',
+  companyRevenueRange: '5M-10M',
+  companyPhoneNumber: '+1-555-0199',
+  companyLocation: 'Seattle, WA',
+  companyLinkedinUrl: 'https://www.linkedin.com/company/northstar',
+  companyDescription: 'The shared company profile selected for comparison.',
   createdAt: '2026-02-01T00:00:00.000Z',
   updatedAt: '2026-02-01T00:00:00.000Z',
   contactCount: 0,
@@ -219,6 +228,16 @@ async function installApiFixtures(context) {
       const data = request.postDataJSON();
       contactUpdates.push(data);
       if (data.companyId) {
+        if (!data.replaceLegacyCompanyProfile) {
+          await route.fulfill({
+            status: 409,
+            json: {
+              error: 'This contact has company details that conflict with the selected company.',
+              code: 'COMPANY_PROFILE_CONFLICT',
+            },
+          });
+          return;
+        }
         contact = { ...contact, companyId: data.companyId, company };
       } else {
         contact = {
@@ -273,7 +292,7 @@ describe('company profile review and contact data preservation', { concurrency: 
       page.on('console', message => {
         if (message.type() === 'error') browserErrors.push(message.text());
       });
-      await page.goto(baseUrl);
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -286,7 +305,9 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.match(reviewText, /Northstar Labs/);
       assert.match(reviewText, /casey\.rivera@example\.test/);
       assert.match(reviewText, /Company domain and website are missing, so an automatic match could not be confirmed\./);
+      assert.match(reviewText, /Compare and review/);
       assert.equal(await page.getByTestId('text-unlinked-company-count').innerText(), '1 to review');
+      assert.match(await page.getByTestId('status-company-backfill').innerText(), /0 contacts linked/);
 
       await reviewRow.getByTestId(`link-review-unlinked-company-${contactId}`).click();
       await page.waitForURL(`**/contacts/${contactId}`);
@@ -352,15 +373,65 @@ describe('company profile review and contact data preservation', { concurrency: 
 
       await page.getByTestId('select-contact-company').selectOption(company.id);
       assert.equal(await page.getByTestId('button-link-company').isDisabled(), false);
+      await page.getByTestId('panel-selected-company-comparison').waitFor({ state: 'visible' });
+      assert.equal(
+        await page.getByTestId('contact-company-comparison-legacy-companyDomain').locator('dd').innerText(),
+        'Not provided',
+      );
+      assert.equal(
+        await page.getByTestId('contact-company-comparison-shared-companyDomain').locator('dd').innerText(),
+        'northstar.example',
+      );
+      assert.match(
+        await page.getByTestId('contact-company-comparison-shared-companyIndustry').innerText(),
+        /Biotechnology/,
+      );
+      assert.equal(contactUpdates.length, 1, 'selecting a shared profile only opens the comparison');
+
       const linkResponse = page.waitForResponse(response =>
         new URL(response.url()).pathname === `/api/contacts/${contactId}` &&
         response.request().method() === 'PATCH',
       );
       await page.getByTestId('button-link-company').click();
-      assert.equal((await linkResponse).status(), 200);
-      await page.getByTestId('status-contact-company').waitFor({ state: 'visible' });
+      assert.equal((await linkResponse).status(), 409);
+      await page.getByTestId('dialog-replace-legacy-company').waitFor({ state: 'visible' });
+      assert.match(
+        await page.getByTestId('company-link-confirmation-comparison-legacy-companyIndustry').innerText(),
+        /Research/,
+      );
+      assert.match(
+        await page.getByTestId('company-link-confirmation-comparison-shared-companyIndustry').innerText(),
+        /Biotechnology/,
+      );
       assert.equal(contactUpdates.length, 2);
+      assert.equal(contact.companyId, null, 'a conflict must not link the contact before confirmation');
+      await page.getByTestId('button-cancel-company-replacement').click();
+      assert.equal(await page.getByTestId('panel-linked-company').count(), 0);
+      assert.equal(contact.companyId, null, 'cancelling leaves the association unchanged');
+      assert.equal(
+        await page.getByTestId('input-detail-company').inputValue(),
+        legacyCompanyProfile.companyName,
+        'cancelling preserves the legacy profile',
+      );
+
+      const retryResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/contacts/${contactId}` &&
+        response.request().method() === 'PATCH',
+      );
+      await page.getByTestId('button-link-company').click();
+      assert.equal((await retryResponse).status(), 409);
+      const confirmResponsePromise = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/contacts/${contactId}` &&
+        response.request().method() === 'PATCH' &&
+        response.status() === 200,
+      );
+      await page.getByTestId('button-confirm-company-replacement').click();
+      const confirmResponse = await confirmResponsePromise;
+      assert.equal(confirmResponse.status(), 200);
+      await page.getByTestId('status-contact-company').waitFor({ state: 'visible' });
+      assert.equal(contactUpdates.length, 4);
       assert.deepEqual(contactUpdates[1], { companyId: company.id });
+      assert.deepEqual(contactUpdates[3], { companyId: company.id, replaceLegacyCompanyProfile: true });
       await page.getByTestId('panel-linked-company').waitFor({ state: 'visible' });
       assert.equal(await page.getByTestId('panel-linked-company').innerText().then(text => text.includes(company.companyName)), true);
     } finally {

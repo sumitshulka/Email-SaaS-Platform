@@ -6,8 +6,8 @@ import {
   getGetCompanyQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
   useGetContact, useGetContactFieldOptions, useListCompanies, useListContactLists, useUpdateContact,
 } from '@workspace/api-client-react';
-import type { Contact, ContactUpdate } from '@workspace/api-client-react';
-import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement } from '@/components/company-link-confirmation';
+import type { Company, Contact, ContactUpdate } from '@workspace/api-client-react';
+import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 import { ContactFieldSelect } from '@/components/contact-field-select';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
@@ -35,6 +35,30 @@ const date = (value: string | null | undefined) => value
   ? new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   : '—';
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+const profileFromContact = (contact: Contact): CompanyProfileSnapshot => ({
+  companyName: contact.companyName,
+  companyWebsiteUrl: contact.companyWebsiteUrl,
+  companyDomain: contact.companyDomain,
+  companyIndustry: contact.companyIndustry,
+  companySize: contact.companySize,
+  companyRevenueRange: contact.companyRevenueRange,
+  companyDescription: contact.companyDescription,
+  companyPhoneNumber: contact.companyPhoneNumber,
+  companyLinkedinUrl: contact.companyLinkedinUrl,
+  companyLocation: contact.companyLocation,
+});
+const profileFromCompany = (company: Company): CompanyProfileSnapshot => ({
+  companyName: company.companyName,
+  companyWebsiteUrl: company.companyWebsiteUrl,
+  companyDomain: company.companyDomain,
+  companyIndustry: company.companyIndustry,
+  companySize: company.companySize,
+  companyRevenueRange: company.companyRevenueRange,
+  companyDescription: company.companyDescription,
+  companyPhoneNumber: company.companyPhoneNumber,
+  companyLinkedinUrl: company.companyLinkedinUrl,
+  companyLocation: company.companyLocation,
+});
 
 function DataField({ label: title, value, testId }: { label: string; value: string | null | undefined; testId: string }) {
   return <div className="min-w-0 border-b border-[#edf0f2] py-3 last:border-0">
@@ -140,6 +164,7 @@ export function ContactDetailPage() {
   }
 
   const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
+  const selectedCompany = companiesQuery.data?.companies.find(item => item.id === companyChoice);
   const setString = (key: Exclude<keyof Editable, 'subscribed'>) => (value: string) => change(key, value);
   const toggleProfileEdit = (key: NullableField) => setEditingProfiles(current => {
     const next = new Set(current);
@@ -174,6 +199,7 @@ export function ContactDetailPage() {
         setReplacement(!confirmed && targetCompany && isCompanyProfileConflict(error) ? {
           contactId: contact.id, contactName: contact.name, legacyCompanyName: contact.companyName,
           companyId: targetCompany.id, companyName: targetCompany.companyName,
+          legacyProfile: profileFromContact(contact), sharedProfile: profileFromCompany(targetCompany),
         } : null);
         const text = errorText(error);
         const conflict = /conflict|domain|company profile/i.test(text);
@@ -253,7 +279,15 @@ export function ContactDetailPage() {
             </dl>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><span className="text-[10px] text-[#7c8998]">Shared across contacts in this workspace</span><button type="button" data-testid="button-unlink-company" disabled={update.isPending} onClick={() => changeCompany(null)} className="inline-flex items-center gap-1.5 rounded-md border border-[#d8e0e7] bg-white px-3 py-2 text-[10px] font-semibold text-[#52667b] hover:bg-[#f1f5f8] disabled:opacity-50"><Unlink2 className="h-3.5 w-3.5"/>{update.isPending ? 'Updating…' : 'Unlink company'}</button></div>
           </div> : <div className="mb-4 rounded-md border border-[#e6eaf0] bg-[#fbfcfd] p-3.5"><div className="flex items-start gap-2.5"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#8a96a4]"/><div><div className="text-[11px] font-semibold text-[#536477]">{form.companyName ? `Legacy profile: ${form.companyName}` : 'No shared company linked'}</div><p className="mt-1 text-[10px] leading-4 text-[#8793a0]">{form.companyName ? 'This contact’s existing company profile stays visible and unchanged until you choose to link a shared record.' : 'Choose a shared company profile to associate this contact.'}</p></div></div>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row"><select aria-label="Choose company" data-testid="select-contact-company" value={companyChoice} onChange={event => setCompanyChoice(event.target.value)} className="h-10 min-w-0 flex-1 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] text-[#344154] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"><option value="">Choose a company…</option>{(companiesQuery.data?.companies || []).map(company => <option key={company.id} value={company.id}>{company.companyName}{company.companyDomain ? ` · ${company.companyDomain}` : ''}</option>)}</select><button type="button" data-testid="button-link-company" disabled={!companyChoice || update.isPending || companiesQuery.isLoading} onClick={() => changeCompany(companyChoice)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-[#174f99] bg-[#174f99] px-3 text-[10px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50"><Link2 className="h-3.5 w-3.5"/>Link company</button></div>
+             <div className="mt-3 flex flex-col gap-2 sm:flex-row"><select aria-label="Choose company" data-testid="select-contact-company" value={companyChoice} onChange={event => setCompanyChoice(event.target.value)} className="h-10 min-w-0 flex-1 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] text-[#344154] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"><option value="">Choose a company…</option>{(companiesQuery.data?.companies || []).map(company => <option key={company.id} value={company.id}>{company.companyName}{company.companyDomain ? ` · ${company.companyDomain}` : ''}</option>)}</select><button type="button" data-testid="button-link-company" disabled={!companyChoice || update.isPending || companiesQuery.isLoading} onClick={() => changeCompany(companyChoice)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border border-[#174f99] bg-[#174f99] px-3 text-[10px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50"><Link2 className="h-3.5 w-3.5"/>Link company</button></div>
+             {selectedCompany && <div className="mt-4 space-y-2" data-testid="panel-selected-company-comparison">
+               <CompanyProfileComparison
+                 legacyProfile={profileFromContact(contact)}
+                 sharedProfile={profileFromCompany(selectedCompany)}
+                 testIdPrefix="contact-company-comparison"
+               />
+               <p className="text-[10px] leading-4 text-[#7c8998]">This preview does not link or replace anything. Link company is a separate action, and conflicting details require another confirmation.</p>
+             </div>}
             {companiesQuery.isError && <p role="alert" className="mt-2 text-[10px] text-[#a45b30]">Company options could not be loaded. Retry from the Companies page.</p>}
           </div>}
           {!contact.company && <div className="grid gap-4 sm:grid-cols-2">
