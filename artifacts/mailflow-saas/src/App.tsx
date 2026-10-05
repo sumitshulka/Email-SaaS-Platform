@@ -100,7 +100,7 @@ function AuthFrame({ children, label = 'Your email infrastructure, in focus.', c
           <div className="auth-hero-mark pointer-events-none absolute bottom-[164px] right-[34px] grid h-[122px] w-[122px] place-items-center rounded-full border border-[#cad8e7] bg-white/80"><div className="auth-hero-mark-icon h-[43px] w-[52px] -skew-x-12 border-2 border-[#245b9b]"/><span className="auth-hero-mark-dot absolute bottom-[31px] right-[31px] h-2 w-2 rounded-full bg-[#ee913f]"/></div>
           <div className="auth-hero-footer relative z-[1] mono text-[10px] tracking-wide text-[#99a1aa]">MAILFLOW PLATFORM <span className="px-2 text-[#d58b4f]">/</span> TRUST IN EVERY SEND</div>
         </section>
-        <section className="auth-login-panel flex items-center justify-center px-5 py-12 sm:px-10">
+        <section className="auth-panel flex items-center justify-center px-5 py-12 sm:px-10">
           <div className="w-full max-w-[410px]">{children}</div>
         </section>
       </div>
@@ -114,13 +114,68 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const login = useLogin(); const qc = useQueryClient(); const [, setLocation] = useLocation();
   const submit = form.handleSubmit(values => login.mutate({ data: values }, { onSuccess: res => { qc.setQueryData(getGetCurrentUserQueryKey(), res.user); setLocation(res.user.mustChangeCredentials ? '/profile?rotate=1' : res.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'); } }));
-  return <AuthFrame className="auth-login-frame"><AuthTitle className="auth-login-title" overline="Secure sign in" title="Welcome back." sub="Sign in with your account credentials to continue."/><Form {...form}><form onSubmit={submit} className="auth-login-form space-y-4"><Field label="Username or email" value={form.watch('identifier')} onChange={v => form.setValue('identifier', v, { shouldValidate: true })} testId="input-identifier" placeholder="you@company.com" required autoComplete="username"/><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Password</span><span className="relative block"><input data-testid="input-password" required type={showPassword ? 'text' : 'password'} value={form.watch('password')} onChange={e => form.setValue('password', e.target.value)} placeholder="Your password" autoComplete="current-password" className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 pr-11 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"/><button type="button" data-testid="button-toggle-password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(visible => !visible)} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-[#778291] hover:text-[#245b9b] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#3b73b8]">{showPassword ? <EyeOff className="h-4 w-4"/> : <Eye className="h-4 w-4"/>}</button></span></label><div className="flex justify-end"><Link data-testid="link-forgot-password" href="/forgot-password" className="text-[12px] font-semibold text-[#245b9b] no-underline hover:underline">Forgot password?</Link></div><FormError message={login.isError ? getError(login.error) : undefined}/><Button type="submit" testId="button-sign-in" disabled={login.isPending} className="auth-login-submit w-full">{login.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <ArrowRight className="h-4 w-4"/>}{login.isPending ? 'Signing in' : 'Sign in'}</Button></form></Form><div className="auth-login-register mt-7 border-t border-[#e7eaee] pt-5 text-center text-[12px] text-[#737e8b]">New to Mailflow? <Link data-testid="link-register" href="/register" className="ml-1 font-semibold text-[#245b9b] no-underline hover:underline">Create an account</Link></div><div className="auth-login-protection mt-8 flex items-center justify-center gap-2 text-[10px] text-[#929ba6]"><ShieldCheck className="h-3.5 w-3.5"/>Protected account access</div></AuthFrame>;
+  return (
+    <AuthFrame className="auth-branded-frame">
+      <AuthTitle className="auth-form-title" overline="Secure sign in" title="Welcome back." sub="Sign in with your account credentials to continue." />
+      <Form {...form}>
+        <form onSubmit={submit} className="auth-form space-y-4">
+          <Field label="Username or email" value={form.watch('identifier')} onChange={v => form.setValue('identifier', v, { shouldValidate: true })} testId="input-identifier" placeholder="you@company.com" required autoComplete="username" />
+          <label className="block space-y-1.5">
+            <span className="text-[12px] font-semibold text-[#344154]">Password</span>
+            <span className="relative block">
+              <input data-testid="input-password" required type={showPassword ? 'text' : 'password'} value={form.watch('password')} onChange={e => form.setValue('password', e.target.value)} placeholder="Your password" autoComplete="current-password" className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 pr-11 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]" />
+              <button type="button" data-testid="button-toggle-password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(visible => !visible)} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-[#778291] hover:text-[#245b9b] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#3b73b8]">
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </span>
+          </label>
+          <div className="flex justify-end">
+            <Link data-testid="link-forgot-password" href="/forgot-password" className="text-[12px] font-semibold text-[#245b9b] no-underline hover:underline">Forgot password?</Link>
+          </div>
+          <FormError message={login.isError ? getError(login.error) : undefined} />
+          <Button type="submit" testId="button-sign-in" disabled={login.isPending} className="auth-submit w-full">
+            {login.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+            {login.isPending ? 'Signing in' : 'Sign in'}
+          </Button>
+        </form>
+      </Form>
+      <div className="auth-footer mt-7 border-t border-[#e7eaee] pt-5 text-center text-[12px] text-[#737e8b]">
+        New to Mailflow? <Link data-testid="link-register" href="/register" className="ml-1 font-semibold text-[#245b9b] no-underline hover:underline">Create an account</Link>
+      </div>
+      <div className="auth-protection mt-8 flex items-center justify-center gap-2 text-[10px] text-[#929ba6]">
+        <ShieldCheck className="h-3.5 w-3.5" />Protected account access
+      </div>
+    </AuthFrame>
+  );
 }
 function RegisterPage() {
   const register = useRegister(); const [, setLocation] = useLocation();
   const [values, setValues] = useState({ firstName: '', lastName: '', email: '', password: '' });
   const onSubmit = (e: FormEvent) => { e.preventDefault(); register.mutate({ data: values }, { onSuccess: () => { sessionStorage.setItem('mailflow-verification-email', values.email); setLocation('/verify-email'); } }); };
-  return <AuthFrame label="Good email starts with a solid foundation."><AuthTitle overline="Create workspace access" title="Start with your account." sub="A few details are all we need to get you set up."/><form onSubmit={onSubmit} className="space-y-4"><div className="grid grid-cols-2 gap-3"><Field label="First name" value={values.firstName} onChange={firstName => setValues(v => ({ ...v, firstName }))} testId="input-first-name" required autoComplete="given-name"/><Field label="Last name" value={values.lastName} onChange={lastName => setValues(v => ({ ...v, lastName }))} testId="input-last-name" required autoComplete="family-name"/></div><Field label="Work email" value={values.email} onChange={email => setValues(v => ({ ...v, email }))} testId="input-register-email" type="email" placeholder="name@company.com" required autoComplete="email"/><Field label="Password" value={values.password} onChange={password => setValues(v => ({ ...v, password }))} testId="input-register-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password"/><FormError message={register.isError ? getError(register.error) : undefined}/><Button type="submit" testId="button-create-account" disabled={register.isPending} className="w-full">{register.isPending ? 'Creating account…' : 'Create account'}<ArrowRight className="h-4 w-4"/></Button></form><p className="mt-6 text-center text-[12px] text-[#737e8b]">Already have an account? <Link data-testid="link-login" href="/" className="ml-1 font-semibold text-[#245b9b] no-underline">Sign in</Link></p></AuthFrame>;
+  return (
+    <AuthFrame className="auth-branded-frame" label="Good email starts with a solid foundation.">
+      <AuthTitle className="auth-form-title" overline="Create workspace access" title="Start with your account." sub="A few details are all we need to get you set up." />
+      <form onSubmit={onSubmit} className="auth-form space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="First name" value={values.firstName} onChange={firstName => setValues(v => ({ ...v, firstName }))} testId="input-first-name" required autoComplete="given-name" />
+          <Field label="Last name" value={values.lastName} onChange={lastName => setValues(v => ({ ...v, lastName }))} testId="input-last-name" required autoComplete="family-name" />
+        </div>
+        <Field label="Work email" value={values.email} onChange={email => setValues(v => ({ ...v, email }))} testId="input-register-email" type="email" placeholder="name@company.com" required autoComplete="email" />
+        <Field label="Password" value={values.password} onChange={password => setValues(v => ({ ...v, password }))} testId="input-register-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password" />
+        <FormError message={register.isError ? getError(register.error) : undefined} />
+        <Button type="submit" testId="button-create-account" disabled={register.isPending} className="auth-submit w-full">
+          {register.isPending ? 'Creating account…' : 'Create account'}
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </form>
+      <div className="auth-footer mt-7 border-t border-[#e7eaee] pt-5 text-center text-[12px] text-[#737e8b]">
+        Already have an account? <Link data-testid="link-login" href="/" className="ml-1 font-semibold text-[#245b9b] no-underline hover:underline">Sign in</Link>
+      </div>
+      <div className="auth-protection mt-8 flex items-center justify-center gap-2 text-[10px] text-[#929ba6]">
+        <ShieldCheck className="h-3.5 w-3.5" />Protected account access
+      </div>
+    </AuthFrame>
+  );
 }
 function VerifyPage() {
   const verify = useVerifyRegistrationEmail(); const [, setLocation] = useLocation();
