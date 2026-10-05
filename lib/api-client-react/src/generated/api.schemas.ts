@@ -649,6 +649,62 @@ export interface CompanyBackfillResult {
   skippedContacts: number;
 }
 
+export interface UnlinkedCompanyProfile {
+  contactId: string;
+  contactName: string;
+  email: string;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyName: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation: string | null;
+  reason: string;
+}
 export interface Contact {
   id: string;
   email: string;
@@ -2360,3 +2416,7 @@ export const ListAdminUsersStatus = {
   pending: 'pending',
 } as const;
 
+
+export interface UnlinkedCompanyProfileCollection {
+  profiles: UnlinkedCompanyProfile[];
+}

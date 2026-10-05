@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   companyDomainKey,
   companyProfileFrom,
+  companyProfileReviewReason,
+  conflictingCompanyProfileFields,
   mergeCompatibleCompanyProfiles,
   normalizeCompanyDomain,
 } from "../src/lib/company-profile.ts";
@@ -31,11 +33,44 @@ describe("legacy company profile merge", () => {
   });
 
   it("leaves conflicting profiles unmatched instead of merging by name", () => {
-    const merged = mergeCompatibleCompanyProfiles([
+    const profiles = [
       companyProfileFrom({ companyName: "Acme", companyDomain: "acme.test" }),
       companyProfileFrom({ companyName: "Different company", companyDomain: "https://www.acme.test" }),
-    ]);
+    ];
+    const merged = mergeCompatibleCompanyProfiles(profiles);
 
     assert.equal(merged, null);
+    assert.deepEqual(conflictingCompanyProfileFields(profiles), ["companyName"]);
+    assert.match(
+      companyProfileReviewReason(profiles[0], profiles),
+      /conflicting company name values/,
+    );
+  });
+
+  it("explains when a profile is missing the domain required for safe matching", () => {
+    const profile = companyProfileFrom({ companyName: "Acme" });
+
+    assert.match(
+      companyProfileReviewReason(profile, [profile]),
+      /domain or website URL is missing/,
+    );
+  });
+
+  it("identifies conflicting fields on an existing shared company", () => {
+    const profile = companyProfileFrom({
+      companyName: "Acme",
+      companyDomain: "acme.test",
+      companyIndustry: "Software",
+    });
+    const sharedCompany = companyProfileFrom({
+      companyName: "Acme",
+      companyDomain: "acme.test",
+      companyIndustry: "Manufacturing",
+    });
+
+    assert.match(
+      companyProfileReviewReason(profile, [profile], sharedCompany),
+      /shared company for acme\.test has conflicting industry values/,
+    );
   });
 });

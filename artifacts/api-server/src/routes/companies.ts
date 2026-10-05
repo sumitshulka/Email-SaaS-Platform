@@ -8,6 +8,7 @@ import {
   GetCompanyParams,
   GetCompanyResponse,
   ListCompaniesResponse,
+  ListUnlinkedCompanyProfilesResponse,
   UpdateCompanyBody,
   UpdateCompanyParams,
   UpdateCompanyResponse,
@@ -24,7 +25,10 @@ import {
   normalizeCompanyDomain,
   type CompanyProfileValues,
 } from "../lib/company-profile";
-import { backfillCompanyProfilesInTransaction } from "../lib/company-backfill";
+import {
+  backfillCompanyProfilesInTransaction,
+  listUnlinkedCompanyProfilesForTenant,
+} from "../lib/company-backfill";
 import { requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
@@ -107,6 +111,17 @@ router.post(
       return backfillCompanyProfilesInTransaction(tx, userId);
     });
     res.json(BackfillCompanyProfilesResponse.parse(result));
+  },
+);
+
+router.get(
+  "/companies/unlinked-profiles",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const profiles = await listUnlinkedCompanyProfilesForTenant(
+      req.authUser!.id,
+    );
+    res.json(ListUnlinkedCompanyProfilesResponse.parse({ profiles }));
   },
 );
 

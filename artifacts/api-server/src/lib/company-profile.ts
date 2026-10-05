@@ -50,16 +50,83 @@ function comparisonValue(field: CompanyProfileField, value: string): string {
   return value.trim().replace(/\/+$/, "").toLowerCase();
 }
 
+export function conflictingCompanyProfileFields(
+  profiles: readonly CompanyProfileValues[],
+): CompanyProfileField[] {
+  return companyProfileFields.filter((field) => {
+    const values = profiles
+      .map((profile) => profile[field])
+      .filter((value): value is string => value !== null && value.trim() !== "");
+    return new Set(values.map((value) => comparisonValue(field, value))).size > 1;
+  });
+}
+
+const companyFieldLabels: Record<CompanyProfileField, string> = {
+  companyName: "company name",
+  companyWebsiteUrl: "website",
+  companyDomain: "domain",
+  companyIndustry: "industry",
+  companySize: "company size",
+  companyRevenueRange: "revenue range",
+  companyDescription: "description",
+  companyPhoneNumber: "phone number",
+  companyLinkedinUrl: "LinkedIn URL",
+  companyLocation: "location",
+};
+
+export function companyProfileReviewReason(
+  profile: CompanyProfileValues,
+  profilesWithSameDomain: readonly CompanyProfileValues[],
+  existingCompany?: CompanyProfileValues,
+): string {
+  const reasons: string[] = [];
+  const domainKey = companyDomainKey(profile);
+  if (!profile.companyName) reasons.push("Company name is missing.");
+  if (!domainKey) {
+    const hasInvalidDomain =
+      Boolean(profile.companyDomain || profile.companyWebsiteUrl);
+    reasons.push(
+      hasInvalidDomain
+        ? "A valid company domain or website URL could not be read from this profile."
+        : "A company domain or website URL is missing; a domain is required for safe matching.",
+    );
+  } else {
+    const legacyConflicts = conflictingCompanyProfileFields(
+      profilesWithSameDomain,
+    );
+    if (legacyConflicts.length > 0) {
+      const labels = legacyConflicts.map((field) => companyFieldLabels[field]);
+      reasons.push(
+        `Other unlinked profiles for ${domainKey} have conflicting ${labels.join(", ")} values.`,
+      );
+    }
+    if (existingCompany) {
+      const sharedConflicts = conflictingCompanyProfileFields([
+        profile,
+        existingCompany,
+      ]);
+      if (sharedConflicts.length > 0) {
+        const labels = sharedConflicts.map((field) => companyFieldLabels[field]);
+        reasons.push(
+          `The shared company for ${domainKey} has conflicting ${labels.join(", ")} values.`,
+        );
+      }
+    }
+  }
+  return reasons.length > 0
+    ? reasons.join(" ")
+    : "No safe domain-based match was confirmed. Review the saved company details before linking.";
+}
+
 export function mergeCompatibleCompanyProfiles(
   profiles: readonly CompanyProfileValues[],
 ): CompanyProfileValues | null {
+  if (conflictingCompanyProfileFields(profiles).length > 0) return null;
   const merged = {} as CompanyProfileValues;
   for (const field of companyProfileFields) {
     const values = profiles
       .map((profile) => profile[field])
       .filter((value): value is string => value !== null && value.trim() !== "");
-    const distinct = new Set(values.map((value) => comparisonValue(field, value)));
-    if (distinct.size > 1) return null;
     merged[field] = values[0] ?? null;
   }
   return merged;

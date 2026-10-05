@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import {
-  Building2, Check, CircleAlert, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight,
+  ArrowUpRight, Building2, Check, CircleAlert, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
+  getGetCompanyQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
   useBackfillCompanyProfiles, useCreateCompany,
-  useListCompanies, useUpdateCompany,
+  useListCompanies, useListUnlinkedCompanyProfiles, useUpdateCompany,
 } from '@workspace/api-client-react';
-import type { Company, CompanyInput, CompanyUpdate } from '@workspace/api-client-react';
+import type { Company, CompanyInput, CompanyUpdate, UnlinkedCompanyProfile } from '@workspace/api-client-react';
 
 const card = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -109,6 +109,7 @@ export function CompanyEditor({ company, onClose, onSaved }: { company?: Company
 export function CompaniesPage() {
   const qc = useQueryClient();
   const listQuery = useListCompanies();
+  const unlinkedProfilesQuery = useListUnlinkedCompanyProfiles();
   const backfill = useBackfillCompanyProfiles();
   const started = useRef(false);
   const [editor, setEditor] = useState<'new' | Company | null>(null);
@@ -129,6 +130,7 @@ export function CompaniesPage() {
         setBackfillResult(result);
         void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+         void qc.invalidateQueries({ queryKey: getListUnlinkedCompanyProfilesQueryKey() });
       },
       onError: error => setNotice({ tone: 'error', text: `Legacy profile backfill could not run: ${errorMessage(error)}` }),
     });
@@ -138,9 +140,22 @@ export function CompaniesPage() {
   if (listQuery.isError && !listQuery.data) return <section className={`${card} flex flex-col items-start gap-3 p-6`} role="alert"><div className="flex items-center gap-2 text-sm font-semibold"><CircleAlert className="h-4 w-4 text-[#c16d31]"/>Companies could not be loaded</div><p className="text-xs text-[#778291]">Your shared records are unchanged.</p><button type="button" data-testid="button-retry-companies" onClick={() => void listQuery.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button></section>;
   return <div className="fade-in">
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">CUSTOMER CONTEXT / DIRECTORY</div><h1 className="display text-[30px] font-bold leading-tight text-[#172334]">Companies</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Shared profiles for the organizations behind your contacts.</p></div><button type="button" data-testid="button-add-company" onClick={() => setEditor('new')} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>Add company</button></div>
-    {backfillResult && <div role="status" data-testid="status-company-backfill" className="mb-5 flex flex-col gap-3 rounded-lg border border-[#d8e5df] bg-[#f4f9f6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#43825e]"/><div><div className="text-[12px] font-semibold text-[#2c6547]">Legacy company profiles checked</div><p className="mt-1 text-[11px] leading-5 text-[#617c6d]">{backfillResult.linkedContacts} contacts linked · {backfillResult.createdCompanies} shared {backfillResult.createdCompanies === 1 ? 'company created' : 'companies created'} · {backfillResult.skippedContacts} contacts stayed unlinked</p></div></div><span className="text-[10px] text-[#789080]">Only safe matches are linked.</span></div>}
+     {backfillResult && <div role="status" data-testid="status-company-backfill" className="mb-5 flex flex-col gap-3 rounded-lg border border-[#d8e5df] bg-[#f4f9f6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#43825e]"/><div><div className="text-[12px] font-semibold text-[#2c6547]">Legacy company profiles checked</div><p className="mt-1 text-[11px] leading-5 text-[#617c6d]">{backfillResult.linkedContacts} contacts linked · {backfillResult.createdCompanies} shared {backfillResult.createdCompanies === 1 ? 'company created' : 'companies created'} · {backfillResult.skippedContacts} contacts stayed unlinked</p></div></div><span className="text-[10px] text-[#789080]">Only safe matches are linked.</span></div>}
     {backfillRunning && <div className="mb-5 flex items-center gap-2 rounded-lg border border-[#dce5ec] bg-[#f7fafc] px-4 py-3 text-[11px] text-[#64768b]"><RefreshCw className="h-3.5 w-3.5 animate-spin"/>Checking legacy company profiles…</div>}
     {notice && <div role={notice.tone === 'error' ? 'alert' : 'status'} data-testid="status-company-notice" className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${notice.tone === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{notice.text}</div>}
+     <section data-testid="section-unlinked-company-profiles" className={`${card} mb-5 overflow-hidden`}>
+       <header className="border-b border-[#e8edf1] px-4 py-4 sm:px-5">
+         <div className="flex flex-wrap items-start justify-between gap-3">
+           <div><h2 className="text-[14px] font-bold text-[#223247]">Company profiles to review</h2><p className="mt-1 text-[11px] leading-5 text-[#788697]">Profiles that could not be safely linked stay on their contact. Automatic linking requires compatible details and a matching domain; names alone are never used.</p></div>
+           {!unlinkedProfilesQuery.isLoading && !unlinkedProfilesQuery.isError && <span data-testid="text-unlinked-company-count" className="rounded-full bg-[#f3f5f7] px-2.5 py-1 text-[10px] font-semibold text-[#647386]">{unlinkedProfilesQuery.data?.profiles.length ?? 0} to review</span>}
+         </div>
+       </header>
+       {unlinkedProfilesQuery.isLoading ? <div className="px-5 py-7 text-[11px] text-[#8390a0]">Loading unlinked profiles…</div>
+         : unlinkedProfilesQuery.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 px-5 py-5"><p className="text-[11px] text-[#8b6044]">Unlinked profiles could not be loaded.</p><button type="button" data-testid="button-retry-unlinked-profiles" onClick={() => void unlinkedProfilesQuery.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-[11px] font-semibold text-[#52667b]">Retry</button></div>
+           : unlinkedProfilesQuery.data?.profiles.length ? <div className="max-h-[500px] divide-y divide-[#edf0f2] overflow-y-auto">{unlinkedProfilesQuery.data.profiles.map(profile => <UnlinkedProfileRow key={profile.contactId} profile={profile}/>)}</div>
+             : <div data-testid="empty-unlinked-company-profiles" className="px-5 py-7"><p className="text-[12px] font-semibold text-[#405166]">No unlinked profiles need review</p><p className="mt-1 text-[11px] text-[#84909e]">When a legacy profile is incomplete or conflicts with another record, it will appear here.</p></div>}
+       <footer className="border-t border-[#edf0f2] bg-[#fbfcfd] px-4 py-3 text-[10px] leading-4 text-[#778596] sm:px-5">To keep a profile unchanged, leave it as-is. It remains on the contact and in this list until you correct or link it.</footer>
+     </section>
     <div className="grid items-start">
        <section className={`${card} overflow-hidden`}>
         <div className="flex flex-col gap-3 border-b border-[#e8edf1] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><h2 className="text-[14px] font-bold text-[#223247]">Company directory</h2><p data-testid="text-company-result-count" className="mt-1 text-[11px] text-[#84909e]">{filtered.length} {filtered.length === 1 ? 'record' : 'records'} in this workspace</p></div><label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search companies" data-testid="input-search-companies" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-md border border-[#dce2e8] bg-[#fbfcfd] pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label></div>
@@ -148,6 +163,23 @@ export function CompaniesPage() {
          {filtered.length > 0 && <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] px-5 py-3"><span data-testid="text-company-page" className="text-[10px] text-[#7f8b99]">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span><div className="flex items-center gap-2"><button type="button" data-testid="button-company-page-previous" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronLeft className="h-4 w-4"/></button><span className="mono min-w-[54px] text-center text-[10px] text-[#667586]">{page} / {pageCount}</span><button type="button" data-testid="button-company-page-next" aria-label="Next page" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronRight className="h-4 w-4"/></button></div></footer>}
        </section>
      </div>
-     {editor && <CompanyEditor company={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); setNotice({ tone: 'success', text: 'Company profile saved.' }); void listQuery.refetch(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); }}/>}
+      {editor && <CompanyEditor company={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); setNotice({ tone: 'success', text: 'Company profile saved.' }); void listQuery.refetch(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListUnlinkedCompanyProfilesQueryKey() }); }}/>}
   </div>;
+}
+
+function UnlinkedProfileRow({ profile }: { profile: UnlinkedCompanyProfile }) {
+  return <article data-testid={`row-unlinked-company-${profile.contactId}`} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#fff6ed] text-[#a7632f]"><CircleAlert className="h-4 w-4"/></span>
+      <div className="min-w-0">
+        <div className="break-words text-[12px] font-semibold text-[#26364a]">{profile.companyName || 'Company name missing'}</div>
+        <p className="mt-0.5 break-all text-[10px] text-[#7b8898]">{profile.contactName} · {profile.email}</p>
+        <p className="mt-1 break-all text-[10px] text-[#718196]">{profile.companyDomain || profile.companyWebsiteUrl || 'No company domain or website'}</p>
+        <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#9a5b2d]">{profile.reason}</p>
+      </div>
+    </div>
+    <Link href={`/contacts/${profile.contactId}`} data-testid={`link-review-unlinked-company-${profile.contactId}`} className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 self-start rounded-md border border-[#d6e1ed] bg-white px-3 text-[10px] font-semibold text-[#245b9b] no-underline hover:bg-[#f2f7fc] sm:self-center">
+      Review contact<ArrowUpRight className="h-3.5 w-3.5"/>
+    </Link>
+  </article>;
 }

@@ -614,6 +614,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CompanyBackfillResult"
+  /companies/unlinked-profiles:
+    get:
+      operationId: listUnlinkedCompanyProfiles
+      tags: [contacts]
+      summary: List legacy company profiles that remain unlinked for the authenticated tenant
+      responses:
+        "200":
+          description: Unlinked contact company profiles and the reason each needs review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnlinkedCompanyProfileCollection"
   /companies/{companyId}:
     parameters:
       - name: companyId
@@ -2139,6 +2151,31 @@ components:
         createdCompanies: { type: integer, minimum: 0 }
         skippedContacts: { type: integer, minimum: 0 }
       required: [linkedContacts, createdCompanies, skippedContacts]
+    UnlinkedCompanyProfile:
+      type: object
+      properties:
+        contactId: { type: string, format: uuid }
+        contactName: { type: string }
+        email: { type: string, format: email }
+        companyName: { type: ["string", "null"], maxLength: 200 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
+        reason: { type: string }
+      required: [contactId, contactName, email, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, reason]
+    UnlinkedCompanyProfileCollection:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items: { $ref: "#/components/schemas/UnlinkedCompanyProfile" }
+      required: [profiles]
     Contact:
       type: object
       properties:

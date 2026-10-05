@@ -123,6 +123,7 @@ export function ContactDetailPage() {
       onSuccess: () => {
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getListUnlinkedCompanyProfilesQueryKey() });
         setNotice({ kind: 'success', text: 'Contact changes saved. This save does not change the company association.' });
       },
       onError: error => setNotice({ kind: 'error', text: errorText(error) }),
@@ -159,6 +160,7 @@ export function ContactDetailPage() {
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
         void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+        void qc.invalidateQueries({ queryKey: getListUnlinkedCompanyProfilesQueryKey() });
         if (contact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(contact.companyId) });
         if (linkedContact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(linkedContact.companyId) });
         if (linkedContact.companyId !== companyId) {

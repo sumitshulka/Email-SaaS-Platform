@@ -7,11 +7,76 @@ import {
 import {
   companyDomainKey,
   companyProfileFrom,
+  companyProfileReviewReason,
   hasCompanyProfile,
   mergeCompatibleCompanyProfiles,
 } from "./company-profile";
 
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function listUnlinkedCompanyProfilesForTenant(userId: string) {
+  const [contacts, companies] = await Promise.all([
+    db
+      .select()
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.userId, userId),
+          isNull(contactsTable.companyId),
+          eq(contactsTable.companyLinkSuppressed, false),
+        ),
+      ),
+    db.select().from(companiesTable).where(eq(companiesTable.userId, userId)),
+  ]);
+  const unlinkedProfiles = contacts
+    .map((contact) => ({
+      contact,
+      profile: companyProfileFrom(contact),
+    }))
+    .filter(({ profile }) => hasCompanyProfile(profile));
+  const profilesByDomain = new Map<
+    string,
+    Array<(typeof unlinkedProfiles)[number]>
+  >();
+  for (const row of unlinkedProfiles) {
+    const domainKey = companyDomainKey(row.profile);
+    if (!domainKey) continue;
+    const sameDomain = profilesByDomain.get(domainKey) ?? [];
+    sameDomain.push(row);
+    profilesByDomain.set(domainKey, sameDomain);
+  }
+  const companiesByDomain = new Map(
+    companies.flatMap((company) => {
+      const domainKey = companyDomainKey(companyProfileFrom(company));
+      return domainKey ? [[domainKey, company] as const] : [];
+    }),
+  );
+
+  return unlinkedProfiles.map(({ contact, profile }) => {
+    const domainKey = companyDomainKey(profile);
+    const sameDomainProfiles = domainKey
+      ? (profilesByDomain.get(domainKey) ?? []).map((row) => row.profile)
+      : [];
+    const existingCompany = domainKey
+      ? companiesByDomain.get(domainKey)
+      : undefined;
+    const contactName =
+      [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+      contact.name ||
+      contact.email;
+    return {
+      contactId: contact.id,
+      contactName,
+      email: contact.email,
+      ...profile,
+      reason: companyProfileReviewReason(
+        profile,
+        sameDomainProfiles,
+        existingCompany ? companyProfileFrom(existingCompany) : undefined,
+      ),
+    };
+  });
+}
 
 export async function backfillCompanyProfilesInTransaction(
   tx: DatabaseTransaction,

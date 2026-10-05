@@ -1917,6 +1917,27 @@ describe("tenant contact management and package quotas", { concurrency: false },
       skippedContacts: 1,
     });
 
+    const ownerReview = await api("/companies/unlinked-profiles", {
+      cookie: owner.cookie,
+    });
+    assert.equal(ownerReview.response.status, 200, JSON.stringify(ownerReview.body));
+    assert.deepEqual(ownerReview.body.profiles.map((profile) => profile.contactId), [
+      conflict.body.id,
+    ]);
+    assert.match(ownerReview.body.profiles[0].reason, /shared company.*company name/i);
+    const stillUnlinked = await api(`/contacts/${conflict.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(stillUnlinked.body.companyId, null);
+
+    const otherReview = await api("/companies/unlinked-profiles", {
+      cookie: other.cookie,
+    });
+    assert.equal(otherReview.response.status, 200, JSON.stringify(otherReview.body));
+    assert.deepEqual(otherReview.body.profiles.map((profile) => profile.contactId), [
+      otherContact.body.id,
+    ]);
+
     const companies = await api("/companies", { cookie: owner.cookie });
     assert.equal(companies.response.status, 200, JSON.stringify(companies.body));
     assert.equal(companies.body.companies.length, 1);

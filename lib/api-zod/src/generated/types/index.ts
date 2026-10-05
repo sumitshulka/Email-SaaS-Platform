@@ -155,6 +155,8 @@ export * from './tenantSendingTestInput';
 export * from './tenantSendingTestResponse';
 export * from './testEmailInput';
 export * from './testRazorpayConnectionInput';
+export * from './unlinkedCompanyProfile';
+export * from './unlinkedCompanyProfileCollection';
 export * from './userDashboard';
 export * from './userDashboardSubscriptionStatus';
 export * from './userStatusInput';
