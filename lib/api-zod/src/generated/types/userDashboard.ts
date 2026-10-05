@@ -5,16 +5,20 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardAmountByCurrency } from './dashboardAmountByCurrency';
+import type { DashboardCampaign } from './dashboardCampaign';
+import type { DashboardContactSegment } from './dashboardContactSegment';
 import type { UserDashboardSubscriptionStatus } from './userDashboardSubscriptionStatus';
 
 export interface UserDashboard {
   subscriptionStatus: UserDashboardSubscriptionStatus;
   contacts: number;
+  companies: number;
   activeLists: number;
-  emailsSent: number;
-  delivered: number;
-  bounced: number;
-  remainingThisHour: number;
+  amountSpentByCurrency: DashboardAmountByCurrency[];
+  lifecycleStages: DashboardContactSegment[];
+  leadStatuses: DashboardContactSegment[];
+  campaigns: DashboardCampaign[];
   setupStepsCompleted: number;
   setupStepsTotal: number;
 }

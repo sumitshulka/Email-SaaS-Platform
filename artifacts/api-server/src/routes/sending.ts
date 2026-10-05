@@ -10,6 +10,7 @@ import {
   lte,
   max,
   ne,
+  sum,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
@@ -70,6 +71,7 @@ import {
   emailCampaignRecipientsTable,
   emailCampaignsTable,
   emailSendAttemptsTable,
+  paymentsTable,
   subscriptionPackagesTable,
   tenantSendingConfigurationTable,
   userSubscriptionsTable,
@@ -2629,18 +2631,25 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
   const [
     { subscription },
     [contactCount],
+    [companyCount],
     [listCount],
     [sender],
-    [deliveredCount],
-    [bouncedCount],
-    [unknownCount],
-    [hourlyCount],
+    amountSpentRows,
+    lifecycleStageRows,
+    leadStatusRows,
+    contactFieldOptions,
+    runningCampaigns,
+    recentCampaigns,
   ] = await Promise.all([
     getCurrentSubscriptionForUser(userId),
     db
       .select({ value: count() })
       .from(contactsTable)
       .where(eq(contactsTable.userId, userId)),
+    db
+      .select({ value: count() })
+      .from(companiesTable)
+      .where(eq(companiesTable.userId, userId)),
     db
       .select({ value: count() })
       .from(contactListsTable)
@@ -2655,48 +2664,224 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       .from(tenantSendingConfigurationTable)
       .where(eq(tenantSendingConfigurationTable.userId, userId)),
     db
-      .select({ value: count() })
-      .from(emailCampaignRecipientsTable)
+      .select({
+        currency: paymentsTable.currency,
+        amountMinor: sum(paymentsTable.amountMinor),
+      })
+      .from(paymentsTable)
       .where(
         and(
-          eq(emailCampaignRecipientsTable.userId, userId),
-          eq(emailCampaignRecipientsTable.status, "delivered"),
+          eq(paymentsTable.userId, userId),
+          eq(paymentsTable.status, "captured"),
         ),
+      )
+      .groupBy(paymentsTable.currency)
+      .orderBy(asc(paymentsTable.currency)),
+    db
+      .select({
+        value: contactsTable.lifecycleStage,
+        count: count(),
+      })
+      .from(contactsTable)
+      .where(eq(contactsTable.userId, userId))
+      .groupBy(contactsTable.lifecycleStage),
+    db
+      .select({
+        value: contactsTable.leadStatus,
+        count: count(),
+      })
+      .from(contactsTable)
+      .where(eq(contactsTable.userId, userId))
+      .groupBy(contactsTable.leadStatus),
+    db
+      .select({
+        fieldKey: contactFieldOptionsTable.fieldKey,
+        optionValue: contactFieldOptionsTable.value,
+      })
+      .from(contactFieldOptionsTable)
+      .where(
+        and(
+          eq(contactFieldOptionsTable.userId, userId),
+          inArray(contactFieldOptionsTable.fieldKey, [
+            "lifecycleStage",
+            "leadStatus",
+          ]),
+        ),
+      )
+      .orderBy(
+        asc(contactFieldOptionsTable.fieldKey),
+        asc(contactFieldOptionsTable.normalizedValue),
       ),
     db
-      .select({ value: count() })
-      .from(emailCampaignRecipientsTable)
+      .select({
+        id: emailCampaignsTable.id,
+        name: emailCampaignsTable.name,
+        status: emailCampaignsTable.status,
+        queuedAt: emailCampaignsTable.queuedAt,
+        completedAt: emailCampaignsTable.completedAt,
+        updatedAt: emailCampaignsTable.updatedAt,
+      })
+      .from(emailCampaignsTable)
       .where(
         and(
-          eq(emailCampaignRecipientsTable.userId, userId),
-          eq(emailCampaignRecipientsTable.status, "bounced"),
+          eq(emailCampaignsTable.userId, userId),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
         ),
-      ),
+      )
+      .orderBy(desc(emailCampaignsTable.updatedAt))
+      .limit(20),
     db
-      .select({ value: count() })
-      .from(emailCampaignRecipientsTable)
+      .select({
+        id: emailCampaignsTable.id,
+        name: emailCampaignsTable.name,
+        status: emailCampaignsTable.status,
+        queuedAt: emailCampaignsTable.queuedAt,
+        completedAt: emailCampaignsTable.completedAt,
+        updatedAt: emailCampaignsTable.updatedAt,
+      })
+      .from(emailCampaignsTable)
       .where(
         and(
-          eq(emailCampaignRecipientsTable.userId, userId),
-          eq(emailCampaignRecipientsTable.status, "unknown"),
+          eq(emailCampaignsTable.userId, userId),
+          eq(emailCampaignsTable.status, "completed"),
         ),
-      ),
-    db
-      .select({ value: count() })
-      .from(emailSendAttemptsTable)
-      .where(
-        and(
-          eq(emailSendAttemptsTable.userId, userId),
-          gte(emailSendAttemptsTable.attemptedAt, hourStart),
-        ),
-      ),
+      )
+      .orderBy(desc(emailCampaignsTable.updatedAt))
+      .limit(6),
   ]);
 
   const contacts = contactCount?.value ?? 0;
+  const companies = companyCount?.value ?? 0;
   const activeLists = listCount?.value ?? 0;
-  const delivered = deliveredCount?.value ?? 0;
-  const bounced = bouncedCount?.value ?? 0;
-  const unknown = unknownCount?.value ?? 0;
+  const campaigns = [...runningCampaigns, ...recentCampaigns];
+  const campaignIds = campaigns.map((campaign) => campaign.id);
+  const [campaignRecipientRows, campaignAttemptRows] =
+    campaignIds.length > 0
+      ? await Promise.all([
+          db
+            .select({
+              campaignId: emailCampaignRecipientsTable.campaignId,
+              status: emailCampaignRecipientsTable.status,
+              value: count(),
+            })
+            .from(emailCampaignRecipientsTable)
+            .where(
+              and(
+                eq(emailCampaignRecipientsTable.userId, userId),
+                inArray(emailCampaignRecipientsTable.campaignId, campaignIds),
+              ),
+            )
+            .groupBy(
+              emailCampaignRecipientsTable.campaignId,
+              emailCampaignRecipientsTable.status,
+            ),
+          db
+            .select({
+              campaignId: emailCampaignRecipientsTable.campaignId,
+              value: count(),
+            })
+            .from(emailSendAttemptsTable)
+            .innerJoin(
+              emailCampaignRecipientsTable,
+              and(
+                eq(
+                  emailCampaignRecipientsTable.id,
+                  emailSendAttemptsTable.recipientId,
+                ),
+                eq(
+                  emailCampaignRecipientsTable.userId,
+                  emailSendAttemptsTable.userId,
+                ),
+              ),
+            )
+            .where(
+              and(
+                eq(emailSendAttemptsTable.userId, userId),
+                gte(emailSendAttemptsTable.attemptedAt, hourStart),
+                inArray(emailCampaignRecipientsTable.campaignId, campaignIds),
+              ),
+            )
+            .groupBy(emailCampaignRecipientsTable.campaignId),
+        ])
+      : [[], []];
+  const countsByCampaign = new Map<
+    string,
+    {
+      recipients: number;
+      queued: number;
+      delivered: number;
+      bounced: number;
+      suppressed: number;
+      unknown: number;
+    }
+  >();
+  for (const row of campaignRecipientRows) {
+    const countsForCampaign = countsByCampaign.get(row.campaignId) ?? {
+      recipients: 0,
+      queued: 0,
+      delivered: 0,
+      bounced: 0,
+      suppressed: 0,
+      unknown: 0,
+    };
+    const value = Number(row.value);
+    countsForCampaign.recipients += value;
+    if (row.status === "queued" || row.status === "sending") {
+      countsForCampaign.queued += value;
+    } else if (row.status === "delivered") {
+      countsForCampaign.delivered += value;
+    } else if (row.status === "bounced") {
+      countsForCampaign.bounced += value;
+    } else if (row.status === "suppressed") {
+      countsForCampaign.suppressed += value;
+    } else if (row.status === "unknown") {
+      countsForCampaign.unknown += value;
+    }
+    countsByCampaign.set(row.campaignId, countsForCampaign);
+  }
+  const attemptsByCampaign = new Map(
+    campaignAttemptRows.map((row) => [row.campaignId, Number(row.value)]),
+  );
+  const dashboardCampaigns = campaigns.map((campaign) => {
+    const countsForCampaign = countsByCampaign.get(campaign.id) ?? {
+      recipients: 0,
+      queued: 0,
+      delivered: 0,
+      bounced: 0,
+      suppressed: 0,
+      unknown: 0,
+    };
+    const attemptsThisHour = attemptsByCampaign.get(campaign.id) ?? 0;
+    const isActive =
+      campaign.status === "queued" || campaign.status === "sending";
+    return {
+      ...campaign,
+      ...countsForCampaign,
+      attemptsThisHour,
+      remainingThisHour: isActive
+        ? Math.min(
+            countsForCampaign.queued,
+            Math.max(0, settings.defaultEmailsPerHour - attemptsThisHour),
+          )
+        : 0,
+      hourlyLimit: settings.defaultEmailsPerHour,
+    };
+  });
+  const buildContactSegments = (
+    rows: Array<{ value: string | null; count: number }>,
+    fieldKey: "lifecycleStage" | "leadStatus",
+  ) => {
+    const counts = new Map<string, number>();
+    for (const option of contactFieldOptions) {
+      if (option.fieldKey === fieldKey) counts.set(option.optionValue, 0);
+    }
+    counts.set("Not set", counts.get("Not set") ?? 0);
+    for (const row of rows) {
+      const value = row.value?.trim() || "Not set";
+      counts.set(value, (counts.get(value) ?? 0) + Number(row.count));
+    }
+    return Array.from(counts, ([value, count]) => ({ value, count }));
+  };
   const setupStepsCompleted =
     Number(req.authUser!.emailVerified) +
     Number(Boolean(sender?.verifiedAt)) +
@@ -2710,14 +2895,18 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
           ? "expired"
           : "inactive",
     contacts,
+    companies,
     activeLists,
-    emailsSent: delivered + bounced + unknown,
-    delivered,
-    bounced,
-    remainingThisHour: Math.max(
-      0,
-      settings.defaultEmailsPerHour - (hourlyCount?.value ?? 0),
+    amountSpentByCurrency: amountSpentRows.map((row) => ({
+      currency: row.currency,
+      amountMinor: Number(row.amountMinor ?? 0),
+    })),
+    lifecycleStages: buildContactSegments(
+      lifecycleStageRows,
+      "lifecycleStage",
     ),
+    leadStatuses: buildContactSegments(leadStatusRows, "leadStatus"),
+    campaigns: dashboardCampaigns,
     setupStepsCompleted,
     setupStepsTotal: 4,
   }));

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import {
   getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey,
-  getGetCurrentUserQueryKey, getListAdminUsersQueryKey,
+  getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetUserDashboard,
   useGetApplicationEmailSettings, useGetCurrentUser, useListAdminUsers,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
@@ -18,6 +18,7 @@ import {
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
 } from '@workspace/api-client-react';
 import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, PlatformSettingsInput } from '@workspace/api-client-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { Toaster } from '@/components/ui/toaster';
@@ -133,25 +134,105 @@ function Metric({ label, value, sub, icon: Icon, accent = 'blue' }: { label: str
   return <Panel className="p-5"><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#6d7886]">{label}</span><span className={cn('grid h-8 w-8 place-items-center rounded-md', accent === 'blue' ? 'bg-[#edf4fc] text-[#245b9b]' : 'bg-[#fff2e6] text-[#bc6829]')}><Icon className="h-4 w-4"/></span></div><div className="mt-3 display text-[27px] font-bold leading-none tracking-[-.04em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div>{sub && <div className="mt-2 text-[11px] text-[#7e8894]">{sub}</div>}</Panel>;
 }
 function UserDashboardPage({ user }: { user: AuthUser }) {
-  const query = useGetUserDashboard();
+  const query = useGetUserDashboard({ query: { queryKey: getGetUserDashboardQueryKey() } });
   const data = query.data;
   if (query.isLoading) return <LoadingPanel label="Loading workspace sending summary"/>;
   if (query.isError || !data) return <QueryProblem retry={() => void query.refetch()}/>;
-  const metrics = [
-    { label: 'Contacts', value: data.contacts, sub: 'In this workspace', icon: Users },
-    { label: 'Active lists', value: data.activeLists, sub: 'Ready for campaign audiences', icon: Activity },
-    { label: 'Emails sent', value: data.emailsSent, sub: 'Persisted recipient outcomes', icon: Send },
-    { label: 'SMTP accepted', value: data.delivered, sub: 'Inbox delivery is not confirmed', icon: ArrowUpRight },
-    { label: 'Rejected / failed', value: data.bounced, sub: 'SMTP rejection or terminal send failure', icon: ArrowDownLeft, accent: 'orange' as const },
-    { label: 'Remaining this hour', value: data.remainingThisHour, sub: 'Workspace send limit', icon: Clock3 },
-  ];
-  return <><PageHeading eyebrow="ACCOUNT OVERVIEW" title="Workspace" detail="A live view of your tenant's audience, campaigns, and delivery outcomes."/>
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{metrics.map(item => <Metric key={item.label} {...item}/>)}</div>
-    <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
-      <Panel className="p-6"><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">SENDING WORKSPACE</div><h2 className="display mt-2 text-xl font-bold">Your audience and campaigns are ready to manage</h2><p className="mt-3 max-w-2xl text-[13px] leading-6 text-[#6d7886]">Sending credentials, contacts, lists, and campaign results are kept within this workspace. Campaigns send through your verified SMTP identity, separately from Mailflow platform notifications.</p><div className="mt-5 flex flex-wrap gap-4"><Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline">Manage campaigns <ArrowRight className="h-4 w-4"/></Link><Link href="/sending-settings" data-testid="link-workspace-sender" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline">Configure sender identity <ArrowRight className="h-4 w-4"/></Link></div></Panel>
-      <Panel className="p-6"><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">GETTING STARTED</div><div className="mt-3 flex items-end justify-between gap-3"><div><h2 className="display text-xl font-bold">Workspace setup</h2><p className="mt-1 text-[12px] text-[#778291]">{data.setupStepsCompleted} of {data.setupStepsTotal} steps completed</p></div><span className="mono text-[16px] font-semibold text-[#245b9b]">{Math.round(data.setupStepsCompleted / data.setupStepsTotal * 100)}%</span></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-[#edf0f3]"><div className="h-full rounded-full bg-[#245b9b] transition-all" style={{ width: `${data.setupStepsCompleted / data.setupStepsTotal * 100}%` }}/></div><div className="mt-4 grid gap-2 text-[12px]"><div className="flex items-center justify-between"><span className="text-[#647182]">Email verified</span><StatusPill tone={user.emailVerified ? 'blue' : 'orange'}>{user.emailVerified ? 'Done' : 'Needed'}</StatusPill></div><div className="flex items-center justify-between"><span className="text-[#647182]">Sender identity tested</span><Link href="/sending-settings" className="font-semibold text-[#245b9b] no-underline">Configure</Link></div><div className="flex items-center justify-between"><span className="text-[#647182]">Contacts and active lists</span><Link href="/contacts" className="font-semibold text-[#245b9b] no-underline">Manage</Link></div><div className="mt-2 flex items-center justify-between border-t border-[#edf0f2] pt-3"><span className="text-[#647182]">Subscription</span><span className="font-semibold capitalize text-[#344154]">{data.subscriptionStatus}</span></div></div></Panel>
-    </div><div className="mt-5 flex flex-wrap gap-3"><Link href="/contacts" className="rounded-md border border-[#d8e0e8] px-3 py-2 text-[12px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]">Contacts</Link><Link href="/lists" className="rounded-md border border-[#d8e0e8] px-3 py-2 text-[12px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]">Lists</Link><Link href="/plans" data-testid="link-workspace-plans" className="rounded-md border border-[#d8e0e8] px-3 py-2 text-[12px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]">Plans & billing</Link><Link href="/profile" data-testid="link-workspace-profile" className="rounded-md border border-[#d8e0e8] px-3 py-2 text-[12px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]">Profile & security</Link></div>
-  </>;
+  const stages = normalizeSegments(data.lifecycleStages);
+  const leads = normalizeSegments(data.leadStatuses);
+  const setupPct = data.setupStepsTotal > 0 ? Math.min(100, Math.round(data.setupStepsCompleted / data.setupStepsTotal * 100)) : 0;
+  const money = (minor: number, currency: string) => {
+    const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency });
+    const minorUnitDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
+    return formatter.format(minor / 10 ** minorUnitDigits);
+  };
+  const shortDate = (date: string | null) => date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(date)) : '—';
+  return <div className="fade-in space-y-6">
+    <PageHeading eyebrow="WORKSPACE / OVERVIEW" title="Good to see you, again." detail="A clear view of the audience, account, and campaigns in this workspace."
+      trailing={<div className="flex items-center gap-2 rounded-full border border-[#dce5e2] bg-[#f2f7f4] px-3 py-1.5 text-[11px] font-semibold text-[#426c5d]"><span className="h-1.5 w-1.5 rounded-full bg-[#538a70]"/><span className="capitalize">{data.subscriptionStatus}</span> plan</div>}/>
+
+    <section aria-label="Workspace summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <SummaryCard label="Contacts" value={data.contacts.toLocaleString()} note="All contacts in this workspace" icon={Users} tint="blue"/>
+      <SummaryCard label="Companies" value={data.companies.toLocaleString()} note="Workspace company records" icon={Building2} tint="sage"/>
+      <SummaryCard label="Active lists" value={data.activeLists.toLocaleString()} note="Available for campaign audiences" icon={Activity} tint="apricot"/>
+      <Panel className="overflow-hidden border-[#e4e7e2] bg-[#fbfaf5] p-5">
+        <div className="flex items-start justify-between"><div><div className="text-[12px] font-medium text-[#6d7886]">Captured payments</div><div className="mt-1 text-[10px] uppercase tracking-[.08em] text-[#93958d]">Spend by currency</div></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f2ead7] text-[#8b6d36]"><CreditCard className="h-4 w-4"/></span></div>
+        {data.amountSpentByCurrency.length ? <div className="mt-3 space-y-1.5">{data.amountSpentByCurrency.map(item => <div key={item.currency} className="flex items-baseline justify-between gap-2" data-testid={`spend-${item.currency.toLowerCase()}`}><span className="mono text-[10px] text-[#85877e]">{item.currency}</span><span className="text-[19px] font-bold tracking-[-.04em] text-[#283747]">{money(item.amountMinor, item.currency)}</span></div>)}</div> : <div className="mt-4 text-[14px] font-semibold text-[#687484]">No captured spend</div>}
+        <p className="mt-2 text-[10px] leading-4 text-[#85877e]">Captured payments only; gifts, non-captured, and refunded rows are excluded.</p>
+      </Panel>
+    </section>
+
+    <section className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
+      <Panel className="p-5 sm:p-6">
+        <ChartHeading eyebrow="CONTACT PROFILE" title="Lifecycle stages" detail="Workspace-wide contact count by lifecycle stage."/>
+        {data.contacts > 0 && stages.length ? <div className="mt-4 h-[250px]" data-testid="chart-lifecycle-stages"><ResponsiveContainer width="100%" height="100%" debounce={0}><BarChart data={stages} layout="vertical" margin={{ top: 4, right: 14, left: 4, bottom: 4 }}>
+          <CartesianGrid horizontal={false} stroke="#edf0ed"/><XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#79838d' }} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="name" width={104} tick={{ fontSize: 11, fill: '#566474' }} axisLine={false} tickLine={false}/><Tooltip isAnimationActive={false} cursor={{ fill: '#f4f6f3' }} contentStyle={chartTooltip} formatter={(value: number) => [value.toLocaleString(), 'Contacts']}/><Bar dataKey="count" name="Contacts" fill="#4d897e" radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={25}/>
+        </BarChart></ResponsiveContainer></div> : <ChartEmpty title="No lifecycle data yet" body="Contact stage counts will appear once this workspace has categorized contacts."/>}
+      </Panel>
+      <Panel className="p-5 sm:p-6">
+        <ChartHeading eyebrow="CONTACT PROFILE" title="Lead status" detail="Workspace-wide contact count by lead status."/>
+        {data.contacts > 0 && leads.length ? <div className="mt-4 h-[250px]" data-testid="chart-lead-statuses"><ResponsiveContainer width="100%" height="100%" debounce={0}><BarChart data={leads} layout="vertical" margin={{ top: 4, right: 14, left: 4, bottom: 4 }}>
+          <CartesianGrid horizontal={false} stroke="#edf0ed"/><XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#79838d' }} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="name" width={104} tick={{ fontSize: 11, fill: '#566474' }} axisLine={false} tickLine={false}/><Tooltip isAnimationActive={false} cursor={{ fill: '#f4f6f3' }} contentStyle={chartTooltip} formatter={(value: number) => [value.toLocaleString(), 'Contacts']}/><Bar dataKey="count" name="Contacts" fill="#d88a52" radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={25}/>
+        </BarChart></ResponsiveContainer></div> : <ChartEmpty title="No lead status data yet" body="Lead status counts will appear as contacts are categorized."/>}
+      </Panel>
+    </section>
+
+    <Panel className="overflow-hidden">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8ece8] px-5 py-5 sm:px-6">
+        <ChartHeading eyebrow="CAMPAIGN ACTIVITY" title="Campaigns" detail="Sending and outcome figures are scoped to each campaign."/>
+        <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]">Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
+      </div>
+      {data.campaigns.length ? <div className="divide-y divide-[#edf0ed]">
+        {data.campaigns.map(campaign => {
+          const campaignIsActive = campaign.status === 'queued' || campaign.status === 'sending';
+          return <article key={campaign.id} data-testid={`campaign-row-${campaign.id}`} className="grid gap-4 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(180px,1.15fr)_repeat(5,minmax(64px,.55fr))_minmax(145px,.85fr)] lg:items-center">
+            <div className="min-w-0"><div className="flex items-center gap-2"><span className={cn('h-2 w-2 rounded-full', campaign.status === 'sending' ? 'bg-[#d98949]' : campaign.status === 'completed' ? 'bg-[#548873]' : 'bg-[#8d9daf]')}/><h3 className="truncate text-[14px] font-semibold text-[#263447]">{campaign.name}</h3></div><div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#85909a]"><span className="capitalize">{campaign.status}</span><span>·</span><span>{campaign.recipients.toLocaleString()} recipients</span></div></div>
+            <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
+            <CampaignDatum label="Bounced" value={campaign.bounced} hint="Bounced campaign recipients."/>
+            <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
+            <CampaignDatum label="Unknown" value={campaign.unknown} hint="No confirmed outcome is available."/>
+            <CampaignDatum label="Queued / sending" value={campaign.queued} hint="Recipients queued or currently being sent."/>
+            <div className="rounded-lg bg-[#f6f7f4] px-3 py-2.5">{campaignIsActive ? <><div className="flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Attempts / last 60 min</span><span className="mono font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div><div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Remaining estimate</span><span className="mono font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div><div className="mt-1 text-[9px] leading-4 text-[#959da2]">Per-campaign estimate against shared hourly capacity; estimates are not additive.</div></> : <div className="text-[10px] text-[#77828b]">Hourly estimate shown while campaign is queued or sending.</div>}</div>
+            <div className="text-[10px] text-[#9099a1] lg:col-span-7">Updated {shortDate(campaign.updatedAt)}{campaign.completedAt ? ` · Completed ${shortDate(campaign.completedAt)}` : campaign.queuedAt ? ` · Queued ${shortDate(campaign.queuedAt)}` : ''}</div>
+          </article>;
+        })}
+      </div> : <div className="px-6 py-14"><ChartEmpty title="No campaigns to report" body="When campaigns are created, their queue and SMTP outcome summaries will appear here."/></div>}
+      <div className="border-t border-[#e8ece8] bg-[#fbfcfa] px-5 py-3 text-[10px] leading-5 text-[#7f8992] sm:px-6">SMTP accepted means the sending server accepted the message, not that it reached the inbox. Hourly estimates appear for queued or sending campaigns only; the cap is shared, so estimates are not additive.</div>
+    </Panel>
+
+    <section className="grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
+      <Panel className="flex flex-col justify-between gap-5 bg-[#f1f6fa] p-5 sm:flex-row sm:items-center sm:p-6">
+        <div><div className="mono text-[10px] uppercase tracking-[.15em] text-[#6f8295]">SENDING WORKSPACE</div><h2 className="display mt-2 text-xl font-bold text-[#1c3044]">Your tools, one workspace.</h2><p className="mt-2 max-w-xl text-[12px] leading-5 text-[#637487]">Contacts, lists, sender settings, and campaign results stay within your tenant workspace.</p></div>
+        <div className="flex shrink-0 flex-wrap gap-2"><Link href="/sending-settings" data-testid="link-workspace-sender" className="inline-flex items-center gap-2 rounded-md bg-[#174f99] px-3.5 py-2.5 text-[11px] font-semibold text-white no-underline hover:bg-[#103f7e]">Configure sender <ArrowRight className="h-3.5 w-3.5"/></Link><Link href="/campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#cad7e2] bg-white/75 px-3.5 py-2.5 text-[11px] font-semibold text-[#355571] no-underline hover:bg-white">Campaigns <ArrowRight className="h-3.5 w-3.5"/></Link></div>
+      </Panel>
+      <Panel className="p-5 sm:p-6">
+        <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">GETTING STARTED</div><div className="mt-2 flex items-end justify-between gap-3"><div><h2 className="display text-xl font-bold">Workspace setup</h2><p className="mt-1 text-[11px] text-[#778291]">{data.setupStepsCompleted} of {data.setupStepsTotal} steps completed</p></div><span className="mono text-[15px] font-semibold text-[#245b9b]">{setupPct}%</span></div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf0f3]"><div className="h-full rounded-full bg-[#4d897e] transition-all" style={{ width: `${setupPct}%` }}/></div>
+        <div className="mt-4 grid gap-2.5 text-[11px]"><div className="flex items-center justify-between"><span className="text-[#647182]">Email verified</span><StatusPill tone={user.emailVerified ? 'blue' : 'orange'}>{user.emailVerified ? 'Done' : 'Needed'}</StatusPill></div><div className="flex items-center justify-between"><span className="text-[#647182]">Sender identity</span><Link href="/sending-settings" className="font-semibold text-[#245b9b] no-underline">Configure</Link></div><div className="flex items-center justify-between"><span className="text-[#647182]">Audience</span><div className="flex gap-3"><Link href="/contacts" className="font-semibold text-[#245b9b] no-underline">Contacts</Link><Link href="/lists" className="font-semibold text-[#245b9b] no-underline">Lists</Link></div></div><div className="flex items-center justify-between border-t border-[#edf0f2] pt-2.5"><span className="text-[#647182]">Plan</span><Link href="/plans" className="font-semibold capitalize text-[#245b9b] no-underline">{data.subscriptionStatus} · View billing</Link></div></div>
+      </Panel>
+    </section>
+    <div className="flex flex-wrap gap-2"><Link href="/contacts" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Contacts</Link><Link href="/companies" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Companies</Link><Link href="/lists" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Lists</Link><Link href="/plans" data-testid="link-workspace-plans" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Plans & billing</Link><Link href="/profile" data-testid="link-workspace-profile" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Profile & security</Link></div>
+  </div>;
+}
+const chartTooltip = { borderRadius: 8, border: '1px solid #dfe5e0', background: '#fffefa', fontSize: 12, boxShadow: '0 8px 24px rgba(35,48,59,.08)' };
+function normalizeSegments(items: Array<{ value: string; count: number }>) {
+  const counts = new Map<string, number>();
+  items.forEach(item => { const name = item.value.trim() || 'Not set'; counts.set(name, (counts.get(name) || 0) + item.count); });
+  return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+}
+function SummaryCard({ label, value, note, icon: Icon, tint }: { label: string; value: string; note: string; icon: typeof Users; tint: 'blue' | 'sage' | 'apricot' }) {
+  const colors = { blue: 'bg-[#edf4fa] text-[#3d6e9e]', sage: 'bg-[#edf4ef] text-[#4f8068]', apricot: 'bg-[#fbf0e7] text-[#b57547]' };
+  const surfaces = { blue: 'bg-[#f6f9fc]', sage: 'bg-[#f4f8f4]', apricot: 'bg-[#fff8f1]' };
+  return <Panel className={cn('p-5', surfaces[tint])}><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#6d7886]">{label}</span><span className={cn('grid h-9 w-9 place-items-center rounded-xl', colors[tint])}><Icon className="h-4 w-4"/></span></div><div className="display mt-3 text-[29px] font-bold leading-none tracking-[-.045em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div><div className="mt-2 text-[10px] text-[#818c97]">{note}</div></Panel>;
+}
+function ChartHeading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) {
+  return <div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#8a969d]">{eyebrow}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">{title}</h2><p className="mt-1 text-[11px] text-[#818c97]">{detail}</p></div>;
+}
+function ChartEmpty({ title, body }: { title: string; body: string }) {
+  return <div className="flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed border-[#dce3de] bg-[#fbfcfa] px-6 text-center"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#edf3ef] text-[#628071]"><Activity className="h-4 w-4"/></span><h3 className="mt-3 text-[12px] font-semibold text-[#394a56]">{title}</h3><p className="mt-1 max-w-xs text-[10px] leading-5 text-[#828d95]">{body}</p></div>;
+}
+function CampaignDatum({ label, value, hint }: { label: string; value: number | string; hint: string }) {
+  return <div title={hint}><div className="text-[9px] uppercase tracking-[.08em] text-[#9099a1]">{label}</div><div className="mono mt-1 text-[13px] font-medium text-[#425364]">{typeof value === 'number' ? value.toLocaleString() : value}</div></div>;
 }
 function AdminDashboardPage() {
   const query = useGetAdminDashboard(); const d = query.data;

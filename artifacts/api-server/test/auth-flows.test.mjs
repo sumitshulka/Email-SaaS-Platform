@@ -4569,16 +4569,83 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       newerTimestamp,
     );
 
+    const [dashboardPaymentPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Dashboard payment package",
+        description: "",
+        amountMinor: 12500,
+        currency: "INR",
+        periodDays: 30,
+      })
+      .returning();
+    await db.insert(dbModule.companiesTable).values({
+      userId: owner.user.id,
+      companyName: "Dashboard Company",
+      companyDomain: "dashboard-company.owner.test",
+      companyDomainKey: "dashboard-company.owner.test",
+    });
+    await db.insert(dbModule.paymentsTable).values([
+      {
+        userId: owner.user.id,
+        packageId: dashboardPaymentPackage.id,
+        receipt: `db-inr-${randomUUID().slice(0, 8)}`,
+        amountMinor: 12500,
+        currency: "INR",
+        status: "captured",
+      },
+      {
+        userId: owner.user.id,
+        packageId: dashboardPaymentPackage.id,
+        receipt: `db-usd-${randomUUID().slice(0, 8)}`,
+        amountMinor: 2345,
+        currency: "USD",
+        status: "captured",
+      },
+      {
+        userId: owner.user.id,
+        packageId: dashboardPaymentPackage.id,
+        receipt: `db-rfd-${randomUUID().slice(0, 8)}`,
+        amountMinor: 99000,
+        currency: "INR",
+        status: "refunded",
+      },
+    ]);
+
     const ownerDashboard = await api("/dashboard", { cookie: owner.cookie });
     const otherDashboard = await api("/dashboard", { cookie: other.cookie });
     assert.equal(ownerDashboard.response.status, 200);
     assert.equal(ownerDashboard.body.contacts, 3);
+    assert.equal(ownerDashboard.body.companies, 1);
     assert.equal(ownerDashboard.body.activeLists, 1);
-    assert.equal(ownerDashboard.body.emailsSent, 2);
-    assert.equal(ownerDashboard.body.delivered, 1);
-    assert.equal(ownerDashboard.body.bounced, 1);
+    assert.deepEqual(ownerDashboard.body.amountSpentByCurrency, [
+      { currency: "INR", amountMinor: 12500 },
+      { currency: "USD", amountMinor: 2345 },
+    ]);
+    assert.deepEqual(ownerDashboard.body.lifecycleStages, [{ value: "Not set", count: 3 }]);
+    assert.deepEqual(ownerDashboard.body.leadStatuses, [{ value: "Not set", count: 3 }]);
+    const ownerCampaignSummary = ownerDashboard.body.campaigns.find(
+      (item) => item.id === campaign.body.id,
+    );
+    assert.equal(ownerCampaignSummary.status, "completed");
+    assert.equal(ownerCampaignSummary.recipients, 3);
+    assert.equal(ownerCampaignSummary.delivered, 1);
+    assert.equal(ownerCampaignSummary.bounced, 1);
+    assert.equal(ownerCampaignSummary.suppressed, 1);
+    assert.equal(typeof ownerCampaignSummary.attemptsThisHour, "number");
+    assert.equal(ownerCampaignSummary.remainingThisHour, 0);
+    for (const globalSendMetric of [
+      "emailsSent",
+      "delivered",
+      "bounced",
+      "remainingThisHour",
+    ]) {
+      assert.equal(Object.hasOwn(ownerDashboard.body, globalSendMetric), false);
+    }
     assert.equal(otherDashboard.body.contacts, 1);
-    assert.equal(otherDashboard.body.emailsSent, 0);
+    assert.equal(otherDashboard.body.companies, 0);
+    assert.deepEqual(otherDashboard.body.amountSpentByCurrency, []);
+    assert.deepEqual(otherDashboard.body.campaigns, []);
 
     await db
       .update(dbModule.emailCampaignRecipientsTable)

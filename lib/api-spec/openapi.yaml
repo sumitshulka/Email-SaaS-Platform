@@ -1908,14 +1908,54 @@ components:
       properties:
         subscriptionStatus: { type: string, enum: [inactive, active, expired] }
         contacts: { type: integer }
+        companies: { type: integer }
         activeLists: { type: integer }
-        emailsSent: { type: integer }
-        delivered: { type: integer }
-        bounced: { type: integer }
-        remainingThisHour: { type: integer }
+        amountSpentByCurrency:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardAmountByCurrency" }
+        lifecycleStages:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardContactSegment" }
+        leadStatuses:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardContactSegment" }
+        campaigns:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardCampaign" }
         setupStepsCompleted: { type: integer }
         setupStepsTotal: { type: integer }
-      required: [subscriptionStatus, contacts, activeLists, emailsSent, delivered, bounced, remainingThisHour, setupStepsCompleted, setupStepsTotal]
+      required: [subscriptionStatus, contacts, companies, activeLists, amountSpentByCurrency, lifecycleStages, leadStatuses, campaigns, setupStepsCompleted, setupStepsTotal]
+    DashboardAmountByCurrency:
+      type: object
+      properties:
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        amountMinor: { type: integer, minimum: 0 }
+      required: [currency, amountMinor]
+    DashboardContactSegment:
+      type: object
+      properties:
+        value: { type: string }
+        count: { type: integer, minimum: 0 }
+      required: [value, count]
+    DashboardCampaign:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [queued, sending, completed] }
+        recipients: { type: integer, minimum: 0 }
+        queued: { type: integer, minimum: 0 }
+        delivered: { type: integer, minimum: 0 }
+        bounced: { type: integer, minimum: 0 }
+        suppressed: { type: integer, minimum: 0 }
+        unknown: { type: integer, minimum: 0 }
+        attemptsThisHour: { type: integer, minimum: 0 }
+        remainingThisHour: { type: integer, minimum: 0 }
+        hourlyLimit: { type: integer, minimum: 1 }
+        queuedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, status, recipients, queued, delivered, bounced, suppressed, unknown, attemptsThisHour, remainingThisHour, hourlyLimit, queuedAt, completedAt, updatedAt]
     TenantSendingSettings:
       type: object
       properties:

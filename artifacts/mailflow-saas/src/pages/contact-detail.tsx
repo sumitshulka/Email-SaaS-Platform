@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2 } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
+  getGetCompanyQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
   useGetContact, useGetContactFieldOptions, useListCompanies, useListContactLists, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Contact, ContactUpdate } from '@workspace/api-client-react';

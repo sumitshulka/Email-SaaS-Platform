@@ -150,14 +150,69 @@ export const UserDashboardSubscriptionStatus = {
   expired: 'expired',
 } as const;
 
+export interface DashboardAmountByCurrency {
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+  /** @minimum 0 */
+  amountMinor: number;
+}
+
+export interface DashboardContactSegment {
+  value: string;
+  /** @minimum 0 */
+  count: number;
+}
+
+export type DashboardCampaignStatus = typeof DashboardCampaignStatus[keyof typeof DashboardCampaignStatus];
+
+
+export const DashboardCampaignStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  completed: 'completed',
+} as const;
+
+export interface DashboardCampaign {
+  id: string;
+  name: string;
+  status: DashboardCampaignStatus;
+  /** @minimum 0 */
+  recipients: number;
+  /** @minimum 0 */
+  queued: number;
+  /** @minimum 0 */
+  delivered: number;
+  /** @minimum 0 */
+  bounced: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  unknown: number;
+  /** @minimum 0 */
+  attemptsThisHour: number;
+  /** @minimum 0 */
+  remainingThisHour: number;
+  /** @minimum 1 */
+  hourlyLimit: number;
+  /** @nullable */
+  queuedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  updatedAt: string;
+}
+
 export interface UserDashboard {
   subscriptionStatus: UserDashboardSubscriptionStatus;
   contacts: number;
+  companies: number;
   activeLists: number;
-  emailsSent: number;
-  delivered: number;
-  bounced: number;
-  remainingThisHour: number;
+  amountSpentByCurrency: DashboardAmountByCurrency[];
+  lifecycleStages: DashboardContactSegment[];
+  leadStatuses: DashboardContactSegment[];
+  campaigns: DashboardCampaign[];
   setupStepsCompleted: number;
   setupStepsTotal: number;
 }
@@ -705,6 +760,11 @@ export interface UnlinkedCompanyProfile {
   companyLocation: string | null;
   reason: string;
 }
+
+export interface UnlinkedCompanyProfileCollection {
+  profiles: UnlinkedCompanyProfile[];
+}
+
 export interface Contact {
   id: string;
   email: string;
@@ -2416,7 +2476,3 @@ export const ListAdminUsersStatus = {
   pending: 'pending',
 } as const;
 
-
-export interface UnlinkedCompanyProfileCollection {
-  profiles: UnlinkedCompanyProfile[];
-}
