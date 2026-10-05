@@ -98,6 +98,9 @@ export default function PlansPage() {
       razorpaySignature: response.razorpay_signature,
     } }, {
       onSuccess: result => {
+        if (result.status === 'active' && result.subscription) {
+          trackEvent('paid_subscription_activated');
+        }
         setPaymentState({ kind: result.status, message: result.message });
         setCheckoutOrder(null);
         void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });

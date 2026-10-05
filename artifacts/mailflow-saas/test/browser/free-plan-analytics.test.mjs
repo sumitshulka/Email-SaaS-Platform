@@ -40,6 +40,28 @@ const activatedSubscription = {
   endsAt: '2026-11-04T00:00:00.000Z',
   package: freePackage,
 };
+const paidPackage = {
+  ...freePackage,
+  id: '9cf2f2ae-61bb-4523-a582-dcb843f48a30',
+  name: 'Growth plan',
+  description: 'A paid package used to verify activation tracking.',
+  amountMinor: 2499,
+};
+const paidSubscription = {
+  ...activatedSubscription,
+  id: '07bc8789-b710-450a-87d7-62fef5479b71',
+  package: paidPackage,
+};
+const paidOrder = {
+  paymentId: '56b83116-e2ae-4bb4-9f89-86faece8f8fb',
+  orderId: 'order_browser_test',
+  amountMinor: paidPackage.amountMinor,
+  currency: paidPackage.currency,
+  keyId: 'rzp_test_browser',
+  packageName: paidPackage.name,
+  customerName: 'Paid Plan',
+  customerEmail: 'paid-plan@example.test',
+};
 
 let serverProcess;
 let serverOutput = '';
@@ -110,36 +132,67 @@ async function stopWebServer() {
   }
 }
 
-async function installFixtures(context, activationStatus) {
+async function installFixtures(context, {
+  activationStatus = 200,
+  verificationStatus = 200,
+  verificationResult = {
+    status: 'active',
+    message: 'Payment verified.',
+    subscription: paidSubscription,
+  },
+  checkoutAction = null,
+  packages = [freePackage],
+} = {}) {
   await context.addCookies([{
     name: 'mailflow_session',
     value: 'free-plan-browser-test',
     url: baseUrl,
     sameSite: 'Lax',
   }]);
-  await context.addInitScript(() => {
+  await context.addInitScript(({ checkoutAction, orderId }) => {
     window.__analyticsCalls = [];
     window.__freeActivationResponses = [];
+    window.__paidVerificationResponses = [];
     window.umami = {
       track(...args) {
         window.__analyticsCalls.push({
           args,
           freeActivationResponses: [...window.__freeActivationResponses],
+          paidVerificationResponses: [...window.__paidVerificationResponses],
         });
       },
     };
+    if (checkoutAction) {
+      window.Razorpay = function(options) {
+        this.open = () => {
+          if (checkoutAction === 'dismiss') {
+            options.modal.ondismiss();
+          } else {
+            options.handler({
+              razorpay_payment_id: 'pay_browser_test',
+              razorpay_order_id: orderId,
+              razorpay_signature: 's'.repeat(64),
+            });
+          }
+        };
+      };
+    }
 
     const originalFetch = window.fetch.bind(window);
     window.fetch = async (...args) => {
       const response = await originalFetch(...args);
       const input = args[0];
       const url = input instanceof Request ? input.url : String(input);
-      if (new URL(url, window.location.href).pathname === '/api/subscriptions/free') {
+      const pathname = new URL(url, window.location.href).pathname;
+      if (pathname === '/api/subscriptions/free') {
         window.__freeActivationResponses.push(response.status);
+      }
+      if (pathname === '/api/subscriptions/verify') {
+        window.__paidVerificationResponses.push(response.status);
       }
       return response;
     };
-  });
+  }, { checkoutAction, orderId: paidOrder.orderId });
   await context.route('**/api/**', async route => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -154,11 +207,22 @@ async function installFixtures(context, activationStatus) {
       return;
     }
     if (pathname === '/api/subscriptions/packages') {
-      await route.fulfill({ status: 200, json: { packages: [freePackage] } });
+      await route.fulfill({ status: 200, json: { packages } });
       return;
     }
     if (pathname === '/api/subscriptions/current') {
       await route.fulfill({ status: 200, json: { subscription: null } });
+      return;
+    }
+    if (pathname === '/api/subscriptions/orders' && request.method() === 'POST') {
+      await route.fulfill({ status: 201, json: paidOrder });
+      return;
+    }
+    if (pathname === '/api/subscriptions/verify' && request.method() === 'POST') {
+      await route.fulfill({
+        status: verificationStatus,
+        json: verificationStatus === 200 ? verificationResult : { error: 'Payment verification failed.' },
+      });
       return;
     }
     if (pathname === '/api/subscriptions/free' && request.method() === 'POST') {
@@ -180,16 +244,15 @@ async function installFixtures(context, activationStatus) {
   });
 }
 
-async function openPlansPage(activationStatus) {
+async function openPlansPage(options) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await installFixtures(context, activationStatus);
+  await installFixtures(context, options);
   const page = await context.newPage();
   await page.goto(`${baseUrl}/plans`);
-  await page.getByTestId(`button-purchase-plan-${freePackage.id}`).waitFor({ state: 'visible' });
   return { context, page };
 }
 
-describe('free plan activation analytics', { concurrency: false }, () => {
+describe('subscription activation analytics', { concurrency: false }, () => {
   before(async () => {
     await startWebServer();
     const executablePath =
@@ -207,7 +270,7 @@ describe('free plan activation analytics', { concurrency: false }, () => {
   });
 
   it('tracks only after successful activation and sends no user or package details', async () => {
-    const { context, page } = await openPlansPage(200);
+    const { context, page } = await openPlansPage({ activationStatus: 200 });
     try {
       await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
@@ -216,6 +279,7 @@ describe('free plan activation analytics', { concurrency: false }, () => {
       assert.deepEqual(trackingCalls, [{
         args: ['free_subscription_activated', undefined],
         freeActivationResponses: [200],
+        paidVerificationResponses: [],
       }]);
     } finally {
       await context.close();
@@ -223,7 +287,7 @@ describe('free plan activation analytics', { concurrency: false }, () => {
   });
 
   it('does not track when free plan activation fails', async () => {
-    const { context, page } = await openPlansPage(403);
+    const { context, page } = await openPlansPage({ activationStatus: 403 });
     try {
       await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Free plan activation failed.').waitFor();
@@ -234,6 +298,79 @@ describe('free plan activation analytics', { concurrency: false }, () => {
         await page.evaluate(() => window.__freeActivationResponses),
         [403],
       );
+    } finally {
+      await context.close();
+    }
+  });
+  it('tracks only after server verification confirms an active subscription and sends no details', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'complete',
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_subscription_activated', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [200],
+      }]);
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not track when verification is still pending', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'complete',
+      verificationResult: {
+        status: 'pending',
+        message: 'Payment has not been captured yet.',
+        subscription: null,
+      },
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Payment verification pending').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not track when server verification fails', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'complete',
+      verificationStatus: 400,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Payment needs attention').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [400]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not track when checkout is dismissed', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'dismiss',
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('status-payment').getByText('Checkout closed').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
     } finally {
       await context.close();
     }
