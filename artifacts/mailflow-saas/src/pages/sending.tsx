@@ -4,7 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, CirclePlus, Clock3,
   Edit3, Fingerprint, LoaderCircle, Upload, Mail, Search, Send,
-  ShieldCheck, Trash2, Users, X,
+  ShieldCheck, Trash2, Users, X, BookmarkPlus,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import {
@@ -22,15 +22,15 @@ import {
   getGetCampaignDashboardQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useStartGmailMailboxConnection,
-  getListCompaniesQueryKey, getListContactsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useGetCampaignDashboard, useGetTenantSendingSettings,
+  getListCompaniesQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetTenantSendingSettings,
   useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, usePreviewCampaign, useSendCampaign,
-  useListCompanies, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact,
+  useListCompanies, useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, CompanyListItem, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList,
-  TenantSendingSettings, TenantSendingSettingsInput,
+  ContactAudienceSegment, TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -366,9 +366,19 @@ export function ContactsPage() {
   const contactsQuery = useListContacts({ query: { queryKey: getListContactsQueryKey(), refetchInterval: 30_000 } });
   const listsQuery = useListContactLists();
   const companiesQuery = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), refetchInterval: 60_000 } });
+  const segmentsQuery = useListContactSegments({
+    query: { queryKey: getListContactSegmentsQueryKey(), staleTime: 0, refetchOnMount: 'always' },
+  });
   const create = useCreateContact(); const update = useUpdateContact(); const remove = useDeleteContact();
+  const createSegment = useCreateContactSegment();
+  const updateSegment = useUpdateContactSegment();
+  const removeSegment = useDeleteContactSegment();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
+  const [selectedSegmentId, setSelectedSegmentId] = useState('');
+  const [segmentEditor, setSegmentEditor] = useState<{ mode: 'save' | 'rename'; segment?: ContactAudienceSegment } | null>(null);
+  const [segmentName, setSegmentName] = useState('');
+  const [segmentToDelete, setSegmentToDelete] = useState<ContactAudienceSegment | null>(null);
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
@@ -378,6 +388,8 @@ export function ContactsPage() {
   const lifecycleStages = useMemo(() => distinctContactValues(contacts.map(contact => contact.lifecycleStage)), [contacts]);
   const leadStatuses = useMemo(() => distinctContactValues(contacts.map(contact => contact.leadStatus)), [contacts]);
   const leadSources = useMemo(() => distinctContactValues(contacts.map(contact => contact.leadSource)), [contacts]);
+  const segments = segmentsQuery.data ?? [];
+  const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
   const visible = useMemo(() => contacts.filter(c => {
     const terms = filters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const searchableText = [
@@ -435,6 +447,63 @@ export function ContactsPage() {
       onError: error => { setContactToDelete(null); setNotice({ kind: 'error', text: mutationError(error) }); },
     });
   };
+  const openSegmentEditor = (mode: 'save' | 'rename', segment?: ContactAudienceSegment) => {
+    setSegmentName(segment?.name ?? '');
+    setSegmentEditor({ mode, ...(segment ? { segment } : {}) });
+  };
+  const submitSegment = (event: FormEvent) => {
+    event.preventDefault();
+    const name = segmentName.trim();
+    if (!name || !segmentEditor) return;
+    const failed = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
+    const saved = (segment: ContactAudienceSegment, successText: string) => {
+      void qc.invalidateQueries({ queryKey: getListContactSegmentsQueryKey() });
+      setSelectedSegmentId(segment.id);
+      setSegmentEditor(null);
+      setNotice({ kind: 'success', text: successText });
+    };
+    if (segmentEditor.mode === 'save') {
+      createSegment.mutate(
+        { data: { name, filters } },
+        {
+          onSuccess: segment => saved(segment, `“${segment.name}” was saved.`),
+          onError: failed,
+        },
+      );
+    } else if (segmentEditor.segment) {
+      updateSegment.mutate(
+        { segmentId: segmentEditor.segment.id, data: { name } },
+        {
+          onSuccess: segment => saved(segment, `“${segment.name}” was renamed.`),
+          onError: failed,
+        },
+      );
+    }
+  };
+  const applySelectedSegment = () => {
+    if (!selectedSegment) return;
+    setFilters(selectedSegment.filters);
+    setNotice({ kind: 'success', text: `“${selectedSegment.name}” was applied.` });
+  };
+  const confirmDeleteSegment = () => {
+    if (!segmentToDelete) return;
+    const segment = segmentToDelete;
+    removeSegment.mutate(
+      { segmentId: segment.id },
+      {
+        onSuccess: () => {
+          setSegmentToDelete(null);
+          if (selectedSegmentId === segment.id) setSelectedSegmentId('');
+          void qc.invalidateQueries({ queryKey: getListContactSegmentsQueryKey() });
+          setNotice({ kind: 'success', text: `“${segment.name}” was deleted.` });
+        },
+        onError: error => {
+          setSegmentToDelete(null);
+          setNotice({ kind: 'error', text: mutationError(error) });
+        },
+      },
+    );
+  };
   const toggleSub = (contact: Contact) => update.mutate({ contactId: contact.id, data: { subscribed: !contact.subscribed } }, { onSuccess: () => { reload(); setNotice({ kind: 'success', text: contact.subscribed ? 'Contact unsubscribed.' : 'Contact subscribed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
   const busy = create.isPending || update.isPending;
   return <QueryState loading={contactsQuery.isLoading || listsQuery.isLoading} error={contactsQuery.isError || listsQuery.isError} retry={() => { void contactsQuery.refetch(); void listsQuery.refetch(); }} label="contacts"><>
@@ -454,6 +523,67 @@ export function ContactsPage() {
     <section className={panelClass}>
       <div className="space-y-4 border-b border-[#e9edf0] p-4 sm:p-5">
         <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Audience directory</h2><p className="mt-1 text-[11px] text-[#788392]">Showing {visible.length} of {contacts.length} contacts</p></div>
+        <div data-testid="contact-segments-panel" className="rounded-lg border border-[#dce5ef] bg-white p-3.5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-[12px] font-semibold text-[#344154]">Saved audience segments</h3>
+              <p className="mt-1 text-[10px] text-[#788392]">Save and reuse a search and filter combination in this workspace.</p>
+            </div>
+            <Button
+              variant="outline"
+              testId="button-save-contact-segment"
+              disabled={createSegment.isPending}
+              onClick={() => openSegmentEditor('save')}
+            >
+              <BookmarkPlus className="h-4 w-4"/>Save current filters
+            </Button>
+          </div>
+          {segmentsQuery.isError ? (
+            <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2">
+              <span className="text-[11px] text-[#99501e]">Saved segments could not be loaded.</span>
+              <Button variant="outline" testId="button-retry-contact-segments" onClick={() => void segmentsQuery.refetch()}>Retry</Button>
+            </div>
+          ) : (
+            <>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="min-w-[220px] flex-1">
+                  <span className="sr-only">Saved segment</span>
+                  <select
+                    data-testid="select-contact-segment"
+                    aria-label="Saved audience segment"
+                    value={selectedSegmentId}
+                    onChange={event => setSelectedSegmentId(event.target.value)}
+                    disabled={segmentsQuery.isLoading || segments.length === 0}
+                    className="h-10 w-full rounded-md border border-[#d3dce7] bg-white px-3 text-[12px] text-[#29394c] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] disabled:bg-[#f6f8fa]"
+                  >
+                    <option value="">{segmentsQuery.isLoading ? 'Loading saved segments…' : segments.length ? 'Choose a saved segment' : 'No saved segments yet'}</option>
+                    {segments.map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}
+                  </select>
+                </label>
+                <Button variant="outline" testId="button-apply-contact-segment" disabled={!selectedSegment} onClick={applySelectedSegment}>Apply</Button>
+                <Button
+                  variant="quiet"
+                  testId="button-rename-contact-segment"
+                  disabled={!selectedSegment || updateSegment.isPending}
+                  onClick={() => selectedSegment && openSegmentEditor('rename', selectedSegment)}
+                >
+                  <Edit3 className="h-3.5 w-3.5"/>Rename
+                </Button>
+                <Button
+                  variant="danger"
+                  testId="button-delete-contact-segment"
+                  disabled={!selectedSegment || removeSegment.isPending}
+                  onClick={() => selectedSegment && setSegmentToDelete(selectedSegment)}
+                >
+                  <Trash2 className="h-3.5 w-3.5"/>Delete
+                </Button>
+              </div>
+              {!segmentsQuery.isLoading && segments.length > 0 && (
+                <p className="mt-2 text-[10px] text-[#8591a0]">{segments.length} saved {segments.length === 1 ? 'segment' : 'segments'} in this workspace.</p>
+              )}
+            </>
+          )}
+        </div>
         <ContactDirectoryFiltersPanel
           filters={filters}
           onChange={setFilters}
@@ -476,6 +606,32 @@ export function ContactsPage() {
          <td className="px-5 py-3.5"><div className="flex justify-end gap-1"><Button variant="quiet" testId={`button-contact-history-${contact.id}`} onClick={() => setHistoryContact(contact)}><Clock3 className="h-3.5 w-3.5"/>History</Button><Button variant="quiet" testId={`button-edit-contact-${contact.id}`} onClick={() => openEdit(contact)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-contact-${contact.id}`} disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div></td>
        </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={hasActiveFilters ? 'No matching contacts' : 'Your audience starts here'} detail={hasActiveFilters ? 'Try removing a filter or broadening your search.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={!contacts.length ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
     </section>
+     {segmentEditor && <Modal
+       title={segmentEditor.mode === 'save' ? 'Save audience segment' : 'Rename audience segment'}
+       subtitle={segmentEditor.mode === 'save' ? 'Save the current search and filters for reuse.' : 'Change the name of this saved filter combination.'}
+       close={() => { if (!createSegment.isPending && !updateSegment.isPending) setSegmentEditor(null); }}
+     >
+       <form onSubmit={submitSegment} className="space-y-4">
+         <Field label="Segment name" value={segmentName} onChange={setSegmentName} placeholder="e.g. Recent subscribed leads" required maxLength={100} testId="input-contact-segment-name"/>
+         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4">
+           <Button variant="outline" testId="button-cancel-contact-segment" disabled={createSegment.isPending || updateSegment.isPending} onClick={() => setSegmentEditor(null)}>Cancel</Button>
+           <Button type="submit" testId="button-submit-contact-segment" disabled={createSegment.isPending || updateSegment.isPending}>
+             {(createSegment.isPending || updateSegment.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}
+             {segmentEditor.mode === 'save' ? 'Save segment' : 'Save name'}
+           </Button>
+         </div>
+       </form>
+     </Modal>}
+     <ConfirmActionDialog
+       open={Boolean(segmentToDelete)}
+       title="Delete this saved segment?"
+       description={segmentToDelete ? `Delete “${segmentToDelete.name}”? This removes the saved filter combination but does not change any contacts.` : ''}
+       confirmLabel="Delete segment"
+       onOpenChange={open => { if (!open && !removeSegment.isPending) setSegmentToDelete(null); }}
+       onConfirm={confirmDeleteSegment}
+       pending={removeSegment.isPending}
+       testId="dialog-delete-contact-segment"
+     />
     {editing !== undefined && <Modal title={editing ? 'Edit contact' : 'Add contact'} subtitle="Contact details and list memberships for this workspace." close={() => setEditing(undefined)}>
       <form onSubmit={submit} className="space-y-4">
         <Field label="Email address" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} type="email" placeholder="person@company.com" required maxLength={254} testId="input-contact-email"/>

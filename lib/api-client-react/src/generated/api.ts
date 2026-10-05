@@ -53,6 +53,9 @@ import type {
   CompanyUpdate,
   CompleteGmailMailboxConnectionParams,
   Contact,
+  ContactAudienceSegment,
+  ContactAudienceSegmentInput,
+  ContactAudienceSegmentUpdate,
   ContactCollection,
   ContactCsvInput,
   ContactEmailHistoryItem,
@@ -4307,6 +4310,334 @@ export const useDeleteContactList = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteContactListMutationOptions(options));
+    }
+
+export const getListContactSegmentsUrl = () => {
+
+
+
+
+  return `/api/contact-segments`
+}
+
+/**
+ * @summary List saved contact segments belonging to the authenticated tenant
+ */
+export const listContactSegments = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactAudienceSegment[]> => {
+
+  return customFetch<ContactAudienceSegment[]>(getListContactSegmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactSegmentsQueryKey = () => {
+    return [
+    `/api/contact-segments`
+    ] as const;
+    }
+
+
+export const getListContactSegmentsQueryOptions = <TData = Awaited<ReturnType<typeof listContactSegments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactSegments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactSegmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactSegments>>> = ({ signal }) => listContactSegments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactSegments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactSegmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listContactSegments>>>
+export type ListContactSegmentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List saved contact segments belonging to the authenticated tenant
+ */
+
+export function useListContactSegments<TData = Awaited<ReturnType<typeof listContactSegments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactSegments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactSegmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactSegmentUrl = () => {
+
+
+
+
+  return `/api/contact-segments`
+}
+
+/**
+ * @summary Save a contact filter combination for the authenticated tenant
+ */
+export const createContactSegment = async (contactAudienceSegmentInput: ContactAudienceSegmentInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactAudienceSegment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactAudienceSegment>(getCreateContactSegmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactAudienceSegmentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactSegmentMutationKey = () => ['createContactSegment'] as const;
+
+export const getCreateContactSegmentMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactSegment>>, TError,CreateContactSegmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContactSegment>>, TError,CreateContactSegmentMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactSegmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContactSegment>>, CreateContactSegmentMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContactSegment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactSegmentMutationResult = NonNullable<Awaited<ReturnType<typeof createContactSegment>>>
+    export type CreateContactSegmentMutationBody = BodyType<ContactAudienceSegmentInput>
+    export type CreateContactSegmentMutationError = ErrorType<ApiError>
+    export type CreateContactSegmentMutationVariables = {data: BodyType<ContactAudienceSegmentInput>}
+
+    /**
+ * @summary Save a contact filter combination for the authenticated tenant
+ */
+export const useCreateContactSegment = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactSegment>>, TError,CreateContactSegmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContactSegment>>,
+        TError,
+        CreateContactSegmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactSegmentMutationOptions(options));
+    }
+
+export const getUpdateContactSegmentUrl = (segmentId: string,) => {
+
+
+
+
+  return `/api/contact-segments/${segmentId}`
+}
+
+/**
+ * @summary Rename a saved contact segment owned by the authenticated tenant
+ */
+export const updateContactSegment = async (segmentId: string,
+    contactAudienceSegmentUpdate: ContactAudienceSegmentUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ContactAudienceSegment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactAudienceSegment>(getUpdateContactSegmentUrl(segmentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactAudienceSegmentUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateContactSegmentMutationKey = () => ['updateContactSegment'] as const;
+
+export const getUpdateContactSegmentMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContactSegment>>, TError,UpdateContactSegmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateContactSegment>>, TError,UpdateContactSegmentMutationVariables, TContext> => {
+
+const mutationKey = getUpdateContactSegmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateContactSegment>>, UpdateContactSegmentMutationVariables> = (props) => {
+          const {segmentId,data} = props ?? {};
+
+          return  updateContactSegment(segmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateContactSegmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateContactSegment>>>
+    export type UpdateContactSegmentMutationBody = BodyType<ContactAudienceSegmentUpdate>
+    export type UpdateContactSegmentMutationError = ErrorType<ApiError>
+    export type UpdateContactSegmentMutationVariables = {segmentId: string;data: BodyType<ContactAudienceSegmentUpdate>}
+
+    /**
+ * @summary Rename a saved contact segment owned by the authenticated tenant
+ */
+export const useUpdateContactSegment = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContactSegment>>, TError,UpdateContactSegmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateContactSegment>>,
+        TError,
+        UpdateContactSegmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateContactSegmentMutationOptions(options));
+    }
+
+export const getDeleteContactSegmentUrl = (segmentId: string,) => {
+
+
+
+
+  return `/api/contact-segments/${segmentId}`
+}
+
+/**
+ * @summary Delete a saved contact segment owned by the authenticated tenant
+ */
+export const deleteContactSegment = async (segmentId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteContactSegmentUrl(segmentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteContactSegmentMutationKey = () => ['deleteContactSegment'] as const;
+
+export const getDeleteContactSegmentMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactSegment>>, TError,DeleteContactSegmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContactSegment>>, TError,DeleteContactSegmentMutationVariables, TContext> => {
+
+const mutationKey = getDeleteContactSegmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContactSegment>>, DeleteContactSegmentMutationVariables> = (props) => {
+          const {segmentId} = props ?? {};
+
+          return  deleteContactSegment(segmentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContactSegmentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContactSegment>>>
+
+    export type DeleteContactSegmentMutationError = ErrorType<ApiError>
+    export type DeleteContactSegmentMutationVariables = {segmentId: string}
+
+    /**
+ * @summary Delete a saved contact segment owned by the authenticated tenant
+ */
+export const useDeleteContactSegment = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactSegment>>, TError,DeleteContactSegmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContactSegment>>,
+        TError,
+        DeleteContactSegmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteContactSegmentMutationOptions(options));
     }
 
 export const getListCampaignsUrl = () => {

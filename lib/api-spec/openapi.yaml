@@ -1169,6 +1169,93 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contact-segments:
+    get:
+      operationId: listContactSegments
+      tags: [sending]
+      summary: List saved contact segments belonging to the authenticated tenant
+      responses:
+        "200":
+          description: Saved contact segments for the authenticated tenant
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactAudienceSegment"
+    post:
+      operationId: createContactSegment
+      tags: [sending]
+      summary: Save a contact filter combination for the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactAudienceSegmentInput"
+      responses:
+        "201":
+          description: Saved contact segment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactAudienceSegment"
+        "409":
+          description: A segment with this name already exists in the workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contact-segments/{segmentId}:
+    parameters:
+      - name: segmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateContactSegment
+      tags: [sending]
+      summary: Rename a saved contact segment owned by the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactAudienceSegmentUpdate"
+      responses:
+        "200":
+          description: Renamed contact segment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactAudienceSegment"
+        "404":
+          description: Contact segment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A segment with this name already exists in the workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteContactSegment
+      tags: [sending]
+      summary: Delete a saved contact segment owned by the authenticated tenant
+      responses:
+        "204":
+          description: Contact segment deleted
+        "404":
+          description: Contact segment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns:
     get:
       operationId: listCampaigns
@@ -2975,6 +3062,39 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         active: { type: boolean }
+    ContactDirectoryFilters:
+      type: object
+      additionalProperties: false
+      properties:
+        search: { type: string, maxLength: 200 }
+        status: { type: string, enum: [all, subscribed, unsubscribed] }
+        listId: { type: string, minLength: 1, maxLength: 255 }
+        companyId: { type: string, minLength: 1, maxLength: 255 }
+        lifecycleStage: { type: string, minLength: 1, maxLength: 80 }
+        leadStatus: { type: string, minLength: 1, maxLength: 80 }
+        leadSource: { type: string, minLength: 1, maxLength: 120 }
+        addedWithin: { type: string, enum: [any, "7", "30", "90"] }
+      required: [search, status, listId, companyId, lifecycleStage, leadStatus, leadSource, addedWithin]
+    ContactAudienceSegment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        filters: { $ref: "#/components/schemas/ContactDirectoryFilters" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, filters, createdAt, updatedAt]
+    ContactAudienceSegmentInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        filters: { $ref: "#/components/schemas/ContactDirectoryFilters" }
+      required: [name, filters]
+    ContactAudienceSegmentUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+      required: [name]
     CampaignQueueInput:
       type: object
       properties:

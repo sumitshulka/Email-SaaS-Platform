@@ -2268,6 +2268,170 @@ export const DeleteContactListResponse = zod.void()
 
 
 /**
+ * @summary List saved contact segments belonging to the authenticated tenant
+ */
+export const listContactSegmentsResponseNameMax = 100;
+
+export const listContactSegmentsResponseFiltersSearchMax = 200;
+
+export const listContactSegmentsResponseFiltersListIdMax = 255;
+
+export const listContactSegmentsResponseFiltersCompanyIdMax = 255;
+
+export const listContactSegmentsResponseFiltersLifecycleStageMax = 80;
+
+export const listContactSegmentsResponseFiltersLeadStatusMax = 80;
+
+export const listContactSegmentsResponseFiltersLeadSourceMax = 120;
+
+
+
+export const ListContactSegmentsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactSegmentsResponseNameMax),
+  "filters": zod.object({
+  "search": zod.string().max(listContactSegmentsResponseFiltersSearchMax),
+  "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
+  "listId": zod.string().min(1).max(listContactSegmentsResponseFiltersListIdMax),
+  "companyId": zod.string().min(1).max(listContactSegmentsResponseFiltersCompanyIdMax),
+  "lifecycleStage": zod.string().min(1).max(listContactSegmentsResponseFiltersLifecycleStageMax),
+  "leadStatus": zod.string().min(1).max(listContactSegmentsResponseFiltersLeadStatusMax),
+  "leadSource": zod.string().min(1).max(listContactSegmentsResponseFiltersLeadSourceMax),
+  "addedWithin": zod.enum(['any', '7', '30', '90'])
+}),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListContactSegmentsResponse = zod.array(ListContactSegmentsResponseItem)
+
+
+/**
+ * @summary Save a contact filter combination for the authenticated tenant
+ */
+export const createContactSegmentBodyNameMax = 100;
+
+export const createContactSegmentBodyFiltersSearchMax = 200;
+
+export const createContactSegmentBodyFiltersListIdMax = 255;
+
+export const createContactSegmentBodyFiltersCompanyIdMax = 255;
+
+export const createContactSegmentBodyFiltersLifecycleStageMax = 80;
+
+export const createContactSegmentBodyFiltersLeadStatusMax = 80;
+
+export const createContactSegmentBodyFiltersLeadSourceMax = 120;
+
+
+
+export const CreateContactSegmentBody = zod.object({
+  "name": zod.string().min(1).max(createContactSegmentBodyNameMax),
+  "filters": zod.object({
+  "search": zod.string().max(createContactSegmentBodyFiltersSearchMax),
+  "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
+  "listId": zod.string().min(1).max(createContactSegmentBodyFiltersListIdMax),
+  "companyId": zod.string().min(1).max(createContactSegmentBodyFiltersCompanyIdMax),
+  "lifecycleStage": zod.string().min(1).max(createContactSegmentBodyFiltersLifecycleStageMax),
+  "leadStatus": zod.string().min(1).max(createContactSegmentBodyFiltersLeadStatusMax),
+  "leadSource": zod.string().min(1).max(createContactSegmentBodyFiltersLeadSourceMax),
+  "addedWithin": zod.enum(['any', '7', '30', '90'])
+})
+})
+
+export const createContactSegmentResponseNameMax = 100;
+
+export const createContactSegmentResponseFiltersSearchMax = 200;
+
+export const createContactSegmentResponseFiltersListIdMax = 255;
+
+export const createContactSegmentResponseFiltersCompanyIdMax = 255;
+
+export const createContactSegmentResponseFiltersLifecycleStageMax = 80;
+
+export const createContactSegmentResponseFiltersLeadStatusMax = 80;
+
+export const createContactSegmentResponseFiltersLeadSourceMax = 120;
+
+
+
+export const CreateContactSegmentResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createContactSegmentResponseNameMax),
+  "filters": zod.object({
+  "search": zod.string().max(createContactSegmentResponseFiltersSearchMax),
+  "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
+  "listId": zod.string().min(1).max(createContactSegmentResponseFiltersListIdMax),
+  "companyId": zod.string().min(1).max(createContactSegmentResponseFiltersCompanyIdMax),
+  "lifecycleStage": zod.string().min(1).max(createContactSegmentResponseFiltersLifecycleStageMax),
+  "leadStatus": zod.string().min(1).max(createContactSegmentResponseFiltersLeadStatusMax),
+  "leadSource": zod.string().min(1).max(createContactSegmentResponseFiltersLeadSourceMax),
+  "addedWithin": zod.enum(['any', '7', '30', '90'])
+}),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Rename a saved contact segment owned by the authenticated tenant
+ */
+export const UpdateContactSegmentParams = zod.object({
+  "segmentId": zod.coerce.string().uuid()
+})
+
+export const updateContactSegmentBodyNameMax = 100;
+
+
+
+export const UpdateContactSegmentBody = zod.object({
+  "name": zod.string().min(1).max(updateContactSegmentBodyNameMax)
+})
+
+export const updateContactSegmentResponseNameMax = 100;
+
+export const updateContactSegmentResponseFiltersSearchMax = 200;
+
+export const updateContactSegmentResponseFiltersListIdMax = 255;
+
+export const updateContactSegmentResponseFiltersCompanyIdMax = 255;
+
+export const updateContactSegmentResponseFiltersLifecycleStageMax = 80;
+
+export const updateContactSegmentResponseFiltersLeadStatusMax = 80;
+
+export const updateContactSegmentResponseFiltersLeadSourceMax = 120;
+
+
+
+export const UpdateContactSegmentResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateContactSegmentResponseNameMax),
+  "filters": zod.object({
+  "search": zod.string().max(updateContactSegmentResponseFiltersSearchMax),
+  "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
+  "listId": zod.string().min(1).max(updateContactSegmentResponseFiltersListIdMax),
+  "companyId": zod.string().min(1).max(updateContactSegmentResponseFiltersCompanyIdMax),
+  "lifecycleStage": zod.string().min(1).max(updateContactSegmentResponseFiltersLifecycleStageMax),
+  "leadStatus": zod.string().min(1).max(updateContactSegmentResponseFiltersLeadStatusMax),
+  "leadSource": zod.string().min(1).max(updateContactSegmentResponseFiltersLeadSourceMax),
+  "addedWithin": zod.enum(['any', '7', '30', '90'])
+}),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a saved contact segment owned by the authenticated tenant
+ */
+export const DeleteContactSegmentParams = zod.object({
+  "segmentId": zod.coerce.string().uuid()
+})
+
+export const DeleteContactSegmentResponse = zod.void()
+
+
+/**
  * @summary List campaigns belonging to the authenticated tenant
  */
 export const ListCampaignsResponseItem = zod.object({

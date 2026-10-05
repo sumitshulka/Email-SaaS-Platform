@@ -25,6 +25,7 @@ export * from "./billing";
 export * from "./companies";
 export * from "./contacts";
 export * from "./contact-field-options";
+export * from "./contact-segments";
 export * from "./sending";
 export * from "./notifications";
 export * from "./support";

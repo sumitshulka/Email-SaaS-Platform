@@ -1,20 +1,11 @@
 import { useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
-import type { CompanyListItem, ContactList } from '@workspace/api-client-react';
+import type { CompanyListItem, ContactDirectoryFilters, ContactList } from '@workspace/api-client-react';
 
 export const CONTACT_FILTER_NONE = '__none__';
 export const CONTACT_FILTER_UNSET = '__unset__';
 
-export type ContactDirectoryFilterValues = {
-  search: string;
-  status: string;
-  listId: string;
-  companyId: string;
-  lifecycleStage: string;
-  leadStatus: string;
-  leadSource: string;
-  addedWithin: string;
-};
+export type ContactDirectoryFilterValues = ContactDirectoryFilters;
 
 export const emptyContactDirectoryFilters: ContactDirectoryFilterValues = {
   search: '',
@@ -178,7 +169,10 @@ export function ContactDirectoryFiltersPanel({
   leadSources: string[];
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const setFilter = (key: keyof ContactDirectoryFilterValues, value: string) => {
+  const setFilter = <K extends keyof ContactDirectoryFilterValues>(
+    key: K,
+    value: ContactDirectoryFilterValues[K],
+  ) => {
     onChange({ ...filters, [key]: value });
   };
 
@@ -255,6 +249,7 @@ export function ContactDirectoryFiltersPanel({
               value={filters.search}
               onChange={event => setFilter('search', event.target.value)}
               placeholder="Name, email, title, company…"
+              maxLength={200}
               className="h-10 w-full rounded-md border border-[#d3dce7] bg-white pl-9 pr-3 text-[12px] text-[#29394c] outline-none transition placeholder:text-[#9aa6b4] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"
             />
           </span>
@@ -263,7 +258,7 @@ export function ContactDirectoryFiltersPanel({
           label="Subscription"
           value={filters.status}
           testId="select-contact-status-filter"
-          onChange={value => setFilter('status', value)}
+          onChange={value => setFilter('status', value as ContactDirectoryFilterValues['status'])}
           options={[
             { value: 'all', label: 'All statuses' },
             { value: 'subscribed', label: 'Subscribed' },
@@ -330,7 +325,7 @@ export function ContactDirectoryFiltersPanel({
             label="Added"
             value={filters.addedWithin}
             testId="select-contact-added-filter"
-            onChange={value => setFilter('addedWithin', value)}
+          onChange={value => setFilter('addedWithin', value as ContactDirectoryFilterValues['addedWithin'])}
             options={[
               { value: 'any', label: 'Any time' },
               { value: '7', label: 'Last 7 days' },

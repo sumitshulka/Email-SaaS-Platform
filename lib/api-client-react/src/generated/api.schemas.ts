@@ -1582,6 +1582,86 @@ export interface ContactListUpdate {
   active?: boolean;
 }
 
+export type ContactDirectoryFiltersStatus = typeof ContactDirectoryFiltersStatus[keyof typeof ContactDirectoryFiltersStatus];
+
+
+export const ContactDirectoryFiltersStatus = {
+  all: 'all',
+  subscribed: 'subscribed',
+  unsubscribed: 'unsubscribed',
+} as const;
+
+export type ContactDirectoryFiltersAddedWithin = typeof ContactDirectoryFiltersAddedWithin[keyof typeof ContactDirectoryFiltersAddedWithin];
+
+
+export const ContactDirectoryFiltersAddedWithin = {
+  any: 'any',
+  NUMBER_7: '7',
+  NUMBER_30: '30',
+  NUMBER_90: '90',
+} as const;
+
+export interface ContactDirectoryFilters {
+  /** @maxLength 200 */
+  search: string;
+  status: ContactDirectoryFiltersStatus;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  listId: string;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  companyId: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  lifecycleStage: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  leadStatus: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  leadSource: string;
+  addedWithin: ContactDirectoryFiltersAddedWithin;
+}
+
+export interface ContactAudienceSegment {
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  filters: ContactDirectoryFilters;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContactAudienceSegmentInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  filters: ContactDirectoryFilters;
+}
+
+export interface ContactAudienceSegmentUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+}
+
 export interface CampaignQueueInput {
   scheduledAt?: string;
 }

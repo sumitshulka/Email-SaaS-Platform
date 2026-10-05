@@ -19,6 +19,8 @@ import {
   CreateContactBody,
   CreateContactListBody,
   CreateContactListResponse,
+  CreateContactSegmentBody,
+  CreateContactSegmentResponse,
   CreateContactResponse,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
@@ -30,6 +32,8 @@ import {
   DeleteCampaignResponse,
   DeleteContactListParams,
   DeleteContactListResponse,
+  DeleteContactSegmentParams,
+  DeleteContactSegmentResponse,
   DeleteContactParams,
   DeleteContactResponse,
   GetTenantSendingSettingsResponse,
@@ -38,6 +42,7 @@ import {
   ImportContactsResponse,
   ListCampaignsResponse,
   ListContactListsResponse,
+  ListContactSegmentsResponse,
   ListContactsResponse,
   PreviewCampaignBody,
   PreviewCampaignResponse,
@@ -55,6 +60,9 @@ import {
   UpdateContactListBody,
   UpdateContactListParams,
   UpdateContactListResponse,
+  UpdateContactSegmentBody,
+  UpdateContactSegmentParams,
+  UpdateContactSegmentResponse,
   UpdateContactParams,
   UpdateContactResponse,
   UpdateTenantSendingSettingsBody,
@@ -67,6 +75,7 @@ import {
   contactFieldOptionsTable,
   contactListMembersTable,
   contactListsTable,
+  contactSegmentsTable,
   contactsTable,
   db,
   emailCampaignRecipientsTable,
@@ -2078,6 +2087,167 @@ router.delete(
       return;
     }
     res.status(204).json(DeleteContactListResponse.parse(undefined));
+  },
+);
+
+router.get("/contact-segments", requireUserRole, async (req, res): Promise<void> => {
+  const segments = await db
+    .select({
+      id: contactSegmentsTable.id,
+      name: contactSegmentsTable.name,
+      filters: contactSegmentsTable.filters,
+      createdAt: contactSegmentsTable.createdAt,
+      updatedAt: contactSegmentsTable.updatedAt,
+    })
+    .from(contactSegmentsTable)
+    .where(eq(contactSegmentsTable.userId, req.authUser!.id))
+    .orderBy(desc(contactSegmentsTable.createdAt));
+  res.json(ListContactSegmentsResponse.parse(segments));
+});
+
+router.post("/contact-segments", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = CreateContactSegmentBody.safeParse(req.body);
+  if (!parsed.success || !parsed.data.name.trim()) {
+    res.status(400).json({
+      error: "Enter a valid name and contact filter combination.",
+      code: "INVALID_INPUT",
+    });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const name = parsed.data.name.trim();
+  const [duplicate] = await db
+    .select({ id: contactSegmentsTable.id })
+    .from(contactSegmentsTable)
+    .where(
+      and(
+        eq(contactSegmentsTable.userId, userId),
+        eq(contactSegmentsTable.name, name),
+      ),
+    )
+    .limit(1);
+  if (duplicate) {
+    res.status(409).json({
+      error: "A saved segment with this name already exists.",
+      code: "CONTACT_SEGMENT_EXISTS",
+    });
+    return;
+  }
+  const [segment] = await db
+    .insert(contactSegmentsTable)
+    .values({
+      userId,
+      name,
+      filters: parsed.data.filters,
+    })
+    .onConflictDoNothing({
+      target: [contactSegmentsTable.userId, contactSegmentsTable.name],
+    })
+    .returning({
+      id: contactSegmentsTable.id,
+      name: contactSegmentsTable.name,
+      filters: contactSegmentsTable.filters,
+      createdAt: contactSegmentsTable.createdAt,
+      updatedAt: contactSegmentsTable.updatedAt,
+    });
+  if (!segment) {
+    res.status(409).json({
+      error: "A saved segment with this name already exists.",
+      code: "CONTACT_SEGMENT_EXISTS",
+    });
+    return;
+  }
+  res.status(201).json(CreateContactSegmentResponse.parse(segment));
+});
+
+router.patch(
+  "/contact-segments/:segmentId",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = UpdateContactSegmentParams.safeParse(req.params);
+    const parsed = UpdateContactSegmentBody.safeParse(req.body);
+    if (!params.success || !parsed.success || !parsed.data.name.trim()) {
+      res.status(400).json({
+        error: "Enter a valid saved segment name.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [duplicate] = await db
+      .select({ id: contactSegmentsTable.id })
+      .from(contactSegmentsTable)
+      .where(
+        and(
+          eq(contactSegmentsTable.userId, userId),
+          eq(contactSegmentsTable.name, parsed.data.name.trim()),
+          ne(contactSegmentsTable.id, params.data.segmentId),
+        ),
+      )
+      .limit(1);
+    if (duplicate) {
+      res.status(409).json({
+        error: "A saved segment with this name already exists.",
+        code: "CONTACT_SEGMENT_EXISTS",
+      });
+      return;
+    }
+    const [segment] = await db
+      .update(contactSegmentsTable)
+      .set({ name: parsed.data.name.trim(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(contactSegmentsTable.id, params.data.segmentId),
+          eq(contactSegmentsTable.userId, userId),
+        ),
+      )
+      .returning({
+        id: contactSegmentsTable.id,
+        name: contactSegmentsTable.name,
+        filters: contactSegmentsTable.filters,
+        createdAt: contactSegmentsTable.createdAt,
+        updatedAt: contactSegmentsTable.updatedAt,
+      });
+    if (!segment) {
+      res.status(404).json({
+        error: "Saved contact segment not found.",
+        code: "CONTACT_SEGMENT_NOT_FOUND",
+      });
+      return;
+    }
+    res.json(UpdateContactSegmentResponse.parse(segment));
+  },
+);
+
+router.delete(
+  "/contact-segments/:segmentId",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = DeleteContactSegmentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({
+        error: "Invalid saved contact segment identifier.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+    const [deleted] = await db
+      .delete(contactSegmentsTable)
+      .where(
+        and(
+          eq(contactSegmentsTable.id, params.data.segmentId),
+          eq(contactSegmentsTable.userId, req.authUser!.id),
+        ),
+      )
+      .returning({ id: contactSegmentsTable.id });
+    if (!deleted) {
+      res.status(404).json({
+        error: "Saved contact segment not found.",
+        code: "CONTACT_SEGMENT_NOT_FOUND",
+      });
+      return;
+    }
+    res.status(204).json(DeleteContactSegmentResponse.parse(undefined));
   },
 );
 

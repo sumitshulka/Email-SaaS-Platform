@@ -335,6 +335,15 @@ memory.public.none(`
     UNIQUE (user_id, name),
     UNIQUE (id, user_id)
   );
+  CREATE TABLE contact_segments (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name varchar(100) NOT NULL,
+    filters jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, name)
+  );
   CREATE TABLE contact_list_members (
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     list_id uuid NOT NULL,
@@ -611,6 +620,7 @@ beforeEach(async () => {
   await db.delete(dbModule.emailCampaignRecipientsTable);
   await db.delete(dbModule.emailCampaignsTable);
   await db.delete(dbModule.contactListMembersTable);
+  await db.delete(dbModule.contactSegmentsTable);
   await db.delete(dbModule.contactsTable);
   await db.delete(dbModule.contactFieldOptionsTable);
   await db.delete(dbModule.companiesTable);
@@ -1439,6 +1449,86 @@ describe("Razorpay environment configuration", { concurrency: false }, () => {
 });
 
 describe("tenant contact management and package quotas", { concurrency: false }, () => {
+  it("stores full contact filters and scopes saved segment CRUD by tenant", async () => {
+    const owner = await loggedInUser({ username: "segment-owner" });
+    const other = await loggedInUser({ username: "segment-other" });
+    const filters = {
+      search: "product launch",
+      status: "subscribed",
+      listId: "all",
+      companyId: "company-id",
+      lifecycleStage: "Lead",
+      leadStatus: "Qualified",
+      leadSource: "Webinar",
+      addedWithin: "30",
+    };
+
+    const created = await api("/contact-segments", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Recent qualified leads", filters },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.name, "Recent qualified leads");
+    assert.deepEqual(created.body.filters, filters);
+
+    const duplicate = await api("/contact-segments", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Recent qualified leads", filters },
+    });
+    assert.equal(duplicate.response.status, 409);
+    assert.equal(duplicate.body.code, "CONTACT_SEGMENT_EXISTS");
+
+    const otherSegment = await api("/contact-segments", {
+      method: "POST",
+      cookie: other.cookie,
+      body: { name: "Recent qualified leads", filters },
+    });
+    assert.equal(otherSegment.response.status, 201, JSON.stringify(otherSegment.body));
+
+    const ownerSegments = await api("/contact-segments", { cookie: owner.cookie });
+    const otherSegments = await api("/contact-segments", { cookie: other.cookie });
+    assert.deepEqual(ownerSegments.body.map((segment) => segment.id), [created.body.id]);
+    assert.deepEqual(otherSegments.body.map((segment) => segment.id), [otherSegment.body.id]);
+
+    const renamed = await api(`/contact-segments/${created.body.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { name: "Webinar leads" },
+    });
+    assert.equal(renamed.response.status, 200, JSON.stringify(renamed.body));
+    assert.equal(renamed.body.name, "Webinar leads");
+    assert.deepEqual(renamed.body.filters, filters);
+
+    const foreignRename = await api(`/contact-segments/${created.body.id}`, {
+      method: "PATCH",
+      cookie: other.cookie,
+      body: { name: "Not yours" },
+    });
+    assert.equal(foreignRename.response.status, 404);
+    const foreignDelete = await api(`/contact-segments/${created.body.id}`, {
+      method: "DELETE",
+      cookie: other.cookie,
+    });
+    assert.equal(foreignDelete.response.status, 404);
+
+    const invalidFilters = await api("/contact-segments", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Invalid filters", filters: { ...filters, status: "pending" } },
+    });
+    assert.equal(invalidFilters.response.status, 400);
+
+    const deleted = await api(`/contact-segments/${created.body.id}`, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(deleted.response.status, 204);
+    const ownerAfterDelete = await api("/contact-segments", { cookie: owner.cookie });
+    assert.deepEqual(ownerAfterDelete.body, []);
+  });
+
   it("assigns CSV imports to a tenant-owned list and preserves quota and tenant isolation", async () => {
     const owner = await loggedInUser({ username: "csv-list-owner" });
     const other = await loggedInUser({ username: "csv-list-other" });
