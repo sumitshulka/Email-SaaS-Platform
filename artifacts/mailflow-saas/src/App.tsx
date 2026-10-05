@@ -6,7 +6,7 @@ import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, Check, Eye, EyeOff,
   ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, CreditCard, Gauge, KeyRound, LoaderCircle,
   LockKeyhole, LogOut, Menu, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
-  Trash2, UserRound, Users, Building2,
+  Trash2, UserRound, Users, Building2, LifeBuoy,
 } from 'lucide-react';
 import {
   getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey,
@@ -29,6 +29,7 @@ import AdminBillingPage from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminFinancePage from '@/pages/finance';
+import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { ContactDetailPage } from '@/pages/contact-detail';
@@ -220,6 +221,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Account & settings',
     items: [
       { href: '/notifications', label: 'Notifications', icon: Bell },
+      { href: '/support', label: 'Support', icon: LifeBuoy },
       { href: '/sending-settings', label: 'Email Setup', icon: Settings2 },
       { href: '/plans', label: 'Plans & billing', icon: CreditCard },
       { href: '/profile', label: 'Profile & security', icon: UserRound },
@@ -234,6 +236,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/admin', label: 'Overview', icon: Gauge },
       { href: '/admin/users', label: 'Accounts', icon: Users },
       { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { href: '/admin/support', label: 'Support inbox', icon: LifeBuoy },
       { href: '/admin/billing', label: 'Billing', icon: CreditCard },
       { href: '/admin/finance', label: 'Finance', icon: ReceiptText },
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
@@ -1031,6 +1034,7 @@ function Routes() {
     <Route path="/" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
     <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u}/>}</RouteGate>}</Route>
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/sending-settings">{() => <RouteGate>{() => <SendingSettingsPage/>}</RouteGate>}</Route>
     <Route path="/contact-field-settings">{() => <RouteGate>{u => u.role === 'USER' ? <ContactFieldSettingsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
@@ -1042,6 +1046,7 @@ function Routes() {
     <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId}/>}</RouteGate>}</Route>
     <Route path="/admin">{() => <RouteGate admin>{() => <AdminDashboardPage/>}</RouteGate>}</Route>
     <Route path="/admin/notifications">{() => <RouteGate admin>{() => <AdminNotificationsPage/>}</RouteGate>}</Route>
+    <Route path="/admin/support">{() => <RouteGate admin>{() => <AdminSupportTicketsPage/>}</RouteGate>}</Route>
     <Route path="/admin/users">{() => <RouteGate admin>{() => <AdminUsersPage/>}</RouteGate>}</Route>
     <Route path="/admin/billing">{() => <RouteGate admin>{() => <AdminBillingPage/>}</RouteGate>}</Route>
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>

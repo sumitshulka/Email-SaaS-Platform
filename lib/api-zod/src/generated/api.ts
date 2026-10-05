@@ -329,6 +329,113 @@ export const MarkUserNotificationReadResponse = zod.object({
 
 
 /**
+ * @summary List support tickets for the authenticated customer
+ */
+export const ListSupportTicketsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Open a support ticket with an initial message
+ */
+export const createSupportTicketBodySubjectMax = 160;
+
+export const createSupportTicketBodyMessageMax = 10000;
+
+
+
+export const CreateSupportTicketBody = zod.object({
+  "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
+  "message": zod.string().min(1).max(createSupportTicketBodyMessageMax)
+})
+
+export const CreateSupportTicketResponse = zod.object({
+  "ticket": zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}),
+  "messages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "ticketId": zod.string().uuid(),
+  "authorRole": zod.enum(['USER', 'SUPERADMIN']),
+  "authorName": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Get a support ticket owned by the authenticated customer
+ */
+export const GetSupportTicketParams = zod.object({
+  "ticketId": zod.coerce.string().uuid()
+})
+
+export const GetSupportTicketResponse = zod.object({
+  "ticket": zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}),
+  "messages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "ticketId": zod.string().uuid(),
+  "authorRole": zod.enum(['USER', 'SUPERADMIN']),
+  "authorName": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Add a customer reply to a support ticket
+ */
+export const ReplyToSupportTicketParams = zod.object({
+  "ticketId": zod.coerce.string().uuid()
+})
+
+export const replyToSupportTicketBodyMessageMax = 10000;
+
+
+
+export const ReplyToSupportTicketBody = zod.object({
+  "message": zod.string().min(1).max(replyToSupportTicketBodyMessageMax)
+})
+
+export const ReplyToSupportTicketResponse = zod.object({
+  "ticket": zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}),
+  "messages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "ticketId": zod.string().uuid(),
+  "authorRole": zod.enum(['USER', 'SUPERADMIN']),
+  "authorName": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Get the authenticated tenant's sending identity
  */
 export const GetTenantSendingSettingsResponse = zod.object({
@@ -2660,6 +2767,135 @@ export const CreateAdminNotificationResponse = zod.object({
   "recipientCount": zod.number().int().min(createAdminNotificationResponseRecipientCountMin),
   "readCount": zod.number().int().min(createAdminNotificationResponseReadCountMin),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Search support tickets across customer accounts
+ */
+export const listAdminSupportTicketsQuerySearchMax = 160;
+
+export const listAdminSupportTicketsQueryStatusDefault = `all`;
+
+export const ListAdminSupportTicketsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminSupportTicketsQuerySearchMax).optional(),
+  "status": zod.enum(['all', 'open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']).default(listAdminSupportTicketsQueryStatusDefault)
+})
+
+export const ListAdminSupportTicketsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}).and(zod.object({
+  "requesterFirstName": zod.string(),
+  "requesterLastName": zod.string(),
+  "requesterEmail": zod.string().email()
+})))
+})
+
+
+/**
+ * @summary Get a customer support ticket and its conversation
+ */
+export const GetAdminSupportTicketParams = zod.object({
+  "ticketId": zod.coerce.string().uuid()
+})
+
+export const GetAdminSupportTicketResponse = zod.object({
+  "ticket": zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}).and(zod.object({
+  "requesterFirstName": zod.string(),
+  "requesterLastName": zod.string(),
+  "requesterEmail": zod.string().email()
+})),
+  "messages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "ticketId": zod.string().uuid(),
+  "authorRole": zod.enum(['USER', 'SUPERADMIN']),
+  "authorName": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Send a support reply to a customer ticket
+ */
+export const ReplyToAdminSupportTicketParams = zod.object({
+  "ticketId": zod.coerce.string().uuid()
+})
+
+export const replyToAdminSupportTicketBodyMessageMax = 10000;
+
+
+
+export const ReplyToAdminSupportTicketBody = zod.object({
+  "message": zod.string().min(1).max(replyToAdminSupportTicketBodyMessageMax)
+})
+
+export const ReplyToAdminSupportTicketResponse = zod.object({
+  "ticket": zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}).and(zod.object({
+  "requesterFirstName": zod.string(),
+  "requesterLastName": zod.string(),
+  "requesterEmail": zod.string().email()
+})),
+  "messages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "ticketId": zod.string().uuid(),
+  "authorRole": zod.enum(['USER', 'SUPERADMIN']),
+  "authorName": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Update a support ticket status
+ */
+export const UpdateAdminSupportTicketStatusParams = zod.object({
+  "ticketId": zod.coerce.string().uuid()
+})
+
+export const UpdateAdminSupportTicketStatusBody = zod.object({
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'])
+})
+
+export const UpdateAdminSupportTicketStatusResponse = zod.object({
+  "ticket": zod.object({
+  "id": zod.string().uuid(),
+  "subject": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']),
+  "createdAt": zod.coerce.date(),
+  "lastMessageAt": zod.coerce.date()
+}).and(zod.object({
+  "requesterFirstName": zod.string(),
+  "requesterLastName": zod.string(),
+  "requesterEmail": zod.string().email()
+})),
+  "messages": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "ticketId": zod.string().uuid(),
+  "authorRole": zod.enum(['USER', 'SUPERADMIN']),
+  "authorName": zod.string(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
 })
 
 

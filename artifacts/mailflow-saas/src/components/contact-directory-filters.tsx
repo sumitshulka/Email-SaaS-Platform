@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
-import type { ContactList } from '@workspace/api-client-react';
+import type { CompanyListItem, ContactList } from '@workspace/api-client-react';
 
 export const CONTACT_FILTER_NONE = '__none__';
 export const CONTACT_FILTER_UNSET = '__unset__';
@@ -9,7 +9,7 @@ export type ContactDirectoryFilterValues = {
   search: string;
   status: string;
   listId: string;
-  companyName: string;
+  companyId: string;
   lifecycleStage: string;
   leadStatus: string;
   leadSource: string;
@@ -20,7 +20,7 @@ export const emptyContactDirectoryFilters: ContactDirectoryFilterValues = {
   search: '',
   status: 'all',
   listId: 'all',
-  companyName: 'all',
+  companyId: 'all',
   lifecycleStage: 'all',
   leadStatus: 'all',
   leadSource: 'all',
@@ -57,11 +57,111 @@ function FilterSelect({
   );
 }
 
+function CompanyFilter({
+  companies,
+  value,
+  onChange,
+  loading,
+  error,
+  onRetry,
+}: {
+  companies: CompanyListItem[];
+  value: string;
+  onChange: (value: string) => void;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const selected = companies.find(company => company.id === value);
+  const query = search.trim().toLowerCase();
+  const matches = query
+    ? companies.filter(company => `${company.companyName} ${company.companyDomain ?? ''}`.toLowerCase().includes(query))
+    : companies;
+  const visible = matches.slice(0, 40);
+  const choose = (nextValue: string) => {
+    onChange(nextValue);
+    setSearch('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative min-w-0">
+      <label className="block">
+        <span className="mb-1.5 block text-[11px] font-semibold text-[#415166]">Company</span>
+        <span className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8795a5]"/>
+          <input
+            data-testid="select-contact-company-filter"
+            type="search"
+            role="combobox"
+            aria-label="Company"
+            aria-expanded={open}
+            aria-controls="contact-company-options"
+            aria-autocomplete="list"
+            value={open ? search : selected?.companyName ?? ''}
+            onFocus={() => { setSearch(''); setOpen(true); }}
+            onChange={event => { setSearch(event.target.value); setOpen(true); }}
+            onBlur={() => setOpen(false)}
+            onKeyDown={event => {
+              if (event.key === 'Escape') setOpen(false);
+              if (event.key === 'Enter' && open && visible[0]) {
+                event.preventDefault();
+                choose(visible[0].id);
+              }
+            }}
+            placeholder="Search companies…"
+            autoComplete="off"
+            className="h-10 w-full rounded-md border border-[#d3dce7] bg-white pl-9 pr-3 text-[12px] text-[#29394c] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#9aa6b4]"
+          />
+        </span>
+      </label>
+      {open && (
+        <div
+          id="contact-company-options"
+          role="listbox"
+          aria-label="Company options"
+          className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-[#d6e0eb] bg-white p-1 shadow-lg"
+        >
+          <button type="button" role="option" aria-selected={value === 'all'} onMouseDown={event => event.preventDefault()} onClick={() => choose('all')} className="block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa]">Any company</button>
+          <button type="button" role="option" aria-selected={value === CONTACT_FILTER_NONE} onMouseDown={event => event.preventDefault()} onClick={() => choose(CONTACT_FILTER_NONE)} className="block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa]">No company</button>
+          <div className="my-1 border-t border-[#edf0f3]"/>
+          {loading ? <p className="px-3 py-2 text-[11px] text-[#788696]">Loading companies…</p>
+            : error ? <div className="px-3 py-2"><p role="alert" className="text-[11px] text-[#a84926]">Company options could not be loaded.</p><button type="button" onMouseDown={event => event.preventDefault()} onClick={onRetry} className="mt-1 text-[11px] font-semibold text-[#245b9b] hover:underline">Retry</button></div>
+            : visible.length ? visible.map(company => (
+              <button
+                key={company.id}
+                type="button"
+                role="option"
+                aria-selected={value === company.id}
+                data-testid={`option-contact-company-${company.id}`}
+                onMouseDown={event => event.preventDefault()}
+                onClick={() => choose(company.id)}
+                className="block w-full rounded px-3 py-2 text-left hover:bg-[#f2f6fa]"
+              >
+                <span className="block truncate text-[12px] font-medium text-[#354a60]">{company.companyName}</span>
+                {company.companyDomain && <span className="mt-0.5 block truncate text-[10px] text-[#8290a0]">{company.companyDomain}</span>}
+              </button>
+            )) : <p className="px-3 py-2 text-[11px] text-[#788696]">{query ? 'No matching companies.' : 'No company records yet.'}</p>}
+          {!loading && !error && matches.length > visible.length && <p className="border-t border-[#edf0f3] px-3 py-2 text-[10px] text-[#8290a0]">Showing 40 of {matches.length.toLocaleString()} matches. Refine your search.</p>}
+        </div>
+      )}
+      {value !== 'all' && (
+        <button type="button" onClick={() => choose('all')} className="mt-1 text-[10px] font-semibold text-[#58728c] hover:underline">Clear company filter</button>
+      )}
+    </div>
+  );
+}
+
 export function ContactDirectoryFiltersPanel({
   filters,
   onChange,
   lists,
   companies,
+  companiesLoading,
+  companiesError,
+  onRetryCompanies,
   lifecycleStages,
   leadStatuses,
   leadSources,
@@ -69,7 +169,10 @@ export function ContactDirectoryFiltersPanel({
   filters: ContactDirectoryFilterValues;
   onChange: (filters: ContactDirectoryFilterValues) => void;
   lists: ContactList[];
-  companies: string[];
+  companies: CompanyListItem[];
+  companiesLoading: boolean;
+  companiesError: boolean;
+  onRetryCompanies: () => void;
   lifecycleStages: string[];
   leadStatuses: string[];
   leadSources: string[];
@@ -84,8 +187,8 @@ export function ContactDirectoryFiltersPanel({
   if (filters.status !== 'all') activeLabels.push(`Status: ${filters.status === 'subscribed' ? 'Subscribed' : 'Unsubscribed'}`);
   if (filters.listId === CONTACT_FILTER_NONE) activeLabels.push('List: No list');
   else if (filters.listId !== 'all') activeLabels.push(`List: ${lists.find(list => list.id === filters.listId)?.name || 'Selected list'}`);
-  if (filters.companyName === CONTACT_FILTER_NONE) activeLabels.push('Company: No company');
-  else if (filters.companyName !== 'all') activeLabels.push(`Company: ${filters.companyName}`);
+  if (filters.companyId === CONTACT_FILTER_NONE) activeLabels.push('Company: No company');
+  else if (filters.companyId !== 'all') activeLabels.push(`Company: ${companies.find(company => company.id === filters.companyId)?.companyName || 'Selected company'}`);
   if (filters.lifecycleStage === CONTACT_FILTER_UNSET) activeLabels.push('Lifecycle: Not set');
   else if (filters.lifecycleStage !== 'all') activeLabels.push(`Lifecycle: ${filters.lifecycleStage}`);
   if (filters.leadStatus === CONTACT_FILTER_UNSET) activeLabels.push('Lead status: Not set');
@@ -178,16 +281,13 @@ export function ContactDirectoryFiltersPanel({
             ...lists.map(list => ({ value: list.id, label: list.name })),
           ]}
         />
-        <FilterSelect
-          label="Company"
-          value={filters.companyName}
-          testId="select-contact-company-filter"
-          onChange={value => setFilter('companyName', value)}
-          options={[
-            { value: 'all', label: 'Any company' },
-            { value: CONTACT_FILTER_NONE, label: 'No company' },
-            ...companies.map(company => ({ value: company, label: company })),
-          ]}
+        <CompanyFilter
+          companies={companies}
+          value={filters.companyId}
+          onChange={value => setFilter('companyId', value)}
+          loading={companiesLoading}
+          error={companiesError}
+          onRetry={onRetryCompanies}
         />
       </div>
 

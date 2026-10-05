@@ -16,6 +16,91 @@ export interface ApiError {
   earliestStartAt?: string | null;
 }
 
+export type SupportTicketStatus = typeof SupportTicketStatus[keyof typeof SupportTicketStatus];
+
+
+export const SupportTicketStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export interface SupportTicketSummary {
+  id: string;
+  subject: string;
+  status: SupportTicketStatus;
+  createdAt: string;
+  lastMessageAt: string;
+}
+
+export type AdminSupportTicketSummary = SupportTicketSummary & {
+  requesterFirstName: string;
+  requesterLastName: string;
+  requesterEmail: string;
+};
+
+export type SupportTicketMessageAuthorRole = typeof SupportTicketMessageAuthorRole[keyof typeof SupportTicketMessageAuthorRole];
+
+
+export const SupportTicketMessageAuthorRole = {
+  USER: 'USER',
+  SUPERADMIN: 'SUPERADMIN',
+} as const;
+
+export interface SupportTicketMessage {
+  id: string;
+  ticketId: string;
+  authorRole: SupportTicketMessageAuthorRole;
+  authorName: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface SupportTicketInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  message: string;
+}
+
+export interface SupportTicketMessageInput {
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  message: string;
+}
+
+export interface SupportTicketStatusUpdate {
+  status: SupportTicketStatus;
+}
+
+export interface SupportTicketDetail {
+  ticket: SupportTicketSummary;
+  messages: SupportTicketMessage[];
+}
+
+export interface AdminSupportTicketDetail {
+  ticket: AdminSupportTicketSummary;
+  messages: SupportTicketMessage[];
+}
+
+export interface SupportTicketCollection {
+  items: SupportTicketSummary[];
+}
+
+export interface AdminSupportTicketCollection {
+  items: AdminSupportTicketSummary[];
+}
+
 export interface MessageResponse {
   message: string;
 }
@@ -2534,6 +2619,26 @@ limit?: number;
  */
 offset?: number;
 };
+
+export type ListAdminSupportTicketsParams = {
+/**
+ * @maxLength 160
+ */
+search?: string;
+status?: ListAdminSupportTicketsStatus;
+};
+
+export type ListAdminSupportTicketsStatus = typeof ListAdminSupportTicketsStatus[keyof typeof ListAdminSupportTicketsStatus];
+
+
+export const ListAdminSupportTicketsStatus = {
+  all: 'all',
+  open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
 
 export type ListAdminFinancePaymentsParams = {
 /**

@@ -285,6 +285,87 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /support/tickets:
+    get:
+      operationId: listSupportTickets
+      tags: [support]
+      summary: List support tickets for the authenticated customer
+      responses:
+        "200":
+          description: Customer support tickets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketCollection"
+    post:
+      operationId: createSupportTicket
+      tags: [support]
+      summary: Open a support ticket with an initial message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportTicketInput"
+      responses:
+        "201":
+          description: Created support ticket and conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketDetail"
+  /support/tickets/{ticketId}:
+    get:
+      operationId: getSupportTicket
+      tags: [support]
+      summary: Get a support ticket owned by the authenticated customer
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Support ticket and conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketDetail"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /support/tickets/{ticketId}/messages:
+    post:
+      operationId: replyToSupportTicket
+      tags: [support]
+      summary: Add a customer reply to a support ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportTicketMessageInput"
+      responses:
+        "200":
+          description: Updated support ticket and conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketDetail"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /sending/settings:
     get:
       operationId: getTenantSendingSettings
@@ -1407,6 +1488,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/support/tickets:
+    get:
+      operationId: listAdminSupportTickets
+      tags: [admin, support]
+      summary: Search support tickets across customer accounts
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 160 }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [all, open, in_progress, waiting_on_customer, resolved, closed]
+            default: all
+      responses:
+        "200":
+          description: Support tickets for platform administrators
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSupportTicketCollection"
+  /admin/support/tickets/{ticketId}:
+    get:
+      operationId: getAdminSupportTicket
+      tags: [admin, support]
+      summary: Get a customer support ticket and its conversation
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Support ticket and conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSupportTicketDetail"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/support/tickets/{ticketId}/messages:
+    post:
+      operationId: replyToAdminSupportTicket
+      tags: [admin, support]
+      summary: Send a support reply to a customer ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportTicketMessageInput"
+      responses:
+        "200":
+          description: Updated support ticket and conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSupportTicketDetail"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/support/tickets/{ticketId}/status:
+    patch:
+      operationId: updateAdminSupportTicketStatus
+      tags: [admin, support]
+      summary: Update a support ticket status
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportTicketStatusUpdate"
+      responses:
+        "200":
+          description: Updated support ticket and conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSupportTicketDetail"
+        "404":
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/notifications/{notificationId}/status:
     patch:
       operationId: updateAdminNotificationStatus
@@ -1982,6 +2166,83 @@ components:
           type: ["string", "null"]
           format: date-time
       required: [error]
+    SupportTicketStatus:
+      type: string
+      enum: [open, in_progress, waiting_on_customer, resolved, closed]
+    SupportTicketSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subject: { type: string }
+        status: { $ref: "#/components/schemas/SupportTicketStatus" }
+        createdAt: { type: string, format: date-time }
+        lastMessageAt: { type: string, format: date-time }
+      required: [id, subject, status, createdAt, lastMessageAt]
+    AdminSupportTicketSummary:
+      allOf:
+        - $ref: "#/components/schemas/SupportTicketSummary"
+        - type: object
+          properties:
+            requesterFirstName: { type: string }
+            requesterLastName: { type: string }
+            requesterEmail: { type: string, format: email }
+          required: [requesterFirstName, requesterLastName, requesterEmail]
+    SupportTicketMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        ticketId: { type: string, format: uuid }
+        authorRole: { type: string, enum: [USER, SUPERADMIN] }
+        authorName: { type: string }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, ticketId, authorRole, authorName, message, createdAt]
+    SupportTicketInput:
+      type: object
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 160 }
+        message: { type: string, minLength: 1, maxLength: 10000 }
+      required: [subject, message]
+    SupportTicketMessageInput:
+      type: object
+      properties:
+        message: { type: string, minLength: 1, maxLength: 10000 }
+      required: [message]
+    SupportTicketStatusUpdate:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/SupportTicketStatus" }
+      required: [status]
+    SupportTicketDetail:
+      type: object
+      properties:
+        ticket: { $ref: "#/components/schemas/SupportTicketSummary" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/SupportTicketMessage" }
+      required: [ticket, messages]
+    AdminSupportTicketDetail:
+      type: object
+      properties:
+        ticket: { $ref: "#/components/schemas/AdminSupportTicketSummary" }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/SupportTicketMessage" }
+      required: [ticket, messages]
+    SupportTicketCollection:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SupportTicketSummary" }
+      required: [items]
+    AdminSupportTicketCollection:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSupportTicketSummary" }
+      required: [items]
     MessageResponse:
       type: object
       properties:
