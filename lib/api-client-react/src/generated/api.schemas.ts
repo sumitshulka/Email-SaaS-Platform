@@ -513,6 +513,45 @@ export interface CompanyContact {
   jobTitle: string | null;
 }
 
+export type ContactFieldKey = typeof ContactFieldKey[keyof typeof ContactFieldKey];
+
+
+export const ContactFieldKey = {
+  jobTitle: 'jobTitle',
+  preferredLanguage: 'preferredLanguage',
+  lifecycleStage: 'lifecycleStage',
+  leadStatus: 'leadStatus',
+  leadSource: 'leadSource',
+} as const;
+
+export interface ContactFieldOption {
+  id: string;
+  field: ContactFieldKey;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  value: string;
+  createdAt: string;
+}
+
+export interface ContactFieldOptionCollection {
+  options: ContactFieldOption[];
+}
+
+export interface ContactFieldOptionInput {
+  field: ContactFieldKey;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  value: string;
+}
+
+export interface ContactFieldOptionResponse {
+  option: ContactFieldOption;
+}
+
 export interface CompanyDetail {
   company: Company;
   contacts: CompanyContact[];

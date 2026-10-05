@@ -1440,6 +1440,59 @@ export const ImportContactsResponse = zod.union([zod.object({
 
 
 /**
+ * @summary List contact field values configured by the authenticated tenant
+ */
+export const getContactFieldOptionsResponseOptionsItemValueMax = 200;
+
+
+
+export const GetContactFieldOptionsResponse = zod.object({
+  "options": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "field": zod.enum(['jobTitle', 'preferredLanguage', 'lifecycleStage', 'leadStatus', 'leadSource']),
+  "value": zod.string().min(1).max(getContactFieldOptionsResponseOptionsItemValueMax),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Add a value to one of the tenant's contact field masters
+ */
+export const createContactFieldOptionBodyValueMax = 200;
+
+
+
+export const CreateContactFieldOptionBody = zod.object({
+  "field": zod.enum(['jobTitle', 'preferredLanguage', 'lifecycleStage', 'leadStatus', 'leadSource']),
+  "value": zod.string().min(1).max(createContactFieldOptionBodyValueMax)
+})
+
+export const createContactFieldOptionResponseOptionValueMax = 200;
+
+
+
+export const CreateContactFieldOptionResponse = zod.object({
+  "option": zod.object({
+  "id": zod.string().uuid(),
+  "field": zod.enum(['jobTitle', 'preferredLanguage', 'lifecycleStage', 'leadStatus', 'leadSource']),
+  "value": zod.string().min(1).max(createContactFieldOptionResponseOptionValueMax),
+  "createdAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Remove an unused value from the authenticated tenant's contact field masters
+ */
+export const DeleteContactFieldOptionParams = zod.object({
+  "optionId": zod.coerce.string().uuid()
+})
+
+export const DeleteContactFieldOptionResponse = zod.void()
+
+
+/**
  * @summary Get a contact owned by the authenticated tenant
  */
 export const GetContactParams = zod.object({

@@ -10,6 +10,7 @@ import sendingReportsRouter from "./sending-reports";
 import microsoft365TraceRouter from "../lib/microsoft365-trace";
 import gmailMailboxRouter from "../lib/gmail-mailbox";
 import { contactImportRouter } from "./contacts";
+import contactFieldOptionsRouter from "./contact-field-options";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -17,6 +18,7 @@ router.use(authRouter);
 router.use(profileRouter);
 router.use(billingRouter);
 router.use(companiesRouter);
+router.use(contactFieldOptionsRouter);
 router.use(contactImportRouter);
 router.use(sendingRouter);
 router.use(sendingReportsRouter);

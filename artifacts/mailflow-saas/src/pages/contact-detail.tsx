@@ -3,11 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2 } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
-  useGetContact, useListCompanies, useListContactLists, useUpdateContact,
+  getGetCompanyQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
+  useGetContact, useGetContactFieldOptions, useListCompanies, useListContactLists, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Contact, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement } from '@/components/company-link-confirmation';
+import { ContactFieldSelect } from '@/components/contact-field-select';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -85,6 +86,7 @@ export function ContactDetailPage() {
   const query = useGetContact(contactId, {
     query: { enabled: !!contactId, queryKey: getGetContactQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
   });
+  const fieldOptionsQuery = useGetContactFieldOptions();
   const listsQuery = useListContactLists();
   const companiesQuery = useListCompanies();
   const update = useUpdateContact();
@@ -209,21 +211,21 @@ export function ContactDetailPage() {
             <InputField title="First name" value={form.firstName} onChange={setString('firstName')} testId="input-detail-first-name"/>
             <InputField title="Last name" value={form.lastName} onChange={setString('lastName')} testId="input-detail-last-name"/>
             <InputField title="Email address" type="email" value={form.email} onChange={setString('email')} testId="input-detail-email"/>
-            <InputField title="Job title" value={form.jobTitle} onChange={setString('jobTitle')} testId="input-detail-job-title"/>
+            <ContactFieldSelect field="jobTitle" title="Job title" value={form.jobTitle} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('jobTitle')} testId="input-detail-job-title"/>
             <InputField title="Department" value={form.department} onChange={setString('department')} testId="input-detail-department"/>
             <InputField title="Seniority" value={form.seniority} onChange={setString('seniority')} testId="input-detail-seniority"/>
             <InputField title="Phone number" value={form.phoneNumber} onChange={setString('phoneNumber')} testId="input-detail-phone"/>
             <InputField title="Mobile phone" value={form.mobilePhone} onChange={setString('mobilePhone')} testId="input-detail-mobile-phone"/>
             <InputField title="Location" value={form.location} onChange={setString('location')} testId="input-detail-location"/>
-            <InputField title="Preferred language" value={form.preferredLanguage} onChange={setString('preferredLanguage')} testId="input-detail-language"/>
-            <InputField title="Time zone" value={form.timeZone} onChange={setString('timeZone')} testId="input-detail-time-zone"/>
+            <ContactFieldSelect field="preferredLanguage" title="Preferred language" value={form.preferredLanguage} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('preferredLanguage')} testId="input-detail-language"/>
+            <ContactFieldSelect field="timeZone" title="Time zone" value={form.timeZone} options={[]} onChange={setString('timeZone')} testId="input-detail-time-zone"/>
           </div>
         </Section>
         <Section title="Audience and qualification" eyebrow="SEGMENT / CONTEXT">
           <div className="grid gap-4 sm:grid-cols-2">
-            <InputField title="Lifecycle stage" value={form.lifecycleStage} onChange={setString('lifecycleStage')} testId="input-detail-lifecycle"/>
-            <InputField title="Lead status" value={form.leadStatus} onChange={setString('leadStatus')} testId="input-detail-lead-status"/>
-            <InputField title="Lead source" value={form.leadSource} onChange={setString('leadSource')} testId="input-detail-lead-source"/>
+            <ContactFieldSelect field="lifecycleStage" title="Lifecycle stage" value={form.lifecycleStage} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('lifecycleStage')} testId="input-detail-lifecycle"/>
+            <ContactFieldSelect field="leadStatus" title="Lead status" value={form.leadStatus} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('leadStatus')} testId="input-detail-lead-status"/>
+            <ContactFieldSelect field="leadSource" title="Lead source" value={form.leadSource} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('leadSource')} testId="input-detail-lead-source"/>
             <TextAreaField title="Interests" value={form.interests} onChange={setString('interests')} testId="input-detail-interests"/>
             <TextAreaField title="Goals" value={form.goals} onChange={setString('goals')} testId="input-detail-goals"/>
             <TextAreaField title="Pain points" value={form.painPoints} onChange={setString('painPoints')} testId="input-detail-pain-points"/>

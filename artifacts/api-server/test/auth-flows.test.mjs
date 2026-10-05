@@ -254,6 +254,16 @@ memory.public.none(`
     UNIQUE (id, user_id),
     FOREIGN KEY (company_id, user_id) REFERENCES companies(id, user_id) ON DELETE RESTRICT
   );
+  CREATE TABLE contact_field_options (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    field_key varchar(40) NOT NULL,
+    value varchar(200) NOT NULL,
+    normalized_value varchar(200) NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, field_key, normalized_value),
+    UNIQUE (id, user_id)
+  );
   CREATE TABLE contact_lists (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -518,6 +528,7 @@ beforeEach(async () => {
   await db.delete(dbModule.emailCampaignsTable);
   await db.delete(dbModule.contactListMembersTable);
   await db.delete(dbModule.contactsTable);
+  await db.delete(dbModule.contactFieldOptionsTable);
   await db.delete(dbModule.companiesTable);
   await db.delete(dbModule.contactListsTable);
   await db.delete(dbModule.tenantSendingConfigurationTable);
@@ -1225,6 +1236,12 @@ describe("tenant contact management and package quotas", { concurrency: false },
       startsAt: new Date(Date.now() - 60_000),
       endsAt: new Date(Date.now() + 60 * 60_000),
     });
+    const configuredTitle = await api("/contact-field-options", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { field: "jobTitle", value: "Product Lead" },
+    });
+    assert.equal(configuredTitle.response.status, 201, JSON.stringify(configuredTitle.body));
 
     const legacyNameOnly = await api("/contacts", {
       method: "POST",
@@ -1438,6 +1455,13 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(ownDetail.body.jobTitle, null);
     assert.deepEqual(ownDetail.body.listIds, []);
 
+    const configuredTitle = await api("/contact-field-options", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { field: "jobTitle", value: "Product Lead" },
+    });
+    assert.equal(configuredTitle.response.status, 201, JSON.stringify(configuredTitle.body));
+
     const otherTenantDetail = await api(`/contacts/${contact.id}`, {
       cookie: other.cookie,
     });
@@ -1510,6 +1534,20 @@ describe("tenant contact management and package quotas", { concurrency: false },
       startsAt: new Date(Date.now() - 60_000),
       endsAt: new Date(Date.now() + 60 * 60_000),
     });
+    for (const option of [
+      { field: "jobTitle", value: "Director of Product" },
+      { field: "preferredLanguage", value: "English" },
+      { field: "lifecycleStage", value: "Customer" },
+      { field: "leadStatus", value: "Qualified" },
+      { field: "leadSource", value: "Partner referral" },
+    ]) {
+      const configured = await api("/contact-field-options", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: option,
+      });
+      assert.equal(configured.response.status, 201, JSON.stringify(configured.body));
+    }
 
     const source = {
       first_name: " Avery ",
@@ -1949,6 +1987,156 @@ describe("tenant contact management and package quotas", { concurrency: false },
       cookie: owner.cookie,
     });
     assert.equal(deleted.response.status, 204);
+  });
+});
+
+describe("tenant contact field option masters", { concurrency: false }, () => {
+  it("scopes masters by tenant, validates contact values, and protects values already in use", async () => {
+    const owner = await loggedInUser({ username: "contact-options-owner" });
+    const other = await loggedInUser({ username: "contact-options-other" });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Contact Options Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 5,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "88888888-8888-4888-8888-888888888888",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const added = await api("/contact-field-options", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { field: "jobTitle", value: "Director" },
+    });
+    assert.equal(added.response.status, 201, JSON.stringify(added.body));
+    assert.equal(added.body.option.value, "Director");
+
+    const duplicate = await api("/contact-field-options", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { field: "jobTitle", value: " director " },
+    });
+    assert.equal(duplicate.response.status, 409);
+    assert.equal(duplicate.body.code, "CONTACT_FIELD_OPTION_EXISTS");
+
+    const ownerOptions = await api("/contact-field-options", { cookie: owner.cookie });
+    const otherOptions = await api("/contact-field-options", { cookie: other.cookie });
+    assert.deepEqual(ownerOptions.body.options.map(({ field, value }) => ({ field, value })), [
+      { field: "jobTitle", value: "Director" },
+    ]);
+    assert.deepEqual(otherOptions.body.options, []);
+
+    const invalidJobTitle = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        firstName: "Alex",
+        lastName: "Morgan",
+        email: "alex.morgan@options.test",
+        jobTitle: "Architect",
+      },
+    });
+    assert.equal(invalidJobTitle.response.status, 400);
+    assert.equal(invalidJobTitle.body.code, "INVALID_CONTACT_FIELD_VALUE");
+    assert.match(invalidJobTitle.body.error, /Contact field settings/);
+
+    const invalidTimeZone = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        firstName: "Alex",
+        lastName: "Morgan",
+        email: "alex.morgan@options.test",
+        timeZone: "Mars/Olympus",
+      },
+    });
+    assert.equal(invalidTimeZone.response.status, 400);
+    assert.equal(invalidTimeZone.body.field, "timeZone");
+
+    const created = await api("/contacts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        firstName: "Alex",
+        lastName: "Morgan",
+        email: "alex.morgan@options.test",
+        jobTitle: "director",
+        timeZone: "Asia/Kolkata",
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.jobTitle, "director");
+    assert.equal(created.body.timeZone, "Asia/Kolkata");
+
+    const inUseDelete = await api(`/contact-field-options/${added.body.option.id}`, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(inUseDelete.response.status, 409);
+    assert.equal(inUseDelete.body.code, "CONTACT_FIELD_OPTION_IN_USE");
+
+    const foreignDelete = await api(`/contact-field-options/${added.body.option.id}`, {
+      method: "DELETE",
+      cookie: other.cookie,
+    });
+    assert.equal(foreignDelete.response.status, 404);
+  });
+
+  it("rejects CSV CRM values that have not been added to the tenant master", async () => {
+    const owner = await loggedInUser({ username: "contact-options-import" });
+    const [pkg] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Contact Options Import Package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 5,
+      })
+      .returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: "99999999-9999-4999-8999-999999999999",
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const list = await api("/contact-lists", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Imported leads" },
+    });
+    assert.equal(list.response.status, 201, JSON.stringify(list.body));
+    const configuredStatus = await api("/contact-field-options", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { field: "leadStatus", value: "Qualified" },
+    });
+    assert.equal(configuredStatus.response.status, 201, JSON.stringify(configuredStatus.body));
+
+    const result = await uploadCsv(
+      `/contacts/import?listIds=${list.body.id}`,
+      "name,email,lead_status,time_zone\nJamie Taylor,jamie@options.test,Unconfigured,UTC\nRae Taylor,rae@options.test,Qualified,Mars/Olympus",
+      owner.cookie,
+    );
+    assert.equal(result.response.status, 200, JSON.stringify(result.body));
+    assert.equal(result.body.imported, 0);
+    assert.equal(result.body.rejected.length, 2);
+    assert.match(result.body.rejected[0].reason, /Contact field settings/);
+    assert.match(result.body.rejected[1].reason, /standard time zone/i);
   });
 });
 

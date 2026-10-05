@@ -10,10 +10,11 @@ import {
   getListContactListsQueryKey,
   useCreateContact,
   useDeleteContact,
+  useGetContactFieldOptions,
   useListContactLists,
   useListContacts,
 } from "@workspace/api-client-react";
-import type { ContactImportResponse, ContactInput } from "@workspace/api-client-react";
+import type { ContactFieldKey, ContactImportResponse, ContactInput } from "@workspace/api-client-react";
 import {
   Form,
   FormControl,
@@ -22,8 +23,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { ContactFieldSelect } from "@/components/contact-field-select";
 
 const MAX_IMPORT_LISTS = 100;
+type ContactProfileField = ContactFieldKey | "timeZone";
 
 function requestError(error: unknown): string {
   if (error && typeof error === "object") {
@@ -52,10 +55,14 @@ export default function ContactsPage() {
   const queryClient = useQueryClient();
   const contactsQuery = useListContacts();
   const contactListsQuery = useListContactLists();
+  const contactFieldOptionsQuery = useGetContactFieldOptions();
   const createContact = useCreateContact();
   const deleteContact = useDeleteContact();
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
+  const [contactProfile, setContactProfile] = useState<Record<ContactProfileField, string>>({
+    jobTitle: "", preferredLanguage: "", timeZone: "", lifecycleStage: "", leadStatus: "", leadSource: "",
+  });
   const importContacts = useMutation<
     ContactImportResponse,
     Error,
@@ -131,12 +138,17 @@ export default function ContactsPage() {
   };
 
   const submit = (values: ContactInput) => {
+    const selectedProfile = Object.fromEntries(
+      Object.entries(contactProfile).filter(([, value]) => value.trim()).map(([key, value]) => [key, value.trim()]),
+    ) as Partial<ContactInput>;
     createContact.mutate(
-      { data: { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim().toLowerCase() } },
+      { data: { firstName: values.firstName.trim(), lastName: values.lastName.trim(), email: values.email.trim().toLowerCase(), ...selectedProfile } },
       {
         onSuccess: () => {
           form.reset();
+          setContactProfile({ jobTitle: "", preferredLanguage: "", timeZone: "", lifecycleStage: "", leadStatus: "", leadSource: "" });
           void queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
         },
       },
     );
@@ -379,6 +391,14 @@ export default function ContactsPage() {
                   </FormItem>
                 )}
               />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ContactFieldSelect field="jobTitle" title="Job title" value={contactProfile.jobTitle} options={contactFieldOptionsQuery.data?.options ?? []} onChange={value => setContactProfile(current => ({ ...current, jobTitle: value }))} testId="input-new-contact-job-title"/>
+                <ContactFieldSelect field="preferredLanguage" title="Preferred language" value={contactProfile.preferredLanguage} options={contactFieldOptionsQuery.data?.options ?? []} onChange={value => setContactProfile(current => ({ ...current, preferredLanguage: value }))} testId="input-new-contact-language"/>
+                <ContactFieldSelect field="timeZone" title="Time zone" value={contactProfile.timeZone} options={[]} onChange={value => setContactProfile(current => ({ ...current, timeZone: value }))} testId="input-new-contact-time-zone"/>
+                <ContactFieldSelect field="lifecycleStage" title="Lifecycle stage" value={contactProfile.lifecycleStage} options={contactFieldOptionsQuery.data?.options ?? []} onChange={value => setContactProfile(current => ({ ...current, lifecycleStage: value }))} testId="input-new-contact-lifecycle"/>
+                <ContactFieldSelect field="leadStatus" title="Lead status" value={contactProfile.leadStatus} options={contactFieldOptionsQuery.data?.options ?? []} onChange={value => setContactProfile(current => ({ ...current, leadStatus: value }))} testId="input-new-contact-lead-status"/>
+                <ContactFieldSelect field="leadSource" title="Lead source" value={contactProfile.leadSource} options={contactFieldOptionsQuery.data?.options ?? []} onChange={value => setContactProfile(current => ({ ...current, leadSource: value }))} testId="input-new-contact-lead-source"/>
+              </div>
               {createContact.isError && (
                 <p role="alert" data-testid="status-contact-create-error" className="text-[12px] text-[#a84926]">
                   {requestError(createContact.error)}
@@ -423,6 +443,13 @@ export default function ContactsPage() {
               <span className="font-medium text-[#526579]">linkedin_url</span>,{" "}
               <span className="font-medium text-[#526579]">company_domain</span>, and{" "}
               <span className="font-medium text-[#526579]">company_linkedin_url</span>. Headers also accept spaces or camelCase.
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-[#788696]">
+              Lifecycle stage, lead status, lead source, job title, and preferred language must use configured values.{" "}
+              <Link href="/contact-field-settings" className="font-semibold text-[#174f99] underline">
+                Manage contact field settings
+              </Link>
+              . Time zones must use standard zone names.
             </p>
           </div>
         </div>

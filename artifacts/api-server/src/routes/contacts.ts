@@ -16,6 +16,7 @@ import {
 import {
   contactListMembersTable,
   contactListsTable,
+  contactFieldOptionsTable,
   contactsTable,
   db,
   subscriptionPackagesTable,
@@ -81,6 +82,23 @@ const csvEnrichmentFieldByHeader = new Map<
     field.aliases.map((alias) => [alias, field] as const),
   ),
 );
+const managedContactFieldLabels = [
+  { key: "jobTitle", label: "Job title" },
+  { key: "preferredLanguage", label: "Preferred language" },
+  { key: "lifecycleStage", label: "Lifecycle stage" },
+  { key: "leadStatus", label: "Lead status" },
+  { key: "leadSource", label: "Lead source" },
+] as const;
+
+function isStandardTimeZone(value: string): boolean {
+  if (value === "UTC") return true;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function getContactQuota(userId: string) {
   const now = new Date();
@@ -590,6 +608,16 @@ async function importContactCsv(
     if (!activeSubscription && !settings.allowUserWithoutSubscription) {
       return { kind: "subscription_required" as const };
     }
+    const configuredOptions = await tx
+      .select({
+        field: contactFieldOptionsTable.fieldKey,
+        normalizedValue: contactFieldOptionsTable.normalizedValue,
+      })
+      .from(contactFieldOptionsTable)
+      .where(eq(contactFieldOptionsTable.userId, userId));
+    const configuredOptionKeys = new Set(
+      configuredOptions.map((option) => `${option.field}:${option.normalizedValue}`),
+    );
     const limit = Math.min(
       activeSubscription?.contactLimit ?? settings.maxContactsPerUser,
       settings.maxContactsPerUser,
@@ -608,6 +636,29 @@ async function importContactCsv(
     const toInsert: typeof contactsTable.$inferInsert[] = [];
 
     for (const contact of validatedRows) {
+      const invalidManagedField = managedContactFieldLabels.find(({ key }) => {
+        const value = contact.enrichment[key];
+        return typeof value === "string" &&
+          !configuredOptionKeys.has(`${key}:${value.trim().toLowerCase()}`);
+      });
+      if (invalidManagedField) {
+        const value = contact.enrichment[invalidManagedField.key] as string;
+        rejected.push({
+          rowNumber: contact.rowNumber,
+          email: contact.email,
+          reason: `Add "${value}" to Contact field settings before importing this row.`,
+        });
+        continue;
+      }
+      const timeZone = contact.enrichment.timeZone;
+      if (typeof timeZone === "string" && !isStandardTimeZone(timeZone)) {
+        rejected.push({
+          rowNumber: contact.rowNumber,
+          email: contact.email,
+          reason: "Choose a standard time zone before importing this row.",
+        });
+        continue;
+      }
       if (existingEmails.has(contact.email)) {
         rejected.push({
           rowNumber: contact.rowNumber,

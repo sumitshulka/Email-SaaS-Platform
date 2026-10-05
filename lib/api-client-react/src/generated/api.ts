@@ -48,6 +48,9 @@ import type {
   ContactCollection,
   ContactCsvInput,
   ContactEmailHistoryItem,
+  ContactFieldOptionCollection,
+  ContactFieldOptionInput,
+  ContactFieldOptionResponse,
   ContactImportInput,
   ContactImportResponse,
   ContactImportResult,
@@ -2843,6 +2846,245 @@ export const useImportContacts = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getImportContactsMutationOptions(options));
+    }
+
+export const getGetContactFieldOptionsUrl = () => {
+
+
+
+
+  return `/api/contact-field-options`
+}
+
+/**
+ * @summary List contact field values configured by the authenticated tenant
+ */
+export const getContactFieldOptions = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactFieldOptionCollection> => {
+
+  return customFetch<ContactFieldOptionCollection>(getGetContactFieldOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactFieldOptionsQueryKey = () => {
+    return [
+    `/api/contact-field-options`
+    ] as const;
+    }
+
+
+export const getGetContactFieldOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getContactFieldOptions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactFieldOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactFieldOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactFieldOptions>>> = ({ signal }) => getContactFieldOptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactFieldOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactFieldOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getContactFieldOptions>>>
+export type GetContactFieldOptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List contact field values configured by the authenticated tenant
+ */
+
+export function useGetContactFieldOptions<TData = Awaited<ReturnType<typeof getContactFieldOptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactFieldOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactFieldOptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactFieldOptionUrl = () => {
+
+
+
+
+  return `/api/contact-field-options`
+}
+
+/**
+ * @summary Add a value to one of the tenant's contact field masters
+ */
+export const createContactFieldOption = async (contactFieldOptionInput: ContactFieldOptionInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactFieldOptionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactFieldOptionResponse>(getCreateContactFieldOptionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactFieldOptionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactFieldOptionMutationKey = () => ['createContactFieldOption'] as const;
+
+export const getCreateContactFieldOptionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactFieldOption>>, TError,CreateContactFieldOptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContactFieldOption>>, TError,CreateContactFieldOptionMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactFieldOptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContactFieldOption>>, CreateContactFieldOptionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContactFieldOption(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactFieldOptionMutationResult = NonNullable<Awaited<ReturnType<typeof createContactFieldOption>>>
+    export type CreateContactFieldOptionMutationBody = BodyType<ContactFieldOptionInput>
+    export type CreateContactFieldOptionMutationError = ErrorType<ApiError>
+    export type CreateContactFieldOptionMutationVariables = {data: BodyType<ContactFieldOptionInput>}
+
+    /**
+ * @summary Add a value to one of the tenant's contact field masters
+ */
+export const useCreateContactFieldOption = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactFieldOption>>, TError,CreateContactFieldOptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContactFieldOption>>,
+        TError,
+        CreateContactFieldOptionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactFieldOptionMutationOptions(options));
+    }
+
+export const getDeleteContactFieldOptionUrl = (optionId: string,) => {
+
+
+
+
+  return `/api/contact-field-options/${optionId}`
+}
+
+/**
+ * @summary Remove an unused value from the authenticated tenant's contact field masters
+ */
+export const deleteContactFieldOption = async (optionId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteContactFieldOptionUrl(optionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteContactFieldOptionMutationKey = () => ['deleteContactFieldOption'] as const;
+
+export const getDeleteContactFieldOptionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactFieldOption>>, TError,DeleteContactFieldOptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContactFieldOption>>, TError,DeleteContactFieldOptionMutationVariables, TContext> => {
+
+const mutationKey = getDeleteContactFieldOptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContactFieldOption>>, DeleteContactFieldOptionMutationVariables> = (props) => {
+          const {optionId} = props ?? {};
+
+          return  deleteContactFieldOption(optionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContactFieldOptionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContactFieldOption>>>
+
+    export type DeleteContactFieldOptionMutationError = ErrorType<ApiError>
+    export type DeleteContactFieldOptionMutationVariables = {optionId: string}
+
+    /**
+ * @summary Remove an unused value from the authenticated tenant's contact field masters
+ */
+export const useDeleteContactFieldOption = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactFieldOption>>, TError,DeleteContactFieldOptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContactFieldOption>>,
+        TError,
+        DeleteContactFieldOptionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteContactFieldOptionMutationOptions(options));
     }
 
 export const getGetContactUrl = (contactId: string,) => {

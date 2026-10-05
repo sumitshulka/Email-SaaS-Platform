@@ -768,6 +768,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contact-field-options:
+    get:
+      operationId: getContactFieldOptions
+      tags: [contacts]
+      summary: List contact field values configured by the authenticated tenant
+      responses:
+        "200":
+          description: Tenant-owned contact field master values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactFieldOptionCollection"
+    post:
+      operationId: createContactFieldOption
+      tags: [contacts]
+      summary: Add a value to one of the tenant's contact field masters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactFieldOptionInput"
+      responses:
+        "201":
+          description: Contact field value added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactFieldOptionResponse"
+        "400":
+          description: Invalid field or value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Value already exists or the field has reached its option limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contact-field-options/{optionId}:
+    parameters:
+      - name: optionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: deleteContactFieldOption
+      tags: [contacts]
+      summary: Remove an unused value from the authenticated tenant's contact field masters
+      responses:
+        "204":
+          description: Unused option removed
+        "404":
+          description: Option not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Option is currently assigned to a contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/{contactId}:
     parameters:
       - name: contactId
@@ -1993,6 +2061,35 @@ components:
         email: { type: string, format: email }
         jobTitle: { type: ["string", "null"] }
       required: [id, name, email, jobTitle]
+    ContactFieldKey:
+      type: string
+      enum: [jobTitle, preferredLanguage, lifecycleStage, leadStatus, leadSource]
+    ContactFieldOption:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        field: { $ref: "#/components/schemas/ContactFieldKey" }
+        value: { type: string, minLength: 1, maxLength: 200 }
+        createdAt: { type: string, format: date-time }
+      required: [id, field, value, createdAt]
+    ContactFieldOptionCollection:
+      type: object
+      properties:
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/ContactFieldOption" }
+      required: [options]
+    ContactFieldOptionInput:
+      type: object
+      properties:
+        field: { $ref: "#/components/schemas/ContactFieldKey" }
+        value: { type: string, minLength: 1, maxLength: 200 }
+      required: [field, value]
+    ContactFieldOptionResponse:
+      type: object
+      properties:
+        option: { $ref: "#/components/schemas/ContactFieldOption" }
+      required: [option]
     CompanyDetail:
       type: object
       properties:

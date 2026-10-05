@@ -61,6 +61,8 @@ import {
 import type { TenantSendingSettingsInput } from "@workspace/api-zod";
 import {
   companiesTable,
+  contactFieldKeys,
+  contactFieldOptionsTable,
   contactListMembersTable,
   contactListsTable,
   contactsTable,
@@ -73,6 +75,7 @@ import {
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
+import type { ContactFieldKey } from "@workspace/db";
 import {
   sendTenantEmail,
   verifyTenantEmailConnection,
@@ -152,6 +155,65 @@ function normalizedContactInput(input: unknown): unknown {
     }
   }
   return normalized;
+}
+
+type SendingTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+const normalizeContactOption = (value: string) => value.trim().toLowerCase();
+
+async function getTenantContactOptionSet(
+  tx: SendingTransaction,
+  userId: string,
+): Promise<Set<string>> {
+  const options = await tx
+    .select({
+      field: contactFieldOptionsTable.fieldKey,
+      normalizedValue: contactFieldOptionsTable.normalizedValue,
+    })
+    .from(contactFieldOptionsTable)
+    .where(eq(contactFieldOptionsTable.userId, userId));
+  return new Set(options.map(option => `${option.field}:${option.normalizedValue}`));
+}
+
+function isStandardTimeZone(value: string): boolean {
+  if (value === "UTC") return true;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function contactFieldValueIssue(
+  input: Record<string, unknown>,
+  optionSet: Set<string>,
+  previous?: typeof contactsTable.$inferSelect,
+  action: "save" | "import" = "save",
+): { field: ContactFieldKey | "timeZone"; message: string } | null {
+  for (const field of contactFieldKeys) {
+    const value = input[field];
+    if (value === undefined || value === null || value === "") continue;
+    if (typeof value !== "string") {
+      return { field, message: `Choose a configured ${field} value.` };
+    }
+    if (previous?.[field] === value) continue;
+    if (!optionSet.has(`${field}:${normalizeContactOption(value)}`)) {
+      const suffix = action === "import" ? "before importing this row" : "before saving this contact";
+      return {
+        field,
+        message: `Add "${value}" to Contact field settings ${suffix}.`,
+      };
+    }
+  }
+  const timeZone = input.timeZone;
+  if (timeZone === undefined || timeZone === null || timeZone === "") return null;
+  if (typeof timeZone !== "string" || (previous?.timeZone !== timeZone && !isStandardTimeZone(timeZone))) {
+    return {
+      field: "timeZone",
+      message: "Choose a standard time zone before saving this contact.",
+    };
+  }
+  return null;
 }
 
 function optionalContactValue(value?: string | null): string | null {
@@ -1156,6 +1218,12 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
       .limit(1)
       .for("update");
     if (!lockedUser) return { kind: "user_missing" as const };
+    const optionSet = await getTenantContactOptionSet(tx, userId);
+    const optionIssue = contactFieldValueIssue(
+      parsed.data as Record<string, unknown>,
+      optionSet,
+    );
+    if (optionIssue) return { kind: "invalid_contact_field" as const, issue: optionIssue };
 
     const now = new Date();
     const [activeSubscription] = await tx
@@ -1239,6 +1307,14 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
     });
     return;
   }
+  if (result.kind === "invalid_contact_field") {
+    res.status(400).json({
+      error: result.issue.message,
+      code: "INVALID_CONTACT_FIELD_VALUE",
+      field: result.issue.field,
+    });
+    return;
+  }
   if (result.kind === "subscription_required") {
     res.status(403).json({
       error: "An active subscription is required to add contacts.",
@@ -1314,6 +1390,7 @@ router.post(
         .limit(1)
         .for("update");
       if (!lockedUser) return { kind: "user_missing" as const };
+      const optionSet = await getTenantContactOptionSet(tx, userId);
 
       const now = new Date();
       const [activeSubscription] = await tx
@@ -1359,6 +1436,17 @@ router.post(
           continue;
         }
         const { data } = row;
+        const optionIssue = contactFieldValueIssue(
+          data as Record<string, unknown>,
+          optionSet,
+          undefined,
+          "import",
+        );
+        if (optionIssue) {
+          invalid += 1;
+          issues.push({ rowNumber: row.rowNumber, reason: optionIssue.message });
+          continue;
+        }
         const email = data.email.toLowerCase();
         const listIds = data.listIds ?? [];
         const uniqueListIds = [...new Set(listIds)];
@@ -1570,6 +1658,13 @@ router.patch(
         )
         .for("update");
       if (!existing) return { kind: "not_found" as const };
+      const optionSet = await getTenantContactOptionSet(tx, userId);
+      const optionIssue = contactFieldValueIssue(
+        parsed.data as Record<string, unknown>,
+        optionSet,
+        existing,
+      );
+      if (optionIssue) return { kind: "invalid_contact_field" as const, issue: optionIssue };
 
       // Confirmation replaces only legacy fields, never another shared association.
       if (
@@ -1745,6 +1840,14 @@ router.patch(
         campaignIds: suppressed.map((recipient) => recipient.campaignId),
       };
     });
+    if (updateResult.kind === "invalid_contact_field") {
+      res.status(400).json({
+        error: updateResult.issue.message,
+        code: "INVALID_CONTACT_FIELD_VALUE",
+        field: updateResult.issue.field,
+      });
+      return;
+    }
     if (updateResult.kind === "company_not_found") {
       res.status(404).json({ error: "Company not found in this workspace.", code: "COMPANY_NOT_FOUND" });
       return;
