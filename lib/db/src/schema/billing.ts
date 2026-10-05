@@ -60,6 +60,9 @@ export const subscriptionPackagesTable = pgTable(
   (table) => [
     index("subscription_packages_active_idx").on(table.active),
     index("subscription_packages_created_at_idx").on(table.createdAt),
+    uniqueIndex("subscription_packages_single_free_unique")
+      .on(table.amountMinor)
+      .where(sql`${table.amountMinor} = 0`),
   ],
 );
 

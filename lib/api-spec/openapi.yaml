@@ -1790,6 +1790,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SubscriptionPackage"
+        "409":
+          description: A zero-price package already exists
   /admin/billing/packages/{packageId}:
     patch:
       operationId: updateSubscriptionPackage
@@ -1815,6 +1817,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SubscriptionPackage"
+        "409":
+          description: A different zero-price package already exists
   /admin/billing/subscriptions/gift:
     post:
       operationId: giftAdminSubscription

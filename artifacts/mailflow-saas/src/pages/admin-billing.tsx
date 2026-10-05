@@ -110,6 +110,7 @@ export default function AdminBillingPage() {
   const [editing, setEditing] = useState<SubscriptionPackage | null>(null);
   const [packageFormOpen, setPackageFormOpen] = useState(false);
   const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null);
+  const hasOtherFreePackage = packages.some(pkg => pkg.amountMinor === 0 && pkg.id !== editing?.id);
   const busy = createPackage.isPending || updatePackage.isPending;
 
   const announce = (text: string) => setNotice({ text });
@@ -372,7 +373,8 @@ export default function AdminBillingPage() {
              <Field label="Term length (days)" value={draft.periodDays} onChange={periodDays => setDraft(d => ({ ...d, periodDays }))} testId="input-package-period-days" type="number" step="1" placeholder="30"/>
             <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
           </div>
-          <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b]"><input data-testid="input-package-free" type="checkbox" checked={draft.free} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>Free package · 0 price, no Razorpay order</label>
+          <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>Free package · 0 price, no Razorpay order</label>
+          {hasOtherFreePackage && <p className="-mt-2 text-[11px] text-[#7b8793]">A free package already exists. Edit it or change its price before creating another.</p>}
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Description</span><textarea data-testid="input-package-description" value={draft.description} onChange={event => setDraft(d => ({ ...d, description: event.target.value }))} rows={3} maxLength={2000} placeholder="What this package includes" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]"><input data-testid="input-package-active" type="checkbox" checked={draft.active} onChange={event => setDraft(d => ({ ...d, active: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>Available to customers</label>
           {(createPackage.isError || updatePackage.isError) && <p role="alert" data-testid="status-package-form-error" className="text-[12px] text-[#a84926]">{errorText(createPackage.error || updatePackage.error)}</p>}

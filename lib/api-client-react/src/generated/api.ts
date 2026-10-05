@@ -6494,7 +6494,7 @@ return customFetch<SubscriptionPackage>(getCreateSubscriptionPackageUrl(),
 
 export const getCreateSubscriptionPackageMutationKey = () => ['createSubscriptionPackage'] as const;
 
-export const getCreateSubscriptionPackageMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateSubscriptionPackageMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSubscriptionPackage>>, TError,CreateSubscriptionPackageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createSubscriptionPackage>>, TError,CreateSubscriptionPackageMutationVariables, TContext> => {
 
@@ -6523,13 +6523,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateSubscriptionPackageMutationResult = NonNullable<Awaited<ReturnType<typeof createSubscriptionPackage>>>
     export type CreateSubscriptionPackageMutationBody = BodyType<SubscriptionPackageInput>
-    export type CreateSubscriptionPackageMutationError = ErrorType<unknown>
+    export type CreateSubscriptionPackageMutationError = ErrorType<void>
     export type CreateSubscriptionPackageMutationVariables = {data: BodyType<SubscriptionPackageInput>}
 
     /**
  * @summary Create a subscription package
  */
-export const useCreateSubscriptionPackage = <TError = ErrorType<unknown>,
+export const useCreateSubscriptionPackage = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSubscriptionPackage>>, TError,CreateSubscriptionPackageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createSubscriptionPackage>>,
@@ -6583,7 +6583,7 @@ return customFetch<SubscriptionPackage>(getUpdateSubscriptionPackageUrl(packageI
 
 export const getUpdateSubscriptionPackageMutationKey = () => ['updateSubscriptionPackage'] as const;
 
-export const getUpdateSubscriptionPackageMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateSubscriptionPackageMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSubscriptionPackage>>, TError,UpdateSubscriptionPackageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateSubscriptionPackage>>, TError,UpdateSubscriptionPackageMutationVariables, TContext> => {
 
@@ -6612,13 +6612,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateSubscriptionPackageMutationResult = NonNullable<Awaited<ReturnType<typeof updateSubscriptionPackage>>>
     export type UpdateSubscriptionPackageMutationBody = BodyType<SubscriptionPackageUpdateInput>
-    export type UpdateSubscriptionPackageMutationError = ErrorType<unknown>
+    export type UpdateSubscriptionPackageMutationError = ErrorType<void>
     export type UpdateSubscriptionPackageMutationVariables = {packageId: string;data: BodyType<SubscriptionPackageUpdateInput>}
 
     /**
  * @summary Update a subscription package
  */
-export const useUpdateSubscriptionPackage = <TError = ErrorType<unknown>,
+export const useUpdateSubscriptionPackage = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSubscriptionPackage>>, TError,UpdateSubscriptionPackageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateSubscriptionPackage>>,

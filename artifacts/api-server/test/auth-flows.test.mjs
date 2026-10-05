@@ -188,6 +188,9 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE UNIQUE INDEX subscription_packages_single_free_unique
+    ON subscription_packages (amount_minor)
+    WHERE amount_minor = 0;
   CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1598,6 +1601,35 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(created.response.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.amountMinor, 0);
 
+    const duplicateFreePackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Second Free",
+        description: "A second free package",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        active: true,
+      },
+    });
+    assert.equal(duplicateFreePackage.response.status, 409);
+    assert.equal(
+      duplicateFreePackage.body.code,
+      "FREE_PACKAGE_ALREADY_EXISTS",
+    );
+
+    const keepExistingFree = await api(
+      `/admin/billing/packages/${created.body.id}`,
+      {
+        method: "PATCH",
+        cookie: admin.cookie,
+        body: { amountMinor: 0 },
+      },
+    );
+    assert.equal(keepExistingFree.response.status, 200);
+
     const activation = await api("/subscriptions/free", {
       method: "POST",
       cookie: user.cookie,
@@ -1643,6 +1675,20 @@ describe("tenant contact management and package quotas", { concurrency: false },
       },
     });
     assert.equal(paidPackage.response.status, 201);
+    const updatePaidPackageToFree = await api(
+      `/admin/billing/packages/${paidPackage.body.id}`,
+      {
+        method: "PATCH",
+        cookie: admin.cookie,
+        body: { amountMinor: 0 },
+      },
+    );
+    assert.equal(updatePaidPackageToFree.response.status, 409);
+    assert.equal(
+      updatePaidPackageToFree.body.code,
+      "FREE_PACKAGE_ALREADY_EXISTS",
+    );
+
     const invalidFreeActivation = await api("/subscriptions/free", {
       method: "POST",
       cookie: user.cookie,
@@ -1664,6 +1710,44 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(subscriptions[0].paymentId, null);
     const current = await api("/subscriptions/current", { cookie: user.cookie });
     assert.equal(current.body.subscription.package.id, created.body.id);
+
+    await api(`/admin/billing/packages/${created.body.id}`, {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: { active: false },
+    });
+    const duplicateWhileExistingIsInactive = await api(
+      "/admin/billing/packages",
+      {
+        method: "POST",
+        cookie: admin.cookie,
+        body: {
+          name: "Free While Hidden Exists",
+          description: "Inactive zero-price package still occupies the slot",
+          amountMinor: 0,
+          currency: "INR",
+          periodDays: 30,
+          contactLimit: 500,
+          active: true,
+        },
+      },
+    );
+    assert.equal(duplicateWhileExistingIsInactive.response.status, 409);
+
+    await assert.rejects(
+      db
+        .insert(dbModule.subscriptionPackagesTable)
+        .values({
+          name: "Direct Duplicate",
+          description: "Database index check",
+          amountMinor: 0,
+          currency: "INR",
+          periodDays: 30,
+          contactLimit: 500,
+          active: true,
+        })
+        .returning(),
+    );
   });
 
   it("isolates contacts by tenant and enforces package limits on every create", async () => {

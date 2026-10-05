@@ -379,6 +379,46 @@ function isSupportedCurrency(currency: string): boolean {
   }
 }
 
+type SubscriptionPackageRow = typeof subscriptionPackagesTable.$inferSelect;
+
+const SINGLE_FREE_PACKAGE_CONSTRAINT =
+  "subscription_packages_single_free_unique";
+
+function isSingleFreePackageUniqueViolation(error: unknown): boolean {
+  let candidate: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== "object") return false;
+    const details = candidate as {
+      code?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+    if (
+      details.code === "23505" &&
+      details.constraint === SINGLE_FREE_PACKAGE_CONSTRAINT
+    ) {
+      return true;
+    }
+    candidate = details.cause;
+  }
+  return false;
+}
+
+async function hasOtherFreePackage(exceptPackageId?: string): Promise<boolean> {
+  const freePackages = await db
+    .select({ id: subscriptionPackagesTable.id })
+    .from(subscriptionPackagesTable)
+    .where(eq(subscriptionPackagesTable.amountMinor, 0));
+  return freePackages.some(({ id }) => id !== exceptPackageId);
+}
+
+function respondFreePackageConflict(res: Response): void {
+  res.status(409).json({
+    error: "Only one zero-price package can exist. Edit the existing free package or change its price.",
+    code: "FREE_PACKAGE_ALREADY_EXISTS",
+  });
+}
+
 function serializeRazorpaySettings(
   config: typeof razorpayConfigurationTable.$inferSelect | undefined,
 ) {
@@ -813,14 +853,31 @@ router.post(
       invalidInput(res, "Enter a valid package name, price, currency, and term.");
       return;
     }
-    const [created] = await db
-      .insert(subscriptionPackagesTable)
-      .values({
-        ...parsed.data,
-        createdBy: req.authUser!.id,
-        updatedBy: req.authUser!.id,
-      })
-      .returning();
+    if (
+      parsed.data.amountMinor === 0 &&
+      (await hasOtherFreePackage())
+    ) {
+      respondFreePackageConflict(res);
+      return;
+    }
+    let created: SubscriptionPackageRow | undefined;
+    try {
+      [created] = await db
+        .insert(subscriptionPackagesTable)
+        .values({
+          ...parsed.data,
+          createdBy: req.authUser!.id,
+          updatedBy: req.authUser!.id,
+        })
+        .returning();
+    } catch (error) {
+      if (isSingleFreePackageUniqueViolation(error)) {
+        respondFreePackageConflict(res);
+        return;
+      }
+      throw error;
+    }
+    if (!created) throw new Error("Subscription package was not created.");
     await writeAuditLog({
       actorId: req.authUser!.id,
       action: "subscription_package.created",
@@ -857,15 +914,31 @@ router.patch(
       invalidInput(res, "Enter at least one valid package value to update.");
       return;
     }
-    const [updated] = await db
-      .update(subscriptionPackagesTable)
-      .set({
-        ...parsed.data,
-        updatedBy: req.authUser!.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(subscriptionPackagesTable.id, params.data.packageId))
-      .returning();
+    if (
+      parsed.data.amountMinor === 0 &&
+      (await hasOtherFreePackage(params.data.packageId))
+    ) {
+      respondFreePackageConflict(res);
+      return;
+    }
+    let updated: SubscriptionPackageRow | undefined;
+    try {
+      [updated] = await db
+        .update(subscriptionPackagesTable)
+        .set({
+          ...parsed.data,
+          updatedBy: req.authUser!.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptionPackagesTable.id, params.data.packageId))
+        .returning();
+    } catch (error) {
+      if (isSingleFreePackageUniqueViolation(error)) {
+        respondFreePackageConflict(res);
+        return;
+      }
+      throw error;
+    }
     if (!updated) {
       res.status(404).json({ error: "Subscription package not found.", code: "NOT_FOUND" });
       return;
