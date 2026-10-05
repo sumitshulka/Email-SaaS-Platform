@@ -272,3 +272,86 @@ export async function grantAdminGiftSubscription(input: {
     return serializeSubscription(subscription!, pkg);
   });
 }
+
+export async function activateFreePackageForUser(input: {
+  userId: string;
+  packageId: string;
+}) {
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(
+        and(
+          eq(usersTable.id, input.userId),
+          eq(usersTable.role, "USER"),
+          isNull(usersTable.deletedAt),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!user) return null;
+
+    const [pkg] = await tx
+      .select()
+      .from(subscriptionPackagesTable)
+      .where(
+        and(
+          eq(subscriptionPackagesTable.id, input.packageId),
+          eq(subscriptionPackagesTable.active, true),
+          eq(subscriptionPackagesTable.amountMinor, 0),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!pkg) return null;
+
+    const now = new Date();
+    const [existing] = await tx
+      .select()
+      .from(userSubscriptionsTable)
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, user.id),
+          eq(userSubscriptionsTable.packageId, pkg.id),
+          eq(userSubscriptionsTable.status, "active"),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1)
+      .for("update");
+    if (existing) return serializeSubscription(existing, pkg);
+
+    const [latestActive] = await tx
+      .select()
+      .from(userSubscriptionsTable)
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, user.id),
+          eq(userSubscriptionsTable.status, "active"),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1)
+      .for("update");
+    const { startsAt, endsAt } = getSubscriptionTerm(
+      pkg.periodDays,
+      latestActive?.endsAt,
+      now,
+    );
+    const [subscription] = await tx
+      .insert(userSubscriptionsTable)
+      .values({
+        userId: user.id,
+        packageId: pkg.id,
+        paymentId: null,
+        status: "active",
+        startsAt,
+        endsAt,
+      })
+      .returning();
+    return serializeSubscription(subscription!, pkg);
+  });
+}

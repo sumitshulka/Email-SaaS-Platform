@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ActivateFreeSubscriptionInput,
   AdminDashboard,
   AdminFinancePaymentPage,
   AdminNotification,
@@ -68,6 +69,7 @@ import type {
   DeliveryReportImportResult,
   DeliveryReportInput,
   ForgotPasswordInput,
+  FreeSubscriptionActivation,
   GetCampaignDeliveryReportParams,
   GmailMailboxConnection,
   GmailOAuthStart,
@@ -6869,6 +6871,94 @@ export function useGetCurrentSubscription<TData = Awaited<ReturnType<typeof getC
 
 
 
+export const getActivateFreeSubscriptionUrl = () => {
+
+
+
+
+  return `/api/subscriptions/free`
+}
+
+/**
+ * @summary Activate a free package without creating a payment or Razorpay order
+ */
+export const activateFreeSubscription = async (activateFreeSubscriptionInput: ActivateFreeSubscriptionInput, options?: Parameters<typeof customFetch>[1]): Promise<FreeSubscriptionActivation> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FreeSubscriptionActivation>(getActivateFreeSubscriptionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(activateFreeSubscriptionInput)
+  }
+);}
+
+
+
+
+
+export const getActivateFreeSubscriptionMutationKey = () => ['activateFreeSubscription'] as const;
+
+export const getActivateFreeSubscriptionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateFreeSubscription>>, TError,ActivateFreeSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activateFreeSubscription>>, TError,ActivateFreeSubscriptionMutationVariables, TContext> => {
+
+const mutationKey = getActivateFreeSubscriptionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activateFreeSubscription>>, ActivateFreeSubscriptionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  activateFreeSubscription(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivateFreeSubscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof activateFreeSubscription>>>
+    export type ActivateFreeSubscriptionMutationBody = BodyType<ActivateFreeSubscriptionInput>
+    export type ActivateFreeSubscriptionMutationError = ErrorType<void>
+    export type ActivateFreeSubscriptionMutationVariables = {data: BodyType<ActivateFreeSubscriptionInput>}
+
+    /**
+ * @summary Activate a free package without creating a payment or Razorpay order
+ */
+export const useActivateFreeSubscription = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateFreeSubscription>>, TError,ActivateFreeSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof activateFreeSubscription>>,
+        TError,
+        ActivateFreeSubscriptionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getActivateFreeSubscriptionMutationOptions(options));
+    }
+
 export const getCreateSubscriptionOrderUrl = () => {
 
 
@@ -6911,7 +7001,7 @@ return customFetch<SubscriptionOrderCreated>(getCreateSubscriptionOrderUrl(),
 
 export const getCreateSubscriptionOrderMutationKey = () => ['createSubscriptionOrder'] as const;
 
-export const getCreateSubscriptionOrderMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateSubscriptionOrderMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSubscriptionOrder>>, TError,CreateSubscriptionOrderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createSubscriptionOrder>>, TError,CreateSubscriptionOrderMutationVariables, TContext> => {
 
@@ -6940,13 +7030,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateSubscriptionOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createSubscriptionOrder>>>
     export type CreateSubscriptionOrderMutationBody = BodyType<CreateSubscriptionOrderInput>
-    export type CreateSubscriptionOrderMutationError = ErrorType<unknown>
+    export type CreateSubscriptionOrderMutationError = ErrorType<void>
     export type CreateSubscriptionOrderMutationVariables = {data: BodyType<CreateSubscriptionOrderInput>}
 
     /**
  * @summary Create a server-priced Razorpay order for a package
  */
-export const useCreateSubscriptionOrder = <TError = ErrorType<unknown>,
+export const useCreateSubscriptionOrder = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSubscriptionOrder>>, TError,CreateSubscriptionOrderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createSubscriptionOrder>>,

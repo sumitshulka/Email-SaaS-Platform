@@ -1,11 +1,12 @@
 - [Phase 1 scope language](phase-scope.md) — don't present future sending or billing capabilities as available until backed by working flows and real data.
 - [Isolated API helper checks](api-helper-tests.md) — avoid ESM test bundles that pull in PostgreSQL internals; CommonJS worked for temporary Node checks here.
-- [pg-mem with Drizzle](pg-mem-drizzle-adapter.md) — pg-mem needs Drizzle query-option shims and narrow UTC date-expression shims for route tests.
+- [pg-mem with Drizzle](pg-mem-drizzle-adapter.md) — pg-mem needs narrow SQL shims, and test DDL must preserve production nullability.
 - [Schema push verification](schema-push-verification.md) — inspect SQL errors and actual schema; a successful command exit can accompany a partially applied schema push.
 - [Provider report semantics](provider-report-semantics.md) — provider receipt timestamps and relay events are not final delivery; validate native exports before adding adapters.
 - [Payment capture timestamps](payment-capture-timestamps.md) — use subscription creation time for captures when available; payment-row updates can be unrelated backfills.
 - [Revenue environment isolation](revenue-environment-isolation.md) — superadmin revenue totals, trends, and currency rows must include only the currently active Razorpay environment.
 - [Gift subscription semantics](gift-subscriptions.md) — gifts share paid access without a recipient-facing gift label, but never create payment revenue.
+- [Zero-priced package activation](free-package-activation.md) — activate free plans directly; never route them through Razorpay or record a payment.
 - [Radix and Vite HMR](radix-vite-hmr.md) — if a Radix import triggers an invalid-hook error after dependency optimization, verify React deduping and restart the web workflow once before changing packages.
 - [Mockup preview cold starts](mockup-preview-cold-start.md) — a blank first capture during Vite dependency optimization can clear after the server reloads.
 - [Contact enrichment scope](contact-enrichment.md) — keep enrichment business-focused and show full social/profile URLs as visible plain text.

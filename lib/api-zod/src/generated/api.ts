@@ -2760,7 +2760,7 @@ export const ListAdminFinancePaymentsResponse = zod.object({
   "id": zod.string().uuid(),
   "receipt": zod.string(),
   "status": zod.enum(['captured', 'refunded']),
-  "amountMinor": zod.number().int(),
+  "amountMinor": zod.number().int().describe('Price in currency minor units; zero means this package is free.'),
   "currency": zod.string().min(listAdminFinancePaymentsResponseRowsItemCurrencyMin).max(listAdminFinancePaymentsResponseRowsItemCurrencyMax),
   "razorpayEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
   "razorpayOrderId": zod.string().nullable(),
@@ -3271,6 +3271,7 @@ export const createSubscriptionPackageBodyNameMax = 120;
 
 export const createSubscriptionPackageBodyDescriptionMax = 2000;
 
+export const createSubscriptionPackageBodyAmountMinorMin = 0;
 export const createSubscriptionPackageBodyAmountMinorMax = 100000000;
 
 export const createSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
@@ -3284,7 +3285,7 @@ export const createSubscriptionPackageBodyContactLimitMax = 10000000;
 export const CreateSubscriptionPackageBody = zod.object({
   "name": zod.string().min(createSubscriptionPackageBodyNameMin).max(createSubscriptionPackageBodyNameMax),
   "description": zod.string().max(createSubscriptionPackageBodyDescriptionMax),
-  "amountMinor": zod.number().int().min(1).max(createSubscriptionPackageBodyAmountMinorMax),
+  "amountMinor": zod.number().int().min(createSubscriptionPackageBodyAmountMinorMin).max(createSubscriptionPackageBodyAmountMinorMax).describe('Price in currency minor units; zero creates a free package.'),
   "currency": zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
   "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
   "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
@@ -3324,6 +3325,7 @@ export const updateSubscriptionPackageBodyNameMax = 120;
 
 export const updateSubscriptionPackageBodyDescriptionMax = 2000;
 
+export const updateSubscriptionPackageBodyAmountMinorMin = 0;
 export const updateSubscriptionPackageBodyAmountMinorMax = 100000000;
 
 export const updateSubscriptionPackageBodyCurrencyRegExp = new RegExp('^[A-Z]{3}$');
@@ -3337,7 +3339,7 @@ export const updateSubscriptionPackageBodyContactLimitMax = 10000000;
 export const UpdateSubscriptionPackageBody = zod.object({
   "name": zod.string().min(updateSubscriptionPackageBodyNameMin).max(updateSubscriptionPackageBodyNameMax).optional(),
   "description": zod.string().max(updateSubscriptionPackageBodyDescriptionMax).optional(),
-  "amountMinor": zod.number().int().min(1).max(updateSubscriptionPackageBodyAmountMinorMax).optional(),
+  "amountMinor": zod.number().int().min(updateSubscriptionPackageBodyAmountMinorMin).max(updateSubscriptionPackageBodyAmountMinorMax).optional().describe('Price in currency minor units; zero makes the package free.'),
   "currency": zod.string().regex(updateSubscriptionPackageBodyCurrencyRegExp).optional(),
   "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
@@ -3455,6 +3457,42 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "updatedAt": zod.coerce.date()
 })
 }),zod.null()])
+})
+
+
+/**
+ * @summary Activate a free package without creating a payment or Razorpay order
+ */
+export const ActivateFreeSubscriptionBody = zod.object({
+  "packageId": zod.string().uuid()
+})
+
+export const activateFreeSubscriptionResponseSubscriptionPackageCurrencyMin = 3;
+export const activateFreeSubscriptionResponseSubscriptionPackageCurrencyMax = 3;
+
+export const activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin = 0;
+
+
+
+export const ActivateFreeSubscriptionResponse = zod.object({
+  "subscription": zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "package": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(activateFreeSubscriptionResponseSubscriptionPackageCurrencyMin).max(activateFreeSubscriptionResponseSubscriptionPackageCurrencyMax),
+  "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
 })
 
 

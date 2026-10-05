@@ -18,6 +18,8 @@ import {
 } from "drizzle-orm";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  ActivateFreeSubscriptionBody,
+  ActivateFreeSubscriptionResponse,
   CreateSubscriptionOrderBody,
   CreateSubscriptionPackageBody,
   CreateSubscriptionPackageResponse,
@@ -52,6 +54,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import {
+  activateFreePackageForUser,
   activateCapturedPayment,
   getCurrentSubscriptionForUser,
   grantAdminGiftSubscription,
@@ -912,6 +915,47 @@ router.get(
 );
 
 router.post(
+  "/subscriptions/free",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = ActivateFreeSubscriptionBody.safeParse(req.body);
+    if (!parsed.success) {
+      invalidInput(res, "Choose a valid free package.");
+      return;
+    }
+    if (!req.authUser!.emailVerified) {
+      res.status(403).json({
+        error: "Verify your email before activating a subscription.",
+        code: "EMAIL_VERIFICATION_REQUIRED",
+      });
+      return;
+    }
+    if ((await getPlatformSettings()).packageVisibility === "hidden") {
+      res.status(404).json({
+        error: "That package is not available for activation.",
+        code: "PACKAGE_NOT_AVAILABLE",
+      });
+      return;
+    }
+
+    const subscription = await activateFreePackageForUser({
+      userId: req.authUser!.id,
+      packageId: parsed.data.packageId,
+    });
+    if (!subscription) {
+      res.status(404).json({
+        error: "That free package is not available for activation.",
+        code: "PACKAGE_NOT_AVAILABLE",
+      });
+      return;
+    }
+    res.json(
+      ActivateFreeSubscriptionResponse.parse({ subscription }),
+    );
+  },
+);
+
+router.post(
   "/subscriptions/orders",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -942,6 +986,13 @@ router.post(
       res.status(404).json({
         error: "That package is not available for purchase.",
         code: "PACKAGE_NOT_AVAILABLE",
+      });
+      return;
+    }
+    if (pkg.amountMinor === 0) {
+      res.status(400).json({
+        error: "Free packages are activated directly and do not use Razorpay Checkout.",
+        code: "FREE_PACKAGE_REQUIRES_DIRECT_ACTIVATION",
       });
       return;
     }

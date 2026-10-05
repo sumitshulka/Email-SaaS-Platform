@@ -206,7 +206,7 @@ memory.public.none(`
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     package_id uuid NOT NULL REFERENCES subscription_packages(id) ON DELETE RESTRICT,
-    payment_id uuid NOT NULL,
+    payment_id uuid,
     status subscription_status NOT NULL DEFAULT 'active',
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
@@ -1574,6 +1574,96 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .from(dbModule.subscriptionPackagesTable)
       .where(eq(dbModule.subscriptionPackagesTable.id, created.body.id));
     assert.equal(saved.contactLimit, 2400);
+  });
+
+  it("creates and activates free packages without a payment or Razorpay order", async () => {
+    const admin = await loggedInUser({
+      username: "free-package-admin",
+      role: "SUPERADMIN",
+    });
+    const user = await loggedInUser({ username: "free-package-user" });
+    const created = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Free Starter",
+        description: "Free workspace access",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        active: true,
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.amountMinor, 0);
+
+    const activation = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: user.cookie,
+      body: { packageId: created.body.id },
+    });
+    assert.equal(activation.response.status, 200, JSON.stringify(activation.body));
+    assert.equal(activation.body.subscription.package.id, created.body.id);
+    assert.equal(activation.body.subscription.package.amountMinor, 0);
+
+    const repeatedActivation = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: user.cookie,
+      body: { packageId: created.body.id },
+    });
+    assert.equal(repeatedActivation.response.status, 200);
+    assert.equal(
+      repeatedActivation.body.subscription.id,
+      activation.body.subscription.id,
+    );
+
+    const directOrder = await api("/subscriptions/orders", {
+      method: "POST",
+      cookie: user.cookie,
+      body: { packageId: created.body.id },
+    });
+    assert.equal(directOrder.response.status, 400);
+    assert.equal(
+      directOrder.body.code,
+      "FREE_PACKAGE_REQUIRES_DIRECT_ACTIVATION",
+    );
+
+    const paidPackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Paid Starter",
+        description: "Paid workspace access",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        active: true,
+      },
+    });
+    assert.equal(paidPackage.response.status, 201);
+    const invalidFreeActivation = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: user.cookie,
+      body: { packageId: paidPackage.body.id },
+    });
+    assert.equal(invalidFreeActivation.response.status, 404);
+    assert.equal(invalidFreeActivation.body.code, "PACKAGE_NOT_AVAILABLE");
+
+    const payments = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.userId, user.user.id));
+    assert.deepEqual(payments, []);
+    const subscriptions = await db
+      .select()
+      .from(dbModule.userSubscriptionsTable)
+      .where(eq(dbModule.userSubscriptionsTable.userId, user.user.id));
+    assert.equal(subscriptions.length, 1);
+    assert.equal(subscriptions[0].paymentId, null);
+    const current = await api("/subscriptions/current", { cookie: user.cookie });
+    assert.equal(current.body.subscription.package.id, created.body.id);
   });
 
   it("isolates contacts by tenant and enforces package limits on every create", async () => {

@@ -25,6 +25,7 @@ type PackageDraft = {
   name: string;
   description: string;
   amount: string;
+  free: boolean;
   currency: string;
   periodDays: string;
   contactLimit: string;
@@ -32,7 +33,7 @@ type PackageDraft = {
 };
 
 const blankDraft: PackageDraft = {
-  name: '', description: '', amount: '', currency: 'INR', periodDays: '30', contactLimit: '5000', active: true,
+  name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -43,16 +44,16 @@ function Panel({ children, className = '', testId }: { children: ReactNode; clas
 }
 
 function Field({
-  label, value, onChange, testId, type = 'text', placeholder, hint, step, min, max,
+  label, value, onChange, testId, type = 'text', placeholder, hint, step, min, max, disabled = false,
 }: {
   label: string; value: string; onChange: (value: string) => void; testId: string;
   type?: string; placeholder?: string; hint?: string; step?: string;
-  min?: number; max?: number;
+  min?: number; max?: number; disabled?: boolean;
 }) {
   return <label className="block min-w-0 space-y-1.5">
     <span className="text-[12px] font-semibold text-[#35445a]">{label}</span>
-    <input data-testid={testId} type={type} step={step} min={min} max={max} value={value} onChange={event => onChange(event.target.value)}
-      placeholder={placeholder} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/>
+    <input data-testid={testId} type={type} step={step} min={min} max={max} disabled={disabled} value={value} onChange={event => onChange(event.target.value)}
+      placeholder={placeholder} className={`h-10 w-full rounded-md border border-[#d8dfe6] px-3 text-[13px] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8] ${disabled ? 'cursor-not-allowed bg-[#f1f4f6] text-[#87919b]' : 'bg-[#fcfdfe] text-[#1b2b3d]'}`}/>
     {hint && <span className="block text-[11px] text-[#85909c]">{hint}</span>}
   </label>;
 }
@@ -121,7 +122,8 @@ export default function AdminBillingPage() {
     setPackageFormOpen(true);
     setDraft({
       name: pkg.name, description: pkg.description,
-      amount: (pkg.amountMinor / (10 ** (new Intl.NumberFormat(undefined, { style: 'currency', currency: pkg.currency }).resolvedOptions().maximumFractionDigits ?? 2))).toString(),
+      amount: pkg.amountMinor === 0 ? '0' : (pkg.amountMinor / (10 ** (new Intl.NumberFormat(undefined, { style: 'currency', currency: pkg.currency }).resolvedOptions().maximumFractionDigits ?? 2))).toString(),
+      free: pkg.amountMinor === 0,
       currency: pkg.currency, periodDays: String(pkg.periodDays),
       contactLimit: String(pkg.contactLimit), active: pkg.active,
     });
@@ -133,17 +135,18 @@ export default function AdminBillingPage() {
     const currency = draft.currency.trim().toUpperCase();
     const payload: SubscriptionPackageInput = {
       name: draft.name.trim(), description: draft.description.trim(),
-      amountMinor: inputMinor(draft.amount, currency), currency,
+      amountMinor: draft.free ? 0 : inputMinor(draft.amount, currency), currency,
       periodDays: Number(draft.periodDays), contactLimit: Number(draft.contactLimit),
       active: draft.active,
     };
+    const isFree = draft.free;
     if (editing) {
       updatePackage.mutate({ packageId: editing.id, data: payload }, {
-        onSuccess: () => { void refreshPackages(); announce('Package changes saved.'); resetPackageForm(); },
+        onSuccess: () => { void refreshPackages(); announce(isFree ? 'Free package saved. It will not use Razorpay Checkout.' : 'Package changes saved.'); resetPackageForm(); },
       });
     } else {
       createPackage.mutate({ data: payload }, {
-        onSuccess: () => { void refreshPackages(); announce('Subscription package created.'); resetPackageForm(); },
+        onSuccess: () => { void refreshPackages(); announce(isFree ? 'Free package created. It will not use Razorpay Checkout.' : 'Subscription package created.'); resetPackageForm(); },
       });
     }
   };
@@ -364,15 +367,16 @@ export default function AdminBillingPage() {
         <form onSubmit={submitPackage} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <Field label="Package name" value={draft.name} onChange={name => setDraft(d => ({ ...d, name }))} testId="input-package-name" placeholder="e.g. Team monthly"/>
-             <Field label="Price" value={draft.amount} onChange={amount => setDraft(d => ({ ...d, amount }))} testId="input-package-amount" type="number" step="any" placeholder="0.00"/>
+             <Field label="Price" value={draft.amount} onChange={amount => setDraft(d => ({ ...d, amount }))} testId="input-package-amount" type="number" step="any" min={0} placeholder="0.00" disabled={draft.free} hint={draft.free ? 'Free packages activate without Razorpay Checkout.' : undefined}/>
             <Field label="Currency code" value={draft.currency} onChange={currency => setDraft(d => ({ ...d, currency: currency.toUpperCase() }))} testId="input-package-currency" placeholder="INR" hint="Three-letter ISO 4217 code."/>
              <Field label="Term length (days)" value={draft.periodDays} onChange={periodDays => setDraft(d => ({ ...d, periodDays }))} testId="input-package-period-days" type="number" step="1" placeholder="30"/>
             <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
           </div>
+          <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b]"><input data-testid="input-package-free" type="checkbox" checked={draft.free} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>Free package · 0 price, no Razorpay order</label>
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Description</span><textarea data-testid="input-package-description" value={draft.description} onChange={event => setDraft(d => ({ ...d, description: event.target.value }))} rows={3} maxLength={2000} placeholder="What this package includes" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]"><input data-testid="input-package-active" type="checkbox" checked={draft.active} onChange={event => setDraft(d => ({ ...d, active: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>Available to customers</label>
           {(createPackage.isError || updatePackage.isError) && <p role="alert" data-testid="status-package-form-error" className="text-[12px] text-[#a84926]">{errorText(createPackage.error || updatePackage.error)}</p>}
-            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || inputMinor(draft.amount, draft.currency) < 1 || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1 || !Number.isInteger(Number(draft.contactLimit)) || Number(draft.contactLimit) < 0 || Number(draft.contactLimit) > 10000000} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
+            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || (!draft.free && inputMinor(draft.amount, draft.currency) < 1) || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1 || !Number.isInteger(Number(draft.contactLimit)) || Number(draft.contactLimit) < 0 || Number(draft.contactLimit) > 10000000} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}{busy ? 'Saving package' : editing ? 'Save changes' : 'Create package'}
           </button>
         </form>
@@ -383,7 +387,7 @@ export default function AdminBillingPage() {
           <div className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] gap-4 border-b border-[#e7ecf0] bg-[#f7f9fa] px-5 py-3 mono text-[9px] uppercase tracking-[.15em] text-[#83909d] md:grid"><span>Package</span><span>Rate & term</span><span>Visibility</span><span>Last updated</span><span className="text-right">Actions</span></div>
           <div className="divide-y divide-[#edf0f2]">{packages.map(pkg => <article key={pkg.id} data-testid={`row-subscription-package-${pkg.id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] md:items-center md:gap-4">
             <div><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
-            <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">per {pkg.periodDays} days · {pkg.currency}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts</div></div>
+             <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts</div></div>
             <div><span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
             <div className="text-[11px] text-[#788695] md:text-[10px]">{new Date(pkg.updatedAt).toLocaleDateString()}</div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">

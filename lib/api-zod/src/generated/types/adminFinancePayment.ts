@@ -15,6 +15,7 @@ export interface AdminFinancePayment {
   id: string;
   receipt: string;
   status: AdminFinancePaymentStatus;
+  /** Price in currency minor units; zero means this package is free. */
   amountMinor: number;
   /**
      * @minLength 3

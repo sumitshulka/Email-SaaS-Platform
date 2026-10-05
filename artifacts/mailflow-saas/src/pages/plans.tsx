@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, ShieldCheck, Users } from 'lucide-react';
 import {
   getGetCurrentSubscriptionQueryKey, getListAvailableSubscriptionPackagesQueryKey,
-  useCreateSubscriptionOrder, useGetCurrentSubscription, useListAvailableSubscriptionPackages,
+  useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCurrentSubscription, useListAvailableSubscriptionPackages,
   useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage } from '@workspace/api-client-react';
@@ -67,9 +67,9 @@ function PackageCard({ item, featured, pending, disabled, onPurchase }: {
     {featured && <div className="mono absolute right-0 top-0 rounded-bl-md bg-[#214f7c] px-3 py-2 text-[9px] uppercase tracking-[.14em] text-white">Current package</div>}
     <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.17em] text-[#7e8c9a]">MAILFLOW ACCESS</div><h2 className="display mt-2 text-[22px] font-bold leading-tight text-[#1d2d40]">{item.name}</h2></div><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#e5eef6] text-[#345f87]"><CreditCard className="h-[17px] w-[17px]"/></span></div>
     <p className="mt-4 min-h-[44px] text-[12px] leading-5 text-[#6c7b8a]">{item.description || 'A reliable subscription term for your Mailflow workspace.'}</p>
-      <div className="mt-6 border-t border-[#dfe7ed] pt-5"><div className="flex items-baseline gap-2"><span data-testid={`text-plan-price-${item.id}`} className="display text-[29px] font-bold tracking-[-.05em] text-[#1b3045]">{formatMinor(item.amountMinor, item.currency)}</span><span className="text-[11px] text-[#768595]">{item.currency}</span></div><div data-testid={`text-plan-period-${item.id}`} className="mt-1 flex items-center gap-1.5 text-[11px] text-[#718192]"><CalendarClock className="h-3.5 w-3.5"/>Access for {durationLabel(item.periodDays)}</div><div data-testid={`text-plan-contact-limit-${item.id}`} className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#4b647b]"><Users className="h-3.5 w-3.5"/>Up to {item.contactLimit.toLocaleString()} contacts</div></div>
+      <div className="mt-6 border-t border-[#dfe7ed] pt-5"><div className="flex items-baseline gap-2"><span data-testid={`text-plan-price-${item.id}`} className="display text-[29px] font-bold tracking-[-.05em] text-[#1b3045]">{item.amountMinor === 0 ? 'Free' : formatMinor(item.amountMinor, item.currency)}</span><span className="text-[11px] text-[#768595]">{item.amountMinor === 0 ? 'No payment' : item.currency}</span></div><div data-testid={`text-plan-period-${item.id}`} className="mt-1 flex items-center gap-1.5 text-[11px] text-[#718192]"><CalendarClock className="h-3.5 w-3.5"/>Access for {durationLabel(item.periodDays)}</div><div data-testid={`text-plan-contact-limit-${item.id}`} className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#4b647b]"><Users className="h-3.5 w-3.5"/>Up to {item.contactLimit.toLocaleString()} contacts</div></div>
     <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled} className={`mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
-      {pending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Starting secure checkout</> : <>Choose {item.name}<ArrowRight className="h-4 w-4"/></>}
+      {pending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>{item.amountMinor === 0 ? 'Activating free plan' : 'Starting secure checkout'}</> : <>{item.amountMinor === 0 ? `Activate ${item.name}` : `Choose ${item.name}`}<ArrowRight className="h-4 w-4"/></>}
     </button>
   </article>;
 }
@@ -79,13 +79,14 @@ export default function PlansPage() {
   const packagesQuery = useListAvailableSubscriptionPackages();
   const currentQuery = useGetCurrentSubscription();
   const createOrder = useCreateSubscriptionOrder();
+  const activateFree = useActivateFreeSubscription();
   const verifyPayment = useVerifyRazorpayPayment();
   const [checkoutOrder, setCheckoutOrder] = useState<SubscriptionOrderCreated | null>(null);
   const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'error' | 'dismissed'; message: string } | null>(null);
   const [startingPackage, setStartingPackage] = useState<string | null>(null);
   const packages = packagesQuery.data?.packages ?? [];
   const activeSubscription = currentQuery.data?.subscription?.status === 'active' ? currentQuery.data.subscription : null;
-  const busy = createOrder.isPending || verifyPayment.isPending;
+  const busy = createOrder.isPending || activateFree.isPending || verifyPayment.isPending;
 
   const runVerification = (order: SubscriptionOrderCreated, response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
     setPaymentState({ kind: 'pending', message: 'Payment received. Waiting for server confirmation…' });
@@ -108,6 +109,28 @@ export default function PlansPage() {
   const purchase = (pkg: SubscriptionPackage) => {
     setPaymentState(null);
     setStartingPackage(pkg.id);
+    if (pkg.amountMinor === 0) {
+      activateFree.mutate({ data: { packageId: pkg.id } }, {
+        onSuccess: result => {
+          const startsAt = new Date(result.subscription.startsAt);
+          const scheduled = startsAt.getTime() > Date.now();
+          setPaymentState({
+            kind: 'active',
+            message: scheduled
+              ? `${pkg.name} is scheduled to start on ${startsAt.toLocaleDateString()}. No payment or Razorpay order was required.`
+              : `${pkg.name} is active now. No payment or Razorpay order was required.`,
+          });
+          setStartingPackage(null);
+          void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
+        },
+        onError: error => {
+          setStartingPackage(null);
+          setPaymentState({ kind: 'error', message: errorText(error) });
+        },
+      });
+      return;
+    }
     createOrder.mutate({ data: { packageId: pkg.id } }, {
       onSuccess: async order => {
         setCheckoutOrder(order);
@@ -155,7 +178,7 @@ export default function PlansPage() {
     <header className="relative overflow-hidden rounded-lg border border-[#dce5ec] bg-[#eff5f9] px-5 py-7 md:px-8 md:py-8">
       <div className="relative z-[1] max-w-[700px]"><div className="mono mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[.19em] text-[#58748e]"><span className="h-px w-6 bg-[#d7823c]"/>WORKSPACE BILLING</div>
         <h1 className="display text-[30px] font-bold leading-tight tracking-[-.05em] text-[#1a2e43] md:text-[37px]">Choose your Mailflow plan.</h1>
-        <p className="mt-3 max-w-[570px] text-[13px] leading-6 text-[#64778a]">Choose a subscription term for your workspace. Payments are processed securely through Razorpay Standard Checkout.</p>
+        <p className="mt-3 max-w-[570px] text-[13px] leading-6 text-[#64778a]">Choose a subscription term for your workspace. Paid plans use Razorpay Checkout; free plans activate without a payment order.</p>
       </div>
       <div aria-hidden="true" className="pointer-events-none absolute -right-5 -top-16 hidden h-64 w-64 rounded-full border border-[#d5e1e9] md:block"><div className="absolute inset-7 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-14 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-[84px] rounded-full border border-[#d5e1e9]"/></div>
     </header>
@@ -177,7 +200,7 @@ export default function PlansPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{packages.map(pkg => <PackageCard key={pkg.id} item={pkg} featured={activeSubscription?.package.id === pkg.id} pending={startingPackage === pkg.id} disabled={busy || startingPackage !== null || checkoutOrder !== null} onPurchase={() => purchase(pkg)}/>)}</div>}
     </section>
 
-    <footer className="flex flex-col gap-3 border-t border-[#e5eaee] pt-5 text-[10px] leading-5 text-[#82909d] sm:flex-row sm:items-center sm:justify-between"><span>Prices use the currency shown. Terms start after payment is verified, or after your current term ends. Renewals are manual, not recurring charges.</span><span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5"/>Razorpay secure checkout</span></footer>
+    <footer className="flex flex-col gap-3 border-t border-[#e5eaee] pt-5 text-[10px] leading-5 text-[#82909d] sm:flex-row sm:items-center sm:justify-between"><span>Paid terms start after payment is verified; free terms activate without checkout. A new term starts after any current term ends. Renewals are manual, not recurring charges.</span><span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5"/>Paid checkout by Razorpay</span></footer>
     {checkoutOrder && verifyPayment.isPending && <span className="sr-only" data-testid="text-checkout-order">Order {checkoutOrder.orderId} awaiting payment verification</span>}
   </div>;
 }

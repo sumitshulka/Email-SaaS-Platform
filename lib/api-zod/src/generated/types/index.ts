@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './activateFreeSubscriptionInput';
 export * from './adminDashboard';
 export * from './adminDashboardCurrencyRevenue';
 export * from './adminDashboardPackageActivity';
@@ -102,6 +103,7 @@ export * from './deliveryReportImportResult';
 export * from './deliveryReportInput';
 export * from './deliveryReportInputFormat';
 export * from './forgotPasswordInput';
+export * from './freeSubscriptionActivation';
 export * from './getCampaignDeliveryReportParams';
 export * from './gmailMailboxConnection';
 export * from './gmailMailboxConnectionSyncStatus';

@@ -2213,6 +2213,7 @@ export interface AdminFinancePayment {
   id: string;
   receipt: string;
   status: AdminFinancePaymentStatus;
+  /** Price in currency minor units; zero means this package is free. */
   amountMinor: number;
   /**
      * @minLength 3
@@ -2350,7 +2351,8 @@ export interface SubscriptionPackageInput {
   /** @maxLength 2000 */
   description: string;
   /**
-     * @minimum 1
+     * Price in currency minor units; zero creates a free package.
+     * @minimum 0
      * @maximum 100000000
      */
   amountMinor: number;
@@ -2383,7 +2385,8 @@ export interface SubscriptionPackageUpdateInput {
   /** @maxLength 2000 */
   description?: string;
   /**
-     * @minimum 1
+     * Price in currency minor units; zero makes the package free.
+     * @minimum 0
      * @maximum 100000000
      */
   amountMinor?: number;
@@ -2418,6 +2421,10 @@ export interface CreateSubscriptionOrderInput {
   packageId: string;
 }
 
+export interface ActivateFreeSubscriptionInput {
+  packageId: string;
+}
+
 export interface SubscriptionOrderCreated {
   paymentId: string;
   orderId: string;
@@ -2445,6 +2452,10 @@ export interface SubscriptionSummary {
   startsAt: string;
   endsAt: string;
   package: SubscriptionPackage;
+}
+
+export interface FreeSubscriptionActivation {
+  subscription: SubscriptionSummary;
 }
 
 export interface CurrentSubscription {

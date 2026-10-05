@@ -15,7 +15,8 @@ export interface SubscriptionPackageInput {
   /** @maxLength 2000 */
   description: string;
   /**
-     * @minimum 1
+     * Price in currency minor units; zero creates a free package.
+     * @minimum 0
      * @maximum 100000000
      */
   amountMinor: number;

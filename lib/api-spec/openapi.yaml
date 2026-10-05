@@ -1861,6 +1861,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CurrentSubscription"
+  /subscriptions/free:
+    post:
+      operationId: activateFreeSubscription
+      tags: [billing]
+      summary: Activate a free package without creating a payment or Razorpay order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivateFreeSubscriptionInput"
+      responses:
+        "200":
+          description: Free subscription activated, scheduled, or already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreeSubscriptionActivation"
+        "400":
+          description: Invalid free-package request
+        "403":
+          description: Email verification is required
+        "404":
+          description: Free package is not available
   /subscriptions/orders:
     post:
       operationId: createSubscriptionOrder
@@ -1879,6 +1903,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SubscriptionOrderCreated"
+        "400":
+          description: Invalid package selection or a free package that must use direct activation
   /subscriptions/verify:
     post:
       operationId: verifyRazorpayPayment
@@ -3056,7 +3082,9 @@ components:
         id: { type: string, format: uuid }
         receipt: { type: string }
         status: { type: string, enum: [captured, refunded] }
-        amountMinor: { type: integer }
+        amountMinor:
+          type: integer
+          description: Price in currency minor units; zero means this package is free.
         currency: { type: string, minLength: 3, maxLength: 3 }
         razorpayEnvironment:
           anyOf:
@@ -3197,7 +3225,11 @@ components:
       properties:
         name: { type: string, minLength: 2, maxLength: 120 }
         description: { type: string, maxLength: 2000 }
-        amountMinor: { type: integer, minimum: 1, maximum: 100000000 }
+        amountMinor:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+          description: Price in currency minor units; zero creates a free package.
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
@@ -3214,7 +3246,11 @@ components:
       properties:
         name: { type: string, minLength: 2, maxLength: 120 }
         description: { type: string, maxLength: 2000 }
-        amountMinor: { type: integer, minimum: 1, maximum: 100000000 }
+        amountMinor:
+          type: integer
+          minimum: 0
+          maximum: 100000000
+          description: Price in currency minor units; zero makes the package free.
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
@@ -3248,6 +3284,11 @@ components:
       properties:
         packageId: { type: string, format: uuid }
       required: [packageId]
+    ActivateFreeSubscriptionInput:
+      type: object
+      properties:
+        packageId: { type: string, format: uuid }
+      required: [packageId]
     SubscriptionOrderCreated:
       type: object
       properties:
@@ -3269,6 +3310,11 @@ components:
         endsAt: { type: string, format: date-time }
         package: { $ref: "#/components/schemas/SubscriptionPackage" }
       required: [id, status, startsAt, endsAt, package]
+    FreeSubscriptionActivation:
+      type: object
+      properties:
+        subscription: { $ref: "#/components/schemas/SubscriptionSummary" }
+      required: [subscription]
     CurrentSubscription:
       type: object
       properties:
