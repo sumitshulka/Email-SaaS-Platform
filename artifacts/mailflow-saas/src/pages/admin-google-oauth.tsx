@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Copy, ExternalLink, LoaderCircle, ShieldCheck } from 'lucide-react';
 import {
   getGetGoogleOAuthSettingsQueryKey,
+  useTestGoogleOAuthSettings,
   useGetGoogleOAuthSettings,
   useUpdateGoogleOAuthSettings,
 } from '@workspace/api-client-react';
@@ -12,16 +13,20 @@ type Notice = { kind: 'success' | 'error'; text: string };
 
 const callbackPath = '/api/sending/gmail/oauth/callback';
 
-function errorMessage(error: unknown) {
+function errorMessage(
+  error: unknown,
+  fallback = 'Could not save the Google OAuth configuration. Please try again.',
+) {
   return error && typeof error === 'object' && 'message' in error
     ? String(error.message)
-    : 'Could not save the Google OAuth configuration. Please try again.';
+    : fallback;
 }
 
 export default function AdminGoogleOAuthPage() {
   const queryClient = useQueryClient();
   const settings = useGetGoogleOAuthSettings();
   const saveSettings = useUpdateGoogleOAuthSettings();
+  const testCredentials = useTestGoogleOAuthSettings();
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [redirectUri, setRedirectUri] = useState('');
@@ -34,6 +39,30 @@ export default function AdminGoogleOAuthPage() {
     setClientId(settings.data.clientId ?? '');
     setRedirectUri(settings.data.redirectUri ?? currentCallbackUri);
   }, [settings.data, currentCallbackUri]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get('googleOauthTest');
+    if (!result) return;
+    if (result === 'verified') {
+      setNotice({
+        kind: 'success',
+        text: 'Google OAuth credentials were verified. Workspace users can now connect mailboxes.',
+      });
+    } else {
+      setNotice({
+        kind: 'error',
+        text: 'Google could not verify these credentials. Check the client ID, secret, callback URL, consent-screen access, and Gmail API setup.',
+      });
+    }
+    void settings.refetch();
+    url.searchParams.delete('googleOauthTest');
+    window.history.replaceState(
+      {},
+      '',
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }, [settings.refetch]);
 
   const copyCallbackUri = async () => {
     try {
@@ -63,15 +92,37 @@ export default function AdminGoogleOAuthPage() {
           setClientSecret('');
           setNotice({
             kind: 'success',
-            text: saved.configured
-              ? 'Google OAuth setup is saved and Gmail monitoring is available to users.'
-              : 'Settings were saved, but the setup is incomplete. Check the required fields below.',
+            text: saved.verified
+              ? 'Google OAuth settings are saved and verified. Gmail monitoring is available to users.'
+              : saved.configured
+                ? 'Google OAuth settings are saved. Test the saved credentials with Google before enabling mailbox connections.'
+                : 'Settings were saved, but the setup is incomplete. Check the required fields below.',
           });
           queryClient.setQueryData(getGetGoogleOAuthSettingsQueryKey(), saved);
         },
         onError: error => setNotice({ kind: 'error', text: errorMessage(error) }),
       },
     );
+  };
+  const savedValuesMatch = Boolean(
+    settings.data?.configured &&
+      clientId.trim() === settings.data.clientId &&
+      redirectUri.trim() === settings.data.redirectUri &&
+      !clientSecret.trim(),
+  );
+  const startVerification = () => {
+    setNotice(null);
+    testCredentials.mutate(undefined, {
+      onSuccess: result => window.location.assign(result.authorizationUrl),
+      onError: error =>
+        setNotice({
+          kind: 'error',
+          text: errorMessage(
+            error,
+            'Could not start the Google consent test. Please try again.',
+          ),
+        }),
+    });
   };
 
   return (
@@ -85,7 +136,7 @@ export default function AdminGoogleOAuthPage() {
         </h1>
         <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[#687484]">
           Set up the Google OAuth client once. Workspace users can connect their own mailbox
-          after the configuration is complete.
+          after Google accepts a consent test of the saved credentials.
         </p>
       </div>
 
@@ -93,26 +144,32 @@ export default function AdminGoogleOAuthPage() {
         <div
           role="status"
           className={`mb-5 flex items-start gap-3 rounded-lg border p-4 ${
-            settings.data.configured
+            settings.data.verified
               ? 'border-[#cde7d9] bg-[#f2faf5] text-[#246647]'
-              : 'border-[#e4e8ed] bg-[#f7f9fb] text-[#596777]'
+              : settings.data.configured
+                ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]'
+                : 'border-[#e4e8ed] bg-[#f7f9fb] text-[#596777]'
           }`}
         >
-          {settings.data.configured ? (
+          {settings.data.verified ? (
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
           ) : (
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
           )}
           <div>
             <div className="text-[13px] font-semibold">
-              {settings.data.configured
-                ? 'Gmail monitoring is enabled'
-                : 'Gmail monitoring is not enabled yet'}
+              {settings.data.verified
+                ? 'Google OAuth credentials are verified'
+                : settings.data.configured
+                  ? 'Google OAuth credentials need a consent test'
+                  : 'Gmail monitoring is not enabled yet'}
             </div>
             <div className="mt-1 text-[12px] leading-5 opacity-85">
-              {settings.data.configured
-                ? `OAuth settings saved${settings.data.updatedAt ? ` on ${new Date(settings.data.updatedAt).toLocaleString()}` : ''}.`
-                : 'Complete the Google Cloud steps and save the client details below to enable mailbox connections.'}
+              {settings.data.verified
+                ? `Google completed the consent check${settings.data.verifiedAt ? ` on ${new Date(settings.data.verifiedAt).toLocaleString()}` : ''}.`
+                : settings.data.configured
+                  ? 'The saved values are complete, but mailbox connections stay disabled until Google accepts a consent test.'
+                  : 'Complete the Google Cloud steps and save the client details below before testing the credentials.'}
             </div>
           </div>
         </div>
@@ -268,6 +325,30 @@ export default function AdminGoogleOAuthPage() {
               {saveSettings.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
               {saveSettings.isPending ? 'Saving…' : 'Save Google OAuth settings'}
             </button>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={
+                  !savedValuesMatch ||
+                  saveSettings.isPending ||
+                  testCredentials.isPending
+                }
+                onClick={startVerification}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#d7dce3] bg-white px-4 text-[13px] font-semibold text-[#344154] transition-colors hover:bg-[#f7f9fb] disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {testCredentials.isPending && (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                )}
+                {testCredentials.isPending
+                  ? 'Opening Google consent…'
+                  : 'Test saved credentials with Google'}
+              </button>
+              <p className="text-[11px] leading-5 text-[#788392]">
+                {savedValuesMatch
+                  ? 'Google will ask you to grant consent. The test checks Gmail access without saving a mailbox.'
+                  : 'Save your changes first. The test always uses the saved client ID, secret, and callback URL.'}
+              </p>
+            </div>
           </form>
         </>
       )}

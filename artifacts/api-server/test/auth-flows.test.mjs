@@ -457,6 +457,7 @@ const [
   deliveryReportIngestionModule,
   deliveryParserModule,
   gmailMailboxModule,
+  googleOAuthConfigurationModule,
   loggerModule,
   microsoft365TraceModule,
 ] = await Promise.all([
@@ -469,6 +470,7 @@ const [
   import("../src/lib/delivery-report-ingestion.ts"),
   import("../src/lib/delivery-report-parser.ts"),
   import("../src/lib/gmail-mailbox.ts"),
+  import("../src/lib/google-oauth-configuration.ts"),
   import("../src/lib/logger.ts"),
   import("../src/lib/microsoft365-trace.ts"),
 ]);
@@ -572,12 +574,26 @@ async function api(
   };
 }
 
-async function withGmailOAuthConfig(run) {
+async function withGmailOAuthConfig(run, { verified = true } = {}) {
   const key = "google_oauth";
-  const value = {
+  const config = {
     clientId: "mailflow-test-client",
-    clientSecretEncrypted: securityModule.encryptSecret("mailflow-test-secret"),
+    clientSecret: "mailflow-test-secret",
     redirectUri: "http://localhost/api/sending/gmail/oauth/callback",
+  };
+  const value = {
+    clientId: config.clientId,
+    clientSecretEncrypted: securityModule.encryptSecret(config.clientSecret),
+    redirectUri: config.redirectUri,
+    ...(verified
+      ? {
+          verifiedFingerprint:
+            googleOAuthConfigurationModule.googleOAuthConfigurationFingerprint(
+              config,
+            ),
+          verifiedAt: new Date().toISOString(),
+        }
+      : {}),
   };
   await db
     .insert(dbModule.systemConfigurationTable)
@@ -2207,7 +2223,7 @@ describe("authentication and account recovery", { concurrency: false }, () => {
 });
 
 describe("superadmin Google OAuth setup", { concurrency: false }, () => {
-  it("restricts setup to superadmins, encrypts credentials, and enables user connection only after saving", async () => {
+  it("restricts setup to superadmins, encrypts credentials, and keeps mailbox connection disabled until verification", async () => {
     const admin = await loggedInUser({
       username: "google-oauth-superadmin",
       role: "SUPERADMIN",
@@ -2245,6 +2261,7 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
     });
     assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
     assert.equal(saved.body.configured, true);
+    assert.equal(saved.body.verified, false);
     assert.equal(saved.body.clientSecretConfigured, true);
     assert.equal(Object.hasOwn(saved.body, "clientSecret"), false);
     assert.equal(JSON.stringify(saved.body).includes(input.clientSecret), false);
@@ -2268,7 +2285,7 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
     const connectionStatus = await api("/sending/gmail/connection", {
       cookie: user.cookie,
     });
-    assert.equal(connectionStatus.body.configured, true);
+    assert.equal(connectionStatus.body.configured, false);
     assert.equal(connectionStatus.body.redirectUri, null);
     assert.equal(Object.hasOwn(connectionStatus.body, "clientId"), false);
 
@@ -2276,16 +2293,8 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
       method: "POST",
       cookie: user.cookie,
     });
-    assert.equal(connect.response.status, 200);
-    const authorizationUrl = new URL(connect.body.authorizationUrl);
-    assert.equal(
-      authorizationUrl.searchParams.get("client_id"),
-      input.clientId,
-    );
-    assert.equal(
-      authorizationUrl.searchParams.get("redirect_uri"),
-      input.redirectUri,
-    );
+    assert.equal(connect.response.status, 503);
+    assert.equal(connect.body.code, "GMAIL_OAUTH_NOT_VERIFIED");
 
     const updated = await api(settingsPath, {
       method: "PUT",
@@ -2306,6 +2315,225 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
       stored.value.clientSecretEncrypted,
       "leaving the secret blank should preserve the existing encrypted secret",
     );
+    assert.equal(updated.body.verified, false);
+  });
+
+  it("verifies saved credentials through Google consent without storing a mailbox or refresh token", async () => {
+    const admin = await loggedInUser({
+      username: "google-oauth-test-admin",
+      role: "SUPERADMIN",
+    });
+    const user = await loggedInUser({ username: "google-oauth-test-user" });
+    const settingsPath = "/admin/settings/google-oauth";
+    const config = {
+      clientId: "mailflow-test-client",
+      clientSecret: "mailflow-test-secret",
+      redirectUri: "http://localhost/api/sending/gmail/oauth/callback",
+    };
+    const saved = await api(settingsPath, {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: config,
+    });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.configured, true);
+    assert.equal(saved.body.verified, false);
+
+    const deniedTest = await api(`${settingsPath}/test`, {
+      method: "POST",
+      cookie: user.cookie,
+    });
+    assert.equal(deniedTest.response.status, 403);
+    const beforeTestConnect = await api("/sending/gmail/connect", {
+      method: "POST",
+      cookie: user.cookie,
+    });
+    assert.equal(beforeTestConnect.response.status, 503);
+    assert.equal(beforeTestConnect.body.code, "GMAIL_OAUTH_NOT_VERIFIED");
+
+    const accessToken = "google-oauth-setup-test-access-token";
+    const requests = [];
+    await withGoogleFetch(async (url, init) => {
+      requests.push({ url, init });
+      if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+        const fields = new URLSearchParams(init?.body);
+        assert.equal(fields.get("client_id"), config.clientId);
+        assert.equal(fields.get("client_secret"), config.clientSecret);
+        assert.equal(fields.get("redirect_uri"), config.redirectUri);
+        if (fields.get("code") === "google-oauth-invalid-code") {
+          return googleJson({ error: "invalid_client" }, 401);
+        }
+        assert.equal(fields.get("code"), "google-oauth-setup-code");
+        return googleJson({ access_token: accessToken, token_type: "Bearer" });
+      }
+      if (url.hostname === "openidconnect.googleapis.com") {
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          `Bearer ${accessToken}`,
+        );
+        return googleJson({
+          email: admin.user.email,
+          email_verified: true,
+        });
+      }
+      if (
+        url.hostname === "gmail.googleapis.com" &&
+        url.pathname.endsWith("/users/me/profile")
+      ) {
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          `Bearer ${accessToken}`,
+        );
+        return googleJson({
+          emailAddress: admin.user.email,
+          historyId: "google-oauth-setup-history",
+        });
+      }
+      throw new Error(`Unexpected Google request: ${url}`);
+    }, async () => {
+      const completeConsent = async (code) => {
+        const start = await api(`${settingsPath}/test`, {
+          method: "POST",
+          cookie: admin.cookie,
+        });
+        assert.equal(start.response.status, 200, JSON.stringify(start.body));
+        assert.ok(start.cookie);
+        const authorizationUrl = new URL(start.body.authorizationUrl);
+        assert.equal(
+          authorizationUrl.searchParams.get("client_id"),
+          config.clientId,
+        );
+        assert.equal(
+          authorizationUrl.searchParams.get("redirect_uri"),
+          config.redirectUri,
+        );
+        assert.equal(authorizationUrl.searchParams.get("access_type"), "online");
+        assert.match(authorizationUrl.searchParams.get("prompt"), /consent/);
+        assert.match(
+          authorizationUrl.searchParams.get("prompt"),
+          /select_account/,
+        );
+        assert.match(
+          authorizationUrl.searchParams.get("scope"),
+          /gmail\.readonly/,
+        );
+        const state = authorizationUrl.searchParams.get("state");
+        const callback = await api(
+          `/sending/gmail/oauth/callback?${new URLSearchParams({
+            code,
+            state,
+          })}`,
+          {
+            cookie: `${admin.cookie}; ${start.cookie}`,
+            redirect: "manual",
+          },
+        );
+        assert.equal(callback.response.status, 303);
+        const returnUrl = new URL(callback.response.headers.get("location"));
+        assert.ok(returnUrl.pathname.endsWith("/admin/google-oauth"));
+        return returnUrl.searchParams.get("googleOauthTest");
+      };
+
+      assert.equal(
+        await completeConsent("google-oauth-invalid-code"),
+        "failed",
+        "Google rejecting the client credentials must not verify setup",
+      );
+      const stillUnverified = await api(settingsPath, { cookie: admin.cookie });
+      assert.equal(stillUnverified.body.verified, false);
+      assert.equal(
+        await completeConsent("google-oauth-setup-code"),
+        "verified",
+      );
+    });
+
+    const verified = await api(settingsPath, { cookie: admin.cookie });
+    assert.equal(verified.body.configured, true);
+    assert.equal(verified.body.verified, true);
+    assert.ok(verified.body.verifiedAt);
+    const connectionStatus = await api("/sending/gmail/connection", {
+      cookie: user.cookie,
+    });
+    assert.equal(connectionStatus.body.configured, true);
+    const connect = await api("/sending/gmail/connect", {
+      method: "POST",
+      cookie: user.cookie,
+    });
+    assert.equal(connect.response.status, 200);
+    assert.equal(
+      new URL(connect.body.authorizationUrl).searchParams.get("access_type"),
+      "offline",
+    );
+    assert.equal(
+      await db
+        .select()
+        .from(dbModule.gmailMailboxConnectionsTable)
+        .then((rows) => rows.length),
+      0,
+      "the credential test must not create a mailbox connection",
+    );
+    assert.equal(
+      JSON.stringify(
+        await db
+          .select()
+          .from(dbModule.systemConfigurationTable)
+          .where(eq(dbModule.systemConfigurationTable.key, "google_oauth")),
+      ).includes(accessToken),
+      false,
+      "the transient access token must not be stored",
+    );
+    assert.equal(
+      requests.some(
+        ({ url }) =>
+          url.hostname === "oauth2.googleapis.com" &&
+          url.pathname === "/revoke",
+      ),
+      false,
+      "online access should not leave a refresh token to revoke",
+    );
+
+    const changedClientId = await api(settingsPath, {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: {
+        clientId: "mailflow-replaced-client",
+        redirectUri: config.redirectUri,
+      },
+    });
+    assert.equal(changedClientId.response.status, 200);
+    assert.equal(changedClientId.body.verified, false);
+    const changedClientStatus = await api("/sending/gmail/connection", {
+      cookie: user.cookie,
+    });
+    assert.equal(changedClientStatus.body.configured, false);
+    const changedClientConfig =
+      await googleOAuthConfigurationModule.getGoogleOAuthConfiguration();
+    assert.ok(changedClientConfig);
+    assert.equal(
+      await googleOAuthConfigurationModule.markGoogleOAuthConfigurationVerified(
+        googleOAuthConfigurationModule.googleOAuthConfigurationFingerprint(
+          changedClientConfig,
+        ),
+      ),
+      true,
+    );
+    const reverified = await api(settingsPath, { cookie: admin.cookie });
+    assert.equal(reverified.body.verified, true);
+    const changedSecret = await api(settingsPath, {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: {
+        clientId: "mailflow-replaced-client",
+        clientSecret: "mailflow-replaced-secret",
+        redirectUri: config.redirectUri,
+      },
+    });
+    assert.equal(changedSecret.response.status, 200);
+    assert.equal(changedSecret.body.verified, false);
+    const changedSecretStatus = await api("/sending/gmail/connection", {
+      cookie: user.cookie,
+    });
+    assert.equal(changedSecretStatus.body.configured, false);
   });
 });
 

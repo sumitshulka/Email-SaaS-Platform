@@ -18,10 +18,15 @@ import {
   gmailOAuthStatesTable,
   gmailMailboxConnectionsTable,
 } from "@workspace/db";
-import { getGoogleOAuthConfiguration } from "./google-oauth-configuration";
+import {
+  getGoogleOAuthConfiguration,
+  getGoogleOAuthSettingsStatus,
+  googleOAuthConfigurationFingerprint,
+  markGoogleOAuthConfigurationVerified,
+} from "./google-oauth-configuration";
 import { decryptSecret, encryptSecret, hmac, randomToken, constantTimeEqual } from "./security";
 import { logger } from "./logger";
-import { requireUserRole } from "./session";
+import { requireAuth, requireSuperadmin, requireUserRole } from "./session";
 import {
   GmailApiError,
   GmailHistoryExpiredError,
@@ -47,9 +52,17 @@ function oauthCookieOptions(secure: boolean) {
   };
 }
 
-function signedOAuthState(userId: string, nonce: string, expiresAt: number) {
+type OAuthPurpose = "mailbox" | "google_oauth_test";
+
+function signedOAuthState(
+  userId: string,
+  nonce: string,
+  expiresAt: number,
+  purpose: OAuthPurpose,
+  configFingerprint: string,
+) {
   const payload = Buffer.from(
-    JSON.stringify({ userId, nonce, expiresAt }),
+    JSON.stringify({ userId, nonce, expiresAt, purpose, configFingerprint }),
     "utf8",
   ).toString("base64url");
   return `${payload}.${hmac(payload, OAUTH_STATE_PURPOSE)}`;
@@ -62,11 +75,22 @@ function parseOAuthState(state: string, cookieNonce: string | undefined) {
   try {
     const value = JSON.parse(
       Buffer.from(payload, "base64url").toString("utf8"),
-    ) as { userId?: unknown; nonce?: unknown; expiresAt?: unknown };
+    ) as {
+      userId?: unknown;
+      nonce?: unknown;
+      expiresAt?: unknown;
+      purpose?: unknown;
+      configFingerprint?: unknown;
+    };
     if (
       typeof value.userId !== "string" ||
       typeof value.nonce !== "string" ||
       typeof value.expiresAt !== "number" ||
+      (value.purpose !== undefined &&
+        value.purpose !== "mailbox" &&
+        value.purpose !== "google_oauth_test") ||
+      (value.configFingerprint !== undefined &&
+        typeof value.configFingerprint !== "string") ||
       value.expiresAt < Date.now() ||
       !constantTimeEqual(value.nonce, cookieNonce)
     ) {
@@ -76,6 +100,13 @@ function parseOAuthState(state: string, cookieNonce: string | undefined) {
       userId: value.userId,
       nonce: value.nonce,
       expiresAt: value.expiresAt,
+      purpose: value.purpose === "google_oauth_test"
+        ? "google_oauth_test" as const
+        : "mailbox" as const,
+      configFingerprint:
+        typeof value.configFingerprint === "string"
+          ? value.configFingerprint
+          : undefined,
     };
   } catch {
     return null;
@@ -127,7 +158,7 @@ async function postOAuthForm(
   return value;
 }
 
-async function revokeGoogleToken(token: string): Promise<void> {
+async function revokeGoogleToken(token: string): Promise<boolean> {
   let response: globalThis.Response;
   try {
     response = await fetch(
@@ -139,15 +170,16 @@ async function revokeGoogleToken(token: string): Promise<void> {
       { failureType: "network" },
       "Google grant revocation failed",
     );
-    // The local credential is still removed; the user can also revoke access in Google.
-    return;
+    return false;
   }
   if (!response.ok) {
     logger.warn(
       { failureType: "http", statusCode: response.status },
       "Google grant revocation failed",
     );
+    return false;
   }
+  return true;
 }
 
 function redirectToSettings(
@@ -170,6 +202,27 @@ function redirectToSettings(
   res.redirect(303, target.toString());
 }
 
+function redirectToGoogleOAuthAdmin(
+  req: Request,
+  res: ExpressResponse,
+  result: "verified" | "failed",
+  callbackUri?: string | null,
+) {
+  let callback: URL | null = null;
+  try {
+    callback = callbackUri ? new URL(callbackUri) : null;
+  } catch {
+    callback = null;
+  }
+  const basePath = process.env.BASE_PATH?.replace(/\/+$/, "") ?? "";
+  const target = new URL(
+    `${basePath}/admin/google-oauth`,
+    callback?.origin ?? `${req.protocol}://${req.get("host")}`,
+  );
+  target.searchParams.set("googleOauthTest", result);
+  res.redirect(303, target.toString());
+}
+
 export function createGmailMailboxRouter(): IRouter {
   const router: IRouter = Router();
 
@@ -184,8 +237,9 @@ export function createGmailMailboxRouter(): IRouter {
       .where(eq(gmailMailboxConnectionsTable.userId, userId))
       .limit(1);
     const config = await getGoogleOAuthConfiguration();
+    const settings = await getGoogleOAuthSettingsStatus();
     res.json({
-      configured: config !== null,
+      configured: config !== null && settings.verified,
       redirectUri: null,
       connected: Boolean(connection),
       emailAddress: connection?.emailAddress ?? null,
@@ -204,10 +258,13 @@ export function createGmailMailboxRouter(): IRouter {
   requireUserRole,
   async (req, res): Promise<void> => {
     const config = await getGoogleOAuthConfiguration();
-    if (!config) {
+    const settings = await getGoogleOAuthSettingsStatus();
+    if (!config || !settings.verified) {
       res.status(503).json({
-        error: "Gmail bounce monitoring is not available yet. Contact the platform administrator.",
-        code: "GMAIL_OAUTH_NOT_CONFIGURED",
+        error: "Gmail bounce monitoring is not available until the platform administrator verifies Google OAuth.",
+        code: settings.configured
+          ? "GMAIL_OAUTH_NOT_VERIFIED"
+          : "GMAIL_OAUTH_NOT_CONFIGURED",
       });
       return;
     }
@@ -217,6 +274,8 @@ export function createGmailMailboxRouter(): IRouter {
       req.authUser!.id,
       nonce,
       expiresAt,
+      "mailbox",
+      googleOAuthConfigurationFingerprint(config),
     );
     await db.insert(gmailOAuthStatesTable).values({
       nonce,
@@ -236,9 +295,53 @@ export function createGmailMailboxRouter(): IRouter {
   },
 );
 
+  router.post(
+    "/admin/settings/google-oauth/test",
+    requireSuperadmin,
+    async (req, res): Promise<void> => {
+      const config = await getGoogleOAuthConfiguration();
+      const settings = await getGoogleOAuthSettingsStatus();
+      if (!config || !settings.configured) {
+        res.status(400).json({
+          error: "Save complete Google OAuth settings before testing them.",
+          code: "GOOGLE_OAUTH_NOT_CONFIGURED",
+        });
+        return;
+      }
+      const nonce = randomToken(24);
+      const expiresAt = Date.now() + OAUTH_STATE_MAX_AGE_MS;
+      const fingerprint = googleOAuthConfigurationFingerprint(config);
+      const state = signedOAuthState(
+        req.authUser!.id,
+        nonce,
+        expiresAt,
+        "google_oauth_test",
+        fingerprint,
+      );
+      await db.insert(gmailOAuthStatesTable).values({
+        nonce,
+        expiresAt: new Date(expiresAt),
+      });
+      res.cookie(OAUTH_COOKIE, nonce, oauthCookieOptions(req.secure));
+      const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authorization.searchParams.set("client_id", config.clientId);
+      authorization.searchParams.set("redirect_uri", config.redirectUri);
+      authorization.searchParams.set("response_type", "code");
+      authorization.searchParams.set(
+        "scope",
+        "openid email https://www.googleapis.com/auth/gmail.readonly",
+      );
+      authorization.searchParams.set("access_type", "online");
+      authorization.searchParams.set("include_granted_scopes", "true");
+      authorization.searchParams.set("prompt", "consent select_account");
+      authorization.searchParams.set("state", state);
+      res.json({ authorizationUrl: authorization.toString() });
+    },
+  );
+
   router.get(
   "/sending/gmail/oauth/callback",
-  requireUserRole,
+  requireAuth,
   async (req, res): Promise<void> => {
     const config = await getGoogleOAuthConfiguration();
     const state =
@@ -250,18 +353,138 @@ export function createGmailMailboxRouter(): IRouter {
       sameSite: "lax",
       path: OAUTH_COOKIE_PATH,
     });
-    if (
-      !config ||
-      !params ||
-      params.userId !== req.authUser!.id ||
-      typeof req.query.code !== "string" ||
-      req.query.error
-    ) {
-      redirectToSettings(req, res, "failed", config?.redirectUri);
+    const isAdminTest = params?.purpose === "google_oauth_test";
+    const redirectFailure = () => {
+      if (isAdminTest) {
+        redirectToGoogleOAuthAdmin(req, res, "failed", config?.redirectUri);
+      } else {
+        redirectToSettings(req, res, "failed", config?.redirectUri);
+      }
+    };
+    if (!config || !params || params.userId !== req.authUser!.id) {
+      redirectFailure();
       return;
     }
     if (!(await consumeOAuthNonce(params.nonce))) {
-      redirectToSettings(req, res, "failed", config?.redirectUri);
+      redirectFailure();
+      return;
+    }
+
+    const correctRole =
+      isAdminTest
+        ? req.authUser!.role === "SUPERADMIN" &&
+          !req.authUser!.mustChangeCredentials
+        : req.authUser!.role === "USER" &&
+          !req.authUser!.mustChangeCredentials;
+    if (
+      !correctRole ||
+      typeof req.query.code !== "string" ||
+      req.query.error ||
+      (params.configFingerprint &&
+        params.configFingerprint !==
+          googleOAuthConfigurationFingerprint(config))
+    ) {
+      redirectFailure();
+      return;
+    }
+
+    if (isAdminTest) {
+      try {
+        const tokenResponse = await postOAuthForm({
+          code: req.query.code,
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          redirect_uri: config.redirectUri,
+          grant_type: "authorization_code",
+        });
+        const accessToken =
+          typeof tokenResponse.access_token === "string"
+            ? tokenResponse.access_token
+            : null;
+        if (!accessToken) {
+          throw new Error("OAuth response omitted its access token.");
+        }
+
+        const userInfoResponse = await fetch(
+          "https://openidconnect.googleapis.com/v1/userinfo",
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+        if (!userInfoResponse.ok) {
+          throw new Error("Could not verify the Google account.");
+        }
+        const userInfo = (await userInfoResponse.json()) as {
+          email?: string;
+          email_verified?: boolean;
+        };
+        if (!userInfo.email || userInfo.email_verified !== true) {
+          throw new Error("Google did not verify the account email address.");
+        }
+
+        const profileResponse = await fetch(
+          "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+        if (!profileResponse.ok) {
+          throw new Error("Could not read Gmail mailbox metadata.");
+        }
+        const profile = (await profileResponse.json()) as {
+          emailAddress?: string;
+          historyId?: string;
+        };
+        if (
+          !profile.emailAddress ||
+          profile.emailAddress.trim().toLowerCase() !==
+            userInfo.email.trim().toLowerCase() ||
+          !profile.historyId
+        ) {
+          throw new Error("Google account and Gmail mailbox identity did not match.");
+        }
+
+        const refreshToken =
+          typeof tokenResponse.refresh_token === "string"
+            ? tokenResponse.refresh_token
+            : null;
+        if (refreshToken) {
+          const [existingGrant] = await db
+            .select({ userId: gmailMailboxConnectionsTable.userId })
+            .from(gmailMailboxConnectionsTable)
+            .where(
+              eq(
+                gmailMailboxConnectionsTable.emailAddress,
+                profile.emailAddress.trim().toLowerCase(),
+              ),
+            )
+            .limit(1);
+          if (existingGrant || !(await revokeGoogleToken(refreshToken))) {
+            throw new Error(
+              "Google returned a persistent token that could not be safely cleaned up.",
+            );
+          }
+        }
+
+        const verified = await markGoogleOAuthConfigurationVerified(
+          params.configFingerprint ?? "",
+        );
+        if (!verified) {
+          throw new Error("Google OAuth settings changed during verification.");
+        }
+        redirectToGoogleOAuthAdmin(req, res, "verified", config.redirectUri);
+      } catch (error) {
+        logger.warn(
+          {
+            userId: params.userId,
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          },
+          "Google OAuth configuration verification failed",
+        );
+        redirectToGoogleOAuthAdmin(req, res, "failed", config.redirectUri);
+      }
       return;
     }
 

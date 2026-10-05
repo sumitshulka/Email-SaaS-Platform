@@ -5139,6 +5139,80 @@ export const useUpdateGoogleOAuthSettings = <TError = ErrorType<unknown>,
       return useMutation(getUpdateGoogleOAuthSettingsMutationOptions(options));
     }
 
+export const getTestGoogleOAuthSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/google-oauth/test`
+}
+
+/**
+ * @summary Start a Google consent check for the saved OAuth credentials
+ */
+export const testGoogleOAuthSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<GmailOAuthStart> => {
+
+  return customFetch<GmailOAuthStart>(getTestGoogleOAuthSettingsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestGoogleOAuthSettingsMutationKey = () => ['testGoogleOAuthSettings'] as const;
+
+export const getTestGoogleOAuthSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testGoogleOAuthSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testGoogleOAuthSettings>>, TError,void, TContext> => {
+
+const mutationKey = getTestGoogleOAuthSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testGoogleOAuthSettings>>, void> = () => {
+
+
+          return  testGoogleOAuthSettings(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestGoogleOAuthSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof testGoogleOAuthSettings>>>
+
+    export type TestGoogleOAuthSettingsMutationError = ErrorType<ApiError>
+
+
+    /**
+ * @summary Start a Google consent check for the saved OAuth credentials
+ */
+export const useTestGoogleOAuthSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testGoogleOAuthSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testGoogleOAuthSettings>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestGoogleOAuthSettingsMutationOptions(options));
+    }
+
 export const getSendApplicationEmailTestUrl = () => {
 
 

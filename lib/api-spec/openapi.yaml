@@ -1481,6 +1481,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GoogleOAuthSettings"
+  /admin/settings/google-oauth/test:
+    post:
+      operationId: testGoogleOAuthSettings
+      tags: [settings]
+      summary: Start a Google consent check for the saved OAuth credentials
+      responses:
+        "200":
+          description: Google OAuth authorization URL for a non-persistent verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailOAuthStart"
+        "400":
+          description: Google OAuth settings are incomplete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/email/test:
     post:
       operationId: sendApplicationEmailTest
@@ -2589,11 +2607,13 @@ components:
       type: object
       properties:
         configured: { type: boolean }
+        verified: { type: boolean }
         clientId: { type: ["string", "null"] }
         clientSecretConfigured: { type: boolean }
         redirectUri: { type: ["string", "null"], format: uri }
+        verifiedAt: { type: ["string", "null"], format: date-time }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [configured, clientId, clientSecretConfigured, redirectUri, updatedAt]
+      required: [configured, verified, clientId, clientSecretConfigured, redirectUri, verifiedAt, updatedAt]
     GoogleOAuthSettingsInput:
       type: object
       properties:

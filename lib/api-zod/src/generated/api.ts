@@ -2733,9 +2733,11 @@ export const UpdateApplicationEmailSettingsResponse = zod.object({
  */
 export const GetGoogleOAuthSettingsResponse = zod.object({
   "configured": zod.boolean(),
+  "verified": zod.boolean(),
   "clientId": zod.string().nullable(),
   "clientSecretConfigured": zod.boolean(),
   "redirectUri": zod.string().url().nullable(),
+  "verifiedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -2759,10 +2761,20 @@ export const UpdateGoogleOAuthSettingsBody = zod.object({
 
 export const UpdateGoogleOAuthSettingsResponse = zod.object({
   "configured": zod.boolean(),
+  "verified": zod.boolean(),
   "clientId": zod.string().nullable(),
   "clientSecretConfigured": zod.boolean(),
   "redirectUri": zod.string().url().nullable(),
+  "verifiedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Start a Google consent check for the saved OAuth credentials
+ */
+export const TestGoogleOAuthSettingsResponse = zod.object({
+  "authorizationUrl": zod.string().url()
 })
 
 

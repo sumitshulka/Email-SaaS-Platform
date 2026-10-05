@@ -8,11 +8,14 @@
 
 export interface GoogleOAuthSettings {
   configured: boolean;
+  verified: boolean;
   /** @nullable */
   clientId: string | null;
   clientSecretConfigured: boolean;
   /** @nullable */
   redirectUri: string | null;
+  /** @nullable */
+  verifiedAt: Date | null;
   /** @nullable */
   updatedAt: Date | null;
 }
