@@ -7,6 +7,7 @@ import {
   useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage } from '@workspace/api-client-react';
+import { trackEvent } from '@/lib/analytics';
 
 declare global {
   interface Window {
@@ -112,6 +113,7 @@ export default function PlansPage() {
     if (pkg.amountMinor === 0) {
       activateFree.mutate({ data: { packageId: pkg.id } }, {
         onSuccess: result => {
+          trackEvent('free_subscription_activated');
           const startsAt = new Date(result.subscription.startsAt);
           const scheduled = startsAt.getTime() > Date.now();
           setPaymentState({
