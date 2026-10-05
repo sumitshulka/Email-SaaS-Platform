@@ -1033,11 +1033,11 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
       const statusTone = campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
       const isScheduled = campaign.status === 'queued' && campaign.scheduledAt !== null && new Date(campaign.scheduledAt).getTime() > Date.now();
       const metrics = [
-        { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? 'Currently eligible in this list' : 'Captured when queued' },
-        { label: 'SMTP accepted', value: campaign.delivered, detail: 'Inbox delivery is not confirmed' },
-        { label: 'Rejected / failed', value: campaign.bounced, detail: 'SMTP rejection or terminal send failure' },
-        { label: 'Suppressed', value: campaign.suppressed, detail: 'Unsubscribed or removed' },
-        { label: 'Still queued', value: pacing.remainingEmails, detail: campaign.status === 'draft' ? 'Will be queued when sent' : 'Waiting for paced delivery' },
+        { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? 'Currently eligible in this list' : 'Captured when queued', surface: { backgroundColor: '#eef5ff', borderColor: '#d7e4f3' } },
+        { label: 'SMTP accepted', value: campaign.delivered, detail: 'Inbox delivery is not confirmed', surface: { backgroundColor: '#eff8f1', borderColor: '#d5ead9' } },
+        { label: 'Rejected / failed', value: campaign.bounced, detail: 'SMTP rejection or terminal send failure', surface: { backgroundColor: '#fff5eb', borderColor: '#f0dfcb' } },
+        { label: 'Suppressed', value: campaign.suppressed, detail: 'Unsubscribed or removed', surface: { backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' } },
+        { label: 'Still queued', value: pacing.remainingEmails, detail: campaign.status === 'draft' ? 'Will be queued when sent' : 'Waiting for paced delivery', surface: { backgroundColor: '#f3f0fc', borderColor: '#e1dcf4' } },
       ];
 
       return <>
@@ -1046,7 +1046,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
         </div>
         <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{isScheduled ? 'scheduled' : campaign.status}</Status>}/>
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`}>
+          {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`} style={metric.surface}>
             <div className="text-[11px] text-[#778291]">{metric.label}</div>
             <div className="display mt-2 text-[25px] font-bold text-[#192638]">{metric.value.toLocaleString()}</div>
             <div className="mt-1 text-[10px] text-[#8a95a1]">{metric.detail}</div>
