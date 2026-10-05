@@ -167,7 +167,7 @@ async function installFixtures(context, {
         this.open = () => {
           if (checkoutAction === 'dismiss') {
             options.modal.ondismiss();
-          } else {
+          } else if (checkoutAction === 'complete') {
             options.handler({
               razorpay_payment_id: 'pay_browser_test',
               razorpay_order_id: orderId,
@@ -311,11 +311,18 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
 
-      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
-        args: ['paid_subscription_activated', undefined],
-        freeActivationResponses: [],
-        paidVerificationResponses: [200],
-      }]);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['paid_subscription_activated', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [200],
+        },
+      ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
     } finally {
       await context.close();
@@ -336,11 +343,18 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Payment verification pending').waitFor();
 
-      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
-        args: ['paid_payment_verification_pending', undefined],
-        freeActivationResponses: [],
-        paidVerificationResponses: [200],
-      }]);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['paid_payment_verification_pending', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [200],
+        },
+      ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
     } finally {
       await context.close();
@@ -357,18 +371,45 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Payment needs attention').waitFor();
 
-      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
-        args: ['paid_payment_verification_failed', undefined],
-        freeActivationResponses: [],
-        paidVerificationResponses: [400],
-      }]);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['paid_payment_verification_failed', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [400],
+        },
+      ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [400]);
     } finally {
       await context.close();
     }
   });
 
-  it('does not track when checkout is dismissed', async () => {
+  it('tracks paid checkout start without properties or identifiers', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'open',
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.waitForFunction(() => window.__analyticsCalls.length === 1);
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_checkout_started', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [],
+      }]);
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks paid checkout start and dismissal without properties or identifiers', async () => {
     const { context, page } = await openPlansPage({
       packages: [paidPackage],
       checkoutAction: 'dismiss',
@@ -377,7 +418,18 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Checkout closed').waitFor();
 
-      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['paid_checkout_dismissed', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+      ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
     } finally {
       await context.close();

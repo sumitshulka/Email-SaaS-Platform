@@ -7,7 +7,7 @@ import {
   useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage } from '@workspace/api-client-react';
-import { trackEvent, trackPaidVerificationOutcome } from '@/lib/analytics';
+import { trackEvent, trackPaidCheckoutOutcome, trackPaidVerificationOutcome } from '@/lib/analytics';
 
 declare global {
   interface Window {
@@ -158,10 +158,12 @@ export default function PlansPage() {
             theme: { color: '#174f99' },
             handler: response => runVerification(order, response),
             modal: { ondismiss: () => {
+              trackPaidCheckoutOutcome('dismissed');
               setCheckoutOrder(null);
               setPaymentState({ kind: 'dismissed', message: 'Checkout was closed before a payment was confirmed. You can try again whenever you are ready.' });
             } },
           });
+          trackPaidCheckoutOutcome('started');
           checkout.open();
         } catch (error) {
           setCheckoutOrder(null);
