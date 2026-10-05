@@ -195,7 +195,7 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
     db
       .select({
         subscriptions: count(),
-        customers: sql<number>`count(distinct ${userSubscriptionsTable.userId})`,
+        customers: sql<number>`count(distinct ${userSubscriptionsTable.userId})`.mapWith(Number),
       })
       .from(userSubscriptionsTable)
       .innerJoin(usersTable, eq(userSubscriptionsTable.userId, usersTable.id))

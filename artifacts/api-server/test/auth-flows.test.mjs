@@ -53,6 +53,7 @@ memory.public.none(`
   CREATE TYPE payment_status AS ENUM ('created', 'authorized', 'captured', 'failed', 'refunded');
   CREATE TYPE razorpay_environment AS ENUM ('sandbox', 'production');
   CREATE TYPE subscription_status AS ENUM ('active', 'superseded', 'cancelled');
+  CREATE TYPE platform_notification_audience AS ENUM ('broadcast', 'focused');
   CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     username varchar(50) NOT NULL,
@@ -73,6 +74,30 @@ memory.public.none(`
   );
   CREATE UNIQUE INDEX users_username_active_unique ON users(username) WHERE deleted_at IS NULL;
   CREATE UNIQUE INDEX users_email_active_unique ON users(email) WHERE deleted_at IS NULL;
+  CREATE TABLE platform_notifications (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    title varchar(120) NOT NULL,
+    message text NOT NULL,
+    audience platform_notification_audience NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    starts_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE platform_notification_recipients (
+    notification_id uuid NOT NULL REFERENCES platform_notifications(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (notification_id, user_id)
+  );
+  CREATE TABLE platform_notification_reads (
+    notification_id uuid NOT NULL REFERENCES platform_notifications(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    read_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (notification_id, user_id)
+  );
   CREATE TABLE user_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -446,6 +471,8 @@ function adaptMemoryQuery(client) {
   const query = client.query.bind(client);
   client.query = (config, ...args) => {
     const arrayMode = config && typeof config === "object" && config.rowMode === "array";
+    const queryText =
+      typeof config === "string" ? config : config?.text ?? "";
     if (typeof config === "string") {
       config = config.replace(/\s+for update skip locked\b/gi, " for update");
     } else if (config && typeof config === "object" && typeof config.text === "string") {
@@ -467,6 +494,17 @@ function adaptMemoryQuery(client) {
         !Array.isArray(queryResult.rows[0])
       ) {
         queryResult.rows = queryResult.rows.map((row) => Object.values(row));
+      }
+      if (
+        !arrayMode &&
+        /count\s*\(\s*distinct/i.test(queryText) &&
+        Array.isArray(queryResult?.rows)
+      ) {
+        queryResult.rows = queryResult.rows.map((row) =>
+          row && !Array.isArray(row) && Object.hasOwn(row, "customers")
+            ? { ...row, customers: String(row.customers) }
+            : row,
+        );
       }
       return queryResult;
     };
@@ -545,6 +583,9 @@ after(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(dbModule.platformNotificationReadsTable);
+  await db.delete(dbModule.platformNotificationRecipientsTable);
+  await db.delete(dbModule.platformNotificationsTable);
   await db.delete(dbModule.emailDeliveryReportsTable);
   await db.delete(dbModule.microsoft365MessageTracesTable);
   await db.delete(dbModule.microsoft365TraceConnectionsTable);
@@ -1030,6 +1071,192 @@ describe("Superadmin overview", { concurrency: false }, () => {
     assert.equal(dashboard.body.packageVisibility, "public");
     assert.equal(dashboard.body.emailsSent, 0);
     assert.deepEqual(dashboard.body.recentUsers, []);
+  });
+});
+
+describe("Platform notifications", { concurrency: false }, () => {
+  const activeWindow = () => ({
+    startsAt: new Date(Date.now() - 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+  });
+
+  it("broadcasts to each customer and keeps read state account-specific", async () => {
+    const admin = await createUser({
+      username: "notification-broadcast-admin",
+      role: "SUPERADMIN",
+    });
+    const firstCustomer = await createUser({
+      username: "notification-broadcast-first",
+    });
+    const secondCustomer = await createUser({
+      username: "notification-broadcast-second",
+    });
+    const adminSession = await login(admin.email);
+    const firstSession = await login(firstCustomer.email);
+    const secondSession = await login(secondCustomer.email);
+
+    const created = await api("/admin/notifications", {
+      method: "POST",
+      cookie: adminSession.cookie,
+      body: {
+        title: "Service update",
+        message: "The platform will be briefly unavailable tonight.",
+        audience: "broadcast",
+        recipientUserIds: [],
+        ...activeWindow(),
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.status, "active");
+    assert.equal(created.body.recipientCount, 2);
+    assert.equal(created.body.readCount, 0);
+
+    const firstList = await api("/notifications", { cookie: firstSession.cookie });
+    const secondList = await api("/notifications", { cookie: secondSession.cookie });
+    assert.equal(firstList.response.status, 200, JSON.stringify(firstList.body));
+    assert.equal(secondList.response.status, 200, JSON.stringify(secondList.body));
+    assert.deepEqual(firstList.body.unread.map(({ id }) => id), [created.body.id]);
+    assert.deepEqual(secondList.body.unread.map(({ id }) => id), [created.body.id]);
+    assert.deepEqual(firstList.body.history, []);
+
+    const marked = await api(`/notifications/${created.body.id}/read`, {
+      method: "POST",
+      cookie: firstSession.cookie,
+    });
+    assert.equal(marked.response.status, 200, JSON.stringify(marked.body));
+    assert.equal(marked.body.notificationId, created.body.id);
+    assert.ok(marked.body.readAt);
+
+    const firstAfterRead = await api("/notifications", {
+      cookie: firstSession.cookie,
+    });
+    const secondAfterRead = await api("/notifications", {
+      cookie: secondSession.cookie,
+    });
+    assert.deepEqual(firstAfterRead.body.unread, []);
+    assert.equal(firstAfterRead.body.history.length, 1);
+    assert.equal(firstAfterRead.body.history[0].id, created.body.id);
+    assert.equal(secondAfterRead.body.unread.length, 1);
+    assert.deepEqual(secondAfterRead.body.history, []);
+
+    const repeatedRead = await api(`/notifications/${created.body.id}/read`, {
+      method: "POST",
+      cookie: firstSession.cookie,
+    });
+    assert.equal(repeatedRead.response.status, 200);
+    const adminList = await api("/admin/notifications", {
+      cookie: adminSession.cookie,
+    });
+    const broadcastSummary = adminList.body.items.find(
+      ({ id }) => id === created.body.id,
+    );
+    assert.equal(broadcastSummary.recipientCount, 2);
+    assert.equal(broadcastSummary.readCount, 1);
+  });
+
+  it("limits focused notices to selected customers and retains read history when disabled", async () => {
+    const admin = await createUser({
+      username: "notification-focused-admin",
+      role: "SUPERADMIN",
+    });
+    const target = await createUser({ username: "notification-focused-target" });
+    const other = await createUser({ username: "notification-focused-other" });
+    const adminSession = await login(admin.email);
+    const targetSession = await login(target.email);
+    const otherSession = await login(other.email);
+
+    const selectedSuperadmin = await api("/admin/notifications", {
+      method: "POST",
+      cookie: adminSession.cookie,
+      body: {
+        title: "Invalid target",
+        message: "This must not be assigned to a superadmin.",
+        audience: "focused",
+        recipientUserIds: [admin.id],
+        ...activeWindow(),
+      },
+    });
+    assert.equal(selectedSuperadmin.response.status, 400);
+
+    const created = await api("/admin/notifications", {
+      method: "POST",
+      cookie: adminSession.cookie,
+      body: {
+        title: "Account-specific notice",
+        message: "Please review your account settings.",
+        audience: "focused",
+        recipientUserIds: [target.id],
+        ...activeWindow(),
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.recipientCount, 1);
+
+    const targetList = await api("/notifications", { cookie: targetSession.cookie });
+    const otherList = await api("/notifications", { cookie: otherSession.cookie });
+    assert.deepEqual(targetList.body.unread.map(({ id }) => id), [created.body.id]);
+    assert.deepEqual(otherList.body.unread, []);
+
+    const unauthorizedRead = await api(
+      `/notifications/${created.body.id}/read`,
+      { method: "POST", cookie: otherSession.cookie },
+    );
+    assert.equal(unauthorizedRead.response.status, 404);
+
+    const marked = await api(`/notifications/${created.body.id}/read`, {
+      method: "POST",
+      cookie: targetSession.cookie,
+    });
+    assert.equal(marked.response.status, 200);
+    const disabled = await api(
+      `/admin/notifications/${created.body.id}/status`,
+      {
+        method: "PATCH",
+        cookie: adminSession.cookie,
+        body: { enabled: false },
+      },
+    );
+    assert.equal(disabled.response.status, 200, JSON.stringify(disabled.body));
+    assert.equal(disabled.body.status, "disabled");
+
+    const targetAfterDisable = await api("/notifications", {
+      cookie: targetSession.cookie,
+    });
+    assert.deepEqual(targetAfterDisable.body.unread, []);
+    assert.equal(targetAfterDisable.body.history.length, 1);
+
+    const scheduledWindow = {
+      startsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 2 * 60 * 60_000).toISOString(),
+    };
+    const scheduled = await api("/admin/notifications", {
+      method: "POST",
+      cookie: adminSession.cookie,
+      body: {
+        title: "Upcoming notice",
+        message: "This message is not active yet.",
+        audience: "focused",
+        recipientUserIds: [target.id],
+        ...scheduledWindow,
+      },
+    });
+    assert.equal(scheduled.response.status, 201, JSON.stringify(scheduled.body));
+    assert.equal(scheduled.body.status, "scheduled");
+    const targetBeforeStart = await api("/notifications", {
+      cookie: targetSession.cookie,
+    });
+    assert.deepEqual(targetBeforeStart.body.unread, []);
+  });
+
+  it("keeps notification administration superadmin-only", async () => {
+    const customer = await createUser({
+      username: "notification-route-customer",
+    });
+    const customerSession = await login(customer.email);
+    const list = await api("/admin/notifications", {
+      cookie: customerSession.cookie,
+    });
+    assert.equal(list.response.status, 403);
   });
 });
 

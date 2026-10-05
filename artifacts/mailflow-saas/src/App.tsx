@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { useForm } from 'react-hook-form';
 import {
-  Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Check, Eye, EyeOff,
+  Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, Check, Eye, EyeOff,
   ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, CreditCard, Gauge, KeyRound, LoaderCircle,
   LockKeyhole, LogOut, Menu, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
   Trash2, UserRound, Users, Building2,
@@ -11,6 +11,7 @@ import {
 import {
   getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey,
   getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
+  getGetUserNotificationsQueryKey, useGetUserNotifications, useMarkUserNotificationRead,
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetUserDashboard,
   useGetApplicationEmailSettings, useGetCurrentUser, useListAdminUsers,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
@@ -25,6 +26,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
 import AdminBillingPage from '@/pages/admin-billing';
+import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminFinancePage from '@/pages/finance';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
@@ -141,7 +143,7 @@ function ResetPage() {
 }
 function AppShell({ user, children, admin = false }: { user: AuthUser; children: ReactNode; admin?: boolean }) {
    const [location, setLocation] = useLocation(); const logout = useLogout(); const [navOpen, setNavOpen] = useState(false);
-    const qc = useQueryClient(); const nav = admin ? [{ href: '/admin', label: 'Overview', icon: Gauge }, { href: '/admin/users', label: 'Accounts', icon: Users }, { href: '/admin/billing', label: 'Billing', icon: CreditCard }, { href: '/admin/finance', label: 'Finance', icon: ReceiptText }, { href: '/admin/settings', label: 'Platform settings', icon: Settings2 }, { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck }] : [{ href: '/dashboard', label: 'Overview', icon: Gauge }, { href: '/campaigns', label: 'Campaigns', icon: Send }, { href: '/contacts', label: 'Contacts', icon: Users }, { href: '/contact-field-settings', label: 'Contact fields', icon: Settings2 }, { href: '/companies', label: 'Companies', icon: Building2 }, { href: '/lists', label: 'Lists', icon: Activity }, { href: '/sending-settings', label: 'Sending settings', icon: Settings2 }, { href: '/plans', label: 'Plans & billing', icon: CreditCard }, { href: '/profile', label: 'Profile & security', icon: UserRound }];
+     const qc = useQueryClient(); const nav = admin ? [{ href: '/admin', label: 'Overview', icon: Gauge }, { href: '/admin/users', label: 'Accounts', icon: Users }, { href: '/admin/notifications', label: 'Notifications', icon: Bell }, { href: '/admin/billing', label: 'Billing', icon: CreditCard }, { href: '/admin/finance', label: 'Finance', icon: ReceiptText }, { href: '/admin/settings', label: 'Platform settings', icon: Settings2 }, { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck }] : [{ href: '/dashboard', label: 'Overview', icon: Gauge }, { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/campaigns', label: 'Campaigns', icon: Send }, { href: '/contacts', label: 'Contacts', icon: Users }, { href: '/contact-field-settings', label: 'Contact fields', icon: Settings2 }, { href: '/companies', label: 'Companies', icon: Building2 }, { href: '/lists', label: 'Lists', icon: Activity }, { href: '/sending-settings', label: 'Sending settings', icon: Settings2 }, { href: '/plans', label: 'Plans & billing', icon: CreditCard }, { href: '/profile', label: 'Profile & security', icon: UserRound }];
   const leave = () => logout.mutate(undefined, { onSuccess: () => { qc.clear(); setLocation('/'); } });
   return <div className="min-h-[100dvh] bg-white text-[#182333]"><aside className={cn('fixed inset-y-0 left-0 z-30 flex w-[246px] flex-col border-r border-[#e3e7eb] bg-white transition-transform md:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-full')}><div className="flex h-[69px] items-center border-b border-[#e8ebef] px-6"><Link href={admin ? '/admin' : '/dashboard'} data-testid="link-shell-brand" className="no-underline"><Mark small/></Link></div><div className="px-4 pt-6"><div className="mono mb-3 px-2 text-[9px] uppercase tracking-[.18em] text-[#99a1aa]">{admin ? 'PLATFORM' : 'WORKSPACE'}</div><nav className="space-y-1">{nav.map(item => { const Icon = item.icon; const active = location === item.href || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href)); return <Link key={item.href} href={item.href} data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z]+/g, '-')}`} onClick={() => setNavOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium no-underline transition-colors', active ? 'bg-[#edf4fc] text-[#174f99]' : 'text-[#66717e] hover:bg-[#f5f7f9] hover:text-[#182333]')}><Icon className="h-[17px] w-[17px]"/>{item.label}{active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#ed913e]"/>}</Link>; })}</nav></div><div className="mt-auto px-4 pb-4"><div className="mb-4 border-t border-[#e8ebef] pt-4"><Link href="/profile" data-testid="nav-account-profile" className="flex items-center gap-3 rounded-md px-2 py-2 no-underline hover:bg-[#f7f8fa]"><span className="grid h-8 w-8 place-items-center rounded-md bg-[#edf2f7] text-[11px] font-bold text-[#34577c]">{(user.firstName[0] || user.username[0] || 'A').toUpperCase()}{(user.lastName[0] || '').toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#243144]">{user.firstName} {user.lastName}</span><span className="block truncate text-[10px] text-[#858f9c]">{user.email}</span></span><ChevronDown className="h-3.5 w-3.5 text-[#8b95a1]"/></Link></div><Button variant="quiet" className="w-full justify-start px-2" testId="button-logout" disabled={logout.isPending} onClick={leave}><LogOut className="h-4 w-4"/>Sign out</Button></div></aside><div className="md:pl-[246px]"><header className="sticky top-0 z-20 flex h-[69px] items-center justify-between border-b border-[#e3e7eb] bg-white/95 px-5 backdrop-blur md:px-9"><div className="flex items-center gap-3"><button data-testid="button-open-navigation" className="rounded-md p-2 text-[#66717e] hover:bg-[#f2f4f6] md:hidden" onClick={() => setNavOpen(v => !v)}><Menu className="h-5 w-5"/></button><div className="mono hidden text-[10px] uppercase tracking-[.16em] text-[#8893a0] sm:block">{admin ? 'PLATFORM CONTROL' : 'ACCOUNT CONSOLE'}</div></div><div className="flex items-center gap-3"><span className="hidden items-center gap-1.5 text-[11px] text-[#7d8794] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#4c82bb]"/>Signed in</span><div className="h-4 w-px bg-[#e3e7eb]"/><span className="mono text-[10px] text-[#7d8794]">{user.timezone}</span><Link href="/profile" data-testid="link-header-profile" className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] hover:bg-[#f4f6f8]"><UserRound className="h-4 w-4"/></Link></div></header><main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">{children}</main></div></div>;
 }
@@ -163,6 +165,13 @@ function Metric({ label, value, sub, icon: Icon, accent = 'blue' }: { label: str
 }
 function UserDashboardPage({ user }: { user: AuthUser }) {
   const query = useGetUserDashboard({ query: { queryKey: getGetUserDashboardQueryKey() } });
+  const notificationQuery = useGetUserNotifications({ query: {
+    queryKey: getGetUserNotificationsQueryKey(),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  } });
+  const markNotificationRead = useMarkUserNotificationRead();
+  const queryClient = useQueryClient();
   const data = query.data;
   if (query.isLoading) return <LoadingPanel label="Loading workspace sending summary"/>;
   if (query.isError || !data) return <QueryProblem retry={() => void query.refetch()}/>;
@@ -175,7 +184,23 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
     return formatter.format(minor / 10 ** minorUnitDigits);
   };
   const shortDate = (date: string | null) => date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(date)) : '—';
+  const markRead = (notificationId: string) => markNotificationRead.mutate({ notificationId }, {
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getGetUserNotificationsQueryKey() }); },
+  });
   return <div className="fade-in space-y-6">
+    {notificationQuery.isError ? <section aria-label="Platform notice error" data-testid="dashboard-notification-error" className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#efd8c7] bg-[#fff8f2] px-5 py-4 text-[#75421f]">
+      <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#bd692d]"/><div><h2 className="text-[12px] font-semibold">Platform notices couldn’t be loaded</h2><p className="mt-1 text-[11px] text-[#93694c]">Your dashboard is available. Retry to check for account updates.</p></div></div>
+      <button type="button" data-testid="button-retry-dashboard-notifications" onClick={() => void notificationQuery.refetch()} disabled={notificationQuery.isFetching} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#e8c5a8] bg-white px-3 text-[11px] font-semibold text-[#94501f] hover:bg-[#fff7f0] disabled:opacity-50">{notificationQuery.isFetching ? 'Checking…' : 'Retry'}</button>
+    </section> : notificationQuery.data?.unread.length ? <section aria-label="Unread platform notifications" data-testid="dashboard-unread-notifications" className="overflow-hidden rounded-lg border border-[#9f4c13] bg-[#a94f13] text-[#fff8f0] shadow-sm">
+      <div className="flex items-center gap-2 border-b border-[#c46d31] px-5 py-3"><Bell className="h-4 w-4"/><span className="mono text-[10px] font-medium uppercase tracking-[.15em]">Platform notice</span><span className="ml-auto rounded-full bg-[#813b0d] px-2 py-0.5 text-[10px] font-semibold">{notificationQuery.data.unread.length} unread</span></div>
+      <div className="divide-y divide-[#c46d31]">
+        {notificationQuery.data.unread.map(item => <article key={item.id} data-testid={`dashboard-notification-${item.id}`} className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+          <div className="min-w-0 flex-1"><h2 className="text-[14px] font-bold text-white">{item.title}</h2><p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[#ffead7]">{item.message}</p><p className="mt-2 text-[10px] text-[#f5c8a4]">Expires {shortDate(item.expiresAt)}</p></div>
+          <button type="button" data-testid={`button-dashboard-mark-read-${item.id}`} onClick={() => markRead(item.id)} disabled={markNotificationRead.isPending} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border border-[#edb17f] bg-[#873d0e] px-3 text-[11px] font-semibold text-white transition hover:bg-[#74350d] disabled:opacity-55"><Check className="h-3.5 w-3.5"/>Mark read</button>
+        </article>)}
+      </div>
+      <div className="border-t border-[#c46d31] bg-[#98460f] px-5 py-2.5 text-[10px] text-[#ffdfc5]"><Link href="/notifications" data-testid="link-dashboard-notification-history" className="font-semibold text-white underline decoration-[#e9a978] underline-offset-2">View notification history</Link></div>
+    </section> : null}
     <PageHeading eyebrow="WORKSPACE / OVERVIEW" title="Good to see you, again." detail="A clear view of the audience, account, and campaigns in this workspace."
       trailing={<div className="flex items-center gap-2 rounded-full border border-[#dce5e2] bg-[#f2f7f4] px-3 py-1.5 text-[11px] font-semibold text-[#426c5d]"><span className="h-1.5 w-1.5 rounded-full bg-[#538a70]"/><span className="capitalize">{data.subscriptionStatus}</span> plan</div>}/>
 
@@ -819,6 +844,7 @@ function Routes() {
   return <RoutedErrorBoundary><Switch>
     <Route path="/" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
     <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u}/>}</RouteGate>}</Route>
+    <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/sending-settings">{() => <RouteGate>{() => <SendingSettingsPage/>}</RouteGate>}</Route>
     <Route path="/contact-field-settings">{() => <RouteGate>{u => u.role === 'USER' ? <ContactFieldSettingsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
@@ -829,6 +855,7 @@ function Routes() {
     <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage/>}</RouteGate>}</Route>
     <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId}/>}</RouteGate>}</Route>
     <Route path="/admin">{() => <RouteGate admin>{() => <AdminDashboardPage/>}</RouteGate>}</Route>
+    <Route path="/admin/notifications">{() => <RouteGate admin>{() => <AdminNotificationsPage/>}</RouteGate>}</Route>
     <Route path="/admin/users">{() => <RouteGate admin>{() => <AdminUsersPage/>}</RouteGate>}</Route>
     <Route path="/admin/billing">{() => <RouteGate admin>{() => <AdminBillingPage/>}</RouteGate>}</Route>
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>
