@@ -26,6 +26,14 @@ export function trackPaidVerificationOutcome(outcome: 'pending' | 'failed'): voi
   );
 }
 
+export function trackFreeActivationOutcome(outcome: 'activated' | 'failed'): void {
+  trackEvent(
+    outcome === 'activated'
+      ? 'free_subscription_activated'
+      : 'free_subscription_activation_failed',
+  );
+}
+
 export function trackPaidCheckoutOutcome(outcome: 'started' | 'dismissed' | 'setup_failed'): void {
   const eventName = {
     started: 'paid_checkout_started',

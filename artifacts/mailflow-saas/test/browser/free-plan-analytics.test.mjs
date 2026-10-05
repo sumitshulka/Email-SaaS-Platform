@@ -299,14 +299,18 @@ describe('subscription activation analytics', { concurrency: false }, () => {
     }
   });
 
-  it('does not track when free plan activation fails', async () => {
+  it('tracks failed free plan activation without properties or identifiers', async () => {
     const { context, page } = await openPlansPage({ activationStatus: 403 });
     try {
       await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Free plan activation failed.').waitFor();
 
       const trackingCalls = await page.evaluate(() => window.__analyticsCalls);
-      assert.deepEqual(trackingCalls, []);
+      assert.deepEqual(trackingCalls, [{
+        args: ['free_subscription_activation_failed', undefined],
+        freeActivationResponses: [403],
+        paidVerificationResponses: [],
+      }]);
       assert.deepEqual(
         await page.evaluate(() => window.__freeActivationResponses),
         [403],

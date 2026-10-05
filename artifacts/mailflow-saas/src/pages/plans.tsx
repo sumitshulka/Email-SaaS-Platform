@@ -7,7 +7,7 @@ import {
   useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage } from '@workspace/api-client-react';
-import { trackEvent, trackPaidCheckoutOutcome, trackPaidVerificationOutcome } from '@/lib/analytics';
+import { trackEvent, trackFreeActivationOutcome, trackPaidCheckoutOutcome, trackPaidVerificationOutcome } from '@/lib/analytics';
 
 declare global {
   interface Window {
@@ -121,7 +121,7 @@ export default function PlansPage() {
     if (pkg.amountMinor === 0) {
       activateFree.mutate({ data: { packageId: pkg.id } }, {
         onSuccess: result => {
-          trackEvent('free_subscription_activated');
+          trackFreeActivationOutcome('activated');
           const startsAt = new Date(result.subscription.startsAt);
           const scheduled = startsAt.getTime() > Date.now();
           setPaymentState({
@@ -135,6 +135,7 @@ export default function PlansPage() {
           void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
         },
         onError: error => {
+          trackFreeActivationOutcome('failed');
           setStartingPackage(null);
           setPaymentState({ kind: 'error', message: errorText(error) });
         },
