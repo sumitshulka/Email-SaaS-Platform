@@ -1323,6 +1323,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/recipient-summary:
+    get:
+      operationId: getCampaignRecipientSummary
+      tags: [sending]
+      summary: Count unique subscribed recipients and overlaps across ordered target lists
+      parameters:
+        - name: listIds
+          in: query
+          required: true
+          description: Tenant-owned contact list IDs in campaign processing order. Repeat the parameter once per list.
+          style: form
+          explode: true
+          schema:
+            type: array
+            minItems: 1
+            items:
+              type: string
+              format: uuid
+      responses:
+        "200":
+          description: Unique email-address count and count of addresses present in multiple selected lists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignAudienceSummary"
+        "400":
+          description: Invalid list selection or a list not owned by this tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns/{campaignId}:
     parameters:
       - name: campaignId
@@ -3107,7 +3138,15 @@ components:
         subject: { type: string }
         textBody: { type: string }
         htmlBody: { type: ["string", "null"] }
-        listId: { type: ["string", "null"], format: uuid }
+        listId:
+          type: ["string", "null"]
+          format: uuid
+          deprecated: true
+          description: First selected list, retained for compatibility. Use listIds for the ordered audience.
+        listIds:
+          type: array
+          description: Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.
+          items: { type: string, format: uuid }
         status: { type: string, enum: [draft, queued, sending, completed] }
         recipients: { type: integer }
         estimatedDurationSeconds: { type: integer }
@@ -3121,7 +3160,13 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, subject, textBody, htmlBody, listId, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, name, subject, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+    CampaignAudienceSummary:
+      type: object
+      properties:
+        uniqueRecipients: { type: integer, minimum: 0 }
+        overlappingRecipients: { type: integer, minimum: 0, description: Email addresses found in more than one selected list. }
+      required: [uniqueRecipients, overlappingRecipients]
     CampaignDashboard:
       type: object
       properties:
@@ -3131,9 +3176,14 @@ components:
           oneOf:
             - $ref: "#/components/schemas/CampaignTargetList"
             - type: "null"
+          deprecated: true
+          description: First selected list, retained for compatibility. Use targetLists for all selected lists.
+        targetLists:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignTargetList" }
         pacing:
           $ref: "#/components/schemas/CampaignPacing"
-      required: [campaign, targetList, pacing]
+      required: [campaign, targetList, targetLists, pacing]
     DeliveryReportInput:
       type: object
       description: Submitted content is processed in memory and not retained as a raw file. Imported evidence is user-provided and is not provider-authenticated.
@@ -3223,8 +3273,16 @@ components:
         subject: { type: string, minLength: 1, maxLength: 200 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
-        listId: { type: string, format: uuid }
-      required: [name, subject, textBody, listId]
+        listIds:
+          type: array
+          description: Ordered target lists. The first matching list wins for overlapping email addresses.
+          items: { type: string, format: uuid }
+        listId:
+          type: string
+          format: uuid
+          deprecated: true
+          description: Legacy single-list input; use listIds.
+      required: [name, subject, textBody]
     CampaignUpdate:
       type: object
       properties:
@@ -3232,16 +3290,32 @@ components:
         subject: { type: string, minLength: 1, maxLength: 200 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
-        listId: { type: string, format: uuid }
+        listIds:
+          type: array
+          description: Ordered target lists. The first matching list wins for overlapping email addresses.
+          items: { type: string, format: uuid }
+        listId:
+          type: string
+          format: uuid
+          deprecated: true
+          description: Legacy single-list input; use listIds.
     CampaignPreviewInput:
       type: object
       properties:
-        listId: { type: string, format: uuid }
+        listIds:
+          type: array
+          description: Ordered target lists; contactId must be an eligible member of at least one.
+          items: { type: string, format: uuid }
+        listId:
+          type: string
+          format: uuid
+          deprecated: true
+          description: Legacy single-list input; use listIds.
         contactId: { type: string, format: uuid }
         subject: { type: string, maxLength: 200 }
         textBody: { type: string, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
-      required: [listId, contactId, subject, textBody, htmlBody]
+      required: [contactId, subject, textBody, htmlBody]
     CampaignTemplatePreview:
       type: object
       properties:

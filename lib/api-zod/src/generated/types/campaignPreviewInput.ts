@@ -7,7 +7,13 @@
  */
 
 export interface CampaignPreviewInput {
-  listId: string;
+  /** Ordered target lists; contactId must be an eligible member of at least one. */
+  listIds?: string[];
+  /**
+     * Legacy single-list input; use listIds.
+     * @deprecated
+     */
+  listId?: string;
   contactId: string;
   /** @maxLength 200 */
   subject: string;

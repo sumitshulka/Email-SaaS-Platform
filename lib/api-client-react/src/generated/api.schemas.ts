@@ -1683,8 +1683,14 @@ export interface CampaignSummary {
   textBody: string;
   /** @nullable */
   htmlBody: string | null;
-  /** @nullable */
+  /**
+     * First selected list, retained for compatibility. Use listIds for the ordered audience.
+     * @deprecated
+     * @nullable
+     */
   listId: string | null;
+  /** Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses. */
+  listIds: string[];
   status: CampaignSummaryStatus;
   recipients: number;
   estimatedDurationSeconds: number;
@@ -1701,6 +1707,16 @@ export interface CampaignSummary {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CampaignAudienceSummary {
+  /** @minimum 0 */
+  uniqueRecipients: number;
+  /**
+     * Email addresses found in more than one selected list.
+     * @minimum 0
+     */
+  overlappingRecipients: number;
 }
 
 export interface CampaignTargetList {
@@ -1725,7 +1741,12 @@ export interface CampaignPacing {
 
 export interface CampaignDashboard {
   campaign: CampaignSummary;
+  /**
+     * First selected list, retained for compatibility. Use targetLists for all selected lists.
+     * @deprecated
+     */
   targetList: CampaignTargetList | null;
+  targetLists: CampaignTargetList[];
   pacing: CampaignPacing;
 }
 
@@ -1908,7 +1929,13 @@ export interface CampaignInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody?: string;
-  listId: string;
+  /** Ordered target lists. The first matching list wins for overlapping email addresses. */
+  listIds?: string[];
+  /**
+     * Legacy single-list input; use listIds.
+     * @deprecated
+     */
+  listId?: string;
 }
 
 export interface CampaignUpdate {
@@ -1929,11 +1956,23 @@ export interface CampaignUpdate {
   textBody?: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  /** Ordered target lists. The first matching list wins for overlapping email addresses. */
+  listIds?: string[];
+  /**
+     * Legacy single-list input; use listIds.
+     * @deprecated
+     */
   listId?: string;
 }
 
 export interface CampaignPreviewInput {
-  listId: string;
+  /** Ordered target lists; contactId must be an eligible member of at least one. */
+  listIds?: string[];
+  /**
+     * Legacy single-list input; use listIds.
+     * @deprecated
+     */
+  listId?: string;
   contactId: string;
   /** @maxLength 200 */
   subject: string;
@@ -2686,6 +2725,14 @@ listIds?: string[];
  * Legacy single-list selection. Use listIds to assign contacts to multiple lists.
  */
 listId?: string;
+};
+
+export type GetCampaignRecipientSummaryParams = {
+/**
+ * Tenant-owned contact list IDs in campaign processing order. Repeat the parameter once per list.
+ * @minItems 1
+ */
+listIds: string[];
 };
 
 export type GetCampaignDeliveryReportParams = {

@@ -36,6 +36,7 @@ import type {
   ApplicationEmailSettingsInput,
   AuthResponse,
   AuthUser,
+  CampaignAudienceSummary,
   CampaignDashboard,
   CampaignDeliveryReport,
   CampaignInput,
@@ -77,6 +78,7 @@ import type {
   ForgotPasswordInput,
   FreeSubscriptionActivation,
   GetCampaignDeliveryReportParams,
+  GetCampaignRecipientSummaryParams,
   GmailMailboxConnection,
   GmailOAuthStart,
   GoogleOAuthSettings,
@@ -4892,6 +4894,96 @@ export const usePreviewCampaign = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getPreviewCampaignMutationOptions(options));
     }
+
+export const getGetCampaignRecipientSummaryUrl = (params: GetCampaignRecipientSummaryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const explodeParameters = ["listIds"];
+
+    if (Array.isArray(value) && explodeParameters.includes(key)) {
+      value.forEach((v) => {
+        normalizedParams.append(key, v === null ? 'null' : String(v));
+      });
+      return;
+    }
+
+
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/campaigns/recipient-summary?${stringifiedParams}` : `/api/campaigns/recipient-summary`
+}
+
+/**
+ * @summary Count unique subscribed recipients and overlaps across ordered target lists
+ */
+export const getCampaignRecipientSummary = async (params: GetCampaignRecipientSummaryParams, options?: Parameters<typeof customFetch>[1]): Promise<CampaignAudienceSummary> => {
+
+  return customFetch<CampaignAudienceSummary>(getGetCampaignRecipientSummaryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignRecipientSummaryQueryKey = (params?: GetCampaignRecipientSummaryParams,) => {
+    return [
+    `/api/campaigns/recipient-summary`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCampaignRecipientSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignRecipientSummary>>, TError = ErrorType<ApiError>>(params: GetCampaignRecipientSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignRecipientSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignRecipientSummaryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignRecipientSummary>>> = ({ signal }) => getCampaignRecipientSummary(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignRecipientSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignRecipientSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignRecipientSummary>>>
+export type GetCampaignRecipientSummaryQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Count unique subscribed recipients and overlaps across ordered target lists
+ */
+
+export function useGetCampaignRecipientSummary<TData = Awaited<ReturnType<typeof getCampaignRecipientSummary>>, TError = ErrorType<ApiError>>(
+ params: GetCampaignRecipientSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignRecipientSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignRecipientSummaryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetCampaignDashboardUrl = (campaignId: string,) => {
 

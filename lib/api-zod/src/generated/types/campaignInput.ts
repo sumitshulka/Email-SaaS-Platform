@@ -24,5 +24,11 @@ export interface CampaignInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody?: string;
-  listId: string;
+  /** Ordered target lists. The first matching list wins for overlapping email addresses. */
+  listIds?: string[];
+  /**
+     * Legacy single-list input; use listIds.
+     * @deprecated
+     */
+  listId?: string;
 }

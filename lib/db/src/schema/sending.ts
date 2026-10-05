@@ -1,4 +1,5 @@
 import { createInsertSchema } from "drizzle-zod";
+import { sql } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
@@ -257,6 +258,10 @@ export const emailCampaignsTable = pgTable(
     listId: uuid("list_id").references(() => contactListsTable.id, {
       onDelete: "set null",
     }),
+    listIds: uuid("list_ids")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::uuid[]`),
     name: varchar("name", { length: 160 }).notNull(),
     subject: varchar("subject", { length: 200 }).notNull(),
     textBody: text("text_body").notNull(),

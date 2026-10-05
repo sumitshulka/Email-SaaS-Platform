@@ -2440,7 +2440,8 @@ export const ListCampaignsResponseItem = zod.object({
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
-  "listId": zod.string().uuid().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
@@ -2476,7 +2477,8 @@ export const CreateCampaignBody = zod.object({
   "subject": zod.string().min(1).max(createCampaignBodySubjectMax),
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
-  "listId": zod.string().uuid()
+  "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
+  "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
 })
 
 export const CreateCampaignResponse = zod.object({
@@ -2485,7 +2487,8 @@ export const CreateCampaignResponse = zod.object({
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
-  "listId": zod.string().uuid().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
@@ -2514,7 +2517,8 @@ export const previewCampaignBodyHtmlBodyMax = 100000;
 
 
 export const PreviewCampaignBody = zod.object({
-  "listId": zod.string().uuid(),
+  "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists; contactId must be an eligible member of at least one.'),
+  "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.'),
   "contactId": zod.string().uuid(),
   "subject": zod.string().max(previewCampaignBodySubjectMax),
   "textBody": zod.string().max(previewCampaignBodyTextBodyMax),
@@ -2525,6 +2529,28 @@ export const PreviewCampaignResponse = zod.object({
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable()
+})
+
+
+/**
+ * @summary Count unique subscribed recipients and overlaps across ordered target lists
+ */
+
+
+
+export const GetCampaignRecipientSummaryQueryParams = zod.object({
+  "listIds": zod.array(zod.coerce.string().uuid()).min(1).describe('Tenant-owned contact list IDs in campaign processing order. Repeat the parameter once per list.')
+})
+
+export const getCampaignRecipientSummaryResponseUniqueRecipientsMin = 0;
+
+export const getCampaignRecipientSummaryResponseOverlappingRecipientsMin = 0;
+
+
+
+export const GetCampaignRecipientSummaryResponse = zod.object({
+  "uniqueRecipients": zod.number().int().min(getCampaignRecipientSummaryResponseUniqueRecipientsMin),
+  "overlappingRecipients": zod.number().int().min(getCampaignRecipientSummaryResponseOverlappingRecipientsMin).describe('Email addresses found in more than one selected list.')
 })
 
 
@@ -2542,7 +2568,8 @@ export const GetCampaignDashboardResponse = zod.object({
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
-  "listId": zod.string().uuid().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
@@ -2564,7 +2591,15 @@ export const GetCampaignDashboardResponse = zod.object({
   "totalContacts": zod.number().int(),
   "eligibleContacts": zod.number().int(),
   "unsubscribedContacts": zod.number().int()
-}),zod.null()]),
+}),zod.null()]).describe('First selected list, retained for compatibility. Use targetLists for all selected lists.'),
+  "targetLists": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "active": zod.boolean(),
+  "totalContacts": zod.number().int(),
+  "eligibleContacts": zod.number().int(),
+  "unsubscribedContacts": zod.number().int()
+})),
   "pacing": zod.object({
   "emailsPerHour": zod.number().int(),
   "emailsPerDay": zod.number().int(),
@@ -2599,7 +2634,8 @@ export const UpdateCampaignBody = zod.object({
   "subject": zod.string().min(1).max(updateCampaignBodySubjectMax).optional(),
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
   "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
-  "listId": zod.string().uuid().optional()
+  "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
+  "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
 })
 
 export const UpdateCampaignResponse = zod.object({
@@ -2608,7 +2644,8 @@ export const UpdateCampaignResponse = zod.object({
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
-  "listId": zod.string().uuid().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
@@ -2767,7 +2804,8 @@ export const SendCampaignResponse = zod.object({
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
-  "listId": zod.string().uuid().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),

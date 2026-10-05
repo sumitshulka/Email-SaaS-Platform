@@ -10,6 +10,7 @@ import {
   lte,
   max,
   ne,
+  sql,
   sum,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
@@ -24,6 +25,8 @@ import {
   CreateContactResponse,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
+  GetCampaignRecipientSummaryQueryParams,
+  GetCampaignRecipientSummaryResponse,
   GetContactParams,
   GetContactResponse,
   GetContactEmailHistoryParams,
@@ -97,6 +100,10 @@ import {
   renderCampaignForContact,
   sanitizeCampaignHtml,
 } from "../lib/campaign-template";
+import {
+  summarizeCampaignAudience,
+  uniqueCampaignRecipients,
+} from "../lib/campaign-audience";
 import { decryptSecret, encryptSecret } from "../lib/security";
 import {
   estimateCampaignDeliveryAfterQueueSeconds,
@@ -538,20 +545,34 @@ async function getTenantContactEmailHistory(userId: string, contactId?: string) 
 async function isValidTenantListSelection(
   userId: string,
   listIds: string[],
+  activeOnly = false,
 ): Promise<boolean> {
   const uniqueIds = [...new Set(listIds)];
   if (uniqueIds.length !== listIds.length) return false;
   if (uniqueIds.length === 0) return true;
+  const conditions = [
+    eq(contactListsTable.userId, userId),
+    inArray(contactListsTable.id, uniqueIds),
+  ];
+  if (activeOnly) conditions.push(eq(contactListsTable.active, true));
   const rows = await db
     .select({ id: contactListsTable.id })
     .from(contactListsTable)
-    .where(
-      and(
-        eq(contactListsTable.userId, userId),
-        inArray(contactListsTable.id, uniqueIds),
-      ),
-    );
+    .where(and(...conditions));
   return rows.length === uniqueIds.length;
+}
+
+function campaignListIds(campaign: {
+  listId?: string | null;
+  listIds?: string[] | null;
+}): string[] {
+  const ids =
+    campaign.listIds && campaign.listIds.length > 0
+      ? campaign.listIds
+      : campaign.listId
+        ? [campaign.listId]
+        : [];
+  return [...new Set(ids)];
 }
 
 async function contactListPayloads(userId: string) {
@@ -578,12 +599,19 @@ async function contactListPayloads(userId: string) {
 }
 
 async function campaignPayloads(userId: string) {
-  const [campaigns, recipients, eligibleByList, settings] = await Promise.all([
-    db
-      .select()
-      .from(emailCampaignsTable)
-      .where(eq(emailCampaignsTable.userId, userId))
-      .orderBy(desc(emailCampaignsTable.createdAt)),
+  const campaigns = await db
+    .select()
+    .from(emailCampaignsTable)
+    .where(eq(emailCampaignsTable.userId, userId))
+    .orderBy(desc(emailCampaignsTable.createdAt));
+  const draftListIds = [
+    ...new Set(
+      campaigns
+        .filter((campaign) => campaign.status === "draft")
+        .flatMap(campaignListIds),
+    ),
+  ];
+  const [recipients, eligibleMemberships, settings] = await Promise.all([
     db
       .select({
         campaignId: emailCampaignRecipientsTable.campaignId,
@@ -593,26 +621,28 @@ async function campaignPayloads(userId: string) {
       })
       .from(emailCampaignRecipientsTable)
       .where(eq(emailCampaignRecipientsTable.userId, userId)),
-    db
-      .select({
-        listId: contactListMembersTable.listId,
-        value: count(),
-      })
-      .from(contactListMembersTable)
-      .innerJoin(
-        contactsTable,
-        and(
-          eq(contactsTable.id, contactListMembersTable.contactId),
-          eq(contactsTable.userId, contactListMembersTable.userId),
-        ),
-      )
-      .where(
-        and(
-          eq(contactListMembersTable.userId, userId),
-          eq(contactsTable.subscribed, true),
-        ),
-      )
-      .groupBy(contactListMembersTable.listId),
+    draftListIds.length === 0
+      ? Promise.resolve([])
+      : db
+          .select({
+            listId: contactListMembersTable.listId,
+            email: contactsTable.email,
+          })
+          .from(contactListMembersTable)
+          .innerJoin(
+            contactsTable,
+            and(
+              eq(contactsTable.id, contactListMembersTable.contactId),
+              eq(contactsTable.userId, contactListMembersTable.userId),
+            ),
+          )
+          .where(
+            and(
+              eq(contactListMembersTable.userId, userId),
+              inArray(contactListMembersTable.listId, draftListIds),
+              eq(contactsTable.subscribed, true),
+            ),
+          ),
     getPlatformSettings(),
   ]);
   const estimateNow = new Date();
@@ -706,9 +736,6 @@ async function campaignPayloads(userId: string) {
     }
     counts.set(recipient.campaignId, total);
   }
-  const eligibleCounts = new Map(
-    eligibleByList.map((row) => [row.listId, row.value]),
-  );
   return campaigns.map((campaign) => {
     const deliveryCounts = counts.get(campaign.id) ?? {
       recipients: 0,
@@ -718,13 +745,18 @@ async function campaignPayloads(userId: string) {
       suppressed: 0,
       unknown: 0,
     };
-    const recipients =
+    const listIds = campaignListIds(campaign);
+    const eligibleAudience =
       campaign.status === "draft"
-        ? eligibleCounts.get(campaign.listId ?? "") ?? 0
+        ? summarizeCampaignAudience(eligibleMemberships, listIds)
+        : null;
+    const recipientCount =
+      campaign.status === "draft"
+        ? (eligibleAudience?.uniqueRecipients ?? 0)
         : deliveryCounts.recipients;
     const remainingRecipients =
       campaign.status === "draft"
-        ? recipients
+        ? recipientCount
         : campaign.status === "completed"
           ? 0
           : deliveryCounts.queued;
@@ -748,8 +780,10 @@ async function campaignPayloads(userId: string) {
             );
     return {
       ...campaign,
+      listId: listIds[0] ?? campaign.listId ?? null,
+      listIds,
       ...deliveryCounts,
-      recipients,
+      recipients: recipientCount,
       estimatedDurationSeconds,
     };
   });
@@ -2269,33 +2303,23 @@ router.post(
     }
 
     const userId = req.authUser!.id;
-    const [list] = await db
-      .select({ id: contactListsTable.id })
-      .from(contactListsTable)
-      .where(
-        and(
-          eq(contactListsTable.id, parsed.data.listId),
-          eq(contactListsTable.userId, userId),
-          eq(contactListsTable.active, true),
-        ),
-      );
-    if (!list) {
+    const listIds =
+      parsed.data.listIds ??
+      (parsed.data.listId ? [parsed.data.listId] : []);
+    if (
+      listIds.length === 0 ||
+      !(await isValidTenantListSelection(userId, listIds, true))
+    ) {
       res.status(400).json({
-        error: "Choose an active contact list from your workspace.",
+        error: "Choose one or more active contact lists from your workspace.",
         code: "INVALID_CONTACT_LIST",
       });
       return;
     }
 
-    const [contact] = await db
+    const [requestedContact] = await db
       .select({
         email: contactsTable.email,
-        firstName: contactsTable.firstName,
-        lastName: contactsTable.lastName,
-        name: contactsTable.name,
-        companyName: contactsTable.companyName,
-        linkedinUrl: contactsTable.linkedinUrl,
-        phoneNumber: contactsTable.phoneNumber,
       })
       .from(contactListMembersTable)
       .innerJoin(
@@ -2305,16 +2329,52 @@ router.post(
       .where(
         and(
           eq(contactListMembersTable.userId, userId),
-          eq(contactListMembersTable.listId, list.id),
+          inArray(contactListMembersTable.listId, listIds),
           eq(contactListMembersTable.contactId, parsed.data.contactId),
           eq(contactsTable.userId, userId),
           eq(contactsTable.subscribed, true),
         ),
       )
       .limit(1);
+    if (!requestedContact) {
+      res.status(404).json({
+        error: "Choose a subscribed contact in at least one selected list.",
+        code: "CAMPAIGN_PREVIEW_CONTACT_NOT_FOUND",
+      });
+      return;
+    }
+
+    const matchingMemberships = await db
+      .select({
+        id: contactsTable.id,
+        listId: contactListMembersTable.listId,
+        email: contactsTable.email,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+        name: contactsTable.name,
+        companyName: contactsTable.companyName,
+        linkedinUrl: contactsTable.linkedinUrl,
+        phoneNumber: contactsTable.phoneNumber,
+        createdAt: contactsTable.createdAt,
+      })
+      .from(contactListMembersTable)
+      .innerJoin(
+        contactsTable,
+        eq(contactsTable.id, contactListMembersTable.contactId),
+      )
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          inArray(contactListMembersTable.listId, listIds),
+          eq(contactsTable.userId, userId),
+          eq(contactsTable.subscribed, true),
+          sql`lower(${contactsTable.email}) = ${requestedContact.email.trim().toLowerCase()}`,
+        ),
+      );
+    const [contact] = uniqueCampaignRecipients(matchingMemberships, listIds);
     if (!contact) {
       res.status(404).json({
-        error: "Choose a subscribed contact in the selected list.",
+        error: "Choose a subscribed contact in at least one selected list.",
         code: "CAMPAIGN_PREVIEW_CONTACT_NOT_FOUND",
       });
       return;
@@ -2336,6 +2396,64 @@ router.post(
       },
     );
     res.json(PreviewCampaignResponse.parse(rendered));
+  },
+);
+
+router.get(
+  "/campaigns/recipient-summary",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const rawListIds = req.query.listIds;
+    const listIds = Array.isArray(rawListIds)
+      ? rawListIds.filter((value): value is string => typeof value === "string")
+      : typeof rawListIds === "string"
+        ? [rawListIds]
+        : [];
+    const parsed = GetCampaignRecipientSummaryQueryParams.safeParse({
+      listIds,
+    });
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Choose one or more valid contact lists.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    if (!(await isValidTenantListSelection(userId, parsed.data.listIds))) {
+      res.status(400).json({
+        error: "Choose contact lists from your workspace.",
+        code: "INVALID_CONTACT_LIST",
+      });
+      return;
+    }
+
+    const memberships = await db
+      .select({
+        listId: contactListMembersTable.listId,
+        email: contactsTable.email,
+      })
+      .from(contactListMembersTable)
+      .innerJoin(
+        contactsTable,
+        and(
+          eq(contactsTable.id, contactListMembersTable.contactId),
+          eq(contactsTable.userId, contactListMembersTable.userId),
+        ),
+      )
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          inArray(contactListMembersTable.listId, parsed.data.listIds),
+          eq(contactsTable.subscribed, true),
+        ),
+      );
+    res.json(
+      GetCampaignRecipientSummaryResponse.parse(
+        summarizeCampaignAudience(memberships, parsed.data.listIds),
+      ),
+    );
   },
 );
 
@@ -2364,16 +2482,8 @@ router.get(
       return;
     }
 
-    let targetList: {
-      id: string;
-      name: string;
-      active: boolean;
-      totalContacts: number;
-      eligibleContacts: number;
-      unsubscribedContacts: number;
-    } | null = null;
-    if (campaign.listId) {
-      const [list] = await db
+    const [lists, totalRows, eligibleRows] = await Promise.all([
+      db
         .select({
           id: contactListsTable.id,
           name: contactListsTable.name,
@@ -2382,54 +2492,70 @@ router.get(
         .from(contactListsTable)
         .where(
           and(
-            eq(contactListsTable.id, campaign.listId),
             eq(contactListsTable.userId, userId),
+            inArray(contactListsTable.id, campaign.listIds),
           ),
-        );
-      if (list) {
-        const [total, eligible] = await Promise.all([
-          db
-            .select({ value: count() })
-            .from(contactListMembersTable)
-            .where(
-              and(
-                eq(contactListMembersTable.userId, userId),
-                eq(contactListMembersTable.listId, list.id),
-              ),
-            ),
-          db
-            .select({ value: count() })
-            .from(contactListMembersTable)
-            .innerJoin(
-              contactsTable,
-              and(
-                eq(contactsTable.id, contactListMembersTable.contactId),
-                eq(contactsTable.userId, contactListMembersTable.userId),
-              ),
-            )
-            .where(
-              and(
-                eq(contactListMembersTable.userId, userId),
-                eq(contactListMembersTable.listId, list.id),
-                eq(contactsTable.subscribed, true),
-              ),
-            ),
-        ]);
-        const totalContacts = total[0]?.value ?? 0;
-        const eligibleContacts = eligible[0]?.value ?? 0;
-        targetList = {
+        ),
+      db
+        .select({
+          listId: contactListMembersTable.listId,
+          value: count(),
+        })
+        .from(contactListMembersTable)
+        .where(
+          and(
+            eq(contactListMembersTable.userId, userId),
+            inArray(contactListMembersTable.listId, campaign.listIds),
+          ),
+        )
+        .groupBy(contactListMembersTable.listId),
+      db
+        .select({
+          listId: contactListMembersTable.listId,
+          value: count(),
+        })
+        .from(contactListMembersTable)
+        .innerJoin(
+          contactsTable,
+          and(
+            eq(contactsTable.id, contactListMembersTable.contactId),
+            eq(contactsTable.userId, contactListMembersTable.userId),
+          ),
+        )
+        .where(
+          and(
+            eq(contactListMembersTable.userId, userId),
+            inArray(contactListMembersTable.listId, campaign.listIds),
+            eq(contactsTable.subscribed, true),
+          ),
+        )
+        .groupBy(contactListMembersTable.listId),
+    ]);
+    const listsById = new Map(lists.map((list) => [list.id, list]));
+    const totalCounts = new Map(totalRows.map((row) => [row.listId, row.value]));
+    const eligibleCounts = new Map(
+      eligibleRows.map((row) => [row.listId, row.value]),
+    );
+    const targetLists = campaign.listIds.flatMap((listId) => {
+      const list = listsById.get(listId);
+      if (!list) return [];
+      const totalContacts = totalCounts.get(listId) ?? 0;
+      const eligibleContacts = eligibleCounts.get(listId) ?? 0;
+      return [
+        {
           ...list,
           totalContacts,
           eligibleContacts,
           unsubscribedContacts: Math.max(0, totalContacts - eligibleContacts),
-        };
-      }
-    }
+        },
+      ];
+    });
+    const targetList = targetLists[0] ?? null;
 
     const settings = await getPlatformSettings();
     const remainingEmails =
       campaign.status === "draft"
-        ? (targetList?.eligibleContacts ?? 0)
+        ? campaign.recipients
         : campaign.status === "completed"
           ? 0
           : campaign.queued;
@@ -2447,6 +2573,7 @@ router.get(
       GetCampaignDashboardResponse.parse({
         campaign,
         targetList,
+        targetLists,
         pacing: {
           emailsPerHour: settings.defaultEmailsPerHour,
           emailsPerDay: settings.maxEmailsPerDay,
@@ -2469,19 +2596,14 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.authUser!.id;
-  const [list] = await db
-    .select({ id: contactListsTable.id })
-    .from(contactListsTable)
-    .where(
-      and(
-        eq(contactListsTable.id, parsed.data.listId),
-        eq(contactListsTable.userId, userId),
-        eq(contactListsTable.active, true),
-      ),
-    );
-  if (!list) {
+  const listIds =
+    parsed.data.listIds ?? (parsed.data.listId ? [parsed.data.listId] : []);
+  if (
+    listIds.length === 0 ||
+    !(await isValidTenantListSelection(userId, listIds, true))
+  ) {
     res.status(400).json({
-      error: "Choose an active contact list from your workspace.",
+      error: "Choose one or more active contact lists from your workspace.",
       code: "INVALID_CONTACT_LIST",
     });
     return;
@@ -2490,7 +2612,8 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     .insert(emailCampaignsTable)
     .values({
       userId,
-      listId: list.id,
+      listId: listIds[0],
+      listIds,
       name: parsed.data.name.trim(),
       subject: parsed.data.subject.trim(),
       textBody: parsed.data.textBody,
@@ -2516,24 +2639,22 @@ router.patch(
       return;
     }
     const userId = req.authUser!.id;
-    if (parsed.data.listId) {
-      const [list] = await db
-        .select({ id: contactListsTable.id })
-        .from(contactListsTable)
-        .where(
-          and(
-            eq(contactListsTable.id, parsed.data.listId),
-            eq(contactListsTable.userId, userId),
-            eq(contactListsTable.active, true),
-          ),
-        );
-      if (!list) {
+    const requestedListIds =
+      parsed.data.listIds !== undefined
+        ? parsed.data.listIds
+        : parsed.data.listId !== undefined
+          ? [parsed.data.listId]
+          : undefined;
+    if (
+      requestedListIds !== undefined &&
+      (requestedListIds.length === 0 ||
+        !(await isValidTenantListSelection(userId, requestedListIds)))
+    ) {
         res.status(400).json({
-          error: "Choose an active contact list from your workspace.",
+          error: "Choose one or more contact lists from your workspace.",
           code: "INVALID_CONTACT_LIST",
         });
         return;
-      }
     }
     const [updated] = await db
       .update(emailCampaignsTable)
@@ -2550,7 +2671,12 @@ router.patch(
                 : null,
             }
           : {}),
-        ...(parsed.data.listId ? { listId: parsed.data.listId } : {}),
+        ...(requestedListIds !== undefined
+          ? {
+              listId: requestedListIds[0] ?? null,
+              listIds: requestedListIds,
+            }
+          : {}),
         updatedAt: new Date(),
       })
       .where(
@@ -2674,19 +2800,22 @@ router.post(
         .where(eq(tenantSendingConfigurationTable.userId, userId))
         .for("update");
       if (!sender?.verifiedAt) return { error: "sender_not_ready" as const };
-      if (!campaign.listId) return { error: "list_missing" as const };
+      const listIds = campaignListIds(campaign);
+      if (listIds.length === 0) return { error: "list_missing" as const };
 
-      const [list] = await tx
-        .select()
+      const activeLists = await tx
+        .select({ id: contactListsTable.id })
         .from(contactListsTable)
         .where(
           and(
-            eq(contactListsTable.id, campaign.listId),
             eq(contactListsTable.userId, userId),
+            inArray(contactListsTable.id, listIds),
             eq(contactListsTable.active, true),
           ),
         );
-      if (!list) return { error: "list_missing" as const };
+      if (activeLists.length !== listIds.length) {
+        return { error: "list_missing" as const };
+      }
 
       const now = new Date();
       const activeCampaigns = await tx
@@ -2798,12 +2927,14 @@ router.post(
         return { error: "concurrency_limit" as const };
       }
 
-      const recipients = await tx
+      const memberships = await tx
         .select({
           id: contactsTable.id,
+          listId: contactListMembersTable.listId,
           email: contactsTable.email,
           firstName: contactsTable.firstName,
           lastName: contactsTable.lastName,
+          createdAt: contactsTable.createdAt,
         })
         .from(contactListMembersTable)
         .innerJoin(
@@ -2813,12 +2944,13 @@ router.post(
         .where(
           and(
             eq(contactListMembersTable.userId, userId),
-            eq(contactListMembersTable.listId, list.id),
+            inArray(contactListMembersTable.listId, listIds),
             eq(contactsTable.userId, userId),
             eq(contactsTable.subscribed, true),
           ),
         )
         .orderBy(asc(contactsTable.createdAt));
+      const recipients = uniqueCampaignRecipients(memberships, listIds);
       if (recipients.length === 0) return { error: "empty_list" as const };
       if (recipients.length > settings.maxCampaignSize) {
         return { error: "campaign_size_limit" as const };

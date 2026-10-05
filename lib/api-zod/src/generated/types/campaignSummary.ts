@@ -14,8 +14,14 @@ export interface CampaignSummary {
   textBody: string;
   /** @nullable */
   htmlBody: string | null;
-  /** @nullable */
+  /**
+     * First selected list, retained for compatibility. Use listIds for the ordered audience.
+     * @deprecated
+     * @nullable
+     */
   listId: string | null;
+  /** Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses. */
+  listIds: string[];
   status: CampaignSummaryStatus;
   recipients: number;
   estimatedDurationSeconds: number;

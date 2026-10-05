@@ -357,6 +357,7 @@ memory.public.none(`
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
+    list_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
     name varchar(160) NOT NULL,
     subject varchar(200) NOT NULL,
     text_body text NOT NULL,
@@ -4727,6 +4728,39 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const otherSender = await api("/sending/settings", { cookie: other.cookie });
     assert.equal(otherSender.body.credentialsConfigured, false);
 
+    const ownerSecondaryList = await api("/contact-lists", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { name: "Owner secondary audience" },
+    });
+    assert.equal(ownerSecondaryList.response.status, 201);
+    await db.insert(dbModule.contactListMembersTable).values({
+      userId: owner.user.id,
+      listId: ownerSecondaryList.body.id,
+      contactId: ownerContacts[0].body.id,
+    });
+    const summaryParams = new URLSearchParams();
+    summaryParams.append("listIds", ownerSecondaryList.body.id);
+    summaryParams.append("listIds", ownerList.body.id);
+    const recipientSummary = await api(
+      `/campaigns/recipient-summary?${summaryParams}`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(
+      recipientSummary.response.status,
+      200,
+      JSON.stringify(recipientSummary.body),
+    );
+    assert.deepEqual(recipientSummary.body, {
+      uniqueRecipients: 3,
+      overlappingRecipients: 1,
+    });
+    const crossTenantRecipientSummary = await api(
+      `/campaigns/recipient-summary?listIds=${otherList.body.id}`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(crossTenantRecipientSummary.response.status, 400);
+
     const campaign = await api("/campaigns", {
       method: "POST",
       cookie: owner.cookie,
@@ -4735,11 +4769,16 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           subject: "A workspace update for {{firstName}}",
           textBody: "Hello {{firstName}} from the campaign.",
           htmlBody: "<p>Draft <em>format</em></p>",
-        listId: ownerList.body.id,
+        listIds: [ownerSecondaryList.body.id, ownerList.body.id],
       },
     });
     assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
     assert.equal(campaign.body.htmlBody, "<p>Draft <em>format</em></p>");
+    assert.equal(campaign.body.listId, ownerSecondaryList.body.id);
+    assert.deepEqual(campaign.body.listIds, [
+      ownerSecondaryList.body.id,
+      ownerList.body.id,
+    ]);
     const updatedCampaign = await api(`/campaigns/${campaign.body.id}`, {
       method: "PATCH",
       cookie: owner.cookie,
@@ -4757,7 +4796,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       method: "POST",
       cookie: owner.cookie,
       body: {
-        listId: ownerList.body.id,
+        listIds: [ownerSecondaryList.body.id, ownerList.body.id],
         contactId: ownerContacts[0].body.id,
         subject: "Hello {{fullName}} ({{missing}})",
         textBody: "A note for {{fullName}} at {{companyName}} from {{email}}.",
@@ -4779,7 +4818,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       method: "POST",
       cookie: owner.cookie,
       body: {
-        listId: ownerList.body.id,
+        listIds: [ownerSecondaryList.body.id, ownerList.body.id],
         contactId: otherContact.body.id,
         subject: "Hello",
         textBody: "Hello",
@@ -4799,9 +4838,13 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       cookie: owner.cookie,
     });
     assert.equal(draftDashboard.response.status, 200, JSON.stringify(draftDashboard.body));
-    assert.equal(draftDashboard.body.targetList.name, ownerList.body.name);
-    assert.equal(draftDashboard.body.targetList.totalContacts, 3);
-    assert.equal(draftDashboard.body.targetList.eligibleContacts, 3);
+    assert.equal(draftDashboard.body.targetList.name, ownerSecondaryList.body.name);
+    assert.deepEqual(
+      draftDashboard.body.targetLists.map((list) => list.name),
+      [ownerSecondaryList.body.name, ownerList.body.name],
+    );
+    assert.equal(draftDashboard.body.targetLists[0].totalContacts, 1);
+    assert.equal(draftDashboard.body.targetLists[0].eligibleContacts, 1);
     assert.equal(draftDashboard.body.pacing.remainingEmails, 3);
     assert.equal(draftDashboard.body.pacing.minimumSpacingSeconds, 36);
 
@@ -4822,6 +4865,25 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
     assert.equal(queued.body.recipients, 3);
     assert.ok(queued.body.scheduledAt);
+    const queuedRecipients = await db
+      .select({
+        email: dbModule.emailCampaignRecipientsTable.email,
+        contactId: dbModule.emailCampaignRecipientsTable.contactId,
+      })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(
+        eq(
+          dbModule.emailCampaignRecipientsTable.campaignId,
+          campaign.body.id,
+        ),
+      );
+    assert.equal(queuedRecipients.length, 3);
+    assert.equal(
+      new Set(queuedRecipients.map((recipient) => recipient.email.toLowerCase()))
+        .size,
+      3,
+      "an address selected through more than one list is queued only once",
+    );
     const scheduledRecipients = await db
       .select({ nextAttemptAt: dbModule.emailCampaignRecipientsTable.nextAttemptAt })
       .from(dbModule.emailCampaignRecipientsTable)
@@ -5479,7 +5541,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(ownerDashboard.response.status, 200);
     assert.equal(ownerDashboard.body.contacts, 3);
     assert.equal(ownerDashboard.body.companies, 1);
-    assert.equal(ownerDashboard.body.activeLists, 1);
+    assert.equal(ownerDashboard.body.activeLists, 2);
     assert.deepEqual(ownerDashboard.body.amountSpentByCurrency, [
       { currency: "INR", amountMinor: 12500 },
       { currency: "USD", amountMinor: 2345 },

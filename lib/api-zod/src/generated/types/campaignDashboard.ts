@@ -11,6 +11,11 @@ import type { CampaignTargetList } from './campaignTargetList';
 
 export interface CampaignDashboard {
   campaign: CampaignSummary;
+  /**
+     * First selected list, retained for compatibility. Use targetLists for all selected lists.
+     * @deprecated
+     */
   targetList: CampaignTargetList | null;
+  targetLists: CampaignTargetList[];
   pacing: CampaignPacing;
 }
