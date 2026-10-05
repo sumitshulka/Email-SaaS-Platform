@@ -236,7 +236,7 @@ export function SendingSettingsPage() {
     });
   };
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => void query.refetch()} label="sender settings"><>
-    <Heading eyebrow="SENDING / IDENTITY" title="Sending settings" detail="Configure the SMTP identity this workspace uses to deliver customer campaigns."/>
+    <Heading eyebrow="SENDING / IDENTITY" title="Email Setup" detail="Configure the email account this workspace uses to send campaigns and monitor delivery."/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     <section data-testid="section-gmail-bounce-monitor" className={`${panelClass} mb-5 p-5 sm:p-6`}>
       <div className="flex flex-wrap items-start justify-between gap-4">

@@ -196,11 +196,136 @@ function ResetPage() {
   const submit = (e: FormEvent) => { e.preventDefault(); reset.mutate({ data: { token, password } }, { onSuccess: () => setLocation('/') }); };
   return <AuthFrame label="Take control of your account again."><AuthTitle overline="Secure recovery" title="Choose a new password." sub="Set a new password to restore access to your Mailflow account."/><form onSubmit={submit} className="space-y-4"><Field label="Reset token" value={token} onChange={setToken} testId="input-reset-token" required hint="The secure token from your email link."/><Field label="New password" value={password} onChange={setPassword} testId="input-new-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password"/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-reset-password" disabled={reset.isPending || token.length < 32} className="w-full">{reset.isPending ? 'Saving…' : 'Set new password'}<ArrowRight className="h-4 w-4"/></Button></form></AuthFrame>;
 }
+type SidebarNavigationItem = { href: string; label: string; icon: typeof Gauge };
+type SidebarNavigationGroup = { title: string | null; items: SidebarNavigationItem[] };
+
+const workspaceNavigationGroups: SidebarNavigationGroup[] = [
+  { title: null, items: [{ href: '/dashboard', label: 'Overview', icon: Gauge }] },
+  {
+    title: 'Contacts & companies',
+    items: [
+      { href: '/companies', label: 'Companies', icon: Building2 },
+      { href: '/contacts', label: 'Contacts', icon: Users },
+      { href: '/contact-field-settings', label: 'Contact fields', icon: Settings2 },
+    ],
+  },
+  {
+    title: 'Email marketing',
+    items: [
+      { href: '/lists', label: 'Lists', icon: Activity },
+      { href: '/campaigns', label: 'Campaigns', icon: Send },
+    ],
+  },
+  {
+    title: 'Account & settings',
+    items: [
+      { href: '/notifications', label: 'Notifications', icon: Bell },
+      { href: '/sending-settings', label: 'Email Setup', icon: Settings2 },
+      { href: '/plans', label: 'Plans & billing', icon: CreditCard },
+      { href: '/profile', label: 'Profile & security', icon: UserRound },
+    ],
+  },
+];
+
+const platformNavigationGroups: SidebarNavigationGroup[] = [
+  {
+    title: null,
+    items: [
+      { href: '/admin', label: 'Overview', icon: Gauge },
+      { href: '/admin/users', label: 'Accounts', icon: Users },
+      { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { href: '/admin/billing', label: 'Billing', icon: CreditCard },
+      { href: '/admin/finance', label: 'Finance', icon: ReceiptText },
+      { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
+      { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
+    ],
+  },
+];
+
 function AppShell({ user, children, admin = false }: { user: AuthUser; children: ReactNode; admin?: boolean }) {
-   const [location, setLocation] = useLocation(); const logout = useLogout(); const [navOpen, setNavOpen] = useState(false);
-     const qc = useQueryClient(); const nav = admin ? [{ href: '/admin', label: 'Overview', icon: Gauge }, { href: '/admin/users', label: 'Accounts', icon: Users }, { href: '/admin/notifications', label: 'Notifications', icon: Bell }, { href: '/admin/billing', label: 'Billing', icon: CreditCard }, { href: '/admin/finance', label: 'Finance', icon: ReceiptText }, { href: '/admin/settings', label: 'Platform settings', icon: Settings2 }, { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck }] : [{ href: '/dashboard', label: 'Overview', icon: Gauge }, { href: '/notifications', label: 'Notifications', icon: Bell }, { href: '/campaigns', label: 'Campaigns', icon: Send }, { href: '/contacts', label: 'Contacts', icon: Users }, { href: '/contact-field-settings', label: 'Contact fields', icon: Settings2 }, { href: '/companies', label: 'Companies', icon: Building2 }, { href: '/lists', label: 'Lists', icon: Activity }, { href: '/sending-settings', label: 'Sending settings', icon: Settings2 }, { href: '/plans', label: 'Plans & billing', icon: CreditCard }, { href: '/profile', label: 'Profile & security', icon: UserRound }];
+  const [location, setLocation] = useLocation();
+  const logout = useLogout();
+  const [navOpen, setNavOpen] = useState(false);
+  const qc = useQueryClient();
+  const navGroups = admin ? platformNavigationGroups : workspaceNavigationGroups;
   const leave = () => logout.mutate(undefined, { onSuccess: () => { qc.clear(); setLocation('/'); } });
-  return <div className="min-h-[100dvh] bg-white text-[#182333]"><aside className={cn('fixed inset-y-0 left-0 z-30 flex w-[246px] flex-col border-r border-[#e3e7eb] bg-white transition-transform md:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-full')}><div className="flex h-[69px] items-center border-b border-[#e8ebef] px-6"><Link href={admin ? '/admin' : '/dashboard'} data-testid="link-shell-brand" className="no-underline"><Mark small/></Link></div><div className="px-4 pt-6"><div className="mono mb-3 px-2 text-[9px] uppercase tracking-[.18em] text-[#99a1aa]">{admin ? 'PLATFORM' : 'WORKSPACE'}</div><nav className="space-y-1">{nav.map(item => { const Icon = item.icon; const active = location === item.href || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href)); return <Link key={item.href} href={item.href} data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z]+/g, '-')}`} onClick={() => setNavOpen(false)} className={cn('flex h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium no-underline transition-colors', active ? 'bg-[#edf4fc] text-[#174f99]' : 'text-[#66717e] hover:bg-[#f5f7f9] hover:text-[#182333]')}><Icon className="h-[17px] w-[17px]"/>{item.label}{active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#ed913e]"/>}</Link>; })}</nav></div><div className="mt-auto px-4 pb-4"><div className="mb-4 border-t border-[#e8ebef] pt-4"><Link href="/profile" data-testid="nav-account-profile" className="flex items-center gap-3 rounded-md px-2 py-2 no-underline hover:bg-[#f7f8fa]"><span className="grid h-8 w-8 place-items-center rounded-md bg-[#edf2f7] text-[11px] font-bold text-[#34577c]">{(user.firstName[0] || user.username[0] || 'A').toUpperCase()}{(user.lastName[0] || '').toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#243144]">{user.firstName} {user.lastName}</span><span className="block truncate text-[10px] text-[#858f9c]">{user.email}</span></span><ChevronDown className="h-3.5 w-3.5 text-[#8b95a1]"/></Link></div><Button variant="quiet" className="w-full justify-start px-2" testId="button-logout" disabled={logout.isPending} onClick={leave}><LogOut className="h-4 w-4"/>Sign out</Button></div></aside><div className="md:pl-[246px]"><header className="sticky top-0 z-20 flex h-[69px] items-center justify-between border-b border-[#e3e7eb] bg-white/95 px-5 backdrop-blur md:px-9"><div className="flex items-center gap-3"><button data-testid="button-open-navigation" className="rounded-md p-2 text-[#66717e] hover:bg-[#f2f4f6] md:hidden" onClick={() => setNavOpen(v => !v)}><Menu className="h-5 w-5"/></button><div className="mono hidden text-[10px] uppercase tracking-[.16em] text-[#8893a0] sm:block">{admin ? 'PLATFORM CONTROL' : 'ACCOUNT CONSOLE'}</div></div><div className="flex items-center gap-3"><span className="hidden items-center gap-1.5 text-[11px] text-[#7d8794] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#4c82bb]"/>Signed in</span><div className="h-4 w-px bg-[#e3e7eb]"/><span className="mono text-[10px] text-[#7d8794]">{user.timezone}</span><Link href="/profile" data-testid="link-header-profile" className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] hover:bg-[#f4f6f8]"><UserRound className="h-4 w-4"/></Link></div></header><main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">{children}</main></div></div>;
+
+  return (
+    <div className="min-h-[100dvh] bg-white text-[#182333]">
+      <aside className={cn(
+        'fixed inset-y-0 left-0 z-30 flex w-[246px] flex-col border-r border-[#e3e7eb] bg-white transition-transform md:translate-x-0',
+        navOpen ? 'translate-x-0' : '-translate-x-full',
+      )}>
+        <div className="flex h-[69px] shrink-0 items-center border-b border-[#e8ebef] px-6">
+          <Link href={admin ? '/admin' : '/dashboard'} data-testid="link-shell-brand" className="no-underline"><Mark small/></Link>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-6">
+          <div className="mono mb-3 px-2 text-[9px] uppercase tracking-[.18em] text-[#99a1aa]">{admin ? 'PLATFORM' : 'WORKSPACE'}</div>
+          <nav className="space-y-3" aria-label={admin ? 'Platform navigation' : 'Workspace navigation'}>
+            {navGroups.map(group => (
+              <div key={group.title ?? 'overview'} className="space-y-1" role="group" aria-label={group.title ?? 'Overview'}>
+                {group.title && <div className="mono mt-3 border-t border-[#eef0f2] px-2 pb-1 pt-3 text-[9px] uppercase tracking-[.14em] text-[#99a1aa]">{group.title}</div>}
+                {group.items.map(item => {
+                  const Icon = item.icon;
+                  const active = location === item.href || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+                      onClick={() => setNavOpen(false)}
+                      className={cn(
+                        'flex h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium no-underline transition-colors',
+                        active ? 'bg-[#edf4fc] text-[#174f99]' : 'text-[#66717e] hover:bg-[#f5f7f9] hover:text-[#182333]',
+                      )}
+                    >
+                      <Icon className="h-[17px] w-[17px]"/>
+                      {item.label}
+                      {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#ed913e]"/>}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+        </div>
+        <div className="shrink-0 px-4 pb-4">
+          <div className="mb-4 border-t border-[#e8ebef] pt-4">
+            <Link href="/profile" data-testid="nav-account-profile" className="flex items-center gap-3 rounded-md px-2 py-2 no-underline hover:bg-[#f7f8fa]">
+              <span className="grid h-8 w-8 place-items-center rounded-md bg-[#edf2f7] text-[11px] font-bold text-[#34577c]">
+                {(user.firstName[0] || user.username[0] || 'A').toUpperCase()}{(user.lastName[0] || '').toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-semibold text-[#243144]">{user.firstName} {user.lastName}</span>
+                <span className="block truncate text-[10px] text-[#858f9c]">{user.email}</span>
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-[#8b95a1]"/>
+            </Link>
+          </div>
+          <Button variant="quiet" className="w-full justify-start px-2" testId="button-logout" disabled={logout.isPending} onClick={leave}>
+            <LogOut className="h-4 w-4"/>Sign out
+          </Button>
+        </div>
+      </aside>
+      <div className="md:pl-[246px]">
+        <header className="sticky top-0 z-20 flex h-[69px] items-center justify-between border-b border-[#e3e7eb] bg-white/95 px-5 backdrop-blur md:px-9">
+          <div className="flex items-center gap-3">
+            <button data-testid="button-open-navigation" aria-label="Open navigation" className="rounded-md p-2 text-[#66717e] hover:bg-[#f2f4f6] md:hidden" onClick={() => setNavOpen(v => !v)}>
+              <Menu className="h-5 w-5"/>
+            </button>
+            <div className="mono hidden text-[10px] uppercase tracking-[.16em] text-[#8893a0] sm:block">{admin ? 'PLATFORM CONTROL' : 'ACCOUNT CONSOLE'}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="hidden items-center gap-1.5 text-[11px] text-[#7d8794] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#4c82bb]"/>Signed in</span>
+            <div className="h-4 w-px bg-[#e3e7eb]"/>
+            <span className="mono text-[10px] text-[#7d8794]">{user.timezone}</span>
+            <Link href="/profile" data-testid="link-header-profile" className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] hover:bg-[#f4f6f8]"><UserRound className="h-4 w-4"/></Link>
+          </div>
+        </header>
+        <main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">{children}</main>
+      </div>
+    </div>
+  );
 }
 function Gate({ children, admin = false }: { children: (user: AuthUser) => ReactNode; admin?: boolean }) {
   const auth = useGetCurrentUser(); const [location, setLocation] = useLocation();
@@ -312,7 +437,7 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
     <section className="grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
       <Panel className="flex flex-col justify-between gap-5 bg-[#f1f6fa] p-5 sm:flex-row sm:items-center sm:p-6">
         <div><div className="mono text-[10px] uppercase tracking-[.15em] text-[#6f8295]">SENDING WORKSPACE</div><h2 className="display mt-2 text-xl font-bold text-[#1c3044]">Your tools, one workspace.</h2><p className="mt-2 max-w-xl text-[12px] leading-5 text-[#637487]">Contacts, lists, sender settings, and campaign results stay within your tenant workspace.</p></div>
-        <div className="flex shrink-0 flex-wrap gap-2"><Link href="/sending-settings" data-testid="link-workspace-sender" className="inline-flex items-center gap-2 rounded-md bg-[#174f99] px-3.5 py-2.5 text-[11px] font-semibold text-white no-underline hover:bg-[#103f7e]">Configure sender <ArrowRight className="h-3.5 w-3.5"/></Link><Link href="/campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#cad7e2] bg-white/75 px-3.5 py-2.5 text-[11px] font-semibold text-[#355571] no-underline hover:bg-white">Campaigns <ArrowRight className="h-3.5 w-3.5"/></Link></div>
+        <div className="flex shrink-0 flex-wrap gap-2"><Link href="/sending-settings" data-testid="link-workspace-sender" className="inline-flex items-center gap-2 rounded-md bg-[#174f99] px-3.5 py-2.5 text-[11px] font-semibold text-white no-underline hover:bg-[#103f7e]">Email Setup <ArrowRight className="h-3.5 w-3.5"/></Link><Link href="/campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#cad7e2] bg-white/75 px-3.5 py-2.5 text-[11px] font-semibold text-[#355571] no-underline hover:bg-white">Campaigns <ArrowRight className="h-3.5 w-3.5"/></Link></div>
       </Panel>
       <Panel className="p-5 sm:p-6">
         <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">GETTING STARTED</div><div className="mt-2 flex items-end justify-between gap-3"><div><h2 className="display text-xl font-bold">Workspace setup</h2><p className="mt-1 text-[11px] text-[#778291]">{data.setupStepsCompleted} of {data.setupStepsTotal} steps completed</p></div><span className="mono text-[15px] font-semibold text-[#245b9b]">{setupPct}%</span></div>
