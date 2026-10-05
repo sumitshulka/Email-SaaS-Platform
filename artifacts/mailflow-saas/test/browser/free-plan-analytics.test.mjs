@@ -336,7 +336,11 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Payment verification pending').waitFor();
 
-      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_payment_verification_pending', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [200],
+      }]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
     } finally {
       await context.close();
@@ -353,7 +357,11 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('status-payment').getByText('Payment needs attention').waitFor();
 
-      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['paid_payment_verification_failed', undefined],
+        freeActivationResponses: [],
+        paidVerificationResponses: [400],
+      }]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [400]);
     } finally {
       await context.close();

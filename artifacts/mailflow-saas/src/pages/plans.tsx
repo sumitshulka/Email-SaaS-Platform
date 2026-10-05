@@ -7,7 +7,7 @@ import {
   useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage } from '@workspace/api-client-react';
-import { trackEvent } from '@/lib/analytics';
+import { trackEvent, trackPaidVerificationOutcome } from '@/lib/analytics';
 
 declare global {
   interface Window {
@@ -100,13 +100,18 @@ export default function PlansPage() {
       onSuccess: result => {
         if (result.status === 'active' && result.subscription) {
           trackEvent('paid_subscription_activated');
+        } else if (result.status === 'pending') {
+          trackPaidVerificationOutcome('pending');
         }
         setPaymentState({ kind: result.status, message: result.message });
         setCheckoutOrder(null);
         void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
       },
-      onError: error => setPaymentState({ kind: 'error', message: errorText(error) }),
+      onError: error => {
+        trackPaidVerificationOutcome('failed');
+        setPaymentState({ kind: 'error', message: errorText(error) });
+      },
     });
   };
 

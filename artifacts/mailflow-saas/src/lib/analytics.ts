@@ -17,3 +17,11 @@ export function trackEvent(name: string, data?: AnalyticsData): void {
     // Analytics must never break the app.
   }
 }
+
+export function trackPaidVerificationOutcome(outcome: 'pending' | 'failed'): void {
+  trackEvent(
+    outcome === 'pending'
+      ? 'paid_payment_verification_pending'
+      : 'paid_payment_verification_failed',
+  );
+}
