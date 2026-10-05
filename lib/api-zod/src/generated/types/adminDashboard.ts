@@ -5,7 +5,13 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminDashboardCurrencyRevenue } from './adminDashboardCurrencyRevenue';
+import type { AdminDashboardPackageActivity } from './adminDashboardPackageActivity';
+import type { AdminDashboardPackageVisibility } from './adminDashboardPackageVisibility';
+import type { AdminDashboardRegistrationMonth } from './adminDashboardRegistrationMonth';
+import type { AdminDashboardRevenueMonth } from './adminDashboardRevenueMonth';
 import type { AdminUser } from './adminUser';
+import type { RazorpayEnvironment } from './razorpayEnvironment';
 
 export interface AdminDashboard {
   totalUsers: number;
@@ -14,7 +20,28 @@ export interface AdminDashboard {
   disabledUsers: number;
   newUsersThisMonth: number;
   activeSubscriptions: number;
+  activeCustomers: number;
+  activePackages: number;
+  subscriptionsEndingSoon: number;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  defaultCurrency: string;
+  /** Net production revenue this month in major units of defaultCurrency. */
   revenueThisMonth: number;
+  /** Lifetime net production revenue in major units of defaultCurrency. */
+  totalRevenue: number;
+  /** Production payments by currency. Refunded amounts are assigned to their original capture month when capture timing is available. */
+  revenueByCurrency: AdminDashboardCurrencyRevenue[];
+  registrationsByMonth: AdminDashboardRegistrationMonth[];
+  /** Six months of net production revenue in major units of defaultCurrency; refunds are assigned to the original capture month. */
+  revenueTrend: AdminDashboardRevenueMonth[];
+  activeSubscriptionsByPackage: AdminDashboardPackageActivity[];
+  billingEnvironment: RazorpayEnvironment | null;
+  applicationEmailConfigured: boolean;
+  maintenanceMode: boolean;
+  packageVisibility: AdminDashboardPackageVisibility;
   emailsSent: number;
   recentUsers: AdminUser[];
 }

@@ -20,6 +20,33 @@ memory.public.registerFunction({
   implementation: () => randomUUID(),
   impure: true,
 });
+memory.public.registerOperator({
+  operator: "AT TIME ZONE",
+  left: DataType.timestamptz,
+  right: DataType.text,
+  returns: DataType.timestamp,
+  implementation: (value) => value,
+});
+memory.public.registerFunction({
+  name: "date_trunc",
+  args: [DataType.text, DataType.timestamp],
+  returns: DataType.timestamp,
+  implementation: (unit, value) => {
+    const date = new Date(value);
+    if (unit !== "month") throw new Error(`Unsupported test date_trunc unit: ${unit}`);
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  },
+});
+memory.public.registerFunction({
+  name: "to_char",
+  args: [DataType.timestamp, DataType.text],
+  returns: DataType.text,
+  implementation: (value, format) => {
+    if (format !== "YYYY-MM") throw new Error(`Unsupported test to_char format: ${format}`);
+    const date = new Date(value);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  },
+});
 
 memory.public.none(`
   CREATE TYPE user_role AS ENUM ('SUPERADMIN', 'USER');
@@ -815,6 +842,196 @@ async function getEmailCode() {
   assert.ok(match, "verification email should contain a six-digit code");
   return match[1];
 }
+
+describe("Superadmin overview", { concurrency: false }, () => {
+  it("reports production revenue by currency and current account operations", async () => {
+    const admin = await createUser({
+      username: "overview-admin",
+      role: "SUPERADMIN",
+    });
+    const session = await login(admin.email);
+    assert.equal(session.response.status, 200, JSON.stringify(session.body));
+
+    const currentCustomer = await createUser({ username: "overview-current" });
+    const refundedCustomer = await createUser({ username: "overview-refunded" });
+    const [inrPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Overview INR",
+        description: "",
+        amountMinor: 15000,
+        currency: "INR",
+        periodDays: 30,
+      })
+      .returning();
+    const [usdPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Overview USD",
+        description: "",
+        amountMinor: 1999,
+        currency: "USD",
+        periodDays: 30,
+      })
+      .returning();
+    const [capturedInr, refundedInr, capturedUsd, currentRefundInr, sandboxInr] = await db
+      .insert(dbModule.paymentsTable)
+      .values([
+        {
+          userId: currentCustomer.id,
+          packageId: inrPackage.id,
+          receipt: "overview-captured-inr",
+          amountMinor: 15000,
+          currency: "INR",
+          status: "captured",
+          razorpayEnvironment: "production",
+          updatedAt: new Date(),
+        },
+        {
+          userId: refundedCustomer.id,
+          packageId: inrPackage.id,
+          receipt: "overview-refunded-inr",
+          amountMinor: 2500,
+          currency: "INR",
+          status: "refunded",
+          razorpayEnvironment: "production",
+          updatedAt: new Date(),
+        },
+        {
+          userId: currentCustomer.id,
+          packageId: usdPackage.id,
+          receipt: "overview-captured-usd",
+          amountMinor: 1999,
+          currency: "USD",
+          status: "captured",
+          razorpayEnvironment: "production",
+          updatedAt: new Date(),
+        },
+        {
+          userId: currentCustomer.id,
+          packageId: inrPackage.id,
+          receipt: "overview-current-refund-inr",
+          amountMinor: 5000,
+          currency: "INR",
+          status: "refunded",
+          razorpayEnvironment: "production",
+          updatedAt: new Date(),
+        },
+        {
+          userId: currentCustomer.id,
+          packageId: inrPackage.id,
+          receipt: "overview-sandbox-inr",
+          amountMinor: 900000,
+          currency: "INR",
+          status: "captured",
+          razorpayEnvironment: "sandbox",
+          updatedAt: new Date(),
+        },
+      ])
+      .returning();
+    const now = new Date();
+    const priorMonthCapture = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15),
+    );
+    await db.insert(dbModule.userSubscriptionsTable).values([
+      {
+        userId: currentCustomer.id,
+        packageId: inrPackage.id,
+        paymentId: capturedInr.id,
+        status: "active",
+        startsAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        endsAt: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+      },
+      {
+        userId: refundedCustomer.id,
+        packageId: inrPackage.id,
+        paymentId: refundedInr.id,
+        status: "cancelled",
+        startsAt: new Date(priorMonthCapture.getTime() - 30 * 24 * 60 * 60 * 1000),
+        endsAt: priorMonthCapture,
+        createdAt: priorMonthCapture,
+      },
+    ]);
+    await db.insert(dbModule.razorpayConfigurationTable).values({
+      id: "platform",
+      keyId: "rzp_live_overview",
+      keySecretEncrypted: securityModule.encryptSecret("overview-key-secret"),
+      webhookSecretEncrypted: securityModule.encryptSecret("overview-webhook-secret"),
+      activeEnvironment: "production",
+    });
+
+    const dashboard = await api("/admin/dashboard", { cookie: session.cookie });
+    assert.equal(dashboard.response.status, 200, JSON.stringify(dashboard.body));
+    assert.equal(dashboard.body.newUsersThisMonth, 2);
+    assert.equal(dashboard.body.activeSubscriptions, 1);
+    assert.equal(dashboard.body.activeCustomers, 1);
+    assert.equal(dashboard.body.activePackages, 2);
+    assert.equal(dashboard.body.subscriptionsEndingSoon, 1);
+    assert.equal(dashboard.body.defaultCurrency, "INR");
+    assert.equal(dashboard.body.revenueThisMonth, 100);
+    assert.equal(dashboard.body.totalRevenue, 75);
+    assert.deepEqual(dashboard.body.revenueByCurrency.map(({ currency }) => currency), [
+      "INR",
+      "USD",
+    ]);
+    assert.deepEqual(
+      dashboard.body.revenueByCurrency.map(({ currency, revenueThisMonth }) => ({
+        currency,
+        revenueThisMonth,
+      })),
+      [
+        { currency: "INR", revenueThisMonth: 100 },
+        { currency: "USD", revenueThisMonth: 19.99 },
+      ],
+    );
+    assert.equal(dashboard.body.revenueByCurrency[0].refundedThisMonth, 50);
+    assert.equal(dashboard.body.revenueByCurrency[0].totalRevenue, 75);
+    assert.equal(dashboard.body.revenueByCurrency[0].refundedLifetime, 75);
+    assert.equal(dashboard.body.revenueByCurrency[0].capturedPaymentsTotal, 1);
+    assert.equal(dashboard.body.revenueByCurrency[0].refundedPaymentsTotal, 2);
+    assert.equal(dashboard.body.revenueByCurrency[0].revenueThisMonth, 100);
+    assert.equal(dashboard.body.revenueTrend.at(-1).revenue, 100);
+    assert.equal(dashboard.body.registrationsByMonth.at(-1).registrations, 2);
+    assert.deepEqual(dashboard.body.activeSubscriptionsByPackage, [
+      { packageName: "Overview INR", activeSubscriptions: 1 },
+    ]);
+    assert.equal(dashboard.body.billingEnvironment, "production");
+    assert.equal(dashboard.body.applicationEmailConfigured, true);
+    assert.equal(dashboard.body.maintenanceMode, false);
+    assert.equal(dashboard.body.packageVisibility, "public");
+  });
+
+  it("returns explicit zero and unconfigured states before customers or payments exist", async () => {
+    const admin = await createUser({
+      username: "overview-empty-admin",
+      role: "SUPERADMIN",
+    });
+    const session = await login(admin.email);
+    assert.equal(session.response.status, 200, JSON.stringify(session.body));
+
+    const dashboard = await api("/admin/dashboard", { cookie: session.cookie });
+    assert.equal(dashboard.response.status, 200, JSON.stringify(dashboard.body));
+    assert.equal(dashboard.body.totalUsers, 0);
+    assert.equal(dashboard.body.newUsersThisMonth, 0);
+    assert.equal(dashboard.body.activeSubscriptions, 0);
+    assert.equal(dashboard.body.activeCustomers, 0);
+    assert.equal(dashboard.body.activePackages, 0);
+    assert.equal(dashboard.body.subscriptionsEndingSoon, 0);
+    assert.deepEqual(dashboard.body.revenueByCurrency, []);
+    assert.deepEqual(dashboard.body.activeSubscriptionsByPackage, []);
+    assert.equal(dashboard.body.registrationsByMonth.length, 6);
+    assert.ok(dashboard.body.registrationsByMonth.every((month) => month.registrations === 0));
+    assert.equal(dashboard.body.revenueTrend.length, 6);
+    assert.ok(dashboard.body.revenueTrend.every((month) => month.revenue === 0));
+    assert.equal(dashboard.body.billingEnvironment, null);
+    assert.equal(dashboard.body.applicationEmailConfigured, true);
+    assert.equal(dashboard.body.maintenanceMode, false);
+    assert.equal(dashboard.body.packageVisibility, "public");
+    assert.equal(dashboard.body.emailsSent, 0);
+    assert.deepEqual(dashboard.body.recentUsers, []);
+  });
+});
 
 describe("Razorpay environment configuration", { concurrency: false }, () => {
   it("keeps one active mode, preserves old payment mode, and tests saved inactive credentials", async () => {

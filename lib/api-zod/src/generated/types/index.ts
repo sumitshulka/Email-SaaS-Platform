@@ -7,6 +7,11 @@
  */
 
 export * from './adminDashboard';
+export * from './adminDashboardCurrencyRevenue';
+export * from './adminDashboardPackageActivity';
+export * from './adminDashboardPackageVisibility';
+export * from './adminDashboardRegistrationMonth';
+export * from './adminDashboardRevenueMonth';
 export * from './adminFinanceAccount';
 export * from './adminFinanceAccountStatus';
 export * from './adminFinanceCurrencySummary';

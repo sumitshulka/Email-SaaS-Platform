@@ -265,8 +265,167 @@ function CampaignDatum({ label, value, hint }: { label: string; value: number | 
 function AdminDashboardPage() {
   const query = useGetAdminDashboard(); const d = query.data;
   if (query.isLoading) return <LoadingPanel label="Loading platform overview"/>;
-  if (query.isError || !d) return <QueryProblem retry={() => query.refetch()}/>;
-  return <><PageHeading eyebrow="PLATFORM CONTROL" title="Platform overview" detail="A live view of customer-account activity and access." trailing={<StatusPill>Operator access</StatusPill>}/><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Total accounts" value={d.totalUsers.toLocaleString()} sub={`${d.newUsersThisMonth} new this month`} icon={Users}/><Metric label="Active accounts" value={d.activeUsers.toLocaleString()} sub="Verified and enabled" icon={BadgeCheck}/><Metric label="Pending verification" value={d.pendingUsers.toLocaleString()} sub="Awaiting email confirmation" icon={ShieldCheck}/><Metric label="Disabled accounts" value={d.disabledUsers.toLocaleString()} sub="Access currently disabled" icon={UserRound} accent="orange"/></div><div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]"><Panel className="p-6"><div className="flex items-start justify-between"><div><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">ACCOUNT ACTIVITY</div><h2 className="display mt-2 text-xl font-bold">Recent accounts</h2></div><Link href="/admin/users" data-testid="link-all-accounts" className="flex items-center gap-1 text-[12px] font-semibold text-[#245b9b] no-underline">All accounts <ArrowRight className="h-3.5 w-3.5"/></Link></div>{d.recentUsers.length ? <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[540px] text-left"><thead><tr className="border-b border-[#e9edf0] text-[10px] uppercase tracking-[.12em] text-[#8b95a1]"><th className="pb-3 font-medium">Account</th><th className="pb-3 font-medium">Joined</th><th className="pb-3 font-medium">Status</th></tr></thead><tbody>{d.recentUsers.map((u: AdminUser) => <tr key={u.id} data-testid={`row-recent-user-${u.id}`} className="border-b border-[#f0f2f4] last:border-0"><td className="py-3"><div className="text-[12px] font-semibold">{u.firstName} {u.lastName}</div><div className="mt-0.5 text-[11px] text-[#7d8794]">{u.email}</div></td><td className="py-3 text-[11px] text-[#6d7886]">{new Date(u.createdAt).toLocaleDateString()}</td><td className="py-3"><StatusPill tone={u.active ? 'blue' : 'orange'}>{u.active ? 'Active' : 'Disabled'}</StatusPill></td></tr>)}</tbody></table></div> : <div className="py-12 text-center text-[12px] text-[#7d8794]">No account activity to display.</div>}</Panel><div className="space-y-5"><Panel className="p-6"><div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">ACTIVE CAPABILITIES</div><div className="mt-4 text-[14px] font-semibold">Identity, billing, and platform controls</div><p className="mt-2 text-[12px] leading-5 text-[#747f8c]">Account administration, security settings, and application email are active. Razorpay and subscription packages are ready to configure; customers can pay after gateway credentials and plans are set up. Campaigns and delivery reporting are planned for later phases.</p><div className="mt-5 flex justify-between border-t border-[#edf0f2] pt-4 text-[12px]"><span className="text-[#6d7886]">New accounts this month</span><span className="mono font-medium">{d.newUsersThisMonth}</span></div><Link href="/admin/billing" data-testid="link-admin-billing" className="mt-4 flex items-center justify-between border-t border-[#edf0f2] pt-4 text-[12px] font-semibold text-[#245b9b] no-underline">Configure Razorpay & packages <ArrowRight className="h-4 w-4"/></Link><Link href="/admin/settings" data-testid="link-platform-settings" className="mt-4 flex items-center justify-between border-t border-[#edf0f2] pt-4 text-[12px] font-semibold text-[#245b9b] no-underline">Review settings <ArrowRight className="h-4 w-4"/></Link></Panel><Panel className="p-6"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-[#245b9b]"/><div className="text-[13px] font-semibold">Platform status</div></div><p className="mt-2 text-[12px] leading-5 text-[#747f8c]">Review account access and system configuration from operator controls.</p></Panel></div></div></>;
+  if (query.isError || !d) return <QueryProblem retry={() => void query.refetch()}/>;
+
+  const formatCurrency = (amount: number, currency: string) => {
+    try {
+      const digits = new Intl.NumberFormat(undefined, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: digits }).format(amount);
+    } catch {
+      return `${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    }
+  };
+  const monthLabel = (value: string) => {
+    const [year, month] = value.split('-').map(Number);
+    return new Intl.DateTimeFormat(undefined, { month: 'short' }).format(new Date(year, month - 1, 1));
+  };
+  const accountState = [
+    { label: 'Enabled', value: d.activeUsers, color: '#4f8068' },
+    { label: 'Pending', value: d.pendingUsers, color: '#d58a4b' },
+    { label: 'Disabled', value: d.disabledUsers, color: '#a6afb8' },
+  ];
+  const maxPackageCount = Math.max(1, ...d.activeSubscriptionsByPackage.map(item => item.activeSubscriptions));
+  const historyHasRegistrations = d.registrationsByMonth.some(item => item.registrations > 0);
+  const historyHasRevenue = d.revenueTrend.some(item => item.revenue > 0);
+  const quickLinks = [
+    { href: '/admin/users', label: 'Manage accounts', detail: 'Access, verification and status', icon: Users, testId: 'link-admin-overview-accounts' },
+    { href: '/admin/finance', label: 'Review finance', detail: 'Payment ledger and refunds', icon: ReceiptText, testId: 'link-admin-overview-finance' },
+    { href: '/admin/billing', label: 'Billing & plans', detail: 'Gateway and package controls', icon: CreditCard, testId: 'link-admin-overview-billing' },
+    { href: '/admin/settings', label: 'Platform settings', detail: 'Operations and application email', icon: Settings2, testId: 'link-admin-overview-settings' },
+    { href: '/admin/google-oauth', label: 'Gmail setup', detail: 'OAuth configuration', icon: ShieldCheck, testId: 'link-admin-overview-google-oauth' },
+  ];
+  return <div className="fade-in space-y-5">
+    <PageHeading eyebrow="PLATFORM CONTROL / OPERATIONS" title="Platform overview" detail="Account access, subscription health, revenue and configuration at a glance."
+      trailing={<div className="flex items-center gap-2"><span className="mono hidden text-[10px] text-[#87919b] sm:block">DEFAULT CURRENCY</span><StatusPill>{d.defaultCurrency}</StatusPill></div>}/>
+
+    <section aria-label="Platform headline metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Panel className="border-[#dce6e0] bg-[#f4f8f4] p-4" data-testid="dashboard-value-new-accounts">
+        <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#557064]">Registrations this month</div><span className="grid h-8 w-8 place-items-center rounded-md bg-white text-[#4f8068]"><UserRound className="h-4 w-4"/></span></div>
+        <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#25473d]">{d.newUsersThisMonth.toLocaleString()}</div>
+        <div className="mt-2 text-[10px] text-[#75877e]">New platform accounts</div>
+      </Panel>
+      <Panel className="p-4" data-testid="dashboard-value-active-subscriptions">
+        <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#6d7886]">Active subscription access</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#edf4fc] text-[#245b9b]"><BadgeCheck className="h-4 w-4"/></span></div>
+        <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#192638]">{d.activeSubscriptions.toLocaleString()}</div>
+        <div className="mt-2 text-[10px] text-[#7e8894]">{d.activeCustomers.toLocaleString()} accounts with access; may include gifted or comped</div>
+      </Panel>
+      <Panel className={cn('p-4', d.subscriptionsEndingSoon > 0 && 'border-[#ead8c4] bg-[#fffaf4]')} data-testid="dashboard-value-ending-soon">
+        <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#6d7886]">Ending within 7 days</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#fff2e6] text-[#bc6829]"><Clock3 className="h-4 w-4"/></span></div>
+        <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#192638]">{d.subscriptionsEndingSoon.toLocaleString()}</div>
+        <div className="mt-2 text-[10px] text-[#7e8894]">{d.subscriptionsEndingSoon ? 'Review renewals and customer access' : 'No upcoming expirations'}</div>
+      </Panel>
+      <Panel className="p-4" data-testid="dashboard-value-active-packages">
+        <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#6d7886]">Active packages</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#f3f1ea] text-[#826d46]"><SlidersHorizontal className="h-4 w-4"/></span></div>
+        <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#192638]">{d.activePackages.toLocaleString()}</div>
+        <div className="mt-2 text-[10px] text-[#7e8894]">{d.packageVisibility === 'public' ? 'Packages visible to customers' : 'Packages currently hidden'}</div>
+      </Panel>
+    </section>
+
+    <section aria-label="Account access and revenue" className="grid gap-4 xl:grid-cols-[.92fr_1.08fr]">
+      <Panel className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">ACCOUNT ACCESS</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Customer account state</h2></div>
+          <Link href="/admin/users" data-testid="link-access-accounts" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Accounts <ArrowRight className="h-3.5 w-3.5"/></Link>
+        </div>
+        <div className="mt-4 flex items-end justify-between gap-4">
+          <div><div className="mono text-[9px] uppercase tracking-[.1em] text-[#8b95a1]">TOTAL ACCOUNTS</div><div className="display mt-1 text-[27px] font-bold leading-none text-[#192638]" data-testid="dashboard-value-total-accounts">{d.totalUsers.toLocaleString()}</div></div>
+          <div className="text-right"><div className="text-[10px] text-[#808a97]">New this month</div><div className="mono mt-1 text-[13px] font-semibold text-[#425364]" data-testid="dashboard-value-monthly-registrations">{d.newUsersThisMonth.toLocaleString()}</div></div>
+        </div>
+        <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-[#edf0f2]" role="img" aria-label={`Account state: ${d.activeUsers} active, ${d.pendingUsers} pending, ${d.disabledUsers} disabled`}>
+          {d.totalUsers > 0 && accountState.map(state => <span key={state.label} style={{ width: `${state.value / d.totalUsers * 100}%`, backgroundColor: state.color }} />)}
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {accountState.map(state => <div key={state.label} className="border-l-2 pl-2.5" style={{ borderColor: state.color }}><div className="text-[10px] text-[#788390]">{state.label}</div><div className="mono mt-0.5 text-[13px] font-semibold text-[#334255]" data-testid={`dashboard-value-account-${state.label.toLowerCase()}`}>{state.value.toLocaleString()}</div></div>)}
+        </div>
+        {d.totalUsers === 0 && <p className="mt-3 text-[11px] text-[#798491]">No customer accounts have been created yet.</p>}
+      </Panel>
+      <Panel className="flex flex-col justify-between border-[#dce6e0] bg-[#f4f8f4] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#71867b]">PRODUCTION BILLING / {d.defaultCurrency}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263f37]">Net revenue</h2></div>
+          <Link href="/admin/finance" data-testid="link-revenue-finance" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#34776b] no-underline hover:underline">Payment ledger <ArrowRight className="h-3.5 w-3.5"/></Link>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div><div className="text-[10px] font-medium text-[#75877e]">This month</div><div className="display mt-1 text-[25px] font-bold tracking-[-.04em] text-[#25473d]" data-testid="dashboard-value-revenue-month">{formatCurrency(d.revenueThisMonth, d.defaultCurrency)}</div></div>
+          <div className="sm:border-l sm:border-[#dce6e0] sm:pl-5"><div className="text-[10px] font-medium text-[#75877e]">Lifetime</div><div className="display mt-1 text-[25px] font-bold tracking-[-.04em] text-[#25473d]" data-testid="dashboard-value-revenue-lifetime">{formatCurrency(d.totalRevenue, d.defaultCurrency)}</div></div>
+        </div>
+        <p className="mt-4 border-t border-[#dce6e0] pt-3 text-[10px] leading-4 text-[#74877d]">Production payments only; sandbox is excluded. Revenue is net of full refunds. Refunds are assigned to the original capture month because the ledger does not store refund timestamps.</p>
+      </Panel>
+    </section>
+
+    <section aria-label="Six-month operating trends" className="grid gap-4 xl:grid-cols-2">
+      <Panel className="p-5">
+        <ChartHeading eyebrow="ACQUISITION / LAST 6 MONTHS" title="Registrations" detail="New accounts created each month"/>
+        {historyHasRegistrations ? <div className="mt-4 h-[210px]" data-testid="chart-registrations">
+          <ResponsiveContainer width="100%" height="100%"><BarChart data={d.registrationsByMonth} margin={{ top: 8, right: 6, left: -24, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="#edf0ee"/><XAxis dataKey="month" tickFormatter={monthLabel} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#87919b' }}/><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#87919b' }}/><Tooltip contentStyle={chartTooltip} labelFormatter={label => monthLabel(String(label))} formatter={(value: number) => [value.toLocaleString(), 'Registrations']}/><Bar dataKey="registrations" name="Registrations" fill="#4f8068" radius={[3, 3, 0, 0]} maxBarSize={34}/>
+          </BarChart></ResponsiveContainer>
+        </div> : <div className="mt-4"><ChartEmpty title="No registrations in this period" body="Monthly account history will appear here once new customers register."/></div>}
+      </Panel>
+      <Panel className="p-5">
+        <ChartHeading eyebrow={`REVENUE / ${d.defaultCurrency} / LAST 6 MONTHS`} title="Net revenue trend" detail="Default currency only; currencies are never combined"/>
+        {historyHasRevenue ? <div className="mt-4 h-[210px]" data-testid="chart-revenue-history">
+          <ResponsiveContainer width="100%" height="100%"><BarChart data={d.revenueTrend} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="#edf0ee"/><XAxis dataKey="month" tickFormatter={monthLabel} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#87919b' }}/><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#87919b' }} tickFormatter={value => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value))}/><Tooltip contentStyle={chartTooltip} labelFormatter={label => monthLabel(String(label))} formatter={(value: number) => [formatCurrency(value, d.defaultCurrency), `Net ${d.defaultCurrency}`]}/><Bar dataKey="revenue" name={`Net ${d.defaultCurrency}`} fill="#3f7690" radius={[3, 3, 0, 0]} maxBarSize={34}/>
+          </BarChart></ResponsiveContainer>
+        </div> : <div className="mt-4"><ChartEmpty title="No revenue in this period" body={`No production revenue is recorded in ${d.defaultCurrency} for the six-month history.`}/></div>}
+        <p className="mt-2 text-[10px] leading-4 text-[#7e8894]">Refunds are recorded against their original capture month; exact refund timing is not available in the ledger.</p>
+      </Panel>
+    </section>
+
+    <section aria-label="Subscription plans and currency ledger" className="grid gap-4 xl:grid-cols-[.82fr_1.18fr]">
+      <Panel className="p-5">
+        <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">CURRENT ACCESS</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Plan distribution</h2></div><Link href="/admin/billing" data-testid="link-package-billing" className="text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Plans <ArrowRight className="ml-1 inline h-3.5 w-3.5"/></Link></div>
+        <p className="mt-1 text-[10px] leading-4 text-[#818c97]">Active subscription access by package; access may be gifted or comped.</p>
+        {d.activeSubscriptionsByPackage.length ? <div className="mt-4 space-y-3">
+          {d.activeSubscriptionsByPackage.map((item, index) => <div key={item.packageName} data-testid={`package-distribution-${index}`}>
+            <div className="mb-1 flex items-baseline justify-between gap-3"><span className="truncate text-[11px] font-medium text-[#455365]">{item.packageName}</span><span className="mono shrink-0 text-[11px] font-semibold text-[#344154]">{item.activeSubscriptions.toLocaleString()}</span></div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-[#edf0f2]"><div className="h-full rounded-full bg-[#668ba1]" style={{ width: `${Math.max(item.activeSubscriptions > 0 ? 2 : 0, item.activeSubscriptions / maxPackageCount * 100)}%` }}/></div>
+          </div>)}
+        </div> : <div className="mt-4 rounded-md border border-dashed border-[#dce3de] bg-[#fbfcfa] px-4 py-7 text-center"><div className="text-[12px] font-semibold text-[#52616e]">No active package access</div><p className="mt-1 text-[10px] text-[#818c97]">Active plan assignments will appear here.</p></div>}
+      </Panel>
+      <Panel className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">LEDGER SUMMARY</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Revenue by currency</h2></div><Link href="/admin/finance" data-testid="link-currency-finance" className="text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Open finance <ArrowRight className="ml-1 inline h-3.5 w-3.5"/></Link></div>
+        <p className="mt-1 text-[10px] leading-4 text-[#818c97]">Each currency is reported separately. Values reflect production capture totals net of full refunds.</p>
+        {d.revenueByCurrency.length ? <div className="mt-4 space-y-3">
+          {d.revenueByCurrency.map(item => <div key={item.currency} data-testid={`currency-summary-${item.currency.toLowerCase()}`} className="rounded-md border border-[#e8ecef] bg-[#fbfcfb] p-3">
+            <div className="mb-2 flex items-center justify-between border-b border-[#edf0f2] pb-2"><span className="mono text-[11px] font-semibold tracking-wide text-[#435465]">{item.currency}</span><span className="text-[9px] text-[#89939d]">MONTH / LIFETIME</span></div>
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2 text-[10px]">
+              <span className="text-[#778390]">Net revenue</span><span className="mono text-right font-semibold text-[#334255]">{formatCurrency(item.revenueThisMonth, item.currency)}</span><span className="mono text-right font-semibold text-[#334255]">{formatCurrency(item.totalRevenue, item.currency)}</span>
+              <span className="text-[#778390]">Captured / refunded</span><span className="text-right text-[#52616e]">{item.capturedPaymentsThisMonth.toLocaleString()} / {item.refundedPaymentsThisMonth.toLocaleString()} payments</span><span className="text-right text-[#52616e]">{item.capturedPaymentsTotal.toLocaleString()} / {item.refundedPaymentsTotal.toLocaleString()} payments</span>
+              <span className="text-[#778390]">Captured gross</span><span className="mono text-right text-[#52616e]">{formatCurrency(item.capturedThisMonth, item.currency)}</span><span className="mono text-right text-[#52616e]">{formatCurrency(item.capturedLifetime, item.currency)}</span>
+              <span className="text-[#778390]">Refunded</span><span className="mono text-right text-[#9a6547]">{formatCurrency(item.refundedThisMonth, item.currency)}</span><span className="mono text-right text-[#9a6547]">{formatCurrency(item.refundedLifetime, item.currency)}</span>
+            </div>
+          </div>)}
+        </div> : <div className="mt-4 rounded-md border border-dashed border-[#dce3de] bg-[#fbfcfa] px-4 py-7 text-center"><div className="text-[12px] font-semibold text-[#52616e]">No payment activity recorded</div><p className="mt-1 text-[10px] text-[#818c97]">Currency totals will appear after production payments are captured.</p></div>}
+      </Panel>
+    </section>
+
+    <section aria-label="Platform configuration and recent accounts" className="grid gap-4 xl:grid-cols-[.9fr_1.1fr]">
+      <Panel className="p-5">
+        <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">CONTROL PLANE</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Operational configuration</h2></div><Link href="/admin/settings" data-testid="link-configuration-settings" className="text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Settings <ArrowRight className="ml-1 inline h-3.5 w-3.5"/></Link></div>
+        <div className="mt-4 divide-y divide-[#edf0f2]">
+          <div className="flex items-center justify-between gap-3 py-2.5"><span className="text-[11px] text-[#657282]">Razorpay environment</span><StatusPill tone={d.billingEnvironment === 'production' ? 'blue' : 'orange'}>{d.billingEnvironment ? d.billingEnvironment : 'Not configured'}</StatusPill></div>
+          <div className="flex items-center justify-between gap-3 py-2.5"><span className="text-[11px] text-[#657282]">Application SMTP</span><StatusPill tone={d.applicationEmailConfigured ? 'blue' : 'gray'}>{d.applicationEmailConfigured ? 'Settings saved' : 'Not configured'}</StatusPill></div>
+          <div className="flex items-center justify-between gap-3 py-2.5"><span className="text-[11px] text-[#657282]">Maintenance mode</span><StatusPill tone={d.maintenanceMode ? 'orange' : 'blue'}>{d.maintenanceMode ? 'Enabled' : 'Off'}</StatusPill></div>
+          <div className="flex items-center justify-between gap-3 py-2.5"><span className="text-[11px] text-[#657282]">Plan visibility</span><StatusPill tone={d.packageVisibility === 'public' ? 'blue' : 'gray'}>{d.packageVisibility === 'public' ? 'Public' : 'Hidden'}</StatusPill></div>
+        </div>
+        <p className="mt-2 border-t border-[#edf0f2] pt-3 text-[10px] leading-4 text-[#818c97]">SMTP status confirms saved settings only, not a successful connection or delivery. Email attempts: <span className="mono font-semibold text-[#566475]" data-testid="dashboard-value-email-attempts">{d.emailsSent.toLocaleString()}</span>; this is an attempt count, not confirmed inbox delivery.</p>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          <Link href="/admin/billing" data-testid="link-configuration-billing" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Billing controls</Link>
+          <Link href="/admin/settings" data-testid="link-configuration-platform" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Platform settings</Link>
+          <Link href="/admin/google-oauth" data-testid="link-configuration-oauth" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Gmail OAuth</Link>
+        </div>
+      </Panel>
+      <Panel className="p-5">
+        <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">LATEST SIGN-UPS</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Recent accounts</h2></div><Link href="/admin/users" data-testid="link-all-accounts" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">All accounts <ArrowRight className="h-3.5 w-3.5"/></Link></div>
+        {d.recentUsers.length ? <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[490px] text-left"><thead><tr className="border-b border-[#e9edf0] text-[9px] uppercase tracking-[.11em] text-[#8b95a1]"><th className="pb-2 font-medium">Account</th><th className="pb-2 font-medium">Joined</th><th className="pb-2 font-medium">Access</th><th className="pb-2 font-medium">Plan</th></tr></thead><tbody>{d.recentUsers.map((u: AdminUser) => <tr key={u.id} data-testid={`row-recent-user-${u.id}`} className="border-b border-[#f0f2f4] last:border-0"><td className="py-2.5"><div className="text-[11px] font-semibold text-[#344154]">{u.firstName} {u.lastName}</div><div className="mt-0.5 text-[10px] text-[#7d8794]">{u.email}</div></td><td className="whitespace-nowrap py-2.5 text-[10px] text-[#6d7886]">{new Date(u.createdAt).toLocaleDateString()}</td><td className="py-2.5"><div className="flex flex-wrap gap-1"><StatusPill tone={u.active ? 'blue' : 'orange'}>{u.active ? 'Enabled' : 'Disabled'}</StatusPill>{!u.emailVerified && <StatusPill tone="orange">Unverified</StatusPill>}</div></td><td className="py-2.5 text-[10px] capitalize text-[#687484]">{u.subscriptionStatus || 'No plan'}</td></tr>)}</tbody></table></div> : <div className="mt-4 rounded-md border border-dashed border-[#dce3de] bg-[#fbfcfa] px-4 py-8 text-center"><div className="text-[12px] font-semibold text-[#52616e]">No recent accounts</div><p className="mt-1 text-[10px] text-[#818c97]">New tenant sign-ups will appear here.</p></div>}
+      </Panel>
+    </section>
+
+    <Panel className="p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Activity className="h-4 w-4 text-[#557b8f]"/><span className="text-[11px] font-semibold text-[#455365]">Quick access</span></div><nav aria-label="Admin destinations" className="flex flex-wrap gap-x-5 gap-y-2">{quickLinks.map(item => { const Icon = item.icon; return <Link key={item.href} href={item.href} data-testid={item.testId} title={item.detail} className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#536b7c] no-underline hover:text-[#174f99]"><Icon className="h-3.5 w-3.5"/>{item.label}</Link>; })}</nav></div>
+    </Panel>
+  </div>;
 }
 function AdminUsersPage() {
   const [search, setSearch] = useState(''); const [status, setStatus] = useState('all'); const [page, setPage] = useState(1);

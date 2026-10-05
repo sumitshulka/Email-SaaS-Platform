@@ -1696,6 +1696,70 @@ export interface CampaignTemplatePreview {
   htmlBody: string | null;
 }
 
+export type AdminDashboardPackageVisibility = typeof AdminDashboardPackageVisibility[keyof typeof AdminDashboardPackageVisibility];
+
+
+export const AdminDashboardPackageVisibility = {
+  public: 'public',
+  hidden: 'hidden',
+} as const;
+
+export interface AdminDashboardCurrencyRevenue {
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+  /** Net production revenue in major units of this item currency for the current month. */
+  revenueThisMonth: number;
+  /** Lifetime net production revenue in major units of this item currency. */
+  totalRevenue: number;
+  /** Gross captured amount in major units of this item currency for the current month. */
+  capturedThisMonth: number;
+  /** Refunded amount in major units of this item currency, assigned to the capture month when available. */
+  refundedThisMonth: number;
+  /** Lifetime gross captured amount in major units of this item currency. */
+  capturedLifetime: number;
+  /** Lifetime refunded amount in major units of this item currency. */
+  refundedLifetime: number;
+  /** @minimum 0 */
+  capturedPaymentsThisMonth: number;
+  /** @minimum 0 */
+  refundedPaymentsThisMonth: number;
+  /** @minimum 0 */
+  capturedPaymentsTotal: number;
+  /** @minimum 0 */
+  refundedPaymentsTotal: number;
+}
+
+export interface AdminDashboardRegistrationMonth {
+  /** @pattern ^\d{4}-\d{2}$ */
+  month: string;
+  /** @minimum 0 */
+  registrations: number;
+}
+
+export interface AdminDashboardRevenueMonth {
+  /** @pattern ^\d{4}-\d{2}$ */
+  month: string;
+  /** Net production revenue in major units of defaultCurrency. */
+  revenue: number;
+}
+
+export interface AdminDashboardPackageActivity {
+  packageName: string;
+  /** @minimum 0 */
+  activeSubscriptions: number;
+}
+
+export type RazorpayEnvironment = typeof RazorpayEnvironment[keyof typeof RazorpayEnvironment];
+
+
+export const RazorpayEnvironment = {
+  sandbox: 'sandbox',
+  production: 'production',
+} as const;
+
 export interface AdminUser {
   id: string;
   username: string;
@@ -1718,7 +1782,28 @@ export interface AdminDashboard {
   disabledUsers: number;
   newUsersThisMonth: number;
   activeSubscriptions: number;
+  activeCustomers: number;
+  activePackages: number;
+  subscriptionsEndingSoon: number;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  defaultCurrency: string;
+  /** Net production revenue this month in major units of defaultCurrency. */
   revenueThisMonth: number;
+  /** Lifetime net production revenue in major units of defaultCurrency. */
+  totalRevenue: number;
+  /** Production payments by currency. Refunded amounts are assigned to their original capture month when capture timing is available. */
+  revenueByCurrency: AdminDashboardCurrencyRevenue[];
+  registrationsByMonth: AdminDashboardRegistrationMonth[];
+  /** Six months of net production revenue in major units of defaultCurrency; refunds are assigned to the original capture month. */
+  revenueTrend: AdminDashboardRevenueMonth[];
+  activeSubscriptionsByPackage: AdminDashboardPackageActivity[];
+  billingEnvironment: RazorpayEnvironment | null;
+  applicationEmailConfigured: boolean;
+  maintenanceMode: boolean;
+  packageVisibility: AdminDashboardPackageVisibility;
   emailsSent: number;
   recentUsers: AdminUser[];
 }
@@ -1992,14 +2077,6 @@ export interface GoogleOAuthSettingsInput {
 export interface TestEmailInput {
   toEmail: string;
 }
-
-export type RazorpayEnvironment = typeof RazorpayEnvironment[keyof typeof RazorpayEnvironment];
-
-
-export const RazorpayEnvironment = {
-  sandbox: 'sandbox',
-  production: 'production',
-} as const;
 
 export type AdminFinancePaymentStatus = typeof AdminFinancePaymentStatus[keyof typeof AdminFinancePaymentStatus];
 

@@ -9,6 +9,7 @@ import {
   ilike,
   isNull,
   lte,
+  lt,
   or,
   sql,
 } from "drizzle-orm";
@@ -40,6 +41,7 @@ import {
   db,
   emailSendAttemptsTable,
   paymentsTable,
+  razorpayConfigurationTable,
   subscriptionPackagesTable,
   systemConfigurationTable,
   userSubscriptionsTable,
@@ -124,67 +126,238 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
     eq(usersTable.role, "USER"),
     isNull(usersTable.deletedAt),
   );
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
-  const [allCount] = await db
-    .select({ value: count() })
-    .from(usersTable)
-    .where(liveUsers);
-  const [activeCount] = await db
-    .select({ value: count() })
-    .from(usersTable)
-    .where(and(liveUsers, eq(usersTable.active, true), eq(usersTable.emailVerified, true)));
-  const [pendingCount] = await db
-    .select({ value: count() })
-    .from(usersTable)
-    .where(and(liveUsers, eq(usersTable.emailVerified, false)));
-  const [disabledCount] = await db
-    .select({ value: count() })
-    .from(usersTable)
-    .where(and(liveUsers, eq(usersTable.active, false), eq(usersTable.emailVerified, true)));
-  const [newCount] = await db
-    .select({ value: count() })
-    .from(usersTable)
-    .where(and(liveUsers, gte(usersTable.createdAt, monthStart)));
-  const recent = await db
-    .select()
-    .from(usersTable)
-    .where(liveUsers)
-    .orderBy(desc(usersTable.createdAt))
-    .limit(5);
   const now = new Date();
-  const [subscriptionCount] = await db
-    .select({ value: count() })
-    .from(userSubscriptionsTable)
-    .where(
-      and(
-        eq(userSubscriptionsTable.status, "active"),
-        lte(userSubscriptionsTable.startsAt, now),
-        gt(userSubscriptionsTable.endsAt, now),
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const trendStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const monthKeys = Array.from({ length: 6 }, (_, index) =>
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5 + index, 1))
+      .toISOString()
+      .slice(0, 7),
+  );
+  const currentMonthKey = monthKeys[monthKeys.length - 1] ?? now.toISOString().slice(0, 7);
+  const currentMonthExpression = sql<string>`to_char(date_trunc('month', ${usersTable.createdAt} AT TIME ZONE 'UTC'), 'YYYY-MM')`;
+  const capturedAtExpression = sql<Date>`COALESCE(
+    ${userSubscriptionsTable.createdAt}, ${paymentsTable.updatedAt}
+  )`;
+  const paymentMonthExpression = sql<string>`to_char(date_trunc('month', ${capturedAtExpression} AT TIME ZONE 'UTC'), 'YYYY-MM')`;
+  const activeSubscriptionConditions = and(
+    eq(userSubscriptionsTable.status, "active"),
+    eq(usersTable.role, "USER"),
+    isNull(usersTable.deletedAt),
+    lte(userSubscriptionsTable.startsAt, now),
+    gt(userSubscriptionsTable.endsAt, now),
+  );
+
+  const [
+    [allCount],
+    [activeCount],
+    [pendingCount],
+    [disabledCount],
+    [newCount],
+    recent,
+    [subscriptionCounts],
+    [activePackageCount],
+    endingSoonRows,
+    packageActivityRows,
+    registrationRows,
+    monthlyRevenueRows,
+    lifetimeRevenueRows,
+    [emailConfig],
+    [gatewayConfig],
+    platformSettings,
+    [emailAttempts],
+  ] = await Promise.all([
+    db.select({ value: count() }).from(usersTable).where(liveUsers),
+    db
+      .select({ value: count() })
+      .from(usersTable)
+      .where(and(liveUsers, eq(usersTable.active, true), eq(usersTable.emailVerified, true))),
+    db
+      .select({ value: count() })
+      .from(usersTable)
+      .where(and(liveUsers, eq(usersTable.emailVerified, false))),
+    db
+      .select({ value: count() })
+      .from(usersTable)
+      .where(and(liveUsers, eq(usersTable.active, false), eq(usersTable.emailVerified, true))),
+    db
+      .select({ value: count() })
+      .from(usersTable)
+      .where(and(liveUsers, gte(usersTable.createdAt, monthStart), lt(usersTable.createdAt, nextMonthStart))),
+    db
+      .select()
+      .from(usersTable)
+      .where(liveUsers)
+      .orderBy(desc(usersTable.createdAt))
+      .limit(5),
+    db
+      .select({
+        subscriptions: count(),
+        customers: sql<number>`count(distinct ${userSubscriptionsTable.userId})`,
+      })
+      .from(userSubscriptionsTable)
+      .innerJoin(usersTable, eq(userSubscriptionsTable.userId, usersTable.id))
+      .where(activeSubscriptionConditions),
+    db
+      .select({ value: count() })
+      .from(subscriptionPackagesTable)
+      .where(eq(subscriptionPackagesTable.active, true)),
+    db
+      .select({ value: count() })
+      .from(userSubscriptionsTable)
+      .innerJoin(usersTable, eq(userSubscriptionsTable.userId, usersTable.id))
+      .where(
+        and(
+          activeSubscriptionConditions,
+          lte(userSubscriptionsTable.endsAt, nextWeek),
+        ),
       ),
-    );
-  const platformSettings = await getPlatformSettings();
-  const [revenue] = await db
-    .select({
-      value: sql<number>`coalesce(sum(${paymentsTable.amountMinor}), 0)`,
-    })
-    .from(paymentsTable)
-    .where(
-      and(
-        eq(paymentsTable.status, "captured"),
-        eq(paymentsTable.currency, platformSettings.defaultCurrency),
-        gte(paymentsTable.updatedAt, monthStart),
+    db
+      .select({
+        packageName: subscriptionPackagesTable.name,
+        activeSubscriptions: count(),
+      })
+      .from(userSubscriptionsTable)
+      .innerJoin(usersTable, eq(userSubscriptionsTable.userId, usersTable.id))
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(activeSubscriptionConditions)
+      .groupBy(subscriptionPackagesTable.id, subscriptionPackagesTable.name)
+      .orderBy(desc(count())),
+    db
+      .select({
+        month: currentMonthExpression,
+        registrations: count(),
+      })
+      .from(usersTable)
+      .where(and(liveUsers, gte(usersTable.createdAt, trendStart), lt(usersTable.createdAt, nextMonthStart)))
+      .groupBy(currentMonthExpression)
+      .orderBy(currentMonthExpression),
+    db
+      .select({
+        month: paymentMonthExpression,
+        currency: paymentsTable.currency,
+        capturedMinor: sql<string>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'captured' THEN ${paymentsTable.amountMinor} ELSE 0 END), 0)::text`,
+        refundedMinor: sql<string>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'refunded' THEN ${paymentsTable.amountMinor} ELSE 0 END), 0)::text`,
+        capturedPayments: sql<number>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'captured' THEN 1 ELSE 0 END), 0)::int`,
+        refundedPayments: sql<number>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'refunded' THEN 1 ELSE 0 END), 0)::int`,
+      })
+      .from(paymentsTable)
+      .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
+      .leftJoin(userSubscriptionsTable, eq(userSubscriptionsTable.paymentId, paymentsTable.id))
+      .where(
+        and(
+          eq(usersTable.role, "USER"),
+          eq(paymentsTable.razorpayEnvironment, "production"),
+          inArray(paymentsTable.status, ["captured", "refunded"]),
+          gte(capturedAtExpression, trendStart),
+          lt(capturedAtExpression, nextMonthStart),
+        ),
+      )
+      .groupBy(paymentsTable.currency, paymentMonthExpression)
+      .orderBy(paymentsTable.currency, paymentMonthExpression),
+    db
+      .select({
+        currency: paymentsTable.currency,
+        capturedMinor: sql<string>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'captured' THEN ${paymentsTable.amountMinor} ELSE 0 END), 0)::text`,
+        refundedMinor: sql<string>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'refunded' THEN ${paymentsTable.amountMinor} ELSE 0 END), 0)::text`,
+        capturedPayments: sql<number>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'captured' THEN 1 ELSE 0 END), 0)::int`,
+        refundedPayments: sql<number>`COALESCE(SUM(CASE WHEN ${paymentsTable.status} = 'refunded' THEN 1 ELSE 0 END), 0)::int`,
+      })
+      .from(paymentsTable)
+      .innerJoin(usersTable, eq(paymentsTable.userId, usersTable.id))
+      .where(
+        and(
+          eq(usersTable.role, "USER"),
+          eq(paymentsTable.razorpayEnvironment, "production"),
+          inArray(paymentsTable.status, ["captured", "refunded"]),
+        ),
+      )
+      .groupBy(paymentsTable.currency)
+      .orderBy(paymentsTable.currency),
+    db
+      .select({
+        host: applicationEmailConfigurationTable.host,
+        username: applicationEmailConfigurationTable.username,
+        passwordEncrypted: applicationEmailConfigurationTable.passwordEncrypted,
+        fromEmail: applicationEmailConfigurationTable.fromEmail,
+      })
+      .from(applicationEmailConfigurationTable)
+      .where(eq(applicationEmailConfigurationTable.id, "platform"))
+      .limit(1),
+    db
+      .select({ activeEnvironment: razorpayConfigurationTable.activeEnvironment })
+      .from(razorpayConfigurationTable)
+      .where(eq(razorpayConfigurationTable.id, "platform"))
+      .limit(1),
+    getPlatformSettings(),
+    db.select({ value: count() }).from(emailSendAttemptsTable),
+  ]);
+
+  const registrationCounts = new Map(registrationRows.map((row) => [row.month, row.registrations]));
+  const registrationsByMonth = monthKeys.map((month) => ({
+    month,
+    registrations: registrationCounts.get(month) ?? 0,
+  }));
+  const monthlyRevenueByCurrency = new Map<
+    string,
+    Map<string, { capturedMinor: bigint; refundedMinor: bigint; capturedPayments: number; refundedPayments: number }>
+  >();
+  for (const row of monthlyRevenueRows) {
+    const monthData = monthlyRevenueByCurrency.get(row.currency) ?? new Map();
+    monthData.set(row.month, {
+      capturedMinor: BigInt(row.capturedMinor),
+      refundedMinor: BigInt(row.refundedMinor),
+      capturedPayments: row.capturedPayments,
+      refundedPayments: row.refundedPayments,
+    });
+    monthlyRevenueByCurrency.set(row.currency, monthData);
+  }
+  const amountFromMinor = (minor: bigint, currency: string) => {
+    const digits = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+    }).resolvedOptions().maximumFractionDigits ?? 2;
+    return Number(minor) / 10 ** digits;
+  };
+  const revenueByCurrency = lifetimeRevenueRows.map((row) => {
+    const lifetimeCapturedMinor = BigInt(row.capturedMinor);
+    const lifetimeRefundedMinor = BigInt(row.refundedMinor);
+    const currentMonth = monthlyRevenueByCurrency.get(row.currency)?.get(currentMonthKey);
+    const capturedThisMonthMinor = currentMonth?.capturedMinor ?? 0n;
+    const refundedThisMonthMinor = currentMonth?.refundedMinor ?? 0n;
+    return {
+      currency: row.currency,
+      revenueThisMonth: amountFromMinor(capturedThisMonthMinor - refundedThisMonthMinor, row.currency),
+      totalRevenue: amountFromMinor(lifetimeCapturedMinor - lifetimeRefundedMinor, row.currency),
+      capturedThisMonth: amountFromMinor(capturedThisMonthMinor, row.currency),
+      refundedThisMonth: amountFromMinor(refundedThisMonthMinor, row.currency),
+      capturedLifetime: amountFromMinor(lifetimeCapturedMinor, row.currency),
+      refundedLifetime: amountFromMinor(lifetimeRefundedMinor, row.currency),
+      capturedPaymentsThisMonth: currentMonth?.capturedPayments ?? 0,
+      refundedPaymentsThisMonth: currentMonth?.refundedPayments ?? 0,
+      capturedPaymentsTotal: row.capturedPayments,
+      refundedPaymentsTotal: row.refundedPayments,
+    };
+  });
+  const defaultCurrencyRevenue = revenueByCurrency.find(
+    (summary) => summary.currency === platformSettings.defaultCurrency,
+  );
+  const defaultCurrencyTrend = monthKeys.map((month) => {
+    const data = monthlyRevenueByCurrency.get(platformSettings.defaultCurrency)?.get(month);
+    return {
+      month,
+      revenue: amountFromMinor(
+        (data?.capturedMinor ?? 0n) - (data?.refundedMinor ?? 0n),
+        platformSettings.defaultCurrency,
       ),
-    );
-  const [emailAttempts] = await db
-    .select({ value: count() })
-    .from(emailSendAttemptsTable);
-  const minorUnitDigits = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: platformSettings.defaultCurrency,
-  }).resolvedOptions().maximumFractionDigits;
+    };
+  });
+  const packageVisibility = platformSettings.packageVisibility;
 
   res.json(
     GetAdminDashboardResponse.parse({
@@ -193,9 +366,26 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       pendingUsers: pendingCount?.value ?? 0,
       disabledUsers: disabledCount?.value ?? 0,
       newUsersThisMonth: newCount?.value ?? 0,
-      activeSubscriptions: subscriptionCount?.value ?? 0,
-      revenueThisMonth:
-        Number(revenue?.value ?? 0) / 10 ** (minorUnitDigits ?? 2),
+      activeSubscriptions: subscriptionCounts?.subscriptions ?? 0,
+      activeCustomers: subscriptionCounts?.customers ?? 0,
+      activePackages: activePackageCount?.value ?? 0,
+      subscriptionsEndingSoon: endingSoonRows[0]?.value ?? 0,
+      defaultCurrency: platformSettings.defaultCurrency,
+      revenueThisMonth: defaultCurrencyRevenue?.revenueThisMonth ?? 0,
+      totalRevenue: defaultCurrencyRevenue?.totalRevenue ?? 0,
+      revenueByCurrency,
+      registrationsByMonth,
+      revenueTrend: defaultCurrencyTrend,
+      activeSubscriptionsByPackage: packageActivityRows,
+      billingEnvironment: gatewayConfig?.activeEnvironment ?? null,
+      applicationEmailConfigured: Boolean(
+        emailConfig?.host &&
+          emailConfig.username &&
+          emailConfig.passwordEncrypted &&
+          emailConfig.fromEmail,
+      ),
+      maintenanceMode: platformSettings.maintenanceMode,
+      packageVisibility,
       emailsSent: emailAttempts?.value ?? 0,
       recentUsers: await toAdminUsers(recent),
     }),
