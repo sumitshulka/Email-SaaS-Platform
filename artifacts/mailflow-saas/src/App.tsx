@@ -223,6 +223,7 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
   const notificationQuery = useGetUserNotifications({ query: {
     queryKey: getGetUserNotificationsQueryKey(),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   } });
   const markNotificationRead = useMarkUserNotificationRead();

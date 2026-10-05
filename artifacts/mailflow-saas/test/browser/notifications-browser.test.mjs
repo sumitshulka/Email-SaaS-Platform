@@ -80,6 +80,15 @@ async function getAvailablePort() {
 }
 
 async function startWebServer() {
+  if (process.env.MAILFLOW_BROWSER_TEST_BASE_URL) {
+    baseUrl = process.env.MAILFLOW_BROWSER_TEST_BASE_URL;
+    const response = await fetch(baseUrl);
+    if (!response.ok) {
+      throw new Error(`Browser test server returned HTTP ${response.status} at ${baseUrl}`);
+    }
+    return;
+  }
+
   const port = await getAvailablePort();
   baseUrl = `http://127.0.0.1:${port}`;
   serverProcess = spawn('pnpm', ['run', 'dev'], {
@@ -396,7 +405,8 @@ async function installApiFixtures(context) {
 }
 
 async function signIn(page, account, destination) {
-  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+  await page.goto(baseUrl, { waitUntil: 'commit', timeout: 90_000 });
+  await page.getByTestId('input-identifier').waitFor({ state: 'visible', timeout: 60_000 });
   await page.getByTestId('input-identifier').fill(account.username);
   await page.getByTestId('input-password').fill('browser-test-password');
   await page.getByTestId('button-sign-in').click();
@@ -609,6 +619,93 @@ describe('notification creation, display, and per-account read history', { concu
     } finally {
       await firstContext.close();
       await secondContext.close();
+    }
+  });
+
+  it('removes disabled notices from an open dashboard on its scheduled refresh and preserves read history', async () => {
+    const broadcastId = 'd32fbdc0-402c-408e-8af8-0a65f0ab8ba0';
+    const now = Date.now();
+    state.notifications = [{
+      id: broadcastId,
+      title: 'Scheduled service update',
+      message: 'The platform will be briefly unavailable tonight.',
+      audience: 'broadcast',
+      recipientUserIds: [],
+      startsAt: new Date(now - 60 * 60_000).toISOString(),
+      expiresAt: new Date(now + 24 * 60 * 60_000).toISOString(),
+      createdAt: new Date(now - 60 * 60_000).toISOString(),
+      enabled: true,
+    }];
+    state.reads.clear();
+    state.reads.set(`${broadcastId}:${firstCustomer.id}`, new Date(now - 30 * 60_000).toISOString());
+    state.statusRequests.length = 0;
+    state.unexpectedRequests.length = 0;
+
+    const customerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const historyContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await Promise.all([
+        installApiFixtures(customerContext),
+        installApiFixtures(adminContext),
+        installApiFixtures(historyContext),
+      ]);
+
+      const customerPage = await customerContext.newPage();
+      await signIn(customerPage, secondCustomer, '/dashboard');
+      await customerPage.getByRole('heading', { name: 'Good to see you, again.' }).waitFor();
+      await customerPage.getByTestId(`dashboard-notification-${broadcastId}`).waitFor({ state: 'visible' });
+      const dashboardUrl = customerPage.url();
+      let dashboardNavigations = 0;
+      customerPage.on('framenavigated', frame => {
+        if (frame === customerPage.mainFrame()) dashboardNavigations += 1;
+      });
+
+      const adminPage = await adminContext.newPage();
+      await signIn(adminPage, admin, '/admin');
+      await adminPage.goto(`${baseUrl}/admin/notifications`);
+      await adminPage.getByTestId(`admin-notification-${broadcastId}`).waitFor({ state: 'visible' });
+      const disableResponse = adminPage.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/admin/notifications/${broadcastId}/status` &&
+        response.request().method() === 'PATCH',
+      );
+      await adminPage.getByTestId(`button-disable-notification-${broadcastId}`).click();
+      assert.equal((await disableResponse).status(), 200);
+      assert.deepEqual(state.statusRequests.at(-1), { notificationId: broadcastId, enabled: false });
+
+      const refreshedResponse = await customerPage.waitForResponse(async response => {
+        if (
+          new URL(response.url()).pathname !== '/api/notifications' ||
+          response.request().method() !== 'GET' ||
+          response.status() !== 200
+        ) {
+          return false;
+        }
+        const refreshed = await response.json();
+        return !refreshed.unread.some(notification => notification.id === broadcastId);
+      }, { timeout: 40_000 });
+      assert.equal(refreshedResponse.status(), 200);
+      await customerPage.getByTestId(`dashboard-notification-${broadcastId}`).waitFor({ state: 'detached' });
+      assert.equal(customerPage.url(), dashboardUrl, 'the customer should remain on the open dashboard');
+      assert.equal(dashboardNavigations, 0, 'the scheduled refresh should not reload or navigate the page');
+
+      const historyPage = await historyContext.newPage();
+      await signIn(historyPage, firstCustomer, '/dashboard');
+      await historyPage.goto(`${baseUrl}/notifications`);
+      await historyPage.getByRole('heading', { name: 'Notifications' }).waitFor();
+      const historyCard = historyPage.getByTestId(`notification-card-${broadcastId}`);
+      await historyCard.waitFor({ state: 'visible' });
+      assert.equal(
+        await historyCard.getByText('Read', { exact: true }).count(),
+        1,
+        'disabling the notice should not remove the first customer’s read history',
+      );
+      assert.equal(await historyCard.getByTestId(`button-mark-notification-read-${broadcastId}`).count(), 0);
+      assert.deepEqual(state.unexpectedRequests, []);
+    } finally {
+      await customerContext.close();
+      await adminContext.close();
+      await historyContext.close();
     }
   });
 });
