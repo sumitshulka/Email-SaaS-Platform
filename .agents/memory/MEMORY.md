@@ -8,6 +8,7 @@
 - [Gift subscription semantics](gift-subscriptions.md) — gifts share paid access without a recipient-facing gift label, but never create payment revenue.
 - [Zero-priced package activation](free-package-activation.md) — activate free plans directly; never route them through Razorpay or record a payment.
 - [Radix and Vite HMR](radix-vite-hmr.md) — if a Radix import triggers an invalid-hook error after dependency optimization, verify React deduping and restart the web workflow once before changing packages.
+- [Panel surface colors](panel-surface-colors.md) — verify custom `Panel` backgrounds in the browser; caller background classes can lose to the base white surface.
 - [Mockup preview cold starts](mockup-preview-cold-start.md) — a blank first capture during Vite dependency optimization can clear after the server reloads.
 - [Contact enrichment scope](contact-enrichment.md) — keep enrichment business-focused and show full social/profile URLs as visible plain text.
 - [Shared company linking](company-linking.md) — auto-link only on compatible domains; preserve manual unlink intent and never move contacts implicitly.

@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { useForm } from 'react-hook-form';
@@ -64,7 +64,7 @@ function Field({ label, value, onChange, type = 'text', placeholder, testId, req
 function SelectField({ label, value, onChange, options, testId, required = false, disabled = false }: { label: string; value: string; onChange: (v: string) => void; options: Array<string | { value: string; label: string }>; testId: string; required?: boolean; disabled?: boolean }) {
   return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><select required={required} disabled={disabled} data-testid={testId} value={value} onChange={e => onChange(e.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#697584]">{options.map(option => { const optionValue = typeof option === 'string' ? option : option.value; const optionLabel = typeof option === 'string' ? (option || 'Select encryption') : option.label; return <option key={optionValue} value={optionValue}>{optionLabel}</option>; })}</select></label>;
 }
-function Panel({ children, className = '' }: { children: ReactNode; className?: string }) { return <section className={cn('rounded-lg border border-[#e0e4e9] bg-white', className)}>{children}</section>; }
+function Panel({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) { return <section style={style} className={cn('rounded-lg border border-[#e0e4e9] bg-white', className)}>{children}</section>; }
 function PageHeading({ eyebrow, title, detail, trailing }: { eyebrow?: string; title: string; detail?: string; trailing?: ReactNode }) {
   return <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div>{eyebrow && <div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">{eyebrow}</div>}<h1 className="display text-[30px] font-bold leading-tight text-[#172334]">{title}</h1>{detail && <p className="mt-2 max-w-2xl text-[13px] text-[#687484]">{detail}</p>}</div>{trailing}</div>;
 }
@@ -389,7 +389,7 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
       <SummaryCard label="Contacts" value={data.contacts.toLocaleString()} note="All contacts in this workspace" icon={Users} tint="blue"/>
       <SummaryCard label="Companies" value={data.companies.toLocaleString()} note="Workspace company records" icon={Building2} tint="sage"/>
       <SummaryCard label="Active lists" value={data.activeLists.toLocaleString()} note="Available for campaign audiences" icon={Activity} tint="apricot"/>
-      <Panel className="overflow-hidden border-[#e8d8ad] bg-[#fff2d6] p-5">
+      <Panel className="overflow-hidden p-5" style={{ backgroundColor: '#fff2d6', borderColor: '#e8d8ad' }}>
         <div className="flex items-start justify-between"><div><div className="text-[12px] font-medium text-[#62583f]">Captured payments</div><div className="mt-1 text-[10px] uppercase tracking-[.08em] text-[#827657]">Spend by currency</div></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#ead9a7] text-[#795f2c]"><CreditCard className="h-4 w-4"/></span></div>
         {data.amountSpentByCurrency.length ? <div className="mt-3 space-y-1.5">{data.amountSpentByCurrency.map(item => <div key={item.currency} className="flex items-baseline justify-between gap-2" data-testid={`spend-${item.currency.toLowerCase()}`}><span className="mono text-[10px] text-[#796f56]">{item.currency}</span><span className="text-[19px] font-bold tracking-[-.04em] text-[#283747]">{money(item.amountMinor, item.currency)}</span></div>)}</div> : <div className="mt-4 text-[14px] font-semibold text-[#687484]">No captured spend</div>}
         <p className="mt-2 text-[10px] leading-4 text-[#796f56]">Captured payments only; gifts, non-captured, and refunded rows are excluded.</p>
@@ -456,8 +456,12 @@ function normalizeSegments(items: Array<{ value: string; count: number }>) {
 }
 function SummaryCard({ label, value, note, icon: Icon, tint }: { label: string; value: string; note: string; icon: typeof Users; tint: 'blue' | 'sage' | 'apricot' }) {
   const colors = { blue: 'bg-[#d8e8ff] text-[#2862a1]', sage: 'bg-[#d9ecde] text-[#3e7856]', apricot: 'bg-[#ffe0ca] text-[#a75d2d]' };
-  const surfaces = { blue: 'border-[#c9dcf3] bg-[#eaf3ff]', sage: 'border-[#cce2d3] bg-[#eaf4ed]', apricot: 'border-[#efd2b7] bg-[#fff0e4]' };
-  return <Panel className={cn('p-5', surfaces[tint])}><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#596779]">{label}</span><span className={cn('grid h-9 w-9 place-items-center rounded-xl', colors[tint])}><Icon className="h-4 w-4"/></span></div><div className="display mt-3 text-[29px] font-bold leading-none tracking-[-.045em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div><div className="mt-2 text-[10px] text-[#6d7886]">{note}</div></Panel>;
+  const surfaces: Record<typeof tint, CSSProperties> = {
+    blue: { backgroundColor: '#eaf3ff', borderColor: '#c9dcf3' },
+    sage: { backgroundColor: '#eaf4ed', borderColor: '#cce2d3' },
+    apricot: { backgroundColor: '#fff0e4', borderColor: '#efd2b7' },
+  };
+  return <Panel className="p-5" style={surfaces[tint]}><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#596779]">{label}</span><span className={cn('grid h-9 w-9 place-items-center rounded-xl', colors[tint])}><Icon className="h-4 w-4"/></span></div><div className="display mt-3 text-[29px] font-bold leading-none tracking-[-.045em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div><div className="mt-2 text-[10px] text-[#6d7886]">{note}</div></Panel>;
 }
 function ChartHeading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) {
   return <div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#8a969d]">{eyebrow}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">{title}</h2><p className="mt-1 text-[11px] text-[#818c97]">{detail}</p></div>;
