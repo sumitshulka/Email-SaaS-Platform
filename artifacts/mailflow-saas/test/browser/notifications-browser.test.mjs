@@ -502,6 +502,37 @@ describe('notification creation, display, and per-account read history', { concu
     }
   });
 
+  it('shows distinct tinted backgrounds on the overview summary cards', async () => {
+    const expectedBackgrounds = [
+      'rgb(234, 243, 255)',
+      'rgb(234, 244, 237)',
+      'rgb(255, 240, 228)',
+      'rgb(255, 242, 214)',
+    ];
+
+    for (const viewport of [
+      { width: 1440, height: 1000 },
+      { width: 390, height: 844 },
+    ]) {
+      const context = await browser.newContext({ viewport });
+      try {
+        await installApiFixtures(context);
+        const page = await context.newPage();
+        await signIn(page, firstCustomer, '/dashboard');
+        const cards = page.locator('[aria-label="Workspace summary"] > section');
+        await cards.first().waitFor({ state: 'visible' });
+
+        assert.deepEqual(
+          await cards.evaluateAll(elements => elements.map(element => getComputedStyle(element).backgroundColor)),
+          expectedBackgrounds,
+          'each summary card should have its own visible pastel background',
+        );
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
   it('lets a superadmin publish broadcast and focused notices and change their enabled state', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {

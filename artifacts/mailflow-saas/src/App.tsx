@@ -389,10 +389,10 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
       <SummaryCard label="Contacts" value={data.contacts.toLocaleString()} note="All contacts in this workspace" icon={Users} tint="blue"/>
       <SummaryCard label="Companies" value={data.companies.toLocaleString()} note="Workspace company records" icon={Building2} tint="sage"/>
       <SummaryCard label="Active lists" value={data.activeLists.toLocaleString()} note="Available for campaign audiences" icon={Activity} tint="apricot"/>
-      <Panel className="overflow-hidden border-[#e4e7e2] bg-[#fbfaf5] p-5">
-        <div className="flex items-start justify-between"><div><div className="text-[12px] font-medium text-[#6d7886]">Captured payments</div><div className="mt-1 text-[10px] uppercase tracking-[.08em] text-[#93958d]">Spend by currency</div></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f2ead7] text-[#8b6d36]"><CreditCard className="h-4 w-4"/></span></div>
-        {data.amountSpentByCurrency.length ? <div className="mt-3 space-y-1.5">{data.amountSpentByCurrency.map(item => <div key={item.currency} className="flex items-baseline justify-between gap-2" data-testid={`spend-${item.currency.toLowerCase()}`}><span className="mono text-[10px] text-[#85877e]">{item.currency}</span><span className="text-[19px] font-bold tracking-[-.04em] text-[#283747]">{money(item.amountMinor, item.currency)}</span></div>)}</div> : <div className="mt-4 text-[14px] font-semibold text-[#687484]">No captured spend</div>}
-        <p className="mt-2 text-[10px] leading-4 text-[#85877e]">Captured payments only; gifts, non-captured, and refunded rows are excluded.</p>
+      <Panel className="overflow-hidden border-[#e8d8ad] bg-[#fff2d6] p-5">
+        <div className="flex items-start justify-between"><div><div className="text-[12px] font-medium text-[#62583f]">Captured payments</div><div className="mt-1 text-[10px] uppercase tracking-[.08em] text-[#827657]">Spend by currency</div></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#ead9a7] text-[#795f2c]"><CreditCard className="h-4 w-4"/></span></div>
+        {data.amountSpentByCurrency.length ? <div className="mt-3 space-y-1.5">{data.amountSpentByCurrency.map(item => <div key={item.currency} className="flex items-baseline justify-between gap-2" data-testid={`spend-${item.currency.toLowerCase()}`}><span className="mono text-[10px] text-[#796f56]">{item.currency}</span><span className="text-[19px] font-bold tracking-[-.04em] text-[#283747]">{money(item.amountMinor, item.currency)}</span></div>)}</div> : <div className="mt-4 text-[14px] font-semibold text-[#687484]">No captured spend</div>}
+        <p className="mt-2 text-[10px] leading-4 text-[#796f56]">Captured payments only; gifts, non-captured, and refunded rows are excluded.</p>
       </Panel>
     </section>
 
@@ -455,9 +455,9 @@ function normalizeSegments(items: Array<{ value: string; count: number }>) {
   return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 function SummaryCard({ label, value, note, icon: Icon, tint }: { label: string; value: string; note: string; icon: typeof Users; tint: 'blue' | 'sage' | 'apricot' }) {
-  const colors = { blue: 'bg-[#edf4fa] text-[#3d6e9e]', sage: 'bg-[#edf4ef] text-[#4f8068]', apricot: 'bg-[#fbf0e7] text-[#b57547]' };
-  const surfaces = { blue: 'bg-[#f6f9fc]', sage: 'bg-[#f4f8f4]', apricot: 'bg-[#fff8f1]' };
-  return <Panel className={cn('p-5', surfaces[tint])}><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#6d7886]">{label}</span><span className={cn('grid h-9 w-9 place-items-center rounded-xl', colors[tint])}><Icon className="h-4 w-4"/></span></div><div className="display mt-3 text-[29px] font-bold leading-none tracking-[-.045em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div><div className="mt-2 text-[10px] text-[#818c97]">{note}</div></Panel>;
+  const colors = { blue: 'bg-[#d8e8ff] text-[#2862a1]', sage: 'bg-[#d9ecde] text-[#3e7856]', apricot: 'bg-[#ffe0ca] text-[#a75d2d]' };
+  const surfaces = { blue: 'border-[#c9dcf3] bg-[#eaf3ff]', sage: 'border-[#cce2d3] bg-[#eaf4ed]', apricot: 'border-[#efd2b7] bg-[#fff0e4]' };
+  return <Panel className={cn('p-5', surfaces[tint])}><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#596779]">{label}</span><span className={cn('grid h-9 w-9 place-items-center rounded-xl', colors[tint])}><Icon className="h-4 w-4"/></span></div><div className="display mt-3 text-[29px] font-bold leading-none tracking-[-.045em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div><div className="mt-2 text-[10px] text-[#6d7886]">{note}</div></Panel>;
 }
 function ChartHeading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) {
   return <div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#8a969d]">{eyebrow}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">{title}</h2><p className="mt-1 text-[11px] text-[#818c97]">{detail}</p></div>;
