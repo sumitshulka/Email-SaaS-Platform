@@ -41,6 +41,7 @@ import {
   ListContactsResponse,
   PreviewCampaignBody,
   PreviewCampaignResponse,
+  SendCampaignBody,
   SendCampaignParams,
   SendCampaignResponse,
   TestTenantSendingConnectionBody,
@@ -2470,8 +2471,14 @@ router.post(
       res.status(400).json({ error: "Invalid campaign identifier.", code: "INVALID_INPUT" });
       return;
     }
+    const input = SendCampaignBody.safeParse(req.body ?? {});
+    if (!input.success) {
+      res.status(400).json({ error: "Choose a valid campaign start date and time.", code: "INVALID_INPUT" });
+      return;
+    }
     const userId = req.authUser!.id;
     const settings = await getPlatformSettings();
+    const requestedStartAt = input.data.scheduledAt;
     const outcome = await db.transaction(async (tx) => {
       await tx
         .select({ id: usersTable.id })
@@ -2511,8 +2518,13 @@ router.post(
         );
       if (!list) return { error: "list_missing" as const };
 
-      const [running] = await tx
-        .select({ value: count() })
+      const now = new Date();
+      const activeCampaigns = await tx
+        .select({
+          id: emailCampaignsTable.id,
+          status: emailCampaignsTable.status,
+          scheduledAt: emailCampaignsTable.scheduledAt,
+        })
         .from(emailCampaignsTable)
         .where(
           and(
@@ -2520,7 +2532,99 @@ router.post(
             inArray(emailCampaignsTable.status, ["queued", "sending"]),
           ),
         );
-      if ((running?.value ?? 0) >= settings.maxConcurrentCampaigns) {
+      const activeCampaignIds = activeCampaigns.map((item) => item.id);
+      const activeRecipients =
+        activeCampaignIds.length === 0
+          ? []
+          : await tx
+              .select({
+                campaignId: emailCampaignRecipientsTable.campaignId,
+                status: emailCampaignRecipientsTable.status,
+                nextAttemptAt: emailCampaignRecipientsTable.nextAttemptAt,
+                createdAt: emailCampaignRecipientsTable.createdAt,
+              })
+              .from(emailCampaignRecipientsTable)
+              .where(
+                and(
+                  eq(emailCampaignRecipientsTable.userId, userId),
+                  inArray(emailCampaignRecipientsTable.campaignId, activeCampaignIds),
+                  inArray(emailCampaignRecipientsTable.status, ["queued", "sending"]),
+                ),
+              );
+      const inProgressCampaignIds = new Set(
+        activeRecipients
+          .filter((recipient) => recipient.status === "sending")
+          .map((recipient) => recipient.campaignId),
+      );
+      const queuedWorkStartAt = new Date(
+        now.getTime() +
+          (inProgressCampaignIds.size > 0
+            ? Math.max(1, settings.queuePollingSeconds) * 1000
+            : 0),
+      );
+      const queuedRecipients = activeRecipients
+        .filter((recipient) => recipient.status === "queued")
+        .map((recipient) => ({
+          campaignId: recipient.campaignId,
+          nextAttemptAt:
+            recipient.nextAttemptAt > queuedWorkStartAt
+              ? recipient.nextAttemptAt
+              : queuedWorkStartAt,
+          createdAt: recipient.createdAt,
+        }));
+      const recentAttempts =
+        activeCampaignIds.length === 0
+          ? []
+          : await tx
+              .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
+              .from(emailSendAttemptsTable)
+              .where(
+                and(
+                  eq(emailSendAttemptsTable.userId, userId),
+                  gte(
+                    emailSendAttemptsTable.attemptedAt,
+                    new Date(now.getTime() - 24 * 60 * 60 * 1000),
+                  ),
+                ),
+              )
+              .orderBy(asc(emailSendAttemptsTable.attemptedAt));
+      const queueForecast = estimateCampaignQueueDeliverySeconds(
+        queuedRecipients,
+        settings,
+        recentAttempts.map((attempt) => attempt.attemptedAt),
+        now,
+      );
+      const latestActiveFinishSeconds = activeCampaigns.reduce(
+        (latest, activeCampaign) =>
+          Math.max(
+            latest,
+            queueForecast.durationSecondsByCampaign.get(activeCampaign.id) ?? 0,
+            inProgressCampaignIds.has(activeCampaign.id)
+              ? Math.max(1, settings.queuePollingSeconds)
+              : 0,
+          ),
+        0,
+      );
+      const earliestStartAt = new Date(
+        now.getTime() + latestActiveFinishSeconds * 1000,
+      );
+      if (
+        requestedStartAt &&
+        requestedStartAt.getTime() < earliestStartAt.getTime()
+      ) {
+        return { error: "start_too_early" as const, earliestStartAt };
+      }
+      const scheduledAt = requestedStartAt ?? earliestStartAt;
+      const activeNowCount = activeCampaigns.filter(
+        (activeCampaign) =>
+          activeCampaign.status === "sending" ||
+          !activeCampaign.scheduledAt ||
+          activeCampaign.scheduledAt.getTime() <= now.getTime(),
+      ).length;
+      if (
+        scheduledAt.getTime() <= now.getTime() &&
+        activeNowCount >= settings.maxConcurrentCampaigns
+      ) {
         return { error: "concurrency_limit" as const };
       }
 
@@ -2554,8 +2658,9 @@ router.post(
         .update(emailCampaignsTable)
         .set({
           status: "queued",
-          queuedAt: new Date(),
-          updatedAt: new Date(),
+          queuedAt: now,
+          scheduledAt,
+          updatedAt: now,
         })
         .where(
           and(
@@ -2575,6 +2680,7 @@ router.post(
           email: recipient.email,
           firstName: recipient.firstName,
           lastName: recipient.lastName,
+          nextAttemptAt: scheduledAt,
         })),
       );
       return { campaignId: campaign.id };
@@ -2607,6 +2713,12 @@ router.post(
         res.status(429).json({
           error: "This campaign exceeds the platform campaign size limit.",
           code: "CAMPAIGN_SIZE_LIMIT",
+        });
+      } else if (outcome.error === "start_too_early") {
+        res.status(409).json({
+          error: `The campaign cannot start before ${outcome.earliestStartAt.toISOString()}.`,
+          code: "CAMPAIGN_START_TOO_EARLY",
+          earliestStartAt: outcome.earliestStartAt.toISOString(),
         });
       } else {
         res.status(429).json({

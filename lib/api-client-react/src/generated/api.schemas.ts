@@ -12,6 +12,8 @@ export interface HealthStatus {
 export interface ApiError {
   error: string;
   code?: string;
+  /** @nullable */
+  earliestStartAt?: string | null;
 }
 
 export interface MessageResponse {
@@ -1495,6 +1497,10 @@ export interface ContactListUpdate {
   active?: boolean;
 }
 
+export interface CampaignQueueInput {
+  scheduledAt?: string;
+}
+
 export type CampaignSummaryStatus = typeof CampaignSummaryStatus[keyof typeof CampaignSummaryStatus];
 
 
@@ -1524,6 +1530,8 @@ export interface CampaignSummary {
   unknown: number;
   /** @nullable */
   queuedAt: string | null;
+  /** @nullable */
+  scheduledAt: string | null;
   /** @nullable */
   completedAt: string | null;
   createdAt: string;

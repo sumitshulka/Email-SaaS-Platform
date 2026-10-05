@@ -1311,6 +1311,12 @@ paths:
       operationId: sendCampaign
       tags: [sending]
       summary: Queue a tenant campaign for worker-based delivery
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignQueueInput"
       responses:
         "202":
           description: Campaign queued for delivery
@@ -1960,6 +1966,9 @@ components:
           type: string
         code:
           type: string
+        earliestStartAt:
+          type: ["string", "null"]
+          format: date-time
       required: [error]
     MessageResponse:
       type: object
@@ -2693,6 +2702,10 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
         active: { type: boolean }
+    CampaignQueueInput:
+      type: object
+      properties:
+        scheduledAt: { type: string, format: date-time }
     CampaignSummary:
       type: object
       properties:
@@ -2711,10 +2724,11 @@ components:
         suppressed: { type: integer }
         unknown: { type: integer }
         queuedAt: { type: ["string", "null"], format: date-time }
+        scheduledAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, subject, textBody, htmlBody, listId, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, completedAt, createdAt, updatedAt]
+      required: [id, name, subject, textBody, htmlBody, listId, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignDashboard:
       type: object
       properties:

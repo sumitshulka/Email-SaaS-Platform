@@ -45,6 +45,7 @@ export * from './campaignDeliveryReportSummary';
 export * from './campaignInput';
 export * from './campaignPacing';
 export * from './campaignPreviewInput';
+export * from './campaignQueueInput';
 export * from './campaignSummary';
 export * from './campaignSummaryStatus';
 export * from './campaignTargetList';

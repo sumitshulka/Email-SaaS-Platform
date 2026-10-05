@@ -348,6 +348,7 @@ memory.public.none(`
     html_body text,
     status email_campaign_status NOT NULL DEFAULT 'draft',
     queued_at timestamptz,
+    scheduled_at timestamptz,
     completed_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -4668,9 +4669,24 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const queued = await api(`/campaigns/${campaign.body.id}/send`, {
       method: "POST",
       cookie: owner.cookie,
+      body: {},
     });
     assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
     assert.equal(queued.body.recipients, 3);
+    assert.ok(queued.body.scheduledAt);
+    const scheduledRecipients = await db
+      .select({ nextAttemptAt: dbModule.emailCampaignRecipientsTable.nextAttemptAt })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id));
+    assert.equal(scheduledRecipients.length, 3);
+    assert.ok(
+      scheduledRecipients.every(
+        (recipient) =>
+          recipient.nextAttemptAt.getTime() ===
+          new Date(queued.body.scheduledAt).getTime(),
+      ),
+      "recipient delivery eligibility matches the requested campaign start",
+    );
     const queuedDashboard = await api(`/campaigns/${campaign.body.id}`, {
       cookie: owner.cookie,
     });
@@ -4693,11 +4709,38 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         queuedDashboard.body.pacing.estimatedDurationSeconds,
       "a draft estimate includes already queued work ahead of it",
     );
+    const tooEarly = await api(`/campaigns/${backlogCampaign.body.id}/send`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { scheduledAt: new Date(Date.now() + 60_000).toISOString() },
+    });
+    assert.equal(tooEarly.response.status, 409, JSON.stringify(tooEarly.body));
+    assert.equal(tooEarly.body.code, "CAMPAIGN_START_TOO_EARLY");
+    assert.ok(new Date(tooEarly.body.earliestStartAt).getTime() > Date.now());
+
+    const backlogScheduledAt = new Date(
+      new Date(tooEarly.body.earliestStartAt).getTime() + 60_000,
+    );
     const queuedBacklog = await api(`/campaigns/${backlogCampaign.body.id}/send`, {
       method: "POST",
       cookie: owner.cookie,
+      body: { scheduledAt: backlogScheduledAt.toISOString() },
     });
     assert.equal(queuedBacklog.response.status, 202, JSON.stringify(queuedBacklog.body));
+    assert.equal(
+      new Date(queuedBacklog.body.scheduledAt).getTime(),
+      backlogScheduledAt.getTime(),
+    );
+    const backlogRecipients = await db
+      .select({ nextAttemptAt: dbModule.emailCampaignRecipientsTable.nextAttemptAt })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, backlogCampaign.body.id));
+    assert.ok(
+      backlogRecipients.every(
+        (recipient) => recipient.nextAttemptAt.getTime() === backlogScheduledAt.getTime(),
+      ),
+      "future-scheduled recipients remain ineligible until the selected start",
+    );
     await db
       .update(dbModule.emailCampaignRecipientsTable)
       .set({ createdAt: new Date(Date.now() + 60_000) })
@@ -4746,6 +4789,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(partialCampaign.queued, 1);
     assert.equal(partialCampaign.suppressed, 1);
     assert.equal(partialCampaign.status, "sending");
+    const scheduledCampaign = afterRateLimit.body.find(
+      (item) => item.id === backlogCampaign.body.id,
+    );
+    assert.equal(scheduledCampaign.delivered, 0);
+    assert.equal(scheduledCampaign.queued, 2);
+    assert.equal(scheduledCampaign.suppressed, 1);
     const progressDashboard = await api(`/campaigns/${campaign.body.id}`, {
       cookie: owner.cookie,
     });

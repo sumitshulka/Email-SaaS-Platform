@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,8 @@ type ConfirmActionDialogProps = {
   onConfirm: () => void;
   destructive?: boolean;
   pending?: boolean;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
   testId?: string;
 };
 
@@ -30,6 +33,8 @@ export function ConfirmActionDialog({
   onConfirm,
   destructive = true,
   pending = false,
+  confirmDisabled = false,
+  children,
   testId = 'dialog-confirm-action',
 }: ConfirmActionDialogProps) {
   return (
@@ -46,6 +51,7 @@ export function ConfirmActionDialog({
             {description}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         <AlertDialogFooter className="gap-2 sm:gap-2">
           <AlertDialogCancel
             data-testid="button-cancel-confirmation"
@@ -58,7 +64,7 @@ export function ConfirmActionDialog({
             <button
               type="button"
               data-testid="button-confirm-action"
-              disabled={pending}
+              disabled={pending || confirmDisabled}
               onClick={(event) => {
                 event.preventDefault();
                 if (!pending) onConfirm();

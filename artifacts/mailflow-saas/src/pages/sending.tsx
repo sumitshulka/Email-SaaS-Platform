@@ -79,6 +79,21 @@ function Status({ children, tone = 'gray' }: { children: ReactNode; tone?: 'blue
 function formatDate(date: string | null | undefined) {
   return date ? new Date(date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 }
+function roundUpToMinute(date: Date) {
+  return new Date(Math.ceil(date.getTime() / 60_000) * 60_000);
+}
+function dateTimeLocalValue(date: Date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+function minimumCampaignStartAt(campaigns: CampaignSummary[], serverMinimum?: Date | null) {
+  const now = Date.now();
+  const activeCampaigns = campaigns.filter(campaign => campaign.status === 'queued' || campaign.status === 'sending');
+  const estimatedFinish = activeCampaigns.reduce(
+    (latest, campaign) => Math.max(latest, now + Math.max(0, campaign.estimatedDurationSeconds) * 1000),
+    now,
+  );
+  return roundUpToMinute(new Date(Math.max(now + 60_000, estimatedFinish, serverMinimum?.getTime() ?? 0)));
+}
 function useNotice() {
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   return { notice, setNotice, dismiss: () => setNotice(null) };
@@ -598,10 +613,22 @@ export function CampaignsPage() {
   const [previewState, setPreviewState] = useState<{ key: string; rendered: CampaignTemplatePreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ key: string; message: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<{ kind: 'queue' | 'delete'; campaign: CampaignSummary } | null>(null);
+  const [queueStartAt, setQueueStartAt] = useState('');
+  const [serverMinimumStartAt, setServerMinimumStartAt] = useState<Date | null>(null);
+  const [queueStartError, setQueueStartError] = useState<string | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts || [];
   const activeLists = lists.filter(list => list.active);
+  const queueMinimumStartAt = minimumCampaignStartAt(campaigns, serverMinimumStartAt);
+  const queueMinimumStartAtInput = dateTimeLocalValue(queueMinimumStartAt);
+  const queueStartDate = queueStartAt ? new Date(queueStartAt) : null;
+  const queueStartIsValid = Boolean(
+    queueStartDate &&
+    Number.isFinite(queueStartDate.getTime()) &&
+    queueStartDate.getTime() >= queueMinimumStartAt.getTime(),
+  );
+  const hasActiveCampaigns = campaigns.some(campaign => campaign.status === 'queued' || campaign.status === 'sending');
   const eligibleSampleContacts = contacts.filter(contact => contact.subscribed && contact.listIds.includes(form.listId));
   const previewKey = JSON.stringify([form.listId, sampleContactId, form.subject, form.textBody, form.htmlBody]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
@@ -646,15 +673,32 @@ export function CampaignsPage() {
     if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
     else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
   };
-  const queue = (campaign: CampaignSummary) => setPendingAction({ kind: 'queue', campaign });
+  const queue = (campaign: CampaignSummary) => {
+    setServerMinimumStartAt(null);
+    setQueueStartError(null);
+    setQueueStartAt(dateTimeLocalValue(minimumCampaignStartAt(campaigns)));
+    setPendingAction({ kind: 'queue', campaign });
+  };
   const del = (campaign: CampaignSummary) => setPendingAction({ kind: 'delete', campaign });
   const confirmCampaignAction = () => {
     if (!pendingAction) return;
     const action = pendingAction;
     if (action.kind === 'queue') {
-      send.mutate({ campaignId: action.campaign.id }, {
-        onSuccess: response => { setPendingAction(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.status === 'queued' ? 'Campaign queued for delivery.' : `Campaign status: ${response.status}.` }); },
-        onError: error => { setPendingAction(null); setNotice({ kind: 'error', text: mutationError(error) }); },
+      if (!queueStartIsValid || !queueStartDate) return;
+      send.mutate({ campaignId: action.campaign.id, data: { scheduledAt: queueStartDate.toISOString() } }, {
+        onSuccess: response => { setPendingAction(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
+        onError: error => {
+          const apiError = (error as { data?: { code?: string; earliestStartAt?: string | null } }).data;
+          if (apiError?.code === 'CAMPAIGN_START_TOO_EARLY' && apiError.earliestStartAt) {
+            const earliest = new Date(apiError.earliestStartAt);
+            setServerMinimumStartAt(earliest);
+            setQueueStartAt(dateTimeLocalValue(roundUpToMinute(earliest)));
+            setQueueStartError(`Delivery estimates changed. The earliest available start is ${formatDate(apiError.earliestStartAt)}.`);
+            return;
+          }
+          setPendingAction(null);
+          setNotice({ kind: 'error', text: mutationError(error) });
+        },
       });
     } else {
       remove.mutate({ campaignId: action.campaign.id }, {
@@ -676,9 +720,9 @@ export function CampaignsPage() {
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Queued / completed</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaigns.map(campaign => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
         <td className="max-w-[240px] px-5 py-4"><button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="text-left"><span className="block truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></td>
         <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{lists.find(l => l.id === campaign.listId)?.name || 'Removed list'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
-        <td className="px-4 py-4"><Status tone={statusTone(campaign.status)}>{campaign.status}</Status></td>
+         <td className="px-4 py-4"><Status tone={statusTone(campaign.status)}>{campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
-        <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]">{campaign.queuedAt ? <><span className="block">Queued {formatDate(campaign.queuedAt)}</span>{campaign.completedAt && <span className="block">Finished {formatDate(campaign.completedAt)}</span>}</> : 'Not queued'}</td>
+         <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]">{campaign.queuedAt ? <><span className="block">{campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'Starts' : 'Queued'} {formatDate(campaign.scheduledAt || campaign.queuedAt)}</span>{campaign.scheduledAt && <span className="block">Queued {formatDate(campaign.queuedAt)}</span>}{campaign.completedAt && <span className="block">Finished {formatDate(campaign.completedAt)}</span>}</> : 'Not queued'}</td>
          <td className="px-5 py-4"><div className="flex justify-end gap-1">{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !campaign.listId || !lists.some(l => l.id === campaign.listId && l.active)}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
       </tr>)}</tbody></table></div>
     </section> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
@@ -716,15 +760,28 @@ export function CampaignsPage() {
        open={Boolean(pendingAction)}
        title={pendingAction?.kind === 'queue' ? 'Queue this campaign?' : 'Delete this draft?'}
        description={pendingAction?.kind === 'queue'
-         ? `Start sending “${pendingAction.campaign.name}” to ${pendingAction.campaign.recipients} eligible recipients in its selected list.`
+          ? `Choose when “${pendingAction.campaign.name}” should start sending to its ${pendingAction.campaign.recipients} eligible recipients.`
          : pendingAction ? `Permanently delete the draft “${pendingAction.campaign.name}”? This cannot be undone.` : ''}
        confirmLabel={pendingAction?.kind === 'queue' ? 'Queue campaign' : 'Delete draft'}
        destructive={pendingAction?.kind !== 'queue'}
        pending={send.isPending || remove.isPending}
+        confirmDisabled={pendingAction?.kind === 'queue' && !queueStartIsValid}
        onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) setPendingAction(null); }}
        onConfirm={confirmCampaignAction}
        testId="dialog-campaign-action"
-     />
+      >
+        {pendingAction?.kind === 'queue' && <div className="mt-4 space-y-3">
+          <label className="block">
+            <span className={labelClass}>Start date and time (your local time)</span>
+            <input data-testid="input-campaign-start-at" type="datetime-local" min={queueMinimumStartAtInput} value={queueStartAt} onChange={event => { setQueueStartAt(event.target.value); setQueueStartError(null); }} className={inputClass} required />
+          </label>
+          {hasActiveCampaigns && <div className="rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2.5 text-[11px] leading-5 text-[#895b2f]">
+            Existing campaign delivery is queued or in progress. This campaign cannot start before <strong>{formatDate(queueMinimumStartAt.toISOString())}</strong>. The finish time is an estimate and can change.
+          </div>}
+          {!hasActiveCampaigns && <p className="text-[11px] leading-5 text-[#788392]">Choose a future time. The time is interpreted in your device’s time zone.</p>}
+          {queueStartError && <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{queueStartError}</div>}
+        </div>}
+      </ConfirmActionDialog>
   </></QueryState>;
 }
 
@@ -757,6 +814,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
       const resolved = campaign.delivered + campaign.bounced + campaign.suppressed + campaign.unknown;
       const progress = campaign.recipients > 0 ? Math.min(100, Math.round((resolved / campaign.recipients) * 100)) : 0;
       const statusTone = campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
+      const isScheduled = campaign.status === 'queued' && campaign.scheduledAt !== null && new Date(campaign.scheduledAt).getTime() > Date.now();
       const metrics = [
         { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? 'Currently eligible in this list' : 'Captured when queued' },
         { label: 'SMTP accepted', value: campaign.delivered, detail: 'Inbox delivery is not confirmed' },
@@ -769,7 +827,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
         <div className="mb-5">
           <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
         </div>
-        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{campaign.status}</Status>}/>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{isScheduled ? 'scheduled' : campaign.status}</Status>}/>
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`}>
             <div className="text-[11px] text-[#778291]">{metric.label}</div>
@@ -824,7 +882,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
           <h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign message</h2>
           <div className="mt-4 border-b border-[#edf0f2] pb-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Subject</div><p className="mt-1 text-[13px] font-semibold text-[#29384a]">{campaign.subject}</p></div>
            <div className="pt-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">{campaign.htmlBody ? 'Formatted message' : 'Plain-text message'}</div>{campaign.htmlBody ? <div className="campaign-message-preview mt-2 rounded-md bg-[#f8fafb] p-4 text-[12px] leading-6 text-[#566476] [&_a]:text-[#245b9b] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[#9abbe1] [&_blockquote]:pl-3 [&_h1]:my-2 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_strong]:font-bold [&_u]:underline [&_ul]:my-2 [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: campaign.htmlBody }}/> : <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#566476]">{campaign.textBody}</pre>}</div>
-          <div className="mt-5 flex flex-wrap gap-5 border-t border-[#edf0f2] pt-4 text-[10px] text-[#7c8794]"><span>Created: {formatDate(campaign.createdAt)}</span><span>Queued: {formatDate(campaign.queuedAt)}</span><span>Completed: {formatDate(campaign.completedAt)}</span></div>
+           <div className="mt-5 flex flex-wrap gap-5 border-t border-[#edf0f2] pt-4 text-[10px] text-[#7c8794]"><span>Created: {formatDate(campaign.createdAt)}</span><span>Queued: {formatDate(campaign.queuedAt)}</span><span>Scheduled start: {formatDate(campaign.scheduledAt)}</span><span>Completed: {formatDate(campaign.completedAt)}</span></div>
         </section>
       </>;
     })()}

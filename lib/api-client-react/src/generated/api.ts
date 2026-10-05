@@ -38,6 +38,7 @@ import type {
   CampaignDeliveryReport,
   CampaignInput,
   CampaignPreviewInput,
+  CampaignQueueInput,
   CampaignSummary,
   CampaignTemplatePreview,
   CampaignUpdate,
@@ -4652,14 +4653,29 @@ export const getSendCampaignUrl = (campaignId: string,) => {
 /**
  * @summary Queue a tenant campaign for worker-based delivery
  */
-export const sendCampaign = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
+export const sendCampaign = async (campaignId: string,
+    campaignQueueInput?: CampaignQueueInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
 
-  return customFetch<CampaignSummary>(getSendCampaignUrl(campaignId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignSummary>(getSendCampaignUrl(campaignId),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignQueueInput)
   }
 );}
 
@@ -4684,9 +4700,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendCampaign>>, SendCampaignMutationVariables> = (props) => {
-          const {campaignId} = props ?? {};
+          const {campaignId,data} = props ?? {};
 
-          return  sendCampaign(campaignId,requestOptions)
+          return  sendCampaign(campaignId,data,requestOptions)
         }
 
 
@@ -4697,9 +4713,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type SendCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof sendCampaign>>>
-
+    export type SendCampaignMutationBody = BodyType<CampaignQueueInput> | undefined
     export type SendCampaignMutationError = ErrorType<ApiError>
-    export type SendCampaignMutationVariables = {campaignId: string}
+    export type SendCampaignMutationVariables = {campaignId: string;data?: BodyType<CampaignQueueInput>}
 
     /**
  * @summary Queue a tenant campaign for worker-based delivery

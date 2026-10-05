@@ -2179,6 +2179,7 @@ export const ListCampaignsResponseItem = zod.object({
   "suppressed": zod.number().int(),
   "unknown": zod.number().int(),
   "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -2223,6 +2224,7 @@ export const CreateCampaignResponse = zod.object({
   "suppressed": zod.number().int(),
   "unknown": zod.number().int(),
   "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -2279,6 +2281,7 @@ export const GetCampaignDashboardResponse = zod.object({
   "suppressed": zod.number().int(),
   "unknown": zod.number().int(),
   "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -2344,6 +2347,7 @@ export const UpdateCampaignResponse = zod.object({
   "suppressed": zod.number().int(),
   "unknown": zod.number().int(),
   "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -2482,6 +2486,10 @@ export const SendCampaignParams = zod.object({
   "campaignId": zod.coerce.string().uuid()
 })
 
+export const SendCampaignBody = zod.object({
+  "scheduledAt": zod.coerce.date().optional()
+})
+
 export const SendCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
@@ -2498,6 +2506,7 @@ export const SendCampaignResponse = zod.object({
   "suppressed": zod.number().int(),
   "unknown": zod.number().int(),
   "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

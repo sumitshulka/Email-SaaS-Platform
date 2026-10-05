@@ -27,6 +27,8 @@ export interface CampaignSummary {
   /** @nullable */
   queuedAt: Date | null;
   /** @nullable */
+  scheduledAt: Date | null;
+  /** @nullable */
   completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
