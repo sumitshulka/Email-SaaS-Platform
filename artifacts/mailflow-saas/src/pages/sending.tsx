@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, CirclePlus, Clock3,
-  Edit3, Fingerprint, LoaderCircle, Upload, Mail, Search, Send,
+  Edit3, Fingerprint, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
   ShieldCheck, Trash2, Users, X, BookmarkPlus,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
@@ -15,6 +15,7 @@ import {
   type ContactDirectoryFilterValues,
 } from '@/components/contact-directory-filters';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
@@ -660,18 +661,30 @@ export function ContactsPage() {
 
 export function ListsPage() {
   const [, setLocation] = useLocation();
-  const query = useListContactLists(); const contactsQuery = useListContacts();
+  const query = useListContactLists(); const contactsQuery = useListContacts(); const campaignsQuery = useListCampaigns();
   const create = useCreateContactList(); const update = useUpdateContactList(); const remove = useDeleteContactList();
   const updateContact = useUpdateContact();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<ContactList | null | undefined>(undefined); const [name, setName] = useState('');
   const [listToDelete, setListToDelete] = useState<ContactList | null>(null);
   const [viewingList, setViewingList] = useState<ContactList | null>(null);
+  const [openCampaignLists, setOpenCampaignLists] = useState<Set<string>>(() => new Set());
   const [contactSearch, setContactSearch] = useState('');
   const [pendingMembershipIds, setPendingMembershipIds] = useState<Set<string>>(() => new Set());
   const [membershipFeedback, setMembershipFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const lists = (query.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts ?? [];
+  const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
+  const campaignsByList = useMemo(() => {
+    const grouped = new Map<string, CampaignSummary[]>();
+    for (const campaign of campaigns) {
+      if (!campaign.listId) continue;
+      const listCampaigns = grouped.get(campaign.listId) || [];
+      listCampaigns.push(campaign);
+      grouped.set(campaign.listId, listCampaigns);
+    }
+    return grouped;
+  }, [campaigns]);
   const viewingContacts = viewingList
     ? contacts
         .filter(contact => contact.listIds.includes(viewingList.id))
@@ -701,6 +714,12 @@ export function ListsPage() {
     setMembershipFeedback(null);
     void contactsQuery.refetch();
   };
+  const toggleCampaignList = (listId: string) => setOpenCampaignLists(current => {
+    const next = new Set(current);
+    if (next.has(listId)) next.delete(listId);
+    else next.add(listId);
+    return next;
+  });
   const addContactToList = async (contact: (typeof contacts)[number]) => {
     const list = viewingList;
     if (!list || contactsQuery.isFetching || contact.listIds.includes(list.id)) return;
@@ -747,12 +766,53 @@ export function ListsPage() {
      <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Total lists</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{lists.length}</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">Active lists</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{lists.filter(l => l.active).length}</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f0fc', borderColor: '#e1dcf4' }}><div className="text-[11px] text-[#6f6692]">Contacts in lists</div><div className="display mt-2 text-[26px] font-bold text-[#6352a0]">{contacts.filter(c => c.listIds.length > 0).length}</div></div></div>
     {lists.length ? <div className="space-y-3">{lists.map((list, index) => {
       const memberCount = contacts.filter(c => c.listIds.includes(list.id)).length;
+      const listCampaigns = campaignsByList.get(list.id) || [];
+      const campaignsOpen = openCampaignLists.has(list.id);
+      const campaignsUnavailable = campaignsQuery.isError && campaignsQuery.data === undefined;
+      const campaignsLoading = campaignsQuery.isLoading && campaignsQuery.data === undefined;
       return <section key={list.id} data-testid={`card-list-${list.id}`} className={`${panelClass} overflow-hidden transition-shadow hover:shadow-sm`}>
         <div className="flex flex-wrap items-center gap-4 p-4 sm:p-5">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#edf4fc] text-[#245b9b]"><Users className="h-5 w-5"/></div>
           <div className="min-w-[180px] flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="display text-[18px] font-bold text-[#1c2b3d]">{list.name}</h2><Status tone={list.active ? 'green' : 'gray'}>{list.active ? 'Active' : 'Inactive'}</Status></div><p className="mt-1 text-[11px] text-[#7c8794]">Created {new Date(list.createdAt).toLocaleDateString()} · updated {new Date(list.updatedAt).toLocaleDateString()}</p></div>
           <div className="min-w-[125px] rounded-md bg-[#f7f9fb] px-3 py-2"><div className="text-[10px] text-[#7e8996]">Contacts</div><div className="mt-0.5 text-[16px] font-bold text-[#26364a]">{memberCount.toLocaleString()} <span className="text-[10px] font-normal text-[#84909d]">members</span></div></div>
-             <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button variant="outline" testId={`button-view-list-contacts-${list.id}`} onClick={() => openListContacts(list)}><Users className="h-3.5 w-3.5"/>Manage contacts</Button><Button variant="outline" testId={`button-toggle-list-${list.id}`} onClick={() => toggle(list)} disabled={update.isPending}>{list.active ? 'Deactivate' : 'Activate'}</Button><Button variant="quiet" testId={`button-edit-list-${list.id}`} onClick={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-list-${list.id}`} disabled={remove.isPending} onClick={() => setListToDelete(list)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Button variant="outline" testId={`button-view-list-contacts-${list.id}`} onClick={() => openListContacts(list)}><Users className="h-3.5 w-3.5"/>Manage contacts</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" data-testid={`button-list-actions-${list.id}`} aria-label={`Actions for ${list.name}`} title="List actions" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#d7dce3] bg-white text-[#526174] transition hover:bg-[#f7f9fb] focus:outline-none focus:ring-2 focus:ring-[#dbe8f7]">
+                  <MoreHorizontal className="h-4 w-4"/>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                <DropdownMenuItem data-testid={`button-toggle-list-${list.id}`} disabled={update.isPending} onSelect={() => toggle(list)}>{list.active ? 'Deactivate' : 'Activate'}</DropdownMenuItem>
+                <DropdownMenuItem data-testid={`button-edit-list-${list.id}`} onSelect={() => { setEditing(list); setName(list.name); }}><Edit3 className="h-3.5 w-3.5"/>Edit</DropdownMenuItem>
+                <DropdownMenuItem data-testid={`button-delete-list-${list.id}`} disabled={remove.isPending} onSelect={() => setListToDelete(list)} className="text-[#b85b20] focus:text-[#b85b20]"><Trash2 className="h-3.5 w-3.5"/>Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        <div data-testid={`list-campaigns-section-${list.id}`} className="border-t border-[#edf0f2] px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="font-semibold text-[#435164]">Campaigns using this list</span>
+              <span data-testid={`status-list-campaign-count-${list.id}`} className="rounded-full bg-[#f1f4f7] px-2 py-0.5 text-[10px] text-[#657386]">
+                {campaignsLoading ? 'Loading' : campaignsUnavailable ? 'Unavailable' : `${listCampaigns.length} ${listCampaigns.length === 1 ? 'campaign' : 'campaigns'}`}
+              </span>
+            </div>
+            <button type="button" data-testid={`button-toggle-list-campaigns-${list.id}`} aria-expanded={campaignsOpen} aria-controls={`list-campaigns-${list.id}`} onClick={() => toggleCampaignList(list.id)} className="rounded px-2 py-1 text-[11px] font-semibold text-[#245b9b] transition hover:bg-[#edf4fc]">
+              {campaignsOpen ? 'Hide campaigns' : 'View campaigns'}
+            </button>
+          </div>
+          {campaignsOpen && <div id={`list-campaigns-${list.id}`} className="mt-3">
+            {campaignsLoading ? <p className="text-[11px] text-[#7c8794]">Loading campaigns…</p>
+              : campaignsUnavailable ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>Campaigns using this list could not be loaded.</span><Button variant="outline" className="min-h-8 px-3 text-[11px]" testId={`button-retry-list-campaigns-${list.id}`} onClick={() => { void campaignsQuery.refetch(); }}>Retry</Button></div>
+                : listCampaigns.length ? <div className="grid gap-2 md:grid-cols-2">
+                  {listCampaigns.map(campaign => <Link key={campaign.id} href={`/campaigns/${campaign.id}`} data-testid={`link-list-campaign-${campaign.id}`} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-[#e8edf2] bg-[#fbfcfd] px-3 py-2.5 no-underline transition hover:border-[#c8d8e8] hover:bg-[#f6f9fc]">
+                    <span className="min-w-0"><span className="block truncate text-[11px] font-semibold text-[#29384a]">{campaign.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#7c8794]">{campaign.subject}</span></span>
+                    <Status tone={campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray'}>{campaign.status}</Status>
+                  </Link>)}
+                </div> : <p className="text-[11px] text-[#7c8794]">No campaigns have used this list yet.</p>}
+          </div>}
         </div>
         <div className="flex items-center justify-between border-t border-[#edf0f2] bg-[#fcfcfd] px-5 py-2.5"><span className="mono text-[9px] tracking-[.1em] text-[#9aa3ad]">LIST {String(index + 1).padStart(2, '0')}</span><span className="text-[10px] text-[#87919d]">{list.active ? 'Available for campaign targeting' : 'Hidden from campaign queueing'}</span></div>
       </section>;
