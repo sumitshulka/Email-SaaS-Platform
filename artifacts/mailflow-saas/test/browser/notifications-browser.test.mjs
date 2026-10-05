@@ -60,6 +60,8 @@ const state = {
   createRequests: [],
   statusRequests: [],
   readRequests: [],
+  notificationLoadFailureBudget: new Map(),
+  notificationFailureResponses: [],
   unexpectedRequests: [],
 };
 
@@ -340,6 +342,16 @@ async function installApiFixtures(context) {
     }
 
     if (pathname === '/api/notifications' && method === 'GET') {
+      const failuresRemaining = state.notificationLoadFailureBudget.get(user.id) ?? 0;
+      if (failuresRemaining > 0) {
+        state.notificationLoadFailureBudget.set(user.id, failuresRemaining - 1);
+        state.notificationFailureResponses.push(user.id);
+        await route.fulfill({
+          status: 503,
+          json: { error: 'Notification history is temporarily unavailable.' },
+        });
+        return;
+      }
       const unread = state.notifications
         .filter(notification =>
           isAvailable(notification) &&
@@ -706,6 +718,116 @@ describe('notification creation, display, and per-account read history', { concu
       await customerContext.close();
       await adminContext.close();
       await historyContext.close();
+    }
+  });
+
+  it('recovers from temporary notification load failures on the dashboard and history page', async () => {
+    const broadcastId = 'd32fbdc0-402c-408e-8af8-0a65f0ab8ba0';
+    const focusedId = 'ea4e44f6-83d6-46f2-a95d-4572c2ae3eb4';
+    const readAt = new Date(Date.now() - 30 * 60_000).toISOString();
+    const now = Date.now();
+    state.notifications = [
+      {
+        id: broadcastId,
+        title: 'Scheduled service update',
+        message: 'The platform will be briefly unavailable tonight.',
+        audience: 'broadcast',
+        recipientUserIds: [],
+        startsAt: new Date(now - 60 * 60_000).toISOString(),
+        expiresAt: new Date(now + 24 * 60 * 60_000).toISOString(),
+        createdAt: new Date(now - 60 * 60_000).toISOString(),
+        enabled: true,
+      },
+      {
+        id: focusedId,
+        title: 'Account security reminder',
+        message: 'Please review your account settings.',
+        audience: 'focused',
+        recipientUserIds: [firstCustomer.id],
+        startsAt: new Date(now - 60 * 60_000).toISOString(),
+        expiresAt: new Date(now + 24 * 60 * 60_000).toISOString(),
+        createdAt: new Date(now - 30 * 60_000).toISOString(),
+        enabled: true,
+      },
+    ];
+    state.reads.clear();
+    state.reads.set(`${broadcastId}:${firstCustomer.id}`, readAt);
+    state.notificationLoadFailureBudget.clear();
+    state.notificationFailureResponses.length = 0;
+    state.unexpectedRequests.length = 0;
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      state.notificationLoadFailureBudget.set(firstCustomer.id, 2);
+      await signIn(page, firstCustomer, '/dashboard');
+      await page.getByRole('heading', { name: 'Good to see you, again.' }).waitFor();
+      await page.getByTestId('dashboard-notification-error').waitFor({ state: 'visible' });
+      assert.match(
+        await page.getByTestId('dashboard-notification-error').innerText(),
+        /Platform notices couldn’t be loaded[\s\S]*Retry to check for account updates/,
+      );
+
+      const dashboardRetryResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === '/api/notifications' &&
+        response.request().method() === 'GET' &&
+        response.status() === 200,
+      );
+      await page.getByTestId('button-retry-dashboard-notifications').click();
+      assert.equal((await dashboardRetryResponse).status(), 200);
+      await page.getByTestId(`dashboard-notification-${focusedId}`).waitFor({ state: 'visible' });
+      assert.equal(
+        await page.getByTestId(`dashboard-notification-${broadcastId}`).count(),
+        0,
+        'the already-read broadcast should not return to the unread dashboard notices',
+      );
+      await page.getByTestId('dashboard-notification-error').waitFor({ state: 'detached' });
+
+      await page.goto(`${baseUrl}/notifications`);
+      await page.getByRole('heading', { name: 'Notifications' }).waitFor();
+      const readCardBeforeFailure = page.getByTestId(`notification-card-${broadcastId}`);
+      await readCardBeforeFailure.waitFor({ state: 'visible' });
+      assert.equal(await readCardBeforeFailure.getByText('Read', { exact: true }).count(), 1);
+      assert.equal(
+        await page.getByTestId(`button-mark-notification-read-${focusedId}`).count(),
+        1,
+        'the focused notice should remain unread before the temporary history failure',
+      );
+
+      state.notificationLoadFailureBudget.set(firstCustomer.id, 2);
+      await page.reload();
+      await page.getByTestId('error-notifications').waitFor({ state: 'visible' });
+      assert.match(
+        await page.getByTestId('error-notifications').innerText(),
+        /Notifications are unavailable[\s\S]*Your read history is unchanged[\s\S]*Try loading it again/,
+      );
+
+      const historyRetryResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === '/api/notifications' &&
+        response.request().method() === 'GET' &&
+        response.status() === 200,
+      );
+      await page.getByTestId('button-retry-notifications').click();
+      assert.equal((await historyRetryResponse).status(), 200);
+      const readCard = page.getByTestId(`notification-card-${broadcastId}`);
+      const unreadCard = page.getByTestId(`notification-card-${focusedId}`);
+      await readCard.waitFor({ state: 'visible' });
+      await unreadCard.waitFor({ state: 'visible' });
+      assert.equal(await readCard.getByText('Read', { exact: true }).count(), 1);
+      assert.equal(await unreadCard.getByText('Unread', { exact: true }).count(), 1);
+      assert.equal(await page.getByTestId(`button-mark-notification-read-${broadcastId}`).count(), 0);
+      assert.equal(await page.getByTestId(`button-mark-notification-read-${focusedId}`).count(), 1);
+      assert.equal(state.reads.get(`${broadcastId}:${firstCustomer.id}`), readAt);
+      assert.deepEqual(state.notificationFailureResponses, [
+        firstCustomer.id,
+        firstCustomer.id,
+        firstCustomer.id,
+        firstCustomer.id,
+      ]);
+      assert.deepEqual(state.unexpectedRequests, []);
+    } finally {
+      await context.close();
     }
   });
 });
