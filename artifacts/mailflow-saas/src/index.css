@@ -60,7 +60,7 @@
 .auth-login-frame { background-color: #f7faf8; }
 .auth-login-frame > .auth-header { border-bottom: 1px solid rgba(209, 225, 217, .8); background: rgba(248, 251, 249, .9); backdrop-filter: blur(12px); }
 .auth-login-frame .auth-header-label { color: #638077; }
-.auth-login-frame .auth-grid { border-right-color: #d9e8e1; background-color: #edf5f1; background-image: radial-gradient(ellipse at 82% 74%, rgba(190, 221, 207, .72), transparent 38%), radial-gradient(ellipse at 4% 2%, rgba(211, 228, 241, .72), transparent 40%), linear-gradient(to right, rgba(45, 116, 102, .065) 1px, transparent 1px), linear-gradient(to bottom, rgba(45, 116, 102, .065) 1px, transparent 1px); }
+.auth-login-frame .auth-grid { border-right-color: #d9e8e1; background-color: #f1f4ee; background-image: radial-gradient(ellipse at 88% 78%, rgba(182, 210, 194, .42), transparent 38%), linear-gradient(140deg, #f5f5ee 0%, #edf3ee 100%); background-size: 100% 100%; background-repeat: no-repeat; }
 .auth-login-frame .auth-hero-kicker { color: #39776c; }
 .auth-login-frame .auth-hero-rule { background-color: #d58a4b; }
 .auth-login-frame .auth-hero-title { color: #1d3936; }
