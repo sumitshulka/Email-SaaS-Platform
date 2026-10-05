@@ -1,14 +1,15 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
-import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
-  useGetContact, useGetContactFieldOptions, useListCompanies, useListContactLists, useUpdateContact,
+  getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
+  useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCompanies, useListContactLists, useUpdateContact,
 } from '@workspace/api-client-react';
-import type { Company, Contact, ContactUpdate } from '@workspace/api-client-react';
+import type { Company, Contact, ContactEmailHistoryItem, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 import { ContactFieldSelect } from '@/components/contact-field-select';
+import { ContactReportEvidence } from '@/components/delivery-evidence';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -94,14 +95,73 @@ function OnlineProfileField({ title, value, onChange, testId, editing, onToggleE
       : <div data-testid={`${testId}-full-value`} className="min-h-10 break-all rounded-md border border-[#e8edf1] bg-[#f8fafb] px-3 py-2 font-mono text-[11px] leading-5 text-[#3e536b]">{value || <span className="font-sans text-[#a0a8b3]">Not provided</span>}</div>}
   </div>;
 }
-function Section({ title, eyebrow, children }: { title: string; eyebrow: string; children: ReactNode }) {
-  return <section className={`${panel} overflow-hidden`}>
+function Section({ title, eyebrow, children, testId }: { title: string; eyebrow: string; children: ReactNode; testId?: string }) {
+  return <section data-testid={testId} className={`${panel} overflow-hidden`}>
     <header className="border-b border-[#e9edf0] bg-[#fbfcfd] px-5 py-4">
       <div className="font-mono text-[9px] uppercase tracking-[.16em] text-[#818c99]">{eyebrow}</div>
       <h2 className="mt-1 text-[15px] font-bold tracking-[-.02em] text-[#1c2b3d]">{title}</h2>
     </header>
     <div className="p-5">{children}</div>
   </section>;
+}
+
+const emailHistoryStatus: Record<ContactEmailHistoryItem['status'], { label: string; className: string }> = {
+  queued: { label: 'Queued', className: 'bg-[#edf4fc] text-[#245b9b]' },
+  sending: { label: 'Sending', className: 'bg-[#edf4fc] text-[#245b9b]' },
+  delivered: { label: 'SMTP accepted', className: 'bg-[#edf7f0] text-[#397050]' },
+  bounced: { label: 'Rejected / failed', className: 'bg-[#fff3e8] text-[#a95218]' },
+  suppressed: { label: 'Suppressed', className: 'bg-[#f0f2f4] text-[#66717e]' },
+  unknown: { label: 'Outcome unknown', className: 'bg-[#f0f2f4] text-[#66717e]' },
+};
+
+function ContactEmailHistorySection({ contactId, email }: { contactId: string; email: string }) {
+  const query = useGetContactEmailHistory(contactId, {
+    query: {
+      enabled: !!contactId,
+      queryKey: getGetContactEmailHistoryQueryKey(contactId),
+      refetchInterval: 30_000,
+    },
+  });
+
+  return <Section title="Email history" eyebrow="CAMPAIGN / DELIVERY ACTIVITY" testId="section-contact-email-history">
+    <p className="mb-4 text-[11px] leading-5 text-[#7c8794]">Campaign email attempts to <span className="font-medium text-[#526174]">{email}</span>. SMTP acceptance is not proof of inbox delivery; provider reports are shown separately.</p>
+    {query.isError && !query.data ? <div role="alert" data-testid="status-contact-email-history-error" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4">
+      <div><p className="text-[12px] font-semibold text-[#99501e]">We couldn’t load this contact’s email history.</p><p className="mt-1 text-[11px] text-[#93694c]">Your sending history is unchanged. Retry to load it again.</p></div>
+      <button type="button" data-testid="button-retry-contact-email-history-detail" onClick={() => void query.refetch()} disabled={query.isFetching} className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#e8c5a8] bg-white px-3 text-[11px] font-semibold text-[#94501f] hover:bg-[#fff7f0] disabled:opacity-50">{query.isFetching ? 'Retrying…' : 'Retry'}</button>
+    </div> : query.isLoading ? <div aria-label="Loading contact email history" data-testid="loading-contact-email-history" className="space-y-3">
+      {[0, 1, 2].map(item => <div key={item} className="h-24 animate-pulse rounded-lg border border-[#e8ecef] bg-[#f6f8f9]"/> )}
+    </div> : query.data?.length ? <div>
+      {query.isError && <div role="status" data-testid="status-contact-email-history-stale" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[11px] text-[#99501e]"><span>Couldn’t refresh. Showing the latest history already loaded.</span><button type="button" data-testid="button-retry-contact-email-history-stale" onClick={() => void query.refetch()} className="font-semibold underline underline-offset-2">Retry</button></div>}
+      <ol data-testid="list-contact-email-history" className="max-h-[680px] space-y-3 overflow-y-auto pr-1">
+        {query.data.map(emailItem => {
+          const status = emailHistoryStatus[emailItem.status];
+          return <li key={emailItem.id} data-testid={`item-contact-email-history-${emailItem.id}`} className="rounded-lg border border-[#e5e9ed] bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div data-testid={`text-email-history-campaign-${emailItem.id}`} className="text-[13px] font-semibold text-[#26364a]">{emailItem.campaignName}</div>
+                <div data-testid={`text-email-history-subject-${emailItem.id}`} className="mt-1 break-words text-[12px] text-[#697687]">{emailItem.subject}</div>
+                <Link href={`/campaigns/${encodeURIComponent(emailItem.campaignId)}`} data-testid={`link-email-history-campaign-${emailItem.id}`} className="mt-2 inline-flex text-[10px] font-semibold text-[#245b9b] underline decoration-[#b9cce0] underline-offset-2 hover:text-[#174f99]">View campaign</Link>
+              </div>
+              <span data-testid={`status-email-history-${emailItem.id}`} className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
+            </div>
+            <dl className="mt-3 grid gap-3 border-t border-[#edf0f2] pt-3 text-[11px] sm:grid-cols-3">
+              <div><dt className="text-[9px] font-semibold uppercase tracking-[.1em] text-[#87919d]">Last attempt</dt><dd data-testid={`text-email-history-attempt-${emailItem.id}`} className="mt-1 text-[#586778]">{date(emailItem.lastAttemptAt)}</dd></div>
+              <div><dt className="text-[9px] font-semibold uppercase tracking-[.1em] text-[#87919d]">Attempts</dt><dd data-testid={`text-email-history-attempt-count-${emailItem.id}`} className="mt-1 text-[#586778]">{emailItem.attempts} {emailItem.attempts === 1 ? 'attempt' : 'attempts'}</dd></div>
+              <div><dt className="text-[9px] font-semibold uppercase tracking-[.1em] text-[#87919d]">SMTP acceptance</dt><dd data-testid={`text-email-history-accepted-${emailItem.id}`} className="mt-1 text-[#586778]">{emailItem.deliveredAt ? date(emailItem.deliveredAt) : 'Not recorded'}</dd></div>
+            </dl>
+            <ContactReportEvidence detailed id={emailItem.id} item={emailItem}/>
+          </li>;
+        })}
+      </ol>
+    </div> : <div>
+      {query.isError && <div role="status" data-testid="status-contact-email-history-stale" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[11px] text-[#99501e]"><span>Couldn’t refresh. Showing the latest history already loaded.</span><button type="button" data-testid="button-retry-contact-email-history-stale" onClick={() => void query.refetch()} className="font-semibold underline underline-offset-2">Retry</button></div>}
+      <div data-testid="empty-contact-email-history" className="rounded-lg border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-10 text-center">
+        <Mail className="mx-auto h-5 w-5 text-[#557399]"/>
+        <div className="mt-3 text-[14px] font-semibold text-[#26364a]">No email history yet</div>
+        <p className="mt-1 text-[12px] text-[#738091]">No campaign email attempts have been recorded for this contact.</p>
+      </div>
+    </div>}
+  </Section>;
 }
 
 export function ContactDetailPage() {
@@ -328,5 +388,8 @@ export function ContactDetailPage() {
         </div>
       </div>
     </form>
+    <div className="mt-5">
+      <ContactEmailHistorySection contactId={contact.id} email={contact.email}/>
+    </div>
   </div>;
 }
