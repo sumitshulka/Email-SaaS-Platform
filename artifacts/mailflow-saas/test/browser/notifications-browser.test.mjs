@@ -463,6 +463,45 @@ describe('notification creation, display, and per-account read history', { concu
     await stopWebServer();
   });
 
+  it('groups workspace navigation links consistently on desktop and mobile', async () => {
+    const expectedGroups = [
+      ['Contacts & companies', ['Companies', 'Contacts', 'Contact fields']],
+      ['Email marketing', ['Lists', 'Campaigns']],
+      ['Account & settings', ['Notifications', 'Email Setup', 'Plans & billing', 'Profile & security']],
+    ];
+
+    for (const viewport of [
+      { width: 1440, height: 1000 },
+      { width: 390, height: 844 },
+    ]) {
+      const context = await browser.newContext({ viewport });
+      try {
+        await installApiFixtures(context);
+        const page = await context.newPage();
+        await signIn(page, firstCustomer, '/dashboard');
+
+        if (viewport.width < 768) {
+          await page.getByTestId('button-open-navigation').click();
+        }
+
+        const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
+        for (const [groupName, links] of expectedGroups) {
+          const group = navigation.getByRole('group', { name: groupName });
+          await group.waitFor({ state: 'visible' });
+          for (const label of links) {
+            assert.equal(
+              await group.getByRole('link', { name: label, exact: true }).count(),
+              1,
+              `${label} should appear in the ${groupName} group`,
+            );
+          }
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
   it('lets a superadmin publish broadcast and focused notices and change their enabled state', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
