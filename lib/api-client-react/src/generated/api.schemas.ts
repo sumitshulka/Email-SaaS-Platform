@@ -1791,9 +1791,9 @@ export interface AdminDashboardCurrencyRevenue {
      * @maxLength 3
      */
   currency: string;
-  /** Net production revenue in major units of this item currency for the current month. */
+  /** Net revenue in major units of this item currency for the current month in the active billing environment. */
   revenueThisMonth: number;
-  /** Lifetime net production revenue in major units of this item currency. */
+  /** Lifetime net revenue in major units of this item currency in the active billing environment. */
   totalRevenue: number;
   /** Gross captured amount in major units of this item currency for the current month. */
   capturedThisMonth: number;
@@ -1823,7 +1823,7 @@ export interface AdminDashboardRegistrationMonth {
 export interface AdminDashboardRevenueMonth {
   /** @pattern ^\d{4}-\d{2}$ */
   month: string;
-  /** Net production revenue in major units of defaultCurrency. */
+  /** Net revenue in major units of defaultCurrency for the active billing environment. */
   revenue: number;
 }
 
@@ -1871,16 +1871,17 @@ export interface AdminDashboard {
      * @maxLength 3
      */
   defaultCurrency: string;
-  /** Net production revenue this month in major units of defaultCurrency. */
+  /** Net revenue this month in major units of defaultCurrency for the active billing environment. */
   revenueThisMonth: number;
-  /** Lifetime net production revenue in major units of defaultCurrency. */
+  /** Lifetime net revenue in major units of defaultCurrency for the active billing environment. */
   totalRevenue: number;
-  /** Production payments by currency. Refunded amounts are assigned to their original capture month when capture timing is available. */
+  /** Payments from the active billing environment, grouped by currency. Refunded amounts are assigned to their original capture month when capture timing is available. */
   revenueByCurrency: AdminDashboardCurrencyRevenue[];
   registrationsByMonth: AdminDashboardRegistrationMonth[];
-  /** Six months of net production revenue in major units of defaultCurrency; refunds are assigned to the original capture month. */
+  /** Six months of net revenue in major units of defaultCurrency for the active billing environment; refunds are assigned to the original capture month. */
   revenueTrend: AdminDashboardRevenueMonth[];
   activeSubscriptionsByPackage: AdminDashboardPackageActivity[];
+  /** Active Razorpay environment used for all revenue fields, or null when no environment is active. */
   billingEnvironment: RazorpayEnvironment | null;
   applicationEmailConfigured: boolean;
   maintenanceMode: boolean;

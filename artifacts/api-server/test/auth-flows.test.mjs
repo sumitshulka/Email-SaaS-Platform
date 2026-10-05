@@ -885,7 +885,7 @@ async function getEmailCode() {
 }
 
 describe("Superadmin overview", { concurrency: false }, () => {
-  it("reports production revenue by currency and current account operations", async () => {
+  it("reports revenue only for the active payment environment and current operations", async () => {
     const admin = await createUser({
       username: "overview-admin",
       role: "SUPERADMIN",
@@ -1041,6 +1041,49 @@ describe("Superadmin overview", { concurrency: false }, () => {
     assert.equal(dashboard.body.applicationEmailConfigured, true);
     assert.equal(dashboard.body.maintenanceMode, false);
     assert.equal(dashboard.body.packageVisibility, "public");
+
+    await db
+      .update(dbModule.razorpayConfigurationTable)
+      .set({ activeEnvironment: "sandbox" })
+      .where(eq(dbModule.razorpayConfigurationTable.id, "platform"));
+    const sandboxDashboard = await api("/admin/dashboard", {
+      cookie: session.cookie,
+    });
+    assert.equal(
+      sandboxDashboard.response.status,
+      200,
+      JSON.stringify(sandboxDashboard.body),
+    );
+    assert.equal(sandboxDashboard.body.billingEnvironment, "sandbox");
+    assert.equal(sandboxDashboard.body.revenueThisMonth, 9000);
+    assert.equal(sandboxDashboard.body.totalRevenue, 9000);
+    assert.deepEqual(
+      sandboxDashboard.body.revenueByCurrency.map(({ currency }) => currency),
+      ["INR"],
+    );
+    assert.equal(
+      sandboxDashboard.body.revenueByCurrency[0].capturedPaymentsTotal,
+      1,
+    );
+    assert.equal(sandboxDashboard.body.revenueTrend.at(-1).revenue, 9000);
+
+    await db
+      .update(dbModule.razorpayConfigurationTable)
+      .set({ activeEnvironment: null })
+      .where(eq(dbModule.razorpayConfigurationTable.id, "platform"));
+    const unconfiguredDashboard = await api("/admin/dashboard", {
+      cookie: session.cookie,
+    });
+    assert.equal(
+      unconfiguredDashboard.response.status,
+      200,
+      JSON.stringify(unconfiguredDashboard.body),
+    );
+    assert.equal(unconfiguredDashboard.body.billingEnvironment, null);
+    assert.deepEqual(unconfiguredDashboard.body.revenueByCurrency, []);
+    assert.ok(
+      unconfiguredDashboard.body.revenueTrend.every((month) => month.revenue === 0),
+    );
   });
 
   it("returns explicit zero and unconfigured states before customers or payments exist", async () => {
@@ -1059,7 +1102,11 @@ describe("Superadmin overview", { concurrency: false }, () => {
     assert.equal(dashboard.body.activeCustomers, 0);
     assert.equal(dashboard.body.activePackages, 0);
     assert.equal(dashboard.body.subscriptionsEndingSoon, 0);
+    assert.equal(dashboard.body.billingEnvironment, null);
+    assert.equal(dashboard.body.revenueThisMonth, 0);
+    assert.equal(dashboard.body.totalRevenue, 0);
     assert.deepEqual(dashboard.body.revenueByCurrency, []);
+    assert.ok(dashboard.body.revenueTrend.every((month) => month.revenue === 0));
     assert.deepEqual(dashboard.body.activeSubscriptionsByPackage, []);
     assert.equal(dashboard.body.registrationsByMonth.length, 6);
     assert.ok(dashboard.body.registrationsByMonth.every((month) => month.registrations === 0));

@@ -2540,12 +2540,12 @@ export const GetAdminDashboardResponse = zod.object({
   "activePackages": zod.number().int(),
   "subscriptionsEndingSoon": zod.number().int(),
   "defaultCurrency": zod.string().min(getAdminDashboardResponseDefaultCurrencyMin).max(getAdminDashboardResponseDefaultCurrencyMax),
-  "revenueThisMonth": zod.number().describe('Net production revenue this month in major units of defaultCurrency.'),
-  "totalRevenue": zod.number().describe('Lifetime net production revenue in major units of defaultCurrency.'),
+  "revenueThisMonth": zod.number().describe('Net revenue this month in major units of defaultCurrency for the active billing environment.'),
+  "totalRevenue": zod.number().describe('Lifetime net revenue in major units of defaultCurrency for the active billing environment.'),
   "revenueByCurrency": zod.array(zod.object({
   "currency": zod.string().min(getAdminDashboardResponseRevenueByCurrencyItemCurrencyMin).max(getAdminDashboardResponseRevenueByCurrencyItemCurrencyMax),
-  "revenueThisMonth": zod.number().describe('Net production revenue in major units of this item currency for the current month.'),
-  "totalRevenue": zod.number().describe('Lifetime net production revenue in major units of this item currency.'),
+  "revenueThisMonth": zod.number().describe('Net revenue in major units of this item currency for the current month in the active billing environment.'),
+  "totalRevenue": zod.number().describe('Lifetime net revenue in major units of this item currency in the active billing environment.'),
   "capturedThisMonth": zod.number().describe('Gross captured amount in major units of this item currency for the current month.'),
   "refundedThisMonth": zod.number().describe('Refunded amount in major units of this item currency, assigned to the capture month when available.'),
   "capturedLifetime": zod.number().describe('Lifetime gross captured amount in major units of this item currency.'),
@@ -2554,20 +2554,20 @@ export const GetAdminDashboardResponse = zod.object({
   "refundedPaymentsThisMonth": zod.number().int().min(getAdminDashboardResponseRevenueByCurrencyItemRefundedPaymentsThisMonthMin),
   "capturedPaymentsTotal": zod.number().int().min(getAdminDashboardResponseRevenueByCurrencyItemCapturedPaymentsTotalMin),
   "refundedPaymentsTotal": zod.number().int().min(getAdminDashboardResponseRevenueByCurrencyItemRefundedPaymentsTotalMin)
-})).describe('Production payments by currency. Refunded amounts are assigned to their original capture month when capture timing is available.'),
+})).describe('Payments from the active billing environment, grouped by currency. Refunded amounts are assigned to their original capture month when capture timing is available.'),
   "registrationsByMonth": zod.array(zod.object({
   "month": zod.string().regex(getAdminDashboardResponseRegistrationsByMonthItemMonthRegExp),
   "registrations": zod.number().int().min(getAdminDashboardResponseRegistrationsByMonthItemRegistrationsMin)
 })),
   "revenueTrend": zod.array(zod.object({
   "month": zod.string().regex(getAdminDashboardResponseRevenueTrendItemMonthRegExp),
-  "revenue": zod.number().describe('Net production revenue in major units of defaultCurrency.')
-})).describe('Six months of net production revenue in major units of defaultCurrency; refunds are assigned to the original capture month.'),
+  "revenue": zod.number().describe('Net revenue in major units of defaultCurrency for the active billing environment.')
+})).describe('Six months of net revenue in major units of defaultCurrency for the active billing environment; refunds are assigned to the original capture month.'),
   "activeSubscriptionsByPackage": zod.array(zod.object({
   "packageName": zod.string(),
   "activeSubscriptions": zod.number().int().min(getAdminDashboardResponseActiveSubscriptionsByPackageItemActiveSubscriptionsMin)
 })),
-  "billingEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]),
+  "billingEnvironment": zod.union([zod.enum(['sandbox', 'production']),zod.null()]).describe('Active Razorpay environment used for all revenue fields, or null when no environment is active.'),
   "applicationEmailConfigured": zod.boolean(),
   "maintenanceMode": zod.boolean(),
   "packageVisibility": zod.enum(['public', 'hidden']),

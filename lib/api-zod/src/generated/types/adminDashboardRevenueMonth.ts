@@ -9,6 +9,6 @@
 export interface AdminDashboardRevenueMonth {
   /** @pattern ^\d{4}-\d{2}$ */
   month: string;
-  /** Net production revenue in major units of defaultCurrency. */
+  /** Net revenue in major units of defaultCurrency for the active billing environment. */
   revenue: number;
 }

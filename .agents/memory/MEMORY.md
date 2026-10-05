@@ -4,6 +4,7 @@
 - [Schema push verification](schema-push-verification.md) — inspect SQL errors and actual schema; a successful command exit can accompany a partially applied schema push.
 - [Provider report semantics](provider-report-semantics.md) — provider receipt timestamps and relay events are not final delivery; validate native exports before adding adapters.
 - [Payment capture timestamps](payment-capture-timestamps.md) — use subscription creation time for captures when available; payment-row updates can be unrelated backfills.
+- [Revenue environment isolation](revenue-environment-isolation.md) — superadmin revenue totals, trends, and currency rows must include only the currently active Razorpay environment.
 - [Gift subscription semantics](gift-subscriptions.md) — gifts share paid access without a recipient-facing gift label, but never create payment revenue.
 - [Radix and Vite HMR](radix-vite-hmr.md) — if a Radix import triggers an invalid-hook error after dependency optimization, verify React deduping and restart the web workflow once before changing packages.
 - [Mockup preview cold starts](mockup-preview-cold-start.md) — a blank first capture during Vite dependency optimization can clear after the server reloads.

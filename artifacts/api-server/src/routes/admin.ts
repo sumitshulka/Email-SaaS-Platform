@@ -149,6 +149,15 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
     lte(userSubscriptionsTable.startsAt, now),
     gt(userSubscriptionsTable.endsAt, now),
   );
+  const [gatewayConfig] = await db
+    .select({ activeEnvironment: razorpayConfigurationTable.activeEnvironment })
+    .from(razorpayConfigurationTable)
+    .where(eq(razorpayConfigurationTable.id, "platform"))
+    .limit(1);
+  const billingEnvironment = gatewayConfig?.activeEnvironment ?? null;
+  const paymentEnvironmentCondition = billingEnvironment
+    ? eq(paymentsTable.razorpayEnvironment, billingEnvironment)
+    : sql`false`;
 
   const [
     [allCount],
@@ -165,7 +174,6 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
     monthlyRevenueRows,
     lifetimeRevenueRows,
     [emailConfig],
-    [gatewayConfig],
     platformSettings,
     [emailAttempts],
   ] = await Promise.all([
@@ -252,7 +260,7 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       .where(
         and(
           eq(usersTable.role, "USER"),
-          eq(paymentsTable.razorpayEnvironment, "production"),
+          paymentEnvironmentCondition,
           inArray(paymentsTable.status, ["captured", "refunded"]),
           gte(capturedAtExpression, trendStart),
           lt(capturedAtExpression, nextMonthStart),
@@ -273,7 +281,7 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       .where(
         and(
           eq(usersTable.role, "USER"),
-          eq(paymentsTable.razorpayEnvironment, "production"),
+          paymentEnvironmentCondition,
           inArray(paymentsTable.status, ["captured", "refunded"]),
         ),
       )
@@ -288,11 +296,6 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       })
       .from(applicationEmailConfigurationTable)
       .where(eq(applicationEmailConfigurationTable.id, "platform"))
-      .limit(1),
-    db
-      .select({ activeEnvironment: razorpayConfigurationTable.activeEnvironment })
-      .from(razorpayConfigurationTable)
-      .where(eq(razorpayConfigurationTable.id, "platform"))
       .limit(1),
     getPlatformSettings(),
     db.select({ value: count() }).from(emailSendAttemptsTable),
@@ -377,7 +380,7 @@ router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<voi
       registrationsByMonth,
       revenueTrend: defaultCurrencyTrend,
       activeSubscriptionsByPackage: packageActivityRows,
-      billingEnvironment: gatewayConfig?.activeEnvironment ?? null,
+      billingEnvironment,
       applicationEmailConfigured: Boolean(
         emailConfig?.host &&
           emailConfig.username &&

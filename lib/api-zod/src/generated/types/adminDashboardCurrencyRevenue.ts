@@ -12,9 +12,9 @@ export interface AdminDashboardCurrencyRevenue {
      * @maxLength 3
      */
   currency: string;
-  /** Net production revenue in major units of this item currency for the current month. */
+  /** Net revenue in major units of this item currency for the current month in the active billing environment. */
   revenueThisMonth: number;
-  /** Lifetime net production revenue in major units of this item currency. */
+  /** Lifetime net revenue in major units of this item currency in the active billing environment. */
   totalRevenue: number;
   /** Gross captured amount in major units of this item currency for the current month. */
   capturedThisMonth: number;

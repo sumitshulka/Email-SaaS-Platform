@@ -2827,25 +2827,26 @@ components:
         defaultCurrency: { type: string, minLength: 3, maxLength: 3 }
         revenueThisMonth:
           type: number
-          description: Net production revenue this month in major units of defaultCurrency.
+          description: Net revenue this month in major units of defaultCurrency for the active billing environment.
         totalRevenue:
           type: number
-          description: Lifetime net production revenue in major units of defaultCurrency.
+          description: Lifetime net revenue in major units of defaultCurrency for the active billing environment.
         revenueByCurrency:
           type: array
-          description: Production payments by currency. Refunded amounts are assigned to their original capture month when capture timing is available.
+          description: Payments from the active billing environment, grouped by currency. Refunded amounts are assigned to their original capture month when capture timing is available.
           items: { $ref: "#/components/schemas/AdminDashboardCurrencyRevenue" }
         registrationsByMonth:
           type: array
           items: { $ref: "#/components/schemas/AdminDashboardRegistrationMonth" }
         revenueTrend:
           type: array
-          description: Six months of net production revenue in major units of defaultCurrency; refunds are assigned to the original capture month.
+          description: Six months of net revenue in major units of defaultCurrency for the active billing environment; refunds are assigned to the original capture month.
           items: { $ref: "#/components/schemas/AdminDashboardRevenueMonth" }
         activeSubscriptionsByPackage:
           type: array
           items: { $ref: "#/components/schemas/AdminDashboardPackageActivity" }
         billingEnvironment:
+          description: Active Razorpay environment used for all revenue fields, or null when no environment is active.
           anyOf:
             - $ref: "#/components/schemas/RazorpayEnvironment"
             - type: "null"
@@ -2863,10 +2864,10 @@ components:
         currency: { type: string, minLength: 3, maxLength: 3 }
         revenueThisMonth:
           type: number
-          description: Net production revenue in major units of this item currency for the current month.
+          description: Net revenue in major units of this item currency for the current month in the active billing environment.
         totalRevenue:
           type: number
-          description: Lifetime net production revenue in major units of this item currency.
+          description: Lifetime net revenue in major units of this item currency in the active billing environment.
         capturedThisMonth:
           type: number
           description: Gross captured amount in major units of this item currency for the current month.
@@ -2896,7 +2897,7 @@ components:
         month: { type: string, pattern: "^\\d{4}-\\d{2}$" }
         revenue:
           type: number
-          description: Net production revenue in major units of defaultCurrency.
+          description: Net revenue in major units of defaultCurrency for the active billing environment.
       required: [month, revenue]
     AdminDashboardPackageActivity:
       type: object

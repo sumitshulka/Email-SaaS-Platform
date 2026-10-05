@@ -309,6 +309,7 @@ function AdminDashboardPage() {
     { label: 'Pending', value: d.pendingUsers, color: '#d58a4b' },
     { label: 'Disabled', value: d.disabledUsers, color: '#a6afb8' },
   ];
+  const activeEnvironmentLabel = d.billingEnvironment?.toUpperCase() ?? 'NO ACTIVE ENVIRONMENT';
   const maxPackageCount = Math.max(1, ...d.activeSubscriptionsByPackage.map(item => item.activeSubscriptions));
   const historyHasRegistrations = d.registrationsByMonth.some(item => item.registrations > 0);
   const historyHasRevenue = d.revenueTrend.some(item => item.revenue > 0);
@@ -321,7 +322,7 @@ function AdminDashboardPage() {
   ];
   return <div className="fade-in space-y-5">
     <PageHeading eyebrow="PLATFORM CONTROL / OPERATIONS" title="Platform overview" detail="Account access, subscription health, revenue and configuration at a glance."
-      trailing={<div className="flex items-center gap-2"><span className="mono hidden text-[10px] text-[#87919b] sm:block">DEFAULT CURRENCY</span><StatusPill>{d.defaultCurrency}</StatusPill></div>}/>
+      trailing={<div className="flex flex-wrap items-center gap-2"><span className="mono hidden text-[10px] text-[#87919b] sm:block">ACTIVE ENVIRONMENT</span><StatusPill tone={d.billingEnvironment === 'production' ? 'blue' : 'orange'}>{d.billingEnvironment ?? 'Not configured'}</StatusPill><span className="mono hidden text-[10px] text-[#87919b] sm:block">DEFAULT CURRENCY</span><StatusPill>{d.defaultCurrency}</StatusPill></div>}/>
 
     <section aria-label="Platform headline metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Panel className="border-[#dce6e0] bg-[#f4f8f4] p-4" data-testid="dashboard-value-new-accounts">
@@ -366,14 +367,14 @@ function AdminDashboardPage() {
       </Panel>
       <Panel className="flex flex-col justify-between border-[#dce6e0] bg-[#f4f8f4] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#71867b]">PRODUCTION BILLING / {d.defaultCurrency}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263f37]">Net revenue</h2></div>
+          <div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#71867b]">{activeEnvironmentLabel} BILLING / {d.defaultCurrency}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263f37]">Net revenue</h2></div>
           <Link href="/admin/finance" data-testid="link-revenue-finance" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#34776b] no-underline hover:underline">Payment ledger <ArrowRight className="h-3.5 w-3.5"/></Link>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <div><div className="text-[10px] font-medium text-[#75877e]">This month</div><div className="display mt-1 text-[25px] font-bold tracking-[-.04em] text-[#25473d]" data-testid="dashboard-value-revenue-month">{formatCurrency(d.revenueThisMonth, d.defaultCurrency)}</div></div>
           <div className="sm:border-l sm:border-[#dce6e0] sm:pl-5"><div className="text-[10px] font-medium text-[#75877e]">Lifetime</div><div className="display mt-1 text-[25px] font-bold tracking-[-.04em] text-[#25473d]" data-testid="dashboard-value-revenue-lifetime">{formatCurrency(d.totalRevenue, d.defaultCurrency)}</div></div>
         </div>
-        <p className="mt-4 border-t border-[#dce6e0] pt-3 text-[10px] leading-4 text-[#74877d]">Production payments only; sandbox is excluded. Revenue is net of full refunds. Refunds are assigned to the original capture month because the ledger does not store refund timestamps.</p>
+        <p className="mt-4 border-t border-[#dce6e0] pt-3 text-[10px] leading-4 text-[#74877d]">{d.billingEnvironment ? `${d.billingEnvironment} payments only; the other environment is excluded. ` : 'No active billing environment; revenue is not reported. ' }Revenue is net of full refunds. Refunds are assigned to the original capture month because the ledger does not store refund timestamps.</p>
       </Panel>
     </section>
 
@@ -387,12 +388,12 @@ function AdminDashboardPage() {
         </div> : <div className="mt-4"><ChartEmpty title="No registrations in this period" body="Monthly account history will appear here once new customers register."/></div>}
       </Panel>
       <Panel className="p-5">
-        <ChartHeading eyebrow={`REVENUE / ${d.defaultCurrency} / LAST 6 MONTHS`} title="Net revenue trend" detail="Default currency only; currencies are never combined"/>
+        <ChartHeading eyebrow={`REVENUE / ${activeEnvironmentLabel} / ${d.defaultCurrency} / LAST 6 MONTHS`} title="Net revenue trend" detail={d.billingEnvironment ? `Active ${d.billingEnvironment} environment; default currency only, with currencies never combined.` : 'Select an active Razorpay environment to display its revenue trend.'}/>
         {historyHasRevenue ? <div className="mt-4 h-[210px]" data-testid="chart-revenue-history">
           <ResponsiveContainer width="100%" height="100%"><BarChart data={d.revenueTrend} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="#edf0ee"/><XAxis dataKey="month" tickFormatter={monthLabel} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#87919b' }}/><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#87919b' }} tickFormatter={value => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value))}/><Tooltip contentStyle={chartTooltip} labelFormatter={label => monthLabel(String(label))} formatter={(value: number) => [formatCurrency(value, d.defaultCurrency), `Net ${d.defaultCurrency}`]}/><Bar dataKey="revenue" name={`Net ${d.defaultCurrency}`} fill="#3f7690" radius={[3, 3, 0, 0]} maxBarSize={34}/>
           </BarChart></ResponsiveContainer>
-        </div> : <div className="mt-4"><ChartEmpty title="No revenue in this period" body={`No production revenue is recorded in ${d.defaultCurrency} for the six-month history.`}/></div>}
+        </div> : <div className="mt-4"><ChartEmpty title="No revenue in this period" body={d.billingEnvironment ? `No ${d.billingEnvironment} revenue is recorded in ${d.defaultCurrency} for the six-month history.` : 'No active billing environment is configured, so no revenue trend can be shown.'}/></div>}
         <p className="mt-2 text-[10px] leading-4 text-[#7e8894]">Refunds are recorded against their original capture month; exact refund timing is not available in the ledger.</p>
       </Panel>
     </section>
@@ -410,7 +411,7 @@ function AdminDashboardPage() {
       </Panel>
       <Panel className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">LEDGER SUMMARY</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Revenue by currency</h2></div><Link href="/admin/finance" data-testid="link-currency-finance" className="text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Open finance <ArrowRight className="ml-1 inline h-3.5 w-3.5"/></Link></div>
-        <p className="mt-1 text-[10px] leading-4 text-[#818c97]">Each currency is reported separately. Values reflect production capture totals net of full refunds.</p>
+        <p className="mt-1 text-[10px] leading-4 text-[#818c97]">{d.billingEnvironment ? `Each currency is reported separately. Values reflect ${d.billingEnvironment} capture totals net of full refunds.` : 'No active billing environment is configured, so no payment totals are included.'}</p>
         {d.revenueByCurrency.length ? <div className="mt-4 space-y-3">
           {d.revenueByCurrency.map(item => <div key={item.currency} data-testid={`currency-summary-${item.currency.toLowerCase()}`} className="rounded-md border border-[#e8ecef] bg-[#fbfcfb] p-3">
             <div className="mb-2 flex items-center justify-between border-b border-[#edf0f2] pb-2"><span className="mono text-[11px] font-semibold tracking-wide text-[#435465]">{item.currency}</span><span className="text-[9px] text-[#89939d]">MONTH / LIFETIME</span></div>
@@ -421,7 +422,7 @@ function AdminDashboardPage() {
               <span className="text-[#778390]">Refunded</span><span className="mono text-right text-[#9a6547]">{formatCurrency(item.refundedThisMonth, item.currency)}</span><span className="mono text-right text-[#9a6547]">{formatCurrency(item.refundedLifetime, item.currency)}</span>
             </div>
           </div>)}
-        </div> : <div className="mt-4 rounded-md border border-dashed border-[#dce3de] bg-[#fbfcfa] px-4 py-7 text-center"><div className="text-[12px] font-semibold text-[#52616e]">No payment activity recorded</div><p className="mt-1 text-[10px] text-[#818c97]">Currency totals will appear after production payments are captured.</p></div>}
+        </div> : <div className="mt-4 rounded-md border border-dashed border-[#dce3de] bg-[#fbfcfa] px-4 py-7 text-center"><div className="text-[12px] font-semibold text-[#52616e]">No payment activity recorded</div><p className="mt-1 text-[10px] text-[#818c97]">{d.billingEnvironment ? `Currency totals will appear after ${d.billingEnvironment} payments are captured.` : 'Select an active billing environment under Billing & plans to view its payments.'}</p></div>}
       </Panel>
     </section>
 
