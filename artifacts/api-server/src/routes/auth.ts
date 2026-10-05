@@ -1,5 +1,5 @@
-import { and, desc, eq, gt, isNull, ne, or } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { and, desc, eq, gt, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { Router, type IRouter, type Request } from "express";
 import {
   ChangePasswordBody,
   ChangePasswordResponse,
@@ -19,6 +19,7 @@ import {
   db,
   loginAttemptsTable,
   otpVerificationsTable,
+  passwordResetRateLimitsTable,
   passwordResetTokensTable,
   userSessionsTable,
   usersTable,
@@ -43,11 +44,108 @@ import {
 
 const router: IRouter = Router();
 const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const RESET_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RESET_RATE_LIMIT_EMAIL_MAX = 3;
+const RESET_RATE_LIMIT_IP_MAX = 20;
+const RESET_RATE_LIMIT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
+let lastPasswordResetRateLimitCleanupAt = 0;
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function getPasswordResetOrigin(req: Request): string {
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || req.get("host")?.trim();
+  if (!host || /[\s\\/@?#]/.test(host)) {
+    throw new Error("The request did not contain a valid application host.");
+  }
+
+  const protocol =
+    process.env.NODE_ENV === "production" ? "https" : req.protocol;
+  if (protocol !== "http" && protocol !== "https") {
+    throw new Error("The request did not contain a valid application protocol.");
+  }
+
+  const origin = new URL(`${protocol}://${host}`);
+  if (
+    !origin.host ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== "/" ||
+    origin.search ||
+    origin.hash
+  ) {
+    throw new Error("The request did not contain a valid application origin.");
+  }
+  return origin.origin;
+}
+
+function getPasswordResetUrl(origin: string, token: string): string {
+  const url = new URL("/reset-password", origin);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
+async function isPasswordResetRateLimited(
+  email: string,
+  ipAddress: string,
+): Promise<boolean> {
+  const now = new Date();
+  if (
+    now.getTime() - lastPasswordResetRateLimitCleanupAt >=
+    60 * 60 * 1000
+  ) {
+    await db
+      .delete(passwordResetRateLimitsTable)
+      .where(
+        lt(
+          passwordResetRateLimitsTable.updatedAt,
+          new Date(now.getTime() - RESET_RATE_LIMIT_RETENTION_MS),
+        ),
+      );
+    lastPasswordResetRateLimitCleanupAt = now.getTime();
+  }
+
+  const emailScopeHash = hmac(email, "password-reset-email-rate-limit");
+  const ipScopeHash = hmac(ipAddress, "password-reset-ip-rate-limit");
+  const windowFloor = new Date(now.getTime() - RESET_RATE_LIMIT_WINDOW_MS);
+  const counts = await db.transaction(async (tx) => {
+    const incrementBucket = async (scopeHash: string): Promise<number> => {
+      const [bucket] = await tx
+        .insert(passwordResetRateLimitsTable)
+        .values({
+          scopeHash,
+          requestCount: 1,
+          windowStartedAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: passwordResetRateLimitsTable.scopeHash,
+          set: {
+            requestCount: sql<number>`CASE WHEN ${passwordResetRateLimitsTable.windowStartedAt} <= ${windowFloor} THEN 1 ELSE ${passwordResetRateLimitsTable.requestCount} + 1 END`,
+            windowStartedAt: sql<Date>`CASE WHEN ${passwordResetRateLimitsTable.windowStartedAt} <= ${windowFloor} THEN ${now} ELSE ${passwordResetRateLimitsTable.windowStartedAt} END`,
+            updatedAt: now,
+          },
+        })
+        .returning({
+          requestCount: passwordResetRateLimitsTable.requestCount,
+        });
+      return bucket.requestCount;
+    };
+
+    return {
+      email: await incrementBucket(emailScopeHash),
+      ip: await incrementBucket(ipScopeHash),
+    };
+  });
+
+  return (
+    counts.email > RESET_RATE_LIMIT_EMAIL_MAX ||
+    counts.ip > RESET_RATE_LIMIT_IP_MAX
+  );
 }
 
 function toPublicUser(user: typeof usersTable.$inferSelect) {
@@ -336,28 +434,70 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
     return;
   }
   const email = normalizeEmail(parsed.data.email);
+  const emailConfig = await getApplicationEmailConfig();
+  if (!emailConfig) {
+    req.log.error("Password reset requested while application email is not configured");
+    res.status(503).json({
+      error: "Password recovery email is temporarily unavailable. Please contact support.",
+      code: "PASSWORD_RESET_EMAIL_UNAVAILABLE",
+    });
+    return;
+  }
+
+  let origin: string;
+  try {
+    origin = getPasswordResetOrigin(req);
+  } catch (error) {
+    req.log.error(
+      { errorName: error instanceof Error ? error.name : "UnknownError" },
+      "Password reset link host could not be determined",
+    );
+    res.status(503).json({
+      error: "Password recovery is temporarily unavailable. Please contact support.",
+      code: "PASSWORD_RESET_EMAIL_UNAVAILABLE",
+    });
+    return;
+  }
+
+  const ipAddress = req.ip ?? req.socket.remoteAddress ?? "unknown";
+  if (await isPasswordResetRateLimited(email, ipAddress)) {
+    res.setHeader(
+      "Retry-After",
+      String(Math.ceil(RESET_RATE_LIMIT_WINDOW_MS / 1000)),
+    );
+    res.status(429).json({
+      error: "Too many reset requests. Wait before trying again.",
+      code: "PASSWORD_RESET_RATE_LIMITED",
+    });
+    return;
+  }
+
   const [user] = await db
     .select()
     .from(usersTable)
     .where(and(eq(usersTable.email, email), isNull(usersTable.deletedAt)))
     .limit(1);
-  const emailConfig = await getApplicationEmailConfig();
-  if (user && emailConfig) {
+  if (user) {
     const token = randomToken(32);
     await db.insert(passwordResetTokensTable).values({
       userId: user.id,
       tokenHash: sha256(token),
       expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
     });
-    const origin = `${req.protocol}://${req.get("host")}`;
     try {
       await sendApplicationEmail(
         email,
         "Reset your Mailflow password",
-        `Use this link to set a new password. The link expires in 30 minutes:\n\n${origin}/reset-password?token=${token}\n\nIf you did not request this, ignore this email.`,
+        `Use this link to set a new password. The link expires in 30 minutes:\n\n${getPasswordResetUrl(origin, token)}\n\nIf you did not request this, ignore this email.`,
       );
-    } catch {
-      req.log.warn({ userId: user.id }, "Password reset email could not be sent");
+    } catch (error) {
+      req.log.error(
+        {
+          userId: user.id,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Password reset email could not be sent",
+      );
     }
   }
   res.json(
@@ -398,20 +538,35 @@ router.post("/auth/reset-password", async (req, res): Promise<void> => {
   }
   const passwordHash = await hashPassword(parsed.data.password);
   const now = new Date();
+  let consumed = false;
   await db.transaction(async (tx) => {
+    const [claimedToken] = await tx
+      .update(passwordResetTokensTable)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(passwordResetTokensTable.id, token.id),
+          isNull(passwordResetTokensTable.consumedAt),
+          gt(passwordResetTokensTable.expiresAt, now),
+        ),
+      )
+      .returning({ userId: passwordResetTokensTable.userId });
+    if (!claimedToken) return;
+
+    consumed = true;
     await tx
       .update(usersTable)
       .set({ passwordHash, mustChangeCredentials: false })
-      .where(eq(usersTable.id, token.userId));
-    await tx
-      .update(passwordResetTokensTable)
-      .set({ consumedAt: now })
-      .where(eq(passwordResetTokensTable.id, token.id));
+      .where(eq(usersTable.id, claimedToken.userId));
     await tx
       .update(userSessionsTable)
       .set({ revokedAt: now })
-      .where(and(eq(userSessionsTable.userId, token.userId), isNull(userSessionsTable.revokedAt)));
+      .where(and(eq(userSessionsTable.userId, claimedToken.userId), isNull(userSessionsTable.revokedAt)));
   });
+  if (!consumed) {
+    res.status(400).json({ error: "This reset link is invalid or expired.", code: "RESET_TOKEN_INVALID" });
+    return;
+  }
   res.json(ResetPasswordResponse.parse({ message: "Your password has been updated. Please sign in." }));
 });
 

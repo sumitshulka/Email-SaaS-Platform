@@ -16,5 +16,6 @@
 - [Contact list workflow](contact-list-management.md) — users should be able to assign existing contacts to a list from the Contact Lists page.
 - [Google OAuth admin setup](google-oauth-admin-config.md) — keep Gmail OAuth credentials in superadmin-managed app settings, not Replit Secrets.
 - [Gmail mailbox replacement](gmail-mailbox-replacement.md) — an unverified replacement must not trigger revocation when a saved mailbox already exists.
+- [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
 - [Browser-test resource contention](browser-test-resource-contention.md) — concurrent Vite and Chromium startups can time out; reuse the running web server when available.

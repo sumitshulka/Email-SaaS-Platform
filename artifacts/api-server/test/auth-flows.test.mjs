@@ -127,6 +127,12 @@ memory.public.none(`
     consumed_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE password_reset_rate_limits (
+    scope_hash varchar(64) PRIMARY KEY,
+    request_count integer NOT NULL DEFAULT 0,
+    window_started_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
   CREATE TABLE login_attempts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     identifier varchar(254) NOT NULL,
@@ -554,8 +560,14 @@ const [
   import("../src/lib/microsoft365-trace.ts"),
 ]);
 
-const { db, usersTable, userSessionsTable, loginAttemptsTable, otpVerificationsTable } =
-  dbModule;
+const {
+  db,
+  usersTable,
+  userSessionsTable,
+  loginAttemptsTable,
+  otpVerificationsTable,
+  passwordResetRateLimitsTable,
+} = dbModule;
 const emails = [];
 const tenantDeliveries = [];
 emailModule.setApplicationEmailTransportForTests(async (message) => {
@@ -611,6 +623,7 @@ beforeEach(async () => {
   await db.delete(dbModule.subscriptionPackagesTable);
   await db.delete(dbModule.razorpayConfigurationTable);
   await db.delete(dbModule.passwordResetTokensTable);
+  await db.delete(passwordResetRateLimitsTable);
   await db.delete(dbModule.otpVerificationsTable);
   await db.delete(dbModule.userSessionsTable);
   await db.delete(dbModule.loginAttemptsTable);
@@ -632,9 +645,9 @@ beforeEach(async () => {
 
 async function api(
   path,
-  { method = "GET", body, cookie, redirect = "follow" } = {},
+  { method = "GET", body, cookie, redirect = "follow", headers: extraHeaders = {} } = {},
 ) {
-  const headers = {};
+  const headers = { ...extraHeaders };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (cookie) headers.cookie = cookie;
   const response = await fetch(`${baseUrl}/api${path}`, {
@@ -2970,14 +2983,28 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const resetRequest = await api("/auth/forgot-password", {
       method: "POST",
       body: { email: user.email },
+      headers: {
+        "x-forwarded-host": "mailflow.example.test",
+        "x-forwarded-proto": "https",
+      },
     });
     assert.equal(resetRequest.response.status, 200);
     assert.equal(emails.length, 1);
+    assert.equal(emails[0].to, user.email);
     assert.match(emails[0].subject, /reset/i);
     const link = emails[0].text.match(/https?:\/\/\S+/)?.[0];
     assert.ok(link, "reset email should contain a reset URL");
+    assert.equal(new URL(link).origin, "https://mailflow.example.test");
     const resetToken = new URL(link).searchParams.get("token");
     assert.ok(resetToken);
+
+    const unknownAccount = await api("/auth/forgot-password", {
+      method: "POST",
+      body: { email: "missing-account@mailflow.test" },
+    });
+    assert.equal(unknownAccount.response.status, 200);
+    assert.deepEqual(unknownAccount.body, resetRequest.body);
+    assert.equal(emails.length, 1);
 
     const reset = await api("/auth/reset-password", {
       method: "POST",
@@ -2996,6 +3023,37 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.equal(oldPassword.response.status, 401);
     const newPassword = await login(user.email, "Replacement-password-2026!");
     assert.equal(newPassword.response.status, 200);
+  });
+
+  it("limits password reset requests by email and returns the same limit before account lookup", async () => {
+    const { user } = await loggedInUser();
+    for (let request = 0; request < 3; request += 1) {
+      const allowed = await api("/auth/forgot-password", {
+        method: "POST",
+        body: { email: user.email },
+      });
+      assert.equal(allowed.response.status, 200);
+    }
+
+    const limited = await api("/auth/forgot-password", {
+      method: "POST",
+      body: { email: user.email },
+    });
+    assert.equal(limited.response.status, 429);
+    assert.equal(limited.response.headers.get("retry-after"), "900");
+    assert.equal(limited.body.code, "PASSWORD_RESET_RATE_LIMITED");
+    assert.equal(emails.length, 3);
+  });
+
+  it("reports when the platform application email is not configured", async () => {
+    await db.delete(dbModule.applicationEmailConfigurationTable);
+    const response = await api("/auth/forgot-password", {
+      method: "POST",
+      body: { email: "unknown@mailflow.test" },
+    });
+    assert.equal(response.response.status, 503);
+    assert.equal(response.body.code, "PASSWORD_RESET_EMAIL_UNAVAILABLE");
+    assert.equal(emails.length, 0);
   });
 
   it("keeps the password-changing session and revokes other active sessions", async () => {

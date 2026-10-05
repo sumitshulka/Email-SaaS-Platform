@@ -532,7 +532,7 @@ return customFetch<MessageResponse>(getRequestPasswordResetUrl(),
 
 export const getRequestPasswordResetMutationKey = () => ['requestPasswordReset'] as const;
 
-export const getRequestPasswordResetMutationOptions = <TError = ErrorType<unknown>,
+export const getRequestPasswordResetMutationOptions = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPasswordReset>>, TError,RequestPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof requestPasswordReset>>, TError,RequestPasswordResetMutationVariables, TContext> => {
 
@@ -561,13 +561,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RequestPasswordResetMutationResult = NonNullable<Awaited<ReturnType<typeof requestPasswordReset>>>
     export type RequestPasswordResetMutationBody = BodyType<ForgotPasswordInput>
-    export type RequestPasswordResetMutationError = ErrorType<unknown>
+    export type RequestPasswordResetMutationError = ErrorType<ApiError>
     export type RequestPasswordResetMutationVariables = {data: BodyType<ForgotPasswordInput>}
 
     /**
  * @summary Send a password reset link without revealing account existence
  */
-export const useRequestPasswordReset = <TError = ErrorType<unknown>,
+export const useRequestPasswordReset = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPasswordReset>>, TError,RequestPasswordResetMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof requestPasswordReset>>,

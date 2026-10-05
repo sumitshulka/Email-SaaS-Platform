@@ -77,6 +77,24 @@ export const passwordResetTokensTable = pgTable(
   ],
 );
 
+export const passwordResetRateLimitsTable = pgTable(
+  "password_reset_rate_limits",
+  {
+    scopeHash: varchar("scope_hash", { length: 64 }).primaryKey(),
+    requestCount: integer("request_count").notNull().default(0),
+    windowStartedAt: timestamp("window_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("password_reset_rate_limits_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
 export const loginAttemptsTable = pgTable(
   "login_attempts",
   {
@@ -112,7 +130,12 @@ export const insertOtpVerificationSchema = createInsertSchema(
 export const insertPasswordResetTokenSchema = createInsertSchema(
   passwordResetTokensTable,
 ).omit({ id: true, createdAt: true });
+export const insertPasswordResetRateLimitSchema = createInsertSchema(
+  passwordResetRateLimitsTable,
+).omit({ updatedAt: true });
 
 export type UserSession = typeof userSessionsTable.$inferSelect;
 export type OtpVerification = typeof otpVerificationsTable.$inferSelect;
 export type PasswordResetToken = typeof passwordResetTokensTable.$inferSelect;
+export type PasswordResetRateLimit =
+  typeof passwordResetRateLimitsTable.$inferSelect;
