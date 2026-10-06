@@ -200,6 +200,13 @@ async function createUser({ username, role = "USER" }) {
   return user;
 }
 
+function signedSessionCookie(token) {
+  const signature = createHmac("sha256", process.env.SESSION_SECRET)
+    .update(`session:${token}`)
+    .digest("base64url");
+  return `mailflow_session=${token}.${signature}`;
+}
+
 async function sessionCookie(user) {
   const token = randomBytes(32).toString("base64url");
   await db.insert(userSessionsTable).values({
@@ -207,10 +214,7 @@ async function sessionCookie(user) {
     tokenHash: createHash("sha256").update(token).digest("hex"),
     expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   });
-  const signature = createHmac("sha256", process.env.SESSION_SECRET)
-    .update(`session:${token}`)
-    .digest("base64url");
-  return `mailflow_session=${token}.${signature}`;
+  return signedSessionCookie(token);
 }
 
 async function createTicket(cookie, overrides = {}) {
@@ -228,6 +232,102 @@ async function createTicket(cookie, overrides = {}) {
 }
 
 describe("support ticket access boundaries", { concurrency: false }, () => {
+  it("rejects anonymous and unrecognized sessions on every customer and admin endpoint", async () => {
+    const owner = await createUser({ username: "anonymous-boundary-owner" });
+    const ownerCookie = await sessionCookie(owner);
+    const created = await createTicket(ownerCookie);
+    const ticketId = created.ticket.id;
+    const unrecognizedCookie = signedSessionCookie(
+      randomBytes(32).toString("base64url"),
+    );
+    const anonymousSessions = [
+      { name: "no session cookie", cookie: undefined },
+      { name: "unrecognized session", cookie: unrecognizedCookie },
+    ];
+    const requests = [
+      {
+        name: "list customer tickets",
+        run: (cookie) => api("/support/tickets", { cookie }),
+      },
+      {
+        name: "create a customer ticket",
+        run: (cookie) => api("/support/tickets", {
+          method: "POST",
+          cookie,
+          body: {
+            subject: "Anonymous ticket",
+            message: "This ticket must not be created.",
+          },
+        }),
+      },
+      {
+        name: "view a customer ticket",
+        run: (cookie) => api(`/support/tickets/${ticketId}`, { cookie }),
+      },
+      {
+        name: "reply to a customer ticket",
+        run: (cookie) => api(`/support/tickets/${ticketId}/messages`, {
+          method: "POST",
+          cookie,
+          body: { message: "This reply must not be added." },
+        }),
+      },
+      {
+        name: "read the admin ticket queue",
+        run: (cookie) => api("/admin/support/tickets", { cookie }),
+      },
+      {
+        name: "view an admin ticket",
+        run: (cookie) => api(`/admin/support/tickets/${ticketId}`, { cookie }),
+      },
+      {
+        name: "reply as staff",
+        run: (cookie) => api(`/admin/support/tickets/${ticketId}/messages`, {
+          method: "POST",
+          cookie,
+          body: { message: "This staff reply must not be added." },
+        }),
+      },
+      {
+        name: "change ticket status",
+        run: (cookie) => api(`/admin/support/tickets/${ticketId}/status`, {
+          method: "PATCH",
+          cookie,
+          body: { status: "resolved" },
+        }),
+      },
+    ];
+
+    for (const session of anonymousSessions) {
+      for (const request of requests) {
+        const result = await request.run(session.cookie);
+        assert.equal(
+          result.status,
+          401,
+          `${session.name} must not ${request.name}: ${JSON.stringify(result.body)}`,
+        );
+        assert.equal(result.body.code, "UNAUTHENTICATED");
+      }
+    }
+
+    const unchanged = await api(`/support/tickets/${ticketId}`, {
+      cookie: ownerCookie,
+    });
+    assert.equal(unchanged.status, 200);
+    assert.equal(unchanged.body.ticket.status, "open");
+    assert.deepEqual(
+      unchanged.body.messages.map((message) => message.message),
+      ["Please review the invoice on my account."],
+    );
+    const customerTickets = await api("/support/tickets", {
+      cookie: ownerCookie,
+    });
+    assert.deepEqual(
+      customerTickets.body.items.map((ticket) => ticket.id),
+      [ticketId],
+    );
+  });
+
   it("keeps another customer's ticket out of their list, detail, and replies", async () => {
     const owner = await createUser({ username: "ticket-owner" });
     const otherCustomer = await createUser({ username: "different-customer" });
