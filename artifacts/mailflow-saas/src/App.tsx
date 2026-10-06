@@ -40,9 +40,14 @@ import NotFound from '@/pages/not-found';
 import './index.css';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 20_000, refetchOnWindowFocus: false } } });
+const SUPPORT_TICKET_RETURN_KEY = 'mailflow-support-ticket-return';
 
 type Fields = Record<string, string | number | boolean | string[]>;
 const cn = (...s: Array<string | false | undefined>) => s.filter(Boolean).join(' ');
+function getSupportTicketReturnPath() {
+  const ticketId = sessionStorage.getItem(SUPPORT_TICKET_RETURN_KEY);
+  return ticketId ? `/support?ticketId=${encodeURIComponent(ticketId)}` : undefined;
+}
 const getError = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return 'Something went wrong. Please try again.';
@@ -114,7 +119,12 @@ function LoginPage() {
   const form = useForm<{ identifier: string; password: string }>({ defaultValues: { identifier: '', password: '' } });
   const [showPassword, setShowPassword] = useState(false);
   const login = useLogin(); const qc = useQueryClient(); const [, setLocation] = useLocation();
-  const submit = form.handleSubmit(values => login.mutate({ data: values }, { onSuccess: res => { qc.setQueryData(getGetCurrentUserQueryKey(), res.user); setLocation(res.user.mustChangeCredentials ? '/profile?rotate=1' : res.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'); } }));
+  const submit = form.handleSubmit(values => login.mutate({ data: values }, { onSuccess: res => {
+    qc.setQueryData(getGetCurrentUserQueryKey(), res.user);
+    const supportReturnPath = res.user.role === 'USER' ? getSupportTicketReturnPath() : undefined;
+    if (res.user.role !== 'USER' || !res.user.mustChangeCredentials) sessionStorage.removeItem(SUPPORT_TICKET_RETURN_KEY);
+    setLocation(res.user.mustChangeCredentials ? '/profile?rotate=1' : supportReturnPath || (res.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'));
+  } }));
   return (
     <AuthFrame className="auth-branded-frame">
       <AuthTitle className="auth-form-title" overline="Secure sign in" title="Welcome back." sub="Sign in with your account credentials to continue." />
@@ -332,7 +342,13 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
 }
 function Gate({ children, admin = false }: { children: (user: AuthUser) => ReactNode; admin?: boolean }) {
   const auth = useGetCurrentUser(); const [location, setLocation] = useLocation();
-  useEffect(() => { if (auth.isError) setLocation('/'); }, [auth.isError, setLocation]);
+  useEffect(() => {
+    if (!auth.isError) return;
+    const url = new URL(window.location.href);
+    const ticketId = url.pathname === '/support' ? url.searchParams.get('ticketId') : null;
+    if (ticketId) sessionStorage.setItem(SUPPORT_TICKET_RETURN_KEY, ticketId);
+    setLocation('/');
+  }, [auth.isError, setLocation]);
   useEffect(() => {
     if (!auth.data) return;
     if (auth.data.mustChangeCredentials && location !== '/profile') setLocation('/profile?rotate=1');
@@ -949,7 +965,9 @@ function ProfilePage({ user }: { user: AuthUser }) {
           qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
           if (rotate) {
             setRotate(false);
-            setLocation(user.role === 'SUPERADMIN' ? '/admin' : '/dashboard');
+            const supportReturnPath = user.role === 'USER' ? getSupportTicketReturnPath() : undefined;
+            sessionStorage.removeItem(SUPPORT_TICKET_RETURN_KEY);
+            setLocation(supportReturnPath || (user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'));
           }
         },
       },

@@ -212,7 +212,9 @@ export function SupportTicketsPage() {
   const list = useListSupportTickets({
     query: { queryKey: getListSupportTicketsQueryKey(), refetchInterval: 30_000 },
   });
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(() =>
+    new URLSearchParams(window.location.search).get('ticketId') || undefined,
+  );
   const [creating, setCreating] = useState(false);
   const selectedTicketId = selectedId || list.data?.items[0]?.id;
   const detail = useGetSupportTicket(selectedTicketId || '', {

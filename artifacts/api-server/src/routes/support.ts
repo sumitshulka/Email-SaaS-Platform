@@ -7,7 +7,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import {
   CreateSupportTicketBody,
   CreateSupportTicketResponse,
@@ -34,11 +34,38 @@ import {
   supportTicketsTable,
   usersTable,
 } from "@workspace/db";
+import { sendSupportReplyNotification } from "../lib/application-email";
 import { requireSuperadmin, requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
 
 type TicketRow = typeof supportTicketsTable.$inferSelect;
+
+function getApplicationOrigin(req: Request): string {
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || req.get("host")?.trim();
+  if (!host || /[\s\\/@?#]/.test(host)) {
+    throw new Error("The request did not contain a valid application host.");
+  }
+
+  const protocol = process.env.NODE_ENV === "production" ? "https" : req.protocol;
+  if (protocol !== "http" && protocol !== "https") {
+    throw new Error("The request did not contain a valid application protocol.");
+  }
+
+  const origin = new URL(`${protocol}://${host}`);
+  if (
+    !origin.host ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== "/" ||
+    origin.search ||
+    origin.hash
+  ) {
+    throw new Error("The request did not contain a valid application origin.");
+  }
+  return origin.origin;
+}
 
 function ticketSummary(ticket: TicketRow) {
   return {
@@ -398,6 +425,22 @@ router.post(
         code: "SUPPORT_TICKET_NOT_FOUND",
       });
       return;
+    }
+    try {
+      await sendSupportReplyNotification(
+        detail.ticket.requesterEmail,
+        detail.ticket.subject,
+        updated.id,
+        getApplicationOrigin(req),
+      );
+    } catch (error) {
+      req.log.warn(
+        {
+          ticketId: updated.id,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Support reply notification failed",
+      );
     }
     res.json(ReplyToAdminSupportTicketResponse.parse(detail));
   },

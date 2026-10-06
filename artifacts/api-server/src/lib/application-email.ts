@@ -105,14 +105,33 @@ export async function sendApplicationEmail(
     debug: false,
   });
 
-  await transport.sendMail({
-    from: { name: config.fromName, address: config.fromEmail },
+  try {
+    await transport.sendMail({
+      from: { name: config.fromName, address: config.fromEmail },
+      to,
+      replyTo: config.replyTo ?? undefined,
+      subject,
+      text,
+    });
+  } finally {
+    transport.close();
+  }
+}
+
+export async function sendSupportReplyNotification(
+  to: string,
+  ticketSubject: string,
+  ticketId: string,
+  origin: string,
+): Promise<void> {
+  const conversationUrl = new URL("/support", origin);
+  conversationUrl.searchParams.set("ticketId", ticketId);
+
+  await sendApplicationEmail(
     to,
-    replyTo: config.replyTo ?? undefined,
-    subject,
-    text,
-  });
-  transport.close();
+    "A reply to your Mailflow support ticket",
+    `Mailflow Support replied to your support ticket "${ticketSubject}".\n\nView the conversation: ${conversationUrl.toString()}`,
+  );
 }
 
 export async function sendTenantEmail(

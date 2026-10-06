@@ -130,6 +130,7 @@ memoryPool.connect = (...args) => {
 const testDb = drizzle(memoryPool, { schema });
 const dbModule = await import("@workspace/db");
 dbModule.setTestDatabase(testDb);
+const emailModule = await import("../src/lib/application-email.ts");
 const { default: app } = await import("../src/app.ts");
 const {
   db,
@@ -141,6 +142,14 @@ const {
 
 let server;
 let baseUrl;
+const emails = [];
+let emailDeliveryFails = false;
+emailModule.setApplicationEmailTransportForTests(async (message) => {
+  emails.push(message);
+  if (emailDeliveryFails) {
+    throw new Error("Test email transport failure");
+  }
+});
 
 before(async () => {
   server = app.listen(0);
@@ -163,18 +172,21 @@ after(async () => {
 });
 
 beforeEach(async () => {
+  emails.length = 0;
+  emailDeliveryFails = false;
   await db.delete(supportTicketMessagesTable);
   await db.delete(supportTicketsTable);
   await db.delete(userSessionsTable);
   await db.delete(usersTable);
 });
 
-async function api(path, { method = "GET", body, cookie } = {}) {
+async function api(path, { method = "GET", body, cookie, headers = {} } = {}) {
   const response = await fetch(`${baseUrl}/api${path}`, {
     method,
     headers: {
       ...(body === undefined ? {} : { "content-type": "application/json" }),
       ...(cookie ? { cookie } : {}),
+      ...headers,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -452,6 +464,7 @@ describe("support ticket access boundaries", { concurrency: false }, () => {
     assert.equal(customerReply.status, 200);
     assert.equal(customerReply.body.ticket.status, "open");
     assert.equal(customerReply.body.messages.at(-1).authorRole, "USER");
+    assert.equal(emails.length, 0);
 
     const adminReply = await api(`/admin/support/tickets/${ticketId}/messages`, {
       method: "POST",
@@ -476,6 +489,73 @@ describe("support ticket access boundaries", { concurrency: false }, () => {
     });
     assert.equal(closed.status, 200);
     assert.equal(closed.body.ticket.status, "closed");
+  });
+
+  it("emails the requester a link to the ticket after a staff reply", async () => {
+    const owner = await createUser({ username: "reply-notification-owner" });
+    const admin = await createUser({
+      username: "reply-notification-admin",
+      role: "SUPERADMIN",
+    });
+    const ownerCookie = await sessionCookie(owner);
+    const adminCookie = await sessionCookie(admin);
+    const created = await createTicket(ownerCookie, {
+      subject: "Help with my account",
+    });
+    const ticketId = created.ticket.id;
+
+    const reply = await api(`/admin/support/tickets/${ticketId}/messages`, {
+      method: "POST",
+      cookie: adminCookie,
+      headers: {
+        "x-forwarded-host": "mailflow.example.test",
+        "x-forwarded-proto": "https",
+      },
+      body: { message: "We have updated your account settings." },
+    });
+
+    assert.equal(reply.status, 200, JSON.stringify(reply.body));
+    assert.equal(reply.body.messages.at(-1).message, "We have updated your account settings.");
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0].to, owner.email);
+    assert.match(emails[0].subject, /reply/i);
+    assert.match(emails[0].text, /Mailflow Support replied/);
+    assert.match(emails[0].text, /Help with my account/);
+    const link = emails[0].text.match(/https:\/\/\S+/)?.[0];
+    assert.ok(link, "notification email should contain a conversation link");
+    const conversationUrl = new URL(link);
+    assert.equal(conversationUrl.origin, "https://mailflow.example.test");
+    assert.equal(conversationUrl.pathname, "/support");
+    assert.equal(conversationUrl.searchParams.get("ticketId"), ticketId);
+  });
+
+  it("keeps a saved staff reply when notification email delivery fails", async () => {
+    const owner = await createUser({ username: "reply-email-failure-owner" });
+    const admin = await createUser({
+      username: "reply-email-failure-admin",
+      role: "SUPERADMIN",
+    });
+    const ownerCookie = await sessionCookie(owner);
+    const adminCookie = await sessionCookie(admin);
+    const created = await createTicket(ownerCookie);
+    const ticketId = created.ticket.id;
+    emailDeliveryFails = true;
+
+    const reply = await api(`/admin/support/tickets/${ticketId}/messages`, {
+      method: "POST",
+      cookie: adminCookie,
+      body: { message: "The saved reply must survive an email failure." },
+    });
+
+    assert.equal(reply.status, 200, JSON.stringify(reply.body));
+    assert.equal(emails.length, 1);
+    assert.equal(emails[0].to, owner.email);
+    const detail = await api(`/support/tickets/${ticketId}`, {
+      cookie: ownerCookie,
+    });
+    assert.equal(detail.status, 200);
+    assert.equal(detail.body.ticket.status, "waiting_on_customer");
+    assert.equal(detail.body.messages.at(-1).message, "The saved reply must survive an email failure.");
   });
 
   it("filters the admin queue by every status and searchable ticket/requester fields", async () => {
