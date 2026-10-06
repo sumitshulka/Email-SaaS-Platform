@@ -110,6 +110,37 @@ validation, and response handling. They establish index-maintenance cost for
 representative full-profile create/edit statements; the actual latency of an
 individual API save also depends on those route and database costs.
 
+## Sparse-domain search
+
+Measured October 6, 2026 on the same PostgreSQL 16.10 instance, with 500,000
+rows and all production company indexes retained. Each run used a 250,000-row
+searched tenant and a 250,000-row second tenant. The fixture kept
+`company_domain` and `company_domain_key` either populated together or `NULL`
+together. Requested rates are deterministic; the measured rate can differ by a
+few hundredths of a percentage point.
+
+| Requested domains populated | Measured target-tenant domains | GIN size | Paged search, without → with GIN | Exact count, without → with GIN | GIN used for page/count |
+| ---: | ---: | ---: | ---: | ---: | :---: |
+| 100% | 250,000 / 250,000 (100%) | 36.48 MiB | 196.58 → 1.16 ms | 185.21 → 0.91 ms | Yes / yes |
+| 50% | 125,129 / 250,000 (50.05%) | 27.62 MiB | 167.63 → 1.17 ms | 163.58 → 0.93 ms | Yes / yes |
+| 10% | 25,025 / 250,000 (10.01%) | 20.87 MiB | 140.92 → 1.03 ms | 133.19 → 0.81 ms | Yes / yes |
+| 0% | 0 / 250,000 (0%) | 18.91 MiB | 135.35 → 0.99 ms | 122.93 → 0.71 ms | Yes / yes |
+
+At each rate the indexed plan used a `BitmapOr` with trigram bitmap scans for
+both search columns, followed by a bitmap heap scan. At 0%, the domain branch
+has no matching values, but PostgreSQL still uses the index for the
+company-name branch. Page contents and counts matched between indexed and
+unindexed runs at all four rates.
+
+The two-column index remains effective even when most or all domains are
+missing: it reduced paged-search time by about 99.3–99.4% and exact-count time
+by about 99.4–99.5% in these runs. Sparse domains reduce storage rather than
+break the search plan. The all-null case still uses 18.91 MiB for the name
+trigrams; the fully populated case uses 17.57 MiB more. The measured results
+support keeping the current index rather than splitting or removing its domain
+column. This is a synthetic distribution and a single PostgreSQL instance, so
+it does not replace production workload monitoring.
+
 ## Rerun
 
 From the repository root, run:
@@ -122,3 +153,6 @@ The benchmark defaults to 500,000 fixture rows and 5,000-row write batches.
 `COMPANY_SEARCH_BENCHMARK_ROWS` can select another multiple of 20,000 (minimum
 400,000); `COMPANY_SEARCH_BENCHMARK_WRITE_ROWS` can change the write batch size.
 The batch size times five must not exceed half the fixture row count.
+`COMPANY_SEARCH_BENCHMARK_DOMAIN_PERCENT` sets the fixture's domain-population
+rate as an integer from 0 to 100 and defaults to 100. For example, rerun with
+`COMPANY_SEARCH_BENCHMARK_DOMAIN_PERCENT=10` to measure a sparse-domain case.
