@@ -688,6 +688,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ContactCollection"
+  /contacts/export:
+    post:
+      operationId: exportContacts
+      tags: [sending]
+      summary: Stream a tenant contact report as an Excel workbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactExportInput"
+      responses:
+        "200":
+          description: Excel workbook containing the selected contact columns and rows
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid export options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/options:
     get:
       operationId: listContactOptions
@@ -776,6 +799,29 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "409":
           description: The contact already exists or the contact quota is full
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /companies/export:
+    post:
+      operationId: exportCompanies
+      tags: [contacts]
+      summary: Stream a tenant company report as an Excel workbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyExportInput"
+      responses:
+        "200":
+          description: Excel workbook containing the selected company columns and rows
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid export options
           content:
             application/json:
               schema:
@@ -2861,6 +2907,29 @@ components:
         companyLinkedinUrl: { type: string, maxLength: 2048 }
         companyLocation: { type: string, maxLength: 200 }
       required: [companyName]
+    CompanyExportColumn:
+      type: string
+      enum: [id, companyName, companyDomain, companyWebsiteUrl, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, contactCount, createdAt, updatedAt]
+    CompanyExportFilters:
+      type: object
+      properties:
+        search: { type: string, maxLength: 200 }
+        industry: { type: string, maxLength: 120 }
+        size: { type: string, maxLength: 80 }
+        revenueRange: { type: string, maxLength: 80 }
+        location: { type: string, maxLength: 200 }
+    CompanyExportInput:
+      type: object
+      properties:
+        scope: { type: string, enum: [filtered, all] }
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/CompanyExportColumn" }
+        filters: { $ref: "#/components/schemas/CompanyExportFilters" }
+      required: [scope, columns]
     CompanyUpdate:
       type: object
       properties:
@@ -2987,6 +3056,32 @@ components:
                 - $ref: "#/components/schemas/ContactEmailHistoryItem"
                 - type: "null"
           required: [lastEmail]
+    ContactExportColumn:
+      type: string
+      enum: [id, name, email, subscribed, listNames, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, phoneNumber, mobilePhone, jobTitle, department, seniority, location, lifecycleStage, leadStatus, leadSource, preferredLanguage, timeZone, linkedinUrl, websiteUrl, twitterUrl, facebookUrl, instagramUrl, interests, goals, painPoints, personalizationContext, notes, createdAt, updatedAt]
+    ContactExportFilters:
+      type: object
+      properties:
+        search: { type: string, maxLength: 200 }
+        status: { type: string, enum: [all, subscribed, unsubscribed], default: all }
+        listId: { type: string, maxLength: 64 }
+        companyId: { type: string, maxLength: 64 }
+        lifecycleStage: { type: string, maxLength: 80 }
+        leadStatus: { type: string, maxLength: 80 }
+        leadSource: { type: string, maxLength: 120 }
+        addedWithin: { type: string, enum: [any, "7", "30", "90"], default: any }
+    ContactExportInput:
+      type: object
+      properties:
+        scope: { type: string, enum: [filtered, all] }
+        columns:
+          type: array
+          minItems: 1
+          maxItems: 40
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/ContactExportColumn" }
+        filters: { $ref: "#/components/schemas/ContactExportFilters" }
+      required: [scope, columns]
     ContactInput:
       type: object
       properties:

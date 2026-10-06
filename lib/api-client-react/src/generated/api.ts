@@ -50,6 +50,7 @@ import type {
   CompanyBackfillResult,
   CompanyCollection,
   CompanyDetail,
+  CompanyExportInput,
   CompanyInput,
   CompanyUpdate,
   CompleteGmailMailboxConnectionParams,
@@ -60,6 +61,7 @@ import type {
   ContactCollection,
   ContactCsvInput,
   ContactEmailHistoryItem,
+  ContactExportInput,
   ContactFieldOptionCollection,
   ContactFieldOptionInput,
   ContactFieldOptionResponse,
@@ -2706,6 +2708,94 @@ export function useListContacts<TData = Awaited<ReturnType<typeof listContacts>>
 
 
 
+export const getExportContactsUrl = () => {
+
+
+
+
+  return `/api/contacts/export`
+}
+
+/**
+ * @summary Stream a tenant contact report as an Excel workbook
+ */
+export const exportContacts = async (contactExportInput: ContactExportInput, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Blob>(getExportContactsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactExportInput)
+  }
+);}
+
+
+
+
+
+export const getExportContactsMutationKey = () => ['exportContacts'] as const;
+
+export const getExportContactsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportContacts>>, TError,ExportContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportContacts>>, TError,ExportContactsMutationVariables, TContext> => {
+
+const mutationKey = getExportContactsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportContacts>>, ExportContactsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportContacts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportContactsMutationResult = NonNullable<Awaited<ReturnType<typeof exportContacts>>>
+    export type ExportContactsMutationBody = BodyType<ContactExportInput>
+    export type ExportContactsMutationError = ErrorType<ApiError>
+    export type ExportContactsMutationVariables = {data: BodyType<ContactExportInput>}
+
+    /**
+ * @summary Stream a tenant contact report as an Excel workbook
+ */
+export const useExportContacts = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportContacts>>, TError,ExportContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportContacts>>,
+        TError,
+        ExportContactsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportContactsMutationOptions(options));
+    }
+
 export const getListContactOptionsUrl = (params?: ListContactOptionsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -2961,6 +3051,94 @@ export const useCreateContact = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateContactMutationOptions(options));
+    }
+
+export const getExportCompaniesUrl = () => {
+
+
+
+
+  return `/api/companies/export`
+}
+
+/**
+ * @summary Stream a tenant company report as an Excel workbook
+ */
+export const exportCompanies = async (companyExportInput: CompanyExportInput, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Blob>(getExportCompaniesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(companyExportInput)
+  }
+);}
+
+
+
+
+
+export const getExportCompaniesMutationKey = () => ['exportCompanies'] as const;
+
+export const getExportCompaniesMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportCompanies>>, TError,ExportCompaniesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportCompanies>>, TError,ExportCompaniesMutationVariables, TContext> => {
+
+const mutationKey = getExportCompaniesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportCompanies>>, ExportCompaniesMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportCompanies(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportCompaniesMutationResult = NonNullable<Awaited<ReturnType<typeof exportCompanies>>>
+    export type ExportCompaniesMutationBody = BodyType<CompanyExportInput>
+    export type ExportCompaniesMutationError = ErrorType<ApiError>
+    export type ExportCompaniesMutationVariables = {data: BodyType<CompanyExportInput>}
+
+    /**
+ * @summary Stream a tenant company report as an Excel workbook
+ */
+export const useExportCompanies = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportCompanies>>, TError,ExportCompaniesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportCompanies>>,
+        TError,
+        ExportCompaniesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportCompaniesMutationOptions(options));
     }
 
 export const getListCompaniesUrl = () => {

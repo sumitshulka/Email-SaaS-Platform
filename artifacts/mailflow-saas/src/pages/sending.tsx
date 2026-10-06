@@ -3,10 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
-  Edit3, Fingerprint, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
+  Download, Edit3, Fingerprint, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
   ShieldCheck, Trash2, Users, X, BookmarkPlus,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
+import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
 import {
   ContactDirectoryFiltersPanel,
   emptyContactDirectoryFilters,
@@ -18,7 +19,7 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
+  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useStartGmailMailboxConnection,
   getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
@@ -29,8 +30,9 @@ import {
 } from '@workspace/api-client-react';
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, CompanyListItem, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
-  ContactAudienceSegment, TenantSendingSettings, TenantSendingSettingsInput,
+  ContactAudienceSegment, ContactExportInput, TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
+import { downloadWorkbook } from '@/lib/download-workbook';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 const inputClass = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -352,6 +354,47 @@ function ContactEmailHistoryDialog({ contact, close }: { contact: Contact; close
   </Modal>;
 }
 
+const contactDownloadColumns: DownloadListColumn<ContactExportInput['columns'][number]>[] = [
+  { key: 'name', label: 'Name', group: 'standard' },
+  { key: 'email', label: 'Email', group: 'standard' },
+  { key: 'subscribed', label: 'Subscription status', group: 'standard' },
+  { key: 'listNames', label: 'Lists', group: 'standard' },
+  { key: 'companyName', label: 'Company', group: 'standard' },
+  { key: 'location', label: 'Location', group: 'standard' },
+  { key: 'createdAt', label: 'Date added', group: 'standard' },
+  { key: 'id', label: 'Contact ID', group: 'additional' },
+  { key: 'phoneNumber', label: 'Phone', group: 'additional' },
+  { key: 'mobilePhone', label: 'Mobile phone', group: 'additional' },
+  { key: 'jobTitle', label: 'Job title', group: 'additional' },
+  { key: 'department', label: 'Department', group: 'additional' },
+  { key: 'seniority', label: 'Seniority', group: 'additional' },
+  { key: 'lifecycleStage', label: 'Lifecycle stage', group: 'additional' },
+  { key: 'leadStatus', label: 'Lead status', group: 'additional' },
+  { key: 'leadSource', label: 'Lead source', group: 'additional' },
+  { key: 'preferredLanguage', label: 'Preferred language', group: 'additional' },
+  { key: 'timeZone', label: 'Time zone', group: 'additional' },
+  { key: 'linkedinUrl', label: 'LinkedIn', group: 'additional' },
+  { key: 'websiteUrl', label: 'Website', group: 'additional' },
+  { key: 'twitterUrl', label: 'X / Twitter', group: 'additional' },
+  { key: 'facebookUrl', label: 'Facebook', group: 'additional' },
+  { key: 'instagramUrl', label: 'Instagram', group: 'additional' },
+  { key: 'interests', label: 'Interests', group: 'additional' },
+  { key: 'goals', label: 'Goals', group: 'additional' },
+  { key: 'painPoints', label: 'Pain points', group: 'additional' },
+  { key: 'personalizationContext', label: 'Personalization context', group: 'additional' },
+  { key: 'notes', label: 'Notes', group: 'additional' },
+  { key: 'companyDomain', label: 'Company domain', group: 'additional' },
+  { key: 'companyWebsiteUrl', label: 'Company website', group: 'additional' },
+  { key: 'companyIndustry', label: 'Company industry', group: 'additional' },
+  { key: 'companySize', label: 'Company size', group: 'additional' },
+  { key: 'companyRevenueRange', label: 'Company revenue', group: 'additional' },
+  { key: 'companyDescription', label: 'Company description', group: 'additional' },
+  { key: 'companyPhoneNumber', label: 'Company phone', group: 'additional' },
+  { key: 'companyLinkedinUrl', label: 'Company LinkedIn', group: 'additional' },
+  { key: 'companyLocation', label: 'Company location', group: 'additional' },
+  { key: 'updatedAt', label: 'Last updated', group: 'additional' },
+];
+
 export function ContactsPage() {
   const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
   const [page, setPage] = useState(1);
@@ -400,6 +443,7 @@ export function ContactsPage() {
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const contacts = contactsQuery.data?.contacts ?? [];
   const visible = contacts;
   const resultStart = contacts.length && contactsQuery.data
@@ -428,6 +472,35 @@ export function ContactsPage() {
     || filters.listId !== 'all' || filters.companyId !== 'all'
     || filters.lifecycleStage !== 'all' || filters.leadStatus !== 'all'
     || filters.leadSource !== 'all' || filters.addedWithin !== 'any';
+  const contactFilterSummary = [
+    filters.search.trim() ? `Search: ${filters.search.trim()}` : null,
+    filters.status !== 'all' ? `Status: ${filters.status}` : null,
+    filters.listId !== 'all' ? `List: ${lists.find(list => list.id === filters.listId)?.name ?? (filters.listId === '__none__' ? 'No list' : 'Selected list')}` : null,
+    filters.companyId !== 'all' ? `Company: ${companies.find(company => company.id === filters.companyId)?.companyName ?? (filters.companyId === '__none__' ? 'No company' : 'Selected company')}` : null,
+    filters.lifecycleStage !== 'all' ? `Lifecycle: ${filters.lifecycleStage === '__unset__' ? 'Not set' : filters.lifecycleStage}` : null,
+    filters.leadStatus !== 'all' ? `Lead status: ${filters.leadStatus === '__unset__' ? 'Not set' : filters.leadStatus}` : null,
+    filters.leadSource !== 'all' ? `Lead source: ${filters.leadSource === '__unset__' ? 'Not set' : filters.leadSource}` : null,
+    filters.addedWithin !== 'any' ? `Added in the last ${filters.addedWithin} days` : null,
+  ].filter((value): value is string => Boolean(value)).join(' · ');
+  const downloadContacts = async (scope: DownloadScope, columns: ContactExportInput['columns']) => {
+    const workbook = await exportContacts({
+      scope,
+      columns,
+      ...(scope === 'filtered' ? {
+        filters: {
+          search: filters.search,
+          status: filters.status,
+          listId: filters.listId,
+          companyId: filters.companyId,
+          lifecycleStage: filters.lifecycleStage,
+          leadStatus: filters.leadStatus,
+          leadSource: filters.leadSource,
+          addedWithin: filters.addedWithin,
+        },
+      } : {}),
+    });
+    downloadWorkbook(workbook, 'contacts');
+  };
   const reload = () => { void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const openNew = () => { setEditing(null); setForm(emptyContact); };
   const openEdit = (contact: Contact) => { setEditing(contact); setForm({ email: contact.email, firstName: contact.firstName, lastName: contact.lastName, companyName: contact.companyName ?? '', linkedinUrl: contact.linkedinUrl ?? '', phoneNumber: contact.phoneNumber ?? '', subscribed: contact.subscribed, listIds: [...contact.listIds] }); };
@@ -514,8 +587,22 @@ export function ContactsPage() {
   const toggleSub = (contact: Contact) => update.mutate({ contactId: contact.id, data: { subscribed: !contact.subscribed } }, { onSuccess: () => { reload(); setNotice({ kind: 'success', text: contact.subscribed ? 'Contact unsubscribed.' : 'Contact subscribed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
   const busy = create.isPending || update.isPending;
   return <QueryState loading={contactsQuery.isLoading || listsQuery.isLoading} error={contactsQuery.isError || listsQuery.isError} retry={() => { void contactsQuery.refetch(); void listsQuery.refetch(); }} label="contacts"><>
-    <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
+    <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-download-contacts" disabled={contactsQuery.isFetching || debouncedSearch !== filters.search} onClick={() => setDownloadOpen(true)}><Download className="h-4 w-4"/>Download list</Button><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
+    {downloadOpen && <DownloadListDialog
+      title="Download contacts"
+      description="Choose the rows and contact fields to include in your Excel workbook."
+      entityLabel="contacts"
+      currentCount={contactsQuery.data?.total ?? 0}
+      allCount={contactsQuery.data?.workspaceTotal ?? 0}
+      hasActiveFilters={hasActiveFilters}
+      filterSummary={contactFilterSummary}
+      defaultScope={hasActiveFilters ? 'filtered' : 'all'}
+      columns={contactDownloadColumns}
+      defaultColumns={['name', 'email', 'subscribed', 'listNames', 'companyName', 'location', 'createdAt']}
+      onDownload={downloadContacts}
+      onClose={() => setDownloadOpen(false)}
+    />}
     <div className="mb-5 grid gap-3 sm:grid-cols-3">
       <div data-testid="summary-contact-total" className={`${panelClass} p-4`} style={{ backgroundColor: '#eaf3ff', borderColor: '#c9dcf3' }}>
         <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#536984]">All contacts</div><div className="display mt-2 text-[26px] font-bold text-[#1d3e65]">{(contactsQuery.data?.workspaceTotal ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#647b97]">Across this workspace</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8e9ff] text-[#2862a1]"><Users className="h-4 w-4"/></span></div>

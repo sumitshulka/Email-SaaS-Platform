@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { and, desc, eq } from "drizzle-orm";
 import express from "express";
 import cookieParser from "cookie-parser";
+import ExcelJS from "exceljs";
 
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://mailflow-test:mailflow-test@127.0.0.1/mailflow_test";
@@ -681,6 +682,229 @@ async function api(
     cookie: setCookie?.split(";", 1)[0],
   };
 }
+
+async function apiBinary(path, { body, cookie, method = "POST" } = {}) {
+  const headers = { "content-type": "application/json" };
+  if (cookie) headers.cookie = cookie;
+  const response = await fetch(`${baseUrl}/api${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return {
+    response,
+    bytes: Buffer.from(await response.arrayBuffer()),
+  };
+}
+
+describe("contact and company workbook exports", () => {
+  it("exports filtered and all-row Excel workbooks without crossing tenant boundaries", async () => {
+    const owner = await loggedInUser({
+      username: "workbook-export-owner",
+      email: "workbook-export-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "workbook-export-other",
+      email: "workbook-export-other@example.test",
+    });
+    const [list] = await dbModule.db
+      .insert(dbModule.contactListsTable)
+      .values({ userId: owner.user.id, name: "Priority list" })
+      .returning();
+    const [company] = await dbModule.db
+      .insert(dbModule.companiesTable)
+      .values({
+        userId: owner.user.id,
+        companyName: "Northstar Systems",
+        companyDomain: "northstar.test",
+        companyLocation: "Austin, TX",
+        companyIndustry: "Technology",
+      })
+      .returning();
+    const [secondCompany] = await dbModule.db
+      .insert(dbModule.companiesTable)
+      .values({
+        userId: owner.user.id,
+        companyName: "Blue Harbor",
+        companyLocation: "London",
+        companyIndustry: "Finance",
+      })
+      .returning();
+    const [foreignCompany] = await dbModule.db
+      .insert(dbModule.companiesTable)
+      .values({
+        userId: other.user.id,
+        companyName: "Private Workspace Company",
+        companyLocation: "Austin, TX",
+        companyIndustry: "Technology",
+      })
+      .returning();
+    const [filteredContact, unsubscribedContact, otherContact] =
+      await dbModule.db
+        .insert(dbModule.contactsTable)
+        .values([
+          {
+            userId: owner.user.id,
+            companyId: company.id,
+            name: "Charlie Filtered",
+            firstName: "Charlie",
+            lastName: "Filtered",
+            email: "charlie@northstar.test",
+            location: "Austin, TX",
+            subscribed: true,
+          },
+          {
+            userId: owner.user.id,
+            companyId: company.id,
+            name: "Casey Unsubscribed",
+            firstName: "Casey",
+            lastName: "Unsubscribed",
+            email: "casey@northstar.test",
+            subscribed: false,
+            location: "Austin, TX",
+          },
+          {
+            userId: owner.user.id,
+            companyId: secondCompany.id,
+            name: "Taylor Other",
+            firstName: "Taylor",
+            lastName: "Other",
+            email: "taylor@blueharbor.test",
+            subscribed: true,
+          },
+        ])
+        .returning();
+    const [foreignContact] = await dbModule.db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: other.user.id,
+        companyId: foreignCompany.id,
+        name: "Foreign Contact",
+        firstName: "Foreign",
+        lastName: "Contact",
+        email: "foreign@private.test",
+      })
+      .returning();
+    await dbModule.db.insert(dbModule.contactListMembersTable).values({
+      userId: owner.user.id,
+      listId: list.id,
+      contactId: filteredContact.id,
+    });
+
+    const filteredExport = await apiBinary("/contacts/export", {
+      cookie: owner.cookie,
+      body: {
+        scope: "filtered",
+        columns: ["name", "email", "listNames", "companyName"],
+        filters: {
+          search: "Charlie",
+          status: "subscribed",
+          listId: list.id,
+          companyId: company.id,
+          addedWithin: "any",
+        },
+      },
+    });
+    assert.equal(filteredExport.response.status, 200);
+    assert.match(
+      filteredExport.response.headers.get("content-type"),
+      /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/,
+    );
+    assert.match(
+      filteredExport.response.headers.get("content-disposition"),
+      /attachment; filename="contacts-/,
+    );
+    const contactWorkbook = new ExcelJS.Workbook();
+    await contactWorkbook.xlsx.load(filteredExport.bytes);
+    const contactSheet = contactWorkbook.getWorksheet("Contacts");
+    assert.ok(contactSheet);
+    assert.deepEqual(contactSheet.getRow(1).values.slice(1), [
+      "Name",
+      "Email",
+      "Lists",
+      "Company",
+    ]);
+    assert.deepEqual(contactSheet.getRow(2).values.slice(1), [
+      "Charlie Filtered",
+      "charlie@northstar.test",
+      "Priority list",
+      "Northstar Systems",
+    ]);
+    assert.equal(contactSheet.rowCount, 2);
+
+    const allContactsExport = await apiBinary("/contacts/export", {
+      cookie: owner.cookie,
+      body: {
+        scope: "all",
+        columns: ["email"],
+        filters: { search: "no-match" },
+      },
+    });
+    assert.equal(allContactsExport.response.status, 200);
+    const allContactsWorkbook = new ExcelJS.Workbook();
+    await allContactsWorkbook.xlsx.load(allContactsExport.bytes);
+    const contactEmails = allContactsWorkbook
+      .getWorksheet("Contacts")
+      .getColumn(1)
+      .values.slice(2);
+    assert.deepEqual(new Set(contactEmails), new Set([
+      "charlie@northstar.test",
+      "casey@northstar.test",
+      "taylor@blueharbor.test",
+    ]));
+    assert.equal(contactEmails.includes(foreignContact.email), false);
+
+    const filteredCompaniesExport = await apiBinary("/companies/export", {
+      cookie: owner.cookie,
+      body: {
+        scope: "filtered",
+        columns: ["companyName", "companyLocation", "contactCount"],
+        filters: {
+          search: "Northstar",
+          industry: "Technology",
+          location: "Austin",
+        },
+      },
+    });
+    assert.equal(filteredCompaniesExport.response.status, 200);
+    const companyWorkbook = new ExcelJS.Workbook();
+    await companyWorkbook.xlsx.load(filteredCompaniesExport.bytes);
+    const companySheet = companyWorkbook.getWorksheet("Companies");
+    assert.ok(companySheet);
+    assert.deepEqual(companySheet.getRow(1).values.slice(1), [
+      "Company name",
+      "Location",
+      "Contacts",
+    ]);
+    assert.deepEqual(companySheet.getRow(2).values.slice(1), [
+      "Northstar Systems",
+      "Austin, TX",
+      2,
+    ]);
+    assert.equal(companySheet.rowCount, 2);
+
+    const allCompaniesExport = await apiBinary("/companies/export", {
+      cookie: owner.cookie,
+      body: {
+        scope: "all",
+        columns: ["companyName"],
+        filters: { search: "no-match" },
+      },
+    });
+    assert.equal(allCompaniesExport.response.status, 200);
+    const allCompaniesWorkbook = new ExcelJS.Workbook();
+    await allCompaniesWorkbook.xlsx.load(allCompaniesExport.bytes);
+    const companyNames = allCompaniesWorkbook
+      .getWorksheet("Companies")
+      .getColumn(1)
+      .values.slice(2);
+    assert.deepEqual(new Set(companyNames), new Set([
+      "Northstar Systems",
+      "Blue Harbor",
+    ]));
+    assert.equal(companyNames.includes(foreignCompany.companyName), false);
+  });
+});
 
 async function withGmailOAuthConfig(run, { verified = true } = {}) {
   const key = "google_oauth";

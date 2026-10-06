@@ -1018,6 +1018,44 @@ export const ListContactsResponse = zod.object({
 
 
 /**
+ * @summary Stream a tenant contact report as an Excel workbook
+ */
+export const exportContactsBodyColumnsMax = 40;
+
+export const exportContactsBodyFiltersSearchMax = 200;
+
+export const exportContactsBodyFiltersStatusDefault = `all`;
+export const exportContactsBodyFiltersListIdMax = 64;
+
+export const exportContactsBodyFiltersCompanyIdMax = 64;
+
+export const exportContactsBodyFiltersLifecycleStageMax = 80;
+
+export const exportContactsBodyFiltersLeadStatusMax = 80;
+
+export const exportContactsBodyFiltersLeadSourceMax = 120;
+
+export const exportContactsBodyFiltersAddedWithinDefault = `any`;
+
+export const ExportContactsBody = zod.object({
+  "scope": zod.enum(['filtered', 'all']),
+  "columns": zod.array(zod.enum(['id', 'name', 'email', 'subscribed', 'listNames', 'companyName', 'companyWebsiteUrl', 'companyDomain', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyDescription', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyLocation', 'phoneNumber', 'mobilePhone', 'jobTitle', 'department', 'seniority', 'location', 'lifecycleStage', 'leadStatus', 'leadSource', 'preferredLanguage', 'timeZone', 'linkedinUrl', 'websiteUrl', 'twitterUrl', 'facebookUrl', 'instagramUrl', 'interests', 'goals', 'painPoints', 'personalizationContext', 'notes', 'createdAt', 'updatedAt'])).min(1).max(exportContactsBodyColumnsMax),
+  "filters": zod.object({
+  "search": zod.string().max(exportContactsBodyFiltersSearchMax).optional(),
+  "status": zod.enum(['all', 'subscribed', 'unsubscribed']).default(exportContactsBodyFiltersStatusDefault),
+  "listId": zod.string().max(exportContactsBodyFiltersListIdMax).optional(),
+  "companyId": zod.string().max(exportContactsBodyFiltersCompanyIdMax).optional(),
+  "lifecycleStage": zod.string().max(exportContactsBodyFiltersLifecycleStageMax).optional(),
+  "leadStatus": zod.string().max(exportContactsBodyFiltersLeadStatusMax).optional(),
+  "leadSource": zod.string().max(exportContactsBodyFiltersLeadSourceMax).optional(),
+  "addedWithin": zod.enum(['any', '7', '30', '90']).default(exportContactsBodyFiltersAddedWithinDefault)
+}).optional()
+})
+
+export const ExportContactsResponse = zod.unknown()
+
+
+/**
  * @summary Return a bounded set of contacts for a picker
  */
 export const listContactOptionsQuerySearchMax = 200;
@@ -1348,6 +1386,38 @@ export const CreateContactResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Stream a tenant company report as an Excel workbook
+ */
+export const exportCompaniesBodyColumnsMax = 20;
+
+export const exportCompaniesBodyFiltersSearchMax = 200;
+
+export const exportCompaniesBodyFiltersIndustryMax = 120;
+
+export const exportCompaniesBodyFiltersSizeMax = 80;
+
+export const exportCompaniesBodyFiltersRevenueRangeMax = 80;
+
+export const exportCompaniesBodyFiltersLocationMax = 200;
+
+
+
+export const ExportCompaniesBody = zod.object({
+  "scope": zod.enum(['filtered', 'all']),
+  "columns": zod.array(zod.enum(['id', 'companyName', 'companyDomain', 'companyWebsiteUrl', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyDescription', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyLocation', 'contactCount', 'createdAt', 'updatedAt'])).min(1).max(exportCompaniesBodyColumnsMax),
+  "filters": zod.object({
+  "search": zod.string().max(exportCompaniesBodyFiltersSearchMax).optional(),
+  "industry": zod.string().max(exportCompaniesBodyFiltersIndustryMax).optional(),
+  "size": zod.string().max(exportCompaniesBodyFiltersSizeMax).optional(),
+  "revenueRange": zod.string().max(exportCompaniesBodyFiltersRevenueRangeMax).optional(),
+  "location": zod.string().max(exportCompaniesBodyFiltersLocationMax).optional()
+}).optional()
+})
+
+export const ExportCompaniesResponse = zod.unknown()
 
 
 /**

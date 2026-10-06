@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import {
-  ArrowUpRight, Building2, Check, CircleAlert, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight,
+  ArrowUpRight, Building2, Check, CircleAlert, Download, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import {
+  exportCompanies,
   getGetCompanyQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
   useBackfillCompanyProfiles, useCreateCompany,
   useListCompanies, useListUnlinkedCompanyProfiles, useUpdateCompany,
 } from '@workspace/api-client-react';
-import type { Company, CompanyInput, CompanyUpdate, UnlinkedCompanyProfile } from '@workspace/api-client-react';
+import type { Company, CompanyExportInput, CompanyInput, CompanyUpdate, UnlinkedCompanyProfile } from '@workspace/api-client-react';
+import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
+import { downloadWorkbook } from '@/lib/download-workbook';
 
 const card = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -24,6 +27,22 @@ type FieldKey = typeof fields[number][0];
 type CompanyForm = Record<FieldKey, string> & { companyName: string; companyDescription: string };
 type CompanyDirectoryFilters = { industry: string; size: string; revenueRange: string; location: string };
 const emptyCompanyDirectoryFilters = (): CompanyDirectoryFilters => ({ industry: '', size: '', revenueRange: '', location: '' });
+const companyDownloadColumns: DownloadListColumn<CompanyExportInput['columns'][number]>[] = [
+  { key: 'companyName', label: 'Company name', group: 'standard' },
+  { key: 'companyDomain', label: 'Domain', group: 'standard' },
+  { key: 'companyLocation', label: 'Location', group: 'standard' },
+  { key: 'contactCount', label: 'Contacts', group: 'standard' },
+  { key: 'id', label: 'Company ID', group: 'additional' },
+  { key: 'companyWebsiteUrl', label: 'Website', group: 'additional' },
+  { key: 'companyIndustry', label: 'Industry', group: 'additional' },
+  { key: 'companySize', label: 'Company size', group: 'additional' },
+  { key: 'companyRevenueRange', label: 'Revenue range', group: 'additional' },
+  { key: 'companyDescription', label: 'Description', group: 'additional' },
+  { key: 'companyPhoneNumber', label: 'Phone', group: 'additional' },
+  { key: 'companyLinkedinUrl', label: 'LinkedIn', group: 'additional' },
+  { key: 'createdAt', label: 'Date added', group: 'additional' },
+  { key: 'updatedAt', label: 'Last updated', group: 'additional' },
+];
 const uniqueCompanyFilterOptions = (values: Array<string | null | undefined>) =>
   [...new Set(values.map(value => value?.trim()).filter((value): value is string => Boolean(value)))].sort((left, right) => left.localeCompare(right));
 const blankForm = (): CompanyForm => ({
@@ -120,6 +139,7 @@ export function CompaniesPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [companyFilters, setCompanyFilters] = useState<CompanyDirectoryFilters>(emptyCompanyDirectoryFilters);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ linkedContacts: number; createdCompanies: number; skippedContacts: number } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const companies = listQuery.data?.companies ?? [];
@@ -130,6 +150,29 @@ export function CompaniesPage() {
   }), [companies]);
   const hasActiveCompanyFilters = Object.values(companyFilters).some(value => value.trim().length > 0);
   const hasCompanySearchOrFilters = Boolean(search.trim() || hasActiveCompanyFilters);
+  const companyFilterSummary = [
+    search.trim() ? `Search: ${search.trim()}` : null,
+    companyFilters.industry ? `Industry: ${companyFilters.industry}` : null,
+    companyFilters.size ? `Size: ${companyFilters.size}` : null,
+    companyFilters.revenueRange ? `Revenue: ${companyFilters.revenueRange}` : null,
+    companyFilters.location.trim() ? `Location: ${companyFilters.location.trim()}` : null,
+  ].filter((value): value is string => Boolean(value)).join(' · ');
+  const downloadCompanies = async (scope: DownloadScope, columns: CompanyExportInput['columns']) => {
+    const workbook = await exportCompanies({
+      scope,
+      columns,
+      ...(scope === 'filtered' ? {
+        filters: {
+          search,
+          industry: companyFilters.industry,
+          size: companyFilters.size,
+          revenueRange: companyFilters.revenueRange,
+          location: companyFilters.location,
+        },
+      } : {}),
+    });
+    downloadWorkbook(workbook, 'companies');
+  };
   const updateCompanyFilter = (key: keyof CompanyDirectoryFilters, value: string) => {
     setCompanyFilters(current => ({ ...current, [key]: value }));
     setPage(1);
@@ -179,7 +222,21 @@ export function CompaniesPage() {
   if (listQuery.isLoading && !backfillRunning) return <div aria-label="Loading companies" className="space-y-5"><div className="h-8 w-56 animate-pulse rounded bg-[#edf0f3]"/><div className="h-24 rounded-lg bg-[#f1f3f5]"/><div className="h-[420px] rounded-lg bg-[#f1f3f5]"/></div>;
   if (listQuery.isError && !listQuery.data) return <section className={`${card} flex flex-col items-start gap-3 p-6`} role="alert"><div className="flex items-center gap-2 text-sm font-semibold"><CircleAlert className="h-4 w-4 text-[#c16d31]"/>Companies could not be loaded</div><p className="text-xs text-[#778291]">Your shared records are unchanged.</p><button type="button" data-testid="button-retry-companies" onClick={() => void listQuery.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button></section>;
   return <div className="fade-in">
-     <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">CUSTOMER CONTEXT / DIRECTORY</div><h1 className="display text-[30px] font-bold leading-tight text-[#172334]">Companies</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Shared profiles for the organizations behind your contacts.</p></div><button type="button" data-testid="button-add-company" onClick={() => setEditor('new')} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>Add company</button></div>
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">CUSTOMER CONTEXT / DIRECTORY</div><h1 className="display text-[30px] font-bold leading-tight text-[#172334]">Companies</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Shared profiles for the organizations behind your contacts.</p></div><div className="flex flex-wrap gap-2"><button type="button" data-testid="button-download-companies" disabled={listQuery.isFetching || backfillRunning} onClick={() => setDownloadOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#d7dce3] bg-white px-3.5 text-[12px] font-semibold text-[#283545] hover:bg-[#f7f9fb] disabled:opacity-55"><Download className="h-4 w-4"/>Download list</button><button type="button" data-testid="button-add-company" onClick={() => setEditor('new')} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>Add company</button></div></div>
+      {downloadOpen && <DownloadListDialog
+        title="Download companies"
+        description="Choose the rows and company fields to include in your Excel workbook."
+        entityLabel="companies"
+        currentCount={filtered.length}
+        allCount={companies.length}
+        hasActiveFilters={hasCompanySearchOrFilters}
+        filterSummary={companyFilterSummary}
+        defaultScope={hasCompanySearchOrFilters ? 'filtered' : 'all'}
+        columns={companyDownloadColumns}
+        defaultColumns={['companyName', 'companyDomain', 'companyLocation', 'contactCount']}
+        onDownload={downloadCompanies}
+        onClose={() => setDownloadOpen(false)}
+      />}
      {backfillResult && <div role="status" data-testid="status-company-backfill" className="mb-5 flex flex-col gap-3 rounded-lg border border-[#d8e5df] bg-[#f4f9f6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#43825e]"/><div><div className="text-[12px] font-semibold text-[#2c6547]">Legacy company profiles checked</div><p className="mt-1 text-[11px] leading-5 text-[#617c6d]">{backfillResult.linkedContacts} contacts linked · {backfillResult.createdCompanies} shared {backfillResult.createdCompanies === 1 ? 'company created' : 'companies created'} · {backfillResult.skippedContacts} contacts stayed unlinked</p></div></div><span className="text-[10px] text-[#789080]">Only safe matches are linked.</span></div>}
     {backfillRunning && <div className="mb-5 flex items-center gap-2 rounded-lg border border-[#dce5ec] bg-[#f7fafc] px-4 py-3 text-[11px] text-[#64768b]"><RefreshCw className="h-3.5 w-3.5 animate-spin"/>Checking legacy company profiles…</div>}
     {notice && <div role={notice.tone === 'error' ? 'alert' : 'status'} data-testid="status-company-notice" className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${notice.tone === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{notice.text}</div>}

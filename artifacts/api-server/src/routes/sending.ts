@@ -10,6 +10,7 @@ import {
   inArray,
   isNull,
   lte,
+  lt,
   max,
   ne,
   notInArray,
@@ -27,6 +28,7 @@ import {
   CreateContactSegmentBody,
   CreateContactSegmentResponse,
   CreateContactResponse,
+  ExportContactsBody,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
   GetCampaignRecipientSummaryQueryParams,
@@ -98,6 +100,7 @@ import {
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
+import ExcelJS from "exceljs";
 import type { ContactFieldKey } from "@workspace/db";
 import {
   sendTenantEmail,
@@ -1144,6 +1147,326 @@ function parseQueryBoolean(value: unknown): boolean | undefined {
   if (value === "false" || value === false) return false;
   return undefined;
 }
+
+const contactExportHeaders: Record<string, string> = {
+  id: "Contact ID",
+  name: "Name",
+  email: "Email",
+  subscribed: "Subscription status",
+  listNames: "Lists",
+  companyName: "Company",
+  companyWebsiteUrl: "Company website",
+  companyDomain: "Company domain",
+  companyIndustry: "Company industry",
+  companySize: "Company size",
+  companyRevenueRange: "Company revenue",
+  companyDescription: "Company description",
+  companyPhoneNumber: "Company phone",
+  companyLinkedinUrl: "Company LinkedIn",
+  companyLocation: "Company location",
+  phoneNumber: "Phone",
+  mobilePhone: "Mobile phone",
+  jobTitle: "Job title",
+  department: "Department",
+  seniority: "Seniority",
+  location: "Contact location",
+  lifecycleStage: "Lifecycle stage",
+  leadStatus: "Lead status",
+  leadSource: "Lead source",
+  preferredLanguage: "Preferred language",
+  timeZone: "Time zone",
+  linkedinUrl: "LinkedIn",
+  websiteUrl: "Website",
+  twitterUrl: "X / Twitter",
+  facebookUrl: "Facebook",
+  instagramUrl: "Instagram",
+  interests: "Interests",
+  goals: "Goals",
+  painPoints: "Pain points",
+  personalizationContext: "Personalization context",
+  notes: "Notes",
+  createdAt: "Date added",
+  updatedAt: "Last updated",
+};
+
+const CONTACT_EXPORT_BATCH_SIZE = 250;
+const EXCEL_MAX_DATA_ROWS = 1_048_575;
+const XLSX_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+router.post(
+  "/contacts/export",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = ExportContactsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Choose at least one valid contact column to export.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    type ExportFilters = NonNullable<typeof parsed.data.filters>;
+    const filters: ExportFilters =
+      parsed.data.scope === "all"
+        ? { status: "all", addedWithin: "any" }
+        : (parsed.data.filters ?? { status: "all", addedWithin: "any" });
+    for (const id of [filters.listId, filters.companyId]) {
+      if (id && id !== "all" && id !== "__none__" && !isContactFilterUuid(id)) {
+        res.status(400).json({
+          error: "A contact filter contains an invalid identifier.",
+          code: "INVALID_INPUT",
+        });
+        return;
+      }
+    }
+
+    const conditions = [eq(contactsTable.userId, userId)];
+    if (filters.status === "subscribed") {
+      conditions.push(eq(contactsTable.subscribed, true));
+    } else if (filters.status === "unsubscribed") {
+      conditions.push(eq(contactsTable.subscribed, false));
+    }
+    if (filters.listId && filters.listId !== "all") {
+      const members = db
+        .select({ contactId: contactListMembersTable.contactId })
+        .from(contactListMembersTable)
+        .where(
+          and(
+            eq(contactListMembersTable.userId, userId),
+            ...(filters.listId === "__none__"
+              ? []
+              : [eq(contactListMembersTable.listId, filters.listId)]),
+          ),
+        );
+      conditions.push(
+        filters.listId === "__none__"
+          ? notInArray(contactsTable.id, members)
+          : inArray(contactsTable.id, members),
+      );
+    }
+    if (filters.companyId === "__none__") {
+      conditions.push(
+        and(
+          isNull(contactsTable.companyId),
+          or(isNull(contactsTable.companyName), eq(contactsTable.companyName, "")),
+        )!,
+      );
+    } else if (filters.companyId && filters.companyId !== "all") {
+      conditions.push(eq(contactsTable.companyId, filters.companyId));
+    }
+    for (const [value, column] of [
+      [filters.lifecycleStage, contactsTable.lifecycleStage],
+      [filters.leadStatus, contactsTable.leadStatus],
+      [filters.leadSource, contactsTable.leadSource],
+    ] as const) {
+      if (!value || value === "all") continue;
+      conditions.push(
+        value === "__unset__"
+          ? or(isNull(column), eq(column, ""))!
+          : eq(column, value),
+      );
+    }
+    if (filters.addedWithin && filters.addedWithin !== "any") {
+      const days = Number(filters.addedWithin);
+      conditions.push(
+        gte(
+          contactsTable.createdAt,
+          new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+        ),
+      );
+    }
+    conditions.push(...contactSearchExpressions(filters.search ?? ""));
+    const selectedColumns = parsed.data.columns;
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res,
+      useStyles: true,
+      useSharedStrings: false,
+    });
+    let sheetNumber = 0;
+    let sheetRowCount = 0;
+    const createWorksheet = () => {
+      sheetNumber += 1;
+      sheetRowCount = 0;
+      const sheet = workbook.addWorksheet(
+        sheetNumber === 1 ? "Contacts" : `Contacts ${sheetNumber}`,
+      );
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+      sheet.columns = selectedColumns.map((key) => ({
+        header: contactExportHeaders[key],
+        key,
+        width: Math.min(34, Math.max(16, contactExportHeaders[key].length + 2)),
+      }));
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FF172334" } };
+      headerRow.commit();
+      return sheet;
+    };
+    let worksheet = createWorksheet();
+
+    try {
+      res.status(200).set({
+        "Content-Type": XLSX_CONTENT_TYPE,
+        "Content-Disposition": `attachment; filename="contacts-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+        "Cache-Control": "private, no-store",
+      });
+      let cursor: { createdAt: Date; id: string } | null = null;
+      while (true) {
+        const batchConditions = [...conditions];
+        if (cursor) {
+          batchConditions.push(
+            or(
+              lt(contactsTable.createdAt, cursor.createdAt),
+              and(
+                eq(contactsTable.createdAt, cursor.createdAt),
+                lt(contactsTable.id, cursor.id),
+              ),
+            )!,
+          );
+        }
+        const batch = await db
+          .select()
+          .from(contactsTable)
+          .where(and(...batchConditions))
+          .orderBy(desc(contactsTable.createdAt), desc(contactsTable.id))
+          .limit(CONTACT_EXPORT_BATCH_SIZE);
+        if (!batch.length) break;
+
+        const contactIds = batch.map((contact) => contact.id);
+        const companyIds = [
+          ...new Set(
+            batch
+              .map((contact) => contact.companyId)
+              .filter((companyId): companyId is string => Boolean(companyId)),
+          ),
+        ];
+        const [memberships, companies] = await Promise.all([
+          db
+            .select({
+              contactId: contactListMembersTable.contactId,
+              listName: contactListsTable.name,
+            })
+            .from(contactListMembersTable)
+            .innerJoin(
+              contactListsTable,
+              eq(contactListMembersTable.listId, contactListsTable.id),
+            )
+            .where(
+              and(
+                eq(contactListMembersTable.userId, userId),
+                eq(contactListsTable.userId, userId),
+                inArray(contactListMembersTable.contactId, contactIds),
+              ),
+            ),
+          companyIds.length
+            ? db
+                .select()
+                .from(companiesTable)
+                .where(
+                  and(
+                    eq(companiesTable.userId, userId),
+                    inArray(companiesTable.id, companyIds),
+                  ),
+                )
+            : Promise.resolve([]),
+        ]);
+        const listNamesByContact = new Map<string, string[]>();
+        for (const membership of memberships) {
+          const names = listNamesByContact.get(membership.contactId) ?? [];
+          names.push(membership.listName);
+          listNamesByContact.set(membership.contactId, names);
+        }
+        const companiesById = new Map(companies.map((company) => [company.id, company]));
+
+        for (const contact of batch) {
+          if (sheetRowCount >= EXCEL_MAX_DATA_ROWS) {
+            worksheet.commit();
+            worksheet = createWorksheet();
+          }
+          const company = contact.companyId
+            ? companiesById.get(contact.companyId)
+            : undefined;
+          const exportValues: Record<string, string | boolean | Date | null> = {
+            id: contact.id,
+            name:
+              contact.name ||
+              [contact.firstName, contact.lastName].filter(Boolean).join(" "),
+            email: contact.email,
+            subscribed: contact.subscribed ? "Subscribed" : "Unsubscribed",
+            listNames: (listNamesByContact.get(contact.id) ?? [])
+              .sort((a, b) => a.localeCompare(b))
+              .join(", "),
+            companyName: company?.companyName ?? contact.companyName,
+            companyWebsiteUrl:
+              company?.companyWebsiteUrl ?? contact.companyWebsiteUrl,
+            companyDomain: company?.companyDomain ?? contact.companyDomain,
+            companyIndustry: company?.companyIndustry ?? contact.companyIndustry,
+            companySize: company?.companySize ?? contact.companySize,
+            companyRevenueRange:
+              company?.companyRevenueRange ?? contact.companyRevenueRange,
+            companyDescription:
+              company?.companyDescription ?? contact.companyDescription,
+            companyPhoneNumber:
+              company?.companyPhoneNumber ?? contact.companyPhoneNumber,
+            companyLinkedinUrl:
+              company?.companyLinkedinUrl ?? contact.companyLinkedinUrl,
+            companyLocation: company?.companyLocation ?? contact.companyLocation,
+            phoneNumber: contact.phoneNumber,
+            mobilePhone: contact.mobilePhone,
+            jobTitle: contact.jobTitle,
+            department: contact.department,
+            seniority: contact.seniority,
+            location: contact.location,
+            lifecycleStage: contact.lifecycleStage,
+            leadStatus: contact.leadStatus,
+            leadSource: contact.leadSource,
+            preferredLanguage: contact.preferredLanguage,
+            timeZone: contact.timeZone,
+            linkedinUrl: contact.linkedinUrl,
+            websiteUrl: contact.websiteUrl,
+            twitterUrl: contact.twitterUrl,
+            facebookUrl: contact.facebookUrl,
+            instagramUrl: contact.instagramUrl,
+            interests: contact.interests,
+            goals: contact.goals,
+            painPoints: contact.painPoints,
+            personalizationContext: contact.personalizationContext,
+            notes: contact.notes,
+            createdAt: contact.createdAt,
+            updatedAt: contact.updatedAt,
+          };
+          worksheet.addRow(
+            selectedColumns.map((key) => exportValues[key] ?? ""),
+          ).commit();
+          sheetRowCount += 1;
+        }
+
+        const lastContact = batch[batch.length - 1];
+        cursor = { createdAt: lastContact.createdAt, id: lastContact.id };
+        if (batch.length < CONTACT_EXPORT_BATCH_SIZE) break;
+      }
+      await workbook.commit();
+    } catch (error) {
+      req.log.error(
+        {
+          userId,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Contact workbook export failed",
+      );
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "The contact workbook could not be created. Try again.",
+          code: "EXPORT_FAILED",
+        });
+      } else {
+        res.destroy(error instanceof Error ? error : new Error("Contact export failed"));
+      }
+    }
+  },
+);
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const parsed = ListContactsQueryParams.safeParse({

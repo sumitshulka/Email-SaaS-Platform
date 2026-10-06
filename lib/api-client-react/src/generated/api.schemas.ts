@@ -810,6 +810,57 @@ export interface CompanyInput {
   companyLocation?: string;
 }
 
+export type CompanyExportColumn = typeof CompanyExportColumn[keyof typeof CompanyExportColumn];
+
+
+export const CompanyExportColumn = {
+  id: 'id',
+  companyName: 'companyName',
+  companyDomain: 'companyDomain',
+  companyWebsiteUrl: 'companyWebsiteUrl',
+  companyIndustry: 'companyIndustry',
+  companySize: 'companySize',
+  companyRevenueRange: 'companyRevenueRange',
+  companyDescription: 'companyDescription',
+  companyPhoneNumber: 'companyPhoneNumber',
+  companyLinkedinUrl: 'companyLinkedinUrl',
+  companyLocation: 'companyLocation',
+  contactCount: 'contactCount',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+} as const;
+
+export interface CompanyExportFilters {
+  /** @maxLength 200 */
+  search?: string;
+  /** @maxLength 120 */
+  industry?: string;
+  /** @maxLength 80 */
+  size?: string;
+  /** @maxLength 80 */
+  revenueRange?: string;
+  /** @maxLength 200 */
+  location?: string;
+}
+
+export type CompanyExportInputScope = typeof CompanyExportInputScope[keyof typeof CompanyExportInputScope];
+
+
+export const CompanyExportInputScope = {
+  filtered: 'filtered',
+  all: 'all',
+} as const;
+
+export interface CompanyExportInput {
+  scope: CompanyExportInputScope;
+  /**
+     * @minItems 1
+     * @maxItems 20
+     */
+  columns: CompanyExportColumn[];
+  filters?: CompanyExportFilters;
+}
+
 export interface CompanyUpdate {
   /**
      * @minLength 1
@@ -1183,6 +1234,104 @@ export interface ContactEmailHistoryItem {
 export type ContactDirectoryItem = Contact & ({
   lastEmail: ContactEmailHistoryItem | null;
 });
+
+export type ContactExportColumn = typeof ContactExportColumn[keyof typeof ContactExportColumn];
+
+
+export const ContactExportColumn = {
+  id: 'id',
+  name: 'name',
+  email: 'email',
+  subscribed: 'subscribed',
+  listNames: 'listNames',
+  companyName: 'companyName',
+  companyWebsiteUrl: 'companyWebsiteUrl',
+  companyDomain: 'companyDomain',
+  companyIndustry: 'companyIndustry',
+  companySize: 'companySize',
+  companyRevenueRange: 'companyRevenueRange',
+  companyDescription: 'companyDescription',
+  companyPhoneNumber: 'companyPhoneNumber',
+  companyLinkedinUrl: 'companyLinkedinUrl',
+  companyLocation: 'companyLocation',
+  phoneNumber: 'phoneNumber',
+  mobilePhone: 'mobilePhone',
+  jobTitle: 'jobTitle',
+  department: 'department',
+  seniority: 'seniority',
+  location: 'location',
+  lifecycleStage: 'lifecycleStage',
+  leadStatus: 'leadStatus',
+  leadSource: 'leadSource',
+  preferredLanguage: 'preferredLanguage',
+  timeZone: 'timeZone',
+  linkedinUrl: 'linkedinUrl',
+  websiteUrl: 'websiteUrl',
+  twitterUrl: 'twitterUrl',
+  facebookUrl: 'facebookUrl',
+  instagramUrl: 'instagramUrl',
+  interests: 'interests',
+  goals: 'goals',
+  painPoints: 'painPoints',
+  personalizationContext: 'personalizationContext',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+} as const;
+
+export type ContactExportFiltersStatus = typeof ContactExportFiltersStatus[keyof typeof ContactExportFiltersStatus];
+
+
+export const ContactExportFiltersStatus = {
+  all: 'all',
+  subscribed: 'subscribed',
+  unsubscribed: 'unsubscribed',
+} as const;
+
+export type ContactExportFiltersAddedWithin = typeof ContactExportFiltersAddedWithin[keyof typeof ContactExportFiltersAddedWithin];
+
+
+export const ContactExportFiltersAddedWithin = {
+  any: 'any',
+  NUMBER_7: '7',
+  NUMBER_30: '30',
+  NUMBER_90: '90',
+} as const;
+
+export interface ContactExportFilters {
+  /** @maxLength 200 */
+  search?: string;
+  status?: ContactExportFiltersStatus;
+  /** @maxLength 64 */
+  listId?: string;
+  /** @maxLength 64 */
+  companyId?: string;
+  /** @maxLength 80 */
+  lifecycleStage?: string;
+  /** @maxLength 80 */
+  leadStatus?: string;
+  /** @maxLength 120 */
+  leadSource?: string;
+  addedWithin?: ContactExportFiltersAddedWithin;
+}
+
+export type ContactExportInputScope = typeof ContactExportInputScope[keyof typeof ContactExportInputScope];
+
+
+export const ContactExportInputScope = {
+  filtered: 'filtered',
+  all: 'all',
+} as const;
+
+export interface ContactExportInput {
+  scope: ContactExportInputScope;
+  /**
+     * @minItems 1
+     * @maxItems 40
+     */
+  columns: ContactExportColumn[];
+  filters?: ContactExportFilters;
+}
 
 export interface ContactInput {
   /** @maxLength 254 */

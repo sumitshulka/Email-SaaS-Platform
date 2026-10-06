@@ -1,9 +1,23 @@
-import { and, asc, count, desc, eq, isNotNull, ne } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  lt,
+  ne,
+  or,
+} from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   BackfillCompanyProfilesResponse,
   CreateCompanyBody,
   CreateCompanyResponse,
+  ExportCompaniesBody,
   DeleteCompanyParams,
   GetCompanyParams,
   GetCompanyResponse,
@@ -19,6 +33,7 @@ import {
   db,
   usersTable,
 } from "@workspace/db";
+import ExcelJS from "exceljs";
 import {
   companyDomainKey,
   companyProfileFrom,
@@ -32,6 +47,10 @@ import {
 import { requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
+const COMPANY_EXPORT_BATCH_SIZE = 250;
+const EXCEL_MAX_DATA_ROWS = 1_048_575;
+const XLSX_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function presentCompany(company: typeof companiesTable.$inferSelect) {
   const {
@@ -94,6 +113,230 @@ router.get("/companies", requireUserRole, async (req, res): Promise<void> => {
     }),
   );
 });
+
+const companyExportHeaders: Record<string, string> = {
+  id: "Company ID",
+  companyName: "Company name",
+  companyDomain: "Domain",
+  companyWebsiteUrl: "Website",
+  companyIndustry: "Industry",
+  companySize: "Company size",
+  companyRevenueRange: "Revenue range",
+  companyDescription: "Description",
+  companyPhoneNumber: "Phone",
+  companyLinkedinUrl: "LinkedIn",
+  companyLocation: "Location",
+  contactCount: "Contacts",
+  createdAt: "Date added",
+  updatedAt: "Last updated",
+};
+
+router.post(
+  "/companies/export",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = ExportCompaniesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Choose at least one valid company column to export.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    type ExportFilters = NonNullable<typeof parsed.data.filters>;
+    const filters: ExportFilters =
+      parsed.data.scope === "all" ? {} : (parsed.data.filters ?? {});
+    const conditions = [eq(companiesTable.userId, userId)];
+    const search = filters.search?.trim();
+    if (search) {
+      const searchableColumns = [
+        companiesTable.companyName,
+        companiesTable.companyDomain,
+        companiesTable.companyWebsiteUrl,
+        companiesTable.companyIndustry,
+        companiesTable.companySize,
+        companiesTable.companyRevenueRange,
+        companiesTable.companyLocation,
+        companiesTable.companyDescription,
+      ];
+      for (const term of search.split(/\s+/).filter(Boolean)) {
+        const pattern = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
+        conditions.push(
+          or(...searchableColumns.map((column) => ilike(column, pattern)))!,
+        );
+      }
+    }
+    if (filters.industry && filters.industry !== "all") {
+      conditions.push(eq(companiesTable.companyIndustry, filters.industry));
+    }
+    if (filters.size && filters.size !== "all") {
+      conditions.push(eq(companiesTable.companySize, filters.size));
+    }
+    if (filters.revenueRange && filters.revenueRange !== "all") {
+      conditions.push(
+        eq(companiesTable.companyRevenueRange, filters.revenueRange),
+      );
+    }
+    if (filters.location?.trim()) {
+      conditions.push(
+        ilike(
+          companiesTable.companyLocation,
+          `%${filters.location.trim().replace(/[\\%_]/g, "\\$&")}%`,
+        ),
+      );
+    }
+
+    const selectedColumns = parsed.data.columns;
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream: res,
+      useStyles: true,
+      useSharedStrings: false,
+    });
+    let sheetNumber = 0;
+    let sheetRowCount = 0;
+    const createWorksheet = () => {
+      sheetNumber += 1;
+      sheetRowCount = 0;
+      const sheet = workbook.addWorksheet(
+        sheetNumber === 1 ? "Companies" : `Companies ${sheetNumber}`,
+      );
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+      sheet.columns = selectedColumns.map((key) => ({
+        header: companyExportHeaders[key],
+        key,
+        width: Math.min(34, Math.max(16, companyExportHeaders[key].length + 2)),
+      }));
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FF172334" } };
+      headerRow.commit();
+      return sheet;
+    };
+    let worksheet = createWorksheet();
+
+    try {
+      res.status(200).set({
+        "Content-Type": XLSX_CONTENT_TYPE,
+        "Content-Disposition": `attachment; filename="companies-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+        "Cache-Control": "private, no-store",
+      });
+      let cursor: {
+        companyName: string;
+        createdAt: Date;
+        id: string;
+      } | null = null;
+      while (true) {
+        const batchConditions = [...conditions];
+        if (cursor) {
+          batchConditions.push(
+            or(
+              gt(companiesTable.companyName, cursor.companyName),
+              and(
+                eq(companiesTable.companyName, cursor.companyName),
+                lt(companiesTable.createdAt, cursor.createdAt),
+              ),
+              and(
+                eq(companiesTable.companyName, cursor.companyName),
+                eq(companiesTable.createdAt, cursor.createdAt),
+                gt(companiesTable.id, cursor.id),
+              ),
+            )!,
+          );
+        }
+        const batch = await db
+          .select()
+          .from(companiesTable)
+          .where(and(...batchConditions))
+          .orderBy(
+            asc(companiesTable.companyName),
+            desc(companiesTable.createdAt),
+            asc(companiesTable.id),
+          )
+          .limit(COMPANY_EXPORT_BATCH_SIZE);
+        if (!batch.length) break;
+
+        const companyIds = batch.map((company) => company.id);
+        const contactCounts = selectedColumns.includes("contactCount")
+          ? await db
+              .select({
+                companyId: contactsTable.companyId,
+                contactCount: count(),
+              })
+              .from(contactsTable)
+              .where(
+                and(
+                  eq(contactsTable.userId, userId),
+                  inArray(contactsTable.companyId, companyIds),
+                ),
+              )
+              .groupBy(contactsTable.companyId)
+          : [];
+        const countsByCompany = new Map(
+          contactCounts.map((row) => [
+            row.companyId,
+            Number(row.contactCount),
+          ]),
+        );
+
+        for (const company of batch) {
+          if (sheetRowCount >= EXCEL_MAX_DATA_ROWS) {
+            worksheet.commit();
+            worksheet = createWorksheet();
+          }
+          const exportValues: Record<
+            string,
+            string | number | Date | null
+          > = {
+            id: company.id,
+            companyName: company.companyName,
+            companyDomain: company.companyDomain,
+            companyWebsiteUrl: company.companyWebsiteUrl,
+            companyIndustry: company.companyIndustry,
+            companySize: company.companySize,
+            companyRevenueRange: company.companyRevenueRange,
+            companyDescription: company.companyDescription,
+            companyPhoneNumber: company.companyPhoneNumber,
+            companyLinkedinUrl: company.companyLinkedinUrl,
+            companyLocation: company.companyLocation,
+            contactCount: countsByCompany.get(company.id) ?? 0,
+            createdAt: company.createdAt,
+            updatedAt: company.updatedAt,
+          };
+          worksheet.addRow(
+            selectedColumns.map((key) => exportValues[key] ?? ""),
+          ).commit();
+          sheetRowCount += 1;
+        }
+
+        const lastCompany = batch[batch.length - 1];
+        cursor = {
+          companyName: lastCompany.companyName,
+          createdAt: lastCompany.createdAt,
+          id: lastCompany.id,
+        };
+        if (batch.length < COMPANY_EXPORT_BATCH_SIZE) break;
+      }
+      await workbook.commit();
+    } catch (error) {
+      req.log.error(
+        {
+          userId,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Company workbook export failed",
+      );
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "The company workbook could not be created. Try again.",
+          code: "EXPORT_FAILED",
+        });
+      } else {
+        res.destroy(error instanceof Error ? error : new Error("Company export failed"));
+      }
+    }
+  },
+);
 
 router.post(
   "/companies/backfill",
