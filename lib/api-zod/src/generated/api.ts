@@ -1546,6 +1546,49 @@ export const CreateCompanyResponse = zod.object({
 
 
 /**
+ * @summary Search a bounded page of company names and domains for the authenticated tenant
+ */
+export const searchCompaniesQuerySearchDefault = ``;
+export const searchCompaniesQuerySearchMax = 200;
+
+export const searchCompaniesQueryPageDefault = 1;
+export const searchCompaniesQueryPageMax = 100000;
+
+export const searchCompaniesQueryPageSizeDefault = 40;
+export const searchCompaniesQueryPageSizeMax = 100;
+
+
+
+export const SearchCompaniesQueryParams = zod.object({
+  "search": zod.coerce.string().max(searchCompaniesQuerySearchMax).default(searchCompaniesQuerySearchDefault),
+  "page": zod.coerce.number().int().min(1).max(searchCompaniesQueryPageMax).default(searchCompaniesQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(searchCompaniesQueryPageSizeMax).default(searchCompaniesQueryPageSizeDefault)
+})
+
+export const searchCompaniesResponseCompaniesItemCompanyNameMax = 200;
+
+export const searchCompaniesResponseCompaniesItemCompanyDomainMax = 255;
+
+export const searchCompaniesResponseTotalMin = 0;
+
+
+export const searchCompaniesResponsePageSizeMax = 100;
+
+
+
+export const SearchCompaniesResponse = zod.object({
+  "companies": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string().max(searchCompaniesResponseCompaniesItemCompanyNameMax),
+  "companyDomain": zod.string().max(searchCompaniesResponseCompaniesItemCompanyDomainMax).nullable()
+})),
+  "total": zod.number().int().min(searchCompaniesResponseTotalMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(searchCompaniesResponsePageSizeMax)
+})
+
+
+/**
  * @summary Move safely matched legacy contact company profiles into shared company records
  */
 export const backfillCompanyProfilesResponseLinkedContactsMin = 0;

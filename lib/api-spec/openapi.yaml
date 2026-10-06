@@ -867,6 +867,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /companies/search:
+    get:
+      operationId: searchCompanies
+      tags: [contacts]
+      summary: Search a bounded page of company names and domains for the authenticated tenant
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 200, default: "" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 40 }
+      responses:
+        "200":
+          description: Matching company selector options and the total number of matches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanySearchResults"
+        "400":
+          description: Invalid company search or pagination values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /companies/backfill:
     post:
       operationId: backfillCompanyProfiles
@@ -2893,6 +2921,23 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CompanyListItem" }
       required: [companies]
+    CompanySearchResultItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        companyName: { type: string, maxLength: 200 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+      required: [id, companyName, companyDomain]
+    CompanySearchResults:
+      type: object
+      properties:
+        companies:
+          type: array
+          items: { $ref: "#/components/schemas/CompanySearchResultItem" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+      required: [companies, total, page, pageSize]
     CompanyInput:
       type: object
       properties:

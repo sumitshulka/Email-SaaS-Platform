@@ -253,6 +253,8 @@ async function stopWebServer() {
 async function installApiFixtures(context, {
   companies = [company],
   contacts = contactDirectoryFixtures(),
+  companySearchRequests = [],
+  companyDirectoryRequests = [],
 } = {}) {
   await context.route('**/api/**', async route => {
     const request = route.request();
@@ -283,7 +285,32 @@ async function installApiFixtures(context, {
       await route.fulfill({ status: 200, json: user });
       return;
     }
+    if (pathname === '/api/companies/search' && method === 'GET') {
+      const url = new URL(request.url());
+      const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const pageSize = Number(url.searchParams.get('pageSize') ?? 40);
+      companySearchRequests.push({ search: url.searchParams.get('search') ?? '', page, pageSize });
+      const matching = companies.filter(item =>
+        `${item.companyName} ${item.companyDomain ?? ''}`.toLowerCase().includes(search),
+      );
+      await route.fulfill({
+        status: 200,
+        json: {
+          companies: matching.slice((page - 1) * pageSize, page * pageSize).map(item => ({
+            id: item.id,
+            companyName: item.companyName,
+            companyDomain: item.companyDomain ?? null,
+          })),
+          total: matching.length,
+          page,
+          pageSize,
+        },
+      });
+      return;
+    }
     if (pathname === '/api/companies' && method === 'GET') {
+      companyDirectoryRequests.push(request.url());
       await route.fulfill({ status: 200, json: { companies } });
       return;
     }
@@ -560,8 +587,15 @@ describe('company profile review and contact data preservation', { concurrency: 
       makeContact('company-id-without-name', 'another-company-id', null),
     ];
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const companySearchRequests = [];
+    const companyDirectoryRequests = [];
     try {
-      await installApiFixtures(context, { companies, contacts });
+      await installApiFixtures(context, {
+        companies,
+        contacts,
+        companySearchRequests,
+        companyDirectoryRequests,
+      });
       const page = await context.newPage();
       await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
@@ -580,10 +614,17 @@ describe('company profile review and contact data preservation', { concurrency: 
       await companySearch.fill('Harbor Directory');
       await page.getByText(refineMessage, { exact: true }).waitFor({ state: 'visible' });
       assert.equal(await companyOptions.count(), 40, 'name search should cap a large result set at 40 companies');
+      assert.ok(companySearchRequests.some(request =>
+        request.search === 'Harbor Directory' && request.page === 1 && request.pageSize === 40,
+      ), 'name searches should request a bounded server page');
 
       await companySearch.fill('customer-mail.test');
       await page.getByText(refineMessage, { exact: true }).waitFor({ state: 'visible' });
       assert.equal(await companyOptions.count(), 40, 'domain search should also cap a large result set at 40 companies');
+      assert.ok(companySearchRequests.some(request =>
+        request.search === 'customer-mail.test' && request.page === 1 && request.pageSize === 40,
+      ), 'domain searches should request a bounded server page');
+      assert.equal(companyDirectoryRequests.length, 0, 'the contacts filter should not download the full company directory');
       assert.equal(await page.getByTestId(`option-contact-company-${selectedCompany.id}`).count(), 1);
       await page.getByTestId(`option-contact-company-${selectedCompany.id}`).click();
 

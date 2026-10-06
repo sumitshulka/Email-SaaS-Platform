@@ -22,14 +22,14 @@ import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useStartGmailMailboxConnection,
-  getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
+  getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetTenantSendingSettings,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, usePreviewCampaign, useSendCampaign,
-  useListCompanies, useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
+  useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
-  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, CompanyListItem, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
+  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 import { downloadWorkbook } from '@/lib/download-workbook';
@@ -399,6 +399,7 @@ export function ContactsPage() {
   const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedCompanyName, setSelectedCompanyName] = useState<string | null>(null);
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(filters.search), 250);
     return () => window.clearTimeout(timer);
@@ -424,7 +425,6 @@ export function ContactsPage() {
     },
   });
   const listsQuery = useListContactLists();
-  const companiesQuery = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), refetchInterval: 60_000 } });
   const filterOptionsQuery = useGetContactFilterOptions({
     query: { queryKey: getGetContactFilterOptionsQueryKey(), staleTime: 60_000 },
   });
@@ -453,7 +453,6 @@ export function ContactsPage() {
     ? Math.min(contactsQuery.data.page * contactsQuery.data.pageSize, contactsQuery.data.total)
     : 0;
   const lists = (listsQuery.data || []) as ContactList[];
-  const companies = (companiesQuery.data?.companies ?? []) as CompanyListItem[];
   const lifecycleStages = filterOptionsQuery.data?.lifecycleStages ?? [];
   const leadStatuses = filterOptionsQuery.data?.leadStatuses ?? [];
   const leadSources = filterOptionsQuery.data?.leadSources ?? [];
@@ -461,6 +460,7 @@ export function ContactsPage() {
   const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
   const updateFilters = (next: ContactDirectoryFilterValues) => {
     setFilters(next);
+    if (next.companyId === 'all') setSelectedCompanyName(null);
     setPage(1);
   };
   useEffect(() => {
@@ -476,7 +476,7 @@ export function ContactsPage() {
     filters.search.trim() ? `Search: ${filters.search.trim()}` : null,
     filters.status !== 'all' ? `Status: ${filters.status}` : null,
     filters.listId !== 'all' ? `List: ${lists.find(list => list.id === filters.listId)?.name ?? (filters.listId === '__none__' ? 'No list' : 'Selected list')}` : null,
-    filters.companyId !== 'all' ? `Company: ${companies.find(company => company.id === filters.companyId)?.companyName ?? (filters.companyId === '__none__' ? 'No company' : 'Selected company')}` : null,
+    filters.companyId !== 'all' ? `Company: ${filters.companyId === '__none__' ? 'No company' : selectedCompanyName ?? 'Selected company'}` : null,
     filters.lifecycleStage !== 'all' ? `Lifecycle: ${filters.lifecycleStage === '__unset__' ? 'Not set' : filters.lifecycleStage}` : null,
     filters.leadStatus !== 'all' ? `Lead status: ${filters.leadStatus === '__unset__' ? 'Not set' : filters.leadStatus}` : null,
     filters.leadSource !== 'all' ? `Lead source: ${filters.leadSource === '__unset__' ? 'Not set' : filters.leadSource}` : null,
@@ -682,10 +682,8 @@ export function ContactsPage() {
           filters={filters}
           onChange={updateFilters}
           lists={lists}
-          companies={companies}
-          companiesLoading={companiesQuery.isLoading}
-          companiesError={companiesQuery.isError}
-          onRetryCompanies={() => void companiesQuery.refetch()}
+          selectedCompanyName={selectedCompanyName}
+          onSelectedCompanyNameChange={setSelectedCompanyName}
           lifecycleStages={lifecycleStages}
           leadStatuses={leadStatuses}
           leadSources={leadSources}

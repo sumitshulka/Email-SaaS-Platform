@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
-import type { CompanyListItem, ContactDirectoryFilters, ContactList } from '@workspace/api-client-react';
+import { getSearchCompaniesQueryKey, useSearchCompanies } from '@workspace/api-client-react';
+import type { CompanySearchResultItem, ContactDirectoryFilters, ContactList } from '@workspace/api-client-react';
 
 export const CONTACT_FILTER_NONE = '__none__';
 export const CONTACT_FILTER_UNSET = '__unset__';
@@ -49,31 +50,34 @@ function FilterSelect({
 }
 
 function CompanyFilter({
-  companies,
   value,
   onChange,
-  loading,
-  error,
-  onRetry,
+  selectedCompanyName,
 }: {
-  companies: CompanyListItem[];
   value: string;
-  onChange: (value: string) => void;
-  loading: boolean;
-  error: boolean;
-  onRetry: () => void;
+  onChange: (value: string, company?: CompanySearchResultItem) => void;
+  selectedCompanyName: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const selected = companies.find(company => company.id === value);
-  const query = search.trim().toLowerCase();
-  const matches = query
-    ? companies.filter(company => `${company.companyName} ${company.companyDomain ?? ''}`.toLowerCase().includes(query))
-    : companies;
-  const visible = matches.slice(0, 40);
-  const choose = (nextValue: string) => {
-    onChange(nextValue);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const query = search.trim();
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(query), 200);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  const companiesQuery = useSearchCompanies(
+    { search: debouncedSearch, page: 1, pageSize: 40 },
+    { query: { queryKey: getSearchCompaniesQueryKey({ search: debouncedSearch, page: 1, pageSize: 40 }), enabled: open, staleTime: 30_000 } },
+  );
+  const visible = companiesQuery.data?.companies ?? [];
+  const total = companiesQuery.data?.total ?? 0;
+  const loading = query !== debouncedSearch || companiesQuery.isLoading || (companiesQuery.isFetching && !companiesQuery.data);
+  const error = companiesQuery.isError && !companiesQuery.data;
+  const choose = (nextValue: string, company?: CompanySearchResultItem) => {
+    onChange(nextValue, company);
     setSearch('');
+    setDebouncedSearch('');
     setOpen(false);
   };
 
@@ -91,8 +95,8 @@ function CompanyFilter({
             aria-expanded={open}
             aria-controls="contact-company-options"
             aria-autocomplete="list"
-            value={open ? search : selected?.companyName ?? ''}
-            onFocus={() => { setSearch(''); setOpen(true); }}
+            value={open ? search : selectedCompanyName ?? ''}
+            onFocus={() => { setSearch(''); setDebouncedSearch(''); setOpen(true); }}
             onChange={event => { setSearch(event.target.value); setOpen(true); }}
             onBlur={() => setOpen(false)}
             onKeyDown={event => {
@@ -119,7 +123,7 @@ function CompanyFilter({
           <button type="button" role="option" aria-selected={value === CONTACT_FILTER_NONE} onMouseDown={event => event.preventDefault()} onClick={() => choose(CONTACT_FILTER_NONE)} className="block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa]">No company</button>
           <div className="my-1 border-t border-[#edf0f3]"/>
           {loading ? <p className="px-3 py-2 text-[11px] text-[#788696]">Loading companies…</p>
-            : error ? <div className="px-3 py-2"><p role="alert" className="text-[11px] text-[#a84926]">Company options could not be loaded.</p><button type="button" onMouseDown={event => event.preventDefault()} onClick={onRetry} className="mt-1 text-[11px] font-semibold text-[#245b9b] hover:underline">Retry</button></div>
+            : error ? <div className="px-3 py-2"><p role="alert" className="text-[11px] text-[#a84926]">Company options could not be loaded.</p><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => void companiesQuery.refetch()} className="mt-1 text-[11px] font-semibold text-[#245b9b] hover:underline">Retry</button></div>
             : visible.length ? visible.map(company => (
               <button
                 key={company.id}
@@ -128,14 +132,14 @@ function CompanyFilter({
                 aria-selected={value === company.id}
                 data-testid={`option-contact-company-${company.id}`}
                 onMouseDown={event => event.preventDefault()}
-                onClick={() => choose(company.id)}
+                onClick={() => choose(company.id, company)}
                 className="block w-full rounded px-3 py-2 text-left hover:bg-[#f2f6fa]"
               >
                 <span className="block truncate text-[12px] font-medium text-[#354a60]">{company.companyName}</span>
                 {company.companyDomain && <span className="mt-0.5 block truncate text-[10px] text-[#8290a0]">{company.companyDomain}</span>}
               </button>
             )) : <p className="px-3 py-2 text-[11px] text-[#788696]">{query ? 'No matching companies.' : 'No company records yet.'}</p>}
-          {!loading && !error && matches.length > visible.length && <p className="border-t border-[#edf0f3] px-3 py-2 text-[10px] text-[#8290a0]">Showing 40 of {matches.length.toLocaleString()} matches. Refine your search.</p>}
+          {!loading && !error && total > visible.length && <p className="border-t border-[#edf0f3] px-3 py-2 text-[10px] text-[#8290a0]">Showing {visible.length.toLocaleString()} of {total.toLocaleString()} matches. Refine your search.</p>}
         </div>
       )}
       {value !== 'all' && (
@@ -149,10 +153,8 @@ export function ContactDirectoryFiltersPanel({
   filters,
   onChange,
   lists,
-  companies,
-  companiesLoading,
-  companiesError,
-  onRetryCompanies,
+  selectedCompanyName,
+  onSelectedCompanyNameChange,
   lifecycleStages,
   leadStatuses,
   leadSources,
@@ -160,10 +162,8 @@ export function ContactDirectoryFiltersPanel({
   filters: ContactDirectoryFilterValues;
   onChange: (filters: ContactDirectoryFilterValues) => void;
   lists: ContactList[];
-  companies: CompanyListItem[];
-  companiesLoading: boolean;
-  companiesError: boolean;
-  onRetryCompanies: () => void;
+  selectedCompanyName: string | null;
+  onSelectedCompanyNameChange: (name: string | null) => void;
   lifecycleStages: string[];
   leadStatuses: string[];
   leadSources: string[];
@@ -182,7 +182,7 @@ export function ContactDirectoryFiltersPanel({
   if (filters.listId === CONTACT_FILTER_NONE) activeLabels.push('List: No list');
   else if (filters.listId !== 'all') activeLabels.push(`List: ${lists.find(list => list.id === filters.listId)?.name || 'Selected list'}`);
   if (filters.companyId === CONTACT_FILTER_NONE) activeLabels.push('Company: No company');
-  else if (filters.companyId !== 'all') activeLabels.push(`Company: ${companies.find(company => company.id === filters.companyId)?.companyName || 'Selected company'}`);
+  else if (filters.companyId !== 'all') activeLabels.push(`Company: ${selectedCompanyName || 'Selected company'}`);
   if (filters.lifecycleStage === CONTACT_FILTER_UNSET) activeLabels.push('Lifecycle: Not set');
   else if (filters.lifecycleStage !== 'all') activeLabels.push(`Lifecycle: ${filters.lifecycleStage}`);
   if (filters.leadStatus === CONTACT_FILTER_UNSET) activeLabels.push('Lead status: Not set');
@@ -277,12 +277,12 @@ export function ContactDirectoryFiltersPanel({
           ]}
         />
         <CompanyFilter
-          companies={companies}
           value={filters.companyId}
-          onChange={value => setFilter('companyId', value)}
-          loading={companiesLoading}
-          error={companiesError}
-          onRetry={onRetryCompanies}
+          onChange={(value, company) => {
+            setFilter('companyId', value);
+            onSelectedCompanyNameChange(company?.companyName ?? null);
+          }}
+          selectedCompanyName={selectedCompanyName}
         />
       </div>
 

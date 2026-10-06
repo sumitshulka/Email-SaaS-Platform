@@ -23,6 +23,8 @@ import {
   GetCompanyResponse,
   ListCompaniesResponse,
   ListUnlinkedCompanyProfilesResponse,
+  SearchCompaniesQueryParams,
+  SearchCompaniesResponse,
   UpdateCompanyBody,
   UpdateCompanyParams,
   UpdateCompanyResponse,
@@ -113,6 +115,60 @@ router.get("/companies", requireUserRole, async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.get(
+  "/companies/search",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = SearchCompaniesQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Enter valid company search and pagination values.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const { search, page, pageSize } = parsed.data;
+    const userId = req.authUser!.id;
+    const normalizedSearch = search.trim().replace(/[\\%_]/g, "\\$&");
+    const where = normalizedSearch
+      ? and(
+          eq(companiesTable.userId, userId),
+          or(
+            ilike(companiesTable.companyName, `%${normalizedSearch}%`),
+            ilike(companiesTable.companyDomain, `%${normalizedSearch}%`),
+          ),
+        )
+      : eq(companiesTable.userId, userId);
+    const [companies, countRows] = await Promise.all([
+      db
+        .select({
+          id: companiesTable.id,
+          companyName: companiesTable.companyName,
+          companyDomain: companiesTable.companyDomain,
+        })
+        .from(companiesTable)
+        .where(where)
+        .orderBy(asc(companiesTable.companyName), desc(companiesTable.createdAt))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize),
+      db
+        .select({ total: count() })
+        .from(companiesTable)
+        .where(where),
+    ]);
+
+    res.json(
+      SearchCompaniesResponse.parse({
+        companies,
+        total: Number(countRows[0]?.total ?? 0),
+        page,
+        pageSize,
+      }),
+    );
+  },
+);
 
 const companyExportHeaders: Record<string, string> = {
   id: "Company ID",

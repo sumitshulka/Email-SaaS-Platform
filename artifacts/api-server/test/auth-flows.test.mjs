@@ -2945,6 +2945,82 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
+  it("searches a bounded page of tenant-owned companies by name or domain", async () => {
+    const owner = await loggedInUser({
+      username: "company-search-owner",
+      email: "company-search-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "company-search-other",
+      email: "company-search-other@example.test",
+    });
+    const insertCompany = async (userId, companyName, companyDomain) => {
+      const [created] = await db.insert(dbModule.companiesTable).values({
+        userId,
+        companyName,
+        companyDomain,
+        companyDomainKey: companyDomain,
+      }).returning();
+      return created;
+    };
+    const ownerBeta = await insertCompany(owner.user.id, "Acme Beta", "beta.owner-search.test");
+    const ownerOrbit = await insertCompany(owner.user.id, "Acme Orbit", "orbit.owner-search.test");
+    const ownerDomainMatch = await insertCompany(owner.user.id, "Northstar", "acme-special.owner-search.test");
+    const otherCompany = await insertCompany(other.user.id, "Acme Foreign", "foreign-search.test");
+
+    const firstPage = await api("/companies/search?search=ACME&page=1&pageSize=1", {
+      cookie: owner.cookie,
+    });
+    assert.equal(firstPage.response.status, 200, JSON.stringify(firstPage.body));
+    assert.deepEqual(firstPage.body, {
+      companies: [{
+        id: ownerBeta.id,
+        companyName: "Acme Beta",
+        companyDomain: "beta.owner-search.test",
+      }],
+      total: 3,
+      page: 1,
+      pageSize: 1,
+    });
+
+    const secondPage = await api("/companies/search?search=ACME&page=2&pageSize=1", {
+      cookie: owner.cookie,
+    });
+    assert.equal(secondPage.response.status, 200, JSON.stringify(secondPage.body));
+    assert.deepEqual(secondPage.body.companies.map(company => company.id), [ownerOrbit.id]);
+    assert.equal(secondPage.body.total, 3, "the total should cover all matching pages");
+
+    const thirdPage = await api("/companies/search?search=ACME&page=3&pageSize=1", {
+      cookie: owner.cookie,
+    });
+    assert.equal(thirdPage.response.status, 200, JSON.stringify(thirdPage.body));
+    assert.deepEqual(thirdPage.body.companies.map(company => company.id), [ownerDomainMatch.id]);
+
+    const domainSearch = await api("/companies/search?search=ACME-SPECIAL", {
+      cookie: owner.cookie,
+    });
+    assert.equal(domainSearch.response.status, 200, JSON.stringify(domainSearch.body));
+    assert.equal(domainSearch.body.total, 1);
+    assert.equal(domainSearch.body.companies[0].id, ownerDomainMatch.id);
+
+    const foreignDomain = await api("/companies/search?search=foreign-search.test", {
+      cookie: owner.cookie,
+    });
+    assert.equal(foreignDomain.response.status, 200);
+    assert.equal(foreignDomain.body.total, 0, "search results and count must be tenant-scoped");
+    const otherTenantSearch = await api("/companies/search?search=ACME", {
+      cookie: other.cookie,
+    });
+    assert.equal(otherTenantSearch.response.status, 200);
+    assert.deepEqual(otherTenantSearch.body.companies.map(company => company.id), [otherCompany.id]);
+    assert.equal(otherTenantSearch.body.total, 1);
+
+    const oversizedPage = await api("/companies/search?pageSize=101", {
+      cookie: owner.cookie,
+    });
+    assert.equal(oversizedPage.response.status, 400);
+  });
+
   it("creates tenant-scoped shared companies from matching domains and preserves conflicts", async () => {
     const owner = await loggedInUser({ username: "company-owner" });
     const other = await loggedInUser({ username: "company-other" });

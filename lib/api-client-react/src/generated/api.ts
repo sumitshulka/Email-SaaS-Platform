@@ -52,6 +52,7 @@ import type {
   CompanyDetail,
   CompanyExportInput,
   CompanyInput,
+  CompanySearchResults,
   CompanyUpdate,
   CompleteGmailMailboxConnectionParams,
   Contact,
@@ -109,6 +110,7 @@ import type {
   RazorpayWebhookPayload,
   RegisterInput,
   ResetPasswordInput,
+  SearchCompaniesParams,
   SetActiveRazorpayEnvironmentInput,
   SubscriptionGiftInput,
   SubscriptionOrderCreated,
@@ -3305,6 +3307,90 @@ export const useCreateCompany = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getCreateCompanyMutationOptions(options));
     }
+
+export const getSearchCompaniesUrl = (params?: SearchCompaniesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/companies/search?${stringifiedParams}` : `/api/companies/search`
+}
+
+/**
+ * @summary Search a bounded page of company names and domains for the authenticated tenant
+ */
+export const searchCompanies = async (params?: SearchCompaniesParams, options?: Parameters<typeof customFetch>[1]): Promise<CompanySearchResults> => {
+
+  return customFetch<CompanySearchResults>(getSearchCompaniesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchCompaniesQueryKey = (params?: SearchCompaniesParams,) => {
+    return [
+    `/api/companies/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchCompaniesQueryOptions = <TData = Awaited<ReturnType<typeof searchCompanies>>, TError = ErrorType<ApiError>>(params?: SearchCompaniesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchCompanies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchCompaniesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchCompanies>>> = ({ signal }) => searchCompanies(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchCompanies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchCompaniesQueryResult = NonNullable<Awaited<ReturnType<typeof searchCompanies>>>
+export type SearchCompaniesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Search a bounded page of company names and domains for the authenticated tenant
+ */
+
+export function useSearchCompanies<TData = Awaited<ReturnType<typeof searchCompanies>>, TError = ErrorType<ApiError>>(
+ params?: SearchCompaniesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchCompanies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchCompaniesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getBackfillCompanyProfilesUrl = () => {
 

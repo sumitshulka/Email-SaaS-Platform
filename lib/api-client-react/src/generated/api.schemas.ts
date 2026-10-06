@@ -784,6 +784,30 @@ export interface CompanyCollection {
   companies: CompanyListItem[];
 }
 
+export interface CompanySearchResultItem {
+  id: string;
+  /** @maxLength 200 */
+  companyName: string;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain: string | null;
+}
+
+export interface CompanySearchResults {
+  companies: CompanySearchResultItem[];
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+}
+
 export interface CompanyInput {
   /**
      * @minLength 1
@@ -3022,6 +3046,23 @@ subscribed?: boolean;
  * @maxItems 100
  */
 listIds?: string[];
+};
+
+export type SearchCompaniesParams = {
+/**
+ * @maxLength 200
+ */
+search?: string;
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
 };
 
 export type ImportContactsParams = {
