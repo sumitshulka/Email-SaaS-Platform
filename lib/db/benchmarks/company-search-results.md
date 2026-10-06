@@ -1,7 +1,8 @@
 # Company search index cost measurements
 
 Measured October 6, 2026 with the `company-search.mjs` benchmark against the
-development PostgreSQL database.
+development PostgreSQL database. The first section preserves the original
+isolated-index result; the second records the expanded full-schema run.
 
 ## Setup
 
@@ -57,6 +58,57 @@ frequency is too low to justify the write cost. The benchmark uses generated
 company names/domains and batched statements; it isolates database index
 maintenance, not end-to-end single-company API latency. Its results are
 specific to this PostgreSQL instance, cache state, and fixture distribution.
+
+## Full company schema and production indexes
+
+The expanded run used the same PostgreSQL 16.10 instance and 500,000-row
+fixture (250,000 rows per tenant), but retained every company-table column and
+all production company indexes in both comparison cases:
+
+- Primary key on `id`.
+- Unique `(id, user_id)` index.
+- Partial unique `(user_id, company_domain_key)` index.
+- `(user_id, created_at)` index.
+- The two-column GIN trigram index, present only in the indexed case.
+
+The fixture also includes the company `user_id` foreign key. Search still uses
+the API's tenant-scoped `%needle%` name/domain pattern, a 25-row ordered page,
+and an exact count. Create and edit each run as five single SQL statements
+affecting 5,000 rows per sample. Creates populate all company profile fields;
+edits change the full profile, including name, domain, and domain key. The
+without-trigram and with-trigram cases start from the same reloaded fixture.
+All fixture work is inside a transaction that is rolled back.
+
+| Measurement | Without trigram index | With trigram index |
+| --- | ---: | ---: |
+| Paged partial search, median | 205.84 ms | 1.21 ms |
+| Exact matching count, median | 201.71 ms | 0.83 ms |
+| Create 5,000 rows, median | 96.31 ms | 165.33 ms |
+| Edit 5,000 rows, median | 122.69 ms | 213.76 ms |
+
+At the base fixture size, the trigram index occupied **38,256,640 bytes
+(36.48 MiB)**. The full company table heap was 156.25 MiB and table plus all
+indexes was 295.58 MiB. After the indexed write samples (25,000 creates and
+25,000 edits), the trigram index measured 53.63 MiB before vacuuming.
+
+With the full set of other indexes enabled, the trigram index added 69.02 ms
+per 5,000-row create batch (about **13.80 microseconds per row**) and 91.07 ms
+per edit batch (about **18.21 microseconds per row**). The indexed 5,000-row
+batches completed in 165.33 ms for creates and 213.76 ms for edits.
+
+## Recommendation
+
+The expanded result confirms the isolated benchmark's recommendation: keep the
+two-column trigram index. It reduced paged-search time by about 99% and exact
+count time by about 99.5% on this fixture. The extra write cost remained below
+0.22 seconds per 5,000-row batch with all the other production indexes enabled,
+and the base trigram index occupied 36.48 MiB at 500,000 companies.
+
+These are batched SQL timings, not end-to-end single-company API timings. They
+exclude the route's transaction setup, tenant lock, duplicate-domain lookup,
+validation, and response handling. They establish index-maintenance cost for
+representative full-profile create/edit statements; the actual latency of an
+individual API save also depends on those route and database costs.
 
 ## Rerun
 

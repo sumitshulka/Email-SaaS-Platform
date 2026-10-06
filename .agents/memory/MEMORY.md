@@ -14,6 +14,7 @@
 - [Contact enrichment scope](contact-enrichment.md) — keep enrichment business-focused and show full social/profile URLs as visible plain text.
 - [Shared company linking](company-linking.md) — auto-link only on compatible domains; preserve manual unlink intent and never move contacts implicitly.
 - [Contact list workflow](contact-list-management.md) — users should be able to assign existing contacts to a list from the Contact Lists page.
+- [Company write benchmarks](company-write-benchmarks.md) — compare index cost by changing only the target index; distinguish batch SQL timings from API latency.
 - [Google OAuth admin setup](google-oauth-admin-config.md) — keep Gmail OAuth credentials in superadmin-managed app settings, not Replit Secrets.
 - [Gmail mailbox replacement](gmail-mailbox-replacement.md) — an unverified replacement must not trigger revocation when a saved mailbox already exists.
 - [SMTP sender account quota](smtp-sender-account-quota.md) — package email-account limits count SMTP campaign senders only, not Gmail OAuth or bounce-monitoring connections.
