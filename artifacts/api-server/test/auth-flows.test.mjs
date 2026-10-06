@@ -359,6 +359,7 @@ memory.public.none(`
     list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
     list_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
     name varchar(160) NOT NULL,
+    objective text NOT NULL DEFAULT '',
     subject varchar(200) NOT NULL,
     text_body text NOT NULL,
     html_body text,
@@ -4766,6 +4767,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       cookie: owner.cookie,
       body: {
         name: "Owner campaign",
+        objective: "Share the launch update with active subscribers.",
           subject: "A workspace update for {{firstName}}",
           textBody: "Hello {{firstName}} from the campaign.",
           htmlBody: "<p>Draft <em>format</em></p>",
@@ -4773,6 +4775,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       },
     });
     assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+    assert.equal(campaign.body.objective, "Share the launch update with active subscribers.");
     assert.equal(campaign.body.htmlBody, "<p>Draft <em>format</em></p>");
     assert.equal(campaign.body.listId, ownerSecondaryList.body.id);
     assert.deepEqual(campaign.body.listIds, [
@@ -4783,11 +4786,13 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       method: "PATCH",
       cookie: owner.cookie,
       body: {
+        objective: "Remind existing customers about the launch.",
         htmlBody:
           "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}.</p><script>alert(1)</script>",
       },
     });
     assert.equal(updatedCampaign.response.status, 200, JSON.stringify(updatedCampaign.body));
+    assert.equal(updatedCampaign.body.objective, "Remind existing customers about the launch.");
     assert.equal(
       updatedCampaign.body.htmlBody,
       "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}.</p>",

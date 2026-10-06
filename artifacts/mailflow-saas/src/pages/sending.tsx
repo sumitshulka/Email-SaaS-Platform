@@ -883,8 +883,8 @@ export function ListsPage() {
   </></QueryState>;
 }
 
-type CampaignForm = { name: string; subject: string; textBody: string; htmlBody: string; listIds: string[] };
-const blankCampaign: CampaignForm = { name: '', subject: '', textBody: '', htmlBody: '', listIds: [] };
+type CampaignForm = { name: string; objective: string; subject: string; textBody: string; htmlBody: string; listIds: string[] };
+const blankCampaign: CampaignForm = { name: '', objective: '', subject: '', textBody: '', htmlBody: '', listIds: [] };
 
 export function CampaignsPage() {
   const [, setLocation] = useLocation();
@@ -977,7 +977,7 @@ export function CampaignsPage() {
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
   const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -1042,7 +1042,7 @@ export function CampaignsPage() {
   const save = (e: FormEvent) => {
     e.preventDefault();
     if (!form.listIds.length || !audienceCheckReady) return;
-    const data = { name: form.name.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: form.listIds };
+    const data = { name: form.name.trim(), objective: form.objective.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: form.listIds };
     const success = () => { refresh(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
     const fail = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
     if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
@@ -1104,7 +1104,14 @@ export function CampaignsPage() {
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Each selected list is processed in the order shown; overlapping addresses receive one email." close={() => setEditing(undefined)}>
       <form onSubmit={save} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>
+          <div className="min-w-0 space-y-3">
+            <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>
+            <label className="block min-w-0">
+              <span className={labelClass}>Campaign objective</span>
+              <textarea data-testid="input-campaign-objective" rows={3} maxLength={500} value={form.objective} onChange={event => setForm(current => ({ ...current, objective: event.target.value }))} placeholder="What should this campaign achieve?" className="w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none placeholder:text-[#a0a8b3] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/>
+              <span className="mt-1 block text-[10px] leading-4 text-[#808a97]">Internal note only; it won’t be included in the email. {form.objective.length}/500</span>
+            </label>
+          </div>
           <fieldset className="min-w-0">
             <legend className={labelClass}>Target lists</legend>
             <div className="overflow-hidden rounded-md border border-[#d8dde4] bg-white">
@@ -1342,6 +1349,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
 
         <section className={`${panelClass} p-5`}>
           <h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign message</h2>
+          {campaign.objective?.trim() && <div className="mt-4 rounded-md border border-[#dbe5ef] bg-[#f6f9fc] p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#718197]">Campaign objective · internal</div><p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[#425368]">{campaign.objective}</p></div>}
           <div className="mt-4 border-b border-[#edf0f2] pb-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Subject</div><p className="mt-1 text-[13px] font-semibold text-[#29384a]">{campaign.subject}</p></div>
            <div className="pt-4"><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">{campaign.htmlBody ? 'Formatted message' : 'Plain-text message'}</div>{campaign.htmlBody ? <div className="campaign-message-preview mt-2 rounded-md bg-[#f8fafb] p-4 text-[12px] leading-6 text-[#566476] [&_a]:text-[#245b9b] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[#9abbe1] [&_blockquote]:pl-3 [&_h1]:my-2 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_strong]:font-bold [&_u]:underline [&_ul]:my-2 [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: campaign.htmlBody }}/> : <pre className="mt-2 whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#566476]">{campaign.textBody}</pre>}</div>
            <div className="mt-5 flex flex-wrap gap-5 border-t border-[#edf0f2] pt-4 text-[10px] text-[#7c8794]"><span>Created: {formatDate(campaign.createdAt)}</span><span>Queued: {formatDate(campaign.queuedAt)}</span><span>Scheduled start: {formatDate(campaign.scheduledAt)}</span><span>Completed: {formatDate(campaign.completedAt)}</span></div>

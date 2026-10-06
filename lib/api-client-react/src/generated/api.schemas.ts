@@ -1679,6 +1679,8 @@ export const CampaignSummaryStatus = {
 export interface CampaignSummary {
   id: string;
   name: string;
+  /** @maxLength 500 */
+  objective?: string;
   subject: string;
   textBody: string;
   /** @nullable */
@@ -1917,6 +1919,8 @@ export interface CampaignInput {
      * @maxLength 160
      */
   name: string;
+  /** @maxLength 500 */
+  objective?: string;
   /**
      * @minLength 1
      * @maxLength 200
@@ -1944,6 +1948,8 @@ export interface CampaignUpdate {
      * @maxLength 160
      */
   name?: string;
+  /** @maxLength 500 */
+  objective?: string;
   /**
      * @minLength 1
      * @maxLength 200

@@ -263,6 +263,7 @@ export const emailCampaignsTable = pgTable(
       .notNull()
       .default(sql`ARRAY[]::uuid[]`),
     name: varchar("name", { length: 160 }).notNull(),
+    objective: text("objective").notNull().default(""),
     subject: varchar("subject", { length: 200 }).notNull(),
     textBody: text("text_body").notNull(),
     htmlBody: text("html_body"),

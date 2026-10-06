@@ -2615,6 +2615,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       listId: listIds[0],
       listIds,
       name: parsed.data.name.trim(),
+      objective: parsed.data.objective?.trim() ?? "",
       subject: parsed.data.subject.trim(),
       textBody: parsed.data.textBody,
       htmlBody: parsed.data.htmlBody
@@ -2661,6 +2662,9 @@ router.patch(
       .set({
         ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
         ...(parsed.data.subject ? { subject: parsed.data.subject.trim() } : {}),
+        ...(parsed.data.objective !== undefined
+          ? { objective: parsed.data.objective.trim() }
+          : {}),
         ...(parsed.data.textBody !== undefined
           ? { textBody: parsed.data.textBody }
           : {}),

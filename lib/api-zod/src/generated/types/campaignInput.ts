@@ -12,6 +12,8 @@ export interface CampaignInput {
      * @maxLength 160
      */
   name: string;
+  /** @maxLength 500 */
+  objective?: string;
   /**
      * @minLength 1
      * @maxLength 200

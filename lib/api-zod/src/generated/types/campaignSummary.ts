@@ -10,6 +10,8 @@ import type { CampaignSummaryStatus } from './campaignSummaryStatus';
 export interface CampaignSummary {
   id: string;
   name: string;
+  /** @maxLength 500 */
+  objective?: string;
   subject: string;
   textBody: string;
   /** @nullable */

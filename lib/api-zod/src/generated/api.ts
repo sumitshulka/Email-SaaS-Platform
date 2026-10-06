@@ -2434,9 +2434,14 @@ export const DeleteContactSegmentResponse = zod.void()
 /**
  * @summary List campaigns belonging to the authenticated tenant
  */
+export const listCampaignsResponseObjectiveMax = 500;
+
+
+
 export const ListCampaignsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "objective": zod.string().max(listCampaignsResponseObjectiveMax).optional(),
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
@@ -2464,6 +2469,8 @@ export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
  */
 export const createCampaignBodyNameMax = 160;
 
+export const createCampaignBodyObjectiveMax = 500;
+
 export const createCampaignBodySubjectMax = 200;
 
 export const createCampaignBodyTextBodyMax = 100000;
@@ -2474,6 +2481,7 @@ export const createCampaignBodyHtmlBodyMax = 100000;
 
 export const CreateCampaignBody = zod.object({
   "name": zod.string().min(1).max(createCampaignBodyNameMax),
+  "objective": zod.string().max(createCampaignBodyObjectiveMax).optional(),
   "subject": zod.string().min(1).max(createCampaignBodySubjectMax),
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
@@ -2481,9 +2489,14 @@ export const CreateCampaignBody = zod.object({
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
 })
 
+export const createCampaignResponseObjectiveMax = 500;
+
+
+
 export const CreateCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "objective": zod.string().max(createCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
@@ -2561,10 +2574,15 @@ export const GetCampaignDashboardParams = zod.object({
   "campaignId": zod.coerce.string().uuid()
 })
 
+export const getCampaignDashboardResponseCampaignObjectiveMax = 500;
+
+
+
 export const GetCampaignDashboardResponse = zod.object({
   "campaign": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "objective": zod.string().max(getCampaignDashboardResponseCampaignObjectiveMax).optional(),
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
@@ -2621,6 +2639,8 @@ export const UpdateCampaignParams = zod.object({
 
 export const updateCampaignBodyNameMax = 160;
 
+export const updateCampaignBodyObjectiveMax = 500;
+
 export const updateCampaignBodySubjectMax = 200;
 
 export const updateCampaignBodyTextBodyMax = 100000;
@@ -2631,6 +2651,7 @@ export const updateCampaignBodyHtmlBodyMax = 100000;
 
 export const UpdateCampaignBody = zod.object({
   "name": zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
+  "objective": zod.string().max(updateCampaignBodyObjectiveMax).optional(),
   "subject": zod.string().min(1).max(updateCampaignBodySubjectMax).optional(),
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
   "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
@@ -2638,9 +2659,14 @@ export const UpdateCampaignBody = zod.object({
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
 })
 
+export const updateCampaignResponseObjectiveMax = 500;
+
+
+
 export const UpdateCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "objective": zod.string().max(updateCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
@@ -2798,9 +2824,14 @@ export const SendCampaignBody = zod.object({
   "scheduledAt": zod.coerce.date().optional()
 })
 
+export const sendCampaignResponseObjectiveMax = 500;
+
+
+
 export const SendCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
+  "objective": zod.string().max(sendCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
