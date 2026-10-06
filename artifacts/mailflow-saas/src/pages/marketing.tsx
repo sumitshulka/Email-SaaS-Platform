@@ -130,7 +130,7 @@ export function MarketingHomePage() {
   usePageMeta(homeMeta);
   return (
     <MetaLayout active="home">
-      <main>
+      <main className="mf-home-page">
         <section className="mf-hero">
           <div className="mf-hero-grid">
             <div className="mf-hero-copy">
@@ -601,6 +601,38 @@ function Styles() {
        .ft-faq-section{padding:65px 0 73px}.ft-faq-layout{grid-template-columns:1fr;gap:22px}.ft-faq-layout h2{font-size:35px}.ft-faq-layout .faq-items summary{font-size:9px;min-height:52px}.ft-faq-layout .faq-items details p{font-size:8px}
        .ft-final-cta{min-height:370px;padding:58px 20px}.ft-final-inner h2{font-size:43px}.ft-final-inner>p{font-size:10px;line-height:1.7;max-width:290px}.ft-final-inner>div{gap:15px}.ft-final-inner .mf-button-light{min-height:43px;padding:0 13px;font-size:10px}.ft-final-pricing{font-size:9px}.ft-final-orbit{width:78vw;right:-45%;opacity:.72}.ft-final-index{right:5%;bottom:16px;font-size:6px}
      }
-    @media(prefers-reduced-motion:reduce){.mf-site *, .mf-site *:before,.mf-site *:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+     .mf-home-page .mf-hero-lede,.mf-home-page .mf-intro-copy p,.mf-home-page .mf-section-heading>p,.mf-home-page .mf-feature p,.mf-home-page .principles-intro p{color:#435569}
+     .mf-home-page .mf-hero-footnote{color:#4b5d70;font-size:11px}
+     .mf-home-page .mf-hero-bottom{color:#586a7c;font-size:10px}
+     .mf-home-page .mf-hero-bottom a{color:#405a71;font-size:11px}
+     .mf-home-page .mf-index{color:#687a8b;font-size:10px}
+     .mf-home-page .mf-intro-copy h2 span{color:#61788a}
+     .mf-home-page .mf-intro-copy p{font-size:15px}
+     .mf-home-page .route-label{color:#667989;font-size:9px}
+     .mf-home-page .route-steps{color:#4e6072;font-size:9px}
+     .mf-home-page .mf-section-heading>p,.mf-home-page .principles-intro p{font-size:15px}
+     .mf-home-page .mf-feature p,.mf-home-page .principle-list p{color:#46596b;font-size:13px}
+     .mf-home-page .mf-final-cta p{color:#d2dde6;font-size:15px}
+     .mf-home-page .cta-note{color:#bdcbd5;font-size:9px}
+     .mf-home-page .cta-side-note{color:#b8c7d1}
+     @media(max-width:640px){
+       .mf-home-page .mf-hero-lede{color:#435569;font-size:14px}
+       .mf-home-page .mf-hero-footnote{font-size:10px}
+       .mf-home-page .mf-hero-bottom{font-size:9px}
+       .mf-home-page .mf-hero-bottom a{font-size:9px}
+       .mf-home-page .mf-index{font-size:9px}
+       .mf-home-page .mf-intro-copy p{font-size:14px}
+       .mf-home-page .route-label,.mf-home-page .route-steps{font-size:9px}
+       .mf-home-page .mf-section-heading>p,.mf-home-page .principles-intro p{font-size:13px}
+       .mf-home-page .mf-feature p,.mf-home-page .principle-list p{font-size:12px}
+       .mf-home-page .mf-final-cta p{font-size:13px}
+     }
+     .mf-footer-main p{color:#536174;font-size:12px}
+     .mf-footer-links>div{color:#46596b;font-size:12px}
+     .mf-footer-label{color:#627487;font-size:9px}
+     .mf-footer-bottom{color:#556779;font-size:10px}
+     .mf-footer-bottom a{color:#40596f}
+     @media(max-width:640px){.mf-footer-bottom{font-size:9px}}
+     @media(prefers-reduced-motion:reduce){.mf-site *, .mf-site *:before,.mf-site *:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   `}</style>;
 }
