@@ -240,7 +240,10 @@ async function stopWebServer() {
   }
 }
 
-async function installApiFixtures(context) {
+async function installApiFixtures(context, {
+  companies = [company],
+  contacts = contactDirectoryFixtures(),
+} = {}) {
   await context.route('**/api/**', async route => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -271,7 +274,7 @@ async function installApiFixtures(context) {
       return;
     }
     if (pathname === '/api/companies' && method === 'GET') {
-      await route.fulfill({ status: 200, json: { companies: [company] } });
+      await route.fulfill({ status: 200, json: { companies } });
       return;
     }
     if (pathname === '/api/companies/unlinked-profiles' && method === 'GET') {
@@ -297,7 +300,7 @@ async function installApiFixtures(context) {
       await route.fulfill({
         status: 200,
         json: {
-          contacts: contactDirectoryFixtures(),
+          contacts,
           quota: { used: 3, limit: 100, remaining: 97, canAdd: true, requiresSubscription: false },
           uploadSettings: { maxFileSizeMb: 10, allowedFileTypes: ['csv'] },
         },
@@ -409,6 +412,92 @@ describe('company profile review and contact data preservation', { concurrency: 
       const pageOverflowsHorizontally = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       assert.equal(pageOverflowsHorizontally, false, 'the mobile contacts page should not have page-level horizontal overflow');
       await page.screenshot({ path: '/tmp/mailflow-contacts-directory-mobile.png', fullPage: true });
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('searches large company lists by name and domain, and filters contacts by company ID', async () => {
+    const matchingCompanyCount = 52;
+    const companies = Array.from({ length: 1200 }, (_, index) => {
+      const matching = index < matchingCompanyCount;
+      return {
+        ...company,
+        id: `browser-large-company-${String(index).padStart(3, '0')}`,
+        companyName: matching
+          ? `Harbor Directory ${String(index).padStart(3, '0')}`
+          : `Unrelated Organization ${String(index).padStart(4, '0')}`,
+        companyDomain: matching
+          ? `tenant-${String(index).padStart(3, '0')}.customer-mail.test`
+          : `unrelated-${String(index).padStart(4, '0')}.example.test`,
+      };
+    });
+    const selectedCompany = companies[0];
+    const makeContact = (id, companyId, companyName) => ({
+      ...contact,
+      id,
+      email: `${id}@example.test`,
+      name: id,
+      firstName: id,
+      lastName: 'Contact',
+      companyId,
+      company: null,
+      companyName,
+      companyDomain: null,
+      listIds: [],
+      subscribed: true,
+      createdAt: '2026-10-05T10:00:00.000Z',
+    });
+    const contacts = [
+      makeContact('company-id-match', selectedCompany.id, selectedCompany.companyName),
+      makeContact('legacy-name-only', null, selectedCompany.companyName),
+      makeContact('different-company-id', 'another-company-id', selectedCompany.companyName),
+      makeContact('no-company-null-values', null, null),
+      makeContact('no-company-blank-name', null, '   '),
+      makeContact('company-id-without-name', 'another-company-id', null),
+    ];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { companies, contacts });
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/contacts`);
+
+      const rows = page.locator('tr[data-testid^="row-contact-"]');
+      await page.getByTestId('row-contact-company-id-match').waitFor({ state: 'visible' });
+      assert.equal(await rows.count(), contacts.length, 'all fixture contacts should appear before filtering');
+
+      const companySearch = page.getByTestId('select-contact-company-filter');
+      const companyOptions = page.locator('[data-testid^="option-contact-company-"]');
+      const refineMessage = `Showing 40 of ${matchingCompanyCount} matches. Refine your search.`;
+      await companySearch.fill('Harbor Directory');
+      await page.getByText(refineMessage, { exact: true }).waitFor({ state: 'visible' });
+      assert.equal(await companyOptions.count(), 40, 'name search should cap a large result set at 40 companies');
+
+      await companySearch.fill('customer-mail.test');
+      await page.getByText(refineMessage, { exact: true }).waitFor({ state: 'visible' });
+      assert.equal(await companyOptions.count(), 40, 'domain search should also cap a large result set at 40 companies');
+      assert.equal(await page.getByTestId(`option-contact-company-${selectedCompany.id}`).count(), 1);
+      await page.getByTestId(`option-contact-company-${selectedCompany.id}`).click();
+
+      await page.getByTestId('row-contact-company-id-match').waitFor({ state: 'visible' });
+      assert.equal(await rows.count(), 1, 'only the contact with the selected company ID should match');
+      assert.equal(await page.getByTestId('row-contact-legacy-name-only').count(), 0, 'a matching legacy name without an ID should not match');
+      assert.equal(await page.getByTestId('row-contact-different-company-id').count(), 0, 'a different company ID should not match even when its name is identical');
+
+      await companySearch.evaluate(input => input.blur());
+      await companySearch.focus();
+      await page.getByRole('listbox', { name: 'Company options' }).waitFor({ state: 'visible' });
+      await page.getByRole('option', { name: 'No company', exact: true }).click();
+      await page.getByTestId('row-contact-no-company-null-values').waitFor({ state: 'visible' });
+      await page.getByTestId('row-contact-no-company-blank-name').waitFor({ state: 'visible' });
+      assert.equal(await rows.count(), 2, 'No company should match only contacts with no ID and no nonblank company name');
+      assert.equal(await page.getByTestId('row-contact-legacy-name-only').count(), 0, 'legacy company names must exclude a contact from No company');
+      assert.equal(await page.getByTestId('row-contact-company-id-without-name').count(), 0, 'a company ID must exclude a contact from No company');
     } finally {
       await context.close();
     }
