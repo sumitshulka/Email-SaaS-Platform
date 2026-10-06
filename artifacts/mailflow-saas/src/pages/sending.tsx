@@ -2,14 +2,12 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
-  Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
+  Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
   Edit3, Fingerprint, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
   ShieldCheck, Trash2, Users, X, BookmarkPlus,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import {
-  CONTACT_FILTER_NONE,
-  CONTACT_FILTER_UNSET,
   ContactDirectoryFiltersPanel,
   emptyContactDirectoryFilters,
   type ContactDirectoryFilterValues,
@@ -20,17 +18,17 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
+  getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useStartGmailMailboxConnection,
-  getListCompaniesQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
+  getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetTenantSendingSettings,
-  useGetContactEmailHistory, useListCampaigns, useListContactLists, useListContacts, usePreviewCampaign, useSendCampaign,
+  useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, usePreviewCampaign, useSendCampaign,
   useListCompanies, useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
   useUpdateContactList, useUpdateTenantSendingSettings,
 } from '@workspace/api-client-react';
 import type {
-  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, CompanyListItem, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList,
+  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, CompanyListItem, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, TenantSendingSettings, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 
@@ -86,15 +84,6 @@ function Status({ children, tone = 'gray' }: { children: ReactNode; tone?: 'blue
 }
 function formatDate(date: string | null | undefined) {
   return date ? new Date(date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
-}
-function distinctContactValues(values: Array<string | null | undefined>) {
-  return [...new Set(values.map(value => value?.trim()).filter((value): value is string => Boolean(value)))]
-    .sort((left, right) => left.localeCompare(right));
-}
-function contactFieldMatchesFilter(selected: string, value: string | null | undefined) {
-  if (selected === 'all') return true;
-  if (selected === CONTACT_FILTER_UNSET) return !value?.trim();
-  return value?.trim() === selected;
 }
 function roundUpToMinute(date: Date) {
   return new Date(Math.ceil(date.getTime() / 60_000) * 60_000);
@@ -364,9 +353,38 @@ function ContactEmailHistoryDialog({ contact, close }: { contact: Contact; close
 }
 
 export function ContactsPage() {
-  const contactsQuery = useListContacts({ query: { queryKey: getListContactsQueryKey(), refetchInterval: 30_000 } });
+  const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
+  const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(filters.search), 250);
+    return () => window.clearTimeout(timer);
+  }, [filters.search]);
+  const contactsParams = {
+    page,
+    pageSize: 50,
+    includeHistory: true,
+    search: debouncedSearch,
+    status: filters.status,
+    listId: filters.listId,
+    companyId: filters.companyId,
+    lifecycleStage: filters.lifecycleStage,
+    leadStatus: filters.leadStatus,
+    leadSource: filters.leadSource,
+    addedWithin: filters.addedWithin,
+  };
+  const contactsQuery = useListContacts(contactsParams, {
+    query: {
+      queryKey: getListContactsQueryKey(contactsParams),
+      refetchInterval: 30_000,
+      placeholderData: previous => previous,
+    },
+  });
   const listsQuery = useListContactLists();
   const companiesQuery = useListCompanies({ query: { queryKey: getListCompaniesQueryKey(), refetchInterval: 60_000 } });
+  const filterOptionsQuery = useGetContactFilterOptions({
+    query: { queryKey: getGetContactFilterOptionsQueryKey(), staleTime: 60_000 },
+  });
   const segmentsQuery = useListContactSegments({
     query: { queryKey: getListContactSegmentsQueryKey(), staleTime: 0, refetchOnMount: 'always' },
   });
@@ -375,7 +393,6 @@ export function ContactsPage() {
   const updateSegment = useUpdateContactSegment();
   const removeSegment = useDeleteContactSegment();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
-  const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
   const [selectedSegmentId, setSelectedSegmentId] = useState('');
   const [segmentEditor, setSegmentEditor] = useState<{ mode: 'save' | 'rename'; segment?: ContactAudienceSegment } | null>(null);
   const [segmentName, setSegmentName] = useState('');
@@ -384,40 +401,29 @@ export function ContactsPage() {
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const contacts = contactsQuery.data?.contacts ?? [];
+  const visible = contacts;
+  const resultStart = contacts.length && contactsQuery.data
+    ? (contactsQuery.data.page - 1) * contactsQuery.data.pageSize + 1
+    : 0;
+  const resultEnd = contactsQuery.data
+    ? Math.min(contactsQuery.data.page * contactsQuery.data.pageSize, contactsQuery.data.total)
+    : 0;
   const lists = (listsQuery.data || []) as ContactList[];
   const companies = (companiesQuery.data?.companies ?? []) as CompanyListItem[];
-  const lifecycleStages = useMemo(() => distinctContactValues(contacts.map(contact => contact.lifecycleStage)), [contacts]);
-  const leadStatuses = useMemo(() => distinctContactValues(contacts.map(contact => contact.leadStatus)), [contacts]);
-  const leadSources = useMemo(() => distinctContactValues(contacts.map(contact => contact.leadSource)), [contacts]);
+  const lifecycleStages = filterOptionsQuery.data?.lifecycleStages ?? [];
+  const leadStatuses = filterOptionsQuery.data?.leadStatuses ?? [];
+  const leadSources = filterOptionsQuery.data?.leadSources ?? [];
   const segments = segmentsQuery.data ?? [];
   const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
-  const visible = useMemo(() => contacts.filter(c => {
-    const terms = filters.search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const searchableText = [
-      c.name, c.email, c.firstName, c.lastName, c.companyName, c.jobTitle, c.department,
-      c.seniority, c.phoneNumber, c.mobilePhone, c.linkedinUrl, c.websiteUrl, c.twitterUrl,
-      c.facebookUrl, c.instagramUrl, c.location, c.preferredLanguage, c.timeZone,
-      c.lifecycleStage, c.leadStatus, c.leadSource, c.companyIndustry, c.companyDomain,
-    ].filter((value): value is string => Boolean(value)).join(' ').toLowerCase();
-    const matchesSearch = terms.every(term => searchableText.includes(term));
-    const matchesStatus = filters.status === 'all' || (filters.status === 'subscribed' ? c.subscribed : !c.subscribed);
-    const matchesList = filters.listId === 'all'
-      || (filters.listId === CONTACT_FILTER_NONE ? c.listIds.length === 0 : c.listIds.includes(filters.listId));
-    const companyName = c.companyName?.trim() ?? '';
-    const matchesCompany = filters.companyId === 'all'
-      || (filters.companyId === CONTACT_FILTER_NONE
-        ? !companyName && !c.companyId
-        : c.companyId === filters.companyId);
-    const matchesLifecycle = contactFieldMatchesFilter(filters.lifecycleStage, c.lifecycleStage);
-    const matchesLeadStatus = contactFieldMatchesFilter(filters.leadStatus, c.leadStatus);
-    const matchesLeadSource = contactFieldMatchesFilter(filters.leadSource, c.leadSource);
-    const days = filters.addedWithin === 'any' ? 0 : Number(filters.addedWithin);
-    const addedCutoff = days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
-    const createdAt = Date.parse(c.createdAt);
-    const matchesAdded = addedCutoff === null || (Number.isFinite(createdAt) && createdAt >= addedCutoff);
-    return matchesSearch && matchesStatus && matchesList && matchesCompany
-      && matchesLifecycle && matchesLeadStatus && matchesLeadSource && matchesAdded;
-  }), [contacts, filters]);
+  const updateFilters = (next: ContactDirectoryFilterValues) => {
+    setFilters(next);
+    setPage(1);
+  };
+  useEffect(() => {
+    if (!contactsQuery.isFetching && contactsQuery.data && contactsQuery.data.page !== page) {
+      setPage(contactsQuery.data.page);
+    }
+  }, [contactsQuery.data?.page, contactsQuery.isFetching, page]);
   const hasActiveFilters = filters.search.trim() !== '' || filters.status !== 'all'
     || filters.listId !== 'all' || filters.companyId !== 'all'
     || filters.lifecycleStage !== 'all' || filters.leadStatus !== 'all'
@@ -483,7 +489,7 @@ export function ContactsPage() {
   };
   const applySelectedSegment = () => {
     if (!selectedSegment) return;
-    setFilters(selectedSegment.filters);
+    updateFilters(selectedSegment.filters);
     setNotice({ kind: 'success', text: `“${selectedSegment.name}” was applied.` });
   };
   const confirmDeleteSegment = () => {
@@ -512,10 +518,10 @@ export function ContactsPage() {
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     <div className="mb-5 grid gap-3 sm:grid-cols-3">
       <div data-testid="summary-contact-total" className={`${panelClass} p-4`} style={{ backgroundColor: '#eaf3ff', borderColor: '#c9dcf3' }}>
-        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#536984]">All contacts</div><div className="display mt-2 text-[26px] font-bold text-[#1d3e65]">{contacts.length.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#647b97]">Across this workspace</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8e9ff] text-[#2862a1]"><Users className="h-4 w-4"/></span></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#536984]">All contacts</div><div className="display mt-2 text-[26px] font-bold text-[#1d3e65]">{(contactsQuery.data?.workspaceTotal ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#647b97]">Across this workspace</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8e9ff] text-[#2862a1]"><Users className="h-4 w-4"/></span></div>
       </div>
       <div data-testid="summary-contact-subscribed" className={`${panelClass} p-4`} style={{ backgroundColor: '#eaf5ee', borderColor: '#cde4d5' }}>
-        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#4d7059]">Subscribed</div><div className="display mt-2 text-[26px] font-bold text-[#285e3c]">{contacts.filter(c => c.subscribed).length.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#64816d]">Eligible for campaigns</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8ecdf] text-[#397050]"><CheckCircle2 className="h-4 w-4"/></span></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#4d7059]">Subscribed</div><div className="display mt-2 text-[26px] font-bold text-[#285e3c]">{(contactsQuery.data?.workspaceSubscribed ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#64816d]">Eligible for campaigns</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#d8ecdf] text-[#397050]"><CheckCircle2 className="h-4 w-4"/></span></div>
       </div>
       <div data-testid="summary-contact-lists" className={`${panelClass} p-4`} style={{ backgroundColor: '#f1edff', borderColor: '#ded6f7' }}>
         <div className="flex items-start justify-between gap-3"><div><div className="text-[11px] font-medium text-[#655b83]">Lists in workspace</div><div className="display mt-2 text-[26px] font-bold text-[#4f4384]">{lists.length.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#766c93]">Available for audience filters</div></div><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#e3dcfb] text-[#6856a4]"><Activity className="h-4 w-4"/></span></div>
@@ -523,7 +529,7 @@ export function ContactsPage() {
     </div>
     <section className={panelClass}>
       <div className="space-y-4 border-b border-[#e9edf0] p-4 sm:p-5">
-        <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Audience directory</h2><p className="mt-1 text-[11px] text-[#788392]">Showing {visible.length} of {contacts.length} contacts</p></div>
+        <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Audience directory</h2><p className="mt-1 text-[11px] text-[#788392]">Showing {resultStart}–{resultEnd} of {(contactsQuery.data?.total ?? 0).toLocaleString()} matching contacts{contactsQuery.isFetching ? ' · Updating…' : ''}</p></div>
         <div data-testid="contact-segments-panel" className="rounded-lg border border-[#dce5ef] bg-white p-3.5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -587,7 +593,7 @@ export function ContactsPage() {
         </div>
         <ContactDirectoryFiltersPanel
           filters={filters}
-          onChange={setFilters}
+          onChange={updateFilters}
           lists={lists}
           companies={companies}
           companiesLoading={companiesQuery.isLoading}
@@ -605,7 +611,14 @@ export function ContactsPage() {
          <td className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.subject}>{contact.lastEmail.subject}</div><div className="mt-1 truncate text-[10px] text-[#7c8794]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div className="mt-1.5 flex flex-wrap items-center gap-2"><Status tone={emailStatusTone(contact.lastEmail.status)}>{emailStatusLabel(contact.lastEmail.status)}</Status><span className="text-[10px] text-[#87919d]">{formatDate(contact.lastEmail.lastAttemptAt)}</span></div><ContactReportEvidence id={contact.lastEmail.id} item={contact.lastEmail}/></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
          <td className="px-5 py-3.5"><div className="flex justify-end gap-1"><Button variant="quiet" testId={`button-contact-history-${contact.id}`} onClick={() => setHistoryContact(contact)}><Clock3 className="h-3.5 w-3.5"/>History</Button><Button variant="quiet" testId={`button-edit-contact-${contact.id}`} onClick={() => openEdit(contact)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button variant="quiet" testId={`button-delete-contact-${contact.id}`} disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></div></td>
-       </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={hasActiveFilters ? 'No matching contacts' : 'Your audience starts here'} detail={hasActiveFilters ? 'Try removing a filter or broadening your search.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={!contacts.length ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
+      </tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={hasActiveFilters ? 'No matching contacts' : 'Your audience starts here'} detail={hasActiveFilters ? 'Try removing a filter or broadening your search.' : 'Add a contact and assign them to a list to get your first audience ready.'} action={(contactsQuery.data?.workspaceTotal ?? 0) === 0 ? <Button testId="button-empty-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add a contact</Button> : undefined}/></div>}
+       {(contactsQuery.data?.pageCount ?? 0) > 1 && <div className="flex items-center justify-between border-t border-[#e9edf0] px-4 py-3">
+         <span className="text-[10px] text-[#788392]">Page {contactsQuery.data!.page.toLocaleString()} of {contactsQuery.data!.pageCount.toLocaleString()}</span>
+         <div className="flex gap-2">
+           <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-audience-previous-page" disabled={contactsQuery.data!.page <= 1 || contactsQuery.isFetching} onClick={() => setPage(current => Math.max(1, current - 1))}><ArrowLeft className="h-3.5 w-3.5"/>Previous</Button>
+           <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-audience-next-page" disabled={contactsQuery.data!.page >= contactsQuery.data!.pageCount || contactsQuery.isFetching} onClick={() => setPage(current => current + 1)}>Next<ArrowRight className="h-3.5 w-3.5"/></Button>
+         </div>
+       </div>}
     </section>
      {segmentEditor && <Modal
        title={segmentEditor.mode === 'save' ? 'Save audience segment' : 'Rename audience segment'}
@@ -661,7 +674,7 @@ export function ContactsPage() {
 
 export function ListsPage() {
   const [, setLocation] = useLocation();
-  const query = useListContactLists(); const contactsQuery = useListContacts(); const campaignsQuery = useListCampaigns();
+  const query = useListContactLists(); const campaignsQuery = useListCampaigns();
   const create = useCreateContactList(); const update = useUpdateContactList(); const remove = useDeleteContactList();
   const updateContact = useUpdateContact();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -670,8 +683,32 @@ export function ListsPage() {
   const [viewingList, setViewingList] = useState<ContactList | null>(null);
   const [openCampaignLists, setOpenCampaignLists] = useState<Set<string>>(() => new Set());
   const [contactSearch, setContactSearch] = useState('');
+  const [debouncedContactSearch, setDebouncedContactSearch] = useState('');
+  const [memberPage, setMemberPage] = useState(1);
   const [pendingMembershipIds, setPendingMembershipIds] = useState<Set<string>>(() => new Set());
   const [membershipFeedback, setMembershipFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedContactSearch(contactSearch), 250);
+    return () => window.clearTimeout(timer);
+  }, [contactSearch]);
+  const memberParams = viewingList
+    ? { page: memberPage, pageSize: 25, includeHistory: false, listId: viewingList.id }
+    : undefined;
+  const contactsQuery = useListContacts(memberParams, {
+    query: {
+      queryKey: getListContactsQueryKey(memberParams),
+      enabled: Boolean(viewingList),
+    },
+  });
+  const contactOptionsParams = viewingList
+    ? { limit: 30, excludeListId: viewingList.id, search: debouncedContactSearch }
+    : undefined;
+  const contactOptionsQuery = useListContactOptions(contactOptionsParams, {
+    query: {
+      queryKey: getListContactOptionsQueryKey(contactOptionsParams),
+      enabled: Boolean(viewingList),
+    },
+  });
   const lists = (query.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts ?? [];
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
@@ -693,34 +730,25 @@ export function ListsPage() {
     }
     return grouped;
   }, [campaigns]);
-  const viewingContacts = viewingList
-    ? contacts
-        .filter(contact => contact.listIds.includes(viewingList.id))
-        .sort((left, right) => left.email.localeCompare(right.email))
-    : [];
-  const availableContacts = viewingList
-    ? contacts
-        .filter(contact => !contact.listIds.includes(viewingList.id))
-        .filter(contact => {
-          const search = contactSearch.trim().toLowerCase();
-          return !search || [contact.firstName, contact.lastName, contact.name, contact.email, contact.companyName]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(search);
-        })
-        .sort((left, right) => left.email.localeCompare(right.email))
-    : [];
+  const viewingContacts = contacts;
+  const availableContacts = contactOptionsQuery.data?.contacts ?? [];
+  useEffect(() => {
+    if (contactsQuery.data && contactsQuery.data.page !== memberPage) {
+      setMemberPage(contactsQuery.data.page);
+    }
+  }, [contactsQuery.data?.page, memberPage]);
   const refresh = () => Promise.all([
     qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }),
     qc.invalidateQueries({ queryKey: getListContactsQueryKey() }),
+    qc.invalidateQueries({ queryKey: getListContactOptionsQueryKey() }),
     qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }),
   ]);
   const openListContacts = (list: ContactList) => {
     setViewingList(list);
     setContactSearch('');
+    setDebouncedContactSearch('');
+    setMemberPage(1);
     setMembershipFeedback(null);
-    void contactsQuery.refetch();
   };
   const toggleCampaignList = (listId: string) => setOpenCampaignLists(current => {
     const next = new Set(current);
@@ -728,9 +756,9 @@ export function ListsPage() {
     else next.add(listId);
     return next;
   });
-  const addContactToList = async (contact: (typeof contacts)[number]) => {
+  const addContactToList = async (contact: ContactOption) => {
     const list = viewingList;
-    if (!list || contactsQuery.isFetching || contact.listIds.includes(list.id)) return;
+    if (!list || contactOptionsQuery.isFetching || contact.listIds.includes(list.id)) return;
     setPendingMembershipIds(current => new Set(current).add(contact.id));
     setMembershipFeedback(null);
     try {
@@ -768,12 +796,12 @@ export function ListsPage() {
     });
   };
   const openCreate = () => { setEditing(null); setName(''); };
-  return <QueryState loading={query.isLoading || contactsQuery.isLoading} error={query.isError || contactsQuery.isError} retry={() => { void query.refetch(); void contactsQuery.refetch(); }} label="contact lists"><>
+  return <QueryState loading={query.isLoading} error={query.isError} retry={() => { void query.refetch(); }} label="contact lists"><>
     <Heading eyebrow="AUDIENCE / LISTS" title="Contact lists" detail="Build focused audiences, control campaign eligibility, and keep every list easy to audit." action={<Button testId="button-create-list" onClick={openCreate}><CirclePlus className="h-4 w-4"/>Create list</Button>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
-     <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Total lists</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{lists.length}</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">Active lists</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{lists.filter(l => l.active).length}</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f0fc', borderColor: '#e1dcf4' }}><div className="text-[11px] text-[#6f6692]">Contacts in lists</div><div className="display mt-2 text-[26px] font-bold text-[#6352a0]">{contacts.filter(c => c.listIds.length > 0).length}</div></div></div>
+     <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Total lists</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{lists.length}</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">Active lists</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{lists.filter(l => l.active).length}</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f0fc', borderColor: '#e1dcf4' }}><div className="text-[11px] text-[#6f6692]">List memberships</div><div className="display mt-2 text-[26px] font-bold text-[#6352a0]">{lists.reduce((total, list) => total + list.contactCount, 0).toLocaleString()}</div></div></div>
     {lists.length ? <div className="space-y-3">{lists.map((list, index) => {
-      const memberCount = contacts.filter(c => c.listIds.includes(list.id)).length;
+      const memberCount = list.contactCount;
       const listCampaigns = campaignsByList.get(list.id) || [];
       const campaignsOpen = openCampaignLists.has(list.id);
       const campaignsUnavailable = campaignsQuery.isError && campaignsQuery.data === undefined;
@@ -830,32 +858,35 @@ export function ListsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-list" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-list" disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save list' : 'Create list'}</Button></div>
       </form>
     </Modal>}
-    {viewingList && <Modal wide title={`Manage contacts · ${viewingList.name}`} subtitle={`${viewingContacts.length.toLocaleString()} contact${viewingContacts.length === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
+    {viewingList && <Modal wide title={`Manage contacts · ${viewingList.name}`} subtitle={`${(contactsQuery.data?.total ?? viewingList.contactCount).toLocaleString()} contact${(contactsQuery.data?.total ?? viewingList.contactCount) === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
       <section className="mb-4 rounded-md border border-[#e3e7eb] bg-[#fafbfc] p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div><h3 className="text-[12px] font-semibold text-[#344154]">Add existing contacts</h3><p className="mt-1 text-[10px] text-[#7b8794]">Choose a contact to add it to this list. Existing list memberships are preserved.</p></div>
-          <span className="text-[10px] text-[#7b8794]">{contacts.filter(contact => !contact.listIds.includes(viewingList.id)).length} available</span>
+          <span className="text-[10px] text-[#7b8794]">{(contactOptionsQuery.data?.total ?? 0).toLocaleString()} available</span>
         </div>
         <label className="relative mt-3 block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a95a2]"/>
           <input data-testid={`input-search-list-contacts-${viewingList.id}`} aria-label="Search contacts to add" className={`${inputClass} h-9 pl-9 text-[12px]`} type="search" placeholder="Search by name, email, or company" value={contactSearch} onChange={event => setContactSearch(event.target.value)}/>
         </label>
         {membershipFeedback && <p role={membershipFeedback.kind === 'error' ? 'alert' : 'status'} data-testid="status-list-membership" className={`mt-3 rounded-md border px-3 py-2 text-[11px] ${membershipFeedback.kind === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{membershipFeedback.text}</p>}
-        {contactsQuery.isFetching && <p className="mt-3 text-[10px] text-[#7b8794]">Refreshing contacts…</p>}
-        {availableContacts.length ? <div className="mt-3 max-h-48 divide-y divide-[#edf0f2] overflow-y-auto rounded-md border border-[#e7ebef] bg-white">
+        {contactOptionsQuery.isLoading ? <p className="mt-3 text-[10px] text-[#7b8794]">Loading matching contacts…</p>
+          : contactOptionsQuery.isError ? <div role="alert" className="mt-3 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>Contacts could not be searched.</span><Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-retry-list-contact-options" onClick={() => void contactOptionsQuery.refetch()}>Retry</Button></div>
+        : availableContacts.length ? <div className="mt-3 max-h-48 divide-y divide-[#edf0f2] overflow-y-auto rounded-md border border-[#e7ebef] bg-white">
           {availableContacts.map(contact => {
             const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
             const pending = pendingMembershipIds.has(contact.id);
             return <div key={contact.id} data-testid={`row-add-contact-to-list-${contact.id}`} className="flex items-center gap-3 px-3 py-2.5">
               <div className="min-w-0 flex-1"><div className="truncate text-[11px] font-semibold text-[#29384a]">{displayName}</div><div className="truncate text-[10px] text-[#7c8794]">{contact.email}{contact.companyName ? ` · ${contact.companyName}` : ''}</div></div>
-              <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId={`button-add-contact-to-list-${contact.id}`} disabled={pending || contactsQuery.isFetching} onClick={() => void addContactToList(contact)}>{pending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <CirclePlus className="h-3.5 w-3.5"/>}{pending ? 'Adding' : 'Add'}</Button>
+              <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId={`button-add-contact-to-list-${contact.id}`} disabled={pending || contactOptionsQuery.isFetching} onClick={() => void addContactToList(contact)}>{pending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <CirclePlus className="h-3.5 w-3.5"/>}{pending ? 'Adding' : 'Add'}</Button>
             </div>;
           })}
-        </div> : contacts.length === 0 ? <div className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center"><p className="text-[11px] text-[#7b8794]">No contacts are in this workspace yet.</p><Button variant="outline" className="mt-3" testId="button-go-to-contacts-to-create" onClick={() => { setViewingList(null); setLocation('/contacts'); }}>Go to Contacts</Button></div> : <p className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center text-[11px] text-[#7b8794]">{contactSearch.trim() ? 'No contacts match your search.' : 'All workspace contacts already belong to this list.'}</p>}
+        </div> : (contactOptionsQuery.data?.total ?? 0) === 0 && !contactSearch.trim() && contactsQuery.data?.workspaceTotal === 0 ? <div className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center"><p className="text-[11px] text-[#7b8794]">No contacts are in this workspace yet.</p><Button variant="outline" className="mt-3" testId="button-go-to-contacts-to-create" onClick={() => { setViewingList(null); setLocation('/contacts'); }}>Go to Contacts</Button></div> : <p className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center text-[11px] text-[#7b8794]">{contactSearch.trim() ? 'No contacts match your search.' : 'All workspace contacts already belong to this list.'}</p>}
       </section>
       <section>
         <h3 className="mb-2 text-[12px] font-semibold text-[#344154]">Contacts in this list</h3>
-      {viewingContacts.length ? <div className="max-h-[36vh] overflow-y-auto rounded-md border border-[#e7ebef]">
+      {contactsQuery.isLoading ? <p className="text-[11px] text-[#7b8794]">Loading list members…</p>
+        : contactsQuery.isError ? <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>List members could not be loaded.</span><Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-retry-list-members" onClick={() => void contactsQuery.refetch()}>Retry</Button></div>
+      : viewingContacts.length ? <div className="max-h-[36vh] overflow-y-auto rounded-md border border-[#e7ebef]">
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-3 border-b border-[#e7ebef] bg-[#f8fafb] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-[#7e8996]"><span>Contact</span><span>Email</span><span>Status</span></div>
         {viewingContacts.map(contact => {
           const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
@@ -867,6 +898,13 @@ export function ListsPage() {
         })}
       </div> : <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-6 text-center">
         <Users className="mx-auto h-5 w-5 text-[#7f8ea0]"/><p className="mt-2 text-[12px] font-semibold text-[#344154]">No contacts in this list yet</p><p className="mt-1 text-[10px] text-[#7b8794]">Use the search above to add contacts from your workspace.</p>
+      </div>}
+      {(contactsQuery.data?.pageCount ?? 0) > 1 && <div className="mt-3 flex items-center justify-between">
+        <span className="text-[10px] text-[#788392]">Page {contactsQuery.data!.page} of {contactsQuery.data!.pageCount.toLocaleString()}</span>
+        <div className="flex gap-2">
+          <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-list-members-previous-page" disabled={memberPage <= 1 || contactsQuery.isFetching} onClick={() => setMemberPage(current => Math.max(1, current - 1))}><ArrowLeft className="h-3.5 w-3.5"/>Previous</Button>
+          <Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-list-members-next-page" disabled={memberPage >= contactsQuery.data!.pageCount || contactsQuery.isFetching} onClick={() => setMemberPage(current => current + 1)}>Next<ArrowRight className="h-3.5 w-3.5"/></Button>
+        </div>
       </div>}
       </section>
     </Modal>}
@@ -889,7 +927,7 @@ const blankCampaign: CampaignForm = { name: '', objective: '', subject: '', text
 export function CampaignsPage() {
   const [, setLocation] = useLocation();
   const subjectInputRef = useRef<HTMLInputElement>(null);
-  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const contactsQuery = useListContacts();
+  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const previewCampaign = usePreviewCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -905,7 +943,15 @@ export function CampaignsPage() {
   const [queueStartError, setQueueStartError] = useState<string | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
-  const contacts = contactsQuery.data?.contacts || [];
+  const sampleContactsParams = { limit: 100, listIds: form.listIds, subscribed: true };
+  const contactsQuery = useListContactOptions(sampleContactsParams, {
+    query: {
+      queryKey: getListContactOptionsQueryKey(sampleContactsParams),
+      enabled: form.listIds.length > 0,
+      staleTime: 30_000,
+    },
+  });
+  const contacts = contactsQuery.data?.contacts ?? [];
   const activeLists = lists.filter(list => list.active);
   const filteredCampaignLists = useMemo(() => {
     const query = campaignListSearch.trim().toLowerCase();
@@ -955,7 +1001,7 @@ export function CampaignsPage() {
     const eligible = contacts
       .filter(contact => contact.subscribed && contact.listIds.some(listId => listPriority.has(listId)))
       .sort((left, right) => {
-        const priority = (contact: ContactDirectoryItem) => Math.min(
+        const priority = (contact: ContactOption) => Math.min(
           ...contact.listIds.map(listId => listPriority.get(listId) ?? Number.MAX_SAFE_INTEGER),
         );
         const listOrder = priority(left) - priority(right);
@@ -972,6 +1018,11 @@ export function CampaignsPage() {
       return true;
     });
   }, [contacts, form.listIds]);
+  useEffect(() => {
+    if (sampleContactId && !eligibleSampleContacts.some(contact => contact.id === sampleContactId)) {
+      setSampleContactId('');
+    }
+  }, [eligibleSampleContacts, sampleContactId]);
   const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subject, form.textBody, form.htmlBody]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
@@ -1192,7 +1243,7 @@ export function CampaignsPage() {
          <section className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
             <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the current unsaved subject and message using a subscribed contact in any selected list.</p></div>
            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="min-w-0 flex-1"><span className={labelClass}>Sample contact</span><select data-testid="select-campaign-preview-contact" className={inputClass} value={sampleContactId} onChange={e => setSampleContactId(e.target.value)} disabled={!form.listIds.length || contactsQuery.isLoading}>
+               <label className="min-w-0 flex-1"><span className={labelClass}>Sample contact</span><select data-testid="select-campaign-preview-contact" className={inputClass} value={sampleContactId} onChange={e => setSampleContactId(e.target.value)} disabled={!form.listIds.length || contactsQuery.isLoading}>
                <option value="">{contactsQuery.isLoading ? 'Loading contacts…' : 'Choose a subscribed contact'}</option>
                {eligibleSampleContacts.map(contact => <option key={contact.id} value={contact.id}>{[contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email} · {contact.email}</option>)}
              </select></label>
@@ -1202,6 +1253,7 @@ export function CampaignsPage() {
            </div>
            {contactsQuery.isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>We couldn’t load contacts for the preview.</span><Button variant="outline" testId="button-retry-preview-contacts" onClick={() => void contactsQuery.refetch()}>Retry</Button></div>}
             {!contactsQuery.isLoading && !contactsQuery.isError && form.listIds.length > 0 && eligibleSampleContacts.length === 0 && <p className="text-[11px] text-[#8a5a31]">These lists have no subscribed contacts available to preview.</p>}
+            {(contactsQuery.data?.total ?? 0) > eligibleSampleContacts.length && <p className="text-[10px] text-[#788392]">Showing the first {eligibleSampleContacts.length} of {contactsQuery.data?.total.toLocaleString()} matching contacts. Select fewer lists to narrow the sample choices.</p>}
            {visiblePreviewError && <p role="alert" className="text-[11px] text-[#99501e]">{visiblePreviewError}</p>}
            {visiblePreview && <div data-testid="panel-campaign-preview" className="space-y-4 rounded-md border border-[#e2e7ed] bg-white p-4">
              <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Resolved subject</div><p data-testid="text-campaign-preview-subject" className="mt-1 break-words text-[13px] font-semibold text-[#29384a]">{visiblePreview.subject}</p></div>

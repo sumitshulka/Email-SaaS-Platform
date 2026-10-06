@@ -63,6 +63,7 @@ import type {
   ContactFieldOptionCollection,
   ContactFieldOptionInput,
   ContactFieldOptionResponse,
+  ContactFilterOptions,
   ContactImportInput,
   ContactImportResponse,
   ContactImportResult,
@@ -70,6 +71,7 @@ import type {
   ContactList,
   ContactListInput,
   ContactListUpdate,
+  ContactOptionsResponse,
   ContactUpdate,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
@@ -88,6 +90,8 @@ import type {
   ListAdminFinancePaymentsParams,
   ListAdminSupportTicketsParams,
   ListAdminUsersParams,
+  ListContactOptionsParams,
+  ListContactsParams,
   LoginInput,
   MessageResponse,
   Microsoft365TraceBackfillInput,
@@ -2618,20 +2622,27 @@ export const useBackfillMicrosoft365Traces = <TError = ErrorType<ApiError>,
       return useMutation(getBackfillMicrosoft365TracesMutationOptions(options));
     }
 
-export const getListContactsUrl = () => {
+export const getListContactsUrl = (params?: ListContactsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/contacts`
+  return stringifiedParams.length > 0 ? `/api/contacts?${stringifiedParams}` : `/api/contacts`
 }
 
 /**
- * @summary List contacts and quota for the authenticated tenant
+ * @summary Return a filtered page of contacts and quota for the authenticated tenant
  */
-export const listContacts = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactCollection> => {
+export const listContacts = async (params?: ListContactsParams, options?: Parameters<typeof customFetch>[1]): Promise<ContactCollection> => {
 
-  return customFetch<ContactCollection>(getListContactsUrl(),
+  return customFetch<ContactCollection>(getListContactsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2644,23 +2655,23 @@ export const listContacts = async ( options?: Parameters<typeof customFetch>[1])
 
 
 
-export const getListContactsQueryKey = () => {
+export const getListContactsQueryKey = (params?: ListContactsParams,) => {
     return [
-    `/api/contacts`
+    `/api/contacts`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListContactsQueryOptions = <TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListContactsQueryOptions = <TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>(params?: ListContactsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListContactsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListContactsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContacts>>> = ({ signal }) => listContacts({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContacts>>> = ({ signal }) => listContacts(params, { signal, ...requestOptions });
 
 
 
@@ -2674,15 +2685,184 @@ export type ListContactsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List contacts and quota for the authenticated tenant
+ * @summary Return a filtered page of contacts and quota for the authenticated tenant
  */
 
 export function useListContacts<TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListContactsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListContactsQueryOptions(options)
+  const queryOptions = getListContactsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListContactOptionsUrl = (params?: ListContactOptionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const explodeParameters = ["listIds"];
+
+    if (Array.isArray(value) && explodeParameters.includes(key)) {
+      value.forEach((v) => {
+        normalizedParams.append(key, v === null ? 'null' : String(v));
+      });
+      return;
+    }
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/contacts/options?${stringifiedParams}` : `/api/contacts/options`
+}
+
+/**
+ * @summary Return a bounded set of contacts for a picker
+ */
+export const listContactOptions = async (params?: ListContactOptionsParams, options?: Parameters<typeof customFetch>[1]): Promise<ContactOptionsResponse> => {
+
+  return customFetch<ContactOptionsResponse>(getListContactOptionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactOptionsQueryKey = (params?: ListContactOptionsParams,) => {
+    return [
+    `/api/contacts/options`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListContactOptionsQueryOptions = <TData = Awaited<ReturnType<typeof listContactOptions>>, TError = ErrorType<ApiError>>(params?: ListContactOptionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactOptionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactOptions>>> = ({ signal }) => listContactOptions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof listContactOptions>>>
+export type ListContactOptionsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Return a bounded set of contacts for a picker
+ */
+
+export function useListContactOptions<TData = Awaited<ReturnType<typeof listContactOptions>>, TError = ErrorType<ApiError>>(
+ params?: ListContactOptionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactOptionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetContactFilterOptionsUrl = () => {
+
+
+
+
+  return `/api/contacts/filter-options`
+}
+
+/**
+ * @summary Return distinct CRM filter values for the authenticated tenant
+ */
+export const getContactFilterOptions = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactFilterOptions> => {
+
+  return customFetch<ContactFilterOptions>(getGetContactFilterOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactFilterOptionsQueryKey = () => {
+    return [
+    `/api/contacts/filter-options`
+    ] as const;
+    }
+
+
+export const getGetContactFilterOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getContactFilterOptions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactFilterOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactFilterOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactFilterOptions>>> = ({ signal }) => getContactFilterOptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactFilterOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactFilterOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getContactFilterOptions>>>
+export type GetContactFilterOptionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Return distinct CRM filter values for the authenticated tenant
+ */
+
+export function useGetContactFilterOptions<TData = Awaited<ReturnType<typeof getContactFilterOptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactFilterOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactFilterOptionsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2700,7 +2880,7 @@ export const getCreateContactUrl = () => {
 
 
 
-  return `/api/contacts`
+  return `/api/contacts/filter-options`
 }
 
 /**

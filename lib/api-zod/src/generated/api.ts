@@ -778,8 +778,43 @@ export const BackfillMicrosoft365TracesResponse = zod.object({
 
 
 /**
- * @summary List contacts and quota for the authenticated tenant
+ * @summary Return a filtered page of contacts and quota for the authenticated tenant
  */
+export const listContactsQueryPageDefault = 1;
+
+export const listContactsQueryPageSizeDefault = 50;
+export const listContactsQueryPageSizeMax = 100;
+
+export const listContactsQuerySearchMax = 200;
+
+export const listContactsQueryStatusDefault = `all`;
+export const listContactsQueryListIdMax = 64;
+
+export const listContactsQueryCompanyIdMax = 64;
+
+export const listContactsQueryLifecycleStageMax = 80;
+
+export const listContactsQueryLeadStatusMax = 80;
+
+export const listContactsQueryLeadSourceMax = 120;
+
+export const listContactsQueryAddedWithinDefault = `any`;
+export const listContactsQueryIncludeHistoryDefault = true;
+
+export const ListContactsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(listContactsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listContactsQueryPageSizeMax).default(listContactsQueryPageSizeDefault),
+  "search": zod.coerce.string().max(listContactsQuerySearchMax).optional(),
+  "status": zod.enum(['all', 'subscribed', 'unsubscribed']).default(listContactsQueryStatusDefault),
+  "listId": zod.coerce.string().max(listContactsQueryListIdMax).optional(),
+  "companyId": zod.coerce.string().max(listContactsQueryCompanyIdMax).optional(),
+  "lifecycleStage": zod.coerce.string().max(listContactsQueryLifecycleStageMax).optional(),
+  "leadStatus": zod.coerce.string().max(listContactsQueryLeadStatusMax).optional(),
+  "leadSource": zod.coerce.string().max(listContactsQueryLeadSourceMax).optional(),
+  "addedWithin": zod.enum(['any', '7', '30', '90']).default(listContactsQueryAddedWithinDefault),
+  "includeHistory": zod.coerce.boolean().default(listContactsQueryIncludeHistoryDefault)
+})
+
 export const listContactsResponseContactsItemOneCompanyOneCompanyNameMax = 200;
 
 export const listContactsResponseContactsItemOneCompanyOneCompanyWebsiteUrlMax = 2048;
@@ -872,6 +907,17 @@ export const listContactsResponseQuotaRemainingMin = 0;
 
 
 
+export const listContactsResponsePageSizeMax = 100;
+
+export const listContactsResponseTotalMin = 0;
+
+export const listContactsResponsePageCountMin = 0;
+
+export const listContactsResponseWorkspaceTotalMin = 0;
+
+export const listContactsResponseWorkspaceSubscribedMin = 0;
+
+
 
 export const ListContactsResponse = zod.object({
   "contacts": zod.array(zod.object({
@@ -961,7 +1007,85 @@ export const ListContactsResponse = zod.object({
   "uploadSettings": zod.object({
   "maxFileSizeMb": zod.number().int().min(1),
   "allowedFileTypes": zod.array(zod.string())
+}),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(listContactsResponsePageSizeMax),
+  "total": zod.number().int().min(listContactsResponseTotalMin),
+  "pageCount": zod.number().int().min(listContactsResponsePageCountMin),
+  "workspaceTotal": zod.number().int().min(listContactsResponseWorkspaceTotalMin),
+  "workspaceSubscribed": zod.number().int().min(listContactsResponseWorkspaceSubscribedMin)
 })
+
+
+/**
+ * @summary Return a bounded set of contacts for a picker
+ */
+export const listContactOptionsQuerySearchMax = 200;
+
+export const listContactOptionsQueryLimitDefault = 30;
+export const listContactOptionsQueryLimitMax = 100;
+
+export const listContactOptionsQueryListIdMax = 64;
+
+export const listContactOptionsQueryExcludeListIdMax = 64;
+
+export const listContactOptionsQueryCompanyIdMax = 64;
+
+export const listContactOptionsQueryListIdsMax = 100;
+
+
+
+export const ListContactOptionsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listContactOptionsQuerySearchMax).optional(),
+  "limit": zod.coerce.number().int().min(1).max(listContactOptionsQueryLimitMax).default(listContactOptionsQueryLimitDefault),
+  "listId": zod.coerce.string().max(listContactOptionsQueryListIdMax).optional(),
+  "excludeListId": zod.coerce.string().max(listContactOptionsQueryExcludeListIdMax).optional(),
+  "companyId": zod.coerce.string().max(listContactOptionsQueryCompanyIdMax).optional(),
+  "subscribed": zod.coerce.boolean().optional(),
+  "listIds": zod.array(zod.coerce.string().uuid()).max(listContactOptionsQueryListIdsMax).optional()
+})
+
+export const listContactOptionsResponseTotalMin = 0;
+
+export const listContactOptionsResponseLimitMax = 100;
+
+
+
+export const ListContactOptionsResponse = zod.object({
+  "contacts": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyId": zod.string().uuid().nullable(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "subscribed": zod.boolean(),
+  "listIds": zod.array(zod.string().uuid()),
+  "createdAt": zod.coerce.date(),
+  "companyWebsiteUrl": zod.string().nullable(),
+  "companyDomain": zod.string().nullable(),
+  "companyIndustry": zod.string().nullable(),
+  "companySize": zod.string().nullable(),
+  "companyRevenueRange": zod.string().nullable(),
+  "companyDescription": zod.string().nullable(),
+  "companyPhoneNumber": zod.string().nullable(),
+  "companyLinkedinUrl": zod.string().nullable(),
+  "companyLocation": zod.string().nullable()
+})),
+  "total": zod.number().int().min(listContactOptionsResponseTotalMin),
+  "limit": zod.number().int().min(1).max(listContactOptionsResponseLimitMax)
+})
+
+
+/**
+ * @summary Return distinct CRM filter values for the authenticated tenant
+ */
+export const GetContactFilterOptionsResponse = zod.object({
+  "lifecycleStages": zod.array(zod.string()),
+  "leadStatuses": zod.array(zod.string()),
+  "leadSources": zod.array(zod.string())
 })
 
 

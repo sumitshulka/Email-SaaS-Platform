@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { ArrowRight, CircleAlert, ContactRound, Download, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, CircleAlert, ContactRound, Download, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link } from "wouter";
 import {
@@ -53,7 +53,11 @@ function downloadRejectedContactsCsv(csv: string) {
 
 export default function ContactsPage() {
   const queryClient = useQueryClient();
-  const contactsQuery = useListContacts();
+  const [page, setPage] = useState(1);
+  const contactsParams = { page, pageSize: 50, includeHistory: false };
+  const contactsQuery = useListContacts(contactsParams, {
+    query: { queryKey: getListContactsQueryKey(contactsParams) },
+  });
   const contactListsQuery = useListContactLists();
   const contactFieldOptionsQuery = useGetContactFieldOptions();
   const createContact = useCreateContact();
@@ -107,6 +111,10 @@ export default function ContactsPage() {
     type.trim().toLowerCase().replace(/^\./, ""),
   );
   const csvImportEnabled = allowedFileTypes.includes("csv");
+
+  useEffect(() => {
+    if (data && page > data.pageCount && data.pageCount > 0) setPage(data.pageCount);
+  }, [data, page]);
 
   const selectCsv = (file?: File) => {
     setUploadError(null);
@@ -260,7 +268,7 @@ export default function ContactsPage() {
           <div className="flex items-center justify-between border-b border-[#e9edf1] px-5 py-4">
             <div>
               <h2 className="text-[14px] font-bold text-[#1d2d40]">Saved contacts</h2>
-              <p className="mt-1 text-[11px] text-[#788696]">{data.contacts.length.toLocaleString()} saved</p>
+              <p className="mt-1 text-[11px] text-[#788696]">{data.total.toLocaleString()} saved · page {data.page} of {Math.max(1, data.pageCount).toLocaleString()}</p>
             </div>
           </div>
           {data.contacts.length === 0 ? (
@@ -300,6 +308,15 @@ export default function ContactsPage() {
                   </button>
                 </article>
               ))}
+            </div>
+          )}
+          {data.pageCount > 1 && (
+            <div className="flex items-center justify-between border-t border-[#e9edf1] px-5 py-3">
+              <span className="text-[10px] text-[#788696]">Page {data.page} of {data.pageCount.toLocaleString()} · {data.total.toLocaleString()} contacts</span>
+              <div className="flex gap-2">
+                <button type="button" data-testid="button-contacts-previous-page" disabled={data.page <= 1 || contactsQuery.isFetching} onClick={() => setPage(data.page - 1)} className="inline-flex h-8 items-center gap-1 rounded-md border border-[#dce2e8] px-2.5 text-[10px] font-semibold text-[#4d5e70] disabled:opacity-45"><ArrowLeft className="h-3.5 w-3.5"/>Previous</button>
+                <button type="button" data-testid="button-contacts-next-page" disabled={data.page >= data.pageCount || contactsQuery.isFetching} onClick={() => setPage(data.page + 1)} className="inline-flex h-8 items-center gap-1 rounded-md border border-[#dce2e8] px-2.5 text-[10px] font-semibold text-[#4d5e70] disabled:opacity-45">Next<ArrowRight className="h-3.5 w-3.5"/></button>
+              </div>
             </div>
           )}
         </div>

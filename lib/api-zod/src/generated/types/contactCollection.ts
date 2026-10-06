@@ -13,4 +13,19 @@ export interface ContactCollection {
   contacts: ContactDirectoryItem[];
   quota: ContactQuota;
   uploadSettings: ContactUploadSettings;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  pageCount: number;
+  /** @minimum 0 */
+  workspaceTotal: number;
+  /** @minimum 0 */
+  workspaceSubscribed: number;
 }

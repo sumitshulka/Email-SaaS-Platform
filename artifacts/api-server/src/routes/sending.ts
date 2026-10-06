@@ -6,10 +6,14 @@ import {
   eq,
   gte,
   gt,
+  ilike,
   inArray,
+  isNull,
   lte,
   max,
   ne,
+  notInArray,
+  or,
   sql,
   sum,
 } from "drizzle-orm";
@@ -31,6 +35,7 @@ import {
   GetContactResponse,
   GetContactEmailHistoryParams,
   GetContactEmailHistoryResponse,
+  GetContactFilterOptionsResponse,
   DeleteCampaignParams,
   DeleteCampaignResponse,
   DeleteContactListParams,
@@ -45,7 +50,10 @@ import {
   ImportContactsResponse,
   ListCampaignsResponse,
   ListContactListsResponse,
+  ListContactOptionsQueryParams,
+  ListContactOptionsResponse,
   ListContactSegmentsResponse,
+  ListContactsQueryParams,
   ListContactsResponse,
   PreviewCampaignBody,
   PreviewCampaignResponse,
@@ -439,12 +447,22 @@ async function getContactPayload(
   };
 }
 
-async function getTenantContactEmailHistory(userId: string, contactId?: string) {
+async function getTenantContactEmailHistory(
+  userId: string,
+  contactFilter?: string | readonly string[],
+) {
   const filters = [
     eq(emailCampaignRecipientsTable.userId, userId),
     gt(emailCampaignRecipientsTable.attempts, 0),
-    ...(contactId ? [eq(emailCampaignRecipientsTable.contactId, contactId)] : []),
+    ...(typeof contactFilter === "string"
+      ? [eq(emailCampaignRecipientsTable.contactId, contactFilter)]
+      : contactFilter
+        ? contactFilter.length
+          ? [inArray(emailCampaignRecipientsTable.contactId, [...contactFilter])]
+          : []
+        : []),
   ];
+  if (Array.isArray(contactFilter) && contactFilter.length === 0) return [];
 
   const history = await db
     .select({
@@ -1064,26 +1082,219 @@ router.post(
   },
 );
 
+function escapeLikeTerm(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function contactSearchExpressions(search: string, includeCrmFields = true) {
+  const searchableColumns = [
+    contactsTable.name,
+    contactsTable.email,
+    contactsTable.firstName,
+    contactsTable.lastName,
+    contactsTable.companyName,
+    contactsTable.jobTitle,
+    contactsTable.department,
+    contactsTable.seniority,
+    contactsTable.phoneNumber,
+    contactsTable.mobilePhone,
+    contactsTable.linkedinUrl,
+    contactsTable.websiteUrl,
+    contactsTable.twitterUrl,
+    contactsTable.facebookUrl,
+    contactsTable.instagramUrl,
+    contactsTable.location,
+    contactsTable.preferredLanguage,
+    contactsTable.timeZone,
+    contactsTable.lifecycleStage,
+    contactsTable.leadStatus,
+    contactsTable.leadSource,
+    contactsTable.companyIndustry,
+    contactsTable.companyDomain,
+  ];
+  const columns = includeCrmFields
+    ? searchableColumns
+    : [
+        contactsTable.name,
+        contactsTable.email,
+        contactsTable.firstName,
+        contactsTable.lastName,
+        contactsTable.companyName,
+        contactsTable.jobTitle,
+      ];
+  return search
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((term) => {
+      const pattern = `%${escapeLikeTerm(term)}%`;
+      return or(...columns.map((column) => ilike(column, pattern)))!;
+    });
+}
+
+function isContactFilterUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+function parseQueryBoolean(value: unknown): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (value === "true" || value === true) return true;
+  if (value === "false" || value === false) return false;
+  return undefined;
+}
+
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = ListContactsQueryParams.safeParse({
+    ...req.query,
+    ...(req.query.includeHistory !== undefined
+      ? { includeHistory: parseQueryBoolean(req.query.includeHistory) }
+      : {}),
+  });
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Enter valid contact filters and pagination values.",
+      code: "INVALID_INPUT",
+    });
+    return;
+  }
+  const params = parsed.data;
+  for (const id of [params.listId, params.companyId]) {
+    if (id && id !== "all" && id !== "__none__" && !isContactFilterUuid(id)) {
+      res.status(400).json({
+        error: "A contact filter contains an invalid identifier.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+  }
+
   const userId = req.authUser!.id;
-  const [contacts, quota, memberships, emailHistory, companies] = await Promise.all([
+  const conditions = [eq(contactsTable.userId, userId)];
+  if (params.status === "subscribed") {
+    conditions.push(eq(contactsTable.subscribed, true));
+  } else if (params.status === "unsubscribed") {
+    conditions.push(eq(contactsTable.subscribed, false));
+  }
+  if (params.listId && params.listId !== "all") {
+    const members = db
+      .select({ contactId: contactListMembersTable.contactId })
+      .from(contactListMembersTable)
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          ...(params.listId === "__none__"
+            ? []
+            : [eq(contactListMembersTable.listId, params.listId)]),
+        ),
+      );
+    conditions.push(
+      params.listId === "__none__"
+        ? notInArray(contactsTable.id, members)
+        : inArray(contactsTable.id, members),
+    );
+  }
+  if (params.companyId === "__none__") {
+    conditions.push(
+      and(
+        isNull(contactsTable.companyId),
+        or(isNull(contactsTable.companyName), eq(contactsTable.companyName, "")),
+      )!,
+    );
+  } else if (params.companyId && params.companyId !== "all") {
+    conditions.push(eq(contactsTable.companyId, params.companyId));
+  }
+  for (const [value, column] of [
+    [params.lifecycleStage, contactsTable.lifecycleStage],
+    [params.leadStatus, contactsTable.leadStatus],
+    [params.leadSource, contactsTable.leadSource],
+  ] as const) {
+    if (!value || value === "all") continue;
+    conditions.push(
+      value === "__unset__"
+        ? or(isNull(column), eq(column, ""))!
+        : eq(column, value),
+    );
+  }
+  if (params.addedWithin && params.addedWithin !== "any") {
+    const days = Number(params.addedWithin);
+    conditions.push(
+      gte(
+        contactsTable.createdAt,
+        new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+      ),
+    );
+  }
+  conditions.push(...contactSearchExpressions(params.search ?? ""));
+  const where = and(...conditions);
+  const pageSize = params.pageSize;
+  const [matched, quota, workspaceSubscribedRows] = await Promise.all([
     db
-      .select()
+      .select({ value: count() })
       .from(contactsTable)
-      .where(eq(contactsTable.userId, userId))
-      .orderBy(desc(contactsTable.createdAt)),
+      .where(where),
     getContactQuota(userId),
     db
-      .select({
-        contactId: contactListMembersTable.contactId,
-        listId: contactListMembersTable.listId,
-      })
-      .from(contactListMembersTable)
-      .where(eq(contactListMembersTable.userId, userId)),
-    getTenantContactEmailHistory(userId),
-    db.select().from(companiesTable).where(eq(companiesTable.userId, userId)),
+      .select({ value: count() })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.userId, userId),
+          eq(contactsTable.subscribed, true),
+        ),
+      ),
   ]);
-  const uploadSettings = await getPlatformSettings();
+  const total = Number(matched[0]?.value ?? 0);
+  const pageCount = Math.ceil(total / pageSize);
+  const page = pageCount ? Math.min(params.page, pageCount) : 1;
+  const contacts = await db
+    .select()
+    .from(contactsTable)
+    .where(where)
+    .orderBy(desc(contactsTable.createdAt), desc(contactsTable.id))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+  const contactIds = contacts.map((contact) => contact.id);
+  const companyIds = [
+    ...new Set(
+      contacts
+        .map((contact) => contact.companyId)
+        .filter((companyId): companyId is string => Boolean(companyId)),
+    ),
+  ];
+  const [memberships, emailHistory, companies, uploadSettings] =
+    await Promise.all([
+      contactIds.length
+        ? db
+            .select({
+              contactId: contactListMembersTable.contactId,
+              listId: contactListMembersTable.listId,
+            })
+            .from(contactListMembersTable)
+            .where(
+              and(
+                eq(contactListMembersTable.userId, userId),
+                inArray(contactListMembersTable.contactId, contactIds),
+              ),
+            )
+        : Promise.resolve([]),
+      params.includeHistory
+        ? getTenantContactEmailHistory(userId, contactIds)
+        : Promise.resolve([]),
+      companyIds.length
+        ? db
+            .select()
+            .from(companiesTable)
+            .where(
+              and(
+                eq(companiesTable.userId, userId),
+                inArray(companiesTable.id, companyIds),
+              ),
+            )
+        : Promise.resolve([]),
+      getPlatformSettings(),
+    ]);
   const listIdsByContact = new Map<string, string[]>();
   for (const membership of memberships) {
     const current = listIdsByContact.get(membership.contactId) ?? [];
@@ -1141,9 +1352,206 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
         maxFileSizeMb: uploadSettings.maxUploadFileSizeMb,
         allowedFileTypes: uploadSettings.allowedContactFileTypes,
       },
+      page,
+      pageSize,
+      total,
+      pageCount,
+      workspaceTotal: quota.used,
+      workspaceSubscribed: Number(workspaceSubscribedRows[0]?.value ?? 0),
     }),
   );
 });
+
+router.get("/contacts/options", requireUserRole, async (req, res): Promise<void> => {
+  const listIds = req.query.listIds;
+  const parsed = ListContactOptionsQueryParams.safeParse({
+    ...req.query,
+    ...(listIds !== undefined
+      ? { listIds: Array.isArray(listIds) ? listIds : [listIds] }
+      : {}),
+    ...(req.query.subscribed !== undefined
+      ? { subscribed: parseQueryBoolean(req.query.subscribed) }
+      : {}),
+  });
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Enter valid contact picker filters.",
+      code: "INVALID_INPUT",
+    });
+    return;
+  }
+  const params = parsed.data;
+  for (const id of [params.listId, params.excludeListId, params.companyId]) {
+    if (id && id !== "__none__" && !isContactFilterUuid(id)) {
+      res.status(400).json({
+        error: "A contact picker filter contains an invalid identifier.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+  }
+  if (params.listIds && new Set(params.listIds).size !== params.listIds.length) {
+    res.status(400).json({
+      error: "Choose each contact list only once.",
+      code: "INVALID_INPUT",
+    });
+    return;
+  }
+
+  const userId = req.authUser!.id;
+  const conditions = [eq(contactsTable.userId, userId)];
+  if (params.subscribed !== undefined) {
+    conditions.push(eq(contactsTable.subscribed, params.subscribed));
+  }
+  if (params.companyId === "__none__") {
+    conditions.push(isNull(contactsTable.companyId));
+  } else if (params.companyId) {
+    conditions.push(eq(contactsTable.companyId, params.companyId));
+  }
+  if (params.listId) {
+    const members = db
+      .select({ contactId: contactListMembersTable.contactId })
+      .from(contactListMembersTable)
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          eq(contactListMembersTable.listId, params.listId),
+        ),
+      );
+    conditions.push(inArray(contactsTable.id, members));
+  }
+  if (params.listIds?.length) {
+    const members = db
+      .select({ contactId: contactListMembersTable.contactId })
+      .from(contactListMembersTable)
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          inArray(contactListMembersTable.listId, params.listIds),
+        ),
+      );
+    conditions.push(inArray(contactsTable.id, members));
+  }
+  if (params.excludeListId) {
+    const members = db
+      .select({ contactId: contactListMembersTable.contactId })
+      .from(contactListMembersTable)
+      .where(
+        and(
+          eq(contactListMembersTable.userId, userId),
+          eq(contactListMembersTable.listId, params.excludeListId),
+        ),
+      );
+    conditions.push(notInArray(contactsTable.id, members));
+  }
+  conditions.push(...contactSearchExpressions(params.search ?? "", false));
+  const where = and(...conditions);
+  const [totalRows, contacts] = await Promise.all([
+    db.select({ value: count() }).from(contactsTable).where(where),
+    db
+      .select({
+        id: contactsTable.id,
+        name: contactsTable.name,
+        email: contactsTable.email,
+        firstName: contactsTable.firstName,
+        lastName: contactsTable.lastName,
+        companyId: contactsTable.companyId,
+        companyName: contactsTable.companyName,
+        jobTitle: contactsTable.jobTitle,
+        subscribed: contactsTable.subscribed,
+        createdAt: contactsTable.createdAt,
+        companyWebsiteUrl: contactsTable.companyWebsiteUrl,
+        companyDomain: contactsTable.companyDomain,
+        companyIndustry: contactsTable.companyIndustry,
+        companySize: contactsTable.companySize,
+        companyRevenueRange: contactsTable.companyRevenueRange,
+        companyDescription: contactsTable.companyDescription,
+        companyPhoneNumber: contactsTable.companyPhoneNumber,
+        companyLinkedinUrl: contactsTable.companyLinkedinUrl,
+        companyLocation: contactsTable.companyLocation,
+      })
+      .from(contactsTable)
+      .where(where)
+      .orderBy(
+        params.companyId === "__none__"
+          ? asc(contactsTable.firstName)
+          : asc(contactsTable.createdAt),
+        asc(contactsTable.lastName),
+        asc(contactsTable.email),
+      )
+      .limit(params.limit),
+  ]);
+  const contactIds = contacts.map((contact) => contact.id);
+  const memberships = contactIds.length
+    ? await db
+        .select({
+          contactId: contactListMembersTable.contactId,
+          listId: contactListMembersTable.listId,
+        })
+        .from(contactListMembersTable)
+        .where(
+          and(
+            eq(contactListMembersTable.userId, userId),
+            inArray(contactListMembersTable.contactId, contactIds),
+          ),
+        )
+    : [];
+  const listIdsByContact = new Map<string, string[]>();
+  for (const membership of memberships) {
+    const current = listIdsByContact.get(membership.contactId) ?? [];
+    current.push(membership.listId);
+    listIdsByContact.set(membership.contactId, current);
+  }
+  res.json(
+    ListContactOptionsResponse.parse({
+      contacts: contacts.map((contact) => ({
+        ...contact,
+        name:
+          [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+          contact.name,
+        listIds: listIdsByContact.get(contact.id) ?? [],
+      })),
+      total: Number(totalRows[0]?.value ?? 0),
+      limit: params.limit,
+    }),
+  );
+});
+
+router.get(
+  "/contacts/filter-options",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const userId = req.authUser!.id;
+    const [stages, statuses, sources] = await Promise.all([
+      db
+        .selectDistinct({ value: contactsTable.lifecycleStage })
+        .from(contactsTable)
+        .where(eq(contactsTable.userId, userId))
+        .orderBy(asc(contactsTable.lifecycleStage)),
+      db
+        .selectDistinct({ value: contactsTable.leadStatus })
+        .from(contactsTable)
+        .where(eq(contactsTable.userId, userId))
+        .orderBy(asc(contactsTable.leadStatus)),
+      db
+        .selectDistinct({ value: contactsTable.leadSource })
+        .from(contactsTable)
+        .where(eq(contactsTable.userId, userId))
+        .orderBy(asc(contactsTable.leadSource)),
+    ]);
+    const values = (rows: Array<{ value: string | null }>) =>
+      rows
+        .map((row) => row.value?.trim())
+        .filter((value): value is string => Boolean(value));
+    res.json(
+      GetContactFilterOptionsResponse.parse({
+        lifecycleStages: values(stages),
+        leadStatuses: values(statuses),
+        leadSources: values(sources),
+      }),
+    );
+  },
+);
 
 router.get(
   "/contacts/:contactId",

@@ -296,11 +296,90 @@ async function installApiFixtures(context, {
       await route.fulfill({ status: 200, json: [filterList] });
       return;
     }
-    if (pathname === '/api/contacts' && method === 'GET') {
+    if (pathname === '/api/contacts/filter-options' && method === 'GET') {
+      const uniqueValues = field => [...new Set(contacts.map(contact => contact[field]).filter(value => typeof value === 'string' && value.trim()))].sort();
       await route.fulfill({
         status: 200,
         json: {
-          contacts,
+          lifecycleStages: uniqueValues('lifecycleStage'),
+          leadStatuses: uniqueValues('leadStatus'),
+          leadSources: uniqueValues('leadSource'),
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/contacts/options' && method === 'GET') {
+      const params = new URL(request.url()).searchParams;
+      const search = (params.get('search') || '').trim().toLowerCase();
+      const listIds = params.getAll('listIds');
+      const limit = Math.min(Number(params.get('limit') || 30), 100);
+      let filtered = contacts.filter(candidate => {
+        if (params.get('companyId') === '__none__' && candidate.companyId) return false;
+        if (params.get('companyId') && params.get('companyId') !== '__none__' && candidate.companyId !== params.get('companyId')) return false;
+        if (params.get('excludeListId') && candidate.listIds.includes(params.get('excludeListId'))) return false;
+        if (params.get('listId') && !candidate.listIds.includes(params.get('listId'))) return false;
+        if (listIds.length && !listIds.some(listId => candidate.listIds.includes(listId))) return false;
+        if (params.get('subscribed') === 'true' && !candidate.subscribed) return false;
+        if (params.get('subscribed') === 'false' && candidate.subscribed) return false;
+        const searchable = [candidate.name, candidate.email, candidate.firstName, candidate.lastName, candidate.companyName, candidate.jobTitle]
+          .filter(Boolean).join(' ').toLowerCase();
+        return search.split(/\s+/).filter(Boolean).every(term => searchable.includes(term));
+      });
+      filtered.sort((left, right) => left.email.localeCompare(right.email));
+      await route.fulfill({
+        status: 200,
+        json: {
+          contacts: filtered.slice(0, limit),
+          total: filtered.length,
+          limit,
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/contacts' && method === 'GET') {
+      const params = new URL(request.url()).searchParams;
+      const search = (params.get('search') || '').trim().toLowerCase();
+      const days = Number(params.get('addedWithin') || 0);
+      const cutoff = days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
+      const filterField = (selected, value) => selected === 'all'
+        || (selected === '__unset__' ? !value?.trim() : selected === value);
+      let filtered = contacts.filter(candidate => {
+        if (params.get('status') === 'subscribed' && !candidate.subscribed) return false;
+        if (params.get('status') === 'unsubscribed' && candidate.subscribed) return false;
+        if (params.get('listId') && params.get('listId') !== 'all'
+          && (params.get('listId') === '__none__' ? candidate.listIds.length > 0 : !candidate.listIds.includes(params.get('listId')))) return false;
+        if (params.get('companyId') && params.get('companyId') !== 'all'
+          && (params.get('companyId') === '__none__' ? candidate.companyId || candidate.companyName?.trim() : candidate.companyId !== params.get('companyId'))) return false;
+        if (!filterField(params.get('lifecycleStage') || 'all', candidate.lifecycleStage)) return false;
+        if (!filterField(params.get('leadStatus') || 'all', candidate.leadStatus)) return false;
+        if (!filterField(params.get('leadSource') || 'all', candidate.leadSource)) return false;
+        if (cutoff !== null && Date.parse(candidate.createdAt) < cutoff) return false;
+        const searchable = [
+          candidate.name, candidate.email, candidate.firstName, candidate.lastName,
+          candidate.companyName, candidate.jobTitle, candidate.department, candidate.seniority,
+          candidate.phoneNumber, candidate.mobilePhone, candidate.linkedinUrl, candidate.websiteUrl,
+          candidate.twitterUrl, candidate.facebookUrl, candidate.instagramUrl, candidate.location,
+          candidate.preferredLanguage, candidate.timeZone, candidate.lifecycleStage,
+          candidate.leadStatus, candidate.leadSource, candidate.companyIndustry, candidate.companyDomain,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return search.split(/\s+/).filter(Boolean).every(term => searchable.includes(term));
+      });
+      filtered.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+      const page = Math.max(1, Number(params.get('page') || 1));
+      const pageSize = Math.min(100, Math.max(1, Number(params.get('pageSize') || 50)));
+      const total = filtered.length;
+      const pageCount = Math.ceil(total / pageSize);
+      const pageOffset = (Math.min(page, Math.max(pageCount, 1)) - 1) * pageSize;
+      await route.fulfill({
+        status: 200,
+        json: {
+          contacts: filtered.slice(pageOffset, pageOffset + pageSize),
+          page: Math.min(page, Math.max(pageCount, 1)),
+          pageSize,
+          total,
+          pageCount,
+          workspaceTotal: contacts.length,
+          workspaceSubscribed: contacts.filter(candidate => candidate.subscribed).length,
           quota: { used: 3, limit: 100, remaining: 97, canAdd: true, requiresSubscription: false },
           uploadSettings: { maxFileSizeMb: 10, allowedFileTypes: ['csv'] },
         },
@@ -387,9 +466,11 @@ describe('company profile review and contact data preservation', { concurrency: 
       await page.screenshot({ path: '/tmp/mailflow-contacts-directory-desktop.png', fullPage: true });
 
       await page.getByTestId('select-contact-list-filter').selectOption(filterList.id);
+      await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 2);
       assert.equal(await rows.count(), 2, 'list membership narrows the directory');
 
       await page.getByTestId('select-contact-status-filter').selectOption('unsubscribed');
+      await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 1);
       assert.equal(await rows.count(), 1, 'subscription status combines with list membership');
       assert.equal(await page.getByTestId('row-contact-browser-filter-customer-id').isVisible(), true);
 
@@ -398,11 +479,14 @@ describe('company profile review and contact data preservation', { concurrency: 
       await page.getByTestId('select-contact-lifecycle-filter').selectOption('Customer');
       await page.getByTestId('select-contact-lead-source-filter').selectOption('Partner');
       await page.getByTestId('input-search-contacts').fill('morgan juniper product partner');
+      await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 1);
       assert.equal(await rows.count(), 1, 'search and CRM fields combine with the other filters');
 
       await page.getByTestId('select-contact-lead-source-filter').selectOption('Referral');
+      await page.getByText('No matching contacts', { exact: true }).waitFor({ state: 'visible' });
       assert.equal(await rows.count(), 0, 'conflicting filter criteria produce an empty result');
       await page.getByTestId('button-clear-contact-filters').click();
+      await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 3);
       assert.equal(await rows.count(), 3, 'clear resets every filter and search term');
       await page.setViewportSize({ width: 390, height: 844 });
       await page.waitForFunction(() => {

@@ -2633,6 +2633,73 @@ export interface ContactCollection {
   contacts: ContactDirectoryItem[];
   quota: ContactQuota;
   uploadSettings: ContactUploadSettings;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  pageCount: number;
+  /** @minimum 0 */
+  workspaceTotal: number;
+  /** @minimum 0 */
+  workspaceSubscribed: number;
+}
+
+export interface ContactOption {
+  id: string;
+  name: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  /** @nullable */
+  companyId: string | null;
+  /** @nullable */
+  companyName: string | null;
+  /** @nullable */
+  jobTitle: string | null;
+  subscribed: boolean;
+  listIds: string[];
+  createdAt: string;
+  /** @nullable */
+  companyWebsiteUrl: string | null;
+  /** @nullable */
+  companyDomain: string | null;
+  /** @nullable */
+  companyIndustry: string | null;
+  /** @nullable */
+  companySize: string | null;
+  /** @nullable */
+  companyRevenueRange: string | null;
+  /** @nullable */
+  companyDescription: string | null;
+  /** @nullable */
+  companyPhoneNumber: string | null;
+  /** @nullable */
+  companyLinkedinUrl: string | null;
+  /** @nullable */
+  companyLocation: string | null;
+}
+
+export interface ContactOptionsResponse {
+  contacts: ContactOption[];
+  /** @minimum 0 */
+  total: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  limit: number;
+}
+
+export interface ContactFilterOptions {
+  lifecycleStages: string[];
+  leadStatuses: string[];
+  leadSources: string[];
 }
 
 export interface CreateSubscriptionOrderInput {
@@ -2719,6 +2786,93 @@ export type CompleteGmailMailboxConnectionParams = {
 code?: string;
 state?: string;
 error?: string;
+};
+
+export type ListContactsParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+/**
+ * @maxLength 200
+ */
+search?: string;
+status?: ListContactsStatus;
+/**
+ * @maxLength 64
+ */
+listId?: string;
+/**
+ * @maxLength 64
+ */
+companyId?: string;
+/**
+ * @maxLength 80
+ */
+lifecycleStage?: string;
+/**
+ * @maxLength 80
+ */
+leadStatus?: string;
+/**
+ * @maxLength 120
+ */
+leadSource?: string;
+addedWithin?: ListContactsAddedWithin;
+includeHistory?: boolean;
+};
+
+export type ListContactsStatus = typeof ListContactsStatus[keyof typeof ListContactsStatus];
+
+
+export const ListContactsStatus = {
+  all: 'all',
+  subscribed: 'subscribed',
+  unsubscribed: 'unsubscribed',
+} as const;
+
+export type ListContactsAddedWithin = typeof ListContactsAddedWithin[keyof typeof ListContactsAddedWithin];
+
+
+export const ListContactsAddedWithin = {
+  any: 'any',
+  NUMBER_7: '7',
+  NUMBER_30: '30',
+  NUMBER_90: '90',
+} as const;
+
+export type ListContactOptionsParams = {
+/**
+ * @maxLength 200
+ */
+search?: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @maxLength 64
+ */
+listId?: string;
+/**
+ * @maxLength 64
+ */
+excludeListId?: string;
+/**
+ * @maxLength 64
+ */
+companyId?: string;
+subscribed?: boolean;
+/**
+ * @maxItems 100
+ */
+listIds?: string[];
 };
 
 export type ImportContactsParams = {

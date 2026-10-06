@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
@@ -6,10 +6,10 @@ import {
   Search, Trash2, Users,
 } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey,
-  useDeleteCompany, useGetCompany, useListContacts, useUpdateContact,
+  getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey,
+  useDeleteCompany, useGetCompany, useListContactOptions, useUpdateContact,
 } from '@workspace/api-client-react';
-import type { Company, Contact } from '@workspace/api-client-react';
+import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
 import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 
@@ -17,7 +17,7 @@ const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const errorText = (error: unknown) => error && typeof error === 'object' && 'message' in error
   ? String(error.message) : 'Something went wrong. Please try again.';
 const prettyDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-const profileFromContact = (contact: Contact): CompanyProfileSnapshot => ({
+const profileFromContact = (contact: ContactOption): CompanyProfileSnapshot => ({
   companyName: contact.companyName,
   companyWebsiteUrl: contact.companyWebsiteUrl,
   companyDomain: contact.companyDomain,
@@ -50,22 +50,31 @@ const profileFields = [
 export function CompanyDetailPage() {
   const { companyId = '' } = useParams<{ companyId: string }>();
   const query = useGetCompany(companyId, { query: { enabled: !!companyId, queryKey: getGetCompanyQueryKey(companyId) } });
-  const contactsQuery = useListContacts();
   const updateContact = useUpdateContact();
   const deleteCompany = useDeleteCompany();
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const contactOptionsParams = { companyId: '__none__', search, limit: 30 };
+  const contactsQuery = useListContactOptions(contactOptionsParams, {
+    query: {
+      queryKey: getListContactOptionsQueryKey(contactOptionsParams),
+      staleTime: 10_000,
+      placeholderData: previous => previous,
+    },
+  });
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedContactId, setSelectedContactId] = useState('');
   const [replacement, setReplacement] = useState<CompanyLinkReplacement | null>(null);
   const company = query.data?.company;
   const linked = query.data?.contacts ?? [];
-  const unlinked = useMemo(() => (contactsQuery.data?.contacts ?? [])
-    .filter(contact => contact.companyId === null)
-    .filter(contact => `${contact.name} ${contact.email} ${contact.jobTitle || ''}`.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => a.name.localeCompare(b.name)), [contactsQuery.data?.contacts, search]);
+  const unlinked = contactsQuery.data?.contacts ?? [];
+  useEffect(() => {
+    if (selectedContactId && !unlinked.some(contact => contact.id === selectedContactId)) {
+      setSelectedContactId('');
+    }
+  }, [selectedContactId, unlinked]);
 
   const linkContact = (target: CompanyLinkReplacement, confirmed = false) => {
     setNotice(null);
@@ -78,6 +87,7 @@ export function CompanyDetailPage() {
         void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(target.companyId) });
         void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getListContactOptionsQueryKey() });
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         if (contact.companyId !== target.companyId) {
           setNotice({ type: 'error', text: 'The server did not confirm the company association. Refresh and try again.' });
@@ -142,11 +152,14 @@ export function CompanyDetailPage() {
         <section className={`${panel} overflow-hidden`} data-testid="panel-attach-contact">
           <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">SAFE ASSOCIATION</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Attach an existing contact</h2><p className="mt-1 text-[11px] text-[#7f8b99]">Only unlinked contacts are eligible. Compatible legacy details merge into this profile. Conflicting legacy details can be replaced only after you confirm.</p></header>
           <div className="p-5">
-            {contactsQuery.isLoading ? <div aria-label="Loading unlinked contacts" data-testid="loading-unlinked-contacts" className="space-y-3"><div className="h-9 animate-pulse rounded bg-[#f1f3f5]"/><div className="h-9 animate-pulse rounded bg-[#f1f3f5]"/></div> : contactsQuery.isError ? <div role="alert" data-testid="error-unlinked-contacts" className="flex items-center justify-between gap-3 text-[11px] text-[#99501e]"><span>Contacts could not be loaded.</span><button type="button" data-testid="button-retry-unlinked-contacts" onClick={() => void contactsQuery.refetch()} className="font-semibold text-[#245b9b]">Retry</button></div> : unlinked.length ? <>
+            {contactsQuery.isLoading ? <div aria-label="Loading unlinked contacts" data-testid="loading-unlinked-contacts" className="space-y-3"><div className="h-9 animate-pulse rounded bg-[#f1f3f5]"/><div className="h-9 animate-pulse rounded bg-[#f1f3f5]"/></div> : contactsQuery.isError ? <div role="alert" data-testid="error-unlinked-contacts" className="flex items-center justify-between gap-3 text-[11px] text-[#99501e]"><span>Contacts could not be loaded.</span><button type="button" data-testid="button-retry-unlinked-contacts" onClick={() => void contactsQuery.refetch()} className="font-semibold text-[#245b9b]">Retry</button></div> : <>
               <label className="relative mb-3 block"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search unlinked contacts" data-testid="input-search-unlinked-contacts" value={search} onChange={event => setSearch(event.target.value)} placeholder="Find by name, email, or title" className="h-9 w-full rounded-md border border-[#dce2e8] bg-white pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label>
-              <div className="max-h-[220px] divide-y divide-[#edf0f2] overflow-y-auto rounded-md border border-[#e6eaee]">{unlinked.slice(0, 30).map(contact => <label key={contact.id} data-testid={`row-unlinked-contact-${contact.id}`} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-[#f8fafb]"><input type="radio" name="attach-contact" value={contact.id} checked={selectedContactId === contact.id} onChange={() => setSelectedContactId(contact.id)} data-testid={`radio-attach-contact-${contact.id}`} className="accent-[#174f99]"/><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold text-[#3c4e62]">{contact.name}</span><span className="block truncate text-[10px] text-[#8994a1]">{contact.email}{contact.jobTitle ? ` · ${contact.jobTitle}` : ''}</span></span></label>)}</div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span data-testid="text-unlinked-contact-count" className="text-[10px] text-[#8793a0]">{unlinked.length} unlinked {unlinked.length === 1 ? 'contact' : 'contacts'}{unlinked.length > 30 ? ' · showing first 30' : ''}</span><button type="button" data-testid="button-attach-contact" disabled={!selectedContactId || updateContact.isPending} onClick={attach} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-3.5 text-[11px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">{updateContact.isPending ? 'Attaching…' : <><Link2 className="h-3.5 w-3.5"/>Attach contact</>}</button></div>
-            </> : <div data-testid="empty-unlinked-contacts" className="rounded-md border border-dashed border-[#dfe5eb] bg-[#fbfcfd] px-4 py-6 text-center"><p className="text-[11px] font-semibold text-[#45566a]">{search ? 'No unlinked contacts match' : 'No unlinked contacts available'}</p><p className="mt-1 text-[10px] text-[#8995a2]">{search ? 'Try another search term.' : 'Contacts already associated with a shared company are not shown here.'}</p></div>}
+              {contactsQuery.isFetching && <p className="-mt-1 mb-2 text-[10px] text-[#8793a0]">Updating matches…</p>}
+              {unlinked.length ? <>
+                <div className="max-h-[220px] divide-y divide-[#edf0f2] overflow-y-auto rounded-md border border-[#e6eaee]">{unlinked.map(contact => <label key={contact.id} data-testid={`row-unlinked-contact-${contact.id}`} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-[#f8fafb]"><input type="radio" name="attach-contact" value={contact.id} checked={selectedContactId === contact.id} onChange={() => setSelectedContactId(contact.id)} data-testid={`radio-attach-contact-${contact.id}`} className="accent-[#174f99]"/><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-semibold text-[#3c4e62]">{contact.name}</span><span className="block truncate text-[10px] text-[#8994a1]">{contact.email}{contact.jobTitle ? ` · ${contact.jobTitle}` : ''}</span></span></label>)}</div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span data-testid="text-unlinked-contact-count" className="text-[10px] text-[#8793a0]">{unlinked.length} shown of {(contactsQuery.data?.total ?? 0).toLocaleString()} matching unlinked contacts</span><button type="button" data-testid="button-attach-contact" disabled={!unlinked.some(contact => contact.id === selectedContactId) || updateContact.isPending} onClick={attach} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-3.5 text-[11px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">{updateContact.isPending ? 'Attaching…' : <><Link2 className="h-3.5 w-3.5"/>Attach contact</>}</button></div>
+              </> : <div data-testid="empty-unlinked-contacts" className="rounded-md border border-dashed border-[#dfe5eb] bg-[#fbfcfd] px-4 py-6 text-center"><p className="text-[11px] font-semibold text-[#45566a]">{search ? 'No unlinked contacts match' : 'No unlinked contacts available'}</p><p className="mt-1 text-[10px] text-[#8995a2]">{search ? 'Try another search term.' : 'Contacts already associated with a shared company are not shown here.'}</p></div>}
+            </>}
           </div>
         </section>
       </div>

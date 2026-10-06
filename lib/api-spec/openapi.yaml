@@ -646,14 +646,105 @@ paths:
     get:
       operationId: listContacts
       tags: [sending]
-      summary: List contacts and quota for the authenticated tenant
+      summary: Return a filtered page of contacts and quota for the authenticated tenant
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - in: query
+          name: search
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: status
+          schema: { type: string, enum: [all, subscribed, unsubscribed], default: all }
+        - in: query
+          name: listId
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: companyId
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: lifecycleStage
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: leadStatus
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: leadSource
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: addedWithin
+          schema: { type: string, enum: [any, "7", "30", "90"], default: any }
+        - in: query
+          name: includeHistory
+          schema: { type: boolean, default: true }
       responses:
         "200":
-          description: Tenant contacts, list memberships, and current quota
+          description: One page of tenant contacts, pagination totals, and current quota
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ContactCollection"
+  /contacts/options:
+    get:
+      operationId: listContactOptions
+      tags: [sending]
+      summary: Return a bounded set of contacts for a picker
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - in: query
+          name: listId
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: excludeListId
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: companyId
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: subscribed
+          schema: { type: boolean }
+        - in: query
+          name: listIds
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 100
+            items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: A bounded page of matching contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactOptionsResponse"
+        "400":
+          description: Invalid picker filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /contacts/filter-options:
+    get:
+      operationId: getContactFilterOptions
+      tags: [sending]
+      summary: Return distinct CRM filter values for the authenticated tenant
+      responses:
+        "200":
+          description: Available lifecycle stages, lead statuses, and lead sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactFilterOptions"
     post:
       operationId: createContact
       tags: [sending]
@@ -3760,7 +3851,53 @@ components:
           items: { $ref: "#/components/schemas/ContactDirectoryItem" }
         quota: { $ref: "#/components/schemas/ContactQuota" }
         uploadSettings: { $ref: "#/components/schemas/ContactUploadSettings" }
-      required: [contacts, quota, uploadSettings]
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        pageCount: { type: integer, minimum: 0 }
+        workspaceTotal: { type: integer, minimum: 0 }
+        workspaceSubscribed: { type: integer, minimum: 0 }
+      required: [contacts, quota, uploadSettings, page, pageSize, total, pageCount, workspaceTotal, workspaceSubscribed]
+    ContactOption:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        companyId: { type: ["string", "null"], format: uuid }
+        companyName: { type: ["string", "null"] }
+        jobTitle: { type: ["string", "null"] }
+        subscribed: { type: boolean }
+        listIds: { type: array, items: { type: string, format: uuid } }
+        createdAt: { type: string, format: date-time }
+        companyWebsiteUrl: { type: ["string", "null"] }
+        companyDomain: { type: ["string", "null"] }
+        companyIndustry: { type: ["string", "null"] }
+        companySize: { type: ["string", "null"] }
+        companyRevenueRange: { type: ["string", "null"] }
+        companyDescription: { type: ["string", "null"] }
+        companyPhoneNumber: { type: ["string", "null"] }
+        companyLinkedinUrl: { type: ["string", "null"] }
+        companyLocation: { type: ["string", "null"] }
+      required: [id, name, email, firstName, lastName, companyId, companyName, jobTitle, subscribed, listIds, createdAt, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation]
+    ContactOptionsResponse:
+      type: object
+      properties:
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/ContactOption" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+      required: [contacts, total, limit]
+    ContactFilterOptions:
+      type: object
+      properties:
+        lifecycleStages: { type: array, items: { type: string } }
+        leadStatuses: { type: array, items: { type: string } }
+        leadSources: { type: array, items: { type: string } }
+      required: [lifecycleStages, leadStatuses, leadSources]
     ContactUploadSettings:
       type: object
       properties:

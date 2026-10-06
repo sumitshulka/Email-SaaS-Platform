@@ -1940,6 +1940,43 @@ describe("tenant contact management and package quotas", { concurrency: false },
       canAdd: false,
       requiresSubscription: false,
     });
+    const firstPage = await api("/contacts?page=1&pageSize=1&includeHistory=false", {
+      cookie: owner.cookie,
+    });
+    assert.equal(firstPage.response.status, 200, JSON.stringify(firstPage.body));
+    assert.equal(firstPage.body.contacts.length, 1);
+    assert.equal(firstPage.body.total, 2);
+    assert.equal(firstPage.body.page, 1);
+    assert.equal(firstPage.body.pageSize, 1);
+    assert.equal(firstPage.body.pageCount, 2);
+    assert.equal(firstPage.body.workspaceTotal, 2);
+    const secondPage = await api("/contacts?page=2&pageSize=1&includeHistory=false", {
+      cookie: owner.cookie,
+    });
+    assert.equal(secondPage.response.status, 200, JSON.stringify(secondPage.body));
+    assert.equal(secondPage.body.contacts.length, 1);
+    assert.notEqual(firstPage.body.contacts[0].id, secondPage.body.contacts[0].id);
+    const filteredPage = await api("/contacts?search=Jamie&pageSize=1", {
+      cookie: owner.cookie,
+    });
+    assert.equal(filteredPage.response.status, 200, JSON.stringify(filteredPage.body));
+    assert.equal(filteredPage.body.total, 1);
+    assert.equal(filteredPage.body.contacts[0].email, "jamie@example.test");
+    const contactOptions = await api("/contacts/options?search=Jamie&limit=1", {
+      cookie: owner.cookie,
+    });
+    assert.equal(contactOptions.response.status, 200, JSON.stringify(contactOptions.body));
+    assert.equal(contactOptions.body.total, 1);
+    assert.equal(contactOptions.body.contacts.length, 1);
+    assert.equal(contactOptions.body.contacts[0].email, "jamie@example.test");
+    assert.equal("notes" in contactOptions.body.contacts[0], false);
+    const filterOptions = await api("/contacts/filter-options", {
+      cookie: owner.cookie,
+    });
+    assert.equal(filterOptions.response.status, 200, JSON.stringify(filterOptions.body));
+    assert.deepEqual(filterOptions.body.lifecycleStages, []);
+    assert.deepEqual(filterOptions.body.leadStatuses, []);
+    assert.deepEqual(filterOptions.body.leadSources, []);
 
     const otherList = await api("/contacts", { cookie: other.cookie });
     assert.equal(otherList.response.status, 200, JSON.stringify(otherList.body));
