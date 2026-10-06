@@ -185,14 +185,20 @@ async function api(path, { method = "GET", body, cookie } = {}) {
   };
 }
 
-async function createUser({ username, role = "USER" }) {
+async function createUser({
+  username,
+  role = "USER",
+  firstName = username === "support-admin" ? "Support" : "Test",
+  lastName = username === "support-admin" ? "Admin" : "Customer",
+  email = `${username}@example.test`,
+}) {
   const [user] = await db
     .insert(usersTable)
     .values({
       username,
-      firstName: username === "support-admin" ? "Support" : "Test",
-      lastName: username === "support-admin" ? "Admin" : "Customer",
-      email: `${username}@example.test`,
+      firstName,
+      lastName,
+      email,
       passwordHash: "unused-test-password-hash",
       role,
     })
@@ -470,5 +476,119 @@ describe("support ticket access boundaries", { concurrency: false }, () => {
     });
     assert.equal(closed.status, 200);
     assert.equal(closed.body.ticket.status, "closed");
+  });
+
+  it("filters the admin queue by every status and searchable ticket/requester fields", async () => {
+    const admin = await createUser({
+      username: "support-admin",
+      role: "SUPERADMIN",
+    });
+    const adminCookie = await sessionCookie(admin);
+    const statuses = [
+      "open",
+      "in_progress",
+      "waiting_on_customer",
+      "resolved",
+      "closed",
+    ];
+    const tickets = [];
+
+    for (const status of statuses) {
+      const owner = await createUser({
+        username: `queue-${status}`,
+        firstName: "Avery",
+        lastName: "Nguyen",
+        email: `avery.${status}@filter.test`,
+      });
+      const created = await createTicket(await sessionCookie(owner), {
+        subject: "Refund for annual plan",
+      });
+      const updated = await api(
+        `/admin/support/tickets/${created.ticket.id}/status`,
+        {
+          method: "PATCH",
+          cookie: adminCookie,
+          body: { status },
+        },
+      );
+      assert.equal(updated.status, 200, JSON.stringify(updated.body));
+      tickets.push({ id: created.ticket.id, status });
+    }
+
+    const idsFor = (items) => items.map((ticket) => ticket.id).sort();
+    for (const status of statuses) {
+      const result = await api(
+        `/admin/support/tickets?${new URLSearchParams({ status })}`,
+        { cookie: adminCookie },
+      );
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.deepEqual(
+        idsFor(result.body.items),
+        tickets
+          .filter((ticket) => ticket.status === status)
+          .map((ticket) => ticket.id)
+          .sort(),
+        `status=${status} must exclude tickets in every other status`,
+      );
+    }
+
+    const all = await api(
+      `/admin/support/tickets?${new URLSearchParams({ status: "all" })}`,
+      { cookie: adminCookie },
+    );
+    assert.equal(all.status, 200, JSON.stringify(all.body));
+    assert.deepEqual(idsFor(all.body.items), idsFor(tickets));
+
+    const searches = [
+      { term: "annual plan", expected: tickets },
+      { term: "Avery", expected: tickets },
+      { term: "Nguyen", expected: tickets },
+      { term: "Avery Nguyen", expected: tickets },
+      {
+        term: "AVERY.OPEN@FILTER.TEST",
+        expected: tickets.filter((ticket) => ticket.status === "open"),
+      },
+    ];
+    for (const { term, expected } of searches) {
+      const result = await api(
+        `/admin/support/tickets?${new URLSearchParams({
+          status: "all",
+          search: term,
+        })}`,
+        { cookie: adminCookie },
+      );
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.deepEqual(
+        idsFor(result.body.items),
+        idsFor(expected),
+        `search=${term} must return only matching tickets`,
+      );
+    }
+
+    const combined = await api(
+      `/admin/support/tickets?${new URLSearchParams({
+        status: "open",
+        search: "Avery Nguyen",
+      })}`,
+      { cookie: adminCookie },
+    );
+    assert.equal(combined.status, 200, JSON.stringify(combined.body));
+    assert.deepEqual(
+      idsFor(combined.body.items),
+      tickets
+        .filter((ticket) => ticket.status === "open")
+        .map((ticket) => ticket.id),
+      "combined status and search filters must exclude nonmatching tickets",
+    );
+
+    const noMatches = await api(
+      `/admin/support/tickets?${new URLSearchParams({
+        status: "open",
+        search: "not a real requester or subject",
+      })}`,
+      { cookie: adminCookie },
+    );
+    assert.equal(noMatches.status, 200, JSON.stringify(noMatches.body));
+    assert.deepEqual(noMatches.body.items, []);
   });
 });

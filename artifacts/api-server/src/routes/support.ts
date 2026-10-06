@@ -5,6 +5,7 @@ import {
   eq,
   ilike,
   or,
+  sql,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
@@ -282,12 +283,18 @@ router.get(
     const search = parsed.data.search?.trim();
     if (search) {
       const pattern = `%${search}%`;
-      conditions.push(or(
-        ilike(supportTicketsTable.subject, pattern),
-        ilike(usersTable.firstName, pattern),
-        ilike(usersTable.lastName, pattern),
-        ilike(usersTable.email, pattern),
-      )!);
+      conditions.push(
+        or(
+          ilike(supportTicketsTable.subject, pattern),
+          ilike(usersTable.firstName, pattern),
+          ilike(usersTable.lastName, pattern),
+          ilike(
+            sql`${usersTable.firstName} || ' ' || ${usersTable.lastName}`,
+            pattern,
+          ),
+          ilike(usersTable.email, pattern),
+        ),
+      );
     }
     const rows = await db
       .select({
