@@ -52,8 +52,11 @@ const getError = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return 'Something went wrong. Please try again.';
 };
+function MailflowIcon({ className = 'h-8 w-8' }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="#142035"/><path d="M7 25V10l9 9 9-9" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.5 7.5H25V13" stroke="#E83D4A" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
 function Mark({ small = false }: { small?: boolean }) {
-  return <div className={cn('flex items-center gap-2.5', small && 'gap-2')}><span className="relative grid h-8 w-8 place-items-center rounded-[9px] bg-[#174f99] text-white" aria-hidden="true"><span className="absolute left-[7px] top-[8px] h-[12px] w-[16px] -skew-x-12 border-[1.5px] border-white"/><span className="absolute bottom-[7px] right-[7px] h-[5px] w-[5px] rounded-full bg-[#f28b32]"/></span><span className="display text-[20px] font-extrabold tracking-[-.05em] text-[#172334]">mailflow</span></div>;
+  return <div className={cn('flex items-center gap-2.5', small && 'gap-2')}><MailflowIcon/><span className="display text-[21px] font-extrabold lowercase leading-none tracking-[-.04em] text-[#142035]">mailflow</span></div>;
 }
 function Button({ children, onClick, type = 'button', variant = 'primary', disabled, className = '', testId }: { children: ReactNode; onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'quiet' | 'outline' | 'danger'; disabled?: boolean; className?: string; testId: string }) {
   const style = {
