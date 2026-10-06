@@ -22,6 +22,10 @@ const fields = [
 ] as const;
 type FieldKey = typeof fields[number][0];
 type CompanyForm = Record<FieldKey, string> & { companyName: string; companyDescription: string };
+type CompanyDirectoryFilters = { industry: string; size: string; revenueRange: string; location: string };
+const emptyCompanyDirectoryFilters = (): CompanyDirectoryFilters => ({ industry: '', size: '', revenueRange: '', location: '' });
+const uniqueCompanyFilterOptions = (values: Array<string | null | undefined>) =>
+  [...new Set(values.map(value => value?.trim()).filter((value): value is string => Boolean(value)))].sort((left, right) => left.localeCompare(right));
 const blankForm = (): CompanyForm => ({
   companyName: '', companyWebsiteUrl: '', companyDomain: '', companyIndustry: '',
   companySize: '', companyRevenueRange: '', companyPhoneNumber: '', companyLocation: '',
@@ -115,10 +119,46 @@ export function CompaniesPage() {
   const [editor, setEditor] = useState<'new' | Company | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [companyFilters, setCompanyFilters] = useState<CompanyDirectoryFilters>(emptyCompanyDirectoryFilters);
   const [backfillResult, setBackfillResult] = useState<{ linkedContacts: number; createdCompanies: number; skippedContacts: number } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const companies = listQuery.data?.companies ?? [];
-  const filtered = useMemo(() => companies.filter(company => `${company.companyName} ${company.companyDomain || ''} ${company.companyIndustry || ''} ${company.companyLocation || ''}`.toLowerCase().includes(search.toLowerCase())), [companies, search]);
+  const companyFilterOptions = useMemo(() => ({
+    industries: uniqueCompanyFilterOptions(companies.map(company => company.companyIndustry)),
+    sizes: uniqueCompanyFilterOptions(companies.map(company => company.companySize)),
+    revenueRanges: uniqueCompanyFilterOptions(companies.map(company => company.companyRevenueRange)),
+  }), [companies]);
+  const hasActiveCompanyFilters = Object.values(companyFilters).some(value => value.trim().length > 0);
+  const hasCompanySearchOrFilters = Boolean(search.trim() || hasActiveCompanyFilters);
+  const updateCompanyFilter = (key: keyof CompanyDirectoryFilters, value: string) => {
+    setCompanyFilters(current => ({ ...current, [key]: value }));
+    setPage(1);
+  };
+  const clearCompanyFilters = () => {
+    setCompanyFilters(emptyCompanyDirectoryFilters());
+    setPage(1);
+  };
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const locationQuery = companyFilters.location.trim().toLowerCase();
+    return companies.filter(company => {
+      const searchableText = [
+        company.companyName,
+        company.companyDomain,
+        company.companyWebsiteUrl,
+        company.companyIndustry,
+        company.companySize,
+        company.companyRevenueRange,
+        company.companyLocation,
+        company.companyDescription,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return (!query || searchableText.includes(query))
+        && (!companyFilters.industry || company.companyIndustry === companyFilters.industry)
+        && (!companyFilters.size || company.companySize === companyFilters.size)
+        && (!companyFilters.revenueRange || company.companyRevenueRange === companyFilters.revenueRange)
+        && (!locationQuery || company.companyLocation?.toLowerCase().includes(locationQuery));
+    });
+  }, [companies, companyFilters, search]);
   const pageSize = 10;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -159,6 +199,42 @@ export function CompaniesPage() {
     <div className="grid items-start">
        <section className={`${card} overflow-hidden`}>
         <div className="flex flex-col gap-3 border-b border-[#e8edf1] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><h2 className="text-[14px] font-bold text-[#223247]">Company directory</h2><p data-testid="text-company-result-count" className="mt-1 text-[11px] text-[#84909e]">{filtered.length} {filtered.length === 1 ? 'record' : 'records'} in this workspace</p></div><label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search companies" data-testid="input-search-companies" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-md border border-[#dce2e8] bg-[#fbfcfd] pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label></div>
+        <section data-testid="section-company-filters" aria-label="Smart company filters" className="border-b border-[#e8edf1] bg-[#fbfcfd] px-4 py-4 sm:px-5">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-[12px] font-semibold text-[#344154]">Smart filters</h3>
+              <p className="mt-1 text-[10px] text-[#7d8997]">Combine company profile filters; all selected values must match.</p>
+            </div>
+            {hasActiveCompanyFilters && <button type="button" data-testid="button-clear-company-filters" onClick={clearCompanyFilters} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Clear filters</button>}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="block">
+              <span className={labelClass}>Industry</span>
+              <select data-testid="select-company-industry-filter" className={input} value={companyFilters.industry} onChange={event => updateCompanyFilter('industry', event.target.value)}>
+                <option value="">All industries</option>
+                {companyFilterOptions.industries.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Company size</span>
+              <select data-testid="select-company-size-filter" className={input} value={companyFilters.size} onChange={event => updateCompanyFilter('size', event.target.value)}>
+                <option value="">All sizes</option>
+                {companyFilterOptions.sizes.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Revenue range</span>
+              <select data-testid="select-company-revenue-filter" className={input} value={companyFilters.revenueRange} onChange={event => updateCompanyFilter('revenueRange', event.target.value)}>
+                <option value="">Any revenue</option>
+                {companyFilterOptions.revenueRanges.map(value => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Location</span>
+              <input data-testid="input-company-location-filter" className={input} value={companyFilters.location} onChange={event => updateCompanyFilter('location', event.target.value)} placeholder="City, region, or country"/>
+            </label>
+          </div>
+        </section>
         {pageItems.length ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">
@@ -194,9 +270,9 @@ export function CompaniesPage() {
         ) : (
           <div data-testid="empty-company-directory" className="px-5 py-14 text-center">
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#eef4fa] text-[#51789f]"><Building2 className="h-5 w-5"/></span>
-            <h3 className="mt-4 text-[13px] font-semibold text-[#344154]">{search ? 'No matching companies' : 'No shared companies yet'}</h3>
-            <p className="mx-auto mt-1 max-w-xs text-[11px] leading-5 text-[#818d9b]">{search ? 'Try another company name, domain, industry, or location.' : 'Add a company profile or let the legacy profile check link safe domain matches.'}</p>
-            {!search && <button type="button" data-testid="button-empty-add-company" onClick={() => setEditor('new')} className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#245b9b]"><Plus className="h-3.5 w-3.5"/>Add first company</button>}
+            <h3 className="mt-4 text-[13px] font-semibold text-[#344154]">{hasCompanySearchOrFilters ? 'No matching companies' : 'No shared companies yet'}</h3>
+            <p className="mx-auto mt-1 max-w-xs text-[11px] leading-5 text-[#818d9b]">{hasCompanySearchOrFilters ? 'Adjust your search or clear one or more filters to see results.' : 'Add a company profile or let the legacy profile check link safe domain matches.'}</p>
+            {!hasCompanySearchOrFilters && <button type="button" data-testid="button-empty-add-company" onClick={() => setEditor('new')} className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#245b9b]"><Plus className="h-3.5 w-3.5"/>Add first company</button>}
           </div>
         )}
          {filtered.length > 0 && <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] px-5 py-3"><span data-testid="text-company-page" className="text-[10px] text-[#7f8b99]">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span><div className="flex items-center gap-2"><button type="button" data-testid="button-company-page-previous" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronLeft className="h-4 w-4"/></button><span className="mono min-w-[54px] text-center text-[10px] text-[#667586]">{page} / {pageCount}</span><button type="button" data-testid="button-company-page-next" aria-label="Next page" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronRight className="h-4 w-4"/></button></div></footer>}
