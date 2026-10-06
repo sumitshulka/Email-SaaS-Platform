@@ -562,7 +562,7 @@ describe('company profile review and contact data preservation', { concurrency: 
           : `unrelated-${String(index).padStart(4, '0')}.example.test`,
       };
     });
-    const selectedCompany = companies[0];
+    const selectedCompany = companies[40];
     const makeContact = (id, companyId, companyName) => ({
       ...contact,
       id,
@@ -610,20 +610,34 @@ describe('company profile review and contact data preservation', { concurrency: 
 
       const companySearch = page.getByTestId('select-contact-company-filter');
       const companyOptions = page.locator('[data-testid^="option-contact-company-"]');
-      const refineMessage = `Showing 40 of ${matchingCompanyCount} matches. Refine your search.`;
+      const firstPageMessage = `Showing 1–40 of ${matchingCompanyCount} matches. Refine your search or browse pages.`;
+      const secondPageMessage = `Showing 41–${matchingCompanyCount} of ${matchingCompanyCount} matches. Refine your search or browse pages.`;
       await companySearch.fill('Harbor Directory');
-      await page.getByText(refineMessage, { exact: true }).waitFor({ state: 'visible' });
+      await page.getByText(firstPageMessage, { exact: true }).waitFor({ state: 'visible' });
       assert.equal(await companyOptions.count(), 40, 'name search should cap a large result set at 40 companies');
       assert.ok(companySearchRequests.some(request =>
         request.search === 'Harbor Directory' && request.page === 1 && request.pageSize === 40,
       ), 'name searches should request a bounded server page');
+      await page.getByTestId('button-contact-company-next-page').click();
+      await page.getByText(secondPageMessage, { exact: true }).waitFor({ state: 'visible' });
+      assert.equal(await companyOptions.count(), matchingCompanyCount - 40, 'the next name-search page should show remaining matches');
+      assert.ok(companySearchRequests.some(request =>
+        request.search === 'Harbor Directory' && request.page === 2 && request.pageSize === 40,
+      ), 'browsing to the next page should retain the active name search');
+      await page.getByTestId('button-contact-company-previous-page').click();
+      await page.getByText(firstPageMessage, { exact: true }).waitFor({ state: 'visible' });
 
       await companySearch.fill('customer-mail.test');
-      await page.getByText(refineMessage, { exact: true }).waitFor({ state: 'visible' });
+      await page.getByText(firstPageMessage, { exact: true }).waitFor({ state: 'visible' });
       assert.equal(await companyOptions.count(), 40, 'domain search should also cap a large result set at 40 companies');
       assert.ok(companySearchRequests.some(request =>
         request.search === 'customer-mail.test' && request.page === 1 && request.pageSize === 40,
       ), 'domain searches should request a bounded server page');
+      await page.getByTestId('button-contact-company-next-page').click();
+      await page.getByText(secondPageMessage, { exact: true }).waitFor({ state: 'visible' });
+      assert.ok(companySearchRequests.some(request =>
+        request.search === 'customer-mail.test' && request.page === 2 && request.pageSize === 40,
+      ), 'browsing to the next page should retain the active domain search');
       assert.equal(companyDirectoryRequests.length, 0, 'the contacts filter should not download the full company directory');
       assert.equal(await page.getByTestId(`option-contact-company-${selectedCompany.id}`).count(), 1);
       await page.getByTestId(`option-contact-company-${selectedCompany.id}`).click();

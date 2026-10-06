@@ -5,6 +5,7 @@ import type { CompanySearchResultItem, ContactDirectoryFilters, ContactList } fr
 
 export const CONTACT_FILTER_NONE = '__none__';
 export const CONTACT_FILTER_UNSET = '__unset__';
+const COMPANY_SEARCH_PAGE_SIZE = 40;
 
 export type ContactDirectoryFilterValues = ContactDirectoryFilters;
 
@@ -61,23 +62,32 @@ function CompanyFilter({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
   const query = search.trim();
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(query), 200);
     return () => window.clearTimeout(timer);
   }, [query]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
   const companiesQuery = useSearchCompanies(
-    { search: debouncedSearch, page: 1, pageSize: 40 },
-    { query: { queryKey: getSearchCompaniesQueryKey({ search: debouncedSearch, page: 1, pageSize: 40 }), enabled: open, staleTime: 30_000 } },
+    { search: debouncedSearch, page, pageSize: COMPANY_SEARCH_PAGE_SIZE },
+    { query: { queryKey: getSearchCompaniesQueryKey({ search: debouncedSearch, page, pageSize: COMPANY_SEARCH_PAGE_SIZE }), enabled: open, staleTime: 30_000 } },
   );
   const visible = companiesQuery.data?.companies ?? [];
   const total = companiesQuery.data?.total ?? 0;
+  const pageSize = companiesQuery.data?.pageSize ?? COMPANY_SEARCH_PAGE_SIZE;
+  const pageCount = Math.ceil(total / pageSize);
+  const firstResult = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastResult = (page - 1) * pageSize + visible.length;
   const loading = query !== debouncedSearch || companiesQuery.isLoading || (companiesQuery.isFetching && !companiesQuery.data);
   const error = companiesQuery.isError && !companiesQuery.data;
   const choose = (nextValue: string, company?: CompanySearchResultItem) => {
     onChange(nextValue, company);
     setSearch('');
     setDebouncedSearch('');
+    setPage(1);
     setOpen(false);
   };
 
@@ -96,14 +106,14 @@ function CompanyFilter({
             aria-controls="contact-company-options"
             aria-autocomplete="list"
             value={open ? search : selectedCompanyName ?? ''}
-            onFocus={() => { setSearch(''); setDebouncedSearch(''); setOpen(true); }}
+            onFocus={() => { setSearch(''); setDebouncedSearch(''); setPage(1); setOpen(true); }}
             onChange={event => { setSearch(event.target.value); setOpen(true); }}
             onBlur={() => setOpen(false)}
             onKeyDown={event => {
               if (event.key === 'Escape') setOpen(false);
               if (event.key === 'Enter' && open && visible[0]) {
                 event.preventDefault();
-                choose(visible[0].id);
+                choose(visible[0].id, visible[0]);
               }
             }}
             placeholder="Search companies…"
@@ -139,7 +149,36 @@ function CompanyFilter({
                 {company.companyDomain && <span className="mt-0.5 block truncate text-[10px] text-[#8290a0]">{company.companyDomain}</span>}
               </button>
             )) : <p className="px-3 py-2 text-[11px] text-[#788696]">{query ? 'No matching companies.' : 'No company records yet.'}</p>}
-          {!loading && !error && total > visible.length && <p className="border-t border-[#edf0f3] px-3 py-2 text-[10px] text-[#8290a0]">Showing {visible.length.toLocaleString()} of {total.toLocaleString()} matches. Refine your search.</p>}
+          {!loading && !error && total > pageSize && (
+            <div className="border-t border-[#edf0f3] px-3 py-2">
+              <p className="text-[10px] text-[#8290a0]">
+                Showing {firstResult.toLocaleString()}–{lastResult.toLocaleString()} of {total.toLocaleString()} matches. Refine your search or browse pages.
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  data-testid="button-contact-company-previous-page"
+                  disabled={page <= 1 || companiesQuery.isFetching}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => setPage(currentPage => Math.max(1, currentPage - 1))}
+                  className="rounded px-2 py-1 text-[10px] font-semibold text-[#315879] hover:bg-[#f2f6fa] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Previous
+                </button>
+                <span aria-live="polite" className="text-[10px] text-[#718095]">Page {page} of {pageCount}</span>
+                <button
+                  type="button"
+                  data-testid="button-contact-company-next-page"
+                  disabled={page >= pageCount || companiesQuery.isFetching}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => setPage(currentPage => Math.min(pageCount, currentPage + 1))}
+                  className="rounded px-2 py-1 text-[10px] font-semibold text-[#315879] hover:bg-[#f2f6fa] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {value !== 'all' && (
