@@ -58,6 +58,7 @@ const state = {
   notifications: [],
   reads: new Map(),
   createRequests: [],
+  deleteRequests: [],
   statusRequests: [],
   readRequests: [],
   notificationLoadFailureBudget: new Map(),
@@ -272,9 +273,13 @@ async function installApiFixtures(context) {
     }
 
     if (pathname === '/api/admin/notifications' && method === 'GET' && user.role === 'SUPERADMIN') {
+      const search = (searchParams.get('search') ?? '').trim().toLocaleLowerCase();
+      const notifications = state.notifications.filter(notification =>
+        `${notification.title} ${notification.message}`.toLocaleLowerCase().includes(search),
+      );
       await route.fulfill({
         status: 200,
-        json: { items: [...state.notifications].reverse().map(adminNotification) },
+        json: { items: [...notifications].reverse().map(adminNotification) },
       });
       return;
     }
@@ -294,6 +299,27 @@ async function installApiFixtures(context) {
       state.notifications = state.notifications.filter(item => item.id !== id);
       state.notifications.push(notification);
       await route.fulfill({ status: 201, json: adminNotification(notification) });
+      return;
+    }
+
+    const deleteMatch = pathname.match(/^\/api\/admin\/notifications\/([^/]+)$/);
+    if (deleteMatch && method === 'DELETE' && user.role === 'SUPERADMIN') {
+      const notificationIndex = state.notifications.findIndex(item => item.id === deleteMatch[1]);
+      if (notificationIndex === -1) {
+        await route.fulfill({ status: 404, json: { error: 'Notification not found.' } });
+        return;
+      }
+      const notification = state.notifications[notificationIndex];
+      if (Date.parse(notification.expiresAt) > Date.now() - 90 * 24 * 60 * 60_000) {
+        await route.fulfill({
+          status: 409,
+          json: { error: 'A notification can be deleted after it has been expired for 90 days.' },
+        });
+        return;
+      }
+      state.deleteRequests.push(deleteMatch[1]);
+      state.notifications.splice(notificationIndex, 1);
+      await route.fulfill({ status: 204 });
       return;
     }
 
@@ -444,6 +470,7 @@ describe('notification creation, display, and per-account read history', { concu
     state.notifications = [];
     state.reads.clear();
     state.createRequests.length = 0;
+    state.deleteRequests.length = 0;
     state.statusRequests.length = 0;
     state.readRequests.length = 0;
     state.unexpectedRequests.length = 0;
@@ -534,6 +561,21 @@ describe('notification creation, display, and per-account read history', { concu
   });
 
   it('lets a superadmin publish broadcast and focused notices and change their enabled state', async () => {
+    const retentionEligibleId = '410b4b82-56e4-4f11-8e7a-47cb8baf0679';
+    const oldExpiry = new Date(Date.now() - 91 * 24 * 60 * 60_000);
+    state.notifications = [{
+      id: retentionEligibleId,
+      title: 'Archive-ready service update',
+      message: 'This old notice is eligible for deletion.',
+      audience: 'broadcast',
+      recipientUserIds: [],
+      startsAt: new Date(oldExpiry.getTime() - 60 * 60_000).toISOString(),
+      expiresAt: oldExpiry.toISOString(),
+      createdAt: new Date(oldExpiry.getTime() - 60 * 60_000).toISOString(),
+      enabled: false,
+    }];
+    state.deleteRequests.length = 0;
+
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
       await installApiFixtures(context);
@@ -542,6 +584,9 @@ describe('notification creation, display, and per-account read history', { concu
       await page.goto(`${baseUrl}/admin/notifications`);
       await page.getByRole('heading', { name: 'Platform notifications' }).waitFor();
 
+      await page.getByTestId('button-open-create-notification').click();
+      await page.getByTestId('dialog-create-notification').waitFor({ state: 'visible' });
+      await page.getByRole('heading', { name: 'Create a platform notice' }).waitFor();
       await page.getByTestId('input-notification-title').fill('Scheduled service update');
       await page.getByTestId('input-notification-message').fill('The platform will be briefly unavailable tonight.');
       await fillSchedule(page);
@@ -570,6 +615,55 @@ describe('notification creation, display, and per-account read history', { concu
         'active',
       );
 
+      const noticeSearch = page.getByTestId('input-admin-notification-search');
+      const matchingNoticesResponse = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === '/api/admin/notifications' &&
+          response.request().method() === 'GET' &&
+          url.searchParams.get('search') === 'BRIEFLY UNAVAILABLE';
+      });
+      await noticeSearch.fill('BRIEFLY UNAVAILABLE');
+      assert.equal((await matchingNoticesResponse).status(), 200);
+      await page.getByTestId(`admin-notification-${broadcastId}`).waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId(`admin-notification-${retentionEligibleId}`).count(), 0);
+
+      const noMatchResponse = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.pathname === '/api/admin/notifications' &&
+          response.request().method() === 'GET' &&
+          url.searchParams.get('search') === 'no notice has this phrase';
+      });
+      await noticeSearch.fill('no notice has this phrase');
+      assert.equal((await noMatchResponse).status(), 200);
+      await page.getByTestId('empty-admin-notification-search').waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId(`admin-notification-${broadcastId}`).count(), 0);
+
+      await noticeSearch.fill('');
+      await page.getByTestId(`admin-notification-${broadcastId}`).waitFor({ state: 'visible' });
+      await page.getByTestId(`admin-notification-${retentionEligibleId}`).waitFor({ state: 'visible' });
+
+      const recentDeleteButton = page.getByTestId(`button-delete-notification-${broadcastId}`);
+      assert.equal(await recentDeleteButton.isDisabled(), true, 'a recent notice must not be deletable');
+      assert.equal(await page.getByTestId('dialog-delete-admin-notification').count(), 0);
+      assert.deepEqual(state.deleteRequests, [], 'the disabled delete control must not send a request');
+
+      await page.getByTestId(`button-delete-notification-${retentionEligibleId}`).click();
+      const deleteDialog = page.getByTestId('dialog-delete-admin-notification');
+      await deleteDialog.waitFor({ state: 'visible' });
+      assert.match(await deleteDialog.innerText(), /Delete this notice\?[\s\S]*Archive-ready service update/);
+      assert.equal(await page.getByTestId('button-confirm-action').isDisabled(), false);
+      assert.deepEqual(state.deleteRequests, [], 'deletion must wait for explicit confirmation');
+      const deleteResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/admin/notifications/${retentionEligibleId}` &&
+        response.request().method() === 'DELETE',
+      );
+      await page.getByTestId('button-confirm-action').click();
+      assert.equal((await deleteResponse).status(), 204);
+      await page.getByTestId(`admin-notification-${retentionEligibleId}`).waitFor({ state: 'detached' });
+      assert.deepEqual(state.deleteRequests, [retentionEligibleId]);
+
+      await page.getByTestId('button-open-create-notification').click();
+      await page.getByTestId('dialog-create-notification').waitFor({ state: 'visible' });
       await page.getByTestId('select-notification-audience').selectOption('focused');
       await page.getByTestId('input-notification-account-search').fill('Taylor');
       const targetButton = page.getByTestId(`button-add-notification-user-${firstCustomer.id}`);
