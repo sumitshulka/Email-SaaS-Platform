@@ -42,3 +42,40 @@ export function trackPaidCheckoutOutcome(outcome: 'started' | 'dismissed' | 'set
   }[outcome];
   trackEvent(eventName);
 }
+
+export function trackSmtpSenderAccountCreated(accountCount: number, accountLimit: number): void {
+  trackEvent('smtp_sender_account_created', {
+    account_count: accountCount,
+    account_limit: accountLimit,
+    outcome: 'success',
+  });
+}
+
+export function trackSmtpSenderAccountDeleted(accountCount: number, accountLimit: number): void {
+  trackEvent('smtp_sender_account_deleted', {
+    account_count: accountCount,
+    account_limit: accountLimit,
+    outcome: 'success',
+  });
+}
+
+export function trackSmtpSenderAccountDefaultSelected(accountCount: number, accountLimit: number): void {
+  trackEvent('smtp_sender_account_default_selected', {
+    account_count: accountCount,
+    account_limit: accountLimit,
+    outcome: 'success',
+  });
+}
+
+export function trackSmtpSenderRetentionCompleted(
+  accountCount: number,
+  retainedCount: number,
+  accountLimit: number,
+): void {
+  trackEvent('smtp_sender_retention_completed', {
+    account_count: accountCount,
+    retained_count: retainedCount,
+    account_limit: accountLimit,
+    outcome: 'accepted',
+  });
+}

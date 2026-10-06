@@ -8,7 +8,13 @@ import {
   useListTenantSendingAccounts, useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage, TenantSendingAccount } from '@workspace/api-client-react';
-import { trackEvent, trackFreeActivationOutcome, trackPaidCheckoutOutcome, trackPaidVerificationOutcome } from '@/lib/analytics';
+import {
+  trackEvent,
+  trackFreeActivationOutcome,
+  trackPaidCheckoutOutcome,
+  trackPaidVerificationOutcome,
+  trackSmtpSenderRetentionCompleted,
+} from '@/lib/analytics';
 
 declare global {
   interface Window {
@@ -137,6 +143,13 @@ export default function PlansPage() {
     if (pkg.amountMinor === 0) {
       activateFree.mutate({ data: { packageId: pkg.id, ...(accountIdsToKeep !== undefined ? { senderAccountIdsToKeep: accountIdsToKeep } : {}) } }, {
         onSuccess: result => {
+          if (accountIdsToKeep !== undefined) {
+            trackSmtpSenderRetentionCompleted(
+              senderAccounts.length,
+              accountIdsToKeep.length,
+              pkg.emailAccountLimit,
+            );
+          }
           trackFreeActivationOutcome('activated');
           const startsAt = new Date(result.subscription.startsAt);
           const scheduled = startsAt.getTime() > Date.now();
@@ -161,6 +174,13 @@ export default function PlansPage() {
     }
     createOrder.mutate({ data: { packageId: pkg.id, ...(accountIdsToKeep !== undefined ? { senderAccountIdsToKeep: accountIdsToKeep } : {}) } }, {
       onSuccess: async order => {
+        if (accountIdsToKeep !== undefined) {
+          trackSmtpSenderRetentionCompleted(
+            senderAccounts.length,
+            accountIdsToKeep.length,
+            pkg.emailAccountLimit,
+          );
+        }
         setCheckoutOrder(order);
         try {
           await loadCheckoutScript();

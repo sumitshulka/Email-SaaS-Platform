@@ -3,8 +3,8 @@ name: Sanitized billing analytics
 description: Privacy limits for payment-related custom analytics.
 ---
 
-Payment-related custom events use fixed names and no properties. Never include customer, payment, or package identifiers, free-form provider messages, or payment details. Track lifecycle outcomes separately, and emit activation only after server-confirmed success.
+Payment lifecycle events use fixed names and no properties. SMTP sender setup and retention events may include aggregate account counts, the package sender-account limit, and a fixed outcome value only. Never include customer, payment, or package identifiers, email addresses, hostnames, credentials, free-form text, or payment details. Emit outcomes only after the corresponding server-confirmed success.
 
-**Why:** Aggregate payment diagnostics should not expose customer-level or transaction-level information.
+**Why:** Aggregate setup and retention metrics can inform package limits without exposing customer-level, sender-account, or transaction-level information.
 
-**How to apply:** When adding billing analytics, route fixed outcomes through a helper that cannot accept metadata, and test exact event arguments plus the absence of activation events for non-success outcomes.
+**How to apply:** Keep payment lifecycle events property-free. For SMTP account analytics, allow only counts, the sender-account limit, and a fixed outcome enum; test exact arguments and ensure rejected operations are not recorded as successes.

@@ -33,6 +33,11 @@ import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
+import {
+  trackSmtpSenderAccountCreated,
+  trackSmtpSenderAccountDefaultSelected,
+  trackSmtpSenderAccountDeleted,
+} from '@/lib/analytics';
 import { downloadWorkbook } from '@/lib/download-workbook';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
@@ -220,7 +225,12 @@ export function SendingSettingsPage() {
       });
     } else {
       createAccount.mutate({ data }, {
-        onSuccess: response => onSuccess(response.account),
+        onSuccess: response => {
+          if (query.data) {
+            trackSmtpSenderAccountCreated(query.data.configuredCount + 1, query.data.emailAccountLimit);
+          }
+          onSuccess(response.account);
+        },
         onError,
       });
     }
@@ -298,6 +308,9 @@ export function SendingSettingsPage() {
     {
       onSuccess: () => {
         refreshSenderAccounts();
+        if (query.data) {
+          trackSmtpSenderAccountDefaultSelected(query.data.configuredCount, query.data.emailAccountLimit);
+        }
         setNotice({ kind: 'success', text: `${account.fromEmail} is now the default campaign sender.` });
       },
       onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
@@ -312,6 +325,12 @@ export function SendingSettingsPage() {
       { accountId: account.id },
       {
         onSuccess: async () => {
+          if (query.data) {
+            trackSmtpSenderAccountDeleted(
+              Math.max(0, query.data.configuredCount - 1),
+              query.data.emailAccountLimit,
+            );
+          }
           await qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
           void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
           void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });

@@ -29,6 +29,7 @@ const freePackage = {
   currency: 'USD',
   periodDays: 30,
   contactLimit: 100,
+  emailAccountLimit: 1,
   active: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -46,6 +47,7 @@ const paidPackage = {
   name: 'Growth plan',
   description: 'A paid package used to verify activation tracking.',
   amountMinor: 2499,
+  emailAccountLimit: 1,
 };
 const paidSubscription = {
   ...activatedSubscription,
@@ -67,6 +69,29 @@ let serverProcess;
 let serverOutput = '';
 let browser;
 let baseUrl;
+
+function makeSenderAccount(id, isPrimary = false) {
+  return {
+    id,
+    provider: 'other',
+    host: `smtp.${id}.example.test`,
+    port: 587,
+    encryption: 'tls',
+    username: '••••••••',
+    credentialsConfigured: true,
+    fromName: `Sender ${id}`,
+    fromEmail: `${id}@example.test`,
+    replyTo: null,
+    verified: true,
+    verifiedAt: '2026-01-01T00:00:00.000Z',
+    connectionCheckStatus: null,
+    connectionCheckAt: null,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    isPrimary,
+    lastUsedAt: null,
+    activeCampaignCount: 0,
+  };
+}
 
 async function getAvailablePort() {
   const server = createServer();
@@ -155,22 +180,31 @@ async function installFixtures(context, {
   checkoutScriptFailure = false,
   checkoutScriptFailures = 0,
   packages = [freePackage],
+  senderAccounts: initialSenderAccounts = [],
+  senderAccountLimit = 1,
+  analyticsThrows = false,
+  deleteSenderAccountStatus = 204,
+  createSenderAccountStatus = 201,
+  setPrimarySenderAccountStatus = 200,
 } = {}) {
+  let senderAccounts = structuredClone(initialSenderAccounts);
   await context.addCookies([{
     name: 'mailflow_session',
     value: 'free-plan-browser-test',
     url: baseUrl,
     sameSite: 'Lax',
   }]);
-  await context.addInitScript(({ checkoutAction, checkoutActions, orderId, checkoutScriptFailure, checkoutScriptFailures }) => {
+  await context.addInitScript(({ checkoutAction, checkoutActions, orderId, checkoutScriptFailure, checkoutScriptFailures, analyticsThrows }) => {
     window.__analyticsCalls = [];
     window.__freeActivationResponses = [];
     window.__paidVerificationResponses = [];
     window.__paidOrderResponses = [];
+    window.__subscriptionRequestBodies = [];
     window.__razorpayOpenedOrderIds = [];
     window.__razorpayCheckoutInstances = 0;
     window.umami = {
       track(...args) {
+        if (analyticsThrows) throw new Error('Analytics is unavailable.');
         window.__analyticsCalls.push({
           args,
           freeActivationResponses: [...window.__freeActivationResponses],
@@ -212,6 +246,16 @@ async function installFixtures(context, {
       const input = args[0];
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.href).pathname;
+      if (pathname === '/api/subscriptions/free' || pathname === '/api/subscriptions/orders') {
+        try {
+          window.__subscriptionRequestBodies.push({
+            pathname,
+            body: JSON.parse(args[1]?.body ?? '{}'),
+          });
+        } catch {
+          // The browser tests only inspect valid JSON mutation requests.
+        }
+      }
       if (pathname === '/api/subscriptions/free') {
         window.__freeActivationResponses.push(response.status);
       }
@@ -223,7 +267,7 @@ async function installFixtures(context, {
       }
       return response;
     };
-  }, { checkoutAction, checkoutActions, orderId: paidOrder.orderId, checkoutScriptFailure, checkoutScriptFailures });
+  }, { checkoutAction, checkoutActions, orderId: paidOrder.orderId, checkoutScriptFailure, checkoutScriptFailures, analyticsThrows });
   if (checkoutScriptFailure || checkoutScriptFailures > 0) {
     let checkoutScriptAttempts = 0;
     await context.route('https://checkout.razorpay.com/v1/checkout.js', async route => {
@@ -259,6 +303,80 @@ async function installFixtures(context, {
     }
     if (pathname === '/api/subscriptions/current') {
       await route.fulfill({ status: 200, json: { subscription: null } });
+      return;
+    }
+    if (pathname === '/api/sending/accounts' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          accounts: senderAccounts,
+          emailAccountLimit: senderAccountLimit,
+          configuredCount: senderAccounts.length,
+          overLimit: senderAccounts.length > senderAccountLimit,
+          scheduledDowngrade: null,
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/sending/gmail/connection') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          configured: false,
+          redirectUri: null,
+          connected: false,
+          emailAddress: null,
+          syncStatus: 'idle',
+          lastSyncAt: null,
+          lastSuccessAt: null,
+          nextSyncAt: null,
+          lastError: null,
+          pollIntervalSeconds: 60,
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/sending/accounts' && request.method() === 'POST') {
+      if (createSenderAccountStatus !== 201) {
+        await route.fulfill({ status: createSenderAccountStatus, json: { error: 'Sender creation failed.' } });
+        return;
+      }
+      const input = request.postDataJSON();
+      const account = {
+        ...makeSenderAccount('new-sender', senderAccounts.length === 0),
+        host: input.host,
+        port: input.port,
+        fromName: input.fromName,
+        fromEmail: input.fromEmail,
+      };
+      senderAccounts = [...senderAccounts, account];
+      await route.fulfill({ status: 201, json: { account } });
+      return;
+    }
+    const primaryAccountMatch = pathname.match(/^\/api\/sending\/accounts\/([^/]+)\/primary$/);
+    if (primaryAccountMatch && request.method() === 'PUT') {
+      if (setPrimarySenderAccountStatus !== 200) {
+        await route.fulfill({ status: setPrimarySenderAccountStatus, json: { error: 'Default selection failed.' } });
+        return;
+      }
+      senderAccounts = senderAccounts.map(account => ({
+        ...account,
+        isPrimary: account.id === primaryAccountMatch[1],
+      }));
+      await route.fulfill({ status: 200, json: { account: senderAccounts.find(account => account.id === primaryAccountMatch[1]) } });
+      return;
+    }
+    const senderAccountMatch = pathname.match(/^\/api\/sending\/accounts\/([^/]+)$/);
+    if (senderAccountMatch && request.method() === 'DELETE') {
+      if (deleteSenderAccountStatus !== 204) {
+        await route.fulfill({ status: deleteSenderAccountStatus, json: { error: 'Sender removal failed.' } });
+        return;
+      }
+      senderAccounts = senderAccounts.filter(account => account.id !== senderAccountMatch[1]);
+      if (!senderAccounts.some(account => account.isPrimary) && senderAccounts[0]) {
+        senderAccounts[0] = { ...senderAccounts[0], isPrimary: true };
+      }
+      await route.fulfill({ status: 204, body: '' });
       return;
     }
     if (pathname === '/api/subscriptions/orders' && request.method() === 'POST') {
@@ -305,6 +423,14 @@ async function openPlansPage(options) {
   await installFixtures(context, options);
   const page = await context.newPage();
   await page.goto(`${baseUrl}/plans`);
+  return { context, page };
+}
+
+async function openSendingPage(options) {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await installFixtures(context, options);
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/sending-settings`);
   return { context, page };
 }
 
@@ -663,6 +789,293 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         freeActivationResponses: [],
         paidVerificationResponses: [],
       }]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks accepted free-plan SMTP retention choices using aggregate values', async () => {
+    const smtpAccounts = [
+      makeSenderAccount('smtp-primary', true),
+      makeSenderAccount('smtp-secondary'),
+    ];
+    const { context, page } = await openPlansPage({
+      senderAccounts: smtpAccounts,
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['smtp_sender_retention_completed', {
+            account_count: 2,
+            retained_count: 1,
+            account_limit: 1,
+            outcome: 'accepted',
+          }],
+          freeActivationResponses: [200],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['free_subscription_activated', undefined],
+          freeActivationResponses: [200],
+          paidVerificationResponses: [],
+        },
+      ]);
+      const request = await page.evaluate(() => window.__subscriptionRequestBodies[0]);
+      assert.equal(request.pathname, '/api/subscriptions/free');
+      assert.deepEqual(request.body.senderAccountIdsToKeep, [smtpAccounts[0].id]);
+      const analyticsPayload = JSON.stringify(await page.evaluate(() => window.__analyticsCalls));
+      for (const account of smtpAccounts) {
+        assert.equal(analyticsPayload.includes(account.id), false);
+        assert.equal(analyticsPayload.includes(account.fromEmail), false);
+        assert.equal(analyticsPayload.includes(account.host), false);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks accepted paid-plan retention before opening checkout without account details', async () => {
+    const smtpAccounts = [
+      makeSenderAccount('smtp-primary', true),
+      makeSenderAccount('smtp-secondary'),
+    ];
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'open',
+      senderAccounts: smtpAccounts,
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
+      await page.waitForFunction(() => window.__razorpayOpenedOrderIds.length === 1);
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['smtp_sender_retention_completed', {
+            account_count: 2,
+            retained_count: 1,
+            account_limit: 1,
+            outcome: 'accepted',
+          }],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+      ]);
+      const request = await page.evaluate(() => window.__subscriptionRequestBodies[0]);
+      assert.equal(request.pathname, '/api/subscriptions/orders');
+      assert.deepEqual(request.body.senderAccountIdsToKeep, [smtpAccounts[0].id]);
+      const analyticsPayload = JSON.stringify(await page.evaluate(() => window.__analyticsCalls));
+      for (const account of smtpAccounts) {
+        assert.equal(analyticsPayload.includes(account.id), false);
+        assert.equal(analyticsPayload.includes(account.fromEmail), false);
+        assert.equal(analyticsPayload.includes(account.host), false);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not count a sender retention choice rejected during free-plan activation', async () => {
+    const { context, page } = await openPlansPage({
+      activationStatus: 409,
+      senderAccounts: [
+        makeSenderAccount('smtp-primary', true),
+        makeSenderAccount('smtp-secondary'),
+      ],
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
+      await page.getByTestId('status-payment').getByText('Free plan activation failed.').waitFor();
+
+      assert.deepEqual(
+        await page.evaluate(() => window.__analyticsCalls.map(call => call.args)),
+        [['free_subscription_activation_failed', undefined]],
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not let analytics tracker failures block package activation', async () => {
+    const { context, page } = await openPlansPage({
+      senderAccounts: [
+        makeSenderAccount('smtp-primary', true),
+        makeSenderAccount('smtp-secondary'),
+      ],
+      senderAccountLimit: 3,
+      analyticsThrows: true,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__freeActivationResponses), [200]);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks successful SMTP sender creation without account details', async () => {
+    const { context, page } = await openSendingPage({
+      senderAccounts: [makeSenderAccount('existing-sender', true)],
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId('section-sender-accounts').waitFor();
+      await page.getByTestId('button-add-sender-account').click();
+      await page.getByTestId('input-smtp-host').fill('smtp.created.example.test');
+      await page.getByTestId('input-smtp-username').fill('sender@example.test');
+      await page.getByTestId('input-smtp-password').fill('test-password');
+      await page.getByTestId('input-from-name').fill('Created Sender');
+      await page.getByTestId('input-from-email').fill('created@example.test');
+      await page.getByTestId('button-save-sending-settings').click();
+
+      await page.getByText('Sender identity saved. SMTP credentials remain encrypted in this workspace.').waitFor();
+      await page.getByText('2 of 3 account slots used').waitFor();
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [{
+        args: ['smtp_sender_account_created', {
+          account_count: 2,
+          account_limit: 3,
+          outcome: 'success',
+        }],
+        freeActivationResponses: [],
+        paidVerificationResponses: [],
+      }]);
+      const payload = JSON.stringify(await page.evaluate(() => window.__analyticsCalls));
+      assert.equal(payload.includes('new-sender'), false);
+      assert.equal(payload.includes('created@example.test'), false);
+      assert.equal(payload.includes('smtp.created.example.test'), false);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not let analytics tracker failures block successful sender creation', async () => {
+    const { context, page } = await openSendingPage({
+      senderAccounts: [makeSenderAccount('existing-sender', true)],
+      senderAccountLimit: 3,
+      analyticsThrows: true,
+    });
+    try {
+      await page.getByTestId('section-sender-accounts').waitFor();
+      await page.getByTestId('button-add-sender-account').click();
+      await page.getByTestId('input-smtp-host').fill('smtp.created.example.test');
+      await page.getByTestId('input-smtp-username').fill('sender@example.test');
+      await page.getByTestId('input-smtp-password').fill('test-password');
+      await page.getByTestId('input-from-name').fill('Created Sender');
+      await page.getByTestId('input-from-email').fill('created@example.test');
+      await page.getByTestId('button-save-sending-settings').click();
+
+      await page.getByText('Sender identity saved. SMTP credentials remain encrypted in this workspace.').waitFor();
+      await page.getByText('2 of 3 account slots used').waitFor();
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not track sender creation or default changes rejected by the server', async () => {
+    const { context, page } = await openSendingPage({
+      senderAccounts: [
+        makeSenderAccount('smtp-primary', true),
+        makeSenderAccount('smtp-secondary'),
+      ],
+      senderAccountLimit: 3,
+      createSenderAccountStatus: 409,
+      setPrimarySenderAccountStatus: 409,
+    });
+    try {
+      await page.getByTestId('section-sender-accounts').waitFor();
+      await page.getByTestId('button-add-sender-account').click();
+      await page.getByTestId('input-smtp-host').fill('smtp.created.example.test');
+      await page.getByTestId('input-smtp-username').fill('sender@example.test');
+      await page.getByTestId('input-smtp-password').fill('test-password');
+      await page.getByTestId('input-from-name').fill('Created Sender');
+      await page.getByTestId('input-from-email').fill('created@example.test');
+      await page.getByTestId('button-save-sending-settings').click();
+      await page.getByText('Sender creation failed.').waitFor();
+
+      await page.getByTestId('button-primary-sender-account-smtp-secondary').click();
+      await page.getByText('Default selection failed.').waitFor();
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks successful default selection and removal without sender identifiers', async () => {
+    const accounts = [
+      makeSenderAccount('smtp-primary', true),
+      makeSenderAccount('smtp-secondary'),
+    ];
+    const { context, page } = await openSendingPage({
+      senderAccounts: accounts,
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId('section-sender-accounts').waitFor();
+      await page.getByTestId('button-primary-sender-account-smtp-secondary').click();
+      await page.getByText('smtp-secondary@example.test is now the default campaign sender.').waitFor();
+      page.once('dialog', dialog => dialog.accept());
+      await page.getByTestId('button-delete-sender-account-smtp-primary').click();
+      await page.getByText('SMTP sender account and its saved credentials were removed.').waitFor();
+
+      const calls = await page.evaluate(() => window.__analyticsCalls);
+      assert.deepEqual(calls.map(call => call.args), [
+        ['smtp_sender_account_default_selected', {
+          account_count: 2,
+          account_limit: 3,
+          outcome: 'success',
+        }],
+        ['smtp_sender_account_deleted', {
+          account_count: 1,
+          account_limit: 3,
+          outcome: 'success',
+        }],
+      ]);
+      const payload = JSON.stringify(calls);
+      for (const account of accounts) {
+        assert.equal(payload.includes(account.id), false);
+        assert.equal(payload.includes(account.fromEmail), false);
+        assert.equal(payload.includes(account.host), false);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not track an SMTP removal rejected by the server', async () => {
+    const account = makeSenderAccount('smtp-protected', true);
+    const { context, page } = await openSendingPage({
+      senderAccounts: [account],
+      senderAccountLimit: 3,
+      deleteSenderAccountStatus: 409,
+    });
+    try {
+      await page.getByTestId('section-sender-accounts').waitFor();
+      page.once('dialog', dialog => dialog.accept());
+      await page.getByTestId('button-delete-sender-account-smtp-protected').click();
+      await page.getByText('Sender removal failed.').waitFor();
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
     } finally {
       await context.close();
     }
