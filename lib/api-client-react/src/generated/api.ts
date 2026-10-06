@@ -4124,7 +4124,7 @@ export const getDeleteCompanyUrl = (companyId: string,) => {
 }
 
 /**
- * @summary Delete a company that has no linked contacts
+ * @summary Delete a company and restore its profile to linked contacts
  */
 export const deleteCompany = async (companyId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
@@ -4176,7 +4176,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteCompanyMutationVariables = {companyId: string}
 
     /**
- * @summary Delete a company that has no linked contacts
+ * @summary Delete a company and restore its profile to linked contacts
  */
 export const useDeleteCompany = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCompany>>, TError,DeleteCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

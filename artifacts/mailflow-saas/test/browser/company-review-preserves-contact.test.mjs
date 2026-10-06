@@ -309,6 +309,56 @@ async function installApiFixtures(context, {
       });
       return;
     }
+    const companyDetailMatch = pathname.match(/^\/api\/companies\/([^/]+)$/);
+    if (companyDetailMatch && method === 'GET') {
+      const companyId = companyDetailMatch[1];
+      const selectedCompany = companies.find(item => item.id === companyId);
+      if (!selectedCompany) {
+        await route.fulfill({ status: 404, json: { error: 'Company not found.' } });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          company: selectedCompany,
+          contacts: contacts
+            .filter(item => item.companyId === companyId)
+            .map(({ id, name, email, jobTitle }) => ({ id, name, email, jobTitle })),
+        },
+      });
+      return;
+    }
+    if (companyDetailMatch && method === 'DELETE') {
+      const companyId = companyDetailMatch[1];
+      const selectedCompanyIndex = companies.findIndex(item => item.id === companyId);
+      if (selectedCompanyIndex < 0) {
+        await route.fulfill({ status: 404, json: { error: 'Company not found.' } });
+        return;
+      }
+      const [deletedCompany] = companies.splice(selectedCompanyIndex, 1);
+      for (let index = 0; index < contacts.length; index += 1) {
+        if (contacts[index].companyId !== companyId) continue;
+        contacts[index] = {
+          ...contacts[index],
+          ...Object.fromEntries([
+            'companyName',
+            'companyWebsiteUrl',
+            'companyDomain',
+            'companyIndustry',
+            'companySize',
+            'companyRevenueRange',
+            'companyDescription',
+            'companyPhoneNumber',
+            'companyLinkedinUrl',
+            'companyLocation',
+          ].map(field => [field, deletedCompany[field] ?? null])),
+          companyId: null,
+          company: null,
+        };
+      }
+      await route.fulfill({ status: 204 });
+      return;
+    }
     if (pathname === '/api/companies' && method === 'GET') {
       companyDirectoryRequests.push(request.url());
       await route.fulfill({ status: 200, json: { companies } });
@@ -732,6 +782,71 @@ describe('company profile review and contact data preservation', { concurrency: 
       await page.setViewportSize({ width: 390, height: 844 });
       const pageOverflowsHorizontally = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       assert.equal(pageOverflowsHorizontally, false, 'filters should not cause page-level horizontal overflow on mobile');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('confirms company deletion, preserves linked contacts, and returns to the directory', async () => {
+    const linkedContact = {
+      ...contact,
+      id: 'browser-delete-linked-contact-id',
+      name: 'Riley Chen',
+      firstName: 'Riley',
+      lastName: 'Chen',
+      email: 'riley.chen@northstar.example',
+      companyId: company.id,
+      company,
+      companyName: null,
+      companyWebsiteUrl: null,
+      companyDomain: null,
+      companyIndustry: null,
+      companySize: null,
+      companyRevenueRange: null,
+      companyDescription: null,
+      companyPhoneNumber: null,
+      companyLinkedinUrl: null,
+      companyLocation: null,
+    };
+    const companies = [{ ...company }];
+    const contacts = [linkedContact];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { companies, contacts });
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/companies/${company.id}`);
+      await page.getByTestId('text-company-name').waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('text-company-name').innerText(), company.companyName);
+
+      await page.getByTestId('button-delete-company').click();
+      const confirmation = page.getByTestId('dialog-delete-company');
+      await confirmation.waitFor({ state: 'visible' });
+      assert.match(await confirmation.innerText(), /1 contact is linked to this company/);
+      assert.match(await confirmation.innerText(), /Riley Chen/);
+      assert.match(await confirmation.innerText(), /riley\.chen@northstar\.example/);
+      await confirmation.getByTestId('button-cancel-confirmation').click();
+      await confirmation.waitFor({ state: 'hidden' });
+      assert.equal(companies.length, 1, 'cancel leaves the company untouched');
+      assert.equal(contacts[0].companyId, company.id, 'cancel leaves the contact association untouched');
+
+      await page.getByTestId('button-delete-company').click();
+      const deleteResponse = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/companies/${company.id}` &&
+        response.request().method() === 'DELETE',
+      );
+      await page.getByTestId('button-confirm-action').click();
+      assert.equal((await deleteResponse).status(), 204);
+      await page.waitForURL('**/companies');
+      await page.getByTestId('empty-company-directory').waitFor({ state: 'visible' });
+      assert.equal(companies.length, 0, 'the company is removed after confirmation');
+      assert.equal(contacts[0].companyId, null, 'the contact remains and is unlinked');
+      assert.equal(contacts[0].companyName, company.companyName, 'the shared company profile is restored to the contact');
+      assert.equal(contacts[0].companyIndustry, company.companyIndustry);
     } finally {
       await context.close();
     }

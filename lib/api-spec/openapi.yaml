@@ -1092,16 +1092,10 @@ paths:
     delete:
       operationId: deleteCompany
       tags: [contacts]
-      summary: Delete a company that has no linked contacts
+      summary: Delete a company and restore its profile to linked contacts
       responses:
         "204":
-          description: Company deleted
-        "409":
-          description: Unlink the company's contacts before deleting it
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
+          description: Company deleted and linked contacts unlinked with the shared profile restored
         "404":
           description: Company not found
           content:

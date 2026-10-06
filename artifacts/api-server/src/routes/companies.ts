@@ -625,30 +625,31 @@ router.delete(
         .limit(1)
         .for("update");
       if (!company) return "not_found" as const;
-      const [{ linkedCount }] = await tx
-        .select({ linkedCount: count() })
-        .from(contactsTable)
+      await tx
+        .update(contactsTable)
+        .set({
+          ...companyProfileFrom(company),
+          companyId: null,
+          companyLinkSuppressed: true,
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(contactsTable.companyId, company.id),
             eq(contactsTable.userId, userId),
           ),
         );
-      if (Number(linkedCount) > 0) return "linked" as const;
-      await tx
+      const [removedCompany] = await tx
         .delete(companiesTable)
-        .where(and(eq(companiesTable.id, company.id), eq(companiesTable.userId, userId)));
+        .where(and(eq(companiesTable.id, company.id), eq(companiesTable.userId, userId)))
+        .returning({ id: companiesTable.id });
+      if (!removedCompany) {
+        throw new Error("Company disappeared while its linked contacts were being restored.");
+      }
       return "deleted" as const;
     });
     if (deleted === "not_found") {
       res.status(404).json({ error: "Company not found.", code: "COMPANY_NOT_FOUND" });
-      return;
-    }
-    if (deleted === "linked") {
-      res.status(409).json({
-        error: "Unlink this company's contacts before deleting the company.",
-        code: "COMPANY_HAS_CONTACTS",
-      });
       return;
     }
     res.status(204).end();

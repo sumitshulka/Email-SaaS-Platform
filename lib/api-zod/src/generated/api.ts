@@ -1998,7 +1998,7 @@ export const UpdateCompanyResponse = zod.object({
 
 
 /**
- * @summary Delete a company that has no linked contacts
+ * @summary Delete a company and restore its profile to linked contacts
  */
 export const DeleteCompanyParams = zod.object({
   "companyId": zod.coerce.string().uuid()

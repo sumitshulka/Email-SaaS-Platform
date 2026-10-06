@@ -12,6 +12,7 @@ import {
 import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
 import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
+import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const errorText = (error: unknown) => error && typeof error === 'object' && 'message' in error
@@ -55,6 +56,7 @@ export function CompanyDetailPage() {
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [search, setSearch] = useState('');
   const contactOptionsParams = { companyId: '__none__', search, limit: 30 };
   const contactsQuery = useListContactOptions(contactOptionsParams, {
@@ -116,17 +118,52 @@ export function CompanyDetailPage() {
   if (query.isError || !company) return <section className={`${panel} flex flex-col items-start gap-3 p-6`} role="alert" data-testid="error-company-detail"><div className="flex items-center gap-2 text-sm font-semibold text-[#26364a]"><CircleAlert className="h-4 w-4 text-[#c16d31]"/>Company details could not be loaded</div><p className="text-xs text-[#778291]">The record may have been removed, or your workspace data could not be reached.</p><div className="flex gap-2"><button type="button" data-testid="button-retry-company-detail" onClick={() => void query.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button><Link href="/companies" data-testid="link-back-companies-error" className="rounded-md px-3 py-2 text-xs font-semibold text-[#245b9b] no-underline">Company directory</Link></div></section>;
 
   const deleteCurrentCompany = () => {
-    if (linked.length || !window.confirm(`Delete ${company.companyName}? This cannot be undone.`)) return;
     deleteCompany.mutate({ companyId: company.id }, {
       onSuccess: () => {
+        setDeleteConfirmationOpen(false);
+        void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) });
         void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+        void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getListContactOptionsQueryKey() });
+        for (const contact of linked) {
+          void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
+        }
         setLocation('/companies');
       },
-      onError: error => setNotice({ type: 'error', text: errorText(error) }),
+      onError: error => {
+        setDeleteConfirmationOpen(false);
+        setNotice({ type: 'error', text: `The company was not deleted. ${errorText(error)}` });
+      },
     });
   };
 
   return <div className="fade-in">
+    <ConfirmActionDialog
+      open={deleteConfirmationOpen}
+      onOpenChange={setDeleteConfirmationOpen}
+      onConfirm={deleteCurrentCompany}
+      title={`Delete ${company.companyName}?`}
+      description={linked.length
+        ? `${linked.length} ${linked.length === 1 ? 'contact is' : 'contacts are'} linked to this company. Their contact records will stay, be unlinked, and keep the shared company profile details. The company and its associations will be permanently removed.`
+        : 'This company and its profile will be permanently removed. Any contacts still linked when you confirm will remain as contact records, be unlinked, and keep the shared company profile details.'}
+      confirmLabel="Delete company"
+      pending={deleteCompany.isPending}
+      testId="dialog-delete-company"
+    >
+      {linked.length > 0 && (
+        <div data-testid="list-delete-company-contacts" className="max-h-36 overflow-y-auto rounded-md border border-[#e4e9ee] bg-[#f8fafb] px-3 py-2">
+          <p className="mb-1.5 text-[10px] font-semibold text-[#667586]">Affected contacts</p>
+          <ul className="space-y-1.5">
+            {linked.map(contact => (
+              <li key={contact.id} className="flex flex-wrap items-baseline justify-between gap-x-3 text-[11px]">
+                <span className="font-semibold text-[#344154]">{contact.name}</span>
+                <span className="text-[#7d8997]">{contact.email}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </ConfirmActionDialog>
     <CompanyLinkConfirmation replacement={replacement} pending={updateContact.isPending}
       onCancel={() => setReplacement(null)} onConfirm={target => linkContact(target, true)} />
     <Link href="/companies" data-testid="link-back-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Company directory</Link>
@@ -141,7 +178,7 @@ export function CompanyDetailPage() {
         <div className="p-5">
           <dl className="grid gap-x-5 sm:grid-cols-2">{profileFields.map(([label, key]) => <div key={key} className="min-w-0 border-b border-[#edf0f2] py-3"><dt className="mono text-[9px] uppercase tracking-[.1em] text-[#8a96a4]">{label}</dt><dd data-testid={`text-company-${key}`} className="mt-1 break-words text-[11px] leading-5 text-[#3b4d61]">{company[key] || <span className="text-[#9aa4af]">Not provided</span>}</dd></div>)}</dl>
           <div className="mt-4"><div className="mono mb-1.5 text-[9px] uppercase tracking-[.1em] text-[#8a96a4]">DESCRIPTION</div><p data-testid="text-company-description" className="whitespace-pre-wrap text-[11px] leading-5 text-[#637285]">{company.companyDescription || 'No description provided.'}</p></div>
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] pt-4"><span data-testid="text-company-updated-at" className="text-[10px] text-[#8994a1]">Updated {prettyDate(company.updatedAt)}</span><button type="button" data-testid="button-delete-company" disabled={linked.length > 0 || deleteCompany.isPending} title={linked.length > 0 ? 'Unlink all contacts before deleting this company.' : 'Delete company'} onClick={deleteCurrentCompany} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[10px] font-semibold text-[#a35c31] hover:bg-[#fff5ec] disabled:cursor-not-allowed disabled:text-[#b8b0aa]"><Trash2 className="h-3.5 w-3.5"/>{deleteCompany.isPending ? 'Deleting…' : linked.length > 0 ? 'Linked · cannot delete' : 'Delete company'}</button></div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] pt-4"><span data-testid="text-company-updated-at" className="text-[10px] text-[#8994a1]">Updated {prettyDate(company.updatedAt)}</span><button type="button" data-testid="button-delete-company" disabled={deleteCompany.isPending} title="Delete company and restore its profile to linked contacts" onClick={() => { setNotice(null); setDeleteConfirmationOpen(true); }} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[10px] font-semibold text-[#a35c31] hover:bg-[#fff5ec] disabled:cursor-not-allowed disabled:text-[#b8b0aa]"><Trash2 className="h-3.5 w-3.5"/>{deleteCompany.isPending ? 'Deleting…' : 'Delete company'}</button></div>
         </div>
       </section>
       <div className="space-y-5">

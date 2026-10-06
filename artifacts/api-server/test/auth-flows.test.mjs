@@ -3729,42 +3729,43 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(linkConflict.response.status, 409);
     assert.equal(linkConflict.body.code, "COMPANY_PROFILE_CONFLICT");
 
-    const blockedDelete = await api(`/companies/${company.id}`, {
+    const deleted = await api(`/companies/${company.id}`, {
       method: "DELETE",
       cookie: owner.cookie,
     });
-    assert.equal(blockedDelete.response.status, 409);
-    assert.equal(blockedDelete.body.code, "COMPANY_HAS_CONTACTS");
-
+    assert.equal(deleted.response.status, 204);
+    const deletedCompany = await api(`/companies/${company.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(deletedCompany.response.status, 404);
+    const contactsAfterDelete = await api("/contacts", { cookie: owner.cookie });
     for (const email of ["first@acme.test", "second@acme.test"]) {
-      const contact = ownerContacts.body.contacts.find((item) => item.email === email);
-      const unlinkedResult = await api(`/contacts/${contact.id}`, {
-        method: "PATCH",
-        cookie: owner.cookie,
-        body: { companyId: null },
-      });
-      assert.equal(unlinkedResult.response.status, 200, JSON.stringify(unlinkedResult.body));
-      assert.equal(unlinkedResult.body.companyId, null);
-      assert.equal(unlinkedResult.body.companyName, "Acme");
-      assert.equal(
-        unlinkedResult.body.companyDomain,
-        "HTTPS://WWW.acme-company.test/about",
-      );
+      const contact = contactsAfterDelete.body.contacts.find((item) => item.email === email);
+      assert.equal(contact.companyId, null);
+      assert.equal(contact.company, null);
+      assert.equal(contact.companyName, "Acme");
+      assert.equal(contact.companyDomain, "HTTPS://WWW.acme-company.test/about");
+      assert.equal(contact.companyIndustry, "Software");
     }
     const backfillAfterUnlink = await api("/companies/backfill", {
       method: "POST",
       cookie: owner.cookie,
     });
     assert.deepEqual(backfillAfterUnlink.body, {
-      linkedContacts: 0,
-      createdCompanies: 0,
-      skippedContacts: 1,
+      linkedContacts: 1,
+      createdCompanies: 1,
+      skippedContacts: 0,
     });
-    const deleted = await api(`/companies/${company.id}`, {
-      method: "DELETE",
-      cookie: owner.cookie,
-    });
-    assert.equal(deleted.response.status, 204);
+    const contactsAfterBackfill = await api("/contacts", { cookie: owner.cookie });
+    for (const email of ["first@acme.test", "second@acme.test"]) {
+      assert.equal(
+        contactsAfterBackfill.body.contacts.find((item) => item.email === email).companyId,
+        null,
+        "contacts restored during deletion must not be automatically relinked",
+      );
+    }
+    const remainingCompanies = await api("/companies", { cookie: owner.cookie });
+    assert.equal(remainingCompanies.body.companies.some((item) => item.id === company.id), false);
   });
 });
 
