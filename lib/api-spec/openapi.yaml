@@ -3591,6 +3591,10 @@ components:
       properties:
         id: { type: string, format: uuid }
         senderAccountId: { type: ["string", "null"], format: uuid }
+        senderEmail:
+          type: ["string", "null"]
+          format: email
+          description: SMTP sender address captured when queued; drafts use the currently assigned account address.
         name: { type: string }
         objective: { type: string, maxLength: 500 }
         subject: { type: string }
@@ -3618,7 +3622,7 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, senderAccountId, name, subject, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, senderAccountId, senderEmail, name, subject, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignAudienceSummary:
       type: object
       properties:
