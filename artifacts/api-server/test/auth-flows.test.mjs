@@ -5399,6 +5399,192 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("finishes an in-flight email but pauses before claiming the next recipient during maintenance", async () => {
+    const owner = await loggedInUser({
+      username: "maintenance-inflight-owner",
+    });
+    const recipientEmails = [
+      "first@maintenance.test",
+      "second@maintenance.test",
+      "third@maintenance.test",
+    ];
+    const contacts = await db
+      .insert(dbModule.contactsTable)
+      .values(
+        recipientEmails.map((email, index) => ({
+          userId: owner.user.id,
+          email,
+          firstName: `Contact ${index + 1}`,
+          subscribed: true,
+        })),
+      )
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.maintenance.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("maintenance-user"),
+        passwordEncrypted: securityModule.encryptSecret("maintenance-password"),
+        fromName: "Maintenance Test",
+        fromEmail: "sender@maintenance.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Maintenance transition",
+        subject: "A campaign update",
+        textBody: "This message should pause safely.",
+        status: "queued",
+      })
+      .returning();
+    await db.insert(dbModule.emailCampaignRecipientsTable).values(
+      contacts.map((contact, index) => ({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        nextAttemptAt: new Date(Date.now() - (recipientEmails.length - index) * 1000),
+        createdAt: new Date(Date.now() - (recipientEmails.length - index) * 1000),
+      })),
+    );
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let markFirstDeliveryStarted;
+    const firstDeliveryStarted = new Promise((resolve) => {
+      markFirstDeliveryStarted = resolve;
+    });
+    let finishFirstDelivery;
+    const firstDeliveryGate = new Promise((resolve) => {
+      finishFirstDelivery = resolve;
+    });
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      if (message.to === recipientEmails[0]) {
+        markFirstDeliveryStarted();
+        await firstDeliveryGate;
+      }
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+
+    try {
+      const inFlightBatch =
+        campaignWorkerModule.processPendingCampaignDeliveries(3);
+      await firstDeliveryStarted;
+      await db
+        .update(dbModule.systemConfigurationTable)
+        .set({
+          value: {
+            maintenanceMode: true,
+            defaultEmailsPerHour: 3600,
+            maxEmailsPerDay: 100,
+            queuePollingSeconds: 1,
+            deliveryTrackingEnabled: true,
+          },
+        })
+        .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+      finishFirstDelivery();
+
+      assert.equal(await inFlightBatch, 1);
+      assert.deepEqual(deliveredTo, [recipientEmails[0]]);
+
+      const pausedRecipients = await db
+        .select({
+          email: dbModule.emailCampaignRecipientsTable.email,
+          status: dbModule.emailCampaignRecipientsTable.status,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(
+          eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.id),
+        );
+      assert.deepEqual(
+        Object.fromEntries(
+          pausedRecipients.map(({ email, status }) => [email, status]),
+        ),
+        {
+          [recipientEmails[0]]: "delivered",
+          [recipientEmails[1]]: "queued",
+          [recipientEmails[2]]: "queued",
+        },
+      );
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(3),
+        0,
+      );
+      assert.deepEqual(deliveredTo, [recipientEmails[0]]);
+
+      await db
+        .update(dbModule.systemConfigurationTable)
+        .set({
+          value: {
+            maintenanceMode: false,
+            defaultEmailsPerHour: 3600,
+            maxEmailsPerDay: 100,
+            queuePollingSeconds: 1,
+            deliveryTrackingEnabled: true,
+          },
+        })
+        .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+      for (const expectedEmail of recipientEmails.slice(1)) {
+        await db
+          .update(dbModule.emailSendAttemptsTable)
+          .set({ attemptedAt: new Date(Date.now() - 60_000) })
+          .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+        assert.equal(
+          await campaignWorkerModule.processPendingCampaignDeliveries(1),
+          1,
+        );
+        assert.equal(deliveredTo.at(-1), expectedEmail);
+      }
+
+      const resumedRecipients = await db
+        .select({
+          email: dbModule.emailCampaignRecipientsTable.email,
+          status: dbModule.emailCampaignRecipientsTable.status,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(
+          eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.id),
+        );
+      assert.deepEqual(
+        Object.fromEntries(
+          resumedRecipients.map(({ email, status }) => [email, status]),
+        ),
+        Object.fromEntries(recipientEmails.map((email) => [email, "delivered"])),
+      );
+      assert.deepEqual(deliveredTo, recipientEmails);
+    } finally {
+      finishFirstDelivery();
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
     const owner = await loggedInUser({ username: "sending-owner" });
     const other = await loggedInUser({ username: "sending-other" });
