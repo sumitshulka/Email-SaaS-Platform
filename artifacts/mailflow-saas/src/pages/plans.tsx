@@ -142,7 +142,11 @@ export default function PlansPage() {
   const activeSubscription = currentQuery.data?.subscription?.status === 'active' ? currentQuery.data.subscription : null;
   const busy = createOrder.isPending || activateFree.isPending || verifyPayment.isPending;
 
-  const runVerification = (order: SubscriptionOrderCreated, response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+  const runVerification = (
+    order: SubscriptionOrderCreated,
+    response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string },
+    retentionAnalytics?: { accountCount: number; retainedCount: number; accountLimit: number },
+  ) => {
     setPaymentState({ kind: 'pending', message: 'Payment received. Waiting for server confirmation…' });
     verifyPayment.mutate({ data: {
       paymentId: order.paymentId,
@@ -153,6 +157,13 @@ export default function PlansPage() {
       onSuccess: result => {
         if (result.status === 'active' && result.subscription) {
           trackEvent('paid_subscription_activated');
+          if (retentionAnalytics) {
+            trackSmtpSenderRetentionCompleted(
+              retentionAnalytics.accountCount,
+              retentionAnalytics.retainedCount,
+              retentionAnalytics.accountLimit,
+            );
+          }
         } else if (result.status === 'pending') {
           trackPaidVerificationOutcome('pending');
         }
@@ -206,13 +217,6 @@ export default function PlansPage() {
     }
     createOrder.mutate({ data: { packageId: pkg.id, ...(accountIdsToKeep !== undefined ? { senderAccountIdsToKeep: accountIdsToKeep } : {}) } }, {
       onSuccess: async order => {
-        if (accountIdsToKeep !== undefined) {
-          trackSmtpSenderRetentionCompleted(
-            senderAccounts.length,
-            accountIdsToKeep.length,
-            pkg.emailAccountLimit,
-          );
-        }
         setCheckoutOrder(order);
         try {
           await loadCheckoutScript();
@@ -226,7 +230,17 @@ export default function PlansPage() {
             order_id: order.orderId,
             prefill: { name: order.customerName, email: order.customerEmail },
             theme: { color: '#174f99' },
-            handler: response => runVerification(order, response),
+            handler: response => runVerification(
+              order,
+              response,
+              accountIdsToKeep !== undefined
+                ? {
+                    accountCount: senderAccounts.length,
+                    retainedCount: accountIdsToKeep.length,
+                    accountLimit: pkg.emailAccountLimit,
+                  }
+                : undefined,
+            ),
             modal: { ondismiss: () => {
               trackPaidCheckoutOutcome('dismissed');
               setCheckoutOrder(null);

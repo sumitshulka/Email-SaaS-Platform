@@ -515,10 +515,16 @@ describe('subscription activation analytics', { concurrency: false }, () => {
     }
   });
 
-  it('does not track when verification is still pending', async () => {
+  it('does not count paid-plan retention while verification is still pending', async () => {
+    const smtpAccounts = [
+      makeSenderAccount('smtp-primary', true),
+      makeSenderAccount('smtp-secondary'),
+    ];
     const { context, page } = await openPlansPage({
       packages: [paidPackage],
       checkoutAction: 'complete',
+      senderAccounts: smtpAccounts,
+      senderAccountLimit: 3,
       verificationResult: {
         status: 'pending',
         message: 'Payment has not been captured yet.',
@@ -527,6 +533,8 @@ describe('subscription activation analytics', { concurrency: false }, () => {
     });
     try {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
       await page.getByTestId('status-payment').getByText('Payment verification pending').waitFor();
 
       assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
@@ -542,6 +550,10 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         },
       ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
+      assert.equal(
+        (await page.evaluate(() => JSON.stringify(window.__analyticsCalls))).includes('smtp_sender_retention_completed'),
+        false,
+      );
     } finally {
       await context.close();
     }
@@ -840,14 +852,14 @@ describe('subscription activation analytics', { concurrency: false }, () => {
     }
   });
 
-  it('tracks accepted paid-plan retention before opening checkout without account details', async () => {
+  it('tracks paid-plan retention only after server confirmation and sends aggregate values', async () => {
     const smtpAccounts = [
       makeSenderAccount('smtp-primary', true),
       makeSenderAccount('smtp-secondary'),
     ];
     const { context, page } = await openPlansPage({
       packages: [paidPackage],
-      checkoutAction: 'open',
+      checkoutAction: 'complete',
       senderAccounts: smtpAccounts,
       senderAccountLimit: 3,
     });
@@ -855,9 +867,19 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
       await page.getByTestId('dialog-sender-retention').waitFor();
       await page.getByTestId('button-confirm-sender-retention').click();
-      await page.waitForFunction(() => window.__razorpayOpenedOrderIds.length === 1);
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
 
       assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['paid_subscription_activated', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [200],
+        },
         {
           args: ['smtp_sender_retention_completed', {
             account_count: 2,
@@ -866,12 +888,7 @@ describe('subscription activation analytics', { concurrency: false }, () => {
             outcome: 'accepted',
           }],
           freeActivationResponses: [],
-          paidVerificationResponses: [],
-        },
-        {
-          args: ['paid_checkout_started', undefined],
-          freeActivationResponses: [],
-          paidVerificationResponses: [],
+          paidVerificationResponses: [200],
         },
       ]);
       const request = await page.evaluate(() => window.__subscriptionRequestBodies[0]);
@@ -883,6 +900,69 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         assert.equal(analyticsPayload.includes(account.fromEmail), false);
         assert.equal(analyticsPayload.includes(account.host), false);
       }
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not count paid-plan retention when checkout is dismissed', async () => {
+    const smtpAccounts = [
+      makeSenderAccount('smtp-primary', true),
+      makeSenderAccount('smtp-secondary'),
+    ];
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'dismiss',
+      senderAccounts: smtpAccounts,
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
+      await page.getByTestId('status-payment').getByText('Checkout closed').waitFor();
+
+      assert.deepEqual(
+        await page.evaluate(() => window.__analyticsCalls.map(call => call.args[0])),
+        ['paid_checkout_started', 'paid_checkout_dismissed'],
+      );
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
+      assert.equal(
+        (await page.evaluate(() => JSON.stringify(window.__analyticsCalls))).includes('smtp_sender_retention_completed'),
+        false,
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not count paid-plan retention when payment verification fails', async () => {
+    const smtpAccounts = [
+      makeSenderAccount('smtp-primary', true),
+      makeSenderAccount('smtp-secondary'),
+    ];
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutAction: 'complete',
+      verificationStatus: 400,
+      senderAccounts: smtpAccounts,
+      senderAccountLimit: 3,
+    });
+    try {
+      await page.getByTestId(`button-purchase-plan-${paidPackage.id}`).click();
+      await page.getByTestId('dialog-sender-retention').waitFor();
+      await page.getByTestId('button-confirm-sender-retention').click();
+      await page.getByTestId('status-payment').getByText('Payment needs attention').waitFor();
+
+      assert.deepEqual(
+        await page.evaluate(() => window.__analyticsCalls.map(call => call.args[0])),
+        ['paid_checkout_started', 'paid_payment_verification_failed'],
+      );
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [400]);
+      assert.equal(
+        (await page.evaluate(() => JSON.stringify(window.__analyticsCalls))).includes('smtp_sender_retention_completed'),
+        false,
+      );
     } finally {
       await context.close();
     }
