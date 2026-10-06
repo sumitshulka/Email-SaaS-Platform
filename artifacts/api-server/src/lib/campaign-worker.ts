@@ -508,14 +508,6 @@ async function claimDelivery(
 
     const attemptId = randomUUID();
     const messageId = `<${attemptId}@mailflow.local>`;
-    await tx.insert(emailSendAttemptsTable).values({
-      id: attemptId,
-      userId,
-      recipientId: recipient.id,
-      messageId,
-      dsnRequested,
-      attemptedAt: now,
-    });
     const [claimed] = await tx
       .update(emailCampaignRecipientsTable)
       .set({
@@ -533,10 +525,19 @@ async function claimDelivery(
         and(
           eq(emailCampaignRecipientsTable.id, recipient.id),
           eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.status, "queued"),
         ),
       )
       .returning();
     if (!claimed) return null;
+    await tx.insert(emailSendAttemptsTable).values({
+      id: attemptId,
+      userId,
+      recipientId: recipient.id,
+      messageId,
+      dsnRequested,
+      attemptedAt: now,
+    });
     await tx
       .update(emailCampaignsTable)
       .set({ status: "sending", updatedAt: now })

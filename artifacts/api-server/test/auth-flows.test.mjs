@@ -5415,6 +5415,129 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("sends a queued recipient once when two campaign workers run concurrently", async () => {
+    const owner = await loggedInUser({
+      username: "concurrent-campaign-worker-owner",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "once@concurrent-worker.test",
+        firstName: "Once",
+        subscribed: true,
+      })
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.concurrent-worker.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("concurrent-worker-user"),
+        passwordEncrypted: securityModule.encryptSecret("concurrent-worker-password"),
+        fromName: "Concurrency Test",
+        fromEmail: "sender@concurrent-worker.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Concurrent worker claim",
+        subject: "One delivery only",
+        textBody: "This recipient must only be claimed once.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let markTransportEntered;
+    const transportEntered = new Promise((resolve) => {
+      markTransportEntered = resolve;
+    });
+    let releaseTransport;
+    const transportGate = new Promise((resolve) => {
+      releaseTransport = resolve;
+    });
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      markTransportEntered();
+      await transportGate;
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+
+    try {
+      const workers = [
+        campaignWorkerModule.processPendingCampaignDeliveries(1),
+        campaignWorkerModule.processPendingCampaignDeliveries(1),
+      ];
+      await transportEntered;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      releaseTransport();
+
+      assert.deepEqual(
+        (await Promise.all(workers)).sort((left, right) => left - right),
+        [0, 1],
+      );
+      assert.deepEqual(deliveredTo, [recipient.email]);
+
+      const [savedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(savedRecipient.status, "delivered");
+      assert.equal(savedRecipient.attempts, 1);
+      assert.ok(savedRecipient.deliveredAt);
+
+      const attempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(attempts.length, 1);
+      assert.equal(attempts[0].outcome, "smtp_accepted");
+      assert.ok(attempts[0].completedAt);
+    } finally {
+      releaseTransport();
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("keeps interrupted sends unknown after maintenance and resumes other recipients", async () => {
     const owner = await loggedInUser({
       username: "maintenance-uncertain-send-owner",
