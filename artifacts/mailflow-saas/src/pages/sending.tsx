@@ -15,6 +15,7 @@ import {
 } from '@/components/contact-directory-filters';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
@@ -346,120 +347,133 @@ export function SendingSettingsPage() {
     );
   };
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => void query.refetch()} label="sender settings"><>
-    <Heading eyebrow="SENDING / IDENTITY" title="Email Setup" detail="Configure campaign sending, Google bounce monitoring, and guided Microsoft 365 message-trace access."/>
+    <Heading eyebrow="SENDING / IDENTITY" title="Email Setup" detail="Manage campaign senders and delivery monitoring for this workspace."/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
-    <section data-testid="section-sender-accounts" className={`${panelClass} mb-5 p-5 sm:p-6`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">SENDER ACCOUNTS</div>
-          <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">SMTP accounts for campaigns</h2>
-          <p className="mt-1 text-[12px] leading-5 text-[#687484]">Each connected SMTP account uses one slot in your subscription. Gmail bounce monitoring is managed separately below.</p>
-        </div>
-        <span data-testid="text-sender-account-usage" className="rounded-md border border-[#dce4eb] bg-[#f7f9fb] px-3 py-2 text-[11px] font-semibold text-[#405469]">
-          {query.data?.configuredCount ?? accounts.length} of {query.data?.emailAccountLimit ?? 1} account slots used
-        </span>
-      </div>
-      {query.data?.overLimit && <p role="alert" className="mt-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2.5 text-[11px] leading-5 text-[#895b2f]">This workspace has more SMTP accounts than its current package allows. Remove accounts until you are within the limit. Campaign sending is paused until then.</p>}
-      {query.data?.scheduledDowngrade && <p data-testid="text-scheduled-sender-retention" className="mt-4 rounded-md border border-[#d6e3ef] bg-[#f3f7fb] px-3 py-2.5 text-[11px] leading-5 text-[#385c7e]">
-        {query.data.scheduledDowngrade.packageName} starts {formatDate(query.data.scheduledDowngrade.startsAt)}. {query.data.scheduledDowngrade.accountIdsToKeep.length} selected SMTP account{query.data.scheduledDowngrade.accountIdsToKeep.length === 1 ? '' : 's'} will stay; other saved accounts will be removed then.
-      </p>}
-      <div className="mt-4 grid gap-2 md:grid-cols-2">
-        {accounts.map(account => <article key={account.id} data-testid={`card-sender-account-${account.id}`} className={`rounded-md border p-3 ${selectedAccountId === account.id ? 'border-[#8eafd0] bg-[#f5f9fd]' : 'border-[#e3e8ed] bg-white'}`}>
-          <button type="button" data-testid={`button-select-sender-account-${account.id}`} onClick={() => selectAccount(account.id)} className="block w-full text-left">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="truncate text-[12px] font-semibold text-[#28394d]">{account.fromEmail}</span>
-              {account.isPrimary && <Status tone="blue">default</Status>}
-              {account.verified && <Status tone="green">verified</Status>}
+    <Tabs defaultValue="email-setup" className="w-full" data-testid="email-setup-tabs">
+      <TabsList className="mb-5 grid h-auto w-full grid-cols-1 gap-1 rounded-lg border border-[#e0e4e9] bg-white p-1 sm:grid-cols-3">
+        <TabsTrigger data-testid="tab-email-setup" value="email-setup" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Email setup</TabsTrigger>
+        <TabsTrigger data-testid="tab-gmail-monitoring" value="gmail-monitoring" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Gmail &amp; Google Workspace</TabsTrigger>
+        <TabsTrigger data-testid="tab-microsoft365-trace" value="microsoft365-trace" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Microsoft 365</TabsTrigger>
+      </TabsList>
+      <TabsContent value="email-setup" className="mt-0">
+        <section data-testid="section-sender-accounts" className={`${panelClass} mb-5 p-5 sm:p-6`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">SENDER ACCOUNTS</div>
+              <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">SMTP accounts for campaigns</h2>
+              <p className="mt-1 text-[12px] leading-5 text-[#687484]">Each connected SMTP account uses one slot in your subscription. Delivery monitoring is managed in its own tab.</p>
             </div>
-            <p className="mt-1 truncate text-[11px] text-[#778392]">{account.fromName} · {account.host}:{account.port}</p>
-            {account.activeCampaignCount > 0 && <p className="mt-1 text-[10px] text-[#895b2f]">{account.activeCampaignCount} queued or sending campaign{account.activeCampaignCount === 1 ? '' : 's'}</p>}
-          </button>
-          <div className="mt-2 flex flex-wrap gap-2 border-t border-[#edf0f2] pt-2">
-            {!account.isPrimary && <button type="button" data-testid={`button-primary-sender-account-${account.id}`} onClick={() => makePrimary(account)} disabled={setPrimaryAccount.isPending} className="text-[10px] font-semibold text-[#245b9b] hover:underline disabled:opacity-50">Make default</button>}
-            <button type="button" data-testid={`button-delete-sender-account-${account.id}`} onClick={() => removeAccount(account)} disabled={account.activeCampaignCount > 0 || deleteAccount.isPending} className="text-[10px] font-semibold text-[#a44f42] hover:underline disabled:cursor-not-allowed disabled:opacity-45">Remove</button>
+            <span data-testid="text-sender-account-usage" className="rounded-md border border-[#dce4eb] bg-[#f7f9fb] px-3 py-2 text-[11px] font-semibold text-[#405469]">
+              {query.data?.configuredCount ?? accounts.length} of {query.data?.emailAccountLimit ?? 1} account slots used
+            </span>
           </div>
-        </article>)}
-        <button type="button" data-testid="button-add-sender-account" onClick={addAccount} disabled={accounts.length >= (query.data?.emailAccountLimit ?? 1)} className="flex min-h-20 items-center justify-center gap-2 rounded-md border border-dashed border-[#ccd7e1] bg-[#fbfcfd] px-3 text-[11px] font-semibold text-[#38638a] hover:bg-[#f4f8fb] disabled:cursor-not-allowed disabled:opacity-50">
-          <CirclePlus className="h-4 w-4"/>Add SMTP account
-        </button>
-      </div>
-    </section>
-    <section data-testid="section-gmail-bounce-monitor" className={`${panelClass} mb-5 p-5 sm:p-6`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-3xl">
-          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">BOUNCE MONITORING</div>
-          <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">Gmail and Google Workspace</h2>
-          <p className="mt-2 text-[12px] leading-5 text-[#687484]">Connect a mailbox with its owner’s Google consent. Mailflow checks new-message headers and fetches message content only when Gmail identifies a delivery-status notice. It does not scan unrelated mailbox content.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {gmailConnection.data?.connected && <Button variant="outline" testId="button-disconnect-gmail" disabled={disconnectGmailConnection.isPending} onClick={disconnectGmail}>{disconnectGmailConnection.isPending ? 'Disconnecting…' : 'Disconnect mailbox'}</Button>}
-          <Button testId="button-connect-gmail" disabled={!gmailConnection.data?.configured || startGmailConnection.isPending} onClick={connectGmail}>{startGmailConnection.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : null}{gmailConnection.data?.connected ? 'Reconnect Google account' : 'Connect Google account'}</Button>
-        </div>
-      </div>
-      {gmailConnection.isLoading ? <p className="mt-4 text-[12px] text-[#778291]">Checking Gmail connection status…</p>
-        : gmailConnection.isError || !gmailConnection.data ? <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[12px] text-[#99501e]"><span>Gmail connection status could not be loaded.</span><button type="button" className={outlineButton} onClick={() => void gmailConnection.refetch()}>Retry</button></div>
-        : !gmailConnection.data.configured
-          ? <div className="mt-4 rounded-md border border-[#e4e8ed] bg-[#f7f9fb] p-4">
-            <p data-testid="text-gmail-oauth-setup" className="text-[12px] leading-5 text-[#596777]">Gmail bounce monitoring is not available yet. Your platform administrator will enable mailbox connections when setup is complete.</p>
+          {query.data?.overLimit && <p role="alert" className="mt-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2.5 text-[11px] leading-5 text-[#895b2f]">This workspace has more SMTP accounts than its current package allows. Remove accounts until you are within the limit. Campaign sending is paused until then.</p>}
+          {query.data?.scheduledDowngrade && <p data-testid="text-scheduled-sender-retention" className="mt-4 rounded-md border border-[#d6e3ef] bg-[#f3f7fb] px-3 py-2.5 text-[11px] leading-5 text-[#385c7e]">
+            {query.data.scheduledDowngrade.packageName} starts {formatDate(query.data.scheduledDowngrade.startsAt)}. {query.data.scheduledDowngrade.accountIdsToKeep.length} selected SMTP account{query.data.scheduledDowngrade.accountIdsToKeep.length === 1 ? '' : 's'} will stay; other saved accounts will be removed then.
+          </p>}
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {accounts.map(account => <article key={account.id} data-testid={`card-sender-account-${account.id}`} className={`rounded-md border p-3 ${selectedAccountId === account.id ? 'border-[#8eafd0] bg-[#f5f9fd]' : 'border-[#e3e8ed] bg-white'}`}>
+              <button type="button" data-testid={`button-select-sender-account-${account.id}`} onClick={() => selectAccount(account.id)} className="block w-full text-left">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-[12px] font-semibold text-[#28394d]">{account.fromEmail}</span>
+                  {account.isPrimary && <Status tone="blue">default</Status>}
+                  {account.verified && <Status tone="green">verified</Status>}
+                </div>
+                <p className="mt-1 truncate text-[11px] text-[#778392]">{account.fromName} · {account.host}:{account.port}</p>
+                {account.activeCampaignCount > 0 && <p className="mt-1 text-[10px] text-[#895b2f]">{account.activeCampaignCount} queued or sending campaign{account.activeCampaignCount === 1 ? '' : 's'}</p>}
+              </button>
+              <div className="mt-2 flex flex-wrap gap-2 border-t border-[#edf0f2] pt-2">
+                {!account.isPrimary && <button type="button" data-testid={`button-primary-sender-account-${account.id}`} onClick={() => makePrimary(account)} disabled={setPrimaryAccount.isPending} className="text-[10px] font-semibold text-[#245b9b] hover:underline disabled:opacity-50">Make default</button>}
+                <button type="button" data-testid={`button-delete-sender-account-${account.id}`} onClick={() => removeAccount(account)} disabled={account.activeCampaignCount > 0 || deleteAccount.isPending} className="text-[10px] font-semibold text-[#a44f42] hover:underline disabled:cursor-not-allowed disabled:opacity-45">Remove</button>
+              </div>
+            </article>)}
+            <button type="button" data-testid="button-add-sender-account" onClick={addAccount} disabled={accounts.length >= (query.data?.emailAccountLimit ?? 1)} className="flex min-h-20 items-center justify-center gap-2 rounded-md border border-dashed border-[#ccd7e1] bg-[#fbfcfd] px-3 text-[11px] font-semibold text-[#38638a] hover:bg-[#f4f8fb] disabled:cursor-not-allowed disabled:opacity-50">
+              <CirclePlus className="h-4 w-4"/>Add SMTP account
+            </button>
           </div>
-          : <div className="mt-4 rounded-md bg-[#f7f9fb] p-4">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#596777]">
-            <span>Status: <strong className="text-[#26364a]">{gmailConnection.data.syncStatus.replace(/_/g, ' ')}</strong></span>
-            {gmailConnection.data.emailAddress && <span>Mailbox: <strong className="text-[#26364a]">{gmailConnection.data.emailAddress}</strong></span>}
-            <span>Polling: every {Math.round(gmailConnection.data.pollIntervalSeconds / 60)} min</span>
-            <span>Last checked: <strong className="text-[#26364a]">{formatDate(gmailConnection.data.lastSyncAt)}</strong></span>
+        </section>
+        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+          <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fc] text-[#245b9b]"><Fingerprint className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Identity status</div><div className="mt-1"><Status tone={settings?.verified ? 'green' : 'orange'}>{settings?.verified ? 'Verified' : 'Verification needed'}</Status></div></div></div>
+          <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#f0f3f6] text-[#657488]"><ShieldCheck className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">SMTP credentials</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{settings?.credentialsConfigured ? 'Configured · protected' : 'Not configured'}</div></div></div>
+          <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#fff3e8] text-[#ae642c]"><Clock3 className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Last updated</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{formatDate(settings?.updatedAt)}</div></div></div>
+        </div>
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(290px,.75fr)]">
+          <form onSubmit={save} className={`${panelClass} p-5 sm:p-6`}>
+            <div className="mb-5 flex items-start justify-between gap-3 border-b border-[#edf0f2] pb-4"><div><h2 className="display text-[18px] font-bold text-[#1b293a]">SMTP connection</h2><p className="mt-1 text-[12px] text-[#788392]">These settings are scoped to your tenant, never shared across workspaces.</p></div><span className="mono rounded bg-[#f4f6f8] px-2 py-1 text-[9px] tracking-wide text-[#788392]">TENANT ONLY</span></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label><span className={labelClass}>Provider</span><select data-testid="select-sender-provider" className={inputClass} value={form.provider} onChange={e => change('provider', e.target.value)}><option value="google_workspace">Google Workspace</option><option value="gmail">Gmail</option><option value="microsoft_365">Microsoft 365</option><option value="other">Other SMTP</option></select></label>
+              <Field label="SMTP host" value={form.host} onChange={v => change('host', v)} placeholder="smtp.example.com" required testId="input-smtp-host"/>
+              <Field label="Port" value={form.port} onChange={v => change('port', v)} type="number" required testId="input-smtp-port"/>
+              <label><span className={labelClass}>Encryption</span><select data-testid="select-smtp-encryption" className={inputClass} value={form.encryption} onChange={e => change('encryption', e.target.value)}><option value="tls">STARTTLS / TLS</option><option value="ssl">SSL</option><option value="none">None</option></select></label>
+              <Field label="SMTP username" value={form.username} onChange={v => change('username', v)} placeholder={settings?.credentialsConfigured ? 'Leave blank to keep the saved username' : 'sender@example.com'} testId="input-smtp-username" hint={settings?.credentialsConfigured ? `Saved username: ${settings.username} · leave blank to keep it` : 'Required with the SMTP password'}/>
+              <Field label="SMTP password" value={form.password} onChange={v => change('password', v)} type="password" placeholder={settings?.credentialsConfigured ? 'Leave blank to keep current password' : 'Enter SMTP password'} testId="input-smtp-password"/>
+            </div>
+            <div className="my-6 border-t border-[#edf0f2]"/>
+            <div className="mb-4"><h3 className="display text-[16px] font-bold text-[#1b293a]">Sender identity</h3><p className="mt-1 text-[12px] text-[#788392]">The visible name and addresses recipients will see.</p></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="From name" value={form.fromName} onChange={v => change('fromName', v)} placeholder="Customer care" required testId="input-from-name"/>
+              <Field label="From email" value={form.fromEmail} onChange={v => change('fromEmail', v)} type="email" placeholder="hello@example.com" required testId="input-from-email"/>
+              <div className="sm:col-span-2"><Field label="Reply-to address" value={form.replyTo} onChange={v => change('replyTo', v)} type="email" placeholder="Optional — defaults to from address" testId="input-reply-to"/></div>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={updateAccount.isPending || createAccount.isPending}>{(updateAccount.isPending || createAccount.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{(updateAccount.isPending || createAccount.isPending) ? 'Saving settings' : selectedAccountId ? 'Save sender settings' : 'Add sender account'}</Button></div>
+          </form>
+          <div className={`${panelClass} overflow-hidden`}>
+            <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Test SMTP settings</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">Use the values currently in the form. You can check login without sending, or send a real test email to confirm the server accepts a message.</p></div>
+            <form onSubmit={runTest} className="space-y-4 p-5">
+              <Field label="Deliver test to" value={testEmail} onChange={setTestEmail} type="email" placeholder="you@company.com" required testId="input-test-recipient"/>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button type="button" variant="outline" testId="button-check-smtp-connection" onClick={runConnectionTest} disabled={!canTestSmtp || connectionTest.isPending || test.isPending} className="w-full">{connectionTest.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <ShieldCheck className="h-4 w-4"/>}{connectionTest.isPending ? 'Checking connection' : 'Check connection'}</Button>
+                <Button type="submit" testId="button-test-sending-settings" disabled={!canTestSmtp || !testEmail.trim() || test.isPending || connectionTest.isPending} className="w-full">{test.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}{test.isPending ? 'Sending test' : 'Send test email'}</Button>
+              </div>
+              {!canTestSmtp && <p className="text-[11px] leading-5 text-[#8a6a4e]">Enter SMTP details and credentials here, or configure credentials in saved settings, before testing.</p>}
+              {connectionResult && <div data-testid="smtp-connection-result" role={connectionResult.kind === 'failure' ? 'alert' : 'status'} className={cx('rounded-md border p-3 text-[11px] leading-5', connectionResult.kind === 'success' ? 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]' : 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]')}>
+                <div className="flex items-start gap-2">{connectionResult.kind === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>}<div><strong>{connectionResult.kind === 'success' ? 'SMTP connection successful' : 'SMTP connection failed'}</strong><p>{connectionResult.message}</p><p className="mt-1">Checked {formatDate(connectionResult.checkedAt)}{connectionResult.savedSettingsUpdated ? ' · Saved check details updated' : ' · Saved check details unchanged'}</p></div></div>
+              </div>}
+              {settings?.connectionCheckAt && settings.connectionCheckStatus && <div data-testid="text-last-smtp-connection-check" className="flex flex-wrap items-center gap-2 border-t border-[#edf0f2] pt-3 text-[11px] text-[#647365]"><span>Last saved-settings connection check:</span><Status tone={settings.connectionCheckStatus === 'success' ? 'green' : 'orange'}>{settings.connectionCheckStatus === 'success' ? 'Successful' : 'Failed'}</Status><span>{formatDate(settings.connectionCheckAt)}</span></div>}
+              <p className="text-[11px] leading-5 text-[#788392]">A connection check sends no email and does not mark the sender verified for campaigns. Matching saved settings keep a separate result and date; draft values are never saved. Sending a test email marks matching saved settings verified.</p>
+              {settings?.verified && settings.verifiedAt && <div className="flex items-start gap-2 border-t border-[#edf0f2] pt-4 text-[11px] leading-5 text-[#647365]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#52815d]"/>Verified {formatDate(settings.verifiedAt)}</div>}
+            </form>
           </div>
-          {gmailConnection.data.lastSuccessAt && <p className="mt-2 text-[11px] text-[#718091]">Last successful sync: {formatDate(gmailConnection.data.lastSuccessAt)} · Next check: {formatDate(gmailConnection.data.nextSyncAt)}</p>}
-          {gmailConnection.data.lastError && <p data-testid="text-gmail-sync-error" role="status" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{gmailConnection.data.lastError}</p>}
-          {gmailConnection.data.syncStatus === 'history_expired' && <p className="mt-2 text-[11px] leading-5 text-[#99501e]">Reconnect to restart monitoring from a new checkpoint. Gmail cannot recover notices from the expired-history gap automatically.</p>}
-        </div>}
-      <p className="mt-3 text-[11px] leading-5 text-[#788392]">Only matched DSNs become bounce evidence. No bounce is not proof of delivery, inbox placement, or reading. Disconnecting removes Mailflow’s refresh token and asks Google to revoke it.</p>
-    </section>
-    <Microsoft365TraceSettingsPanel/>
-    <div className="mb-5 grid gap-3 sm:grid-cols-3">
-      <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fc] text-[#245b9b]"><Fingerprint className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Identity status</div><div className="mt-1"><Status tone={settings?.verified ? 'green' : 'orange'}>{settings?.verified ? 'Verified' : 'Verification needed'}</Status></div></div></div>
-      <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#f0f3f6] text-[#657488]"><ShieldCheck className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">SMTP credentials</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{settings?.credentialsConfigured ? 'Configured · protected' : 'Not configured'}</div></div></div>
-      <div className={`${panelClass} flex items-center gap-3 p-4`}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#fff3e8] text-[#ae642c]"><Clock3 className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Last updated</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{formatDate(settings?.updatedAt)}</div></div></div>
-    </div>
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(290px,.75fr)]">
-      <form onSubmit={save} className={`${panelClass} p-5 sm:p-6`}>
-        <div className="mb-5 flex items-start justify-between gap-3 border-b border-[#edf0f2] pb-4"><div><h2 className="display text-[18px] font-bold text-[#1b293a]">SMTP connection</h2><p className="mt-1 text-[12px] text-[#788392]">These settings are scoped to your tenant, never shared across workspaces.</p></div><span className="mono rounded bg-[#f4f6f8] px-2 py-1 text-[9px] tracking-wide text-[#788392]">TENANT ONLY</span></div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label><span className={labelClass}>Provider</span><select data-testid="select-sender-provider" className={inputClass} value={form.provider} onChange={e => change('provider', e.target.value)}><option value="google_workspace">Google Workspace</option><option value="gmail">Gmail</option><option value="microsoft_365">Microsoft 365</option><option value="other">Other SMTP</option></select></label>
-          <Field label="SMTP host" value={form.host} onChange={v => change('host', v)} placeholder="smtp.example.com" required testId="input-smtp-host"/>
-          <Field label="Port" value={form.port} onChange={v => change('port', v)} type="number" required testId="input-smtp-port"/>
-          <label><span className={labelClass}>Encryption</span><select data-testid="select-smtp-encryption" className={inputClass} value={form.encryption} onChange={e => change('encryption', e.target.value)}><option value="tls">STARTTLS / TLS</option><option value="ssl">SSL</option><option value="none">None</option></select></label>
-          <Field label="SMTP username" value={form.username} onChange={v => change('username', v)} placeholder={settings?.credentialsConfigured ? 'Leave blank to keep the saved username' : 'sender@example.com'} testId="input-smtp-username" hint={settings?.credentialsConfigured ? `Saved username: ${settings.username} · leave blank to keep it` : 'Required with the SMTP password'}/>
-          <Field label="SMTP password" value={form.password} onChange={v => change('password', v)} type="password" placeholder={settings?.credentialsConfigured ? 'Leave blank to keep current password' : 'Enter SMTP password'} testId="input-smtp-password"/>
         </div>
-        <div className="my-6 border-t border-[#edf0f2]"/>
-        <div className="mb-4"><h3 className="display text-[16px] font-bold text-[#1b293a]">Sender identity</h3><p className="mt-1 text-[12px] text-[#788392]">The visible name and addresses recipients will see.</p></div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="From name" value={form.fromName} onChange={v => change('fromName', v)} placeholder="Customer care" required testId="input-from-name"/>
-          <Field label="From email" value={form.fromEmail} onChange={v => change('fromEmail', v)} type="email" placeholder="hello@example.com" required testId="input-from-email"/>
-          <div className="sm:col-span-2"><Field label="Reply-to address" value={form.replyTo} onChange={v => change('replyTo', v)} type="email" placeholder="Optional — defaults to from address" testId="input-reply-to"/></div>
-        </div>
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={updateAccount.isPending || createAccount.isPending}>{(updateAccount.isPending || createAccount.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{(updateAccount.isPending || createAccount.isPending) ? 'Saving settings' : selectedAccountId ? 'Save sender settings' : 'Add sender account'}</Button></div>
-      </form>
-       <div className={`${panelClass} overflow-hidden`}>
-         <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Test SMTP settings</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">Use the values currently in the form. You can check login without sending, or send a real test email to confirm the server accepts a message.</p></div>
-        <form onSubmit={runTest} className="space-y-4 p-5">
-          <Field label="Deliver test to" value={testEmail} onChange={setTestEmail} type="email" placeholder="you@company.com" required testId="input-test-recipient"/>
-           <div className="grid gap-2 sm:grid-cols-2">
-             <Button type="button" variant="outline" testId="button-check-smtp-connection" onClick={runConnectionTest} disabled={!canTestSmtp || connectionTest.isPending || test.isPending} className="w-full">{connectionTest.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <ShieldCheck className="h-4 w-4"/>}{connectionTest.isPending ? 'Checking connection' : 'Check connection'}</Button>
-             <Button type="submit" testId="button-test-sending-settings" disabled={!canTestSmtp || !testEmail.trim() || test.isPending || connectionTest.isPending} className="w-full">{test.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}{test.isPending ? 'Sending test' : 'Send test email'}</Button>
-           </div>
-           {!canTestSmtp && <p className="text-[11px] leading-5 text-[#8a6a4e]">Enter SMTP details and credentials here, or configure credentials in saved settings, before testing.</p>}
-           {connectionResult && <div data-testid="smtp-connection-result" role={connectionResult.kind === 'failure' ? 'alert' : 'status'} className={cx('rounded-md border p-3 text-[11px] leading-5', connectionResult.kind === 'success' ? 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]' : 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]')}>
-             <div className="flex items-start gap-2">{connectionResult.kind === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>}<div><strong>{connectionResult.kind === 'success' ? 'SMTP connection successful' : 'SMTP connection failed'}</strong><p>{connectionResult.message}</p><p className="mt-1">Checked {formatDate(connectionResult.checkedAt)}{connectionResult.savedSettingsUpdated ? ' · Saved check details updated' : ' · Saved check details unchanged'}</p></div></div>
-           </div>}
-           {settings?.connectionCheckAt && settings.connectionCheckStatus && <div data-testid="text-last-smtp-connection-check" className="flex flex-wrap items-center gap-2 border-t border-[#edf0f2] pt-3 text-[11px] text-[#647365]"><span>Last saved-settings connection check:</span><Status tone={settings.connectionCheckStatus === 'success' ? 'green' : 'orange'}>{settings.connectionCheckStatus === 'success' ? 'Successful' : 'Failed'}</Status><span>{formatDate(settings.connectionCheckAt)}</span></div>}
-           <p className="text-[11px] leading-5 text-[#788392]">A connection check sends no email and does not mark the sender verified for campaigns. Matching saved settings keep a separate result and date; draft values are never saved. Sending a test email marks matching saved settings verified.</p>
-          {settings?.verified && settings.verifiedAt && <div className="flex items-start gap-2 border-t border-[#edf0f2] pt-4 text-[11px] leading-5 text-[#647365]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#52815d]"/>Verified {formatDate(settings.verifiedAt)}</div>}
-        </form>
-      </div>
-    </div>
-    <DeliveryCapabilityNotes/>
+        <DeliveryCapabilityNotes/>
+      </TabsContent>
+      <TabsContent value="gmail-monitoring" className="mt-0">
+        <section data-testid="section-gmail-bounce-monitor" className={`${panelClass} p-5 sm:p-6`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-3xl">
+              <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">BOUNCE MONITORING</div>
+              <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">Gmail and Google Workspace</h2>
+              <p className="mt-2 text-[12px] leading-5 text-[#687484]">Connect a mailbox with its owner’s Google consent. Mailflow checks new-message headers and fetches message content only when Gmail identifies a delivery-status notice. It does not scan unrelated mailbox content.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {gmailConnection.data?.connected && <Button variant="outline" testId="button-disconnect-gmail" disabled={disconnectGmailConnection.isPending} onClick={disconnectGmail}>{disconnectGmailConnection.isPending ? 'Disconnecting…' : 'Disconnect mailbox'}</Button>}
+              <Button testId="button-connect-gmail" disabled={!gmailConnection.data?.configured || startGmailConnection.isPending} onClick={connectGmail}>{startGmailConnection.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : null}{gmailConnection.data?.connected ? 'Reconnect Google account' : 'Connect Google account'}</Button>
+            </div>
+          </div>
+          {gmailConnection.isLoading ? <p className="mt-4 text-[12px] text-[#778291]">Checking Gmail connection status…</p>
+            : gmailConnection.isError || !gmailConnection.data ? <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[12px] text-[#99501e]"><span>Gmail connection status could not be loaded.</span><button type="button" className={outlineButton} onClick={() => void gmailConnection.refetch()}>Retry</button></div>
+            : !gmailConnection.data.configured
+              ? <div className="mt-4 rounded-md border border-[#e4e8ed] bg-[#f7f9fb] p-4">
+                <p data-testid="text-gmail-oauth-setup" className="text-[12px] leading-5 text-[#596777]">Gmail bounce monitoring is not available yet. Your platform administrator will enable mailbox connections when setup is complete.</p>
+              </div>
+              : <div className="mt-4 rounded-md bg-[#f7f9fb] p-4">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#596777]">
+                  <span>Status: <strong className="text-[#26364a]">{gmailConnection.data.syncStatus.replace(/_/g, ' ')}</strong></span>
+                  {gmailConnection.data.emailAddress && <span>Mailbox: <strong className="text-[#26364a]">{gmailConnection.data.emailAddress}</strong></span>}
+                  <span>Polling: every {Math.round(gmailConnection.data.pollIntervalSeconds / 60)} min</span>
+                  <span>Last checked: <strong className="text-[#26364a]">{formatDate(gmailConnection.data.lastSyncAt)}</strong></span>
+                </div>
+                {gmailConnection.data.lastSuccessAt && <p className="mt-2 text-[11px] text-[#718091]">Last successful sync: {formatDate(gmailConnection.data.lastSuccessAt)} · Next check: {formatDate(gmailConnection.data.nextSyncAt)}</p>}
+                {gmailConnection.data.lastError && <p data-testid="text-gmail-sync-error" role="status" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{gmailConnection.data.lastError}</p>}
+                {gmailConnection.data.syncStatus === 'history_expired' && <p className="mt-2 text-[11px] leading-5 text-[#99501e]">Reconnect to restart monitoring from a new checkpoint. Gmail cannot recover notices from the expired-history gap automatically.</p>}
+              </div>}
+          <p className="mt-3 text-[11px] leading-5 text-[#788392]">Only matched DSNs become bounce evidence. No bounce is not proof of delivery, inbox placement, or reading. Disconnecting removes Mailflow’s refresh token and asks Google to revoke it.</p>
+        </section>
+      </TabsContent>
+      <TabsContent value="microsoft365-trace" className="mt-0">
+        <Microsoft365TraceSettingsPanel/>
+      </TabsContent>
+    </Tabs>
   </></QueryState>;
 }
 
