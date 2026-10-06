@@ -1162,7 +1162,7 @@ export function ListsPage() {
 type CampaignForm = { name: string; objective: string; subject: string; textBody: string; htmlBody: string; listIds: string[]; senderAccountId: string };
 const blankCampaign: CampaignForm = { name: '', objective: '', subject: '', textBody: '', htmlBody: '', listIds: [], senderAccountId: '' };
 
-export function CampaignsPage() {
+export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused?: boolean } = {}) {
   const [, setLocation] = useLocation();
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
@@ -1416,7 +1416,7 @@ export function CampaignsPage() {
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Queued / completed</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaigns.map(campaign => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
         <td className="max-w-[240px] px-5 py-4"><button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="text-left"><span className="block truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></td>
         <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).map(listId => lists.find(list => list.id === listId)?.name || 'Removed list').join(' · ') || 'No target lists selected'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
-         <td className="px-4 py-4"><Status tone={statusTone(campaign.status)}>{campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
+        <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
          <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]">{campaign.queuedAt ? <><span className="block">{campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'Starts' : 'Queued'} {formatDate(campaign.scheduledAt || campaign.queuedAt)}</span>{campaign.scheduledAt && <span className="block">Queued {formatDate(campaign.queuedAt)}</span>}{campaign.completedAt && <span className="block">Finished {formatDate(campaign.completedAt)}</span>}</> : 'Not queued'}</td>
           <td className="px-5 py-4"><div className="flex justify-end gap-1">{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
@@ -1601,7 +1601,7 @@ function formatDeliveryDuration(seconds: number) {
   return remainingHours ? `${days} day ${remainingHours} hr` : `${days} day`;
 }
 
-export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
+export function CampaignDashboardPage({ campaignId, maintenancePaused = false }: { campaignId: string; maintenancePaused?: boolean }) {
   const [, setLocation] = useLocation();
   const query = useGetCampaignDashboard(campaignId, {
     query: {
@@ -1617,21 +1617,22 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
       const removedTargetListCount = Math.max(0, campaign.listIds.length - targetLists.length);
       const resolved = campaign.delivered + campaign.bounced + campaign.suppressed + campaign.unknown;
       const progress = campaign.recipients > 0 ? Math.min(100, Math.round((resolved / campaign.recipients) * 100)) : 0;
-      const statusTone = campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
+      const isPausedForMaintenance = maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending');
+      const statusTone = isPausedForMaintenance ? 'orange' : campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
       const isScheduled = campaign.status === 'queued' && campaign.scheduledAt !== null && new Date(campaign.scheduledAt).getTime() > Date.now();
       const metrics = [
         { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? 'Unique eligible addresses across selected lists' : 'Captured when queued', surface: { backgroundColor: '#eef5ff', borderColor: '#d7e4f3' } },
         { label: 'SMTP accepted', value: campaign.delivered, detail: 'Inbox delivery is not confirmed', surface: { backgroundColor: '#eff8f1', borderColor: '#d5ead9' } },
         { label: 'Rejected / failed', value: campaign.bounced, detail: 'SMTP rejection or terminal send failure', surface: { backgroundColor: '#fff5eb', borderColor: '#f0dfcb' } },
         { label: 'Suppressed', value: campaign.suppressed, detail: 'Unsubscribed or removed', surface: { backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' } },
-        { label: 'Still queued', value: pacing.remainingEmails, detail: campaign.status === 'draft' ? 'Will be queued when sent' : 'Waiting for paced delivery', surface: { backgroundColor: '#f3f0fc', borderColor: '#e1dcf4' } },
+        { label: 'Still queued', value: pacing.remainingEmails, detail: isPausedForMaintenance ? 'Paused for platform maintenance' : campaign.status === 'draft' ? 'Will be queued when sent' : 'Waiting for paced delivery', surface: { backgroundColor: '#f3f0fc', borderColor: '#e1dcf4' } },
       ];
 
       return <>
         <div className="mb-5">
           <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
         </div>
-        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{isScheduled ? 'scheduled' : campaign.status}</Status>}/>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{isPausedForMaintenance ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>}/>
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`} style={metric.surface}>
             <div className="text-[11px] text-[#778291]">{metric.label}</div>
@@ -1648,7 +1649,7 @@ export function CampaignDashboardPage({ campaignId }: { campaignId: string }) {
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">Estimated time remaining</div><div className="mt-1 text-[20px] font-bold text-[#26364a]">{formatDeliveryDuration(pacing.estimatedDurationSeconds)}</div></div>
-              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">Estimated finish</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{campaign.status === 'completed' ? formatDate(campaign.completedAt) : pacing.estimatedCompletionAt ? formatDate(pacing.estimatedCompletionAt) : 'No emails waiting'}</div></div>
+              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">{isPausedForMaintenance ? 'Delivery paused' : 'Estimated finish'}</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{isPausedForMaintenance ? 'Will resume automatically' : campaign.status === 'completed' ? formatDate(campaign.completedAt) : pacing.estimatedCompletionAt ? formatDate(pacing.estimatedCompletionAt) : 'No emails waiting'}</div></div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div><div className="text-[10px] text-[#85909d]">Hourly cap</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerHour.toLocaleString()} emails/hour</div></div>

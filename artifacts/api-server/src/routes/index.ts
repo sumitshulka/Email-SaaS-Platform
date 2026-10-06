@@ -14,6 +14,7 @@ import contactFieldOptionsRouter from "./contact-field-options";
 import notificationsRouter from "./notifications";
 import adminNotificationsRouter from "./admin-notifications";
 import supportRouter from "./support";
+import maintenanceRouter from "./maintenance";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -31,4 +32,5 @@ router.use(gmailMailboxRouter);
 router.use(adminRouter);
 router.use(adminNotificationsRouter);
 router.use(supportRouter);
+router.use(maintenanceRouter);
 export default router;

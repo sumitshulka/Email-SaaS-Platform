@@ -98,6 +98,7 @@ import type {
   ListContactOptionsParams,
   ListContactsParams,
   LoginInput,
+  MaintenanceStatus,
   MessageResponse,
   Microsoft365TraceBackfillInput,
   Microsoft365TraceConnectInput,
@@ -240,6 +241,84 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetMaintenanceStatusUrl = () => {
+
+
+
+
+  return `/api/maintenance/status`
+}
+
+/**
+ * Returns only whether the application is currently in maintenance mode.
+ * @summary Get public maintenance status
+ */
+export const getMaintenanceStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<MaintenanceStatus> => {
+
+  return customFetch<MaintenanceStatus>(getGetMaintenanceStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMaintenanceStatusQueryKey = () => {
+    return [
+    `/api/maintenance/status`
+    ] as const;
+    }
+
+
+export const getGetMaintenanceStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMaintenanceStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMaintenanceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMaintenanceStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMaintenanceStatus>>> = ({ signal }) => getMaintenanceStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMaintenanceStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMaintenanceStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMaintenanceStatus>>>
+export type GetMaintenanceStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get public maintenance status
+ */
+
+export function useGetMaintenanceStatus<TData = Awaited<ReturnType<typeof getMaintenanceStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMaintenanceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMaintenanceStatusQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

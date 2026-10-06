@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { useForm } from 'react-hook-form';
@@ -9,11 +9,11 @@ import {
   Trash2, UserRound, Users, Building2, LifeBuoy,
 } from 'lucide-react';
 import {
-  getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetPasswordPolicyQueryKey,
+  getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey,
   getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
   getGetUserNotificationsQueryKey, useGetUserNotifications, useMarkUserNotificationRead,
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetPasswordPolicy, useGetUserDashboard,
-  useGetApplicationEmailSettings, useGetCurrentUser, useListAdminUsers,
+  useGetApplicationEmailSettings, useGetCurrentUser, useGetMaintenanceStatus, useListAdminUsers,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
   useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
@@ -389,7 +389,7 @@ function Gate({ children, admin = false }: { children: (user: AuthUser) => React
 function Metric({ label, value, sub, icon: Icon, accent = 'blue' }: { label: string; value: string | number; sub?: string; icon: typeof Send; accent?: 'blue' | 'orange' }) {
   return <Panel className="p-5"><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#6d7886]">{label}</span><span className={cn('grid h-8 w-8 place-items-center rounded-md', accent === 'blue' ? 'bg-[#edf4fc] text-[#245b9b]' : 'bg-[#fff2e6] text-[#bc6829]')}><Icon className="h-4 w-4"/></span></div><div className="mt-3 display text-[27px] font-bold leading-none tracking-[-.04em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div>{sub && <div className="mt-2 text-[11px] text-[#7e8894]">{sub}</div>}</Panel>;
 }
-function UserDashboardPage({ user }: { user: AuthUser }) {
+function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser; maintenancePaused?: boolean }) {
   const query = useGetUserDashboard({ query: { queryKey: getGetUserDashboardQueryKey() } });
   const notificationQuery = useGetUserNotifications({ query: {
     queryKey: getGetUserNotificationsQueryKey(),
@@ -465,8 +465,9 @@ function UserDashboardPage({ user }: { user: AuthUser }) {
       {data.campaigns.length ? <div className="divide-y divide-[#edf0ed]">
         {data.campaigns.map(campaign => {
           const campaignIsActive = campaign.status === 'queued' || campaign.status === 'sending';
+          const campaignIsPaused = maintenancePaused && campaignIsActive;
           return <article key={campaign.id} data-testid={`campaign-row-${campaign.id}`} className="grid gap-4 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(180px,1.15fr)_repeat(5,minmax(64px,.55fr))_minmax(145px,.85fr)] lg:items-center">
-            <div className="min-w-0"><div className="flex items-center gap-2"><span className={cn('h-2 w-2 rounded-full', campaign.status === 'sending' ? 'bg-[#d98949]' : campaign.status === 'completed' ? 'bg-[#548873]' : 'bg-[#8d9daf]')}/><h3 className="truncate text-[14px] font-semibold text-[#263447]">{campaign.name}</h3></div><div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#85909a]"><span className="capitalize">{campaign.status}</span><span>·</span><span>{campaign.recipients.toLocaleString()} recipients</span></div></div>
+            <div className="min-w-0"><div className="flex items-center gap-2"><span className={cn('h-2 w-2 rounded-full', campaignIsPaused ? 'bg-[#d98949]' : campaign.status === 'sending' ? 'bg-[#d98949]' : campaign.status === 'completed' ? 'bg-[#548873]' : 'bg-[#8d9daf]')}/><h3 className="truncate text-[14px] font-semibold text-[#263447]">{campaign.name}</h3></div><div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#85909a]"><span className="capitalize">{campaignIsPaused ? 'paused' : campaign.status}</span><span>·</span><span>{campaign.recipients.toLocaleString()} recipients</span></div></div>
             <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
             <CampaignDatum label="Bounced" value={campaign.bounced} hint="Bounced campaign recipients."/>
             <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
@@ -797,7 +798,12 @@ function AdminSettingsPage() {
     if (!settings) return;
     save.mutate(
       { data: settings as unknown as PlatformSettingsInput },
-      { onSuccess: () => qc.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() }) },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetMaintenanceStatusQueryKey() });
+        },
+      },
     );
   };
 
@@ -1079,9 +1085,12 @@ function ProfilePage({ user }: { user: AuthUser }) {
 function RouteGate({ admin, children }: { admin?: boolean; children: (u: AuthUser) => ReactNode }) { return <Gate admin={admin}>{children}</Gate>; }
 function RoutedErrorBoundary({ children }: { children: ReactNode }) { const [location] = useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
 function Routes() {
+  const maintenancePaused = useGetMaintenanceStatus({
+    query: { queryKey: getGetMaintenanceStatusQueryKey() },
+  }).data?.maintenanceMode === true;
   return <RoutedErrorBoundary><Switch>
     <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/terms-and-conditions" component={TermsAndConditionsPage}/><Route path="/privacy-policy" component={PrivacyPolicyPage}/><Route path="/shipping-refund" component={ShippingRefundPage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
-    <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u}/>}</RouteGate>}</Route>
+    <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/sending-settings">{() => <RouteGate>{() => <SendingSettingsPage/>}</RouteGate>}</Route>
@@ -1091,8 +1100,8 @@ function Routes() {
     <Route path="/companies">{() => <RouteGate>{u => u.role === 'USER' ? <CompaniesPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/lists">{() => <RouteGate>{() => <ListsPage/>}</RouteGate>}</Route>
-    <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage/>}</RouteGate>}</Route>
-    <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId}/>}</RouteGate>}</Route>
+    <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
+    <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/admin">{() => <RouteGate admin>{() => <AdminDashboardPage/>}</RouteGate>}</Route>
     <Route path="/admin/notifications">{() => <RouteGate admin>{() => <AdminNotificationsPage/>}</RouteGate>}</Route>
     <Route path="/admin/support">{() => <RouteGate admin>{() => <AdminSupportTicketsPage/>}</RouteGate>}</Route>
@@ -1106,7 +1115,136 @@ function Routes() {
     <Route component={NotFound}/>
   </Switch></RoutedErrorBoundary>;
 }
+function MaintenancePage() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f3f6fa] px-5 py-12">
+      <section className="w-full max-w-2xl rounded-2xl border border-[#dce4ed] bg-white p-7 shadow-[0_24px_70px_-38px_rgba(16,48,82,.42)] sm:p-10">
+        <MailflowBrand/>
+        <div className="mt-12 inline-flex items-center gap-2 rounded-full bg-[#edf4fc] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[.14em] text-[#245b9b]">
+          <span className="h-2 w-2 rounded-full bg-[#d29131]"/>
+          Service update
+        </div>
+        <h1 className="display mt-5 text-[32px] font-bold leading-tight text-[#172334] sm:text-[40px]">
+          Application Under Maintenance
+        </h1>
+        <p className="mt-3 text-[17px] font-semibold text-[#35455a]">We’ll be back soon.</p>
+        <p className="mt-4 max-w-xl text-[14px] leading-7 text-[#536276]">
+          Mailflow is temporarily unavailable while we carry out maintenance. Campaign delivery is paused and queued emails will resume automatically when the service is available again.
+        </p>
+        <div className="mt-7 rounded-xl border border-[#dce7f3] bg-[#f5f9fe] px-4 py-3 text-[12px] leading-6 text-[#40536b]">
+          If you are the superadmin, you can sign in to manage the maintenance setting.
+        </div>
+        <Link href="/login" className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#174f99] px-5 text-[13px] font-semibold text-white transition hover:bg-[#103f7e]">
+          Superadmin sign in <ArrowRight className="h-4 w-4"/>
+        </Link>
+      </section>
+    </main>
+  );
+}
+
+function MaintenanceStatusLoading() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f3f6fa] px-5">
+      <div className="text-center">
+        <MailflowBrand/>
+        <div className="mt-7 flex items-center justify-center gap-2 text-[13px] text-[#536276]">
+          <LoaderCircle className="h-4 w-4 animate-spin"/>
+          Checking service status…
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function MaintenanceBoundary({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const maintenanceQuery = useGetMaintenanceStatus({
+    query: {
+      queryKey: getGetMaintenanceStatusQueryKey(),
+      staleTime: 0,
+      refetchInterval: 5_000,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+  });
+  const maintenanceOn = maintenanceQuery.data?.maintenanceMode === true;
+  const currentUserQuery = useGetCurrentUser({
+    query: {
+      queryKey: getGetCurrentUserQueryKey(),
+      enabled: maintenanceOn,
+      retry: false,
+      staleTime: 0,
+    },
+  });
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const dismissedRef = useRef(false);
+  const user = currentUserQuery.data;
+  const blockedAuthPath = ['/register', '/verify-email', '/forgot-password', '/reset-password'].includes(
+    location.split('?')[0] ?? '',
+  );
+
+  useEffect(() => {
+    if (!maintenanceOn || !user) {
+      dismissedRef.current = false;
+      setNoticeOpen(false);
+      return;
+    }
+    if (!dismissedRef.current) setNoticeOpen(true);
+  }, [maintenanceOn, user?.id]);
+
+  if (
+    maintenanceOn &&
+    (blockedAuthPath || (!user && location !== '/login'))
+  ) {
+    if (!blockedAuthPath && currentUserQuery.isLoading) {
+      return <MaintenanceStatusLoading/>;
+    }
+    return <MaintenancePage/>;
+  }
+
+  return (
+    <>
+      {maintenanceOn && user && (
+        <div role="status" className="sticky top-0 z-[60] flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-[#d6a44c] bg-[#fff7e6] px-4 py-2 text-center text-[12px] font-medium text-[#694b17]">
+          <span className="font-bold">Maintenance mode is active.</span>
+          Campaign delivery is paused; queued emails will resume when the service is available again.
+        </div>
+      )}
+      {children}
+      {noticeOpen && maintenanceOn && user && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#101b2a]/55 px-4 py-6" role="presentation">
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="maintenance-notice-title"
+            aria-describedby="maintenance-notice-description"
+            className="w-full max-w-lg rounded-xl border border-[#dce4ed] bg-white p-6 shadow-2xl sm:p-7"
+          >
+            <div className="mono text-[10px] font-semibold uppercase tracking-[.16em] text-[#9a6a12]">Platform notice</div>
+            <h2 id="maintenance-notice-title" className="display mt-3 text-[23px] font-bold text-[#172334]">
+              Maintenance mode is active
+            </h2>
+            <p id="maintenance-notice-description" className="mt-3 text-[13px] leading-6 text-[#536276]">
+              Campaign delivery is paused. Queued emails will resume automatically when the superadmin switches maintenance off and the production service is available again. An email already being sent may finish. You can continue using your account.
+            </p>
+            <div className="mt-6 flex justify-end">
+              <Button
+                testId="button-dismiss-maintenance-notice"
+                onClick={() => {
+                  dismissedRef.current = true;
+                  setNoticeOpen(false);
+                }}
+              >
+                Continue working
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
 function App() {
-  return <QueryClientProvider client={client}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Routes/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={client}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><MaintenanceBoundary><Routes/></MaintenanceBoundary></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
 }
 export default App;

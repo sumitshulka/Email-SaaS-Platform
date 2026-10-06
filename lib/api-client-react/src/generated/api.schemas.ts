@@ -9,6 +9,10 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface MaintenanceStatus {
+  maintenanceMode: boolean;
+}
+
 export interface ApiError {
   error: string;
   code?: string;

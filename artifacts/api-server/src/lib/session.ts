@@ -156,14 +156,13 @@ export function enforceSameOrigin(
   }
 }
 
-const maintenanceAllowedPaths = new Set([
-  "/healthz",
-  "/auth/login",
-  "/auth/me",
-  "/auth/logout",
-  "/auth/forgot-password",
-  "/auth/reset-password",
-  "/webhooks/razorpay",
+const maintenanceAllowedRequests = new Set([
+  "GET /api/healthz",
+  "GET /api/maintenance/status",
+  "POST /api/auth/login",
+  "GET /api/auth/me",
+  "POST /api/auth/logout",
+  "POST /api/webhooks/razorpay",
 ]);
 
 export async function enforcePlatformMaintenance(
@@ -175,8 +174,8 @@ export async function enforcePlatformMaintenance(
     const settings = await getPlatformSettings();
     if (
       !settings.maintenanceMode ||
-      req.authUser?.role === "SUPERADMIN" ||
-      maintenanceAllowedPaths.has(req.path)
+      req.authUser ||
+      maintenanceAllowedRequests.has(`${req.method} ${req.path}`)
     ) {
       next();
       return;

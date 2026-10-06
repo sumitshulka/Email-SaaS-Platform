@@ -633,6 +633,7 @@ export async function processPendingCampaignDeliveries(
   batchSize = MAX_DELIVERIES_PER_TICK,
 ): Promise<number> {
   const settings = await getPlatformSettings();
+  if (settings.maintenanceMode) return 0;
   await markInterruptedDeliveriesUnknown();
   const now = new Date();
   const candidates = await db
@@ -660,6 +661,7 @@ export async function processPendingCampaignDeliveries(
 
   let processed = 0;
   for (const candidate of candidates) {
+    if ((await getPlatformSettings()).maintenanceMode) break;
     const claimed = await claimDelivery(
       candidate.id,
       candidate.userId,

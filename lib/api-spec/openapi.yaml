@@ -30,6 +30,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /maintenance/status:
+    get:
+      operationId: getMaintenanceStatus
+      tags: [settings]
+      summary: Get public maintenance status
+      description: Returns only whether the application is currently in maintenance mode.
+      responses:
+        "200":
+          description: Current maintenance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceStatus"
   /auth/login:
     post:
       operationId: login
@@ -60,6 +73,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Sign-in is limited to superadmins during maintenance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /auth/register:
     post:
       operationId: register
@@ -85,7 +104,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "503":
-          description: Application email is not configured
+          description: Application email is not configured or registration is paused for maintenance
           content:
             application/json:
               schema:
@@ -2623,6 +2642,12 @@ components:
         status:
           type: string
       required: [status]
+    MaintenanceStatus:
+      type: object
+      properties:
+        maintenanceMode:
+          type: boolean
+      required: [maintenanceMode]
     ApiError:
       type: object
       properties:

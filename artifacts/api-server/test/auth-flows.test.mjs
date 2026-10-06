@@ -4232,6 +4232,87 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.deepEqual(updatedPolicy.body, { passwordMinimumLength: 17 });
   });
 
+  it("keeps active sessions usable but limits new access and registration during maintenance", async () => {
+    const customer = await loggedInUser({ username: "maintenance-customer" });
+    const admin = await loggedInUser({
+      username: "maintenance-superadmin",
+      role: "SUPERADMIN",
+    });
+    const settingsResponse = await api("/admin/settings", {
+      cookie: admin.cookie,
+    });
+    assert.equal(settingsResponse.response.status, 200);
+    const { updatedAt: _updatedAt, ...settings } = settingsResponse.body;
+    const enabled = await api("/admin/settings", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { ...settings, maintenanceMode: true },
+    });
+    assert.equal(enabled.response.status, 200, JSON.stringify(enabled.body));
+
+    const status = await api("/maintenance/status");
+    assert.equal(status.response.status, 200);
+    assert.deepEqual(status.body, { maintenanceMode: true });
+    assert.equal((await api("/healthz")).response.status, 200);
+
+    const currentSession = await api("/auth/me", { cookie: customer.cookie });
+    assert.equal(currentSession.response.status, 200);
+    const campaignAccess = await api("/campaigns", { cookie: customer.cookie });
+    assert.equal(campaignAccess.response.status, 200);
+
+    const customerLogin = await login(customer.user.email);
+    assert.equal(customerLogin.response.status, 503);
+    assert.equal(customerLogin.body.code, "MAINTENANCE_MODE");
+
+    const superadminLogin = await login(admin.user.email);
+    assert.equal(superadminLogin.response.status, 200, JSON.stringify(superadminLogin.body));
+    assert.ok(superadminLogin.cookie);
+
+    const anonymousRegistration = await api("/auth/register", {
+      method: "POST",
+      body: {
+        firstName: "New",
+        lastName: "Account",
+        email: "maintenance-register@example.test",
+        password: "Initial-user-password-2026!",
+      },
+    });
+    assert.equal(anonymousRegistration.response.status, 503);
+    assert.equal(anonymousRegistration.body.code, "MAINTENANCE_MODE");
+    const sessionRegistration = await api("/auth/register", {
+      method: "POST",
+      cookie: customer.cookie,
+      body: {
+        firstName: "New",
+        lastName: "Account",
+        email: "maintenance-register-session@example.test",
+        password: "Initial-user-password-2026!",
+      },
+    });
+    assert.equal(sessionRegistration.response.status, 503);
+    assert.equal(sessionRegistration.body.code, "MAINTENANCE_MODE");
+
+    const activeSessions = await db
+      .select()
+      .from(userSessionsTable)
+      .where(eq(userSessionsTable.userId, customer.user.id));
+    assert.equal(activeSessions.filter((session) => session.revokedAt == null).length, 1);
+
+    await api("/auth/logout", { method: "POST", cookie: customer.cookie });
+    const afterLogout = await api("/auth/me", { cookie: customer.cookie });
+    assert.equal(afterLogout.response.status, 401);
+
+    const { updatedAt: _latestUpdatedAt, ...latestSettings } = enabled.body;
+    const disabled = await api("/admin/settings", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { ...latestSettings, maintenanceMode: false },
+    });
+    assert.equal(disabled.response.status, 200, JSON.stringify(disabled.body));
+    const statusAfter = await api("/maintenance/status");
+    assert.deepEqual(statusAfter.body, { maintenanceMode: false });
+  });
+
   it("invalidates sessions when accounts are disabled or deleted", async () => {
     const adminUser = await createUser({
       username: "platform-admin",
@@ -6100,6 +6181,48 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     });
     assert.equal(unsubscribed.response.status, 200);
 
+    await db
+      .update(dbModule.systemConfigurationTable)
+      .set({
+        value: {
+          defaultEmailsPerHour: 1,
+          deliveryTrackingEnabled: true,
+          maintenanceMode: true,
+          maxEmailsPerDay: 2,
+          maxConcurrentCampaigns: 2,
+        },
+      })
+      .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+    const deliveryCountBeforeMaintenance = tenantDeliveries.length;
+    const pausedBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
+    assert.equal(pausedBatch, 0);
+    assert.equal(tenantDeliveries.length, deliveryCountBeforeMaintenance);
+    const unchangedRecipients = await db
+      .select({ status: dbModule.emailCampaignRecipientsTable.status })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id));
+    assert.equal(
+      unchangedRecipients.filter((recipient) => recipient.status === "queued").length,
+      2,
+    );
+    assert.equal(
+      unchangedRecipients.filter((recipient) => recipient.status === "suppressed").length,
+      1,
+    );
+    assert.ok(unchangedRecipients.every((recipient) => recipient.status !== "sending"));
+
+    await db
+      .update(dbModule.systemConfigurationTable)
+      .set({
+        value: {
+          defaultEmailsPerHour: 1,
+          deliveryTrackingEnabled: true,
+          maintenanceMode: false,
+          maxEmailsPerDay: 2,
+          maxConcurrentCampaigns: 2,
+        },
+      })
+      .where(eq(dbModule.systemConfigurationTable.key, "platform"));
     const firstBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
     assert.equal(firstBatch, 1);
     const afterRateLimit = await api("/campaigns", { cookie: owner.cookie });

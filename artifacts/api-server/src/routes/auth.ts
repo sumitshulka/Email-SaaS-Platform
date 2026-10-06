@@ -274,6 +274,14 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
+  if (settings.maintenanceMode && user.role !== "SUPERADMIN") {
+    res.status(503).json({
+      error: "Mailflow is under maintenance. Only a superadmin can sign in right now.",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+
   await db
     .delete(loginAttemptsTable)
     .where(
@@ -293,6 +301,15 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/register", async (req, res): Promise<void> => {
+  const settings = await getPlatformSettings();
+  if (settings.maintenanceMode) {
+    res.status(503).json({
+      error: "Registration is unavailable while Mailflow is under maintenance.",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Check the registration details and try again.", code: "INVALID_INPUT" });
@@ -309,7 +326,6 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const settings = await getPlatformSettings();
   if (parsed.data.password.length < settings.passwordMinimumLength) {
     res.status(400).json({
       error: `Password must be at least ${settings.passwordMinimumLength} characters.`,

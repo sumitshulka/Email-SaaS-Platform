@@ -18,6 +18,15 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Returns only whether the application is currently in maintenance mode.
+ * @summary Get public maintenance status
+ */
+export const GetMaintenanceStatusResponse = zod.object({
+  "maintenanceMode": zod.boolean()
+})
+
+
+/**
  * @summary Sign in with username or email
  */
 export const loginBodyIdentifierMax = 254;

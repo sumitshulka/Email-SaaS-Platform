@@ -156,6 +156,7 @@ export * from './listContactsAddedWithin';
 export * from './listContactsParams';
 export * from './listContactsStatus';
 export * from './loginInput';
+export * from './maintenanceStatus';
 export * from './messageResponse';
 export * from './microsoft365TraceBackfillInput';
 export * from './microsoft365TraceConnectInput';
