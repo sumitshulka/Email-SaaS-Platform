@@ -182,6 +182,18 @@ paths:
                 $ref: "#/components/schemas/AuthUser"
         "401":
           description: Not authenticated
+  /auth/password-policy:
+    get:
+      operationId: getPasswordPolicy
+      tags: [auth]
+      summary: Get the current password minimum length
+      responses:
+        "200":
+          description: Password requirements configured by the platform administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordPolicy"
   /auth/logout:
     post:
       operationId: logout
@@ -2719,6 +2731,11 @@ components:
         mustChangeCredentials: { type: boolean }
         createdAt: { type: string, format: date-time }
       required: [id, username, firstName, lastName, email, role, timezone, active, emailVerified, mustChangeCredentials, createdAt]
+    PasswordPolicy:
+      type: object
+      properties:
+        passwordMinimumLength: { type: integer, minimum: 8, maximum: 128 }
+      required: [passwordMinimumLength]
     AuthResponse:
       type: object
       properties:

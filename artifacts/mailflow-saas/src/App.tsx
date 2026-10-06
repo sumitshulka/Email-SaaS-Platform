@@ -9,10 +9,10 @@ import {
   Trash2, UserRound, Users, Building2, LifeBuoy,
 } from 'lucide-react';
 import {
-  getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey,
+  getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetPasswordPolicyQueryKey,
   getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
   getGetUserNotificationsQueryKey, useGetUserNotifications, useMarkUserNotificationRead,
-  useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetUserDashboard,
+  useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetPasswordPolicy, useGetUserDashboard,
   useGetApplicationEmailSettings, useGetCurrentUser, useListAdminUsers,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
   useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
@@ -67,8 +67,20 @@ function Button({ children, onClick, type = 'button', variant = 'primary', disab
   }[variant];
   return <button data-testid={testId} type={type} onClick={onClick} disabled={disabled} className={cn('inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55', style, className)}>{children}</button>;
 }
-function Field({ label, value, onChange, type = 'text', placeholder, testId, required = false, hint, autoComplete, disabled = false }: { label: string; value: string | number; onChange: (v: string) => void; type?: string; placeholder?: string; testId: string; required?: boolean; hint?: string; autoComplete?: string; disabled?: boolean }) {
-  return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><input data-testid={testId} required={required} disabled={disabled} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3] disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#697584]"/>{hint && <span className="block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
+function Field({ label, value, onChange, type = 'text', placeholder, testId, required = false, hint, autoComplete, disabled = false, minLength }: { label: string; value: string | number; onChange: (v: string) => void; type?: string; placeholder?: string; testId: string; required?: boolean; hint?: string; autoComplete?: string; disabled?: boolean; minLength?: number }) {
+  return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><input data-testid={testId} required={required} disabled={disabled} minLength={minLength} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3] disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#697584]"/>{hint && <span className="block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
+}
+function usePasswordRequirement() {
+  const policy = useGetPasswordPolicy({
+    query: { queryKey: getGetPasswordPolicyQueryKey(), staleTime: 0, refetchOnWindowFocus: true },
+  });
+  const minimumLength = policy.data?.passwordMinimumLength;
+  const hint = minimumLength
+    ? `Use at least ${minimumLength} characters.`
+    : policy.isError
+      ? 'Password requirements could not be loaded. The server will enforce the current policy.'
+      : 'Loading password requirements…';
+  return { minimumLength, hint };
 }
 function SelectField({ label, value, onChange, options, testId, required = false, disabled = false }: { label: string; value: string; onChange: (v: string) => void; options: Array<string | { value: string; label: string }>; testId: string; required?: boolean; disabled?: boolean }) {
   return <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">{label}</span><select required={required} disabled={disabled} data-testid={testId} value={value} onChange={e => onChange(e.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#697584]">{options.map(option => { const optionValue = typeof option === 'string' ? option : option.value; const optionLabel = typeof option === 'string' ? (option || 'Select encryption') : option.label; return <option key={optionValue} value={optionValue}>{optionLabel}</option>; })}</select></label>;
@@ -164,6 +176,7 @@ function LoginPage() {
 }
 function RegisterPage() {
   const register = useRegister(); const [, setLocation] = useLocation();
+  const passwordRequirement = usePasswordRequirement();
   const [values, setValues] = useState({ firstName: '', lastName: '', email: '', password: '' });
   const onSubmit = (e: FormEvent) => { e.preventDefault(); register.mutate({ data: values }, { onSuccess: () => { sessionStorage.setItem('mailflow-verification-email', values.email); setLocation('/verify-email'); } }); };
   return (
@@ -175,7 +188,7 @@ function RegisterPage() {
           <Field label="Last name" value={values.lastName} onChange={lastName => setValues(v => ({ ...v, lastName }))} testId="input-last-name" required autoComplete="family-name" />
         </div>
         <Field label="Work email" value={values.email} onChange={email => setValues(v => ({ ...v, email }))} testId="input-register-email" type="email" placeholder="name@company.com" required autoComplete="email" />
-        <Field label="Password" value={values.password} onChange={password => setValues(v => ({ ...v, password }))} testId="input-register-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password" />
+        <Field label="Password" value={values.password} onChange={password => setValues(v => ({ ...v, password }))} testId="input-register-password" type="password" required minLength={passwordRequirement.minimumLength} hint={passwordRequirement.hint} autoComplete="new-password" />
         <FormError message={register.isError ? getError(register.error) : undefined} />
         <Button type="submit" testId="button-create-account" disabled={register.isPending} className="auth-submit w-full">
           {register.isPending ? 'Creating account…' : 'Create account'}
@@ -205,10 +218,11 @@ function ForgotPage() {
 }
 function ResetPage() {
   const reset = useResetPassword(); const [, setLocation] = useLocation();
+  const passwordRequirement = usePasswordRequirement();
   const [token, setToken] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
   const [password, setPassword] = useState('');
   const submit = (e: FormEvent) => { e.preventDefault(); reset.mutate({ data: { token, password } }, { onSuccess: () => setLocation('/') }); };
-  return <AuthFrame label="Take control of your account again."><AuthTitle overline="Secure recovery" title="Choose a new password." sub="Set a new password to restore access to your Mailflow account."/><form onSubmit={submit} className="space-y-4"><Field label="Reset token" value={token} onChange={setToken} testId="input-reset-token" required hint="The secure token from your email link."/><Field label="New password" value={password} onChange={setPassword} testId="input-new-password" type="password" required hint="Use the minimum password length set by your administrator." autoComplete="new-password"/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-reset-password" disabled={reset.isPending || token.length < 32} className="w-full">{reset.isPending ? 'Saving…' : 'Set new password'}<ArrowRight className="h-4 w-4"/></Button></form></AuthFrame>;
+  return <AuthFrame label="Take control of your account again."><AuthTitle overline="Secure recovery" title="Choose a new password." sub="Set a new password to restore access to your Mailflow account."/><form onSubmit={submit} className="space-y-4"><Field label="Reset token" value={token} onChange={setToken} testId="input-reset-token" required hint="The secure token from your email link."/><Field label="New password" value={password} onChange={setPassword} testId="input-new-password" type="password" required minLength={passwordRequirement.minimumLength} hint={passwordRequirement.hint} autoComplete="new-password"/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-reset-password" disabled={reset.isPending || token.length < 32} className="w-full">{reset.isPending ? 'Saving…' : 'Set new password'}<ArrowRight className="h-4 w-4"/></Button></form></AuthFrame>;
 }
 type SidebarNavigationItem = { href: string; label: string; icon: typeof Gauge };
 type SidebarNavigationGroup = { title: string | null; items: SidebarNavigationItem[] };
@@ -951,6 +965,7 @@ function ProfilePage({ user }: { user: AuthUser }) {
   const qc = useQueryClient();
   const update = useUpdateProfile();
   const change = useChangePassword();
+  const passwordRequirement = usePasswordRequirement();
   const [rotate, setRotate] = useState(new URLSearchParams(window.location.search).get('rotate') === '1' || user.mustChangeCredentials);
   const [, setLocation] = useLocation();
   const [profile, setProfile] = useState({ username: user.username, firstName: user.firstName, lastName: user.lastName, email: user.email, timezone: user.timezone });
@@ -1033,14 +1048,14 @@ function ProfilePage({ user }: { user: AuthUser }) {
           </form>
         </Panel>
 
-        <Panel className="p-5 md:p-6">
+        <Panel className="p-5 md:p-6" style={{ backgroundColor: '#f4f8ff', borderColor: '#d9e6f4' }}>
           <div className="mb-5">
             <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">SIGN-IN SECURITY</div>
             <h2 className="display mt-2 text-[18px] font-bold">Change password</h2>
           </div>
           <form onSubmit={savePassword} className="space-y-4">
             <Field label="Current password" value={password.currentPassword} onChange={value => setPassword(current => ({ ...current, currentPassword: value }))} testId="input-current-password" type="password" required autoComplete="current-password"/>
-            <Field label="New password" value={password.newPassword} onChange={value => setPassword(current => ({ ...current, newPassword: value }))} testId="input-change-new-password" type="password" required hint="Use at least 12 characters." autoComplete="new-password"/>
+            <Field label="New password" value={password.newPassword} onChange={value => setPassword(current => ({ ...current, newPassword: value }))} testId="input-change-new-password" type="password" required minLength={passwordRequirement.minimumLength} hint={passwordRequirement.hint} autoComplete="new-password"/>
             <FormError message={change.isError ? getError(change.error) : undefined}/>
             {change.isSuccess && <div data-testid="status-password-changed" className="text-[11px] text-[#245b9b]">Password updated.</div>}
             <div className="flex justify-end pt-1">

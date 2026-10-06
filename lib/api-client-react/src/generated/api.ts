@@ -102,6 +102,7 @@ import type {
   Microsoft365TraceBackfillInput,
   Microsoft365TraceConnectInput,
   Microsoft365TraceConnection,
+  PasswordPolicy,
   PaymentVerificationResult,
   PlatformSettings,
   PlatformSettingsInput,
@@ -756,6 +757,83 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCurrentUserQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPasswordPolicyUrl = () => {
+
+
+
+
+  return `/api/auth/password-policy`
+}
+
+/**
+ * @summary Get the current password minimum length
+ */
+export const getPasswordPolicy = async ( options?: Parameters<typeof customFetch>[1]): Promise<PasswordPolicy> => {
+
+  return customFetch<PasswordPolicy>(getGetPasswordPolicyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPasswordPolicyQueryKey = () => {
+    return [
+    `/api/auth/password-policy`
+    ] as const;
+    }
+
+
+export const getGetPasswordPolicyQueryOptions = <TData = Awaited<ReturnType<typeof getPasswordPolicy>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPasswordPolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPasswordPolicyQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPasswordPolicy>>> = ({ signal }) => getPasswordPolicy({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPasswordPolicy>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPasswordPolicyQueryResult = NonNullable<Awaited<ReturnType<typeof getPasswordPolicy>>>
+export type GetPasswordPolicyQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the current password minimum length
+ */
+
+export function useGetPasswordPolicy<TData = Awaited<ReturnType<typeof getPasswordPolicy>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPasswordPolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPasswordPolicyQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

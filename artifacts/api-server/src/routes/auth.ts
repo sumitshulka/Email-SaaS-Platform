@@ -4,6 +4,7 @@ import {
   ChangePasswordBody,
   ChangePasswordResponse,
   GetCurrentUserResponse,
+  GetPasswordPolicyResponse,
   LoginBody,
   LoginResponse,
   RequestPasswordResetBody,
@@ -568,6 +569,15 @@ router.post("/auth/reset-password", async (req, res): Promise<void> => {
     return;
   }
   res.json(ResetPasswordResponse.parse({ message: "Your password has been updated. Please sign in." }));
+});
+
+router.get("/auth/password-policy", async (_req, res): Promise<void> => {
+  const settings = await getPlatformSettings();
+  res.json(
+    GetPasswordPolicyResponse.parse({
+      passwordMinimumLength: settings.passwordMinimumLength,
+    }),
+  );
 });
 
 router.get("/auth/me", requireAuth, (req, res): void => {

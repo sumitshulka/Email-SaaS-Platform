@@ -169,6 +169,7 @@ export * from './microsoft365TraceConnectionRequestsPerFiveMinutes';
 export * from './microsoft365TraceConnectionSource';
 export * from './microsoft365TraceConnectionSyncStatus';
 export * from './notificationAudience';
+export * from './passwordPolicy';
 export * from './paymentVerificationResult';
 export * from './paymentVerificationResultStatus';
 export * from './platformSettings';

@@ -156,6 +156,19 @@ export const GetCurrentUserResponse = zod.object({
 
 
 /**
+ * @summary Get the current password minimum length
+ */
+export const getPasswordPolicyResponsePasswordMinimumLengthMin = 8;
+export const getPasswordPolicyResponsePasswordMinimumLengthMax = 128;
+
+
+
+export const GetPasswordPolicyResponse = zod.object({
+  "passwordMinimumLength": zod.number().int().min(getPasswordPolicyResponsePasswordMinimumLengthMin).max(getPasswordPolicyResponsePasswordMinimumLengthMax)
+})
+
+
+/**
  * @summary Revoke the current session
  */
 export const LogoutResponse = zod.void()

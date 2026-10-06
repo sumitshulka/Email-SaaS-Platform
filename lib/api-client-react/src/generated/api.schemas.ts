@@ -127,6 +127,14 @@ export interface AuthUser {
   createdAt: string;
 }
 
+export interface PasswordPolicy {
+  /**
+     * @minimum 8
+     * @maximum 128
+     */
+  passwordMinimumLength: number;
+}
+
 export interface AuthResponse {
   user: AuthUser;
 }

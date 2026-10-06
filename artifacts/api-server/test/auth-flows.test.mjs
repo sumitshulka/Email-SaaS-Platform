@@ -4207,6 +4207,31 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.equal(adminAccess.response.status, 200);
   });
 
+  it("exposes only the live password minimum to password forms", async () => {
+    const anonymousPolicy = await api("/auth/password-policy");
+    assert.equal(anonymousPolicy.response.status, 200);
+    assert.deepEqual(Object.keys(anonymousPolicy.body), ["passwordMinimumLength"]);
+
+    await createUser({
+      username: "password-policy-admin",
+      email: "password-policy-admin@example.test",
+      role: "SUPERADMIN",
+    });
+    const admin = await login("password-policy-admin@example.test");
+    const settingsResponse = await api("/admin/settings", { cookie: admin.cookie });
+    assert.equal(settingsResponse.response.status, 200);
+    const { updatedAt: _updatedAt, ...settings } = settingsResponse.body;
+    const changedSettings = await api("/admin/settings", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { ...settings, passwordMinimumLength: 17 },
+    });
+    assert.equal(changedSettings.response.status, 200);
+
+    const updatedPolicy = await api("/auth/password-policy");
+    assert.deepEqual(updatedPolicy.body, { passwordMinimumLength: 17 });
+  });
+
   it("invalidates sessions when accounts are disabled or deleted", async () => {
     const adminUser = await createUser({
       username: "platform-admin",
