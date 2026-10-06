@@ -5415,6 +5415,154 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("keeps interrupted sends unknown after maintenance and resumes other recipients", async () => {
+    const owner = await loggedInUser({
+      username: "maintenance-uncertain-send-owner",
+    });
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.maintenance.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("maintenance-user"),
+        passwordEncrypted: securityModule.encryptSecret("maintenance-password"),
+        fromName: "Maintenance Test",
+        fromEmail: "sender@maintenance.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Uncertain delivery after restart",
+        subject: "A campaign update",
+        textBody: "This message should not be sent twice.",
+        status: "sending",
+      })
+      .returning();
+    const [queuedContact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "queued@maintenance.test",
+        firstName: "Queued",
+        subscribed: true,
+      })
+      .returning();
+    const staleSince = new Date(Date.now() - 11 * 60 * 1000);
+    const [interruptedRecipient, queuedRecipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values([
+        {
+          campaignId: campaign.id,
+          userId: owner.user.id,
+          email: "uncertain@maintenance.test",
+          status: "sending",
+          attempts: 1,
+          nextAttemptAt: staleSince,
+          createdAt: staleSince,
+          updatedAt: staleSince,
+        },
+        {
+          campaignId: campaign.id,
+          userId: owner.user.id,
+          contactId: queuedContact.id,
+          email: "queued@maintenance.test",
+          status: "queued",
+          attempts: 0,
+          nextAttemptAt: new Date(Date.now() - 1000),
+          createdAt: new Date(Date.now() - 1000),
+          updatedAt: new Date(),
+        },
+      ])
+      .returning();
+    const [pendingAttempt] = await db
+      .insert(dbModule.emailSendAttemptsTable)
+      .values({
+        userId: owner.user.id,
+        recipientId: interruptedRecipient.id,
+        outcome: "pending",
+        attemptedAt: staleSince,
+      })
+      .returning();
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: true,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      return { accepted: true };
+    });
+
+    try {
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(2),
+        0,
+      );
+      assert.deepEqual(deliveredTo, []);
+
+      await db
+        .update(dbModule.systemConfigurationTable)
+        .set({
+          value: {
+            maintenanceMode: false,
+            defaultEmailsPerHour: 3600,
+            maxEmailsPerDay: 100,
+            queuePollingSeconds: 1,
+            deliveryTrackingEnabled: true,
+          },
+        })
+        .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+      assert.deepEqual(deliveredTo, ["queued@maintenance.test"]);
+
+      const recipients = await db
+        .select({
+          id: dbModule.emailCampaignRecipientsTable.id,
+          email: dbModule.emailCampaignRecipientsTable.email,
+          status: dbModule.emailCampaignRecipientsTable.status,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.id));
+      assert.deepEqual(
+        Object.fromEntries(recipients.map(({ email, status }) => [email, status])),
+        {
+          "uncertain@maintenance.test": "unknown",
+          "queued@maintenance.test": "delivered",
+        },
+      );
+      const [recoveredAttempt] = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.id, pendingAttempt.id));
+      assert.equal(recoveredAttempt.outcome, "unknown");
+      assert.ok(recoveredAttempt.completedAt);
+      assert.match(recoveredAttempt.errorMessage, /could not be confirmed/i);
+    } finally {
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("finishes an in-flight email but pauses before claiming the next recipient during maintenance", async () => {
     const owner = await loggedInUser({
       username: "maintenance-inflight-owner",
