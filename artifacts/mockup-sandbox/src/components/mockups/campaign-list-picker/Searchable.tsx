@@ -37,10 +37,10 @@ export function Searchable() {
             <input className="mt-1.5 h-10 w-full rounded-md border border-[#d8dde4] px-3 font-normal" value="Spring product notes" readOnly />
           </label>
           <fieldset className="min-w-0">
-            <div className="mb-1.5 flex items-center justify-between">
-              <legend className="text-[12px] font-semibold text-[#344154]">Target lists</legend>
+            <legend className="mb-1.5 flex w-full items-center justify-between gap-3 text-[12px] font-semibold text-[#344154]">
+              <span>Target lists</span>
               <span className="text-[10px] font-medium text-[#687484]">8 selected</span>
-            </div>
+            </legend>
             <div className="overflow-hidden rounded-md border border-[#d8dde4] bg-white">
               <div className="border-b border-[#e9edf0] bg-[#fbfcfd] p-2">
                 <div className="flex items-center justify-between gap-2">
@@ -57,7 +57,10 @@ export function Searchable() {
                 </label>
                 <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
                   <span className="text-[10px] text-[#808a97]">4 results · 1 already selected</span>
-                  <button className="rounded px-1.5 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Add 3 matches</button>
+                  <span className="flex items-center gap-1">
+                    <button className="rounded px-1.5 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Add 3 matches</button>
+                    <button className="rounded px-1.5 py-1 text-[10px] font-semibold text-[#687484] hover:bg-[#eef1f4]">Clear all</button>
+                  </span>
                 </div>
               </div>
               <div className="max-h-40 space-y-0.5 overflow-y-auto p-1.5">
@@ -79,7 +82,6 @@ export function Searchable() {
               <h2 className="text-[11px] font-semibold text-[#344154]">Processing order <span className="ml-1 rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] text-[#245b9b]">8 lists</span></h2>
               <p className="mt-1 text-[10px] leading-4 text-[#788392]">Use arrows to set priority. Overlapping addresses still receive one email.</p>
             </div>
-            <button className="shrink-0 rounded px-2 py-1 text-[10px] font-semibold text-[#687484] hover:bg-[#eef1f4]">Clear all</button>
           </div>
           <ol className="mt-2 max-h-36 space-y-1 overflow-y-auto pr-1">
             {selected.map((name, index) => (
