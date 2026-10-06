@@ -102,6 +102,7 @@ let serverOutput = '';
 let browser;
 let baseUrl;
 const contactUpdates = [];
+const contactLeadStatusUpdates = [];
 const filterList = {
   id: 'browser-filter-list',
   name: 'Lifecycle audience',
@@ -255,6 +256,7 @@ async function installApiFixtures(context, {
   contacts = contactDirectoryFixtures(),
   companySearchRequests = [],
   companyDirectoryRequests = [],
+  leadStatusOptions = [],
 } = {}) {
   await context.route('**/api/**', async route => {
     const request = route.request();
@@ -376,7 +378,7 @@ async function installApiFixtures(context, {
       return;
     }
     if (pathname === '/api/contact-field-options' && method === 'GET') {
-      await route.fulfill({ status: 200, json: { options: [] } });
+      await route.fulfill({ status: 200, json: { options: leadStatusOptions } });
       return;
     }
     if (pathname === '/api/contact-lists' && method === 'GET') {
@@ -477,9 +479,37 @@ async function installApiFixtures(context, {
       await route.fulfill({ status: 200, json: contact });
       return;
     }
+    if (pathname === `/api/contacts/${contactId}/lead-status-updates` && method === 'GET') {
+      await route.fulfill({ status: 200, json: contactLeadStatusUpdates });
+      return;
+    }
     if (pathname === `/api/contacts/${contactId}` && method === 'PATCH') {
       const data = request.postDataJSON();
       contactUpdates.push(data);
+      if (Object.hasOwn(data, 'leadStatus') && data.leadStatus !== contact.leadStatus) {
+        const reason = typeof data.leadStatusChangeReason === 'string'
+          ? data.leadStatusChangeReason.trim()
+          : '';
+        if (!reason) {
+          await route.fulfill({
+            status: 400,
+            json: {
+              error: 'A reason is required when changing lead status.',
+              code: 'LEAD_STATUS_CHANGE_REASON_REQUIRED',
+            },
+          });
+          return;
+        }
+        contactLeadStatusUpdates.unshift({
+          id: `browser-lead-status-update-${contactLeadStatusUpdates.length + 1}`,
+          contactId,
+          previousStatus: contact.leadStatus,
+          newStatus: data.leadStatus,
+          reason,
+          changedByName: `${user.firstName} ${user.lastName}`,
+          changedAt: '2026-10-06T12:34:00.000Z',
+        });
+      }
       if (data.companyId) {
         if (!data.replaceLegacyCompanyProfile) {
           await route.fulfill({
@@ -1131,6 +1161,103 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.deepEqual(contactUpdates[3], { companyId: company.id, replaceLegacyCompanyProfile: true });
       await page.getByTestId('panel-linked-company').waitFor({ state: 'visible' });
       assert.equal(await page.getByTestId('panel-linked-company').innerText().then(text => text.includes(company.companyName)), true);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('requires a reason for lead status changes and shows persisted history after reload', async () => {
+    contact = {
+      ...contact,
+      ...legacyCompanyProfile,
+      companyId: null,
+      company: null,
+      leadStatus: 'New',
+      updatedAt: '2026-10-05T12:00:00.000Z',
+    };
+    contactUpdates.length = 0;
+    contactLeadStatusUpdates.length = 0;
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, {
+        leadStatusOptions: [
+          { id: 'browser-lead-status-new', field: 'leadStatus', value: 'New', normalizedValue: 'new' },
+          { id: 'browser-lead-status-qualified', field: 'leadStatus', value: 'Qualified', normalizedValue: 'qualified' },
+        ],
+      });
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/contacts/${contactId}`);
+
+      const statusSelect = page.getByTestId('input-detail-lead-status');
+      await statusSelect.waitFor({ state: 'visible' });
+      await page.getByTestId('empty-contact-lead-status-updates').waitFor({ state: 'visible' });
+      await statusSelect.selectOption('Qualified');
+      const reasonInput = page.getByTestId('input-detail-lead-status-reason');
+      await reasonInput.waitFor({ state: 'visible' });
+
+      await page.getByTestId('button-save-contact-detail').click();
+      await page.getByText('Enter a reason before saving this status change.', { exact: true }).waitFor({ state: 'visible' });
+      assert.equal(contactUpdates.length, 0, 'the browser should block a status change with no reason before sending a request');
+      assert.equal(contact.leadStatus, 'New');
+      assert.equal(contactLeadStatusUpdates.length, 0);
+
+      const reason = 'Requested a product demonstration.';
+      await reasonInput.fill(reason);
+      const saveResponsePromise = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/contacts/${contactId}` &&
+        response.request().method() === 'PATCH',
+      );
+      await page.getByTestId('button-save-contact-detail').click();
+      assert.equal((await saveResponsePromise).status(), 200);
+
+      const updateId = 'browser-lead-status-update-1';
+      const historyItem = page.getByTestId(`item-contact-lead-status-update-${updateId}`);
+      await historyItem.waitFor({ state: 'visible' });
+      const transitionId = `text-contact-lead-status-transition-${updateId}`;
+      const reasonId = `text-contact-lead-status-reason-${updateId}`;
+      const userId = `text-contact-lead-status-user-${updateId}`;
+      const dateId = `text-contact-lead-status-date-${updateId}`;
+      const dateAfterSave = await historyItem.getByTestId(dateId).getAttribute('datetime');
+      const dateTextAfterSave = await historyItem.getByTestId(dateId).innerText();
+      assert.match(await historyItem.getByTestId(transitionId).innerText(), /New[\s\S]*Qualified/);
+      assert.equal(await historyItem.getByTestId(reasonId).innerText(), reason);
+      assert.match(await historyItem.getByTestId(userId).innerText(), /Company Reviewer/);
+      assert.equal(dateAfterSave, '2026-10-06T12:34:00.000Z');
+      assert.ok(dateTextAfterSave.trim(), 'the changed date should be visible');
+      assert.equal(contactLeadStatusUpdates.length, 1);
+
+      await page.reload();
+      const reloadedItem = page.getByTestId(`item-contact-lead-status-update-${updateId}`);
+      await reloadedItem.waitFor({ state: 'visible' });
+      assert.match(await reloadedItem.getByTestId(transitionId).innerText(), /New[\s\S]*Qualified/);
+      assert.equal(await reloadedItem.getByTestId(reasonId).innerText(), reason);
+      assert.match(await reloadedItem.getByTestId(userId).innerText(), /Company Reviewer/);
+      assert.equal(await reloadedItem.getByTestId(dateId).getAttribute('datetime'), dateAfterSave);
+      assert.equal(await reloadedItem.getByTestId(dateId).innerText(), dateTextAfterSave);
+      assert.equal(contact.leadStatus, 'Qualified');
+
+      const historyRefreshPromise = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/contacts/${contactId}/lead-status-updates` &&
+        response.request().method() === 'GET' &&
+        response.status() === 200,
+      );
+      const unchangedSavePromise = page.waitForResponse(response =>
+        new URL(response.url()).pathname === `/api/contacts/${contactId}` &&
+        response.request().method() === 'PATCH',
+      );
+      await page.getByTestId('button-save-contact-detail').click();
+      assert.equal((await unchangedSavePromise).status(), 200);
+      await historyRefreshPromise;
+      assert.equal(contactUpdates.length, 2, 'the unchanged contact save should reach the API');
+      assert.equal(Object.hasOwn(contactUpdates[1], 'leadStatusChangeReason'), false);
+      assert.equal(contactLeadStatusUpdates.length, 1, 'saving the unchanged status must not add history');
+      assert.equal(await page.locator('[data-testid^="item-contact-lead-status-update-"]').count(), 1);
     } finally {
       await context.close();
     }
