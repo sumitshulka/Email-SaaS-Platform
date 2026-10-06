@@ -21,6 +21,51 @@ const dotClass: Record<Tone, string> = { blue: 'bg-[#4382c4]', green: 'bg-[#4c96
 const outlineBtn = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-[#d7dce3] bg-white px-3 text-[12px] font-semibold text-[#283545] transition hover:bg-[#f7f9fb] disabled:cursor-not-allowed disabled:opacity-55';
 const primaryBtn = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-4 text-[13px] font-semibold text-white transition hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55';
 const inputCls = 'w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]';
+const MICROSOFT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MICROSOFT_TRACE_GUIDE = 'https://learn.microsoft.com/en-us/exchange/monitoring/trace-an-email-message/graph-api-message-trace';
+const MICROSOFT_TRACE_RESOURCE = 'https://learn.microsoft.com/en-us/graph/api/resources/exchangemessagetrace?view=graph-rest-1.0';
+
+type MicrosoftTraceConnectGuidance = { title: string; detail: string; nextSteps: string[] };
+
+function microsoftTraceConnectGuidance(error: unknown): MicrosoftTraceConnectGuidance {
+  const value = error && typeof error === 'object' ? error as { status?: unknown; data?: unknown } : {};
+  const status = typeof value.status === 'number' ? value.status : null;
+  const data = value.data && typeof value.data === 'object' ? value.data as { code?: unknown } : {};
+
+  if (data.code === 'MICROSOFT_365_TENANT_SWITCH_REQUIRES_DISCONNECT' || status === 409) {
+    return {
+      title: 'Disconnect the current tenant before switching',
+      detail: 'This workspace already has a Microsoft 365 trace connection for another tenant.',
+      nextSteps: ['Disconnect the current connection below, then enter the new tenant and app details. Previously saved delivery evidence will remain.'],
+    };
+  }
+  if (data.code === 'MICROSOFT_365_TRACE_NOT_AUTHORIZED' || status === 403) {
+    return {
+      title: 'Microsoft signed in, but did not allow trace access',
+      detail: 'The app is missing permission or the tenant has not completed one of the administrator steps.',
+      nextSteps: ['Confirm ExchangeMessageTrace.Read.All is an Application permission and tenant admin consent is granted.', 'Confirm the Microsoft Exchange trace service principal exists in this tenant.'],
+    };
+  }
+  if (data.code === 'MICROSOFT_365_CREDENTIALS_REJECTED' || data.code === 'INVALID_INPUT' || status === 400) {
+    return {
+      title: 'Check the tenant, app, and secret values',
+      detail: 'Microsoft could not verify the sign-in details. The secret field was cleared; it is not saved in this page after an attempt.',
+      nextSteps: ['Copy the Directory (tenant) ID and Application (client) ID from the same Entra app registration.', 'Enter the secret Value (not its Secret ID) and check that it has not expired.'],
+    };
+  }
+  if (data.code === 'MICROSOFT_365_TRACE_UNAVAILABLE' || status === 502) {
+    return {
+      title: 'Microsoft could not be reached to verify trace access',
+      detail: 'No connection was saved. Check Microsoft service availability and try again.',
+      nextSteps: ['If this keeps happening after retrying, confirm the setup in Microsoft’s message-trace guide.'],
+    };
+  }
+  return {
+    title: 'Trace access could not be verified',
+    detail: 'No connection was saved. Check the Microsoft setup steps and try again.',
+    nextSteps: ['Confirm the tenant and app IDs, the active secret Value, admin consent, and the Exchange trace service principal.'],
+  };
+}
 
 /** Maps imported report outcome strings to display labels. Defensive: unknown strings are shown verbatim as Unconfirmed-like gray. */
 export function reportOutcomeMeta(outcome: string | null | undefined): { label: string; tone: Tone } | null {
@@ -180,9 +225,12 @@ export function Microsoft365TraceSettingsPanel() {
   const [adminConsentConfirmed, setAdminConsentConfirmed] = useState(false);
   const [days, setDays] = useState(90);
   const [error, setError] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<MicrosoftTraceConnectGuidance | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const connection = connectionQuery.data;
   const busy = connect.isPending || disconnect.isPending || sync.isPending || backfill.isPending;
+  const tenantIdValid = MICROSOFT_UUID.test(tenantId.trim());
+  const clientIdValid = MICROSOFT_UUID.test(clientId.trim());
 
   const refreshEvidence = () => {
     void qc.invalidateQueries({ queryKey: getGetMicrosoft365TraceConnectionQueryKey() });
@@ -197,25 +245,33 @@ export function Microsoft365TraceSettingsPanel() {
   };
   const submitConnect = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null); setNotice(null);
+    setError(null); setNotice(null); setConnectError(null);
+    if (!tenantIdValid || !clientIdValid) {
+      setConnectError({
+        title: 'Enter valid Microsoft Entra IDs',
+        detail: 'Both values must be complete IDs in the 8-4-4-4-12 format shown below.',
+        nextSteps: ['Copy the Directory (tenant) ID from the tenant Overview.', 'Copy the Application (client) ID from the app registration Overview.'],
+      });
+      return;
+    }
     connect.mutate({ data: { tenantId: tenantId.trim(), clientId: clientId.trim(), clientSecret, adminConsentConfirmed: true } }, {
       onSuccess: () => {
-        setClientSecret('');
         setNotice('Microsoft Graph accepted a trace request. The rolling 90-day backfill is queued.');
         refreshEvidence();
       },
-      onError: err => setError(err instanceof Error ? err.message : 'Microsoft trace access could not be verified.'),
+      onError: err => setConnectError(microsoftTraceConnectGuidance(err)),
     });
+    setClientSecret('');
   };
   const runSync = () => {
-    setError(null); setNotice(null);
+    setError(null); setConnectError(null); setNotice(null);
     sync.mutate(undefined, {
       onSuccess: () => { setNotice('A trace sync is queued.'); refreshEvidence(); },
       onError: err => setError(err instanceof Error ? err.message : 'The sync could not be queued.'),
     });
   };
   const runBackfill = () => {
-    setError(null); setNotice(null);
+    setError(null); setConnectError(null); setNotice(null);
     backfill.mutate({ data: { days } }, {
       onSuccess: () => { setNotice(`A ${days}-day trace backfill is queued.`); refreshEvidence(); },
       onError: err => setError(err instanceof Error ? err.message : 'The backfill could not be queued.'),
@@ -223,7 +279,7 @@ export function Microsoft365TraceSettingsPanel() {
   };
   const removeConnection = () => {
     if (!window.confirm('Disconnect Microsoft 365 trace collection? Saved delivery evidence will stay, but credentials and queued trace work will be removed.')) return;
-    setError(null); setNotice(null);
+    setError(null); setConnectError(null); setNotice(null);
     disconnect.mutate(undefined, {
       onSuccess: () => { setNotice('Microsoft 365 trace collection is disconnected. Previously recorded evidence remains.'); refreshEvidence(); },
       onError: err => setError(err instanceof Error ? err.message : 'The connection could not be removed.'),
@@ -254,20 +310,60 @@ export function Microsoft365TraceSettingsPanel() {
         <button type="button" data-testid="button-disconnect-microsoft365" className={outlineBtn} disabled={busy} onClick={removeConnection}><Unlink className="h-3.5 w-3.5"/>Disconnect</button>
       </div>
     </div> : <form className="mt-3 space-y-3" onSubmit={submitConnect}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block"><span className="mb-1 block text-[11px] font-semibold text-[#344154]">Microsoft Entra tenant ID</span><input data-testid="input-microsoft365-tenant-id" className={cx(inputCls, 'h-9 mono')} autoComplete="off" spellCheck={false} required maxLength={36} value={tenantId} onChange={e => setTenantId(e.target.value)} placeholder="Tenant (directory) ID"/></label>
-        <label className="block"><span className="mb-1 block text-[11px] font-semibold text-[#344154]">App registration client ID</span><input data-testid="input-microsoft365-client-id" className={cx(inputCls, 'h-9 mono')} autoComplete="off" spellCheck={false} required maxLength={36} value={clientId} onChange={e => setClientId(e.target.value)} placeholder="Application (client) ID"/></label>
+      <div data-testid="help-microsoft365-trace-setup" className="rounded-md border border-[#e5e9ed] bg-[#fbfcfd] p-4">
+        <h4 className="text-[12px] font-semibold text-[#344154]">Set up Microsoft 365 trace access</h4>
+        <p className="mt-1 text-[11px] leading-5 text-[#5f6c7c]">A Microsoft 365 administrator completes these steps in your organization. Mailflow cannot do them for you.</p>
+        <ol className="mt-3 list-decimal space-y-3 pl-5 text-[11px] leading-5 text-[#5f6c7c]">
+          <li>
+            <b className="text-[#344154]">Create or open an app registration.</b> In Microsoft Entra, register the app that will read traces. On its Overview page, copy the Directory (tenant) ID and Application (client) ID.
+            {' '}<a data-testid="link-microsoft365-entra-apps" className="text-[#245b9b] underline" href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noreferrer">Open app registrations in Microsoft Entra</a>.
+          </li>
+          <li>
+            <b className="text-[#344154]">Allow the app to read message traces.</b> Open API permissions, choose Add a permission → Microsoft Graph → Application permissions, and add <span className="mono">ExchangeMessageTrace.Read.All</span>. A tenant administrator must then select Grant admin consent.
+            {' '}<a data-testid="link-microsoft365-graph-setup" className="text-[#245b9b] underline" href={MICROSOFT_TRACE_GUIDE} target="_blank" rel="noreferrer">Follow Microsoft’s Graph trace setup guide</a>
+            {' '}or <a data-testid="link-microsoft365-admin-consent-help" className="text-[#245b9b] underline" href="https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/grant-admin-consent" target="_blank" rel="noreferrer">read about tenant admin consent</a>.
+          </li>
+          <li>
+            <b className="text-[#344154]">Create a client secret.</b> In the app registration, open Certificates &amp; secrets and create a client secret. Copy its <b>Value</b> right away; Microsoft will not show it again. Do not use the Secret ID.
+            {' '}<a data-testid="link-microsoft365-secret-help" className="text-[#245b9b] underline" href="https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials?tabs=client-secret" target="_blank" rel="noreferrer">Microsoft’s secret setup instructions</a>.
+          </li>
+          <li>
+            <b className="text-[#344154]">Provision Microsoft’s trace service principal.</b> This is separate from your app registration. In Microsoft Graph PowerShell, an administrator with permission to create service principals runs:
+            <pre className="my-2 overflow-x-auto rounded bg-[#f0f3f6] p-2 text-[10px] leading-4 text-[#344154]"><code>{'Connect-MgGraph -Scopes "Application.ReadWrite.All"\nNew-MgServicePrincipal -AppId 8bd644d1-64a1-4d4b-ae52-2e0cbf64e373'}</code></pre>
+            <a data-testid="link-microsoft365-trace-service-principal" className="text-[#245b9b] underline" href={MICROSOFT_TRACE_RESOURCE} target="_blank" rel="noreferrer">See Microsoft’s service-principal instructions</a>
+            {' '}and <a data-testid="link-microsoft365-graph-powershell" className="text-[#245b9b] underline" href="https://learn.microsoft.com/en-us/powershell/microsoftgraph/installation?view=graph-powershell-1.0" target="_blank" rel="noreferrer">install Microsoft Graph PowerShell if needed</a>. It can take several hours for this setup to become available.
+          </li>
+        </ol>
+        <p className="mt-3 border-t border-[#e5e9ed] pt-3 text-[11px] leading-5 text-[#5f6c7c]">Microsoft limits trace history to 90 days and requests to 10-day windows. Mailflow splits requests into supported windows and stores progress as it syncs.</p>
       </div>
-      <label className="block"><span className="mb-1 block text-[11px] font-semibold text-[#344154]">App registration client secret</span><input data-testid="input-microsoft365-client-secret" className={cx(inputCls, 'h-9 mono')} type="password" autoComplete="new-password" required minLength={8} maxLength={4096} value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Secret value (not the secret ID)"/></label>
-      <Disclosure testId="help-microsoft365-trace-setup" title="Required tenant setup and permission">
-        <p>In Microsoft Entra, create an app registration, add the Microsoft Graph <span className="mono">ExchangeMessageTrace.Read.All</span> <b>application permission</b>, then grant tenant admin consent. The connection is verified by a real trace query; SMTP login details do not provide this access.</p>
-        <p>Microsoft also requires its trace API service principal in your tenant. An administrator can provision it with Microsoft Graph PowerShell using <span className="mono break-all">New-MgServicePrincipal -AppId 8bd644d1-64a1-4d4b-ae52-2e0cbf64e373</span>. Provisioning may take several hours.</p>
-        <p>Microsoft limits traces to the last 90 days, 10-day query windows, 5,000 results per page, and 100 list requests and 100 detail requests per five minutes. Sync uses those limits and saves paging checkpoints.</p>
-        <a className="text-[#245b9b] underline" href="https://learn.microsoft.com/en-us/exchange/monitoring/trace-an-email-message/graph-api-message-trace" target="_blank" rel="noreferrer">Microsoft’s Graph message trace setup guide</a>
-      </Disclosure>
-      <label className="flex items-start gap-2 text-[11px] leading-5 text-[#5f6c7c]"><input data-testid="checkbox-microsoft365-admin-consent" type="checkbox" required checked={adminConsentConfirmed} onChange={e => setAdminConsentConfirmed(e.target.checked)} className="mt-1 accent-[#174f99]"/>A tenant administrator has granted <span className="mono">ExchangeMessageTrace.Read.All</span> application permission and completed the required trace service-principal setup.</label>
-      {error && <div role="alert" data-testid="error-microsoft365-connect" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{error}</div>}
-      <button type="submit" data-testid="button-connect-microsoft365" className={primaryBtn} disabled={busy || !adminConsentConfirmed || !tenantId.trim() || !clientId.trim() || clientSecret.length < 8}>{connect.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}{connect.isPending ? 'Verifying access' : 'Verify and connect'}</button>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-[#344154]">Microsoft Entra tenant ID</span>
+          <input data-testid="input-microsoft365-tenant-id" aria-invalid={tenantId.length > 0 && !tenantIdValid} aria-describedby={tenantId.length > 0 && !tenantIdValid ? 'help-microsoft365-tenant-id error-microsoft365-tenant-id' : 'help-microsoft365-tenant-id'} className={cx(inputCls, 'h-9 mono')} autoComplete="off" spellCheck={false} required maxLength={36} value={tenantId} onChange={e => { setTenantId(e.target.value); setConnectError(null); }} placeholder="Directory (tenant) ID"/>
+          <span id="help-microsoft365-tenant-id" className="mt-1 block text-[10px] leading-4 text-[#788392]">36 characters in 8-4-4-4-12 format; copy it from the tenant Overview.</span>
+          {tenantId.length > 0 && !tenantIdValid && <span role="alert" data-testid="error-microsoft365-tenant-id" className="mt-1 block text-[10px] text-[#99501e]">Enter the full tenant ID, including its hyphens.</span>}
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold text-[#344154]">App registration client ID</span>
+          <input data-testid="input-microsoft365-client-id" aria-invalid={clientId.length > 0 && !clientIdValid} aria-describedby={clientId.length > 0 && !clientIdValid ? 'help-microsoft365-client-id error-microsoft365-client-id' : 'help-microsoft365-client-id'} className={cx(inputCls, 'h-9 mono')} autoComplete="off" spellCheck={false} required maxLength={36} value={clientId} onChange={e => { setClientId(e.target.value); setConnectError(null); }} placeholder="Application (client) ID"/>
+          <span id="help-microsoft365-client-id" className="mt-1 block text-[10px] leading-4 text-[#788392]">Copy the Application (client) ID from this app registration’s Overview.</span>
+          {clientId.length > 0 && !clientIdValid && <span role="alert" data-testid="error-microsoft365-client-id" className="mt-1 block text-[10px] text-[#99501e]">Enter the full client ID, including its hyphens.</span>}
+        </label>
+      </div>
+      <label className="block">
+        <span className="mb-1 block text-[11px] font-semibold text-[#344154]">App registration client secret</span>
+        <input data-testid="input-microsoft365-client-secret" className={cx(inputCls, 'h-9 mono')} type="password" autoComplete="new-password" spellCheck={false} required minLength={8} maxLength={4096} value={clientSecret} onChange={e => { setClientSecret(e.target.value); setConnectError(null); }} placeholder="Secret Value (not the Secret ID)"/>
+        <span className="mt-1 block text-[10px] leading-4 text-[#788392]">This field is masked and cleared when verification starts. Mailflow stores the secret encrypted and does not return it in connection details.</span>
+      </label>
+      <label className="flex items-start gap-2 text-[11px] leading-5 text-[#5f6c7c]"><input data-testid="checkbox-microsoft365-admin-consent" type="checkbox" required checked={adminConsentConfirmed} onChange={e => { setAdminConsentConfirmed(e.target.checked); setConnectError(null); }} className="mt-1 accent-[#174f99]"/>A tenant administrator has granted the <span className="mono">ExchangeMessageTrace.Read.All</span> application permission and completed the trace service-principal setup.</label>
+      {connectError && <div role="alert" data-testid="error-microsoft365-connect" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
+        <p className="font-semibold">{connectError.title}</p><p className="mt-1">{connectError.detail}</p>
+        <ul className="mt-1 list-disc space-y-1 pl-5">{connectError.nextSteps.map((step, i) => <li key={i}>{step}</li>)}</ul>
+        <p className="mt-2">Review <a data-testid="link-microsoft365-connect-error-guide" className="font-semibold text-[#245b9b] underline" href={MICROSOFT_TRACE_GUIDE} target="_blank" rel="noreferrer">Microsoft’s message-trace setup guide</a> and retry.</p>
+      </div>}
+      {error && <div role="alert" data-testid="error-microsoft365-control" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{error}</div>}
+      <div data-testid="notice-microsoft365-trace-limits" className="flex items-start gap-2 rounded-md bg-[#f5f8fb] p-3 text-[11px] leading-5 text-[#5f6c7c]"><Info className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/><span><b className="text-[#344154]">What trace evidence means:</b> A <span className="mono">DELIVER</span> event is evidence Microsoft reports delivery to a mailbox, not inbox placement or that someone read the message. A <span className="mono">SEND</span> event means it was sent to another server. No trace event does not prove delivery or failure.</span></div>
+      <button type="submit" data-testid="button-connect-microsoft365" className={primaryBtn} disabled={busy || !adminConsentConfirmed || !tenantIdValid || !clientIdValid || clientSecret.length < 8}>{connect.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}{connect.isPending ? 'Verifying access' : 'Verify and connect'}</button>
     </form>}
     {notice && <p role="status" data-testid="notice-microsoft365-connection" className="mt-3 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] text-[#31674b]">{notice}</p>}
     {error && connection?.connected && <div role="alert" data-testid="error-microsoft365-control" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">{error}</div>}
