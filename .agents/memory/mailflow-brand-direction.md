@@ -9,6 +9,8 @@ Use the Flowline identity: a compact message-route mark that subtly forms an “
 
 Use Taskone’s text/logo colors as inspiration, especially deep navy and confident blue with red as an energetic counterpoint. Do not copy Taskone’s logo.
 
-**Why:** The user explicitly selected this audience, personality, color reference, and identity direction.
+Public marketing should emphasize that users can send through an email address and SMTP account they control, without moving into a separate bulk-mail platform. Keep campaign automation approachable and avoid presenting complex operational workflows as the product’s value.
 
-**How to apply:** Keep future Mailflow brand assets, prominent product branding, and typography consistent with this direction unless the user requests a rebrand.
+**Why:** The user explicitly selected this audience, personality, color reference, logo, and typography, and asked to emphasize user-controlled email sending and simple automation.
+
+**How to apply:** Keep future Mailflow brand assets, prominent product branding, typography, and public positioning consistent with this direction. Be clear that provider quotas, policies, and deliverability still apply; don't imply SMTP acceptance confirms inbox placement.

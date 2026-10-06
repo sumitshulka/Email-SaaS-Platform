@@ -233,7 +233,7 @@ export function PublicFeaturesPage() {
               <div className="ft-route-card ft-route-smtp"><span className="ft-route-icon"><Send size={17}/></span><span><small>03 / SENDING</small><b>Your SMTP account</b><em>Configured by your team</em></span><span className="ft-connected">CONNECTED</span></div>
             </div>
             <div className="ft-hero-callout"><span className="ft-callout-line"/><span>Mailflow coordinates the work.<br/><b>Your provider’s rules still apply.</b></span></div>
-            <div className="ft-art-caption"><span>ONE SIMPLE ROUTE</span><span>NO NEW TRANSPORT PROVIDER REQUIRED</span></div>
+            <div className="ft-art-caption"><span>ONE SIMPLE ROUTE</span><span>NO BULK-PLATFORM MOVE-IN</span></div>
           </div>
         </div>
         <div className="ft-hero-bottom"><span>PEOPLE FIRST. SENDING ACCOUNT YOURS.</span><a href="#features-audience" data-testid="features-scroll-audience">Start with the audience <ArrowDown size={13}/></a></div>
@@ -247,9 +247,9 @@ export function PublicFeaturesPage() {
         <div className="mf-section-wrap ft-audience-layout">
           <div className="ft-section-copy">
             <SectionEyebrow>01 / KNOW YOUR PEOPLE</SectionEyebrow><h2>Useful context,<br/><em>not another spreadsheet.</em></h2>
-            <p>Keep contacts connected to companies, add custom contact fields, and shape searchable, filterable lists around the people you want to reach.</p>
-            <ul className="ft-check-list"><li><Check size={14}/> Find the right people with search and filters.</li><li><Check size={14}/> Export contact records when you need them.</li><li><Check size={14}/> Keep lead-status changes with reason, actor and date.</li></ul>
-            <div className="ft-audience-foot"><span className="ft-field-chip">CUSTOM FIELDS</span><span className="ft-field-chip">LEAD HISTORY</span><span className="ft-field-chip">CONTACT EXPORTS</span></div>
+            <p>Keep contacts connected to company profiles, add custom contact fields, and use search, filters and contact lists to find the right people.</p>
+            <ul className="ft-check-list"><li><Check size={14}/> Search and filter contact and company records.</li><li><Check size={14}/> Export contact or company data for your records.</li><li><Check size={14}/> Keep lead-status changes with reason, actor and date.</li></ul>
+            <div className="ft-audience-foot"><span className="ft-field-chip">CUSTOM FIELDS</span><span className="ft-field-chip">LEAD HISTORY</span><span className="ft-field-chip">CONTACT &amp; COMPANY EXPORTS</span></div>
           </div>
           <div className="ft-preview-stage"><div className="ft-preview-label"><span>WORKSPACE PREVIEW</span><span>CONTACTS / EXAMPLE</span></div><FeatureAudiencePreview/><div className="ft-history-note"><span className="ft-history-pin"><Clock3 size={13}/></span><span><b>Lead status updated</b><small>Reason, who changed it, and when are kept with the history.</small></span><ArrowUpRight size={13}/></div></div>
         </div>
@@ -286,7 +286,7 @@ export function PublicFeaturesPage() {
         <div className="mf-section-wrap ft-history-layout">
           <div><SectionEyebrow>04 / A RECORD TO RETURN TO</SectionEyebrow><h2>Know what the<br/><em>server told you.</em></h2><p>Campaign history keeps persisted outcomes with the work, so you can review what was queued and what your configured sending account reported.</p><div className="ft-honesty"><span><Check size={13}/></span><p>SMTP acceptance is not inbox confirmation. Mailflow keeps that distinction clear.</p></div></div>
           <div className="ft-history-card">
-            <div className="ft-history-card-head"><span>CAMPAIGN HISTORY</span><span>APRIL 08 <ArrowDown size={11}/></span></div>
+            <div className="ft-history-card-head"><span>CAMPAIGN HISTORY · EXAMPLE</span><span>APRIL 08 <ArrowDown size={11}/></span></div>
             <div className="ft-history-campaign"><span className="ft-history-campaign-icon"><Mail size={16}/></span><span><b>April studio notes</b><small>Spring clients · Sender: hello@yourstudio.example</small></span><span className="ft-history-done">COMPLETED</span></div>
             <div className="ft-history-divider"/>
             <div className="ft-outcome-row"><span className="ft-outcome-check"><Check size={11}/></span><span><b>SMTP response recorded</b><small>Server accepted the message</small></span><time>10:42</time></div>
