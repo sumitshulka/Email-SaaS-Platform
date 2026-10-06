@@ -27,6 +27,12 @@ export type PlatformSettingsInput = {
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
   queuePollingSeconds: number;
+  subjectVariantMinimum: number;
+  subjectVariantMaximum: number;
+  greetingVariantMinimum: number;
+  greetingVariantMaximum: number;
+  signatureVariantMinimum: number;
+  signatureVariantMaximum: number;
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: "public" | "hidden";
@@ -57,6 +63,12 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   bounceThreshold: 3,
   deliveryTrackingEnabled: false,
   queuePollingSeconds: 15,
+  subjectVariantMinimum: 3,
+  subjectVariantMaximum: 7,
+  greetingVariantMinimum: 3,
+  greetingVariantMaximum: 7,
+  signatureVariantMinimum: 3,
+  signatureVariantMaximum: 7,
   allowUserWithoutSubscription: false,
   gracePeriodDays: 0,
   packageVisibility: "public",

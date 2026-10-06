@@ -34,6 +34,7 @@ export type TenantEmailMessage = {
     attemptId: string;
     messageId: string;
     dsnRequested: boolean;
+    headers?: Record<string, string>;
   };
 };
 
@@ -167,7 +168,10 @@ export async function sendTenantEmail(
       ...(tracking
         ? {
             messageId: tracking.messageId,
-            headers: { "X-Mailflow-Attempt-ID": tracking.attemptId },
+            headers: {
+              "X-Mailflow-Attempt-ID": tracking.attemptId,
+              ...tracking.headers,
+            },
             ...(tracking.dsnRequested
               ? {
                   dsn: {

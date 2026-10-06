@@ -24,7 +24,7 @@ import {
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useStartGmailMailboxConnection,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
@@ -32,7 +32,7 @@ import {
 } from '@workspace/api-client-react';
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
-  ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput,
+  ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -1159,13 +1159,35 @@ export function ListsPage() {
   </></QueryState>;
 }
 
-type CampaignForm = { name: string; objective: string; subject: string; textBody: string; htmlBody: string; listIds: string[]; senderAccountId: string };
-const blankCampaign: CampaignForm = { name: '', objective: '', subject: '', textBody: '', htmlBody: '', listIds: [], senderAccountId: '' };
+type CampaignForm = {
+  name: string;
+  objective: string;
+  subjectVariants: string[];
+  greetingVariants: string[];
+  signatureVariants: string[];
+  textBody: string;
+  htmlBody: string;
+  listIds: string[];
+  senderAccountId: string;
+};
+type CampaignVariantField = 'subjectVariants' | 'greetingVariants' | 'signatureVariants';
+const blankCampaign: CampaignForm = {
+  name: '',
+  objective: '',
+  subjectVariants: [''],
+  greetingVariants: [''],
+  signatureVariants: [''],
+  textBody: '',
+  htmlBody: '',
+  listIds: [],
+  senderAccountId: '',
+};
 
 export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused?: boolean } = {}) {
   const [, setLocation] = useLocation();
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
+  const variantLimitsQuery = useGetCampaignVariantLimits();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const previewCampaign = usePreviewCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -1175,6 +1197,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [campaignListSearch, setCampaignListSearch] = useState('');
   const [showSelectedCampaignLists, setShowSelectedCampaignLists] = useState(false);
   const [sampleContactId, setSampleContactId] = useState('');
+  const [placeholderTarget, setPlaceholderTarget] = useState<{ field: CampaignVariantField; index: number }>({ field: 'subjectVariants', index: 0 });
   const [previewState, setPreviewState] = useState<{ key: string; rendered: CampaignTemplatePreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ key: string; message: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<{ kind: 'queue' | 'delete'; campaign: CampaignSummary } | null>(null);
@@ -1184,7 +1207,43 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
+  const variantLimits = variantLimitsQuery.data ?? {
+    subject: { minimum: 3, maximum: 7 },
+    greeting: { minimum: 3, maximum: 7 },
+    signature: { minimum: 3, maximum: 7 },
+  };
+  const variantLimitsByField = {
+    subjectVariants: variantLimits.subject,
+    greetingVariants: variantLimits.greeting,
+    signatureVariants: variantLimits.signature,
+  };
   const primarySenderAccountId = senderAccounts.find(account => account.isPrimary)?.id ?? senderAccounts[0]?.id ?? '';
+  const updateVariant = (field: CampaignVariantField, index: number, value: string) => {
+    setForm(current => {
+      const values = [...current[field]];
+      values[index] = value;
+      return { ...current, [field]: values };
+    });
+  };
+  const addVariant = (field: CampaignVariantField) => {
+    setForm(current => {
+      if (current[field].length >= variantLimitsByField[field].maximum) return current;
+      return { ...current, [field]: [...current[field], ''] };
+    });
+  };
+  const removeVariant = (field: CampaignVariantField, index: number) => {
+    setForm(current => {
+      const values = current[field].filter((_, valueIndex) => valueIndex !== index);
+      return { ...current, [field]: values.length ? values : [''] };
+    });
+    setPlaceholderTarget(current => {
+      if (current.field !== field || current.index < index) return current;
+      return {
+        field,
+        index: current.index === index ? Math.max(0, index - 1) : current.index - 1,
+      };
+    });
+  };
   const sampleContactsParams = { limit: 100, listIds: form.listIds, subscribed: true };
   const contactsQuery = useListContactOptions(sampleContactsParams, {
     query: {
@@ -1269,12 +1328,12 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       setSampleContactId('');
     }
   }, [eligibleSampleContacts, sampleContactId]);
-  const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subject, form.textBody, form.htmlBody]);
+  const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subjectVariants, form.greetingVariants, form.signatureVariants, form.textBody, form.htmlBody]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -1316,7 +1375,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       data: {
          listIds: form.listIds,
         contactId: sampleContactId,
-        subject: form.subject,
+        subject: form.subjectVariants.find(value => value.trim()) ?? '',
+        subjectVariants: form.subjectVariants.map(value => value.trim()).filter(Boolean),
+        greetingVariants: form.greetingVariants.map(value => value.trim()).filter(Boolean),
+        signatureVariants: form.signatureVariants.map(value => value.trim()).filter(Boolean),
         textBody: form.textBody,
         htmlBody: form.htmlBody,
       },
@@ -1325,23 +1387,50 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       onError: error => setPreviewError({ key, message: mutationError(error) }),
     });
   };
-  const insertSubjectPlaceholder = (token: string) => {
-    const input = subjectInputRef.current;
-    const start = input?.selectionStart ?? form.subject.length;
-    const end = input?.selectionEnd ?? start;
-    const subject = `${form.subject.slice(0, start)}${token}${form.subject.slice(end)}`;
-    setForm(current => ({ ...current, subject }));
-    requestAnimationFrame(() => {
-      input?.focus();
-      input?.setSelectionRange(start + token.length, start + token.length);
+  const insertPlaceholder = (field: CampaignVariantField, index: number, token: string) => {
+    if (field === 'subjectVariants' && index === 0) {
+      const input = subjectInputRef.current;
+      const currentSubject = form.subjectVariants[0] ?? '';
+      const start = input?.selectionStart ?? currentSubject.length;
+      const end = input?.selectionEnd ?? start;
+      const subject = `${currentSubject.slice(0, start)}${token}${currentSubject.slice(end)}`;
+      updateVariant(field, index, subject);
+      requestAnimationFrame(() => {
+        input?.focus();
+        input?.setSelectionRange(start + token.length, start + token.length);
+      });
+      return;
+    }
+    setForm(current => {
+      const values = [...current[field]];
+      const currentValue = values[index] ?? '';
+      const spacer = currentValue && !/\s$/.test(currentValue) ? ' ' : '';
+      values[index] = `${currentValue}${spacer}${token}`;
+      return { ...current, [field]: values };
     });
   };
+  const insertSubjectPlaceholder = (token: string) =>
+    insertPlaceholder('subjectVariants', 0, token);
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.listIds.length || !audienceCheckReady || audienceActionInProgress.current) return;
     audienceActionInProgress.current = true;
     setAudienceActionPending(true);
-    const data = { name: form.name.trim(), objective: form.objective.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: [...form.listIds], senderAccountId: form.senderAccountId || null };
+    const subjectVariants = form.subjectVariants.map(value => value.trim()).filter(Boolean);
+    const greetingVariants = form.greetingVariants.map(value => value.trim()).filter(Boolean);
+    const signatureVariants = form.signatureVariants.map(value => value.trim()).filter(Boolean);
+    const data = {
+      name: form.name.trim(),
+      objective: form.objective.trim(),
+      subject: subjectVariants[0] ?? '',
+      subjectVariants,
+      greetingVariants,
+      signatureVariants,
+      textBody: form.textBody.trim(),
+      htmlBody: form.htmlBody.trim(),
+      listIds: [...form.listIds],
+      senderAccountId: form.senderAccountId || null,
+    };
     try {
       const audience = await campaignAudienceQuery.refetch();
       if (audience.isError || !audience.data) {
@@ -1406,7 +1495,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const statusTone = (status: CampaignSummary['status']) => status === 'completed' ? 'green' : status === 'queued' || status === 'sending' ? 'blue' : 'gray';
   const totalDelivered = campaigns.reduce((sum, campaign) => sum + campaign.delivered, 0);
   const totalBounced = campaigns.reduce((sum, campaign) => sum + campaign.bounced, 0);
-  return <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading} error={campaignsQuery.isError || listsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); }} label="campaigns"><>
+  return <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading || variantLimitsQuery.isLoading} error={campaignsQuery.isError || listsQuery.isError || variantLimitsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); void variantLimitsQuery.refetch(); }} label="campaigns"><>
     <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<Button testId="button-create-campaign" onClick={openNew} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     {!activeLists.length && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before creating a campaign. Drafts can only target active lists.</span></div>}
@@ -1523,11 +1612,52 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
             {campaignAudienceQuery.isError ? 'Retry audience' : 'Refresh audience'}
           </Button>
         </div>}
-         <label className="block"><span className={labelClass}>Email subject</span><input ref={subjectInputRef} data-testid="input-campaign-subject" className={inputClass} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="A concise subject your audience will recognize" required maxLength={200}/></label>
-         <div className="-mt-2 flex flex-wrap items-center gap-1.5"><span className="mr-1 text-[10px] text-[#7e8996]">Insert a subject field:</span>{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertSubjectPlaceholder(token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-subject-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
+         <section data-testid="campaign-subject-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
+           <div><h3 className="text-[12px] font-semibold text-[#344154]">Subject line variants</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Create alternative subject lines for a recipient-level test. Placeholders such as a contact’s first name are supported.</p></div>
+           <div className="space-y-2">
+             {form.subjectVariants.map((value, index) => <div key={`subject-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+               <label className="block"><span className={labelClass}>Subject option {index + 1}{index === 0 ? ' · required' : ''}</span><input ref={index === 0 ? subjectInputRef : undefined} data-testid={index === 0 ? 'input-campaign-subject' : `input-campaign-subject-variant-${index + 1}`} className={inputClass} value={value} onFocus={() => setPlaceholderTarget({ field: 'subjectVariants', index })} onChange={event => updateVariant('subjectVariants', index, event.target.value)} placeholder="A concise subject your audience will recognize" required={index === 0} maxLength={200}/></label>
+               <button type="button" data-testid={`button-remove-subject-variant-${index + 1}`} aria-label={`Remove subject option ${index + 1}`} onClick={() => removeVariant('subjectVariants', index)} disabled={form.subjectVariants.length === 1} className="min-h-10 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] font-medium text-[#536172] hover:bg-[#f5f8fb] disabled:opacity-40">Remove</button>
+             </div>)}
+           </div>
+           <div className="flex flex-wrap items-center justify-between gap-2">
+             <p role="status" className="text-[11px] leading-5 text-[#687587]">{form.subjectVariants.filter(value => value.trim()).length < variantLimits.subject.minimum ? `A test starts at ${variantLimits.subject.minimum} non-empty options. Until then, the first option is used for everyone.` : 'Recipients are assigned one stable subject option for this campaign.'}</p>
+             <button type="button" data-testid="button-add-subject-variant" onClick={() => addVariant('subjectVariants')} disabled={form.subjectVariants.length >= variantLimits.subject.maximum} className="min-h-9 rounded-md border border-[#c9d7e5] bg-white px-3 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc] disabled:cursor-not-allowed disabled:opacity-45">Add subject option</button>
+           </div>
+         </section>
+         <section data-testid="campaign-greeting-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
+           <div><h3 className="text-[12px] font-semibold text-[#344154]">Greeting line variants <span className="font-normal text-[#7e8996]">(optional)</span></h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">A greeting is added above the message body. Leave all options blank to omit it.</p></div>
+           <div className="space-y-2">
+             {form.greetingVariants.map((value, index) => <div key={`greeting-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+               <label className="block"><span className={labelClass}>Greeting option {index + 1}</span><input data-testid={`input-campaign-greeting-variant-${index + 1}`} className={inputClass} value={value} onFocus={() => setPlaceholderTarget({ field: 'greetingVariants', index })} onChange={event => updateVariant('greetingVariants', index, event.target.value)} placeholder="For example, Hello {{firstName}}," maxLength={500}/></label>
+               <button type="button" data-testid={`button-remove-greeting-variant-${index + 1}`} aria-label={`Remove greeting option ${index + 1}`} onClick={() => removeVariant('greetingVariants', index)} disabled={form.greetingVariants.length === 1} className="min-h-10 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] font-medium text-[#536172] hover:bg-[#f5f8fb] disabled:opacity-40">Remove</button>
+             </div>)}
+           </div>
+           <div className="flex flex-wrap items-center justify-between gap-2">
+             <p role="status" className="text-[11px] leading-5 text-[#687587]">{form.greetingVariants.filter(value => value.trim()).length === 0 ? 'Optional. Leave blank to omit a greeting.' : form.greetingVariants.filter(value => value.trim()).length < variantLimits.greeting.minimum ? `A test starts at ${variantLimits.greeting.minimum} non-empty options. Until then, the first option is used for everyone.` : 'Recipients are assigned one stable greeting option for this campaign.'}</p>
+             <button type="button" data-testid="button-add-greeting-variant" onClick={() => addVariant('greetingVariants')} disabled={form.greetingVariants.length >= variantLimits.greeting.maximum} className="min-h-9 rounded-md border border-[#c9d7e5] bg-white px-3 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc] disabled:cursor-not-allowed disabled:opacity-45">Add greeting option</button>
+           </div>
+         </section>
+         <section data-testid="campaign-signature-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
+           <div><h3 className="text-[12px] font-semibold text-[#344154]">Signature variants <span className="font-normal text-[#7e8996]">(optional)</span></h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">A signature is added after the message body. Placeholders are supported; leave all options blank to omit it.</p></div>
+           <div className="space-y-2">
+             {form.signatureVariants.map((value, index) => <div key={`signature-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+               <label className="block"><span className={labelClass}>Signature option {index + 1}</span><textarea data-testid={`input-campaign-signature-variant-${index + 1}`} className={`${inputClass} min-h-20 resize-y py-2`} value={value} onFocus={() => setPlaceholderTarget({ field: 'signatureVariants', index })} onChange={event => updateVariant('signatureVariants', index, event.target.value)} placeholder={'Best regards,\\n{{firstName}}'} maxLength={4000}/></label>
+               <button type="button" data-testid={`button-remove-signature-variant-${index + 1}`} aria-label={`Remove signature option ${index + 1}`} onClick={() => removeVariant('signatureVariants', index)} disabled={form.signatureVariants.length === 1} className="min-h-10 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] font-medium text-[#536172] hover:bg-[#f5f8fb] disabled:opacity-40">Remove</button>
+             </div>)}
+           </div>
+           <div className="flex flex-wrap items-center justify-between gap-2">
+             <p role="status" className="text-[11px] leading-5 text-[#687587]">{form.signatureVariants.filter(value => value.trim()).length === 0 ? 'Optional. Leave blank to omit a signature.' : form.signatureVariants.filter(value => value.trim()).length < variantLimits.signature.minimum ? `A test starts at ${variantLimits.signature.minimum} non-empty options. Until then, the first option is used for everyone.` : 'Recipients are assigned one stable signature option for this campaign.'}</p>
+             <button type="button" data-testid="button-add-signature-variant" onClick={() => addVariant('signatureVariants')} disabled={form.signatureVariants.length >= variantLimits.signature.maximum} className="min-h-9 rounded-md border border-[#c9d7e5] bg-white px-3 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc] disabled:cursor-not-allowed disabled:opacity-45">Add signature option</button>
+           </div>
+         </section>
+         <section className="rounded-md border border-[#e4e9ef] bg-white p-3" aria-label="Insert a contact placeholder">
+           <p className="mb-2 text-[10px] leading-4 text-[#687587]">Insert a contact field into the last focused subject, greeting, or signature option.</p>
+           <div className="flex flex-wrap gap-1.5">{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
+         </section>
          <label className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
          <section className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
-            <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the current unsaved subject and message using a subscribed contact in any selected list.</p></div>
+            <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the first subject, greeting, and signature options with a subscribed contact. Queued recipients receive their fixed test assignments.</p></div>
            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                <label className="min-w-0 flex-1"><span className={labelClass}>Sample contact</span><select data-testid="select-campaign-preview-contact" className={inputClass} value={sampleContactId} onChange={e => setSampleContactId(e.target.value)} disabled={!form.listIds.length || contactsQuery.isLoading}>
                <option value="">{contactsQuery.isLoading ? 'Loading contacts…' : 'Choose a subscribed contact'}</option>
@@ -1547,7 +1677,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
              <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text fallback</div><pre data-testid="text-campaign-preview-fallback" className="mt-2 whitespace-pre-wrap break-words rounded-md bg-[#f8fafb] p-4 font-sans text-[12px] leading-6 text-[#566476]">{visiblePreview.textBody}</pre></div>
            </div>}
          </section>
-         <div className="flex items-center gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] text-[#607186]"><Users className="h-4 w-4 shrink-0 text-[#245b9b]"/>Only subscribed contacts are eligible. Duplicate email addresses are removed when the campaign is queued.</div>
+         <div className="flex items-start gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] leading-5 text-[#607186]"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/><span>Only subscribed contacts are eligible. Duplicate email addresses are removed when queued. Each test assignment stays fixed for that recipient throughout the campaign; an unsubscribe link is included automatically.</span></div>
          <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>
     </Modal>}
@@ -1681,6 +1811,42 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
             <div className="mt-4 grid gap-3 sm:grid-cols-4">
               {[['SMTP accepted', campaign.delivered, '#397050'], ['Rejected / failed', campaign.bounced, '#ae642c'], ['Suppressed', campaign.suppressed, '#66717e'], ['Outcome unknown', campaign.unknown, '#8a65a2']].map(([label, value, color]) => <div key={label} className="flex items-center justify-between text-[11px]"><span className="text-[#778291]">{label}</span><span className="font-semibold" style={{ color: String(color) }}>{Number(value).toLocaleString()}</span></div>)}
             </div>
+          </div>
+        </section>
+
+        <section className={`${panelClass} mb-5 p-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Content variant results</h2><p className="mt-1 text-[11px] leading-5 text-[#687587]">Each recipient keeps one assigned version. These figures describe SMTP acceptance and recorded provider outcomes; they do not measure opens, clicks, inbox placement, or engagement.</p></div>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-3">
+            {([
+              { title: 'Subject lines', group: dashboard.variantResults.subject },
+              { title: 'Greeting lines', group: dashboard.variantResults.greeting },
+              { title: 'Signatures', group: dashboard.variantResults.signature },
+            ] as const).filter(section => section.group.variants.length > 0).map(section => (
+              <div key={section.title} className="min-w-0 rounded-md border border-[#e5e9ee] bg-[#fbfcfd] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[12px] font-semibold text-[#344154]">{section.title}</h3>
+                  <Status tone={campaign.status === 'draft' ? 'gray' : section.group.testEnabled ? 'blue' : 'orange'}>
+                    {campaign.status === 'draft' ? 'not queued' : section.group.testEnabled ? 'test active' : 'first option used'}
+                  </Status>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {section.group.variants.map(variant => <div key={variant.index} className="rounded-md border border-[#e5e9ee] bg-white p-2.5">
+                    <div className="break-words text-[11px] font-medium leading-5 text-[#344154]">{variant.index + 1}. {variant.value || '—'}</div>
+                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[#718092]">
+                      <span>Assigned <strong className="text-[#344154]">{variant.assigned.toLocaleString()}</strong></span>
+                      <span>SMTP accepted <strong className="text-[#397050]">{variant.smtpAccepted.toLocaleString()}</strong></span>
+                      <span>Failed <strong className="text-[#ae642c]">{variant.failed.toLocaleString()}</strong></span>
+                      <span>Suppressed <strong className="text-[#596675]">{variant.suppressed.toLocaleString()}</strong></span>
+                      <span>Unknown <strong className="text-[#8a65a2]">{variant.unknown.toLocaleString()}</strong></span>
+                    </div>
+                  </div>)}
+                </div>
+                {!section.group.testEnabled && campaign.status === 'draft' && <p className="mt-2 text-[10px] leading-4 text-[#788392]">Recipient assignments are recorded when this draft is queued.</p>}
+                {!section.group.testEnabled && campaign.status !== 'draft' && <p className="mt-2 text-[10px] leading-4 text-[#788392]">The campaign did not meet the configured minimum for a test, so the first option was used.</p>}
+              </div>
+            ))}
           </div>
         </section>
 

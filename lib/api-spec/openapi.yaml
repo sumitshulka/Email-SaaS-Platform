@@ -1681,6 +1681,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/variant-limits:
+    get:
+      operationId: getCampaignVariantLimits
+      tags: [sending]
+      summary: Get the configured content-variant limits for campaign tests
+      responses:
+        "200":
+          description: Minimum and maximum variants allowed for each campaign section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignVariantLimits"
+  /public/unsubscribe:
+    post:
+      operationId: applyCampaignUnsubscribe
+      tags: [sending]
+      summary: Apply a recipient unsubscribe request
+      description: Applies a signed, tenant-scoped unsubscribe token. Supports RFC 8058 one-click POST requests; ordinary links use a confirmation page before calling this endpoint.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string, minLength: 20, maxLength: 1024 }
+      responses:
+        "200":
+          description: The recipient is unsubscribed; repeating the request is safe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignUnsubscribeResult"
+        "400":
+          description: Invalid unsubscribe request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns/{campaignId}:
     parameters:
       - name: campaignId
@@ -3641,6 +3677,9 @@ components:
         name: { type: string }
         objective: { type: string, maxLength: 500 }
         subject: { type: string }
+        subjectVariants: { type: array, items: { type: string, maxLength: 200 } }
+        greetingVariants: { type: array, items: { type: string, maxLength: 500 } }
+        signatureVariants: { type: array, items: { type: string, maxLength: 4000 } }
         textBody: { type: string }
         htmlBody: { type: ["string", "null"] }
         listId:
@@ -3665,13 +3704,52 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, senderAccountId, senderEmail, name, subject, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignAudienceSummary:
       type: object
       properties:
         uniqueRecipients: { type: integer, minimum: 0 }
         overlappingRecipients: { type: integer, minimum: 0, description: Email addresses found in more than one selected list. }
       required: [uniqueRecipients, overlappingRecipients]
+    CampaignVariantLimits:
+      type: object
+      properties:
+        subject: { $ref: "#/components/schemas/CampaignVariantLimit" }
+        greeting: { $ref: "#/components/schemas/CampaignVariantLimit" }
+        signature: { $ref: "#/components/schemas/CampaignVariantLimit" }
+      required: [subject, greeting, signature]
+    CampaignVariantLimit:
+      type: object
+      properties:
+        minimum: { type: integer, minimum: 2, maximum: 20 }
+        maximum: { type: integer, minimum: 1, maximum: 20 }
+      required: [minimum, maximum]
+    CampaignVariantResult:
+      type: object
+      properties:
+        index: { type: integer, minimum: 0 }
+        value: { type: string }
+        assigned: { type: integer, minimum: 0 }
+        smtpAccepted: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        suppressed: { type: integer, minimum: 0 }
+        unknown: { type: integer, minimum: 0 }
+      required: [index, value, assigned, smtpAccepted, failed, suppressed, unknown]
+    CampaignVariantResultGroup:
+      type: object
+      properties:
+        testEnabled: { type: boolean }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignVariantResult" }
+      required: [testEnabled, variants]
+    CampaignVariantResults:
+      type: object
+      properties:
+        subject: { $ref: "#/components/schemas/CampaignVariantResultGroup" }
+        greeting: { $ref: "#/components/schemas/CampaignVariantResultGroup" }
+        signature: { $ref: "#/components/schemas/CampaignVariantResultGroup" }
+      required: [subject, greeting, signature]
     CampaignDashboard:
       type: object
       properties:
@@ -3688,7 +3766,14 @@ components:
           items: { $ref: "#/components/schemas/CampaignTargetList" }
         pacing:
           $ref: "#/components/schemas/CampaignPacing"
-      required: [campaign, targetList, targetLists, pacing]
+        variantResults:
+          $ref: "#/components/schemas/CampaignVariantResults"
+      required: [campaign, targetList, targetLists, pacing, variantResults]
+    CampaignUnsubscribeResult:
+      type: object
+      properties:
+        unsubscribed: { type: boolean }
+      required: [unsubscribed]
     DeliveryReportInput:
       type: object
       description: Submitted content is processed in memory and not retained as a raw file. Imported evidence is user-provided and is not provider-authenticated.
@@ -3778,6 +3863,19 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         objective: { type: string, maxLength: 500 }
         subject: { type: string, minLength: 1, maxLength: 200 }
+        subjectVariants:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 200 }
+        greetingVariants:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 500 }
+        signatureVariants:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 4000 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
         listIds:
@@ -3797,6 +3895,19 @@ components:
         name: { type: string, minLength: 1, maxLength: 160 }
         objective: { type: string, maxLength: 500 }
         subject: { type: string, minLength: 1, maxLength: 200 }
+        subjectVariants:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 200 }
+        greetingVariants:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 500 }
+        signatureVariants:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 4000 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
         listIds:
@@ -3822,6 +3933,19 @@ components:
           description: Legacy single-list input; use listIds.
         contactId: { type: string, format: uuid }
         subject: { type: string, maxLength: 200 }
+        subjectVariants:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 200 }
+        greetingVariants:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 500 }
+        signatureVariants:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 4000 }
         textBody: { type: string, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
       required: [contactId, subject, textBody, htmlBody]
@@ -3981,11 +4105,17 @@ components:
         bounceThreshold: { type: integer }
         deliveryTrackingEnabled: { type: boolean }
         queuePollingSeconds: { type: integer }
+        subjectVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
+        subjectVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
+        greetingVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
+        greetingVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
+        signatureVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
+        signatureVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer }
         packageVisibility: { type: string, enum: [public, hidden] }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt]
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt]
     PlatformSettingsInput:
       type: object
       properties:
@@ -4013,10 +4143,16 @@ components:
         bounceThreshold: { type: integer, minimum: 1 }
         deliveryTrackingEnabled: { type: boolean }
         queuePollingSeconds: { type: integer, minimum: 1 }
+        subjectVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
+        subjectVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
+        greetingVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
+        greetingVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
+        signatureVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
+        signatureVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer, minimum: 0 }
         packageVisibility: { type: string, enum: [public, hidden] }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, allowUserWithoutSubscription, gracePeriodDays, packageVisibility]
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility]
     ApplicationEmailSettings:
       type: object
       properties:

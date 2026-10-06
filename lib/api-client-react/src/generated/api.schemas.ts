@@ -1931,6 +1931,12 @@ export interface CampaignSummary {
   /** @maxLength 500 */
   objective?: string;
   subject: string;
+  /** @items.maxLength 200 */
+  subjectVariants: string[];
+  /** @items.maxLength 500 */
+  greetingVariants: string[];
+  /** @items.maxLength 4000 */
+  signatureVariants: string[];
   textBody: string;
   /** @nullable */
   htmlBody: string | null;
@@ -1970,6 +1976,52 @@ export interface CampaignAudienceSummary {
   overlappingRecipients: number;
 }
 
+export interface CampaignVariantLimit {
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  minimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  maximum: number;
+}
+
+export interface CampaignVariantLimits {
+  subject: CampaignVariantLimit;
+  greeting: CampaignVariantLimit;
+  signature: CampaignVariantLimit;
+}
+
+export interface CampaignVariantResult {
+  /** @minimum 0 */
+  index: number;
+  value: string;
+  /** @minimum 0 */
+  assigned: number;
+  /** @minimum 0 */
+  smtpAccepted: number;
+  /** @minimum 0 */
+  failed: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  unknown: number;
+}
+
+export interface CampaignVariantResultGroup {
+  testEnabled: boolean;
+  variants: CampaignVariantResult[];
+}
+
+export interface CampaignVariantResults {
+  subject: CampaignVariantResultGroup;
+  greeting: CampaignVariantResultGroup;
+  signature: CampaignVariantResultGroup;
+}
+
 export interface CampaignTargetList {
   id: string;
   name: string;
@@ -1999,6 +2051,11 @@ export interface CampaignDashboard {
   targetList: CampaignTargetList | null;
   targetLists: CampaignTargetList[];
   pacing: CampaignPacing;
+  variantResults: CampaignVariantResults;
+}
+
+export interface CampaignUnsubscribeResult {
+  unsubscribed: boolean;
 }
 
 export type DeliveryReportInputFormat = typeof DeliveryReportInputFormat[keyof typeof DeliveryReportInputFormat];
@@ -2178,6 +2235,23 @@ export interface CampaignInput {
      */
   subject: string;
   /**
+     * @minItems 1
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  subjectVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 500
+     */
+  greetingVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 4000
+     */
+  signatureVariants?: string[];
+  /**
      * @minLength 1
      * @maxLength 100000
      */
@@ -2209,6 +2283,23 @@ export interface CampaignUpdate {
      */
   subject?: string;
   /**
+     * @minItems 1
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  subjectVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 500
+     */
+  greetingVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 4000
+     */
+  signatureVariants?: string[];
+  /**
      * @minLength 1
      * @maxLength 100000
      */
@@ -2235,6 +2326,23 @@ export interface CampaignPreviewInput {
   contactId: string;
   /** @maxLength 200 */
   subject: string;
+  /**
+     * @minItems 1
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  subjectVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 500
+     */
+  greetingVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 4000
+     */
+  signatureVariants?: string[];
   /** @maxLength 100000 */
   textBody: string;
   /** @maxLength 100000 */
@@ -2405,6 +2513,36 @@ export interface PlatformSettings {
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
   queuePollingSeconds: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  subjectVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  subjectVariantMaximum: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  greetingVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  greetingVariantMaximum: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  signatureVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  signatureVariantMaximum: number;
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsPackageVisibility;
@@ -2498,6 +2636,36 @@ export interface PlatformSettingsInput {
   deliveryTrackingEnabled: boolean;
   /** @minimum 1 */
   queuePollingSeconds: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  subjectVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  subjectVariantMaximum: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  greetingVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  greetingVariantMaximum: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  signatureVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  signatureVariantMaximum: number;
   allowUserWithoutSubscription: boolean;
   /** @minimum 0 */
   gracePeriodDays: number;
@@ -3177,6 +3345,14 @@ export type GetCampaignRecipientSummaryParams = {
  * @minItems 1
  */
 listIds: string[];
+};
+
+export type ApplyCampaignUnsubscribeParams = {
+/**
+ * @minLength 20
+ * @maxLength 1024
+ */
+token: string;
 };
 
 export type GetCampaignDeliveryReportParams = {

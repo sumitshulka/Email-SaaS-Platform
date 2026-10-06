@@ -25,6 +25,11 @@ import {
 import { sendTenantEmail } from "./application-email";
 import { decryptSecret } from "./security";
 import {
+  createCampaignUnsubscribeUrls,
+  getPublicAppOrigin,
+  normalizePublicAppOrigin,
+} from "./campaign-unsubscribe";
+import {
   renderCampaignForContact,
   type CampaignPersonalization,
 } from "./campaign-template";
@@ -382,6 +387,14 @@ async function claimDelivery(
         .where(eq(emailCampaignRecipientsTable.id, recipient.id));
       return { completedCampaignId: recipient.campaignId };
     }
+    if (
+      !normalizePublicAppOrigin(campaign.unsubscribeOrigin) &&
+      !getPublicAppOrigin()
+    ) {
+      // Do not attempt a campaign send without a valid unsubscribe URL. Leave
+      // the recipient queued so configuration can be corrected and retried.
+      return null;
+    }
 
     const [sender] = await tx
       .select()
@@ -412,7 +425,8 @@ async function claimDelivery(
             eq(contactsTable.id, recipient.contactId),
             eq(contactsTable.userId, userId),
           ),
-        );
+        )
+        .for("update");
       if (contact?.subscribed) {
         const [details] = await tx
           .select({
@@ -682,9 +696,26 @@ export async function processPendingCampaignDeliveries(
     processed += 1;
     let result: Awaited<ReturnType<typeof sendTenantEmail>>;
     try {
+      const publicOrigin =
+        normalizePublicAppOrigin(claimed.campaign.unsubscribeOrigin) ??
+        getPublicAppOrigin();
+      if (!publicOrigin) {
+        throw new Error(
+          "Configure PUBLIC_APP_URL before processing campaigns so unsubscribe links remain valid.",
+        );
+      }
+      const unsubscribeUrls = createCampaignUnsubscribeUrls(publicOrigin, {
+        tenantId: claimed.campaign.userId,
+        contactId: claimed.recipient.contactId!,
+        campaignId: claimed.campaign.id,
+      });
       const rendered = renderCampaignForContact(
         claimed.campaign,
         claimed.personalization,
+        {
+          variantAssignment: claimed.recipient.variantAssignment,
+          unsubscribeUrl: unsubscribeUrls.browserUrl,
+        },
       );
       result = await sendTenantEmail(
         claimed.sender,
@@ -696,6 +727,10 @@ export async function processPendingCampaignDeliveries(
           attemptId: claimed.attemptId,
           messageId: claimed.messageId,
           dsnRequested: claimed.dsnRequested,
+          headers: {
+            "List-Unsubscribe": `<${unsubscribeUrls.oneClickUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          },
         },
       );
     } catch (error) {

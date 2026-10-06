@@ -34,6 +34,7 @@ import type {
   ApiError,
   ApplicationEmailSettings,
   ApplicationEmailSettingsInput,
+  ApplyCampaignUnsubscribeParams,
   AuthResponse,
   AuthUser,
   CampaignAudienceSummary,
@@ -44,7 +45,9 @@ import type {
   CampaignQueueInput,
   CampaignSummary,
   CampaignTemplatePreview,
+  CampaignUnsubscribeResult,
   CampaignUpdate,
+  CampaignVariantLimits,
   ChangePasswordInput,
   Company,
   CompanyBackfillResult,
@@ -6068,6 +6071,165 @@ export function useGetCampaignRecipientSummary<TData = Awaited<ReturnType<typeof
 
 
 
+
+export const getGetCampaignVariantLimitsUrl = () => {
+
+
+
+
+  return `/api/campaigns/variant-limits`
+}
+
+/**
+ * @summary Get the configured content-variant limits for campaign tests
+ */
+export const getCampaignVariantLimits = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignVariantLimits> => {
+
+  return customFetch<CampaignVariantLimits>(getGetCampaignVariantLimitsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignVariantLimitsQueryKey = () => {
+    return [
+    `/api/campaigns/variant-limits`
+    ] as const;
+    }
+
+
+export const getGetCampaignVariantLimitsQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignVariantLimits>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignVariantLimits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignVariantLimitsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignVariantLimits>>> = ({ signal }) => getCampaignVariantLimits({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignVariantLimits>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignVariantLimitsQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignVariantLimits>>>
+export type GetCampaignVariantLimitsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the configured content-variant limits for campaign tests
+ */
+
+export function useGetCampaignVariantLimits<TData = Awaited<ReturnType<typeof getCampaignVariantLimits>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignVariantLimits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignVariantLimitsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getApplyCampaignUnsubscribeUrl = (params: ApplyCampaignUnsubscribeParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/public/unsubscribe?${stringifiedParams}` : `/api/public/unsubscribe`
+}
+
+/**
+ * Applies a signed, tenant-scoped unsubscribe token. Supports RFC 8058 one-click POST requests; ordinary links use a confirmation page before calling this endpoint.
+ * @summary Apply a recipient unsubscribe request
+ */
+export const applyCampaignUnsubscribe = async (params: ApplyCampaignUnsubscribeParams, options?: Parameters<typeof customFetch>[1]): Promise<CampaignUnsubscribeResult> => {
+
+  return customFetch<CampaignUnsubscribeResult>(getApplyCampaignUnsubscribeUrl(params),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApplyCampaignUnsubscribeMutationKey = () => ['applyCampaignUnsubscribe'] as const;
+
+export const getApplyCampaignUnsubscribeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCampaignUnsubscribe>>, TError,ApplyCampaignUnsubscribeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyCampaignUnsubscribe>>, TError,ApplyCampaignUnsubscribeMutationVariables, TContext> => {
+
+const mutationKey = getApplyCampaignUnsubscribeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyCampaignUnsubscribe>>, ApplyCampaignUnsubscribeMutationVariables> = (props) => {
+          const {params} = props ?? {};
+
+          return  applyCampaignUnsubscribe(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyCampaignUnsubscribeMutationResult = NonNullable<Awaited<ReturnType<typeof applyCampaignUnsubscribe>>>
+
+    export type ApplyCampaignUnsubscribeMutationError = ErrorType<ApiError>
+    export type ApplyCampaignUnsubscribeMutationVariables = {params: ApplyCampaignUnsubscribeParams}
+
+    /**
+ * @summary Apply a recipient unsubscribe request
+ */
+export const useApplyCampaignUnsubscribe = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCampaignUnsubscribe>>, TError,ApplyCampaignUnsubscribeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof applyCampaignUnsubscribe>>,
+        TError,
+        ApplyCampaignUnsubscribeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApplyCampaignUnsubscribeMutationOptions(options));
+    }
 
 export const getGetCampaignDashboardUrl = (campaignId: string,) => {
 

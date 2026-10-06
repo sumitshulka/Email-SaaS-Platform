@@ -17,6 +17,23 @@ export interface CampaignPreviewInput {
   contactId: string;
   /** @maxLength 200 */
   subject: string;
+  /**
+     * @minItems 1
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  subjectVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 500
+     */
+  greetingVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 4000
+     */
+  signatureVariants?: string[];
   /** @maxLength 100000 */
   textBody: string;
   /** @maxLength 100000 */

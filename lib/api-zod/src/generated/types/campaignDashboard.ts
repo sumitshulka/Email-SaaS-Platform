@@ -8,6 +8,7 @@
 import type { CampaignPacing } from './campaignPacing';
 import type { CampaignSummary } from './campaignSummary';
 import type { CampaignTargetList } from './campaignTargetList';
+import type { CampaignVariantResults } from './campaignVariantResults';
 
 export interface CampaignDashboard {
   campaign: CampaignSummary;
@@ -18,4 +19,5 @@ export interface CampaignDashboard {
   targetList: CampaignTargetList | null;
   targetLists: CampaignTargetList[];
   pacing: CampaignPacing;
+  variantResults: CampaignVariantResults;
 }

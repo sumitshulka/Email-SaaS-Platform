@@ -22,6 +22,23 @@ export interface CampaignUpdate {
      */
   subject?: string;
   /**
+     * @minItems 1
+     * @maxItems 20
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  subjectVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 500
+     */
+  greetingVariants?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 4000
+     */
+  signatureVariants?: string[];
+  /**
      * @minLength 1
      * @maxLength 100000
      */

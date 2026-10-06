@@ -32,6 +32,36 @@ export interface PlatformSettings {
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
   queuePollingSeconds: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  subjectVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  subjectVariantMaximum: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  greetingVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  greetingVariantMaximum: number;
+  /**
+     * @minimum 2
+     * @maximum 20
+     */
+  signatureVariantMinimum: number;
+  /**
+     * @minimum 1
+     * @maximum 20
+     */
+  signatureVariantMaximum: number;
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsPackageVisibility;

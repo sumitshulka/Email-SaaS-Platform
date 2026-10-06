@@ -31,6 +31,8 @@ import {
   ExportContactsBody,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
+  GetCampaignVariantLimitsResponse,
+  ApplyCampaignUnsubscribeResponse,
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
@@ -133,6 +135,18 @@ import {
   getMinimumEmailSpacingSeconds,
   getPlatformSettings,
 } from "../lib/platform-settings";
+import {
+  assignCampaignVariants,
+  normalizeCampaignVariantValues,
+  summarizeCampaignVariantResults,
+} from "../lib/campaign-variants";
+import {
+  applyCampaignUnsubscribeToken,
+  createCampaignUnsubscribeUrls,
+  getPublicAppOrigin,
+  InvalidUnsubscribeTokenError,
+  normalizePublicAppOrigin,
+} from "../lib/campaign-unsubscribe";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import { requireUserRole } from "../lib/session";
 import {
@@ -855,8 +869,12 @@ async function campaignPayloads(userId: string) {
                 ? Math.max(1, settings.queuePollingSeconds)
                 : 0,
             );
+    const variants = normalizeCampaignVariantValues(campaign);
     return {
       ...campaign,
+      subjectVariants: variants.subject,
+      greetingVariants: variants.greeting,
+      signatureVariants: variants.signature,
       senderEmail:
         campaign.senderEmail ??
         senderEmailById.get(campaign.senderAccountId ?? "") ??
@@ -868,6 +886,59 @@ async function campaignPayloads(userId: string) {
       estimatedDurationSeconds,
     };
   });
+}
+
+function cleanedVariantValues(values: {
+  subject?: string[];
+  greeting?: string[];
+  signature?: string[];
+}) {
+  return {
+    subject: (values.subject ?? []).map((value) => value.trim()).filter(Boolean),
+    greeting: (values.greeting ?? []).map((value) => value.trim()).filter(Boolean),
+    signature: (values.signature ?? []).map((value) => value.trim()).filter(Boolean),
+  };
+}
+
+function campaignVariantLimits(settings: Awaited<ReturnType<typeof getPlatformSettings>>) {
+  return GetCampaignVariantLimitsResponse.parse({
+    subject: {
+      minimum: settings.subjectVariantMinimum,
+      maximum: settings.subjectVariantMaximum,
+    },
+    greeting: {
+      minimum: settings.greetingVariantMinimum,
+      maximum: settings.greetingVariantMaximum,
+    },
+    signature: {
+      minimum: settings.signatureVariantMinimum,
+      maximum: settings.signatureVariantMaximum,
+    },
+  });
+}
+
+function variantLimitError(
+  variants: ReturnType<typeof cleanedVariantValues>,
+  settings: Awaited<ReturnType<typeof getPlatformSettings>>,
+): string | null {
+  if (variants.subject.length === 0) return "Add at least one subject line.";
+  return campaignVariantCountError(variants, settings);
+}
+
+function campaignVariantCountError(
+  variants: ReturnType<typeof cleanedVariantValues>,
+  settings: Awaited<ReturnType<typeof getPlatformSettings>>,
+): string | null {
+  if (variants.subject.length > settings.subjectVariantMaximum) {
+    return `Use no more than ${settings.subjectVariantMaximum} subject line variants.`;
+  }
+  if (variants.greeting.length > settings.greetingVariantMaximum) {
+    return `Use no more than ${settings.greetingVariantMaximum} greeting variants.`;
+  }
+  if (variants.signature.length > settings.signatureVariantMaximum) {
+    return `Use no more than ${settings.signatureVariantMaximum} signature variants.`;
+  }
+  return null;
 }
 
 async function completeCampaignIfFinished(
@@ -3479,6 +3550,45 @@ router.delete(
   },
 );
 
+router.get(
+  "/campaigns/variant-limits",
+  requireUserRole,
+  async (_req, res): Promise<void> => {
+    const settings = await getPlatformSettings();
+    res.json(
+      campaignVariantLimits(settings),
+    );
+  },
+);
+
+router.post("/public/unsubscribe", async (req, res): Promise<void> => {
+  const token = typeof req.query.token === "string" ? req.query.token : "";
+  if (
+    !token ||
+    (req.is("application/x-www-form-urlencoded") &&
+      req.body?.["List-Unsubscribe"] !== "One-Click")
+  ) {
+    res.status(400).json({
+      error: "This unsubscribe request is invalid.",
+      code: "INVALID_UNSUBSCRIBE_REQUEST",
+    });
+    return;
+  }
+  try {
+    await applyCampaignUnsubscribeToken(token);
+    res.json(ApplyCampaignUnsubscribeResponse.parse({ unsubscribed: true }));
+  } catch (error) {
+    if (error instanceof InvalidUnsubscribeTokenError) {
+      res.status(400).json({
+        error: error.message,
+        code: "INVALID_UNSUBSCRIBE_REQUEST",
+      });
+      return;
+    }
+    throw error;
+  }
+});
+
 router.get("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.json(ListCampaignsResponse.parse(await campaignPayloads(req.authUser!.id)));
 });
@@ -3574,8 +3684,20 @@ router.post(
       return;
     }
 
+    const previewVariants = cleanedVariantValues({
+      subject:
+        parsed.data.subjectVariants ?? (parsed.data.subject ? [parsed.data.subject] : []),
+      greeting: parsed.data.greetingVariants,
+      signature: parsed.data.signatureVariants,
+    });
     const rendered = renderCampaignForContact(
-      parsed.data,
+      {
+        ...parsed.data,
+        subject: previewVariants.subject[0] ?? parsed.data.subject ?? "",
+        subjectVariants: previewVariants.subject,
+        greetingVariants: previewVariants.greeting,
+        signatureVariants: previewVariants.signature,
+      },
       {
         firstName: contact.firstName,
         lastName: contact.lastName,
@@ -3588,6 +3710,7 @@ router.post(
         phoneNumber: contact.phoneNumber ?? "",
         linkedinUrl: contact.linkedinUrl ?? "",
       },
+      { unsubscribeUrl: "https://mailflow.invalid/unsubscribe?token=preview" },
     );
     res.json(PreviewCampaignResponse.parse(rendered));
   },
@@ -3676,7 +3799,7 @@ router.get(
       return;
     }
 
-    const [lists, totalRows, eligibleRows] = await Promise.all([
+    const [lists, totalRows, eligibleRows, recipientOutcomes] = await Promise.all([
       db
         .select({
           id: contactListsTable.id,
@@ -3724,6 +3847,18 @@ router.get(
           ),
         )
         .groupBy(contactListMembersTable.listId),
+      db
+        .select({
+          status: emailCampaignRecipientsTable.status,
+          variantAssignment: emailCampaignRecipientsTable.variantAssignment,
+        })
+        .from(emailCampaignRecipientsTable)
+        .where(
+          and(
+            eq(emailCampaignRecipientsTable.userId, userId),
+            eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+          ),
+        ),
     ]);
     const listsById = new Map(lists.map((list) => [list.id, list]));
     const totalCounts = new Map(totalRows.map((row) => [row.listId, row.value]));
@@ -3778,6 +3913,10 @@ router.get(
           estimatedDurationSeconds,
           estimatedCompletionAt,
         },
+        variantResults: summarizeCampaignVariantResults(
+          normalizeCampaignVariantValues(campaign),
+          recipientOutcomes,
+        ),
       }),
     );
   },
@@ -3790,6 +3929,17 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.authUser!.id;
+  const settings = await getPlatformSettings();
+  const variants = cleanedVariantValues({
+    subject: parsed.data.subjectVariants ?? [parsed.data.subject],
+    greeting: parsed.data.greetingVariants,
+    signature: parsed.data.signatureVariants,
+  });
+  const variantsError = variantLimitError(variants, settings);
+  if (variantsError) {
+    res.status(400).json({ error: variantsError, code: "INVALID_CAMPAIGN_VARIANTS" });
+    return;
+  }
   const listIds =
     parsed.data.listIds ?? (parsed.data.listId ? [parsed.data.listId] : []);
   if (
@@ -3830,7 +3980,11 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       listIds,
       name: parsed.data.name.trim(),
       objective: parsed.data.objective?.trim() ?? "",
-      subject: parsed.data.subject.trim(),
+      subject: variants.subject[0]!,
+      subjectVariants: variants.subject,
+      greetingVariants: variants.greeting,
+      signatureVariants: variants.signature,
+      unsubscribeOrigin: getPublicAppOrigin(req.get("origin")),
       textBody: parsed.data.textBody,
       htmlBody: parsed.data.htmlBody
         ? sanitizeCampaignHtml(parsed.data.htmlBody)
@@ -3854,6 +4008,60 @@ router.patch(
       return;
     }
     const userId = req.authUser!.id;
+    const [campaignBeforeUpdate] = await db
+      .select()
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.id, params.data.campaignId),
+          eq(emailCampaignsTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!campaignBeforeUpdate) {
+      res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      return;
+    }
+    if (campaignBeforeUpdate.status !== "draft") {
+      res.status(409).json({
+        error: "Only draft campaigns can be edited.",
+        code: "CAMPAIGN_NOT_EDITABLE",
+      });
+      return;
+    }
+
+    const settings = await getPlatformSettings();
+    const subjectVariantsChanged =
+      parsed.data.subjectVariants !== undefined || parsed.data.subject !== undefined;
+    const effectiveVariants = cleanedVariantValues({
+      subject:
+        parsed.data.subjectVariants ??
+        (parsed.data.subject !== undefined
+          ? [parsed.data.subject]
+          : campaignBeforeUpdate.subjectVariants.length
+            ? campaignBeforeUpdate.subjectVariants
+            : [campaignBeforeUpdate.subject]),
+      greeting: parsed.data.greetingVariants ?? campaignBeforeUpdate.greetingVariants,
+      signature: parsed.data.signatureVariants ?? campaignBeforeUpdate.signatureVariants,
+    });
+    const changedVariantCounts = cleanedVariantValues({
+      subject: subjectVariantsChanged ? effectiveVariants.subject : [],
+      greeting:
+        parsed.data.greetingVariants !== undefined
+          ? effectiveVariants.greeting
+          : [],
+      signature:
+        parsed.data.signatureVariants !== undefined
+          ? effectiveVariants.signature
+          : [],
+    });
+    const variantsError = subjectVariantsChanged && !effectiveVariants.subject.length
+      ? "Add at least one subject line."
+      : campaignVariantCountError(changedVariantCounts, settings);
+    if (variantsError) {
+      res.status(400).json({ error: variantsError, code: "INVALID_CAMPAIGN_VARIANTS" });
+      return;
+    }
     const requestedListIds =
       parsed.data.listIds !== undefined
         ? parsed.data.listIds
@@ -3894,7 +4102,18 @@ router.patch(
       .update(emailCampaignsTable)
       .set({
         ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
-        ...(parsed.data.subject ? { subject: parsed.data.subject.trim() } : {}),
+        ...(subjectVariantsChanged
+          ? {
+              subject: effectiveVariants.subject[0]!,
+              subjectVariants: effectiveVariants.subject,
+            }
+          : {}),
+        ...(parsed.data.greetingVariants !== undefined
+          ? { greetingVariants: effectiveVariants.greeting }
+          : {}),
+        ...(parsed.data.signatureVariants !== undefined
+          ? { signatureVariants: effectiveVariants.signature }
+          : {}),
         ...(parsed.data.objective !== undefined
           ? { objective: parsed.data.objective.trim() }
           : {}),
@@ -4034,6 +4253,18 @@ router.post(
         .for("update");
       if (!campaign) return { error: "not_found" as const };
       if (campaign.status !== "draft") return { error: "not_draft" as const };
+
+      const variants = cleanedVariantValues(
+        normalizeCampaignVariantValues(campaign),
+      );
+      const variantsError = variantLimitError(variants, settings);
+      if (variantsError) {
+        return { error: "variant_limits" as const, message: variantsError };
+      }
+      const unsubscribeOrigin =
+        getPublicAppOrigin(req.get("origin")) ??
+        normalizePublicAppOrigin(campaign.unsubscribeOrigin);
+      if (!unsubscribeOrigin) return { error: "unsubscribe_origin" as const };
 
       const [sender] = await tx
         .select()
@@ -4242,6 +4473,7 @@ router.post(
           status: "queued",
           senderAccountId: sender.id,
           senderEmail: sender.fromEmail,
+          unsubscribeOrigin,
           queuedAt: now,
           scheduledAt,
           updatedAt: now,
@@ -4264,6 +4496,16 @@ router.post(
           email: recipient.email,
           firstName: recipient.firstName,
           lastName: recipient.lastName,
+          variantAssignment: assignCampaignVariants(
+            campaign.id,
+            recipient.id,
+            variants,
+            {
+              subject: settings.subjectVariantMinimum,
+              greeting: settings.greetingVariantMinimum,
+              signature: settings.signatureVariantMinimum,
+            },
+          ),
           nextAttemptAt: scheduledAt,
         })),
       );
@@ -4277,6 +4519,16 @@ router.post(
         res.status(409).json({
           error: "Only draft campaigns can be queued.",
           code: "CAMPAIGN_NOT_SENDABLE",
+        });
+      } else if (outcome.error === "variant_limits") {
+        res.status(400).json({
+          error: outcome.message,
+          code: "INVALID_CAMPAIGN_VARIANTS",
+        });
+      } else if (outcome.error === "unsubscribe_origin") {
+        res.status(503).json({
+          error: "Configure the public Mailflow URL before queueing a campaign so recipients can unsubscribe.",
+          code: "UNSUBSCRIBE_ORIGIN_UNAVAILABLE",
         });
       } else if (outcome.error === "sender_not_ready") {
         res.status(400).json({

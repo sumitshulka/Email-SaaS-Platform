@@ -12,8 +12,18 @@ export type CampaignPersonalization = {
 
 export type CampaignTemplate = {
   subject: string;
+  subjectVariants?: string[];
+  greetingVariants?: string[];
+  signatureVariants?: string[];
   textBody: string;
   htmlBody?: string | null;
+};
+
+export type CampaignTemplateRenderOptions = {
+  variantAssignment?: Partial<
+    Record<"subject" | "greeting" | "signature", { index: number }>
+  >;
+  unsubscribeUrl?: string;
 };
 
 export type RenderedCampaignTemplate = {
@@ -101,15 +111,86 @@ export function personalizeCampaignHtml(
   );
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character]!;
+  });
+}
+
+function selectedValue(
+  variants: string[] | undefined,
+  index: number | undefined,
+  fallback = "",
+): string {
+  if (!variants?.length) return fallback;
+  const candidate = Number.isInteger(index) ? variants[index!] : undefined;
+  return candidate ?? variants[0] ?? fallback;
+}
+
 export function renderCampaignForContact(
   template: CampaignTemplate,
   personalization: CampaignPersonalization,
+  options: CampaignTemplateRenderOptions = {},
 ): RenderedCampaignTemplate {
+  const subject = selectedValue(
+    template.subjectVariants,
+    options.variantAssignment?.subject?.index,
+    template.subject,
+  );
+  const greeting = selectedValue(
+    template.greetingVariants,
+    options.variantAssignment?.greeting?.index,
+  );
+  const signature = selectedValue(
+    template.signatureVariants,
+    options.variantAssignment?.signature?.index,
+  );
+  const personalizedGreeting = personalizeCampaignText(greeting, personalization);
+  const personalizedSignature = personalizeCampaignText(signature, personalization);
+  const personalizedBody = personalizeCampaignText(
+    template.textBody,
+    personalization,
+  );
+  const unsubscribeFooter = options.unsubscribeUrl
+    ? `Unsubscribe: ${options.unsubscribeUrl}`
+    : "";
+  const textBody = [
+    personalizedGreeting,
+    personalizedBody,
+    personalizedSignature,
+    unsubscribeFooter,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const htmlGreeting = personalizedGreeting
+    ? `<p>${escapeHtml(personalizedGreeting).replace(/\r?\n/g, "<br>")}</p>`
+    : "";
+  const htmlSignature = personalizedSignature
+    ? `<p>${escapeHtml(personalizedSignature).replace(/\r?\n/g, "<br>")}</p>`
+    : "";
+  const htmlUnsubscribe = options.unsubscribeUrl
+    ? `<p><a href="${escapeHtml(options.unsubscribeUrl)}">Unsubscribe</a></p>`
+    : "";
   return {
-    subject: personalizeCampaignText(template.subject, personalization),
-    textBody: personalizeCampaignText(template.textBody, personalization),
+    subject: personalizeCampaignText(subject, personalization),
+    textBody,
     htmlBody: template.htmlBody
-      ? personalizeCampaignHtml(template.htmlBody, personalization)
+      ? [
+          htmlGreeting,
+          personalizeCampaignHtml(template.htmlBody, personalization),
+          htmlSignature,
+          htmlUnsubscribe,
+        ]
+          .filter(Boolean)
+          .join("\n")
       : null,
   };
 }

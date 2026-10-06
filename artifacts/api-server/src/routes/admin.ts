@@ -545,6 +545,17 @@ router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void>
     res.status(400).json({ error: "Some configuration values are invalid.", code: "INVALID_SETTINGS" });
     return;
   }
+  if (
+    parsed.data.subjectVariantMinimum > parsed.data.subjectVariantMaximum ||
+    parsed.data.greetingVariantMinimum > parsed.data.greetingVariantMaximum ||
+    parsed.data.signatureVariantMinimum > parsed.data.signatureVariantMaximum
+  ) {
+    res.status(400).json({
+      error: "Each campaign test minimum must be less than or equal to its maximum.",
+      code: "INVALID_CAMPAIGN_VARIANT_LIMITS",
+    });
+    return;
+  }
   await db
     .insert(systemConfigurationTable)
     .values({ key: "platform", value: parsed.data, updatedBy: req.authUser!.id })

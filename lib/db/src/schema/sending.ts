@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -22,6 +23,12 @@ export const emailCampaignStatusEnum = pgEnum("email_campaign_status", [
   "sending",
   "completed",
 ]);
+
+export type CampaignVariantAssignment = {
+  subject: { index: number; tested: boolean };
+  greeting: { index: number; tested: boolean };
+  signature: { index: number; tested: boolean };
+};
 
 export const emailCampaignRecipientStatusEnum = pgEnum(
   "email_campaign_recipient_status",
@@ -282,6 +289,19 @@ export const emailCampaignsTable = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     objective: text("objective").notNull().default(""),
     subject: varchar("subject", { length: 200 }).notNull(),
+    subjectVariants: jsonb("subject_variants")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    greetingVariants: jsonb("greeting_variants")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    signatureVariants: jsonb("signature_variants")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    unsubscribeOrigin: text("unsubscribe_origin"),
     textBody: text("text_body").notNull(),
     htmlBody: text("html_body"),
     status: emailCampaignStatusEnum("status").notNull().default("draft"),
@@ -320,6 +340,10 @@ export const emailCampaignRecipientsTable = pgTable(
     email: varchar("email", { length: 254 }).notNull(),
     firstName: varchar("first_name", { length: 100 }).notNull().default(""),
     lastName: varchar("last_name", { length: 100 }).notNull().default(""),
+    variantAssignment: jsonb("variant_assignment")
+      .$type<CampaignVariantAssignment>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     status: emailCampaignRecipientStatusEnum("status")
       .notNull()
       .default("queued"),

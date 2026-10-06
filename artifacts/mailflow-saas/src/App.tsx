@@ -34,6 +34,7 @@ import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
 import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@/pages/legal';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
+import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
@@ -737,14 +738,15 @@ function AdminUsersPage() {
     />
   </>;
 }
-const settingGroups: Array<{ title: string; fields: Array<[keyof PlatformSettingsInput, string, 'text' | 'number' | 'boolean' | 'list' | 'select', string[]?]> }> = [
+const settingGroups: Array<{ title: string; description?: string; fields: Array<[keyof PlatformSettingsInput, string, 'text' | 'number' | 'boolean' | 'list' | 'select', string[]?]> }> = [
   { title: 'Identity & defaults', fields: [['applicationName','Application name','text'],['defaultCurrency','Default currency','text'],['defaultTimezone','Default timezone','text'],['dateFormat','Date format','text'],['supportEmail','Support email','text'],['supportPhone','Support phone','text'],['maintenanceMode','Maintenance mode','boolean']] },
   { title: 'Account & authentication', fields: [['maxContactsPerUser','Contacts per user','number'],['maxUploadFileSizeMb','Upload file size limit (MB)','number'],['allowedContactFileTypes','Allowed contact file types','list'],['passwordMinimumLength','Minimum password length','number'],['otpExpiryMinutes','OTP expiry (minutes)','number'],['maxOtpAttempts','Maximum OTP attempts','number'],['loginAttemptThreshold','Login attempt threshold','number'],['sessionDurationHours','Session duration (hours)','number']] },
   { title: 'Sending & delivery', fields: [['defaultEmailsPerHour','Default emails per hour','number'],['maxEmailsPerDay','Maximum emails per day','number'],['maxCampaignSize','Maximum campaign size','number'],['maxConcurrentCampaigns','Concurrent campaigns','number'],['retryAttempts','Retry attempts','number'],['retryDelaySeconds','Retry delay (seconds)','number'],['bounceThreshold','Bounce threshold','number'],['deliveryTrackingEnabled','Request SMTP delivery notices (best effort)','boolean'],['queuePollingSeconds','Queue polling (seconds)','number']] },
+  { title: 'Campaign content tests', description: 'Set the number of subject, greeting, and signature options required to split recipients across a test, and the maximum options allowed. Below the minimum, the first option is used for everyone.', fields: [['subjectVariantMinimum','Minimum subject options','number'],['subjectVariantMaximum','Maximum subject options','number'],['greetingVariantMinimum','Minimum greeting options','number'],['greetingVariantMaximum','Maximum greeting options','number'],['signatureVariantMinimum','Minimum signature options','number'],['signatureVariantMaximum','Maximum signature options','number']] },
   { title: 'Subscription rules', fields: [['allowUserWithoutSubscription','Allow accounts without subscription','boolean'],['gracePeriodDays','Grace period (days)','number'],['packageVisibility','Package visibility','select',['public','hidden']]] },
 ];
-function SettingsGroup({ title, fields, values, setValues }: { title: string; fields: Array<[keyof PlatformSettingsInput, string, 'text'|'number'|'boolean'|'list'|'select', string[]?]>; values: Fields; setValues: (v: Fields) => void }) {
-  return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2></div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
+function SettingsGroup({ title, description, fields, values, setValues }: { title: string; description?: string; fields: Array<[keyof PlatformSettingsInput, string, 'text'|'number'|'boolean'|'list'|'select', string[]?]>; values: Fields; setValues: (v: Fields) => void }) {
+  return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2>{description && <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#687587]">{description}</p>}</div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
 }
 type SmtpProvider = 'google_workspace' | 'gmail' | 'microsoft_365' | 'other';
 const SMTP_PROVIDER_OPTIONS = [
@@ -768,6 +770,7 @@ function AdminSettingsPage() {
   const testSend = useSendApplicationEmailTest();
   const [settings, setSettings] = useState<Fields | null>(null);
   const [smtp, setSmtp] = useState<Record<string, string>>({ provider: 'other' });
+  const [variantLimitsError, setVariantLimitsError] = useState('');
 
   useEffect(() => {
     if (q.data) {
@@ -796,6 +799,27 @@ function AdminSettingsPage() {
   const savePlatform = (e: FormEvent) => {
     e.preventDefault();
     if (!settings) return;
+    const variantBounds = [
+      ['subjectVariantMinimum', 'subjectVariantMaximum'],
+      ['greetingVariantMinimum', 'greetingVariantMaximum'],
+      ['signatureVariantMinimum', 'signatureVariantMaximum'],
+    ] as const;
+    const invalidBounds = variantBounds.some(([minimumKey, maximumKey]) => {
+      const minimum = Number(settings[minimumKey]);
+      const maximum = Number(settings[maximumKey]);
+      return (
+        !Number.isInteger(minimum) ||
+        !Number.isInteger(maximum) ||
+        minimum < 2 ||
+        maximum > 20 ||
+        minimum > maximum
+      );
+    });
+    if (invalidBounds) {
+      setVariantLimitsError('Each minimum must be between 1 and its maximum, and each maximum must be 20 or less.');
+      return;
+    }
+    setVariantLimitsError('');
     save.mutate(
       { data: settings as unknown as PlatformSettingsInput },
       {
@@ -875,6 +899,7 @@ function AdminSettingsPage() {
         {settingGroups.map(group => (
           <SettingsGroup key={group.title} {...group} values={settings} setValues={setSettings}/>
         ))}
+        {variantLimitsError && <p role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] text-[#99501e]">{variantLimitsError}</p>}
         <div className="flex justify-end">
           <Button type="submit" testId="button-save-platform-settings" disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save platform settings'}<Check className="h-4 w-4"/>
@@ -1089,7 +1114,7 @@ function Routes() {
     query: { queryKey: getGetMaintenanceStatusQueryKey() },
   }).data?.maintenanceMode === true;
   return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/terms-and-conditions" component={TermsAndConditionsPage}/><Route path="/privacy-policy" component={PrivacyPolicyPage}/><Route path="/shipping-refund" component={ShippingRefundPage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
+     <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/terms-and-conditions" component={TermsAndConditionsPage}/><Route path="/privacy-policy" component={PrivacyPolicyPage}/><Route path="/shipping-refund" component={ShippingRefundPage}/><Route path="/unsubscribe" component={CampaignUnsubscribePage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
     <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>
@@ -1168,6 +1193,7 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
     },
   });
   const maintenanceOn = maintenanceQuery.data?.maintenanceMode === true;
+  const unsubscribePage = location === '/unsubscribe';
   const currentUserQuery = useGetCurrentUser({
     query: {
       queryKey: getGetCurrentUserQueryKey(),
@@ -1194,6 +1220,7 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
 
   if (
     maintenanceOn &&
+    !unsubscribePage &&
     (blockedAuthPath || (!user && location !== '/login'))
   ) {
     if (!blockedAuthPath && currentUserQuery.isLoading) {
@@ -1204,14 +1231,14 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {maintenanceOn && user && (
+      {maintenanceOn && user && !unsubscribePage && (
         <div role="status" className="sticky top-0 z-[60] flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-[#d6a44c] bg-[#fff7e6] px-4 py-2 text-center text-[12px] font-medium text-[#694b17]">
           <span className="font-bold">Maintenance mode is active.</span>
           Campaign delivery is paused; queued emails will resume when the service is available again.
         </div>
       )}
       {children}
-      {noticeOpen && maintenanceOn && user && (
+      {noticeOpen && maintenanceOn && user && !unsubscribePage && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#101b2a]/55 px-4 py-6" role="presentation">
           <section
             role="alertdialog"

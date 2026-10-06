@@ -2937,6 +2937,12 @@ export const DeleteContactSegmentResponse = zod.void()
  */
 export const listCampaignsResponseObjectiveMax = 500;
 
+export const listCampaignsResponseSubjectVariantsItemMax = 200;
+
+export const listCampaignsResponseGreetingVariantsItemMax = 500;
+
+export const listCampaignsResponseSignatureVariantsItemMax = 4000;
+
 
 
 export const ListCampaignsResponseItem = zod.object({
@@ -2946,6 +2952,9 @@ export const ListCampaignsResponseItem = zod.object({
   "name": zod.string(),
   "objective": zod.string().max(listCampaignsResponseObjectiveMax).optional(),
   "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(listCampaignsResponseSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(listCampaignsResponseGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(listCampaignsResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
@@ -2976,6 +2985,18 @@ export const createCampaignBodyObjectiveMax = 500;
 
 export const createCampaignBodySubjectMax = 200;
 
+export const createCampaignBodySubjectVariantsItemMax = 200;
+
+export const createCampaignBodySubjectVariantsMax = 20;
+
+export const createCampaignBodyGreetingVariantsItemMax = 500;
+
+export const createCampaignBodyGreetingVariantsMax = 20;
+
+export const createCampaignBodySignatureVariantsItemMax = 4000;
+
+export const createCampaignBodySignatureVariantsMax = 20;
+
 export const createCampaignBodyTextBodyMax = 100000;
 
 export const createCampaignBodyHtmlBodyMax = 100000;
@@ -2987,6 +3008,9 @@ export const CreateCampaignBody = zod.object({
   "name": zod.string().min(1).max(createCampaignBodyNameMax),
   "objective": zod.string().max(createCampaignBodyObjectiveMax).optional(),
   "subject": zod.string().min(1).max(createCampaignBodySubjectMax),
+  "subjectVariants": zod.array(zod.string().min(1).max(createCampaignBodySubjectVariantsItemMax)).min(1).max(createCampaignBodySubjectVariantsMax).optional(),
+  "greetingVariants": zod.array(zod.string().max(createCampaignBodyGreetingVariantsItemMax)).max(createCampaignBodyGreetingVariantsMax).optional(),
+  "signatureVariants": zod.array(zod.string().max(createCampaignBodySignatureVariantsItemMax)).max(createCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
@@ -2994,6 +3018,12 @@ export const CreateCampaignBody = zod.object({
 })
 
 export const createCampaignResponseObjectiveMax = 500;
+
+export const createCampaignResponseSubjectVariantsItemMax = 200;
+
+export const createCampaignResponseGreetingVariantsItemMax = 500;
+
+export const createCampaignResponseSignatureVariantsItemMax = 4000;
 
 
 
@@ -3004,6 +3034,9 @@ export const CreateCampaignResponse = zod.object({
   "name": zod.string(),
   "objective": zod.string().max(createCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(createCampaignResponseSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(createCampaignResponseGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(createCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
@@ -3029,6 +3062,18 @@ export const CreateCampaignResponse = zod.object({
  */
 export const previewCampaignBodySubjectMax = 200;
 
+export const previewCampaignBodySubjectVariantsItemMax = 200;
+
+export const previewCampaignBodySubjectVariantsMax = 20;
+
+export const previewCampaignBodyGreetingVariantsItemMax = 500;
+
+export const previewCampaignBodyGreetingVariantsMax = 20;
+
+export const previewCampaignBodySignatureVariantsItemMax = 4000;
+
+export const previewCampaignBodySignatureVariantsMax = 20;
+
 export const previewCampaignBodyTextBodyMax = 100000;
 
 export const previewCampaignBodyHtmlBodyMax = 100000;
@@ -3040,6 +3085,9 @@ export const PreviewCampaignBody = zod.object({
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.'),
   "contactId": zod.string().uuid(),
   "subject": zod.string().max(previewCampaignBodySubjectMax),
+  "subjectVariants": zod.array(zod.string().min(1).max(previewCampaignBodySubjectVariantsItemMax)).min(1).max(previewCampaignBodySubjectVariantsMax).optional(),
+  "greetingVariants": zod.array(zod.string().max(previewCampaignBodyGreetingVariantsItemMax)).max(previewCampaignBodyGreetingVariantsMax).optional(),
+  "signatureVariants": zod.array(zod.string().max(previewCampaignBodySignatureVariantsItemMax)).max(previewCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().max(previewCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(previewCampaignBodyHtmlBodyMax)
 })
@@ -3074,6 +3122,60 @@ export const GetCampaignRecipientSummaryResponse = zod.object({
 
 
 /**
+ * @summary Get the configured content-variant limits for campaign tests
+ */
+export const getCampaignVariantLimitsResponseSubjectMinimumMin = 2;
+export const getCampaignVariantLimitsResponseSubjectMinimumMax = 20;
+
+export const getCampaignVariantLimitsResponseSubjectMaximumMax = 20;
+
+export const getCampaignVariantLimitsResponseGreetingMinimumMin = 2;
+export const getCampaignVariantLimitsResponseGreetingMinimumMax = 20;
+
+export const getCampaignVariantLimitsResponseGreetingMaximumMax = 20;
+
+export const getCampaignVariantLimitsResponseSignatureMinimumMin = 2;
+export const getCampaignVariantLimitsResponseSignatureMinimumMax = 20;
+
+export const getCampaignVariantLimitsResponseSignatureMaximumMax = 20;
+
+
+
+export const GetCampaignVariantLimitsResponse = zod.object({
+  "subject": zod.object({
+  "minimum": zod.number().int().min(getCampaignVariantLimitsResponseSubjectMinimumMin).max(getCampaignVariantLimitsResponseSubjectMinimumMax),
+  "maximum": zod.number().int().min(1).max(getCampaignVariantLimitsResponseSubjectMaximumMax)
+}),
+  "greeting": zod.object({
+  "minimum": zod.number().int().min(getCampaignVariantLimitsResponseGreetingMinimumMin).max(getCampaignVariantLimitsResponseGreetingMinimumMax),
+  "maximum": zod.number().int().min(1).max(getCampaignVariantLimitsResponseGreetingMaximumMax)
+}),
+  "signature": zod.object({
+  "minimum": zod.number().int().min(getCampaignVariantLimitsResponseSignatureMinimumMin).max(getCampaignVariantLimitsResponseSignatureMinimumMax),
+  "maximum": zod.number().int().min(1).max(getCampaignVariantLimitsResponseSignatureMaximumMax)
+})
+})
+
+
+/**
+ * Applies a signed, tenant-scoped unsubscribe token. Supports RFC 8058 one-click POST requests; ordinary links use a confirmation page before calling this endpoint.
+ * @summary Apply a recipient unsubscribe request
+ */
+export const applyCampaignUnsubscribeQueryTokenMin = 20;
+export const applyCampaignUnsubscribeQueryTokenMax = 1024;
+
+
+
+export const ApplyCampaignUnsubscribeQueryParams = zod.object({
+  "token": zod.coerce.string().min(applyCampaignUnsubscribeQueryTokenMin).max(applyCampaignUnsubscribeQueryTokenMax)
+})
+
+export const ApplyCampaignUnsubscribeResponse = zod.object({
+  "unsubscribed": zod.boolean()
+})
+
+
+/**
  * @summary Get campaign performance, target-list breakdown, and pacing estimate
  */
 export const GetCampaignDashboardParams = zod.object({
@@ -3081,6 +3183,48 @@ export const GetCampaignDashboardParams = zod.object({
 })
 
 export const getCampaignDashboardResponseCampaignObjectiveMax = 500;
+
+export const getCampaignDashboardResponseCampaignSubjectVariantsItemMax = 200;
+
+export const getCampaignDashboardResponseCampaignGreetingVariantsItemMax = 500;
+
+export const getCampaignDashboardResponseCampaignSignatureVariantsItemMax = 4000;
+
+export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemIndexMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemAssignedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemSmtpAcceptedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemFailedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemSuppressedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemUnknownMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsGreetingVariantsItemIndexMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsGreetingVariantsItemAssignedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsGreetingVariantsItemSmtpAcceptedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsGreetingVariantsItemFailedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsGreetingVariantsItemSuppressedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsGreetingVariantsItemUnknownMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemIndexMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemAssignedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemSmtpAcceptedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemFailedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemSuppressedMin = 0;
+
+export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemUnknownMin = 0;
 
 
 
@@ -3092,6 +3236,9 @@ export const GetCampaignDashboardResponse = zod.object({
   "name": zod.string(),
   "objective": zod.string().max(getCampaignDashboardResponseCampaignObjectiveMax).optional(),
   "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(getCampaignDashboardResponseCampaignSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(getCampaignDashboardResponseCampaignGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(getCampaignDashboardResponseCampaignSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
@@ -3134,6 +3281,44 @@ export const GetCampaignDashboardResponse = zod.object({
   "remainingEmails": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "estimatedCompletionAt": zod.coerce.date().nullable()
+}),
+  "variantResults": zod.object({
+  "subject": zod.object({
+  "testEnabled": zod.boolean(),
+  "variants": zod.array(zod.object({
+  "index": zod.number().int().min(getCampaignDashboardResponseVariantResultsSubjectVariantsItemIndexMin),
+  "value": zod.string(),
+  "assigned": zod.number().int().min(getCampaignDashboardResponseVariantResultsSubjectVariantsItemAssignedMin),
+  "smtpAccepted": zod.number().int().min(getCampaignDashboardResponseVariantResultsSubjectVariantsItemSmtpAcceptedMin),
+  "failed": zod.number().int().min(getCampaignDashboardResponseVariantResultsSubjectVariantsItemFailedMin),
+  "suppressed": zod.number().int().min(getCampaignDashboardResponseVariantResultsSubjectVariantsItemSuppressedMin),
+  "unknown": zod.number().int().min(getCampaignDashboardResponseVariantResultsSubjectVariantsItemUnknownMin)
+}))
+}),
+  "greeting": zod.object({
+  "testEnabled": zod.boolean(),
+  "variants": zod.array(zod.object({
+  "index": zod.number().int().min(getCampaignDashboardResponseVariantResultsGreetingVariantsItemIndexMin),
+  "value": zod.string(),
+  "assigned": zod.number().int().min(getCampaignDashboardResponseVariantResultsGreetingVariantsItemAssignedMin),
+  "smtpAccepted": zod.number().int().min(getCampaignDashboardResponseVariantResultsGreetingVariantsItemSmtpAcceptedMin),
+  "failed": zod.number().int().min(getCampaignDashboardResponseVariantResultsGreetingVariantsItemFailedMin),
+  "suppressed": zod.number().int().min(getCampaignDashboardResponseVariantResultsGreetingVariantsItemSuppressedMin),
+  "unknown": zod.number().int().min(getCampaignDashboardResponseVariantResultsGreetingVariantsItemUnknownMin)
+}))
+}),
+  "signature": zod.object({
+  "testEnabled": zod.boolean(),
+  "variants": zod.array(zod.object({
+  "index": zod.number().int().min(getCampaignDashboardResponseVariantResultsSignatureVariantsItemIndexMin),
+  "value": zod.string(),
+  "assigned": zod.number().int().min(getCampaignDashboardResponseVariantResultsSignatureVariantsItemAssignedMin),
+  "smtpAccepted": zod.number().int().min(getCampaignDashboardResponseVariantResultsSignatureVariantsItemSmtpAcceptedMin),
+  "failed": zod.number().int().min(getCampaignDashboardResponseVariantResultsSignatureVariantsItemFailedMin),
+  "suppressed": zod.number().int().min(getCampaignDashboardResponseVariantResultsSignatureVariantsItemSuppressedMin),
+  "unknown": zod.number().int().min(getCampaignDashboardResponseVariantResultsSignatureVariantsItemUnknownMin)
+}))
+})
 })
 })
 
@@ -3151,6 +3336,18 @@ export const updateCampaignBodyObjectiveMax = 500;
 
 export const updateCampaignBodySubjectMax = 200;
 
+export const updateCampaignBodySubjectVariantsItemMax = 200;
+
+export const updateCampaignBodySubjectVariantsMax = 20;
+
+export const updateCampaignBodyGreetingVariantsItemMax = 500;
+
+export const updateCampaignBodyGreetingVariantsMax = 20;
+
+export const updateCampaignBodySignatureVariantsItemMax = 4000;
+
+export const updateCampaignBodySignatureVariantsMax = 20;
+
 export const updateCampaignBodyTextBodyMax = 100000;
 
 export const updateCampaignBodyHtmlBodyMax = 100000;
@@ -3162,6 +3359,9 @@ export const UpdateCampaignBody = zod.object({
   "name": zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
   "objective": zod.string().max(updateCampaignBodyObjectiveMax).optional(),
   "subject": zod.string().min(1).max(updateCampaignBodySubjectMax).optional(),
+  "subjectVariants": zod.array(zod.string().min(1).max(updateCampaignBodySubjectVariantsItemMax)).min(1).max(updateCampaignBodySubjectVariantsMax).optional(),
+  "greetingVariants": zod.array(zod.string().max(updateCampaignBodyGreetingVariantsItemMax)).max(updateCampaignBodyGreetingVariantsMax).optional(),
+  "signatureVariants": zod.array(zod.string().max(updateCampaignBodySignatureVariantsItemMax)).max(updateCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
   "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
@@ -3169,6 +3369,12 @@ export const UpdateCampaignBody = zod.object({
 })
 
 export const updateCampaignResponseObjectiveMax = 500;
+
+export const updateCampaignResponseSubjectVariantsItemMax = 200;
+
+export const updateCampaignResponseGreetingVariantsItemMax = 500;
+
+export const updateCampaignResponseSignatureVariantsItemMax = 4000;
 
 
 
@@ -3179,6 +3385,9 @@ export const UpdateCampaignResponse = zod.object({
   "name": zod.string(),
   "objective": zod.string().max(updateCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(updateCampaignResponseSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(updateCampaignResponseGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(updateCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
@@ -3337,6 +3546,12 @@ export const SendCampaignBody = zod.object({
 
 export const sendCampaignResponseObjectiveMax = 500;
 
+export const sendCampaignResponseSubjectVariantsItemMax = 200;
+
+export const sendCampaignResponseGreetingVariantsItemMax = 500;
+
+export const sendCampaignResponseSignatureVariantsItemMax = 4000;
+
 
 
 export const SendCampaignResponse = zod.object({
@@ -3346,6 +3561,9 @@ export const SendCampaignResponse = zod.object({
   "name": zod.string(),
   "objective": zod.string().max(sendCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(sendCampaignResponseSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(sendCampaignResponseGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(sendCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
@@ -3887,6 +4105,23 @@ export const DeleteAdminUserResponse = zod.void()
 /**
  * @summary Get platform configuration
  */
+export const getAdminSettingsResponseSubjectVariantMinimumMin = 2;
+export const getAdminSettingsResponseSubjectVariantMinimumMax = 20;
+
+export const getAdminSettingsResponseSubjectVariantMaximumMax = 20;
+
+export const getAdminSettingsResponseGreetingVariantMinimumMin = 2;
+export const getAdminSettingsResponseGreetingVariantMinimumMax = 20;
+
+export const getAdminSettingsResponseGreetingVariantMaximumMax = 20;
+
+export const getAdminSettingsResponseSignatureVariantMinimumMin = 2;
+export const getAdminSettingsResponseSignatureVariantMinimumMax = 20;
+
+export const getAdminSettingsResponseSignatureVariantMaximumMax = 20;
+
+
+
 export const GetAdminSettingsResponse = zod.object({
   "applicationName": zod.string(),
   "defaultCurrency": zod.string(),
@@ -3912,6 +4147,12 @@ export const GetAdminSettingsResponse = zod.object({
   "bounceThreshold": zod.number().int(),
   "deliveryTrackingEnabled": zod.boolean(),
   "queuePollingSeconds": zod.number().int(),
+  "subjectVariantMinimum": zod.number().int().min(getAdminSettingsResponseSubjectVariantMinimumMin).max(getAdminSettingsResponseSubjectVariantMinimumMax),
+  "subjectVariantMaximum": zod.number().int().min(1).max(getAdminSettingsResponseSubjectVariantMaximumMax),
+  "greetingVariantMinimum": zod.number().int().min(getAdminSettingsResponseGreetingVariantMinimumMin).max(getAdminSettingsResponseGreetingVariantMinimumMax),
+  "greetingVariantMaximum": zod.number().int().min(1).max(getAdminSettingsResponseGreetingVariantMaximumMax),
+  "signatureVariantMinimum": zod.number().int().min(getAdminSettingsResponseSignatureVariantMinimumMin).max(getAdminSettingsResponseSignatureVariantMinimumMax),
+  "signatureVariantMaximum": zod.number().int().min(1).max(getAdminSettingsResponseSignatureVariantMaximumMax),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
@@ -3958,6 +4199,21 @@ export const updateAdminSettingsBodyRetryAttemptsMax = 10;
 
 
 
+export const updateAdminSettingsBodySubjectVariantMinimumMin = 2;
+export const updateAdminSettingsBodySubjectVariantMinimumMax = 20;
+
+export const updateAdminSettingsBodySubjectVariantMaximumMax = 20;
+
+export const updateAdminSettingsBodyGreetingVariantMinimumMin = 2;
+export const updateAdminSettingsBodyGreetingVariantMinimumMax = 20;
+
+export const updateAdminSettingsBodyGreetingVariantMaximumMax = 20;
+
+export const updateAdminSettingsBodySignatureVariantMinimumMin = 2;
+export const updateAdminSettingsBodySignatureVariantMinimumMax = 20;
+
+export const updateAdminSettingsBodySignatureVariantMaximumMax = 20;
+
 export const updateAdminSettingsBodyGracePeriodDaysMin = 0;
 
 
@@ -3987,10 +4243,33 @@ export const UpdateAdminSettingsBody = zod.object({
   "bounceThreshold": zod.number().int().min(1),
   "deliveryTrackingEnabled": zod.boolean(),
   "queuePollingSeconds": zod.number().int().min(1),
+  "subjectVariantMinimum": zod.number().int().min(updateAdminSettingsBodySubjectVariantMinimumMin).max(updateAdminSettingsBodySubjectVariantMinimumMax),
+  "subjectVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsBodySubjectVariantMaximumMax),
+  "greetingVariantMinimum": zod.number().int().min(updateAdminSettingsBodyGreetingVariantMinimumMin).max(updateAdminSettingsBodyGreetingVariantMinimumMax),
+  "greetingVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsBodyGreetingVariantMaximumMax),
+  "signatureVariantMinimum": zod.number().int().min(updateAdminSettingsBodySignatureVariantMinimumMin).max(updateAdminSettingsBodySignatureVariantMinimumMax),
+  "signatureVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsBodySignatureVariantMaximumMax),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int().min(updateAdminSettingsBodyGracePeriodDaysMin),
   "packageVisibility": zod.enum(['public', 'hidden'])
 })
+
+export const updateAdminSettingsResponseSubjectVariantMinimumMin = 2;
+export const updateAdminSettingsResponseSubjectVariantMinimumMax = 20;
+
+export const updateAdminSettingsResponseSubjectVariantMaximumMax = 20;
+
+export const updateAdminSettingsResponseGreetingVariantMinimumMin = 2;
+export const updateAdminSettingsResponseGreetingVariantMinimumMax = 20;
+
+export const updateAdminSettingsResponseGreetingVariantMaximumMax = 20;
+
+export const updateAdminSettingsResponseSignatureVariantMinimumMin = 2;
+export const updateAdminSettingsResponseSignatureVariantMinimumMax = 20;
+
+export const updateAdminSettingsResponseSignatureVariantMaximumMax = 20;
+
+
 
 export const UpdateAdminSettingsResponse = zod.object({
   "applicationName": zod.string(),
@@ -4017,6 +4296,12 @@ export const UpdateAdminSettingsResponse = zod.object({
   "bounceThreshold": zod.number().int(),
   "deliveryTrackingEnabled": zod.boolean(),
   "queuePollingSeconds": zod.number().int(),
+  "subjectVariantMinimum": zod.number().int().min(updateAdminSettingsResponseSubjectVariantMinimumMin).max(updateAdminSettingsResponseSubjectVariantMinimumMax),
+  "subjectVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsResponseSubjectVariantMaximumMax),
+  "greetingVariantMinimum": zod.number().int().min(updateAdminSettingsResponseGreetingVariantMinimumMin).max(updateAdminSettingsResponseGreetingVariantMinimumMax),
+  "greetingVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsResponseGreetingVariantMaximumMax),
+  "signatureVariantMinimum": zod.number().int().min(updateAdminSettingsResponseSignatureVariantMinimumMin).max(updateAdminSettingsResponseSignatureVariantMinimumMax),
+  "signatureVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsResponseSignatureVariantMaximumMax),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),

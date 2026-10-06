@@ -133,6 +133,14 @@ export function enforceSameOrigin(
   res: Response,
   next: NextFunction,
 ): void {
+  if (
+    req.method === "POST" &&
+    req.path === "/api/public/unsubscribe" &&
+    req.body?.["List-Unsubscribe"] === "One-Click"
+  ) {
+    next();
+    return;
+  }
   const origin = req.get("origin");
   if (!origin) {
     next();
@@ -163,6 +171,7 @@ const maintenanceAllowedRequests = new Set([
   "GET /api/auth/me",
   "POST /api/auth/logout",
   "POST /api/webhooks/razorpay",
+  "POST /api/public/unsubscribe",
 ]);
 
 export async function enforcePlatformMaintenance(

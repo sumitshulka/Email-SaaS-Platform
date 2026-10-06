@@ -383,8 +383,12 @@ memory.public.none(`
     name varchar(160) NOT NULL,
     objective text NOT NULL DEFAULT '',
     subject varchar(200) NOT NULL,
+    subject_variants jsonb NOT NULL DEFAULT '[]'::jsonb,
+    greeting_variants jsonb NOT NULL DEFAULT '[]'::jsonb,
+    signature_variants jsonb NOT NULL DEFAULT '[]'::jsonb,
     text_body text NOT NULL,
     html_body text,
+    unsubscribe_origin text,
     status email_campaign_status NOT NULL DEFAULT 'draft',
     queued_at timestamptz,
     scheduled_at timestamptz,
@@ -401,6 +405,7 @@ memory.public.none(`
     email varchar(254) NOT NULL,
     first_name varchar(100) NOT NULL DEFAULT '',
     last_name varchar(100) NOT NULL DEFAULT '',
+    variant_assignment jsonb NOT NULL DEFAULT '{}'::jsonb,
     status email_campaign_recipient_status NOT NULL DEFAULT 'queued',
     attempts integer NOT NULL DEFAULT 0,
     next_attempt_at timestamptz NOT NULL DEFAULT now(),
@@ -4221,6 +4226,17 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const settingsResponse = await api("/admin/settings", { cookie: admin.cookie });
     assert.equal(settingsResponse.response.status, 200);
     const { updatedAt: _updatedAt, ...settings } = settingsResponse.body;
+    const invalidVariantLimits = await api("/admin/settings", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: {
+        ...settings,
+        subjectVariantMinimum: 5,
+        subjectVariantMaximum: 4,
+      },
+    });
+    assert.equal(invalidVariantLimits.response.status, 400);
+    assert.equal(invalidVariantLimits.body.code, "INVALID_CAMPAIGN_VARIANT_LIMITS");
     const changedSettings = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
@@ -6115,7 +6131,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       body: {
         name: "Owner campaign",
         objective: "Share the launch update with active subscribers.",
-          subject: "A workspace update for {{firstName}}",
+        subject: "A workspace update for {{firstName}}",
+        subjectVariants: [
+          "A workspace update for {{firstName}}",
+          "Your launch update, {{firstName}}",
+          "What’s new at {{companyName}}?",
+        ],
           textBody: "Hello {{firstName}} from the campaign.",
           htmlBody: "<p>Draft <em>format</em></p>",
         listIds: [ownerSecondaryList.body.id, ownerList.body.id],
@@ -6126,6 +6147,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(campaign.body.senderAccountId, backupSender.body.account.id);
     assert.equal(campaign.body.senderEmail, "backup@owner.test");
     assert.equal(campaign.body.objective, "Share the launch update with active subscribers.");
+    assert.deepEqual(campaign.body.subjectVariants, [
+      "A workspace update for {{firstName}}",
+      "Your launch update, {{firstName}}",
+      "What’s new at {{companyName}}?",
+    ]);
     assert.equal(campaign.body.htmlBody, "<p>Draft <em>format</em></p>");
     assert.equal(campaign.body.listId, ownerSecondaryList.body.id);
     assert.deepEqual(campaign.body.listIds, [
@@ -6154,6 +6180,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         listIds: [ownerSecondaryList.body.id, ownerList.body.id],
         contactId: ownerContacts[0].body.id,
         subject: "Hello {{fullName}} ({{missing}})",
+        subjectVariants: [
+          "Hello {{fullName}} ({{missing}})",
+          "Hi {{fullName}}",
+          "A note for {{companyName}}",
+        ],
         textBody: "A note for {{fullName}} at {{companyName}} from {{email}}.",
         htmlBody:
           "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}. {{missing}}</p><script>alert(1)</script>",
@@ -6161,13 +6192,13 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     });
     assert.equal(samplePreview.response.status, 200, JSON.stringify(samplePreview.body));
     assert.equal(samplePreview.body.subject, "Hello Owner Contact ({{missing}})");
-    assert.equal(
+    assert.match(
       samplePreview.body.textBody,
-      "A note for Owner Contact at Acme & Sons from one@owner.test.",
+      /^A note for Owner Contact at Acme & Sons from one@owner\.test\.\n\nUnsubscribe: https:\/\/mailflow\.invalid\/unsubscribe\?token=/,
     );
-    assert.equal(
+    assert.match(
       samplePreview.body.htmlBody,
-      "<p><strong>Hi Owner</strong>, welcome to Acme &amp; Sons. {{missing}}</p>",
+      /^<p><strong>Hi Owner<\/strong>, welcome to Acme &amp; Sons\. \{\{missing\}\}<\/p>\n<p><a href="https:\/\/mailflow\.invalid\/unsubscribe\?token=preview">Unsubscribe<\/a><\/p>$/,
     );
     const outOfListPreview = await api("/campaigns/preview", {
       method: "POST",
@@ -6229,6 +6260,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .select({
         email: dbModule.emailCampaignRecipientsTable.email,
         contactId: dbModule.emailCampaignRecipientsTable.contactId,
+        variantAssignment: dbModule.emailCampaignRecipientsTable.variantAssignment,
       })
       .from(dbModule.emailCampaignRecipientsTable)
       .where(
@@ -6278,6 +6310,15 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .where(eq(dbModule.tenantSendingConfigurationTable.id, backupSender.body.account.id));
     assert.equal(queuedDashboard.body.pacing.emailsPerHour, 1);
     assert.equal(queuedDashboard.body.pacing.remainingEmails, 3);
+    assert.equal(queuedDashboard.body.variantResults.subject.testEnabled, true);
+    assert.equal(queuedDashboard.body.variantResults.subject.variants.length, 3);
+    assert.equal(
+      queuedDashboard.body.variantResults.subject.variants.reduce(
+        (total, variant) => total + variant.assigned,
+        0,
+      ),
+      3,
+    );
 
     const backlogCampaign = await api("/campaigns", {
       method: "POST",
@@ -6457,9 +6498,14 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(finalCampaign.bounced, 1);
     assert.equal(finalCampaign.suppressed, 1);
     assert.equal(finalCampaign.queued, 0);
+    const subjectVariantPrefixes = [
+      "A workspace update for ",
+      "Your launch update, ",
+      "What’s new at ",
+    ];
     assert.equal(
       tenantDeliveries.filter((message) =>
-        message.subject.startsWith("A workspace update for "),
+        subjectVariantPrefixes.some((prefix) => message.subject.startsWith(prefix)),
       ).length,
       2,
     );
@@ -6473,12 +6519,21 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       (message) => message.to === "one@owner.test",
     );
     assert.ok(personalizedDelivery);
-    assert.equal(personalizedDelivery.subject, "A workspace update for Owner");
-    assert.equal(personalizedDelivery.text, "Hello Owner from the campaign.");
-    assert.equal(
-      personalizedDelivery.html,
-      "<p><strong>Hi Owner</strong>, welcome to Acme &amp; Sons.</p>",
+    const personalizedQueuedRecipient = queuedRecipients.find(
+      (recipient) => recipient.email === personalizedDelivery.to,
     );
+    const selectedSubject =
+      campaign.body.subjectVariants[
+        personalizedQueuedRecipient.variantAssignment.subject.index
+      ];
+    assert.equal(
+      personalizedDelivery.subject,
+      selectedSubject
+        .replace("{{firstName}}", "Owner")
+        .replace("{{companyName}}", "Acme & Sons"),
+    );
+    assert.ok(personalizedDelivery.text.startsWith("Hello Owner from the campaign.\n\nUnsubscribe: "));
+    assert.ok(personalizedDelivery.html.startsWith("<p><strong>Hi Owner</strong>, welcome to Acme &amp; Sons.</p>\n"));
     assert.ok(personalizedDelivery.tracking?.attemptId);
     assert.equal(
       personalizedDelivery.tracking.messageId,
@@ -7090,6 +7145,83 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(terminalUnknownReport.body.summary.sendFailed, 1);
     assert.equal(terminalUnknownReport.body.summary.smtpAccepted, 0);
+
+    const listUnsubscribeHeader =
+      personalizedDelivery.tracking.headers["List-Unsubscribe"];
+    assert.match(listUnsubscribeHeader, /^<https?:\/\/[^>]+\/api\/public\/unsubscribe\?token=/);
+    assert.equal(
+      personalizedDelivery.tracking.headers["List-Unsubscribe-Post"],
+      "List-Unsubscribe=One-Click",
+    );
+    const oneClickUrl = new URL(listUnsubscribeHeader.slice(1, -1));
+    const browserUrl = new URL(
+      personalizedDelivery.text.match(/Unsubscribe: (https?:\/\/\S+)/)?.[1] ?? "",
+    );
+    const unsubscribeToken = oneClickUrl.searchParams.get("token");
+    assert.ok(unsubscribeToken);
+    assert.equal(oneClickUrl.origin, browserUrl.origin);
+    assert.equal(oneClickUrl.pathname, "/api/public/unsubscribe");
+    assert.equal(browserUrl.pathname, "/unsubscribe");
+    assert.equal(browserUrl.searchParams.get("token"), unsubscribeToken);
+    assert.ok(personalizedDelivery.html.includes(`href="${browserUrl.href}"`));
+
+    const pendingRecipient = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.body.id,
+        userId: owner.user.id,
+        contactId: deliveredRecipient.contactId,
+        email: personalizedDelivery.to,
+        firstName: "Owner",
+        status: "queued",
+        nextAttemptAt: new Date(),
+      })
+      .returning();
+    const invalidToken = `${unsubscribeToken.slice(0, -1)}${unsubscribeToken.endsWith("A") ? "B" : "A"}`;
+    const invalidUnsubscribe = await api(
+      `/public/unsubscribe?token=${encodeURIComponent(invalidToken)}`,
+      { method: "POST" },
+    );
+    assert.equal(invalidUnsubscribe.response.status, 400);
+    const browserLinkPrefetch = await fetch(
+      `${baseUrl}/api/public/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`,
+    );
+    assert.equal(browserLinkPrefetch.status, 404);
+    const [stillSubscribedContact] = await db
+      .select({ subscribed: dbModule.contactsTable.subscribed })
+      .from(dbModule.contactsTable)
+      .where(eq(dbModule.contactsTable.id, deliveredRecipient.contactId));
+    assert.equal(stillSubscribedContact.subscribed, true);
+
+    const oneClickResponse = await fetch(
+      `${baseUrl}/api/public/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "List-Unsubscribe=One-Click",
+      },
+    );
+    assert.equal(oneClickResponse.status, 200);
+    const [unsubscribedContact] = await db
+      .select({ subscribed: dbModule.contactsTable.subscribed })
+      .from(dbModule.contactsTable)
+      .where(eq(dbModule.contactsTable.id, deliveredRecipient.contactId));
+    assert.equal(unsubscribedContact.subscribed, false);
+    const [suppressedPendingRecipient] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, pendingRecipient[0].id));
+    assert.equal(suppressedPendingRecipient.status, "suppressed");
+    assert.equal(suppressedPendingRecipient.lastError, "Recipient unsubscribed.");
+    const repeatedUnsubscribe = await fetch(
+      `${baseUrl}/api/public/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "List-Unsubscribe=One-Click",
+      },
+    );
+    assert.equal(repeatedUnsubscribe.status, 200, "one-click unsubscribe is idempotent");
   });
 
   it("retains the selected SMTP sender and removes the other account when a lower-limit package starts", async () => {

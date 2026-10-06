@@ -20,6 +20,12 @@ export interface CampaignSummary {
   /** @maxLength 500 */
   objective?: string;
   subject: string;
+  /** @items.maxLength 200 */
+  subjectVariants: string[];
+  /** @items.maxLength 500 */
+  greetingVariants: string[];
+  /** @items.maxLength 4000 */
+  signatureVariants: string[];
   textBody: string;
   /** @nullable */
   htmlBody: string | null;

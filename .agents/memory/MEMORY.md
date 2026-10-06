@@ -28,3 +28,4 @@
 - [ExcelJS streaming worksheet setup](exceljs-streaming-worksheets.md) — pass streaming worksheet options at creation; setup errors can occur after XLSX bytes have begun streaming.
 - [Mailflow brand direction](mailflow-brand-direction.md) — use Flowline, confident Taskone-inspired colors, and position around users’ own senders with simple campaign automation.
 - [Mailflow payment policy](mailflow-payment-policy.md) — Taskone owns Mailflow; plans do not auto-renew, expire immediately, and have a narrowly defined 7-day refund rule.
+- [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
