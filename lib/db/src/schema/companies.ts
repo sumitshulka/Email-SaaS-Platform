@@ -44,6 +44,11 @@ export const companiesTable = pgTable(
       .on(table.userId, table.companyDomainKey)
       .where(sql`${table.companyDomainKey} IS NOT NULL`),
     index("companies_user_created_idx").on(table.userId, table.createdAt),
+    index("companies_name_domain_trgm_idx").using(
+      "gin",
+      table.companyName.op("gin_trgm_ops"),
+      table.companyDomain.op("gin_trgm_ops"),
+    ),
   ],
 );
 

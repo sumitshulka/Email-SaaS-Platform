@@ -3379,6 +3379,11 @@ describe("tenant contact management and package quotas", { concurrency: false },
     const ownerBeta = await insertCompany(owner.user.id, "Acme Beta", "beta.owner-search.test");
     const ownerOrbit = await insertCompany(owner.user.id, "Acme Orbit", "orbit.owner-search.test");
     const ownerDomainMatch = await insertCompany(owner.user.id, "Northstar", "acme-special.owner-search.test");
+    const ownerBothMatch = await insertCompany(
+      owner.user.id,
+      "Dualmatch Holdings",
+      "dualmatch.owner-search.test",
+    );
     const otherCompany = await insertCompany(other.user.id, "Acme Foreign", "foreign-search.test");
 
     const firstPage = await api("/companies/search?search=ACME&page=1&pageSize=1", {
@@ -3415,6 +3420,20 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(domainSearch.response.status, 200, JSON.stringify(domainSearch.body));
     assert.equal(domainSearch.body.total, 1);
     assert.equal(domainSearch.body.companies[0].id, ownerDomainMatch.id);
+
+    const bothFieldsSearch = await api("/companies/search?search=DUALMATCH", {
+      cookie: owner.cookie,
+    });
+    assert.equal(bothFieldsSearch.response.status, 200);
+    assert.equal(
+      bothFieldsSearch.body.total,
+      1,
+      "a company matching both name and domain should only count once",
+    );
+    assert.deepEqual(
+      bothFieldsSearch.body.companies.map((company) => company.id),
+      [ownerBothMatch.id],
+    );
 
     const foreignDomain = await api("/companies/search?search=foreign-search.test", {
       cookie: owner.cookie,
