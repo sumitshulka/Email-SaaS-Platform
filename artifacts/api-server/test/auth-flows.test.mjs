@@ -5749,6 +5749,194 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     }
   });
 
+  it("keeps transiently failed campaign emails queued until maintenance ends and the retry time arrives", async () => {
+    const owner = await loggedInUser({
+      username: "maintenance-retry-owner",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "retry@maintenance.test",
+        firstName: "Retry",
+        subscribed: true,
+      })
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.maintenance.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("maintenance-user"),
+        passwordEncrypted: securityModule.encryptSecret("maintenance-password"),
+        fromName: "Maintenance Test",
+        fromEmail: "sender@maintenance.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Retry after maintenance",
+        subject: "A campaign update",
+        textBody: "This message should retry after maintenance.",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        retryAttempts: 3,
+        retryDelaySeconds: 2,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let markFirstDeliveryStarted;
+    const firstDeliveryStarted = new Promise((resolve) => {
+      markFirstDeliveryStarted = resolve;
+    });
+    let failFirstDelivery;
+    const firstDeliveryGate = new Promise((resolve) => {
+      failFirstDelivery = resolve;
+    });
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      if (deliveredTo.length === 1) {
+        markFirstDeliveryStarted();
+        await firstDeliveryGate;
+        throw Object.assign(new Error("temporary connection failure"), {
+          code: "ECONNECTION",
+          command: "CONN",
+        });
+      }
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+
+    try {
+      const inFlightFailure =
+        campaignWorkerModule.processPendingCampaignDeliveries(1);
+      await firstDeliveryStarted;
+      await db
+        .update(dbModule.systemConfigurationTable)
+        .set({
+          value: {
+            maintenanceMode: true,
+            defaultEmailsPerHour: 3600,
+            maxEmailsPerDay: 100,
+            retryAttempts: 3,
+            retryDelaySeconds: 2,
+            queuePollingSeconds: 1,
+            deliveryTrackingEnabled: true,
+          },
+        })
+        .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+      failFirstDelivery();
+
+      assert.equal(await inFlightFailure, 1);
+      assert.deepEqual(deliveredTo, ["retry@maintenance.test"]);
+      const [retryableRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(retryableRecipient.status, "queued");
+      assert.equal(retryableRecipient.attempts, 1);
+      assert.match(retryableRecipient.lastError, /connect to the SMTP server/i);
+      assert.ok(retryableRecipient.nextAttemptAt.getTime() > Date.now());
+      const [failedAttempt] = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(failedAttempt.outcome, "send_failed");
+      assert.ok(failedAttempt.completedAt);
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        0,
+      );
+      assert.deepEqual(deliveredTo, ["retry@maintenance.test"]);
+
+      await db
+        .update(dbModule.systemConfigurationTable)
+        .set({
+          value: {
+            maintenanceMode: false,
+            defaultEmailsPerHour: 3600,
+            maxEmailsPerDay: 100,
+            retryAttempts: 3,
+            retryDelaySeconds: 2,
+            queuePollingSeconds: 1,
+            deliveryTrackingEnabled: true,
+          },
+        })
+        .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        0,
+      );
+      assert.deepEqual(deliveredTo, ["retry@maintenance.test"]);
+
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.max(
+            0,
+            retryableRecipient.nextAttemptAt.getTime() - Date.now() + 20,
+          ),
+        ),
+      );
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+      assert.deepEqual(deliveredTo, [
+        "retry@maintenance.test",
+        "retry@maintenance.test",
+      ]);
+
+      const [deliveredRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(deliveredRecipient.status, "delivered");
+      assert.equal(deliveredRecipient.attempts, 2);
+    } finally {
+      failFirstDelivery();
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
     const owner = await loggedInUser({ username: "sending-owner" });
     const other = await loggedInUser({ username: "sending-other" });
