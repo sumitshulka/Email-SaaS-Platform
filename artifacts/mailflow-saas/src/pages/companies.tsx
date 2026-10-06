@@ -159,7 +159,46 @@ export function CompaniesPage() {
     <div className="grid items-start">
        <section className={`${card} overflow-hidden`}>
         <div className="flex flex-col gap-3 border-b border-[#e8edf1] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><h2 className="text-[14px] font-bold text-[#223247]">Company directory</h2><p data-testid="text-company-result-count" className="mt-1 text-[11px] text-[#84909e]">{filtered.length} {filtered.length === 1 ? 'record' : 'records'} in this workspace</p></div><label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search companies" data-testid="input-search-companies" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-md border border-[#dce2e8] bg-[#fbfcfd] pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label></div>
-        {pageItems.length ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left"><thead className="bg-[#f8fafb]"><tr className="mono text-[9px] uppercase tracking-[.11em] text-[#84909e]"><th className="px-5 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Domain</th><th className="px-5 py-3 font-medium">Contacts</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{pageItems.map(company => <tr key={company.id} data-testid={`row-company-${company.id}`} className="group hover:bg-[#f8fafb]"><td className="px-5 py-3.5"><Link href={`/companies/${company.id}`} data-testid={`link-company-detail-${company.id}`} className="flex items-center gap-3 no-underline"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[#dbe5ef] bg-[#eef4fa] text-[#245b9b]"><Building2 className="h-4 w-4"/></span><span className="min-w-0 truncate text-[12px] font-semibold text-[#26364a] group-hover:text-[#174f99]">{company.companyName}</span></Link></td><td className="px-4 py-3.5 text-[11px] text-[#536477]">{company.companyDomain || '—'}</td><td className="px-5 py-3.5"><span data-testid={`text-company-contact-count-${company.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f0f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#607184]"><Users className="h-3 w-3"/>{company.contactCount}</span></td></tr>)}</tbody></table></div> : <div data-testid="empty-company-directory" className="px-5 py-14 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#eef4fa] text-[#51789f]"><Building2 className="h-5 w-5"/></span><h3 className="mt-4 text-[13px] font-semibold text-[#344154]">{search ? 'No matching companies' : 'No shared companies yet'}</h3><p className="mx-auto mt-1 max-w-xs text-[11px] leading-5 text-[#818d9b]">{search ? 'Try another company name, domain, industry, or location.' : 'Add a company profile or let the legacy profile check link safe domain matches.'}</p>{!search && <button type="button" data-testid="button-empty-add-company" onClick={() => setEditor('new')} className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#245b9b]"><Plus className="h-3.5 w-3.5"/>Add first company</button>}</div>}
+        {pageItems.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left">
+              <thead className="bg-[#f8fafb]">
+                <tr className="mono text-[9px] uppercase tracking-[.11em] text-[#84909e]">
+                  <th className="px-5 py-3 font-medium">Company</th>
+                  <th className="px-4 py-3 font-medium">Domain</th>
+                  <th className="px-4 py-3 font-medium">Location</th>
+                  <th className="px-5 py-3 font-medium">Contacts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#edf0f2]">
+                {pageItems.map(company => (
+                  <tr key={company.id} data-testid={`row-company-${company.id}`} className="group hover:bg-[#f8fafb]">
+                    <td className="px-5 py-3.5">
+                      <Link href={`/companies/${company.id}`} data-testid={`link-company-detail-${company.id}`} className="flex items-center gap-3 no-underline">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[#dbe5ef] bg-[#eef4fa] text-[#245b9b]"><Building2 className="h-4 w-4"/></span>
+                        <span className="min-w-0 truncate text-[12px] font-semibold text-[#26364a] group-hover:text-[#174f99]">{company.companyName}</span>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3.5 text-[11px] text-[#536477]">{company.companyDomain || '—'}</td>
+                    <td className="max-w-[220px] px-4 py-3.5 text-[11px] text-[#536477]">
+                      <span data-testid={`text-company-location-${company.id}`} title={company.companyLocation || undefined} className="block truncate">{company.companyLocation || '—'}</span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span data-testid={`text-company-contact-count-${company.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f0f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#607184]"><Users className="h-3 w-3"/>{company.contactCount}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div data-testid="empty-company-directory" className="px-5 py-14 text-center">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#eef4fa] text-[#51789f]"><Building2 className="h-5 w-5"/></span>
+            <h3 className="mt-4 text-[13px] font-semibold text-[#344154]">{search ? 'No matching companies' : 'No shared companies yet'}</h3>
+            <p className="mx-auto mt-1 max-w-xs text-[11px] leading-5 text-[#818d9b]">{search ? 'Try another company name, domain, industry, or location.' : 'Add a company profile or let the legacy profile check link safe domain matches.'}</p>
+            {!search && <button type="button" data-testid="button-empty-add-company" onClick={() => setEditor('new')} className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#245b9b]"><Plus className="h-3.5 w-3.5"/>Add first company</button>}
+          </div>
+        )}
          {filtered.length > 0 && <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] px-5 py-3"><span data-testid="text-company-page" className="text-[10px] text-[#7f8b99]">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span><div className="flex items-center gap-2"><button type="button" data-testid="button-company-page-previous" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronLeft className="h-4 w-4"/></button><span className="mono min-w-[54px] text-center text-[10px] text-[#667586]">{page} / {pageCount}</span><button type="button" data-testid="button-company-page-next" aria-label="Next page" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronRight className="h-4 w-4"/></button></div></footer>}
        </section>
      </div>
