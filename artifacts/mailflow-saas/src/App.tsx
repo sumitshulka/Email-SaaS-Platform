@@ -965,6 +965,9 @@ function ProfilePage({ user }: { user: AuthUser }) {
       {
         onSuccess: () => {
           setPassword({ currentPassword: '', newPassword: '' });
+          qc.setQueryData<AuthUser>(getGetCurrentUserQueryKey(), current => current
+            ? { ...current, mustChangeCredentials: false }
+            : current);
           qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
           if (rotate) {
             setRotate(false);

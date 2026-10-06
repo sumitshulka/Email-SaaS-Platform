@@ -21,5 +21,6 @@
 - [Browser-test resource contention](browser-test-resource-contention.md) — concurrent Vite and Chromium startups can time out; reuse the running web server when available.
 - [Radix dropdown browser checks](radix-dropdown-browser-checks.md) — after list status updates, verify pointer and keyboard ways to reopen the menu separately.
 - [Preview session cookies](preview-session-cookies.md) — HTTPS embedded previews need iframe-compatible cookies; keep local HTTP and production policies distinct.
+- [Password-rotation redirects](password-rotation-redirects.md) — clear the cached credential-rotation flag before leaving the profile or route guards can send users back.
 - [ExcelJS streaming worksheet setup](exceljs-streaming-worksheets.md) — pass streaming worksheet options at creation; setup errors can occur after XLSX bytes have begun streaming.
 - [Mailflow brand direction](mailflow-brand-direction.md) — use the approved Flowline identity for small-business marketing teams: confident, dependable, and Taskone-color-inspired.
