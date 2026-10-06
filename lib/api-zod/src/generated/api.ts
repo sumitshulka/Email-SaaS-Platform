@@ -4423,7 +4423,8 @@ export const GiftAdminSubscriptionResponse = zod.object({
 
 
 /**
- * @summary List packages available to the authenticated customer
+ * Returns active packages when package visibility is public. Does not require authentication.
+ * @summary List publicly visible subscription packages
  */
 export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin = 3;
 export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;

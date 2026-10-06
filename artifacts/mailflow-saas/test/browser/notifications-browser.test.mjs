@@ -443,7 +443,7 @@ async function installApiFixtures(context) {
 }
 
 async function signIn(page, account, destination) {
-  await page.goto(baseUrl, { waitUntil: 'commit', timeout: 90_000 });
+  await page.goto(`${baseUrl}/login`, { waitUntil: 'commit', timeout: 90_000 });
   await page.getByTestId('input-identifier').waitFor({ state: 'visible', timeout: 60_000 });
   await page.getByTestId('input-identifier').fill(account.username);
   await page.getByTestId('input-password').fill('browser-test-password');

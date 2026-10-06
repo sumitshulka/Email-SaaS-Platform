@@ -25,11 +25,13 @@ import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
+import { MailflowBrand } from '@/components/brand';
 import AdminBillingPage from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
+import { MarketingHomePage, PublicPricingPage } from '@/pages/marketing';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { ContactDetailPage } from '@/pages/contact-detail';
@@ -52,12 +54,6 @@ const getError = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return 'Something went wrong. Please try again.';
 };
-function MailflowIcon({ className = 'h-8 w-8' }: { className?: string }) {
-  return <svg className={className} viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="#142035"/><path d="M7 25V10l9 9 9-9" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M19.5 7.5H25V13" stroke="#E83D4A" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-}
-function Mark({ small = false }: { small?: boolean }) {
-  return <div className={cn('flex items-center gap-2.5', small && 'gap-2')}><MailflowIcon/><span className="display text-[21px] font-extrabold lowercase leading-none tracking-[-.04em] text-[#142035]">mailflow</span></div>;
-}
 function Button({ children, onClick, type = 'button', variant = 'primary', disabled, className = '', testId }: { children: ReactNode; onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'quiet' | 'outline' | 'danger'; disabled?: boolean; className?: string; testId: string }) {
   const style = {
     primary: 'bg-[#174f99] text-white hover:bg-[#103f7e] border border-[#174f99]',
@@ -101,7 +97,7 @@ function AuthFrame({ children, label = 'Your email infrastructure, in focus.', c
   return (
     <main className={cn('min-h-[100dvh] bg-white', className)}>
       <header className="auth-header absolute left-0 right-0 top-0 z-10 flex h-[76px] items-center justify-between px-6 md:px-12">
-        <Link href="/" data-testid="link-brand" className="no-underline"><Mark/></Link>
+        <Link href="/" data-testid="link-brand" className="no-underline"><MailflowBrand/></Link>
         <div className="auth-header-label mono hidden text-[10px] uppercase tracking-[.16em] text-[#8893a0] md:block">TRANSACTIONAL EMAIL / CONTROL PLANE</div>
       </header>
       <div className="grid min-h-[100dvh] pt-[76px] lg:grid-cols-[minmax(0,1fr)_minmax(420px,.92fr)]">
@@ -196,7 +192,7 @@ function RegisterPage() {
         </Button>
       </form>
       <div className="auth-footer mt-7 border-t border-[#e7eaee] pt-5 text-center text-[12px] text-[#737e8b]">
-        Already have an account? <Link data-testid="link-login" href="/" className="ml-1 font-semibold text-[#245b9b] no-underline hover:underline">Sign in</Link>
+        Already have an account? <Link data-testid="link-login" href="/login" className="ml-1 font-semibold text-[#245b9b] no-underline hover:underline">Sign in</Link>
       </div>
       <div className="auth-protection mt-8 flex items-center justify-center gap-2 text-[10px] text-[#929ba6]">
         <ShieldCheck className="h-3.5 w-3.5" />Protected account access
@@ -214,14 +210,14 @@ function VerifyPage() {
 function ForgotPage() {
   const reset = useRequestPasswordReset(); const [email, setEmail] = useState(''); const [done, setDone] = useState(false);
   const submit = (e: FormEvent) => { e.preventDefault(); reset.mutate({ data: { email } }, { onSuccess: () => setDone(true) }); };
-  return <AuthFrame label="Access should never be a guessing game."><AuthTitle overline="Account recovery" title={done ? 'Request received.' : 'Reset your password.'} sub={done ? 'If that address belongs to an account, a reset link is on its way.' : 'Enter the email associated with your account and we’ll send a secure reset link.'}/>{!done && <form onSubmit={submit} className="space-y-4"><Field label="Email address" value={email} onChange={setEmail} testId="input-reset-email" type="email" required/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-request-reset" disabled={reset.isPending} className="w-full">{reset.isPending ? 'Sending…' : 'Send reset link'}<ArrowRight className="h-4 w-4"/></Button></form>}<Link href="/" data-testid="link-return-login" className="mt-6 flex items-center justify-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline"><ChevronLeft className="h-4 w-4"/>Back to sign in</Link></AuthFrame>;
+  return <AuthFrame label="Access should never be a guessing game."><AuthTitle overline="Account recovery" title={done ? 'Request received.' : 'Reset your password.'} sub={done ? 'If that address belongs to an account, a reset link is on its way.' : 'Enter the email associated with your account and we’ll send a secure reset link.'}/>{!done && <form onSubmit={submit} className="space-y-4"><Field label="Email address" value={email} onChange={setEmail} testId="input-reset-email" type="email" required/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-request-reset" disabled={reset.isPending} className="w-full">{reset.isPending ? 'Sending…' : 'Send reset link'}<ArrowRight className="h-4 w-4"/></Button></form>}<Link href="/login" data-testid="link-return-login" className="mt-6 flex items-center justify-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline"><ChevronLeft className="h-4 w-4"/>Back to sign in</Link></AuthFrame>;
 }
 function ResetPage() {
   const reset = useResetPassword(); const [, setLocation] = useLocation();
   const passwordRequirement = usePasswordRequirement();
   const [token, setToken] = useState(() => new URLSearchParams(window.location.search).get('token') || '');
   const [password, setPassword] = useState('');
-  const submit = (e: FormEvent) => { e.preventDefault(); reset.mutate({ data: { token, password } }, { onSuccess: () => setLocation('/') }); };
+  const submit = (e: FormEvent) => { e.preventDefault(); reset.mutate({ data: { token, password } }, { onSuccess: () => setLocation('/login') }); };
   return <AuthFrame label="Take control of your account again."><AuthTitle overline="Secure recovery" title="Choose a new password." sub="Set a new password to restore access to your Mailflow account."/><form onSubmit={submit} className="space-y-4"><Field label="Reset token" value={token} onChange={setToken} testId="input-reset-token" required hint="The secure token from your email link."/><Field label="New password" value={password} onChange={setPassword} testId="input-new-password" type="password" required minLength={passwordRequirement.minimumLength} hint={passwordRequirement.hint} autoComplete="new-password"/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-reset-password" disabled={reset.isPending || token.length < 32} className="w-full">{reset.isPending ? 'Saving…' : 'Set new password'}<ArrowRight className="h-4 w-4"/></Button></form></AuthFrame>;
 }
 type SidebarNavigationItem = { href: string; label: string; icon: typeof Gauge };
@@ -287,7 +283,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
         navOpen ? 'translate-x-0' : '-translate-x-full',
       )}>
         <div className="flex h-[69px] shrink-0 items-center border-b border-[#e8ebef] px-6">
-          <Link href={admin ? '/admin' : '/dashboard'} data-testid="link-shell-brand" className="no-underline"><Mark small/></Link>
+          <Link href={admin ? '/admin' : '/dashboard'} data-testid="link-shell-brand" className="no-underline"><MailflowBrand small/></Link>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-6">
           <div className="mono mb-3 px-2 text-[9px] uppercase tracking-[.18em] text-[#99a1aa]">{admin ? 'PLATFORM' : 'WORKSPACE'}</div>
@@ -377,7 +373,7 @@ function Gate({ children, admin = false }: { children: (user: AuthUser) => React
     const url = new URL(window.location.href);
     const ticketId = url.pathname === '/support' ? url.searchParams.get('ticketId') : null;
     if (ticketId) sessionStorage.setItem(SUPPORT_TICKET_RETURN_KEY, ticketId);
-    setLocation('/');
+    setLocation('/login');
   }, [auth.isError, setLocation]);
   useEffect(() => {
     if (!auth.data) return;
@@ -1083,7 +1079,7 @@ function RouteGate({ admin, children }: { admin?: boolean; children: (u: AuthUse
 function RoutedErrorBoundary({ children }: { children: ReactNode }) { const [location] = useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
 function Routes() {
   return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
+    <Route path="/" component={MarketingHomePage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
     <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u}/>}</RouteGate>}</Route>
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>

@@ -2514,10 +2514,11 @@ paths:
     get:
       operationId: listAvailableSubscriptionPackages
       tags: [billing]
-      summary: List packages available to the authenticated customer
+      summary: List publicly visible subscription packages
+      description: Returns active packages when package visibility is public. Does not require authentication.
       responses:
         "200":
-          description: Purchasable subscription packages
+          description: Active customer-facing subscription packages
           content:
             application/json:
               schema:

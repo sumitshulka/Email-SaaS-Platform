@@ -1023,7 +1023,6 @@ router.patch(
 
 router.get(
   "/subscriptions/packages",
-  requireUserRole,
   async (_req, res): Promise<void> => {
     const settings = await getPlatformSettings();
     const packages =

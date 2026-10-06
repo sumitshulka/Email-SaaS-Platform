@@ -347,7 +347,7 @@ async function signInAndOpenFinance(viewport, fixtureOptions) {
   await installApiFixtures(context, fixtureOptions);
   const page = await context.newPage();
 
-  await page.goto(baseUrl);
+  await page.goto(`${baseUrl}/login`);
   await page.getByTestId('input-identifier').fill(admin.username);
   await page.getByTestId('input-password').fill('browser-test-password');
   await page.getByTestId('button-sign-in').click();

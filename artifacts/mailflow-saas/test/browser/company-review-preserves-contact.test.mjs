@@ -570,7 +570,7 @@ describe('company profile review and contact data preservation', { concurrency: 
     try {
       await installApiFixtures(context);
       const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -677,7 +677,7 @@ describe('company profile review and contact data preservation', { concurrency: 
         companyDirectoryRequests,
       });
       const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -753,7 +753,7 @@ describe('company profile review and contact data preservation', { concurrency: 
     try {
       await installApiFixtures(context, { companies });
       const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -902,7 +902,7 @@ describe('company profile review and contact data preservation', { concurrency: 
     try {
       await installApiFixtures(context, { companies });
       const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -971,7 +971,7 @@ describe('company profile review and contact data preservation', { concurrency: 
     try {
       await installApiFixtures(context, { companies, contacts });
       const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -1019,7 +1019,7 @@ describe('company profile review and contact data preservation', { concurrency: 
       page.on('console', message => {
         if (message.type() === 'error') browserErrors.push(message.text());
       });
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();
@@ -1187,7 +1187,7 @@ describe('company profile review and contact data preservation', { concurrency: 
         ],
       });
       const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
       await page.getByTestId('button-sign-in').click();

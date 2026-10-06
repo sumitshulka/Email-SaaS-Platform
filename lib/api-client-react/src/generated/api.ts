@@ -8929,7 +8929,8 @@ export const getListAvailableSubscriptionPackagesUrl = () => {
 }
 
 /**
- * @summary List packages available to the authenticated customer
+ * Returns active packages when package visibility is public. Does not require authentication.
+ * @summary List publicly visible subscription packages
  */
 export const listAvailableSubscriptionPackages = async ( options?: Parameters<typeof customFetch>[1]): Promise<SubscriptionPackageList> => {
 
@@ -8976,7 +8977,7 @@ export type ListAvailableSubscriptionPackagesQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List packages available to the authenticated customer
+ * @summary List publicly visible subscription packages
  */
 
 export function useListAvailableSubscriptionPackages<TData = Awaited<ReturnType<typeof listAvailableSubscriptionPackages>>, TError = ErrorType<unknown>>(
