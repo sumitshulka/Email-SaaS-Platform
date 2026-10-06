@@ -1292,8 +1292,8 @@ router.post(
       sheetRowCount = 0;
       const sheet = workbook.addWorksheet(
         sheetNumber === 1 ? "Contacts" : `Contacts ${sheetNumber}`,
+        { views: [{ state: "frozen", ySplit: 1 }] },
       );
-      sheet.views = [{ state: "frozen", ySplit: 1 }];
       sheet.columns = selectedColumns.map((key) => ({
         header: contactExportHeaders[key],
         key,
