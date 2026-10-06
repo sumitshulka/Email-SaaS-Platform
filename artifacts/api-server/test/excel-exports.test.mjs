@@ -134,7 +134,12 @@ memoryPool.connect = (...args) => {
 const testDb = drizzle(memoryPool, { schema });
 const dbModule = await import("@workspace/db");
 dbModule.setTestDatabase(testDb);
-const { contactsTable, companiesTable } = dbModule;
+const {
+  contactsTable,
+  companiesTable,
+  contactListsTable,
+  contactListMembersTable,
+} = dbModule;
 const [{ default: companiesRouter }, { default: sendingRouter }] =
   await Promise.all([
     import("../src/routes/companies.ts"),
@@ -194,8 +199,20 @@ describe("large contact and company Excel exports", { concurrency: false }, () =
       return {
         id: uuid("20000000", number),
         userId: ownerId,
+        companyId:
+          number === 8
+            ? uuid("40000000", 1)
+            : number === 7
+              ? uuid("50000000", 1)
+              : null,
         name: `Owner contact ${String(number).padStart(3, "0")}`,
         email: `owner-${String(number).padStart(3, "0")}@example.test`,
+        ...(number === 7
+          ? {
+              companyName: "Legacy fallback company",
+              companyIndustry: "Legacy fallback industry",
+            }
+          : {}),
         subscribed: number % 2 === 0,
         createdAt: sameSortDate,
       };
@@ -217,8 +234,13 @@ describe("large contact and company Excel exports", { concurrency: false }, () =
       return {
         id: uuid("40000000", number),
         userId: ownerId,
-        companyName: "Boundary Company",
-        companyIndustry: number % 2 === 0 ? "Software" : "Healthcare",
+        companyName: number === 1 ? "Owner boundary company" : "Boundary Company",
+        companyIndustry:
+          number === 1
+            ? "Clean energy"
+            : number % 2 === 0
+              ? "Software"
+              : "Healthcare",
         createdAt: sameSortDate,
       };
     });
@@ -226,12 +248,46 @@ describe("large contact and company Excel exports", { concurrency: false }, () =
       ...Array.from({ length: 7 }, (_, index) => ({
         id: uuid("50000000", index + 1),
         userId: otherTenantId,
-        companyName: "Boundary Company",
-        companyIndustry: "Software",
+        companyName:
+          index === 0 ? "Private tenant company" : "Boundary Company",
+        companyIndustry: index === 0 ? "Private industry" : "Software",
         createdAt: sameSortDate,
       })),
     );
     await testDb.insert(companiesTable).values(companyRows);
+
+    const ownerListId = uuid("60000000", 1);
+    const otherTenantListId = uuid("70000000", 1);
+    await testDb.insert(contactListsTable).values([
+      { id: ownerListId, userId: ownerId, name: "Owner boundary list" },
+      {
+        id: otherTenantListId,
+        userId: otherTenantId,
+        name: "Private tenant list",
+      },
+    ]);
+    await testDb.insert(contactListMembersTable).values([
+      {
+        userId: ownerId,
+        listId: ownerListId,
+        contactId: uuid("20000000", 8),
+      },
+      {
+        userId: ownerId,
+        listId: ownerListId,
+        contactId: uuid("20000000", 7),
+      },
+      {
+        userId: otherTenantId,
+        listId: ownerListId,
+        contactId: uuid("20000000", 7),
+      },
+      {
+        userId: ownerId,
+        listId: otherTenantListId,
+        contactId: uuid("20000000", 7),
+      },
+    ]);
 
     const app = express();
     app.use(express.json());
@@ -299,6 +355,43 @@ describe("large contact and company Excel exports", { concurrency: false }, () =
     assert.deepEqual(
       new Set(filteredRows.slice(1).map((row) => row[0])),
       new Set(expectedSubscribed.map((row) => row[0])),
+    );
+  });
+
+  it("keeps linked company and list values accurate across the 250-row boundary", async () => {
+    const columns = ["id", "email", "listNames", "companyName", "companyIndustry"];
+    const rows = await exportWorkbook("contacts/export", ownerId, {
+      scope: "all",
+      columns,
+    });
+
+    assert.deepEqual(rows[0], [
+      "Contact ID",
+      "Email",
+      "Lists",
+      "Company",
+      "Company industry",
+    ]);
+    assert.equal(rows.length - 1, rowCount);
+    assert.deepEqual(rows[250], [
+      uuid("20000000", 8),
+      "owner-008@example.test",
+      "Owner boundary list",
+      "Owner boundary company",
+      "Clean energy",
+    ]);
+    assert.deepEqual(rows[251], [
+      uuid("20000000", 7),
+      "owner-007@example.test",
+      "Owner boundary list",
+      "Legacy fallback company",
+      "Legacy fallback industry",
+    ]);
+    assert.equal(rows[250].length, columns.length);
+    assert.equal(rows[251].length, columns.length);
+    assert.doesNotMatch(
+      JSON.stringify([rows[250], rows[251]]),
+      /Private tenant company|Private industry|Private tenant list/,
     );
   });
 
