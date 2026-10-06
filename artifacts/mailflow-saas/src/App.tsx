@@ -32,6 +32,7 @@ import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
+import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@/pages/legal';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { ContactDetailPage } from '@/pages/contact-detail';
@@ -1079,7 +1080,7 @@ function RouteGate({ admin, children }: { admin?: boolean; children: (u: AuthUse
 function RoutedErrorBoundary({ children }: { children: ReactNode }) { const [location] = useLocation(); return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>; }
 function Routes() {
   return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
+    <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/terms-and-conditions" component={TermsAndConditionsPage}/><Route path="/privacy-policy" component={PrivacyPolicyPage}/><Route path="/shipping-refund" component={ShippingRefundPage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
     <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u}/>}</RouteGate>}</Route>
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>

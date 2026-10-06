@@ -26,3 +26,4 @@
 - [Password-rotation redirects](password-rotation-redirects.md) — clear the cached credential-rotation flag before leaving the profile or route guards can send users back.
 - [ExcelJS streaming worksheet setup](exceljs-streaming-worksheets.md) — pass streaming worksheet options at creation; setup errors can occur after XLSX bytes have begun streaming.
 - [Mailflow brand direction](mailflow-brand-direction.md) — use Flowline, confident Taskone-inspired colors, and position around users’ own senders with simple campaign automation.
+- [Mailflow payment policy](mailflow-payment-policy.md) — Taskone owns Mailflow; plans do not auto-renew, expire immediately, and have a narrowly defined 7-day refund rule.

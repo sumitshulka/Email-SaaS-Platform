@@ -41,7 +41,7 @@ function usePageMeta(meta: typeof homeMeta) {
   }, [meta]);
 }
 
-function Header({ active }: { active: 'home' | 'pricing' | 'features' }) {
+function Header({ active }: { active: 'home' | 'pricing' | 'features' | 'legal' }) {
   const [open, setOpen] = useState(false);
   return (
     <header className="mf-header">
@@ -72,13 +72,17 @@ function Footer() {
           <p>Email marketing with a little more room to think.</p>
         </div>
         <div className="mf-footer-links">
-          <div><span className="mf-footer-label">Explore</span><Link href="/" data-testid="footer-home">Overview</Link><Link href="/features" data-testid="footer-features">Features</Link><Link href="/pricing" data-testid="footer-pricing">Pricing</Link></div>
-          <div><span className="mf-footer-label">Your workspace</span><Link href="/register" data-testid="footer-register">Create an account</Link><Link href="/login" data-testid="footer-login">Log in</Link></div>
+          <div><span className="mf-footer-label">Explore</span><Link href="/" data-testid="footer-home">Overview</Link><Link href="/features" data-testid="footer-features">Features</Link><Link href="/pricing" data-testid="footer-pricing">Pricing</Link><Link href="/terms-and-conditions" data-testid="footer-terms">Terms and Conditions</Link><Link href="/privacy-policy" data-testid="footer-privacy">Privacy Policy</Link><Link href="/shipping-refund" data-testid="footer-shipping-refund">Shipping &amp; Refund</Link></div>
+          <div><span className="mf-footer-label">Your workspace</span><Link href="/register" data-testid="footer-register">Create an account</Link><Link href="/login" data-testid="footer-login">Log in</Link><a href="https://www.taskone.world/contact.html" data-testid="footer-contact" target="_blank" rel="noreferrer">Contact Us</a></div>
         </div>
       </div>
-      <div className="mf-footer-bottom"><span>Mailflow</span><span>Built for a more considered send.</span><a href="#top" data-testid="link-back-to-top">Back to top <ArrowDown size={13}/></a></div>
+      <div className="mf-footer-bottom"><span>Mailflow</span><span>Mailflow is a product of Taskone Solutions Pvt Ltd.</span><a href="#top" data-testid="link-back-to-top">Back to top <ArrowDown size={13}/></a></div>
     </footer>
   );
+}
+
+export function PublicMarketingLayout({ children }: { children: ReactNode }) {
+  return <div className="mf-site" id="top"><Header active="legal"/>{children}<Footer/><Styles/></div>;
 }
 
 function MetaLayout({ children, active }: { children: ReactNode; active: 'home' | 'pricing' | 'features' }) {
