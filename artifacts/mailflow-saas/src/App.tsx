@@ -336,6 +336,19 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
             <div className="h-4 w-px bg-[#e3e7eb]"/>
             <span className="mono text-[10px] text-[#7d8794]">{user.timezone}</span>
             <Link href="/profile" data-testid="link-header-profile" className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] hover:bg-[#f4f6f8]"><UserRound className="h-4 w-4"/></Link>
+            <button
+              type="button"
+              data-testid="button-header-logout"
+              aria-label={logout.isPending ? 'Signing out' : 'Sign out'}
+              title={logout.isPending ? 'Signing out' : 'Sign out'}
+              disabled={logout.isPending}
+              onClick={leave}
+              className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] transition-colors hover:bg-[#fff4f2] hover:text-[#b34e43] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8] disabled:cursor-wait disabled:opacity-60"
+            >
+              {logout.isPending
+                ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true"/>
+                : <LogOut className="h-4 w-4" aria-hidden="true"/>}
+            </button>
           </div>
         </header>
         <main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">{children}</main>
