@@ -36,8 +36,18 @@ function loadCheckoutScript() {
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
     script.dataset.razorpayCheckout = 'true';
-    script.onload = () => window.Razorpay ? resolve() : reject(new Error('Razorpay Checkout did not initialize.'));
-    script.onerror = () => reject(new Error('Razorpay Checkout could not be loaded. Check your connection and try again.'));
+    script.onload = () => {
+      if (window.Razorpay) {
+        resolve();
+      } else {
+        script.remove();
+        reject(new Error('Razorpay Checkout did not initialize.'));
+      }
+    };
+    script.onerror = () => {
+      script.remove();
+      reject(new Error('Razorpay Checkout could not be loaded. Check your connection and try again.'));
+    };
     if (!existing) document.body.appendChild(script);
   }).catch(error => {
     checkoutScriptPromise = null;
