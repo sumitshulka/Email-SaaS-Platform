@@ -151,6 +151,7 @@ async function installFixtures(context, {
     subscription: paidSubscription,
   },
   checkoutAction = null,
+  checkoutActions = null,
   checkoutScriptFailure = false,
   checkoutScriptFailures = 0,
   packages = [freePackage],
@@ -161,11 +162,13 @@ async function installFixtures(context, {
     url: baseUrl,
     sameSite: 'Lax',
   }]);
-  await context.addInitScript(({ checkoutAction, orderId, checkoutScriptFailure, checkoutScriptFailures }) => {
+  await context.addInitScript(({ checkoutAction, checkoutActions, orderId, checkoutScriptFailure, checkoutScriptFailures }) => {
     window.__analyticsCalls = [];
     window.__freeActivationResponses = [];
     window.__paidVerificationResponses = [];
     window.__paidOrderResponses = [];
+    window.__razorpayOpenedOrderIds = [];
+    window.__razorpayCheckoutInstances = 0;
     window.umami = {
       track(...args) {
         window.__analyticsCalls.push({
@@ -176,16 +179,19 @@ async function installFixtures(context, {
       },
     };
     window.__installRazorpayCheckout = () => {
-      if (!checkoutAction) return;
+      if (!checkoutAction && !checkoutActions?.length) return;
       window.Razorpay = function(options) {
+        const instanceIndex = window.__razorpayCheckoutInstances++;
+        const action = checkoutActions?.[instanceIndex] ?? checkoutAction;
         this.open = () => {
-          if (checkoutAction === 'throw-on-open') {
+          window.__razorpayOpenedOrderIds.push(options.order_id);
+          if (action === 'throw-on-open') {
             throw new Error('Checkout could not open.');
           }
           window.setTimeout(() => {
-            if (checkoutAction === 'dismiss') {
+            if (action === 'dismiss') {
               options.modal.ondismiss();
-            } else if (checkoutAction === 'complete') {
+            } else if (action === 'complete') {
               options.handler({
                 razorpay_payment_id: 'pay_browser_test',
                 razorpay_order_id: orderId,
@@ -196,7 +202,7 @@ async function installFixtures(context, {
         };
       };
     };
-    if (checkoutAction && !checkoutScriptFailure && checkoutScriptFailures === 0) {
+    if ((checkoutAction || checkoutActions?.length) && !checkoutScriptFailure && checkoutScriptFailures === 0) {
       window.__installRazorpayCheckout();
     }
 
@@ -217,7 +223,7 @@ async function installFixtures(context, {
       }
       return response;
     };
-  }, { checkoutAction, orderId: paidOrder.orderId, checkoutScriptFailure, checkoutScriptFailures });
+  }, { checkoutAction, checkoutActions, orderId: paidOrder.orderId, checkoutScriptFailure, checkoutScriptFailures });
   if (checkoutScriptFailure || checkoutScriptFailures > 0) {
     let checkoutScriptAttempts = 0;
     await context.route('https://checkout.razorpay.com/v1/checkout.js', async route => {
@@ -259,10 +265,12 @@ async function installFixtures(context, {
       const responseStatus = orderStatuses
         ? orderStatuses[Math.min(orderAttempt, orderStatuses.length - 1)]
         : orderStatus;
-      orderAttempt += 1;
+      const currentOrderAttempt = orderAttempt++;
       await route.fulfill({
         status: responseStatus,
-        json: responseStatus === 201 ? paidOrder : { error: 'Order creation failed.' },
+        json: responseStatus === 201
+          ? { ...paidOrder, orderId: currentOrderAttempt === 0 ? paidOrder.orderId : `${paidOrder.orderId}_${currentOrderAttempt + 1}` }
+          : { error: 'Order creation failed.' },
       });
       return;
     }
@@ -481,6 +489,45 @@ describe('subscription activation analytics', { concurrency: false }, () => {
           freeActivationResponses: [],
           paidVerificationResponses: [],
         },
+      ]);
+      assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('lets customers reopen checkout after dismissal and leaves the plan button usable', async () => {
+    const { context, page } = await openPlansPage({
+      packages: [paidPackage],
+      checkoutActions: ['dismiss', 'open'],
+    });
+    try {
+      const purchaseButton = page.getByTestId(`button-purchase-plan-${paidPackage.id}`);
+      await purchaseButton.click();
+      await page.getByTestId('status-payment').getByText('Checkout closed').waitFor();
+      await page.waitForFunction(testId => {
+        const button = document.querySelector(`[data-testid="${testId}"]`);
+        return Boolean(button && !button.disabled && button.textContent?.includes('Choose Growth plan'));
+      }, `button-purchase-plan-${paidPackage.id}`);
+      assert.equal(await purchaseButton.isDisabled(), false);
+      assert.match(await purchaseButton.innerText(), /Choose Growth plan/);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls.map(call => call.args[0])), [
+        'paid_checkout_started',
+        'paid_checkout_dismissed',
+      ]);
+
+      await purchaseButton.click();
+      await page.waitForFunction(() => window.__razorpayOpenedOrderIds.length === 2);
+
+      assert.deepEqual(await page.evaluate(() => window.__paidOrderResponses), [201, 201]);
+      assert.deepEqual(await page.evaluate(() => window.__razorpayOpenedOrderIds), [
+        'order_browser_test',
+        'order_browser_test_2',
+      ]);
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls.map(call => call.args[0])), [
+        'paid_checkout_started',
+        'paid_checkout_dismissed',
+        'paid_checkout_started',
       ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), []);
     } finally {
