@@ -165,7 +165,7 @@ function ImportPanel({ campaignId }: { campaignId: string }) {
   </div>;
 }
 
-function Microsoft365TracePanel({ campaignId }: { campaignId: string }) {
+export function Microsoft365TraceSettingsPanel() {
   const qc = useQueryClient();
   const connectionQuery = useGetMicrosoft365TraceConnection({
     query: { queryKey: getGetMicrosoft365TraceConnectionQueryKey(), refetchInterval: 30_000, staleTime: 10_000 },
@@ -186,8 +186,13 @@ function Microsoft365TracePanel({ campaignId }: { campaignId: string }) {
 
   const refreshEvidence = () => {
     void qc.invalidateQueries({ queryKey: getGetMicrosoft365TraceConnectionQueryKey() });
-    void qc.invalidateQueries({ queryKey: getGetCampaignDeliveryReportQueryKey(campaignId) });
-    void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) });
+    void qc.invalidateQueries({
+      predicate: query => {
+        const key = String(query.queryKey[0] ?? '');
+        return key.endsWith('/delivery-report') || /^\/api\/campaigns\/[^/]+$/.test(key);
+      },
+    });
+    void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
     void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
   };
   const submitConnect = (event: FormEvent<HTMLFormElement>) => {
@@ -225,10 +230,10 @@ function Microsoft365TracePanel({ campaignId }: { campaignId: string }) {
     });
   };
 
-  return <div data-testid="section-microsoft365-trace" className="border-t border-[#e9edf0] px-5 py-4">
+  return <section data-testid="section-microsoft365-trace" className="mb-5 rounded-lg border border-[#e0e4e9] bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h3 className="text-[13px] font-semibold text-[#26364a]">Microsoft 365 message trace</h3>
-        <p className="mt-0.5 max-w-3xl text-[11px] leading-5 text-[#788392]">Connect a tenant-authorized Microsoft Graph app to collect trace events automatically. This is separate from your SMTP credentials and does not confirm inbox placement or reading.</p></div>
+        <p className="mt-0.5 max-w-3xl text-[11px] leading-5 text-[#788392]">Connect a tenant-authorized Microsoft Graph app to collect trace events automatically for this workspace’s campaigns. One connection applies to all campaigns; matched events appear on each campaign’s details page. This is separate from SMTP credentials and does not confirm inbox placement or reading.</p></div>
       {connection?.connected && <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${connection.syncStatus === 'error' ? 'bg-[#fff3e8] text-[#a95218]' : 'bg-[#edf7f0] text-[#397050]'}`}>{connection.syncStatus === 'error' ? <AlertCircle className="h-3.5 w-3.5"/> : <CheckCircle2 className="h-3.5 w-3.5"/>}{connection.syncStatus === 'error' ? 'Sync needs attention' : 'Trace access verified'}</span>}
     </div>
     {connectionQuery.isError && <div role="alert" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">Connection health could not be loaded. Retry by refreshing this page.</div>}
@@ -266,7 +271,7 @@ function Microsoft365TracePanel({ campaignId }: { campaignId: string }) {
     </form>}
     {notice && <p role="status" data-testid="notice-microsoft365-connection" className="mt-3 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] text-[#31674b]">{notice}</p>}
     {error && connection?.connected && <div role="alert" data-testid="error-microsoft365-control" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">{error}</div>}
-  </div>;
+  </section>;
 }
 
 export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: string; active: boolean }) {
@@ -313,7 +318,7 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
         <div className="flex items-center justify-between border-t border-[#e9edf0] px-5 py-3 text-[11px] text-[#788392]"><span data-testid="text-evidence-range">{total ? `${offset + 1}-${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}` : '0 recipients'}</span>
           <div className="flex gap-2"><button type="button" data-testid="button-evidence-prev" className={outlineBtn} disabled={offset === 0 || query.isFetching} onClick={() => { setOpenId(null); setOffset(Math.max(0, offset - PAGE)); }}><ChevronLeft className="h-4 w-4"/>Previous</button><button type="button" data-testid="button-evidence-next" className={outlineBtn} disabled={offset + PAGE >= total || query.isFetching} onClick={() => { setOpenId(null); setOffset(offset + PAGE); }}>Next<ChevronRight className="h-4 w-4"/></button></div></div>
       </>}
-     <Microsoft365TracePanel campaignId={campaignId}/><ImportPanel campaignId={campaignId}/>
+      <ImportPanel campaignId={campaignId}/>
   </section>;
 }
 
