@@ -894,6 +894,8 @@ export function CampaignsPage() {
   const previewCampaign = usePreviewCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const [campaignListSearch, setCampaignListSearch] = useState('');
+  const [showSelectedCampaignLists, setShowSelectedCampaignLists] = useState(false);
   const [sampleContactId, setSampleContactId] = useState('');
   const [previewState, setPreviewState] = useState<{ key: string; rendered: CampaignTemplatePreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ key: string; message: string } | null>(null);
@@ -905,6 +907,14 @@ export function CampaignsPage() {
   const lists = (listsQuery.data || []) as ContactList[];
   const contacts = contactsQuery.data?.contacts || [];
   const activeLists = lists.filter(list => list.active);
+  const filteredCampaignLists = useMemo(() => {
+    const query = campaignListSearch.trim().toLowerCase();
+    return lists.filter(list =>
+      (!query || list.name.toLowerCase().includes(query)) &&
+      (!showSelectedCampaignLists || form.listIds.includes(list.id)),
+    );
+  }, [campaignListSearch, form.listIds, lists, showSelectedCampaignLists]);
+  const matchingCampaignListsToAdd = filteredCampaignLists.filter(list => list.active && !form.listIds.includes(list.id));
   const queueMinimumStartAt = minimumCampaignStartAt(campaigns, serverMinimumStartAt);
   const queueMinimumStartAtInput = dateTimeLocalValue(queueMinimumStartAt);
   const queueStartDate = queueStartAt ? new Date(queueStartAt) : null;
@@ -966,18 +976,28 @@ export function CampaignsPage() {
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [] }); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [] }); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
-  const toggleCampaignList = (listId: string, checked: boolean) => {
-    setForm(current => ({
-      ...current,
-      listIds: checked
-        ? current.listIds.includes(listId) ? current.listIds : [...current.listIds, listId]
-        : current.listIds.filter(id => id !== listId),
-    }));
+  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
+    setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
     setPreviewState(null);
     setPreviewError(null);
+  };
+  const toggleCampaignList = (listId: string, checked: boolean) => {
+    updateCampaignListSelection(listIds =>
+      checked
+        ? listIds.includes(listId) ? listIds : [...listIds, listId]
+        : listIds.filter(id => id !== listId),
+    );
+  };
+  const addMatchingCampaignLists = () => {
+    if (!campaignListSearch.trim() || !matchingCampaignListsToAdd.length) return;
+    const matchingIds = matchingCampaignListsToAdd.map(list => list.id);
+    updateCampaignListSelection(listIds => [...listIds, ...matchingIds.filter(id => !listIds.includes(id))]);
+  };
+  const clearCampaignLists = () => {
+    if (form.listIds.length) updateCampaignListSelection(() => []);
   };
   const moveCampaignList = (index: number, direction: -1 | 1) => {
     setForm(current => {
@@ -1087,34 +1107,57 @@ export function CampaignsPage() {
           <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>
           <fieldset className="min-w-0">
             <legend className={labelClass}>Target lists</legend>
-            <div data-testid="campaign-list-picker" className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-[#d8dde4] bg-white p-2">
-              {lists.map(list => {
-                const checked = form.listIds.includes(list.id);
-                return <label key={list.id} className={cx('flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-[11px] hover:bg-[#f5f8fb]', !list.active && !checked && 'cursor-not-allowed opacity-60')}>
-                  <input data-testid={`checkbox-campaign-list-${list.id}`} type="checkbox" checked={checked} disabled={!list.active && !checked} onChange={event => toggleCampaignList(list.id, event.target.checked)} className="h-4 w-4 accent-[#245b9b]"/>
-                  <span className="min-w-0 flex-1 truncate font-medium text-[#344154]">{list.name}</span>
-                  <span className="shrink-0 text-[10px] text-[#8993a0]">{list.contactCount} contacts</span>
-                  {!list.active && <Status tone="gray">inactive</Status>}
-                </label>;
-              })}
-              {form.listIds.filter(listId => !lists.some(list => list.id === listId)).map(listId => <div key={listId} className="flex items-center justify-between gap-2 rounded bg-[#fff8ef] px-2 py-2 text-[11px] text-[#895b2f]">
-                <span>Removed list is still selected.</span>
-                <Button variant="quiet" testId={`button-remove-removed-campaign-list-${listId}`} onClick={() => toggleCampaignList(listId, false)}>Remove</Button>
-              </div>)}
-              {!lists.length && <p className="px-2 py-2 text-[11px] text-[#788392]">Create a contact list before preparing a campaign.</p>}
+            <div className="overflow-hidden rounded-md border border-[#d8dde4] bg-white">
+              <div className="border-b border-[#e9edf0] bg-[#fbfcfd] p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="inline-flex rounded-md border border-[#e0e4e9] bg-white p-0.5">
+                    <button type="button" data-testid="button-campaign-lists-all" aria-pressed={!showSelectedCampaignLists} onClick={() => setShowSelectedCampaignLists(false)} className={cx('rounded px-2 py-1 text-[10px] font-semibold transition', !showSelectedCampaignLists ? 'bg-[#edf4fc] text-[#245b9b]' : 'text-[#66717e] hover:bg-[#f6f8fa]')}>All <span className="font-normal opacity-75">{lists.length}</span></button>
+                    <button type="button" data-testid="button-campaign-lists-selected" aria-pressed={showSelectedCampaignLists} onClick={() => setShowSelectedCampaignLists(true)} className={cx('rounded px-2 py-1 text-[10px] font-semibold transition', showSelectedCampaignLists ? 'bg-[#edf4fc] text-[#245b9b]' : 'text-[#66717e] hover:bg-[#f6f8fa]')}>Selected <span className="font-normal opacity-75">{form.listIds.length}</span></button>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-medium text-[#687484]">{form.listIds.length} selected</span>
+                </div>
+                <label className="relative mt-2 block">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8993a0]"/>
+                  <input data-testid="input-campaign-list-search" type="search" value={campaignListSearch} onChange={event => setCampaignListSearch(event.target.value)} placeholder="Search lists by name" aria-label="Search campaign lists" className="h-9 w-full rounded-md border border-[#d8dde4] bg-white pl-8 pr-3 text-[11px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"/>
+                </label>
+                <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
+                  <span className="text-[10px] text-[#808a97]">{filteredCampaignLists.length} of {lists.length} lists</span>
+                  <div className="flex items-center gap-1">
+                    {campaignListSearch.trim() && !showSelectedCampaignLists && <button type="button" data-testid="button-add-matching-campaign-lists" onClick={addMatchingCampaignLists} disabled={!matchingCampaignListsToAdd.length} className="rounded px-1.5 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc] disabled:cursor-not-allowed disabled:text-[#a0a8b3]">Add {matchingCampaignListsToAdd.length} matches</button>}
+                    {form.listIds.length > 0 && <button type="button" data-testid="button-clear-campaign-lists" onClick={clearCampaignLists} className="rounded px-1.5 py-1 text-[10px] font-semibold text-[#687484] hover:bg-[#eef1f4]">Clear all</button>}
+                  </div>
+                </div>
+              </div>
+              <div data-testid="campaign-list-picker" className="max-h-40 space-y-0.5 overflow-y-auto p-1.5">
+                {filteredCampaignLists.map(list => {
+                  const checked = form.listIds.includes(list.id);
+                  return <label key={list.id} className={cx('flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-[11px] hover:bg-[#f5f8fb]', !list.active && !checked && 'cursor-not-allowed opacity-60')}>
+                    <input data-testid={`checkbox-campaign-list-${list.id}`} type="checkbox" checked={checked} disabled={!list.active && !checked} onChange={event => toggleCampaignList(list.id, event.target.checked)} className="h-4 w-4 accent-[#245b9b]"/>
+                    <span className="min-w-0 flex-1 truncate font-medium text-[#344154]">{list.name}</span>
+                    <span className="shrink-0 text-[10px] text-[#8993a0]">{list.contactCount} contacts</span>
+                    {!list.active && <Status tone="gray">inactive</Status>}
+                  </label>;
+                })}
+                {form.listIds.filter(listId => !lists.some(list => list.id === listId)).map(listId => <div key={listId} className="flex items-center justify-between gap-2 rounded bg-[#fff8ef] px-2 py-2 text-[11px] text-[#895b2f]">
+                  <span>Removed list is still selected.</span>
+                  <Button variant="quiet" testId={`button-remove-removed-campaign-list-${listId}`} onClick={() => toggleCampaignList(listId, false)}>Remove</Button>
+                </div>)}
+                {!lists.length && <p className="px-2 py-2 text-[11px] text-[#788392]">Create a contact list before preparing a campaign.</p>}
+                {lists.length > 0 && !filteredCampaignLists.length && <p className="px-2 py-3 text-center text-[11px] text-[#788392]">{showSelectedCampaignLists ? 'No selected lists match this search.' : 'No lists match this search.'}</p>}
+              </div>
             </div>
             <p className="mt-1.5 text-[10px] leading-4 text-[#808a97]">Choose one or more lists. Inactive lists can’t be newly selected or queued.</p>
           </fieldset>
         </div>
         <section className="rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-3" aria-label="Campaign list processing order">
           <div><h3 className="text-[11px] font-semibold text-[#344154]">Processing order</h3><p className="mt-1 text-[10px] leading-4 text-[#788392]">If an email address appears in more than one list, the first list containing it determines the entry used. That address still receives only one email.</p></div>
-          {form.listIds.length ? <ol data-testid="campaign-list-order" className="mt-2 space-y-1">
+          {form.listIds.length ? <ol data-testid="campaign-list-order" className="mt-2 max-h-36 space-y-1 overflow-y-auto pr-1">
             {form.listIds.map((listId, index) => {
               const list = lists.find(item => item.id === listId);
               const label = list?.name || 'Removed list';
-              return <li key={`${listId}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#e5e9ee] bg-white px-3 py-2">
-                <span className="flex items-center gap-2 text-[11px] font-medium text-[#344154]"><span className="mono text-[10px] text-[#8a95a1]">{index + 1}</span>{label}{index === 0 && <Status tone="blue">first priority</Status>}{list && !list.active && <Status tone="gray">inactive</Status>}</span>
-                <span className="flex gap-1">
+              return <li key={`${listId}-${index}`} className="flex min-h-10 items-center justify-between gap-2 rounded-md border border-[#e5e9ee] bg-white px-2.5 py-1.5">
+                <span className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-[#344154]"><span className="mono shrink-0 text-[10px] text-[#8a95a1]">{index + 1}</span><span className="truncate">{label}</span>{index === 0 && <span className="shrink-0"><Status tone="blue">first priority</Status></span>}{list && !list.active && <span className="shrink-0"><Status tone="gray">inactive</Status></span>}</span>
+                <span className="flex shrink-0 gap-0.5">
                   <Button variant="quiet" testId={`button-campaign-list-up-${listId}`} onClick={() => moveCampaignList(index, -1)} disabled={index === 0}><ArrowUp className="h-3.5 w-3.5"/>Earlier</Button>
                   <Button variant="quiet" testId={`button-campaign-list-down-${listId}`} onClick={() => moveCampaignList(index, 1)} disabled={index === form.listIds.length - 1}><ArrowDown className="h-3.5 w-3.5"/>Later</Button>
                 </span>
