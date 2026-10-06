@@ -81,13 +81,45 @@ function durationLabel(days: number) {
 function PackageCard({ item, featured, pending, disabled, onPurchase }: {
   item: SubscriptionPackage; featured: boolean; pending: boolean; disabled: boolean; onPurchase: () => void;
 }) {
-  return <article data-testid={`card-plan-${item.id}`} className={`relative flex min-h-[330px] flex-col overflow-hidden rounded-lg border p-5 md:p-6 ${featured ? 'border-[#224e78] bg-[#f1f6fa] shadow-[0_8px_26px_rgba(35,70,104,.09)]' : 'border-[#e0e6eb] bg-white'}`}>
-    {featured && <div className="mono absolute right-0 top-0 rounded-bl-md bg-[#214f7c] px-3 py-2 text-[9px] uppercase tracking-[.14em] text-white">Current package</div>}
-    <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.17em] text-[#7e8c9a]">MAILFLOW ACCESS</div><h2 className="display mt-2 text-[22px] font-bold leading-tight text-[#1d2d40]">{item.name}</h2></div><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#e5eef6] text-[#345f87]"><CreditCard className="h-[17px] w-[17px]"/></span></div>
-    <p className="mt-4 min-h-[44px] text-[12px] leading-5 text-[#6c7b8a]">{item.description || 'A reliable subscription term for your Mailflow workspace.'}</p>
-      <div className="mt-6 border-t border-[#dfe7ed] pt-5"><div className="flex items-baseline gap-2"><span data-testid={`text-plan-price-${item.id}`} className="display text-[29px] font-bold tracking-[-.05em] text-[#1b3045]">{item.amountMinor === 0 ? 'Free' : formatMinor(item.amountMinor, item.currency)}</span><span className="text-[11px] text-[#768595]">{item.amountMinor === 0 ? 'No payment' : item.currency}</span></div><div data-testid={`text-plan-period-${item.id}`} className="mt-1 flex items-center gap-1.5 text-[11px] text-[#718192]"><CalendarClock className="h-3.5 w-3.5"/>Access for {durationLabel(item.periodDays)}</div><div data-testid={`text-plan-contact-limit-${item.id}`} className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#4b647b]"><Users className="h-3.5 w-3.5"/>Up to {item.contactLimit.toLocaleString()} contacts</div><div data-testid={`text-plan-sender-account-limit-${item.id}`} className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-[#4b647b]"><Mail className="h-3.5 w-3.5"/>Up to {item.emailAccountLimit} SMTP sender account{item.emailAccountLimit === 1 ? '' : 's'}</div></div>
-    <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled} className={`mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
-      {pending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>{item.amountMinor === 0 ? 'Activating free plan' : 'Starting secure checkout'}</> : <>{item.amountMinor === 0 ? `Activate ${item.name}` : `Choose ${item.name}`}<ArrowRight className="h-4 w-4"/></>}
+  return <article data-testid={`card-plan-${item.id}`} className={`flex min-h-[330px] flex-col rounded-lg border p-4 sm:p-5 md:p-6 ${featured ? 'border-[#224e78] bg-[#f1f6fa] shadow-[0_8px_26px_rgba(35,70,104,.09)]' : 'border-[#e0e6eb] bg-white'}`}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="mono text-[9px] uppercase tracking-[.17em] text-[#7e8c9a]">MAILFLOW ACCESS</span>
+          {featured && <span data-testid={`badge-current-package-${item.id}`} className="mono inline-flex shrink-0 items-center rounded-full border border-[#c8d8e5] bg-white/90 px-2 py-1 text-[8px] font-semibold uppercase leading-none tracking-[.08em] text-[#365b7b]">Current package</span>}
+        </div>
+        <h2 className="display mt-2 break-words text-[22px] font-bold leading-tight text-[#1d2d40]">{item.name}</h2>
+      </div>
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#e5eef6] text-[#345f87]">
+        <CreditCard className="h-[17px] w-[17px]"/>
+      </span>
+    </div>
+
+    <p className="mt-3 min-h-[44px] break-words text-[12px] leading-5 text-[#6c7b8a]">{item.description || 'A reliable subscription term for your Mailflow workspace.'}</p>
+
+    <div className="mt-auto border-t border-[#dfe7ed] pt-4">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span data-testid={`text-plan-price-${item.id}`} className="display max-w-full break-words text-[27px] font-bold tracking-[-.05em] text-[#1b3045] sm:text-[29px]">{item.amountMinor === 0 ? 'Free' : formatMinor(item.amountMinor, item.currency)}</span>
+        <span className="text-[11px] text-[#768595]">{item.amountMinor === 0 ? 'No payment' : item.currency}</span>
+      </div>
+      <div className="mt-2 grid gap-1.5">
+        <div data-testid={`text-plan-period-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] text-[#718192]">
+          <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">Access for {durationLabel(item.periodDays)}</span>
+        </div>
+        <div data-testid={`text-plan-contact-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Users className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">Up to {item.contactLimit.toLocaleString()} contacts</span>
+        </div>
+        <div data-testid={`text-plan-sender-account-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">Up to {item.emailAccountLimit} SMTP sender account{item.emailAccountLimit === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+    </div>
+
+    <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled} className={`mt-4 inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-center text-[12px] font-semibold leading-4 transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
+      {pending ? <><LoaderCircle className="h-4 w-4 shrink-0 animate-spin"/><span className="min-w-0 break-words">{item.amountMinor === 0 ? 'Activating free plan' : 'Starting secure checkout'}</span></> : <><span className="min-w-0 break-words">{item.amountMinor === 0 ? `Activate ${item.name}` : `Choose ${item.name}`}</span><ArrowRight className="h-4 w-4 shrink-0"/></>}
     </button>
   </article>;
 }
