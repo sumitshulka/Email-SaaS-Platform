@@ -3176,6 +3176,14 @@ export const GetAdminDashboardResponse = zod.object({
 /**
  * @summary List platform notifications with recipient and read counts
  */
+export const listAdminNotificationsQuerySearchMax = 160;
+
+
+
+export const ListAdminNotificationsQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminNotificationsQuerySearchMax).optional()
+})
+
 export const listAdminNotificationsResponseItemsItemRecipientCountMin = 0;
 
 export const listAdminNotificationsResponseItemsItemReadCountMin = 0;
@@ -3367,6 +3375,16 @@ export const UpdateAdminSupportTicketStatusResponse = zod.object({
   "createdAt": zod.coerce.date()
 }))
 })
+
+
+/**
+ * @summary Delete a notification after it has been expired for 90 days
+ */
+export const DeleteAdminNotificationParams = zod.object({
+  "notificationId": zod.coerce.string().uuid()
+})
+
+export const DeleteAdminNotificationResponse = zod.void()
 
 
 /**

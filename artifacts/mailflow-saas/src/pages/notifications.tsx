@@ -1,13 +1,14 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, CalendarClock, Check, CircleAlert, Clock3, Megaphone, Search, ShieldCheck, Users,
+  Bell, CalendarClock, Check, CircleAlert, Clock3, Megaphone, Plus, Search, ShieldCheck, Trash2, Users,
 } from 'lucide-react';
 import {
   getGetUserNotificationsQueryKey,
   getListAdminNotificationsQueryKey,
   getListAdminUsersQueryKey,
   useCreateAdminNotification,
+  useDeleteAdminNotification,
   useGetUserNotifications,
   useListAdminNotifications,
   useListAdminUsers,
@@ -15,6 +16,14 @@ import {
   useUpdateAdminNotificationStatus,
 } from '@workspace/api-client-react';
 import type { AdminNotification, AdminUser, UserNotification } from '@workspace/api-client-react';
+import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const errorText = (error: unknown) =>
   error && typeof error === 'object' && 'message' in error ? String(error.message) : 'The request could not be completed. Please try again.';
@@ -22,6 +31,10 @@ const errorText = (error: unknown) =>
 const dateTime = (value: string) => new Intl.DateTimeFormat(undefined, {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
 }).format(new Date(value));
+
+const NOTICE_DELETION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const noticeDeletionAvailableAt = (item: AdminNotification) =>
+  new Date(new Date(item.expiresAt).getTime() + NOTICE_DELETION_RETENTION_MS);
 
 function Notice({ children, bad = false }: { children: string; bad?: boolean }) {
   return <p role={bad ? 'alert' : 'status'} data-testid={bad ? 'status-notification-error' : 'status-notification-success'} className={`rounded-md border px-3.5 py-3 text-[12px] ${bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{children}</p>;
@@ -101,31 +114,53 @@ function StatusTag({ status, notificationId }: { status: AdminNotification['stat
 
 export default function AdminNotificationsPage() {
   const queryClient = useQueryClient();
-  const notificationsQuery = useListAdminNotifications({ query: { queryKey: getListAdminNotificationsQueryKey() } });
+  const [noticeSearch, setNoticeSearch] = useState('');
+  const [debouncedNoticeSearch, setDebouncedNoticeSearch] = useState('');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminNotification | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [formError, setFormError] = useState('');
+  const notificationParams = useMemo(() => {
+    const search = debouncedNoticeSearch.trim();
+    return search ? { search } : undefined;
+  }, [debouncedNoticeSearch]);
+  const notificationsQuery = useListAdminNotifications(notificationParams, {
+    query: {
+      queryKey: getListAdminNotificationsQueryKey(notificationParams),
+      placeholderData: previousData => previousData,
+    },
+  });
   const createNotification = useCreateAdminNotification();
+  const deleteNotification = useDeleteAdminNotification();
   const updateStatus = useUpdateAdminNotificationStatus();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [search, setSearch] = useState('');
+  const [accountSearch, setAccountSearch] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<AdminUser[]>([]);
   const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null);
-  const userParams = useMemo(() => ({ search: search.trim(), status: 'all' as const, page: 1, pageSize: 8 }), [search]);
+  const userParams = useMemo(() => ({ search: accountSearch.trim(), status: 'all' as const, page: 1, pageSize: 8 }), [accountSearch]);
   const userQuery = useListAdminUsers(userParams, {
-    query: { enabled: draft.audience === 'focused' && search.trim().length >= 2, queryKey: getListAdminUsersQueryKey(userParams) },
+    query: { enabled: isCreateOpen && draft.audience === 'focused' && accountSearch.trim().length >= 2, queryKey: getListAdminUsersQueryKey(userParams) },
   });
   const items = notificationsQuery.data?.items ?? [];
   const busy = createNotification.isPending;
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedNoticeSearch(noticeSearch.trim()), 250);
+    return () => window.clearTimeout(timeout);
+  }, [noticeSearch]);
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setNotice(null);
+    setFormError('');
     const startsAt = new Date(draft.startsAt);
     const expiresAt = new Date(draft.expiresAt);
     if (draft.audience === 'focused' && selectedUsers.length === 0) {
-      setNotice({ text: 'Choose at least one customer account for a focused notice.', bad: true });
+      setFormError('Choose at least one customer account for a focused notice.');
       return;
     }
     if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(expiresAt.getTime()) || expiresAt <= startsAt) {
-      setNotice({ text: 'Expiry must be later than the start date and time.', bad: true });
+      setFormError('Expiry must be later than the start date and time.');
       return;
     }
     createNotification.mutate({
@@ -139,9 +174,12 @@ export default function AdminNotificationsPage() {
         void queryClient.invalidateQueries({ queryKey: getListAdminNotificationsQueryKey() });
         setDraft(emptyDraft);
         setSelectedUsers([]);
+        setAccountSearch('');
+        setFormError('');
+        setIsCreateOpen(false);
         setNotice({ text: 'Platform notification created.' });
       },
-      onError: error => setNotice({ text: errorText(error), bad: true }),
+      onError: error => setFormError(errorText(error)),
     });
   };
 
@@ -155,7 +193,20 @@ export default function AdminNotificationsPage() {
 
   const addUser = (user: AdminUser) => {
     setSelectedUsers(current => current.some(selected => selected.id === user.id) ? current : [...current, user]);
-    setSearch('');
+    setAccountSearch('');
+  };
+
+  const deleteSelectedNotice = () => {
+    if (!deleteTarget) return;
+    setDeleteError('');
+    deleteNotification.mutate({ notificationId: deleteTarget.id }, {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getListAdminNotificationsQueryKey() });
+        setDeleteTarget(null);
+        setNotice({ text: 'The notice was deleted.' });
+      },
+      onError: error => setDeleteError(errorText(error)),
+    });
   };
 
   if (notificationsQuery.isLoading) return <div data-testid="loading-admin-notifications" className="space-y-5" aria-label="Loading platform notifications"><div className="h-8 w-64 animate-pulse rounded bg-[#e9eef2]"/><div className="h-64 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="h-52 animate-pulse rounded-lg bg-[#edf1f4]"/></div>;
@@ -164,37 +215,65 @@ export default function AdminNotificationsPage() {
   return <div className="fade-in space-y-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div><div className="mono mb-2 text-[10px] uppercase tracking-[.18em] text-[#75869a]">PLATFORM / CUSTOMER COMMUNICATION</div><h1 className="display text-[32px] font-bold leading-tight text-[#192a3d]">Platform notifications</h1><p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#6c7b8b]">Publish account notices with an exact audience and a clear service window.</p></div>
-      <div className="inline-flex items-center gap-2 rounded-md border border-[#dfe7ed] bg-[#f6f9fb] px-3 py-2 text-[11px] text-[#53677b]"><ShieldCheck className="h-4 w-4 text-[#3374a9]"/>Superadmin controls</div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex items-center gap-2 rounded-md border border-[#dfe7ed] bg-[#f6f9fb] px-3 py-2 text-[11px] text-[#53677b]"><ShieldCheck className="h-4 w-4 text-[#3374a9]"/>Superadmin controls</div>
+        <button type="button" data-testid="button-open-create-notification" onClick={() => { setFormError(''); setIsCreateOpen(true); }} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>Create notice</button>
+      </div>
     </header>
     {notice && <Notice bad={notice.bad}>{notice.text}</Notice>}
+    <Dialog open={isCreateOpen} onOpenChange={open => { if (!createNotification.isPending) setIsCreateOpen(open); }}>
+      <DialogContent data-testid="dialog-create-notification" className="max-h-[90vh] overflow-y-auto border border-[#dfe4ea] bg-white p-5 text-[#182333] shadow-xl sm:max-w-3xl sm:p-6">
+        <DialogHeader className="text-left">
+          <DialogTitle className="display text-[22px] font-bold text-[#172334]">Create a platform notice</DialogTitle>
+          <DialogDescription className="text-[12px] leading-5 text-[#687484]">Set the audience and service window. Notices are visible only while enabled and within that window.</DialogDescription>
+        </DialogHeader>
     <section className="overflow-hidden rounded-lg border border-[#e1e6eb] bg-white" data-testid="panel-create-notification">
-      <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6"><span className="grid h-9 w-9 place-items-center rounded-md bg-[#fff1e6] text-[#a95720]"><Megaphone className="h-[17px] w-[17px]"/></span><div><h2 className="text-[15px] font-bold text-[#1d2d40]">Compose a notice</h2><p className="mt-0.5 text-[11px] text-[#788696]">Customers see active notices at the top of their workspace dashboard.</p></div></div>
       <form onSubmit={submit} className="space-y-5 p-5 md:p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Title</span><input data-testid="input-notification-title" required maxLength={120} value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="A concise subject for customers" className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Audience</span><select data-testid="select-notification-audience" value={draft.audience} onChange={event => { setDraft(current => ({ ...current, audience: event.target.value as Draft['audience'] })); setSelectedUsers([]); }} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"><option value="broadcast">All customer accounts · broadcast</option><option value="focused">Selected customer accounts · focused</option></select></label>
         </div>
         <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Message</span><textarea data-testid="input-notification-message" required maxLength={5000} rows={4} value={draft.message} onChange={event => setDraft(current => ({ ...current, message: event.target.value }))} placeholder="Share what customers need to know…" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] leading-5 outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
-        {draft.audience === 'focused' && <div className="space-y-3 rounded-md border border-[#e1e6eb] bg-[#fafbfd] p-4" data-testid="focused-audience-picker">
+          {draft.audience === 'focused' && <div className="space-y-3 rounded-md border border-[#e1e6eb] bg-[#fafbfd] p-4" data-testid="focused-audience-picker">
           <div className="flex items-start gap-2"><Users className="mt-0.5 h-4 w-4 text-[#4c7192]"/><div><div className="text-[12px] font-semibold text-[#31475c]">Customer accounts</div><p className="mt-0.5 text-[10px] text-[#7d8996]">Search by name or email, then add each intended recipient.</p></div></div>
           {selectedUsers.length > 0 && <div className="flex flex-wrap gap-2">{selectedUsers.map(user => <span key={user.id} data-testid={`selected-notification-user-${user.id}`} className="inline-flex items-center gap-2 rounded-full border border-[#d9e4ec] bg-white px-2.5 py-1 text-[10px] font-medium text-[#36546e]">{user.firstName} {user.lastName}<button type="button" data-testid={`button-remove-notification-user-${user.id}`} aria-label={`Remove ${user.email}`} onClick={() => setSelectedUsers(current => current.filter(item => item.id !== user.id))} className="text-[#8995a1] hover:text-[#a95218]">×</button></span>)}</div>}
-          <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8994a0]"/><input data-testid="input-notification-account-search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search customer accounts" autoComplete="off" className="h-10 w-full rounded-md border border-[#d8dfe6] bg-white pl-9 pr-3 text-[12px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
-          {search.trim().length >= 2 && <div className="max-h-52 overflow-y-auto rounded-md border border-[#e1e6eb] bg-white" data-testid="notification-account-results">{userQuery.isLoading || userQuery.isFetching ? <p className="px-3 py-2.5 text-[11px] text-[#788696]">Searching accounts…</p> : userQuery.isError ? <p role="alert" className="px-3 py-2.5 text-[11px] text-[#a84926]">{errorText(userQuery.error)}</p> : userQuery.data?.items.filter(user => !selectedUsers.some(selected => selected.id === user.id)).length ? userQuery.data.items.filter(user => !selectedUsers.some(selected => selected.id === user.id)).map(user => <button type="button" key={user.id} data-testid={`button-add-notification-user-${user.id}`} onClick={() => addUser(user)} className="block w-full border-b border-[#edf0f2] px-3 py-2.5 text-left last:border-0 hover:bg-[#f7f9fa]"><span className="block text-[12px] font-semibold text-[#26374a]">{user.firstName} {user.lastName}</span><span className="mt-0.5 block text-[11px] text-[#788696]">{user.email}</span></button>) : <p className="px-3 py-2.5 text-[11px] text-[#788696]">No matching accounts.</p>}</div>}
+           <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8994a0]"/><input data-testid="input-notification-account-search" type="search" value={accountSearch} onChange={event => setAccountSearch(event.target.value)} placeholder="Search customer accounts" autoComplete="off" className="h-10 w-full rounded-md border border-[#d8dfe6] bg-white pl-9 pr-3 text-[12px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
+           {accountSearch.trim().length >= 2 && <div className="max-h-52 overflow-y-auto rounded-md border border-[#e1e6eb] bg-white" data-testid="notification-account-results">{userQuery.isLoading || userQuery.isFetching ? <p className="px-3 py-2.5 text-[11px] text-[#788696]">Searching accounts…</p> : userQuery.isError ? <p role="alert" className="px-3 py-2.5 text-[11px] text-[#a84926]">{errorText(userQuery.error)}</p> : userQuery.data?.items.filter(user => !selectedUsers.some(selected => selected.id === user.id)).length ? userQuery.data.items.filter(user => !selectedUsers.some(selected => selected.id === user.id)).map(user => <button type="button" key={user.id} data-testid={`button-add-notification-user-${user.id}`} onClick={() => addUser(user)} className="block w-full border-b border-[#edf0f2] px-3 py-2.5 text-left last:border-0 hover:bg-[#f7f9fa]"><span className="block text-[12px] font-semibold text-[#26374a]">{user.firstName} {user.lastName}</span><span className="mt-0.5 block text-[11px] text-[#788696]">{user.email}</span></button>) : <p className="px-3 py-2.5 text-[11px] text-[#788696]">No matching accounts.</p>}</div>}
         </div>}
         <div className="grid gap-4 md:grid-cols-2"><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Starts at</span><input data-testid="input-notification-starts-at" type="datetime-local" required value={draft.startsAt} onChange={event => setDraft(current => ({ ...current, startsAt: event.target.value }))} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[12px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Expires at</span><input data-testid="input-notification-expires-at" type="datetime-local" required value={draft.expiresAt} onChange={event => setDraft(current => ({ ...current, expiresAt: event.target.value }))} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[12px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label></div>
-        {(createNotification.isError || updateStatus.isError) && <p role="alert" data-testid="status-admin-notification-error" className="text-[12px] text-[#a84926]">{errorText(createNotification.error || updateStatus.error)}</p>}
+        {formError && <Notice bad>{formError}</Notice>}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-4"><p className="max-w-xl text-[10px] leading-5 text-[#788696]">Notices are visible only during their configured window. Disabling a notice stops future visibility without removing its history.</p><button data-testid="button-create-notification" type="submit" disabled={busy || !draft.title.trim() || !draft.message.trim() || (draft.audience === 'focused' && selectedUsers.length === 0)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Publishing…' : 'Create notification'}</button></div>
       </form>
     </section>
+      </DialogContent>
+    </Dialog>
 
     <section data-testid="admin-notification-list">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[10px] uppercase tracking-[.17em] text-[#8290a0]">NOTICE REGISTER</div><h2 className="display text-[22px] font-bold text-[#1d2d40]">Published notices</h2><p className="mt-1 text-[12px] text-[#748292]">Monitor status and customer read-through; enabled state can be changed at any time.</p></div><span data-testid="text-notification-total" className="rounded-full border border-[#e0e6eb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#69798a]">{items.length} total</span></div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+        <div><div className="mono mb-1 text-[10px] uppercase tracking-[.17em] text-[#8290a0]">NOTICE REGISTER</div><h2 className="display text-[22px] font-bold text-[#1d2d40]">Published notices</h2><p className="mt-1 text-[12px] text-[#748292]">Monitor status and customer read-through; enabled state can be changed at any time.</p></div>
+        <span data-testid="text-notification-total" className="rounded-full border border-[#e0e6eb] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#69798a]">{items.length} {noticeSearch.trim() ? 'matches' : 'shown'}</span>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="relative block min-w-[260px] max-w-xl flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8994a0]"/>
+          <input data-testid="input-admin-notification-search" aria-label="Search notices by title or message" type="search" maxLength={160} value={noticeSearch} onChange={event => setNoticeSearch(event.target.value)} placeholder="Search notices by title or message" autoComplete="off" className="h-10 w-full rounded-md border border-[#d8dfe6] bg-white pl-9 pr-3 text-[12px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/>
+        </label>
+        {notificationsQuery.isFetching && !notificationsQuery.isLoading && <span role="status" className="text-[11px] text-[#788696]">Searching notices…</span>}
+      </div>
       {items.length ? <div className="space-y-3">{items.map(item => {
         const readRate = item.recipientCount > 0 ? Math.round(item.readCount / item.recipientCount * 100) : 0;
+        const deletionAt = noticeDeletionAvailableAt(item);
+        const canDelete = Date.now() >= deletionAt.getTime();
         return <article key={item.id} data-testid={`admin-notification-${item.id}`} className="rounded-lg border border-[#e1e6eb] bg-white p-5 md:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1"><div className="mb-2 flex flex-wrap items-center gap-2"><StatusTag status={item.status} notificationId={item.id}/><span className="rounded-full bg-[#f0f3f5] px-2.5 py-1 text-[10px] font-semibold capitalize text-[#647383]">{item.audience}</span></div><h3 className="text-[15px] font-bold text-[#263447]">{item.title}</h3><p className="mt-1.5 whitespace-pre-wrap text-[12px] leading-5 text-[#687788]">{item.message}</p></div>
-            <button type="button" data-testid={`button-${item.enabled ? 'disable' : 'enable'}-notification-${item.id}`} onClick={() => toggleStatus(item)} disabled={updateStatus.isPending} className={`inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-[11px] font-semibold disabled:opacity-50 ${item.enabled ? 'border-[#ebc9ae] text-[#9b541e] hover:bg-[#fff7f0]' : 'border-[#cfe3d5] text-[#397451] hover:bg-[#f2f8f4]'}`}>{item.enabled ? 'Disable notice' : 'Enable notice'}</button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" data-testid={`button-${item.enabled ? 'disable' : 'enable'}-notification-${item.id}`} onClick={() => toggleStatus(item)} disabled={updateStatus.isPending} className={`inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-[11px] font-semibold disabled:opacity-50 ${item.enabled ? 'border-[#ebc9ae] text-[#9b541e] hover:bg-[#fff7f0]' : 'border-[#cfe3d5] text-[#397451] hover:bg-[#f2f8f4]'}`}>{item.enabled ? 'Disable notice' : 'Enable notice'}</button>
+              <button type="button" data-testid={`button-delete-notification-${item.id}`} aria-label={`Delete notice ${item.title}`} onClick={() => { setDeleteError(''); setDeleteTarget(item); }} disabled={!canDelete || deleteNotification.isPending} title={canDelete ? 'Delete this expired notice' : `Available ${dateTime(deletionAt.toISOString())}`} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#e1d8d4] px-3 text-[11px] font-semibold text-[#9a4b2b] hover:bg-[#fff7f3] disabled:cursor-not-allowed disabled:border-[#e5e8eb] disabled:bg-[#fafbfc] disabled:text-[#929ca7]">
+                <Trash2 className="h-3.5 w-3.5"/>Delete
+              </button>
+              {!canDelete && <span className="text-[10px] text-[#87919d]">Available {dateTime(deletionAt.toISOString())}</span>}
+            </div>
           </div>
           <div className="mt-4 grid gap-3 border-t border-[#edf0f2] pt-4 sm:grid-cols-2 lg:grid-cols-4">
             <div><div className="text-[9px] uppercase tracking-[.12em] text-[#8b96a1]">Service window</div><div className="mt-1 text-[11px] font-medium text-[#516173]">{dateTime(item.startsAt)}<br/>to {dateTime(item.expiresAt)}</div></div>
@@ -203,7 +282,20 @@ export default function AdminNotificationsPage() {
             <div><div className="text-[9px] uppercase tracking-[.12em] text-[#8b96a1]">Created</div><div className="mt-1 text-[11px] font-medium text-[#516173]">{dateTime(item.createdAt)}</div></div>
           </div>
         </article>;
-      })}</div> : <div data-testid="empty-admin-notifications" className="rounded-lg border border-dashed border-[#d5dee5] bg-[#f7f9fa] px-6 py-12 text-center"><span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-[#e8eef3] text-[#55718b]"><Megaphone className="h-5 w-5"/></span><h3 className="mt-3 text-[14px] font-semibold text-[#344b61]">No platform notices yet</h3><p className="mt-1 text-[12px] text-[#788796]">Create a broadcast or focused notice to share a time-sensitive update with customers.</p></div>}
+      })}</div> : noticeSearch.trim() ? <div data-testid="empty-admin-notification-search" className="rounded-lg border border-dashed border-[#d5dee5] bg-[#f7f9fa] px-6 py-10 text-center"><h3 className="text-[14px] font-semibold text-[#344b61]">No matching notices</h3><p className="mt-1 text-[12px] text-[#788796]">Try another title or message search.</p></div> : <div data-testid="empty-admin-notifications" className="rounded-lg border border-dashed border-[#d5dee5] bg-[#f7f9fa] px-6 py-12 text-center"><span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-[#e8eef3] text-[#55718b]"><Megaphone className="h-5 w-5"/></span><h3 className="mt-3 text-[14px] font-semibold text-[#344b61]">No platform notices yet</h3><p className="mt-1 text-[12px] text-[#788796]">Create a broadcast or focused notice to share a time-sensitive update with customers.</p></div>}
     </section>
+    <ConfirmActionDialog
+      open={!!deleteTarget}
+      title="Delete this notice?"
+      description={deleteTarget ? `"${deleteTarget.title}" expired on ${dateTime(deleteTarget.expiresAt)}. Deleting it permanently removes the notice, its recipient records, and its read history.` : 'This notice will be permanently removed.'}
+      confirmLabel="Delete notice"
+      onOpenChange={open => { if (!open && !deleteNotification.isPending) { setDeleteTarget(null); setDeleteError(''); } }}
+      onConfirm={deleteSelectedNotice}
+      pending={deleteNotification.isPending}
+      confirmDisabled={!deleteTarget || Date.now() < noticeDeletionAvailableAt(deleteTarget).getTime()}
+      testId="dialog-delete-admin-notification"
+    >
+      {deleteError && <p role="alert" className="text-[12px] text-[#a84926]">{deleteError}</p>}
+    </ConfirmActionDialog>
   </div>;
 }

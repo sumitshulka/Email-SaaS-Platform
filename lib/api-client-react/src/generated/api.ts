@@ -91,6 +91,7 @@ import type {
   HealthStatus,
   ImportContactsParams,
   ListAdminFinancePaymentsParams,
+  ListAdminNotificationsParams,
   ListAdminSupportTicketsParams,
   ListAdminUsersParams,
   ListContactOptionsParams,
@@ -6014,20 +6015,27 @@ export function useGetAdminDashboard<TData = Awaited<ReturnType<typeof getAdminD
 
 
 
-export const getListAdminNotificationsUrl = () => {
+export const getListAdminNotificationsUrl = (params?: ListAdminNotificationsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/admin/notifications`
+  return stringifiedParams.length > 0 ? `/api/admin/notifications?${stringifiedParams}` : `/api/admin/notifications`
 }
 
 /**
  * @summary List platform notifications with recipient and read counts
  */
-export const listAdminNotifications = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminNotificationsResponse> => {
+export const listAdminNotifications = async (params?: ListAdminNotificationsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotificationsResponse> => {
 
-  return customFetch<AdminNotificationsResponse>(getListAdminNotificationsUrl(),
+  return customFetch<AdminNotificationsResponse>(getListAdminNotificationsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -6040,23 +6048,23 @@ export const listAdminNotifications = async ( options?: Parameters<typeof custom
 
 
 
-export const getListAdminNotificationsQueryKey = () => {
+export const getListAdminNotificationsQueryKey = (params?: ListAdminNotificationsParams,) => {
     return [
-    `/api/admin/notifications`
+    `/api/admin/notifications`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListAdminNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminNotifications>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListAdminNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminNotifications>>, TError = ErrorType<ApiError>>(params?: ListAdminNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListAdminNotificationsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListAdminNotificationsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminNotifications>>> = ({ signal }) => listAdminNotifications({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminNotifications>>> = ({ signal }) => listAdminNotifications(params, { signal, ...requestOptions });
 
 
 
@@ -6066,19 +6074,19 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListAdminNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminNotifications>>>
-export type ListAdminNotificationsQueryError = ErrorType<unknown>
+export type ListAdminNotificationsQueryError = ErrorType<ApiError>
 
 
 /**
  * @summary List platform notifications with recipient and read counts
  */
 
-export function useListAdminNotifications<TData = Awaited<ReturnType<typeof listAdminNotifications>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useListAdminNotifications<TData = Awaited<ReturnType<typeof listAdminNotifications>>, TError = ErrorType<ApiError>>(
+ params?: ListAdminNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListAdminNotificationsQueryOptions(options)
+  const queryOptions = getListAdminNotificationsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -6516,6 +6524,80 @@ export const useUpdateAdminSupportTicketStatus = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getUpdateAdminSupportTicketStatusMutationOptions(options));
+    }
+
+export const getDeleteAdminNotificationUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/admin/notifications/${notificationId}`
+}
+
+/**
+ * @summary Delete a notification after it has been expired for 90 days
+ */
+export const deleteAdminNotification = async (notificationId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteAdminNotificationUrl(notificationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAdminNotificationMutationKey = () => ['deleteAdminNotification'] as const;
+
+export const getDeleteAdminNotificationMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminNotification>>, TError,DeleteAdminNotificationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAdminNotification>>, TError,DeleteAdminNotificationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteAdminNotificationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAdminNotification>>, DeleteAdminNotificationMutationVariables> = (props) => {
+          const {notificationId} = props ?? {};
+
+          return  deleteAdminNotification(notificationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAdminNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAdminNotification>>>
+
+    export type DeleteAdminNotificationMutationError = ErrorType<ApiError>
+    export type DeleteAdminNotificationMutationVariables = {notificationId: string}
+
+    /**
+ * @summary Delete a notification after it has been expired for 90 days
+ */
+export const useDeleteAdminNotification = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAdminNotification>>, TError,DeleteAdminNotificationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAdminNotification>>,
+        TError,
+        DeleteAdminNotificationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteAdminNotificationMutationOptions(options));
     }
 
 export const getUpdateAdminNotificationStatusUrl = (notificationId: string,) => {

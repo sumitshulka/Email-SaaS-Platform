@@ -1558,6 +1558,92 @@ describe("Platform notifications", { concurrency: false }, () => {
     });
     assert.equal(list.response.status, 403);
   });
+
+  it("searches notices and permits deletion only after 90 days expired", async () => {
+    const admin = await createUser({
+      username: "notification-retention-admin",
+      role: "SUPERADMIN",
+    });
+    const customer = await createUser({
+      username: "notification-retention-customer",
+    });
+    const adminSession = await login(admin.email);
+    const customerSession = await login(customer.email);
+    const retentionMs = 90 * 24 * 60 * 60 * 1000;
+    const oldExpiry = new Date(Date.now() - retentionMs - 60_000);
+    const recentExpiry = new Date(Date.now() - retentionMs + 60_000);
+    const createNotice = (title, expiresAt, audience, recipientUserIds) =>
+      api("/admin/notifications", {
+        method: "POST",
+        cookie: adminSession.cookie,
+        body: {
+          title,
+          message: "Notification retention test",
+          audience,
+          recipientUserIds,
+          startsAt: new Date(expiresAt.getTime() - 60 * 60_000).toISOString(),
+          expiresAt: expiresAt.toISOString(),
+        },
+      });
+    const oldNotice = await createNotice(
+      "Archive search target",
+      oldExpiry,
+      "focused",
+      [customer.id],
+    );
+    const recentNotice = await createNotice(
+      "Recent expired notice",
+      recentExpiry,
+      "broadcast",
+      [],
+    );
+    assert.equal(oldNotice.response.status, 201);
+    assert.equal(recentNotice.response.status, 201);
+    await db.insert(dbModule.platformNotificationReadsTable).values({
+      notificationId: oldNotice.body.id,
+      userId: customer.id,
+      readAt: new Date(oldExpiry.getTime() - 30 * 60_000),
+    });
+
+    const matching = await api("/admin/notifications?search=ARCHIVE", {
+      cookie: adminSession.cookie,
+    });
+    assert.equal(matching.response.status, 200);
+    assert.deepEqual(matching.body.items.map(({ id }) => id), [oldNotice.body.id]);
+
+    const unauthorized = await api(
+      `/admin/notifications/${oldNotice.body.id}`,
+      { method: "DELETE", cookie: customerSession.cookie },
+    );
+    assert.equal(unauthorized.response.status, 403);
+
+    const tooEarly = await api(
+      `/admin/notifications/${recentNotice.body.id}`,
+      { method: "DELETE", cookie: adminSession.cookie },
+    );
+    assert.equal(tooEarly.response.status, 409);
+
+    const deleted = await api(
+      `/admin/notifications/${oldNotice.body.id}`,
+      { method: "DELETE", cookie: adminSession.cookie },
+    );
+    assert.equal(deleted.response.status, 204);
+    const recipients = await db
+      .select()
+      .from(dbModule.platformNotificationRecipientsTable)
+      .where(eq(dbModule.platformNotificationRecipientsTable.notificationId, oldNotice.body.id));
+    const reads = await db
+      .select()
+      .from(dbModule.platformNotificationReadsTable)
+      .where(eq(dbModule.platformNotificationReadsTable.notificationId, oldNotice.body.id));
+    assert.deepEqual(recipients, []);
+    assert.deepEqual(reads, []);
+
+    const removedFromSearch = await api("/admin/notifications?search=archive", {
+      cookie: adminSession.cookie,
+    });
+    assert.deepEqual(removedFromSearch.body.items, []);
+  });
 });
 
 describe("Razorpay environment configuration", { concurrency: false }, () => {

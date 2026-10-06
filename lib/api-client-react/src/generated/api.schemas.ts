@@ -3097,6 +3097,13 @@ limit?: number;
 offset?: number;
 };
 
+export type ListAdminNotificationsParams = {
+/**
+ * @maxLength 160
+ */
+search?: string;
+};
+
 export type ListAdminSupportTicketsParams = {
 /**
  * @maxLength 160

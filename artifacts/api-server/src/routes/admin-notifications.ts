@@ -3,13 +3,18 @@ import {
   count,
   desc,
   eq,
+  ilike,
   inArray,
   isNull,
+  lte,
+  or,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateAdminNotificationBody,
   CreateAdminNotificationResponse,
+  DeleteAdminNotificationParams,
+  ListAdminNotificationsQueryParams,
   ListAdminNotificationsResponse,
   UpdateAdminNotificationStatusBody,
   UpdateAdminNotificationStatusParams,
@@ -25,6 +30,7 @@ import {
 import { requireSuperadmin } from "../lib/session";
 
 const router: IRouter = Router();
+const NOTICE_DELETION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 type NotificationRow = typeof platformNotificationsTable.$inferSelect;
 
@@ -92,10 +98,31 @@ async function withCounts(notifications: NotificationRow[]) {
 router.get(
   "/admin/notifications",
   requireSuperadmin,
-  async (_req, res): Promise<void> => {
+  async (req, res): Promise<void> => {
+    const parsed = ListAdminNotificationsQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Search terms must be 160 characters or fewer.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const search = parsed.data.search?.trim();
+    const pattern = search
+      ? `%${search.replace(/[\\%_]/g, "\\$&")}%`
+      : undefined;
     const notifications = await db
       .select()
       .from(platformNotificationsTable)
+      .where(
+        pattern
+          ? or(
+              ilike(platformNotificationsTable.title, pattern),
+              ilike(platformNotificationsTable.message, pattern),
+            )
+          : undefined,
+      )
       .orderBy(desc(platformNotificationsTable.createdAt))
       .limit(200);
 
@@ -199,6 +226,55 @@ router.post(
     res
       .status(201)
       .json(CreateAdminNotificationResponse.parse(summary));
+  },
+);
+
+router.delete(
+  "/admin/notifications/:notificationId",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const params = DeleteAdminNotificationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({
+        error: "Enter a valid notification ID.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const deletionCutoff = new Date(Date.now() - NOTICE_DELETION_RETENTION_MS);
+    const [deleted] = await db
+      .delete(platformNotificationsTable)
+      .where(
+        and(
+          eq(platformNotificationsTable.id, params.data.notificationId),
+          lte(platformNotificationsTable.expiresAt, deletionCutoff),
+        ),
+      )
+      .returning({ id: platformNotificationsTable.id });
+
+    if (deleted) {
+      res.sendStatus(204);
+      return;
+    }
+
+    const [existing] = await db
+      .select({ id: platformNotificationsTable.id })
+      .from(platformNotificationsTable)
+      .where(eq(platformNotificationsTable.id, params.data.notificationId))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({
+        error: "Notification not found.",
+        code: "NOTIFICATION_NOT_FOUND",
+      });
+      return;
+    }
+
+    res.status(409).json({
+      error: "A notification can be deleted after it has been expired for 90 days.",
+      code: "NOTIFICATION_RETENTION_PERIOD",
+    });
   },
 );
 

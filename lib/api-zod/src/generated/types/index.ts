@@ -145,6 +145,7 @@ export * from './listAdminFinancePaymentsParams';
 export * from './listAdminFinancePaymentsSortBy';
 export * from './listAdminFinancePaymentsSortDirection';
 export * from './listAdminFinancePaymentsStatus';
+export * from './listAdminNotificationsParams';
 export * from './listAdminSupportTicketsParams';
 export * from './listAdminSupportTicketsStatus';
 export * from './listAdminUsersParams';
