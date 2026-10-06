@@ -24,6 +24,7 @@ export * from "./audit";
 export * from "./billing";
 export * from "./companies";
 export * from "./contacts";
+export * from "./contact-lead-status-updates";
 export * from "./contact-field-options";
 export * from "./contact-segments";
 export * from "./sending";

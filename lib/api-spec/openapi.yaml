@@ -1247,6 +1247,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/lead-status-updates:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: listContactLeadStatusUpdates
+      tags: [sending]
+      summary: List lead status changes for a tenant contact
+      responses:
+        "200":
+          description: Lead status changes ordered from newest to oldest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactLeadStatusUpdate"
+        "404":
+          description: Contact not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contact-lists:
     get:
       operationId: listContactLists
@@ -3132,6 +3159,16 @@ components:
         messageId: { type: ["string", "null"] }
         smtpResponse: { type: ["string", "null"] }
       required: [id, campaignId, campaignName, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
+    ContactLeadStatusUpdate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        previousStatus: { type: ["string", "null"], maxLength: 80 }
+        newStatus: { type: ["string", "null"], maxLength: 80 }
+        reason: { type: string, maxLength: 1000 }
+        changedByName: { type: string, maxLength: 161 }
+        changedAt: { type: string, format: date-time }
+      required: [id, previousStatus, newStatus, reason, changedByName, changedAt]
     ContactDirectoryItem:
       allOf:
         - $ref: "#/components/schemas/Contact"
@@ -3236,6 +3273,10 @@ components:
         timeZone: { type: ["string", "null"], maxLength: 100 }
         lifecycleStage: { type: ["string", "null"], maxLength: 80 }
         leadStatus: { type: ["string", "null"], maxLength: 80 }
+        leadStatusChangeReason:
+          type: string
+          maxLength: 1000
+          description: Required when leadStatus changes from its saved value.
         leadSource: { type: ["string", "null"], maxLength: 120 }
         interests: { type: ["string", "null"], maxLength: 10000 }
         goals: { type: ["string", "null"], maxLength: 10000 }

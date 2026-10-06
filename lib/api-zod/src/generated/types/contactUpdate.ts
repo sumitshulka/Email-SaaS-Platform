@@ -109,6 +109,11 @@ export interface ContactUpdate {
      */
   leadStatus?: string | null;
   /**
+     * Required when leadStatus changes from its saved value.
+     * @maxLength 1000
+     */
+  leadStatusChangeReason?: string;
+  /**
      * @maxLength 120
      * @nullable
      */

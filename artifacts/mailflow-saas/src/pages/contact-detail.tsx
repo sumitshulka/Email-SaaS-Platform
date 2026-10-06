@@ -3,10 +3,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
-  useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCompanies, useListContactLists, useUpdateContact,
+  getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactLeadStatusUpdatesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
+  useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useUpdateContact,
 } from '@workspace/api-client-react';
-import type { Company, Contact, ContactEmailHistoryItem, ContactUpdate } from '@workspace/api-client-react';
+import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 import { ContactFieldSelect } from '@/components/contact-field-select';
 import { ContactReportEvidence } from '@/components/delivery-evidence';
@@ -166,6 +166,46 @@ function ContactEmailHistorySection({ contactId, email }: { contactId: string; e
   </Section>;
 }
 
+function ContactLeadStatusUpdatesSection({ contactId }: { contactId: string }) {
+  const query = useListContactLeadStatusUpdates(contactId, {
+    query: {
+      enabled: !!contactId,
+      queryKey: getListContactLeadStatusUpdatesQueryKey(contactId),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
+
+  return <Section title="Lead Status Updates" eyebrow="STATUS / REASON HISTORY" testId="section-contact-lead-status-updates">
+    <p className="mb-4 text-[11px] leading-5 text-[#7c8794]">Every saved lead status change is recorded with its reason, who made it, and when.</p>
+    {query.isError && !query.data ? <div role="alert" data-testid="status-contact-lead-status-updates-error" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4">
+      <div><p className="text-[12px] font-semibold text-[#99501e]">We couldn’t load lead status updates.</p><p className="mt-1 text-[11px] text-[#93694c]">The contact remains unchanged. Retry to load the history.</p></div>
+      <button type="button" data-testid="button-retry-contact-lead-status-updates" onClick={() => void query.refetch()} disabled={query.isFetching} className="inline-flex min-h-9 items-center justify-center rounded-md border border-[#e8c5a8] bg-white px-3 text-[11px] font-semibold text-[#94501f] hover:bg-[#fff7f0] disabled:opacity-50">{query.isFetching ? 'Retrying…' : 'Retry'}</button>
+    </div> : query.isLoading ? <div aria-label="Loading lead status updates" data-testid="loading-contact-lead-status-updates" className="space-y-3">
+      {[0, 1].map(item => <div key={item} className="h-24 animate-pulse rounded-lg border border-[#e8ecef] bg-[#f6f8f9]"/> )}
+    </div> : query.data?.length ? <div>
+      {query.isError && <div role="status" data-testid="status-contact-lead-status-updates-stale" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[11px] text-[#99501e]"><span>Couldn’t refresh. Showing the latest status history already loaded.</span><button type="button" data-testid="button-retry-contact-lead-status-updates-stale" onClick={() => void query.refetch()} className="font-semibold underline underline-offset-2">Retry</button></div>}
+      <ol data-testid="list-contact-lead-status-updates" className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
+        {query.data.map((update: ContactLeadStatusUpdate) => <li key={update.id} data-testid={`item-contact-lead-status-update-${update.id}`} className="rounded-lg border border-[#e5e9ed] bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div data-testid={`text-contact-lead-status-transition-${update.id}`} className="flex items-center gap-2 text-[12px] font-semibold text-[#26364a]">
+              <span className="rounded-full bg-[#f0f2f4] px-2.5 py-1 text-[#66717e]">{update.previousStatus || 'Not set'}</span>
+              <span aria-hidden="true" className="text-[#98a2ae]">→</span>
+              <span className="rounded-full bg-[#edf4fc] px-2.5 py-1 text-[#245b9b]">{update.newStatus || 'Not set'}</span>
+            </div>
+            <time data-testid={`text-contact-lead-status-date-${update.id}`} dateTime={update.changedAt} className="text-[10px] text-[#758293]">{date(update.changedAt)}</time>
+          </div>
+          <p data-testid={`text-contact-lead-status-reason-${update.id}`} className="mt-3 whitespace-pre-wrap break-words text-[12px] leading-5 text-[#4e5d6e]">{update.reason}</p>
+          <p data-testid={`text-contact-lead-status-user-${update.id}`} className="mt-2 border-t border-[#edf0f2] pt-2 text-[10px] text-[#87919d]">Changed by <span className="font-semibold text-[#536477]">{update.changedByName}</span></p>
+        </li>)}
+      </ol>
+    </div> : <div data-testid="empty-contact-lead-status-updates" className="rounded-lg border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-8 text-center">
+      <div className="text-[13px] font-semibold text-[#26364a]">No lead status changes yet</div>
+      <p className="mt-1 text-[11px] text-[#738091]">Changes will appear here after a status is updated and saved.</p>
+    </div>}
+  </Section>;
+}
+
 export function ContactDetailPage() {
   const params = useParams<{ contactId: string }>();
   const contactId = params.contactId || '';
@@ -183,6 +223,8 @@ export function ContactDetailPage() {
   const [companyChoice, setCompanyChoice] = useState('');
   const [replacement, setReplacement] = useState<CompanyLinkReplacement | null>(null);
   const [companyNotice, setCompanyNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [leadStatusChangeReason, setLeadStatusChangeReason] = useState('');
+  const [leadStatusReasonError, setLeadStatusReasonError] = useState(false);
   const contact = query.data as Contact | undefined;
 
   // Reinitialize when a contact is first loaded or the server returns a newer revision.
@@ -198,16 +240,26 @@ export function ContactDetailPage() {
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!contact || !form) return;
+    const leadStatusChanged = nullableValue(form.leadStatus) !== contact.leadStatus;
+    const reason = leadStatusChangeReason.trim();
+    if (leadStatusChanged && !reason) {
+      setLeadStatusReasonError(true);
+      return;
+    }
     const data: ContactUpdate = {
       email: form.email,
       firstName: form.firstName,
       lastName: form.lastName,
       ...Object.fromEntries(nullableFields.map(key => [key, nullableValue(form[key])])),
+      ...(leadStatusChanged ? { leadStatusChangeReason: reason } : {}),
       subscribed: form.subscribed,
     };
     update.mutate({ contactId: contact.id, data }, {
       onSuccess: () => {
+        setLeadStatusChangeReason('');
+        setLeadStatusReasonError(false);
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
+        void qc.invalidateQueries({ queryKey: getListContactLeadStatusUpdatesQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
         void qc.invalidateQueries({ queryKey: getListUnlinkedCompanyProfilesQueryKey() });
         setNotice({ kind: 'success', text: 'Contact changes saved. This save does not change the company association.' });
@@ -228,6 +280,7 @@ export function ContactDetailPage() {
   const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
   const selectedCompany = companiesQuery.data?.companies.find(item => item.id === companyChoice);
   const setString = (key: Exclude<keyof Editable, 'subscribed'>) => (value: string) => change(key, value);
+  const leadStatusChanged = nullableValue(form.leadStatus) !== contact.leadStatus;
   const toggleProfileEdit = (key: NullableField) => setEditingProfiles(current => {
     const next = new Set(current);
     if (next.has(key)) next.delete(key);
@@ -314,7 +367,12 @@ export function ContactDetailPage() {
         <Section title="Audience and qualification" eyebrow="SEGMENT / CONTEXT">
           <div className="grid gap-4 sm:grid-cols-2">
             <ContactFieldSelect field="lifecycleStage" title="Lifecycle stage" value={form.lifecycleStage} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('lifecycleStage')} testId="input-detail-lifecycle"/>
-            <ContactFieldSelect field="leadStatus" title="Lead status" value={form.leadStatus} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('leadStatus')} testId="input-detail-lead-status"/>
+            <ContactFieldSelect field="leadStatus" title="Lead status" value={form.leadStatus} options={fieldOptionsQuery.data?.options ?? []} onChange={value => { setLeadStatusReasonError(false); setString('leadStatus')(value); }} testId="input-detail-lead-status"/>
+            {leadStatusChanged && <label className="block sm:col-span-2">
+              <span className={label}>Reason for status change <span className="text-[#a95218]">(required)</span></span>
+              <textarea data-testid="input-detail-lead-status-reason" maxLength={1000} value={leadStatusChangeReason} onChange={event => { setLeadStatusChangeReason(event.target.value); setLeadStatusReasonError(false); }} aria-invalid={leadStatusReasonError} aria-describedby={leadStatusReasonError ? 'detail-lead-status-reason-error' : undefined} className="min-h-[84px] w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]" placeholder="Why is this lead status changing?"/>
+              {leadStatusReasonError && <span id="detail-lead-status-reason-error" role="alert" className="mt-1 block text-[11px] text-[#a95218]">Enter a reason before saving this status change.</span>}
+            </label>}
             <ContactFieldSelect field="leadSource" title="Lead source" value={form.leadSource} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('leadSource')} testId="input-detail-lead-source"/>
             <TextAreaField title="Interests" value={form.interests} onChange={setString('interests')} testId="input-detail-interests"/>
             <TextAreaField title="Goals" value={form.goals} onChange={setString('goals')} testId="input-detail-goals"/>
@@ -390,6 +448,9 @@ export function ContactDetailPage() {
         </div>
       </div>
     </form>
+    <div className="mt-5">
+      <ContactLeadStatusUpdatesSection contactId={contact.id}/>
+    </div>
     <div className="mt-5">
       <ContactEmailHistorySection contactId={contact.id} email={contact.email}/>
     </div>

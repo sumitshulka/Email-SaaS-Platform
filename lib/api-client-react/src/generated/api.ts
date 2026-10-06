@@ -71,6 +71,7 @@ import type {
   ContactImportResponse,
   ContactImportResult,
   ContactInput,
+  ContactLeadStatusUpdate,
   ContactList,
   ContactListInput,
   ContactListUpdate,
@@ -4419,6 +4420,83 @@ export function useGetContactEmailHistory<TData = Awaited<ReturnType<typeof getC
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetContactEmailHistoryQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListContactLeadStatusUpdatesUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/lead-status-updates`
+}
+
+/**
+ * @summary List lead status changes for a tenant contact
+ */
+export const listContactLeadStatusUpdates = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContactLeadStatusUpdate[]> => {
+
+  return customFetch<ContactLeadStatusUpdate[]>(getListContactLeadStatusUpdatesUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactLeadStatusUpdatesQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/lead-status-updates`
+    ] as const;
+    }
+
+
+export const getListContactLeadStatusUpdatesQueryOptions = <TData = Awaited<ReturnType<typeof listContactLeadStatusUpdates>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactLeadStatusUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactLeadStatusUpdatesQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactLeadStatusUpdates>>> = ({ signal }) => listContactLeadStatusUpdates(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactLeadStatusUpdates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactLeadStatusUpdatesQueryResult = NonNullable<Awaited<ReturnType<typeof listContactLeadStatusUpdates>>>
+export type ListContactLeadStatusUpdatesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List lead status changes for a tenant contact
+ */
+
+export function useListContactLeadStatusUpdates<TData = Awaited<ReturnType<typeof listContactLeadStatusUpdates>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactLeadStatusUpdates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactLeadStatusUpdatesQueryOptions(contactId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

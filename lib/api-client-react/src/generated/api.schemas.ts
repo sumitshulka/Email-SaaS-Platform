@@ -1255,6 +1255,25 @@ export interface ContactEmailHistoryItem {
   smtpResponse: string | null;
 }
 
+export interface ContactLeadStatusUpdate {
+  id: string;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  previousStatus: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  newStatus: string | null;
+  /** @maxLength 1000 */
+  reason: string;
+  /** @maxLength 161 */
+  changedByName: string;
+  changedAt: string;
+}
+
 export type ContactDirectoryItem = Contact & ({
   lastEmail: ContactEmailHistoryItem | null;
 });
@@ -1544,6 +1563,11 @@ export interface ContactUpdate {
      * @nullable
      */
   leadStatus?: string | null;
+  /**
+     * Required when leadStatus changes from its saved value.
+     * @maxLength 1000
+     */
+  leadStatusChangeReason?: string;
   /**
      * @maxLength 120
      * @nullable

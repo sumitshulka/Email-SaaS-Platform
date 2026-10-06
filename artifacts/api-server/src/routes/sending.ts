@@ -37,6 +37,8 @@ import {
   GetContactResponse,
   GetContactEmailHistoryParams,
   GetContactEmailHistoryResponse,
+  ListContactLeadStatusUpdatesParams,
+  ListContactLeadStatusUpdatesResponse,
   GetContactFilterOptionsResponse,
   DeleteCampaignParams,
   DeleteCampaignResponse,
@@ -86,6 +88,7 @@ import {
   companiesTable,
   contactFieldKeys,
   contactFieldOptionsTable,
+  contactLeadStatusUpdatesTable,
   contactListMembersTable,
   contactListsTable,
   contactSegmentsTable,
@@ -1911,6 +1914,54 @@ router.get(
 );
 
 router.get(
+  "/contacts/:contactId/lead-status-updates",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = ListContactLeadStatusUpdatesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid contact identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [contact] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
+      return;
+    }
+    const updates = await db
+      .select({
+        id: contactLeadStatusUpdatesTable.id,
+        previousStatus: contactLeadStatusUpdatesTable.previousStatus,
+        newStatus: contactLeadStatusUpdatesTable.newStatus,
+        reason: contactLeadStatusUpdatesTable.reason,
+        changedByName: contactLeadStatusUpdatesTable.changedByName,
+        changedAt: contactLeadStatusUpdatesTable.changedAt,
+      })
+      .from(contactLeadStatusUpdatesTable)
+      .where(
+        and(
+          eq(contactLeadStatusUpdatesTable.userId, userId),
+          eq(contactLeadStatusUpdatesTable.contactId, contact.id),
+        ),
+      )
+      .orderBy(
+        desc(contactLeadStatusUpdatesTable.changedAt),
+        desc(contactLeadStatusUpdatesTable.id),
+      );
+    res.json(ListContactLeadStatusUpdatesResponse.parse(updates));
+  },
+);
+
+router.get(
   "/contacts/:contactId/email-history",
   requireUserRole,
   async (req, res): Promise<void> => {
@@ -2418,7 +2469,12 @@ router.patch(
 
     const updateResult = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
-        .select({ id: usersTable.id })
+        .select({
+          id: usersTable.id,
+          username: usersTable.username,
+          firstName: usersTable.firstName,
+          lastName: usersTable.lastName,
+        })
         .from(usersTable)
         .where(eq(usersTable.id, userId))
         .limit(1)
@@ -2435,6 +2491,14 @@ router.patch(
         )
         .for("update");
       if (!existing) return { kind: "not_found" as const };
+      const leadStatusChanged =
+        parsed.data.leadStatus !== undefined &&
+        optionalContactValue(parsed.data.leadStatus) !== existing.leadStatus;
+      const leadStatusChangeReason =
+        parsed.data.leadStatusChangeReason?.trim() ?? "";
+      if (leadStatusChanged && !leadStatusChangeReason) {
+        return { kind: "lead_status_reason_required" as const };
+      }
       const optionSet = await getTenantContactOptionSet(tx, userId);
       const optionIssue = contactFieldValueIssue(
         parsed.data as Record<string, unknown>,
@@ -2572,6 +2636,19 @@ router.patch(
         )
         .returning();
       if (!updated) return { kind: "not_found" as const };
+      if (leadStatusChanged) {
+        await tx.insert(contactLeadStatusUpdatesTable).values({
+          userId,
+          contactId: updated.id,
+          previousStatus: existing.leadStatus,
+          newStatus: updated.leadStatus,
+          reason: leadStatusChangeReason,
+          changedByUserId: lockedUser.id,
+          changedByName:
+            [lockedUser.firstName, lockedUser.lastName].filter(Boolean).join(" ") ||
+            lockedUser.username,
+        });
+      }
       if (parsed.data.listIds !== undefined) {
         await tx
           .delete(contactListMembersTable)
@@ -2617,6 +2694,13 @@ router.patch(
         campaignIds: suppressed.map((recipient) => recipient.campaignId),
       };
     });
+    if (updateResult.kind === "lead_status_reason_required") {
+      res.status(400).json({
+        error: "Enter a reason before changing this contact's lead status.",
+        code: "LEAD_STATUS_CHANGE_REASON_REQUIRED",
+      });
+      return;
+    }
     if (updateResult.kind === "invalid_contact_field") {
       res.status(400).json({
         error: updateResult.issue.message,

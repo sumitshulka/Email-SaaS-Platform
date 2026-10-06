@@ -2171,6 +2171,8 @@ export const updateContactBodyLifecycleStageMax = 80;
 
 export const updateContactBodyLeadStatusMax = 80;
 
+export const updateContactBodyLeadStatusChangeReasonMax = 1000;
+
 export const updateContactBodyLeadSourceMax = 120;
 
 export const updateContactBodyInterestsMax = 10000;
@@ -2228,6 +2230,7 @@ export const UpdateContactBody = zod.object({
   "timeZone": zod.string().max(updateContactBodyTimeZoneMax).nullish(),
   "lifecycleStage": zod.string().max(updateContactBodyLifecycleStageMax).nullish(),
   "leadStatus": zod.string().max(updateContactBodyLeadStatusMax).nullish(),
+  "leadStatusChangeReason": zod.string().max(updateContactBodyLeadStatusChangeReasonMax).optional().describe('Required when leadStatus changes from its saved value.'),
   "leadSource": zod.string().max(updateContactBodyLeadSourceMax).nullish(),
   "interests": zod.string().max(updateContactBodyInterestsMax).nullish(),
   "goals": zod.string().max(updateContactBodyGoalsMax).nullish(),
@@ -2431,6 +2434,34 @@ export const GetContactEmailHistoryResponseItem = zod.object({
   "smtpResponse": zod.string().nullable()
 })
 export const GetContactEmailHistoryResponse = zod.array(GetContactEmailHistoryResponseItem)
+
+
+/**
+ * @summary List lead status changes for a tenant contact
+ */
+export const ListContactLeadStatusUpdatesParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const listContactLeadStatusUpdatesResponsePreviousStatusMax = 80;
+
+export const listContactLeadStatusUpdatesResponseNewStatusMax = 80;
+
+export const listContactLeadStatusUpdatesResponseReasonMax = 1000;
+
+export const listContactLeadStatusUpdatesResponseChangedByNameMax = 161;
+
+
+
+export const ListContactLeadStatusUpdatesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "previousStatus": zod.string().max(listContactLeadStatusUpdatesResponsePreviousStatusMax).nullable(),
+  "newStatus": zod.string().max(listContactLeadStatusUpdatesResponseNewStatusMax).nullable(),
+  "reason": zod.string().max(listContactLeadStatusUpdatesResponseReasonMax),
+  "changedByName": zod.string().max(listContactLeadStatusUpdatesResponseChangedByNameMax),
+  "changedAt": zod.coerce.date()
+})
+export const ListContactLeadStatusUpdatesResponse = zod.array(ListContactLeadStatusUpdatesResponseItem)
 
 
 /**

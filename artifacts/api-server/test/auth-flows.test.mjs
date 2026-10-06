@@ -316,6 +316,18 @@ memory.public.none(`
     UNIQUE (id, user_id),
     FOREIGN KEY (company_id, user_id) REFERENCES companies(id, user_id) ON DELETE RESTRICT
   );
+  CREATE TABLE contact_lead_status_updates (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    contact_id uuid NOT NULL,
+    previous_status varchar(80),
+    new_status varchar(80),
+    reason text NOT NULL,
+    changed_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    changed_by_name varchar(161) NOT NULL,
+    changed_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (contact_id, user_id) REFERENCES contacts(id, user_id) ON DELETE CASCADE
+  );
   CREATE TABLE contact_field_options (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1839,6 +1851,129 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(deleted.response.status, 204);
     const ownerAfterDelete = await api("/contact-segments", { cookie: owner.cookie });
     assert.deepEqual(ownerAfterDelete.body, []);
+  });
+
+  it("requires a reason and records tenant-scoped contact lead status history", async () => {
+    const owner = await loggedInUser({ username: "lead-history-owner" });
+    const other = await loggedInUser({ username: "lead-history-other" });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        name: "Maya Chen",
+        firstName: "Maya",
+        lastName: "Chen",
+        email: "maya.chen@lead-history.test",
+        leadStatus: "New",
+      })
+      .returning();
+    await db.insert(dbModule.contactFieldOptionsTable).values([
+      {
+        userId: owner.user.id,
+        fieldKey: "leadStatus",
+        value: "New",
+        normalizedValue: "new",
+      },
+      {
+        userId: owner.user.id,
+        fieldKey: "leadStatus",
+        value: "Qualified",
+        normalizedValue: "qualified",
+      },
+      {
+        userId: owner.user.id,
+        fieldKey: "leadStatus",
+        value: "Customer",
+        normalizedValue: "customer",
+      },
+    ]);
+
+    const missingReason = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { leadStatus: "Qualified" },
+    });
+    assert.equal(missingReason.response.status, 400);
+    assert.equal(missingReason.body.code, "LEAD_STATUS_CHANGE_REASON_REQUIRED");
+
+    const whitespaceReason = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { leadStatus: "Qualified", leadStatusChangeReason: "   " },
+    });
+    assert.equal(whitespaceReason.response.status, 400);
+    assert.equal(whitespaceReason.body.code, "LEAD_STATUS_CHANGE_REASON_REQUIRED");
+
+    const qualified = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        leadStatus: "Qualified",
+        leadStatusChangeReason: "Requested a product demonstration.",
+      },
+    });
+    assert.equal(qualified.response.status, 200, JSON.stringify(qualified.body));
+    assert.equal(qualified.body.leadStatus, "Qualified");
+
+    const noOp = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { leadStatus: "Qualified" },
+    });
+    assert.equal(noOp.response.status, 200, JSON.stringify(noOp.body));
+
+    const customer = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        leadStatus: "Customer",
+        leadStatusChangeReason: "Converted after a successful trial.",
+      },
+    });
+    assert.equal(customer.response.status, 200, JSON.stringify(customer.body));
+    assert.equal(customer.body.leadStatus, "Customer");
+
+    const history = await api(`/contacts/${contact.id}/lead-status-updates`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(history.response.status, 200, JSON.stringify(history.body));
+    assert.equal(history.body.length, 2);
+    assert.deepEqual(
+      history.body.map(({ previousStatus, newStatus, reason }) => ({
+        previousStatus,
+        newStatus,
+        reason,
+      })),
+      [
+        {
+          previousStatus: "Qualified",
+          newStatus: "Customer",
+          reason: "Converted after a successful trial.",
+        },
+        {
+          previousStatus: "New",
+          newStatus: "Qualified",
+          reason: "Requested a product demonstration.",
+        },
+      ],
+    );
+    assert.equal(
+      history.body[0].changedByName,
+      [owner.user.firstName, owner.user.lastName].filter(Boolean).join(" ") ||
+        owner.user.username,
+    );
+    assert.ok(Number.isFinite(Date.parse(history.body[0].changedAt)));
+
+    const currentContact = await api(`/contacts/${contact.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(currentContact.body.leadStatus, "Customer");
+
+    const otherTenantHistory = await api(
+      `/contacts/${contact.id}/lead-status-updates`,
+      { cookie: other.cookie },
+    );
+    assert.equal(otherTenantHistory.response.status, 404);
   });
 
   it("assigns CSV imports to a tenant-owned list and preserves quota and tenant isolation", async () => {

@@ -105,6 +105,7 @@ export * from './contactImportResponse';
 export * from './contactImportResult';
 export * from './contactImportRow';
 export * from './contactInput';
+export * from './contactLeadStatusUpdate';
 export * from './contactList';
 export * from './contactListInput';
 export * from './contactListUpdate';
