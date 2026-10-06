@@ -1,8 +1,10 @@
-import { and, desc, eq, gt, isNull, lte } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, notInArray } from "drizzle-orm";
 import {
   db,
+  emailCampaignsTable,
   paymentsTable,
   subscriptionPackagesTable,
+  tenantSendingConfigurationTable,
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
@@ -19,6 +21,7 @@ export function serializePackage(pkg: PackageRow) {
     currency: pkg.currency,
     periodDays: pkg.periodDays,
     contactLimit: pkg.contactLimit,
+    emailAccountLimit: pkg.emailAccountLimit,
     active: pkg.active,
     createdAt: pkg.createdAt.toISOString(),
     updatedAt: pkg.updatedAt.toISOString(),
@@ -50,6 +53,7 @@ function getSubscriptionTerm(
 }
 
 export async function getCurrentSubscriptionForUser(userId: string) {
+  await applyDueEmailAccountRetention(userId);
   const now = new Date();
   const [current] = await db
     .select({
@@ -104,6 +108,74 @@ export async function getCurrentSubscriptionForUser(userId: string) {
       status,
     ),
   };
+}
+
+async function applyDueEmailAccountRetention(userId: string): Promise<void> {
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .for("update");
+    const [current] = await tx
+      .select({ subscription: userSubscriptionsTable, pkg: subscriptionPackagesTable })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, userId),
+          eq(userSubscriptionsTable.status, "active"),
+          lte(userSubscriptionsTable.startsAt, now),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1)
+      .for("update");
+    const keepIds = current?.subscription.senderAccountIdsToKeep;
+    if (!current || keepIds === null) return;
+
+    const accounts = await tx
+      .select({ id: tenantSendingConfigurationTable.id })
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, userId));
+    const removedIds = accounts
+      .map((account) => account.id)
+      .filter((id) => !keepIds.includes(id));
+    if (removedIds.length > 0) {
+      const [campaignInUse] = await tx
+        .select({ id: emailCampaignsTable.id })
+        .from(emailCampaignsTable)
+        .where(
+          and(
+            eq(emailCampaignsTable.userId, userId),
+            inArray(emailCampaignsTable.senderAccountId, removedIds),
+            inArray(emailCampaignsTable.status, ["queued", "sending"]),
+          ),
+        )
+        .limit(1);
+      if (campaignInUse) return;
+      const deleteAccounts = tx.delete(tenantSendingConfigurationTable);
+      if (keepIds.length === 0) {
+        await deleteAccounts.where(eq(tenantSendingConfigurationTable.userId, userId));
+      } else {
+        await deleteAccounts.where(
+          and(
+            eq(tenantSendingConfigurationTable.userId, userId),
+            notInArray(tenantSendingConfigurationTable.id, keepIds),
+          ),
+        );
+      }
+    }
+    await tx
+      .update(userSubscriptionsTable)
+      .set({ senderAccountIdsToKeep: null })
+      .where(eq(userSubscriptionsTable.id, current.subscription.id));
+  });
 }
 
 export async function activateCapturedPayment(input: {
@@ -198,6 +270,7 @@ export async function activateCapturedPayment(input: {
         status: "active",
         startsAt,
         endsAt,
+        senderAccountIdsToKeep: payment.senderAccountIdsToKeep,
       })
       .returning();
     await tx
@@ -276,6 +349,7 @@ export async function grantAdminGiftSubscription(input: {
 export async function activateFreePackageForUser(input: {
   userId: string;
   packageId: string;
+  senderAccountIdsToKeep?: string[];
 }) {
   return db.transaction(async (tx) => {
     const [user] = await tx
@@ -305,6 +379,48 @@ export async function activateFreePackageForUser(input: {
       .limit(1)
       .for("update");
     if (!pkg) return null;
+    const senderAccountIdsToKeep = input.senderAccountIdsToKeep;
+    const ownedAccounts = await tx
+      .select({ id: tenantSendingConfigurationTable.id })
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, user.id));
+    const needsRetention = ownedAccounts.length > pkg.emailAccountLimit;
+    if (needsRetention && senderAccountIdsToKeep === undefined) {
+      throw new Error("Choose which SMTP sender accounts to retain for this package.");
+    }
+    if (senderAccountIdsToKeep !== undefined) {
+      const ownedIds = new Set(ownedAccounts.map((account) => account.id));
+      if (
+        new Set(senderAccountIdsToKeep).size !== senderAccountIdsToKeep.length ||
+        senderAccountIdsToKeep.some((accountId) => !ownedIds.has(accountId)) ||
+        senderAccountIdsToKeep.length > pkg.emailAccountLimit ||
+        (needsRetention &&
+          senderAccountIdsToKeep.length !== pkg.emailAccountLimit)
+      ) {
+        throw new Error("Choose the SMTP sender accounts allowed by this package.");
+      }
+      if (needsRetention) {
+        const removedIds = ownedAccounts
+          .map((account) => account.id)
+          .filter((accountId) => !senderAccountIdsToKeep.includes(accountId));
+        if (removedIds.length > 0) {
+          const [campaignInUse] = await tx
+            .select({ id: emailCampaignsTable.id })
+            .from(emailCampaignsTable)
+            .where(
+              and(
+                eq(emailCampaignsTable.userId, user.id),
+                inArray(emailCampaignsTable.senderAccountId, removedIds),
+                inArray(emailCampaignsTable.status, ["queued", "sending"]),
+              ),
+            )
+            .limit(1);
+          if (campaignInUse) {
+            throw new Error("Finish or reassign active campaigns before removing their SMTP sender accounts.");
+          }
+        }
+      }
+    }
 
     const now = new Date();
     const [existing] = await tx
@@ -350,6 +466,9 @@ export async function activateFreePackageForUser(input: {
         status: "active",
         startsAt,
         endsAt,
+        senderAccountIdsToKeep: needsRetention
+          ? senderAccountIdsToKeep ?? null
+          : null,
       })
       .returning();
     return serializeSubscription(subscription!, pkg);

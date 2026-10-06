@@ -8,4 +8,5 @@
 
 export interface ActivateFreeSubscriptionInput {
   packageId: string;
+  senderAccountIdsToKeep?: string[];
 }

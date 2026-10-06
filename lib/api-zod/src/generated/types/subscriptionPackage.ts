@@ -19,6 +19,8 @@ export interface SubscriptionPackage {
   periodDays: number;
   /** @minimum 0 */
   contactLimit: number;
+  /** @minimum 0 */
+  emailAccountLimit: number;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

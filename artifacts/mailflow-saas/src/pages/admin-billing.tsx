@@ -29,11 +29,12 @@ type PackageDraft = {
   currency: string;
   periodDays: string;
   contactLimit: string;
+  emailAccountLimit: string;
   active: boolean;
 };
 
 const blankDraft: PackageDraft = {
-  name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', active: true,
+  name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -126,7 +127,7 @@ export default function AdminBillingPage() {
       amount: pkg.amountMinor === 0 ? '0' : (pkg.amountMinor / (10 ** (new Intl.NumberFormat(undefined, { style: 'currency', currency: pkg.currency }).resolvedOptions().maximumFractionDigits ?? 2))).toString(),
       free: pkg.amountMinor === 0,
       currency: pkg.currency, periodDays: String(pkg.periodDays),
-      contactLimit: String(pkg.contactLimit), active: pkg.active,
+      contactLimit: String(pkg.contactLimit), emailAccountLimit: String(pkg.emailAccountLimit), active: pkg.active,
     });
     setNotice(null);
   };
@@ -137,7 +138,7 @@ export default function AdminBillingPage() {
     const payload: SubscriptionPackageInput = {
       name: draft.name.trim(), description: draft.description.trim(),
       amountMinor: draft.free ? 0 : inputMinor(draft.amount, currency), currency,
-      periodDays: Number(draft.periodDays), contactLimit: Number(draft.contactLimit),
+      periodDays: Number(draft.periodDays), contactLimit: Number(draft.contactLimit), emailAccountLimit: Number(draft.emailAccountLimit),
       active: draft.active,
     };
     const isFree = draft.free;
@@ -372,13 +373,14 @@ export default function AdminBillingPage() {
             <Field label="Currency code" value={draft.currency} onChange={currency => setDraft(d => ({ ...d, currency: currency.toUpperCase() }))} testId="input-package-currency" placeholder="INR" hint="Three-letter ISO 4217 code."/>
              <Field label="Term length (days)" value={draft.periodDays} onChange={periodDays => setDraft(d => ({ ...d, periodDays }))} testId="input-package-period-days" type="number" step="1" placeholder="30"/>
             <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
+            <Field label="SMTP sender accounts" value={draft.emailAccountLimit} onChange={emailAccountLimit => setDraft(d => ({ ...d, emailAccountLimit }))} testId="input-package-email-account-limit" type="number" step="1" min={0} max={100} hint="Maximum SMTP accounts users can set up for campaign sending."/>
           </div>
           <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>Free package · 0 price, no Razorpay order</label>
           {hasOtherFreePackage && <p className="-mt-2 text-[11px] text-[#7b8793]">A free package already exists. Edit it or change its price before creating another.</p>}
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Description</span><textarea data-testid="input-package-description" value={draft.description} onChange={event => setDraft(d => ({ ...d, description: event.target.value }))} rows={3} maxLength={2000} placeholder="What this package includes" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]"><input data-testid="input-package-active" type="checkbox" checked={draft.active} onChange={event => setDraft(d => ({ ...d, active: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>Available to customers</label>
           {(createPackage.isError || updatePackage.isError) && <p role="alert" data-testid="status-package-form-error" className="text-[12px] text-[#a84926]">{errorText(createPackage.error || updatePackage.error)}</p>}
-            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || (!draft.free && inputMinor(draft.amount, draft.currency) < 1) || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1 || !Number.isInteger(Number(draft.contactLimit)) || Number(draft.contactLimit) < 0 || Number(draft.contactLimit) > 10000000} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
+            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || (!draft.free && inputMinor(draft.amount, draft.currency) < 1) || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1 || !Number.isInteger(Number(draft.contactLimit)) || Number(draft.contactLimit) < 0 || Number(draft.contactLimit) > 10000000 || !Number.isInteger(Number(draft.emailAccountLimit)) || Number(draft.emailAccountLimit) < 0 || Number(draft.emailAccountLimit) > 100} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}{busy ? 'Saving package' : editing ? 'Save changes' : 'Create package'}
           </button>
         </form>
@@ -389,7 +391,7 @@ export default function AdminBillingPage() {
           <div className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] gap-4 border-b border-[#e7ecf0] bg-[#f7f9fa] px-5 py-3 mono text-[9px] uppercase tracking-[.15em] text-[#83909d] md:grid"><span>Package</span><span>Rate & term</span><span>Visibility</span><span>Last updated</span><span className="text-right">Actions</span></div>
           <div className="divide-y divide-[#edf0f2]">{packages.map(pkg => <article key={pkg.id} data-testid={`row-subscription-package-${pkg.id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] md:items-center md:gap-4">
             <div><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
-             <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts</div></div>
+             <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div></div>
             <div><span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
             <div className="text-[11px] text-[#788695] md:text-[10px]">{new Date(pkg.updatedAt).toLocaleDateString()}</div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">

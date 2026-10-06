@@ -82,6 +82,14 @@ import {
   UpdateContactResponse,
   UpdateTenantSendingSettingsBody,
   UpdateTenantSendingSettingsResponse,
+  CreateTenantSendingAccountResponse,
+  DeleteTenantSendingAccountParams,
+  DeleteTenantSendingAccountResponse,
+  ListTenantSendingAccountsResponse,
+  SetPrimaryTenantSendingAccountParams,
+  SetPrimaryTenantSendingAccountResponse,
+  UpdateTenantSendingAccountParams,
+  UpdateTenantSendingAccountResponse,
 } from "@workspace/api-zod";
 import type { TenantSendingSettingsInput } from "@workspace/api-zod";
 import {
@@ -385,6 +393,26 @@ function sendingSettingsResponse(
     connectionCheckAt: config?.connectionCheckAt ?? null,
     updatedAt: config?.updatedAt ?? null,
   };
+}
+
+function sendingAccountResponse(
+  config: typeof tenantSendingConfigurationTable.$inferSelect,
+  activeCampaignCount = 0,
+) {
+  return {
+    ...sendingSettingsResponse(config),
+    id: config.id,
+    isPrimary: config.isPrimary,
+    lastUsedAt: config.lastUsedAt,
+    activeCampaignCount,
+  };
+}
+
+async function tenantEmailAccountLimit(userId: string): Promise<number> {
+  const { subscription } = await getCurrentSubscriptionForUser(userId);
+  return subscription?.status === "active"
+    ? subscription.package.emailAccountLimit
+    : 1;
 }
 
 async function getContactQuota(userId: string) {
@@ -844,8 +872,294 @@ router.get("/sending/settings", requireUserRole, async (req, res): Promise<void>
   const [config] = await db
     .select()
     .from(tenantSendingConfigurationTable)
-    .where(eq(tenantSendingConfigurationTable.userId, req.authUser!.id));
+    .where(eq(tenantSendingConfigurationTable.userId, req.authUser!.id))
+    .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
+    .limit(1);
   res.json(GetTenantSendingSettingsResponse.parse(sendingSettingsResponse(config)));
+});
+
+router.get("/sending/accounts", requireUserRole, async (req, res): Promise<void> => {
+  const userId = req.authUser!.id;
+  const { subscription } = await getCurrentSubscriptionForUser(userId);
+  const emailAccountLimit =
+    subscription?.status === "active"
+      ? subscription.package.emailAccountLimit
+      : 1;
+  const accounts = await db
+    .select()
+    .from(tenantSendingConfigurationTable)
+    .where(eq(tenantSendingConfigurationTable.userId, userId))
+    .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt));
+  const activeCampaignRows = await db
+    .select({
+      accountId: emailCampaignsTable.senderAccountId,
+      value: count(),
+    })
+    .from(emailCampaignsTable)
+    .where(
+      and(
+        eq(emailCampaignsTable.userId, userId),
+        inArray(emailCampaignsTable.status, ["queued", "sending"]),
+      ),
+    )
+    .groupBy(emailCampaignsTable.senderAccountId);
+  const usage = new Map(
+    activeCampaignRows
+      .filter((row) => row.accountId)
+      .map((row) => [row.accountId!, Number(row.value)]),
+  );
+  const now = new Date();
+  const scheduledRows = await db
+    .select({
+      startsAt: userSubscriptionsTable.startsAt,
+      packageName: subscriptionPackagesTable.name,
+      emailAccountLimit: subscriptionPackagesTable.emailAccountLimit,
+      accountIdsToKeep: userSubscriptionsTable.senderAccountIdsToKeep,
+    })
+    .from(userSubscriptionsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+    )
+    .where(
+      and(
+        eq(userSubscriptionsTable.userId, userId),
+        eq(userSubscriptionsTable.status, "active"),
+        gt(userSubscriptionsTable.startsAt, now),
+      ),
+    )
+    .orderBy(asc(userSubscriptionsTable.startsAt));
+  const scheduled = scheduledRows.find((row) => row.accountIdsToKeep !== null);
+  const scheduledDowngrade =
+    scheduled?.accountIdsToKeep !== null && scheduled?.accountIdsToKeep !== undefined
+      ? {
+          startsAt: scheduled.startsAt.toISOString(),
+          packageName: scheduled.packageName,
+          emailAccountLimit: scheduled.emailAccountLimit,
+          accountIdsToKeep: scheduled.accountIdsToKeep,
+        }
+      : null;
+  res.json(
+    ListTenantSendingAccountsResponse.parse({
+      accounts: accounts.map((account) =>
+        sendingAccountResponse(account, usage.get(account.id) ?? 0),
+      ),
+      emailAccountLimit,
+      configuredCount: accounts.length,
+      overLimit: accounts.length > emailAccountLimit,
+      scheduledDowngrade,
+    }),
+  );
+});
+
+router.post("/sending/accounts", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = UpdateTenantSendingSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter valid SMTP sender settings.", code: "INVALID_SENDING_SETTINGS" });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const suppliedUsername = parsed.data.username?.trim();
+  const suppliedPassword = parsed.data.password?.trim();
+  if (!suppliedUsername || !suppliedPassword) {
+    res.status(400).json({ error: "Enter the SMTP username and password for this sender.", code: "SMTP_CREDENTIALS_REQUIRED" });
+    return;
+  }
+  const limit = await tenantEmailAccountLimit(userId);
+  const outcome = await db.transaction(async (tx) => {
+    await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, userId)).for("update");
+    const accounts = await tx
+      .select({ id: tenantSendingConfigurationTable.id })
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, userId));
+    if (accounts.length >= limit) return { error: "limit" as const, used: accounts.length };
+    const [created] = await tx
+      .insert(tenantSendingConfigurationTable)
+      .values({
+        userId,
+        isPrimary: accounts.length === 0,
+        provider: parsed.data.provider,
+        host: parsed.data.host.trim(),
+        port: parsed.data.port,
+        encryption: parsed.data.encryption,
+        usernameEncrypted: encryptSecret(suppliedUsername),
+        passwordEncrypted: encryptSecret(suppliedPassword),
+        fromName: parsed.data.fromName.trim(),
+        fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
+        replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
+      })
+      .returning();
+    return { account: created! };
+  });
+  if ("error" in outcome) {
+    res.status(409).json({
+      error: `Your package allows ${limit} SMTP sender account${limit === 1 ? "" : "s"}. You already have ${outcome.used}.`,
+      code: "SENDER_ACCOUNT_LIMIT_REACHED",
+      limit,
+      used: outcome.used,
+    });
+    return;
+  }
+  res.status(201).json(
+    CreateTenantSendingAccountResponse.parse({
+      account: sendingAccountResponse(outcome.account),
+    }),
+  );
+});
+
+router.patch("/sending/accounts/:accountId", requireUserRole, async (req, res): Promise<void> => {
+  const params = UpdateTenantSendingAccountParams.safeParse(req.params);
+  const parsed = UpdateTenantSendingSettingsBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: "Enter valid SMTP sender settings.", code: "INVALID_SENDING_SETTINGS" });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const [existing] = await db
+    .select()
+    .from(tenantSendingConfigurationTable)
+    .where(
+      and(
+        eq(tenantSendingConfigurationTable.id, params.data.accountId),
+        eq(tenantSendingConfigurationTable.userId, userId),
+      ),
+    );
+  if (!existing) {
+    res.status(404).json({ error: "SMTP sender account not found.", code: "SENDER_ACCOUNT_NOT_FOUND" });
+    return;
+  }
+  const suppliedUsername = parsed.data.username?.trim();
+  const suppliedPassword = parsed.data.password?.trim();
+  const [saved] = await db
+    .update(tenantSendingConfigurationTable)
+    .set({
+      provider: parsed.data.provider,
+      host: parsed.data.host.trim(),
+      port: parsed.data.port,
+      encryption: parsed.data.encryption,
+      usernameEncrypted: suppliedUsername ? encryptSecret(suppliedUsername) : existing.usernameEncrypted,
+      passwordEncrypted: suppliedPassword ? encryptSecret(suppliedPassword) : existing.passwordEncrypted,
+      fromName: parsed.data.fromName.trim(),
+      fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
+      replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
+      verifiedAt: null,
+      connectionCheckStatus: null,
+      connectionCheckAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tenantSendingConfigurationTable.id, existing.id),
+        eq(tenantSendingConfigurationTable.userId, userId),
+      ),
+    )
+    .returning();
+  res.json(
+    UpdateTenantSendingAccountResponse.parse({
+      account: sendingAccountResponse(saved!),
+    }),
+  );
+});
+
+router.delete("/sending/accounts/:accountId", requireUserRole, async (req, res): Promise<void> => {
+  const params = DeleteTenantSendingAccountParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid SMTP sender account.", code: "INVALID_INPUT" });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const outcome = await db.transaction(async (tx) => {
+    await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, userId)).for("update");
+    const [account] = await tx
+      .select()
+      .from(tenantSendingConfigurationTable)
+      .where(
+        and(
+          eq(tenantSendingConfigurationTable.id, params.data.accountId),
+          eq(tenantSendingConfigurationTable.userId, userId),
+        ),
+      )
+      .for("update");
+    if (!account) return { error: "not_found" as const };
+    const [activeCampaign] = await tx
+      .select({ id: emailCampaignsTable.id })
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          eq(emailCampaignsTable.senderAccountId, account.id),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
+        ),
+      )
+      .limit(1);
+    if (activeCampaign) return { error: "in_use" as const };
+    await tx.delete(tenantSendingConfigurationTable).where(eq(tenantSendingConfigurationTable.id, account.id));
+    if (account.isPrimary) {
+      const [next] = await tx
+        .select({ id: tenantSendingConfigurationTable.id })
+        .from(tenantSendingConfigurationTable)
+        .where(eq(tenantSendingConfigurationTable.userId, userId))
+        .orderBy(asc(tenantSendingConfigurationTable.createdAt))
+        .limit(1);
+      if (next) {
+        await tx
+          .update(tenantSendingConfigurationTable)
+          .set({ isPrimary: true })
+          .where(eq(tenantSendingConfigurationTable.id, next.id));
+      }
+    }
+    return { deleted: true as const };
+  });
+  if ("error" in outcome) {
+    if (outcome.error === "not_found") {
+      res.status(404).json({ error: "SMTP sender account not found.", code: "SENDER_ACCOUNT_NOT_FOUND" });
+    } else {
+      res.status(409).json({ error: "This sender is used by an active campaign. Let the campaign finish before removing it.", code: "SENDER_ACCOUNT_IN_USE" });
+    }
+    return;
+  }
+  res.status(204).json(DeleteTenantSendingAccountResponse.parse(undefined));
+});
+
+router.put("/sending/accounts/:accountId/primary", requireUserRole, async (req, res): Promise<void> => {
+  const params = SetPrimaryTenantSendingAccountParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid SMTP sender account.", code: "INVALID_INPUT" });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const account = await db.transaction(async (tx) => {
+    await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, userId)).for("update");
+    const [target] = await tx
+      .select()
+      .from(tenantSendingConfigurationTable)
+      .where(
+        and(
+          eq(tenantSendingConfigurationTable.id, params.data.accountId),
+          eq(tenantSendingConfigurationTable.userId, userId),
+        ),
+      );
+    if (!target) return null;
+    await tx
+      .update(tenantSendingConfigurationTable)
+      .set({ isPrimary: false })
+      .where(eq(tenantSendingConfigurationTable.userId, userId));
+    const [updated] = await tx
+      .update(tenantSendingConfigurationTable)
+      .set({ isPrimary: true })
+      .where(eq(tenantSendingConfigurationTable.id, target.id))
+      .returning();
+    return updated ?? null;
+  });
+  if (!account) {
+    res.status(404).json({ error: "SMTP sender account not found.", code: "SENDER_ACCOUNT_NOT_FOUND" });
+    return;
+  }
+  res.json(
+    SetPrimaryTenantSendingAccountResponse.parse({
+      account: sendingAccountResponse(account),
+    }),
+  );
 });
 
 router.put("/sending/settings", requireUserRole, async (req, res): Promise<void> => {
@@ -859,69 +1173,79 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
   }
 
   const userId = req.authUser!.id;
-  const [existing] = await db
-    .select()
-    .from(tenantSendingConfigurationTable)
-    .where(eq(tenantSendingConfigurationTable.userId, userId));
-  const suppliedUsername = parsed.data.username?.trim();
-  const suppliedPassword = parsed.data.password?.trim();
-  if (!existing && (!suppliedUsername || !suppliedPassword)) {
-    res.status(400).json({
-      error: "Enter the SMTP username and password to configure a sender.",
-      code: "SMTP_CREDENTIALS_REQUIRED",
-    });
+  const limit = await tenantEmailAccountLimit(userId);
+  const outcome = await db.transaction(async (tx) => {
+    await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .for("update");
+    const [existing] = await tx
+      .select()
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, userId))
+      .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
+      .limit(1)
+      .for("update");
+    const accounts = await tx
+      .select({ id: tenantSendingConfigurationTable.id })
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, userId));
+    const suppliedUsername = parsed.data.username?.trim();
+    const suppliedPassword = parsed.data.password?.trim();
+    if (!existing && accounts.length >= limit) return { error: "limit" as const };
+    if (!existing && (!suppliedUsername || !suppliedPassword)) {
+      return { error: "credentials" as const };
+    }
+    const values = {
+      provider: parsed.data.provider,
+      host: parsed.data.host.trim(),
+      port: parsed.data.port,
+      encryption: parsed.data.encryption,
+      usernameEncrypted: suppliedUsername
+        ? encryptSecret(suppliedUsername)
+        : existing!.usernameEncrypted,
+      passwordEncrypted: suppliedPassword
+        ? encryptSecret(suppliedPassword)
+        : existing!.passwordEncrypted,
+      fromName: parsed.data.fromName.trim(),
+      fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
+      replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
+      verifiedAt: null,
+      connectionCheckStatus: null,
+      connectionCheckAt: null,
+      updatedAt: new Date(),
+    };
+    if (existing) {
+      const [saved] = await tx
+        .update(tenantSendingConfigurationTable)
+        .set(values)
+        .where(eq(tenantSendingConfigurationTable.id, existing.id))
+        .returning();
+      return { saved: saved! };
+    }
+    const [saved] = await tx
+      .insert(tenantSendingConfigurationTable)
+      .values({ userId, isPrimary: true, ...values })
+      .returning();
+    return { saved: saved! };
+  });
+  if ("error" in outcome) {
+    if (outcome.error === "credentials") {
+      res.status(400).json({
+        error: "Enter the SMTP username and password to configure a sender.",
+        code: "SMTP_CREDENTIALS_REQUIRED",
+      });
+    } else {
+      res.status(409).json({
+        error: `Your package allows ${limit} SMTP sender account${limit === 1 ? "" : "s"}.`,
+        code: "SENDER_ACCOUNT_LIMIT_REACHED",
+      });
+    }
     return;
   }
-  const usernameEncrypted = suppliedUsername
-    ? encryptSecret(suppliedUsername)
-    : existing!.usernameEncrypted;
-  const passwordEncrypted = suppliedPassword
-    ? encryptSecret(suppliedPassword)
-    : existing!.passwordEncrypted;
-  const values = {
-    userId,
-    provider: parsed.data.provider,
-    host: parsed.data.host.trim(),
-    port: parsed.data.port,
-    encryption: parsed.data.encryption,
-    usernameEncrypted,
-    passwordEncrypted,
-    fromName: parsed.data.fromName.trim(),
-    fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
-    replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
-    verifiedAt: null,
-    connectionCheckStatus: null,
-    connectionCheckAt: null,
-    updatedAt: new Date(),
-  };
-  await db
-    .insert(tenantSendingConfigurationTable)
-    .values(values)
-    .onConflictDoUpdate({
-      target: tenantSendingConfigurationTable.userId,
-      set: {
-        provider: values.provider,
-        host: values.host,
-        port: values.port,
-        encryption: values.encryption,
-        usernameEncrypted: values.usernameEncrypted,
-        passwordEncrypted: values.passwordEncrypted,
-        fromName: values.fromName,
-        fromEmail: values.fromEmail,
-        replyTo: values.replyTo,
-        verifiedAt: null,
-        connectionCheckStatus: null,
-        connectionCheckAt: null,
-        updatedAt: values.updatedAt,
-      },
-    });
-
-  const [saved] = await db
-    .select()
-    .from(tenantSendingConfigurationTable)
-    .where(eq(tenantSendingConfigurationTable.userId, userId));
   res.json(
-    UpdateTenantSendingSettingsResponse.parse(sendingSettingsResponse(saved)),
+    UpdateTenantSendingSettingsResponse.parse(sendingSettingsResponse(outcome.saved)),
   );
 });
 
@@ -942,7 +1266,20 @@ router.post(
     const [existing] = await db
       .select()
       .from(tenantSendingConfigurationTable)
-      .where(eq(tenantSendingConfigurationTable.userId, userId));
+      .where(
+        parsed.data.accountId
+          ? and(
+              eq(tenantSendingConfigurationTable.id, parsed.data.accountId),
+              eq(tenantSendingConfigurationTable.userId, userId),
+            )
+          : eq(tenantSendingConfigurationTable.userId, userId),
+      )
+      .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
+      .limit(1);
+    if (parsed.data.accountId && !existing) {
+      res.status(404).json({ error: "SMTP sender account not found.", code: "SENDER_ACCOUNT_NOT_FOUND" });
+      return;
+    }
     const config = tenantSendingEmailConfiguration(
       userId,
       parsed.data.settings,
@@ -969,7 +1306,7 @@ router.post(
             connectionCheckStatus: "success",
             connectionCheckAt: checkedAt,
           })
-          .where(eq(tenantSendingConfigurationTable.userId, userId));
+          .where(eq(tenantSendingConfigurationTable.id, existing!.id));
       }
       res.json(
         TestTenantSendingConnectionResponse.parse({
@@ -989,7 +1326,7 @@ router.post(
             connectionCheckStatus: "failure",
             connectionCheckAt: checkedAt,
           })
-          .where(eq(tenantSendingConfigurationTable.userId, userId));
+          .where(eq(tenantSendingConfigurationTable.id, existing!.id));
       }
       req.log.warn(
         {
@@ -1026,7 +1363,20 @@ router.post(
     const [existing] = await db
       .select()
       .from(tenantSendingConfigurationTable)
-      .where(eq(tenantSendingConfigurationTable.userId, userId));
+      .where(
+        parsed.data.accountId
+          ? and(
+              eq(tenantSendingConfigurationTable.id, parsed.data.accountId),
+              eq(tenantSendingConfigurationTable.userId, userId),
+            )
+          : eq(tenantSendingConfigurationTable.userId, userId),
+      )
+      .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
+      .limit(1);
+    if (parsed.data.accountId && !existing) {
+      res.status(404).json({ error: "SMTP sender account not found.", code: "SENDER_ACCOUNT_NOT_FOUND" });
+      return;
+    }
     const config = tenantSendingEmailConfiguration(
       userId,
       parsed.data.settings,
@@ -1062,7 +1412,7 @@ router.post(
         await db
           .update(tenantSendingConfigurationTable)
           .set({ verifiedAt, updatedAt: verifiedAt })
-          .where(eq(tenantSendingConfigurationTable.userId, userId));
+          .where(eq(tenantSendingConfigurationTable.id, existing!.id));
       }
       res.json(
         TestTenantSendingSettingsResponse.parse({
@@ -3423,10 +3773,30 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     });
     return;
   }
+  if (parsed.data.senderAccountId) {
+    const [sender] = await db
+      .select({ id: tenantSendingConfigurationTable.id })
+      .from(tenantSendingConfigurationTable)
+      .where(
+        and(
+          eq(tenantSendingConfigurationTable.id, parsed.data.senderAccountId),
+          eq(tenantSendingConfigurationTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!sender) {
+      res.status(400).json({
+        error: "Choose an SMTP sender account from your workspace.",
+        code: "INVALID_SENDER_ACCOUNT",
+      });
+      return;
+    }
+  }
   const [campaign] = await db
     .insert(emailCampaignsTable)
     .values({
       userId,
+      senderAccountId: parsed.data.senderAccountId ?? null,
       listId: listIds[0],
       listIds,
       name: parsed.data.name.trim(),
@@ -3472,6 +3842,25 @@ router.patch(
         });
         return;
     }
+    if (parsed.data.senderAccountId) {
+      const [sender] = await db
+        .select({ id: tenantSendingConfigurationTable.id })
+        .from(tenantSendingConfigurationTable)
+        .where(
+          and(
+            eq(tenantSendingConfigurationTable.id, parsed.data.senderAccountId),
+            eq(tenantSendingConfigurationTable.userId, userId),
+          ),
+        )
+        .limit(1);
+      if (!sender) {
+        res.status(400).json({
+          error: "Choose an SMTP sender account from your workspace.",
+          code: "INVALID_SENDER_ACCOUNT",
+        });
+        return;
+      }
+    }
     const [updated] = await db
       .update(emailCampaignsTable)
       .set({
@@ -3489,6 +3878,9 @@ router.patch(
                 ? sanitizeCampaignHtml(parsed.data.htmlBody)
                 : null,
             }
+          : {}),
+        ...(parsed.data.senderAccountId !== undefined
+          ? { senderAccountId: parsed.data.senderAccountId }
           : {}),
         ...(requestedListIds !== undefined
           ? {
@@ -3593,6 +3985,7 @@ router.post(
     }
     const userId = req.authUser!.id;
     const settings = await getPlatformSettings();
+    const accountLimit = await tenantEmailAccountLimit(userId);
     const requestedStartAt = input.data.scheduledAt;
     const outcome = await db.transaction(async (tx) => {
       await tx
@@ -3616,9 +4009,25 @@ router.post(
       const [sender] = await tx
         .select()
         .from(tenantSendingConfigurationTable)
-        .where(eq(tenantSendingConfigurationTable.userId, userId))
+        .where(
+          and(
+            eq(tenantSendingConfigurationTable.userId, userId),
+            campaign.senderAccountId
+              ? eq(tenantSendingConfigurationTable.id, campaign.senderAccountId)
+              : undefined,
+          ),
+        )
+        .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
+        .limit(1)
         .for("update");
       if (!sender?.verifiedAt) return { error: "sender_not_ready" as const };
+      const senderAccounts = await tx
+        .select({ id: tenantSendingConfigurationTable.id })
+        .from(tenantSendingConfigurationTable)
+        .where(eq(tenantSendingConfigurationTable.userId, userId));
+      if (senderAccounts.length > accountLimit) {
+        return { error: "sender_limit" as const, limit: accountLimit };
+      }
       const listIds = campaignListIds(campaign);
       if (listIds.length === 0) return { error: "list_missing" as const };
 
@@ -3733,6 +4142,29 @@ router.post(
         return { error: "start_too_early" as const, earliestStartAt };
       }
       const scheduledAt = requestedStartAt ?? earliestStartAt;
+      const [scheduledDowngrade] = await tx
+        .select({
+          startsAt: userSubscriptionsTable.startsAt,
+          accountIdsToKeep: userSubscriptionsTable.senderAccountIdsToKeep,
+        })
+        .from(userSubscriptionsTable)
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, userId),
+            eq(userSubscriptionsTable.status, "active"),
+            gt(userSubscriptionsTable.startsAt, now),
+          ),
+        )
+        .orderBy(asc(userSubscriptionsTable.startsAt))
+        .limit(1);
+      if (
+        scheduledDowngrade?.accountIdsToKeep !== null &&
+        scheduledDowngrade?.accountIdsToKeep !== undefined &&
+        scheduledAt.getTime() >= scheduledDowngrade.startsAt.getTime() &&
+        !scheduledDowngrade.accountIdsToKeep.includes(sender.id)
+      ) {
+        return { error: "sender_scheduled_for_removal" as const };
+      }
       const activeNowCount = activeCampaigns.filter(
         (activeCampaign) =>
           activeCampaign.status === "sending" ||
@@ -3820,6 +4252,16 @@ router.post(
           error: "Save and successfully test your sending identity before sending a campaign.",
           code: "SENDER_NOT_READY",
         });
+      } else if (outcome.error === "sender_limit") {
+        res.status(409).json({
+          error: `Your current package allows ${outcome.limit} SMTP sender account${outcome.limit === 1 ? "" : "s"}.`,
+          code: "SENDER_ACCOUNT_LIMIT_EXCEEDED",
+        });
+      } else if (outcome.error === "sender_scheduled_for_removal") {
+        res.status(409).json({
+          error: "This campaign is scheduled to start after the selected sender account is removed. Choose an account you plan to keep or an earlier start time.",
+          code: "SENDER_ACCOUNT_SCHEDULED_FOR_REMOVAL",
+        });
       } else if (outcome.error === "list_missing") {
         res.status(400).json({
           error: "Choose an active contact list from your workspace.",
@@ -3895,7 +4337,9 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     db
       .select({ verifiedAt: tenantSendingConfigurationTable.verifiedAt })
       .from(tenantSendingConfigurationTable)
-      .where(eq(tenantSendingConfigurationTable.userId, userId)),
+      .where(eq(tenantSendingConfigurationTable.userId, userId))
+      .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
+      .limit(1),
     db
       .select({
         currency: paymentsTable.currency,

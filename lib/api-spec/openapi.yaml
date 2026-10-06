@@ -401,6 +401,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /sending/accounts:
+    get:
+      operationId: listTenantSendingAccounts
+      tags: [sending]
+      summary: List SMTP sender accounts and the authenticated tenant's package allowance
+      responses:
+        "200":
+          description: SMTP sender accounts without credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingAccounts"
+    post:
+      operationId: createTenantSendingAccount
+      tags: [sending]
+      summary: Create an SMTP sender account within the tenant's package allowance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantSendingSettingsInput"
+      responses:
+        "201":
+          description: SMTP sender account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingAccountResponse"
+        "409":
+          description: The package sender-account limit has been reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/accounts/{accountId}:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateTenantSendingAccount
+      tags: [sending]
+      summary: Update an SMTP sender account owned by the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantSendingSettingsInput"
+      responses:
+        "200":
+          description: Updated SMTP sender account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingAccountResponse"
+        "404":
+          description: SMTP sender account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteTenantSendingAccount
+      tags: [sending]
+      summary: Delete an SMTP sender account not used by an active campaign
+      responses:
+        "204":
+          description: SMTP sender account deleted
+        "404":
+          description: SMTP sender account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: SMTP sender account is still used by an active campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/accounts/{accountId}/primary:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: setPrimaryTenantSendingAccount
+      tags: [sending]
+      summary: Make an SMTP sender account the default for campaigns without an explicit sender
+      responses:
+        "200":
+          description: Primary SMTP sender account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantSendingAccountResponse"
+        "404":
+          description: SMTP sender account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /sending/settings/test:
     post:
       operationId: testTenantSendingSettings
@@ -2806,6 +2916,43 @@ components:
         connectionCheckAt: { type: ["string", "null"], format: date-time }
         updatedAt: { type: ["string", "null"], format: date-time }
       required: [provider, host, port, encryption, username, credentialsConfigured, fromName, fromEmail, replyTo, verified, verifiedAt, connectionCheckStatus, connectionCheckAt, updatedAt]
+    TenantSendingAccount:
+      allOf:
+        - $ref: "#/components/schemas/TenantSendingSettings"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            isPrimary: { type: boolean }
+            lastUsedAt: { type: ["string", "null"], format: date-time }
+            activeCampaignCount: { type: integer, minimum: 0 }
+          required: [id, isPrimary, lastUsedAt, activeCampaignCount]
+    TenantSendingAccounts:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/TenantSendingAccount" }
+        emailAccountLimit: { type: integer, minimum: 0 }
+        configuredCount: { type: integer, minimum: 0 }
+        overLimit: { type: boolean }
+        scheduledDowngrade:
+          oneOf:
+            - type: object
+              properties:
+                startsAt: { type: string, format: date-time }
+                packageName: { type: string }
+                emailAccountLimit: { type: integer, minimum: 0 }
+                accountIdsToKeep:
+                  type: array
+                  items: { type: string, format: uuid }
+              required: [startsAt, packageName, emailAccountLimit, accountIdsToKeep]
+            - type: "null"
+      required: [accounts, emailAccountLimit, configuredCount, overLimit, scheduledDowngrade]
+    TenantSendingAccountResponse:
+      type: object
+      properties:
+        account: { $ref: "#/components/schemas/TenantSendingAccount" }
+      required: [account]
     TenantSendingSettingsInput:
       type: object
       properties:
@@ -2883,6 +3030,7 @@ components:
       type: object
       properties:
         toEmail: { type: string, format: email }
+        accountId: { type: string, format: uuid }
         settings:
           $ref: "#/components/schemas/TenantSendingSettingsInput"
       required: [toEmail, settings]
@@ -2895,6 +3043,7 @@ components:
     TenantSendingConnectionTestInput:
       type: object
       properties:
+        accountId: { type: string, format: uuid }
         settings:
           $ref: "#/components/schemas/TenantSendingSettingsInput"
       required: [settings]
@@ -3447,6 +3596,7 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
+        senderAccountId: { type: ["string", "null"], format: uuid }
         name: { type: string }
         objective: { type: string, maxLength: 500 }
         subject: { type: string }
@@ -3474,7 +3624,7 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, subject, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, senderAccountId, name, subject, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignAudienceSummary:
       type: object
       properties:
@@ -3583,6 +3733,7 @@ components:
     CampaignInput:
       type: object
       properties:
+        senderAccountId: { type: ["string", "null"], format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
         objective: { type: string, maxLength: 500 }
         subject: { type: string, minLength: 1, maxLength: 200 }
@@ -3601,6 +3752,7 @@ components:
     CampaignUpdate:
       type: object
       properties:
+        senderAccountId: { type: ["string", "null"], format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
         objective: { type: string, maxLength: 500 }
         subject: { type: string, minLength: 1, maxLength: 200 }
@@ -4010,10 +4162,11 @@ components:
         currency: { type: string, minLength: 3, maxLength: 3 }
         periodDays: { type: integer }
         contactLimit: { type: integer, minimum: 0 }
+        emailAccountLimit: { type: integer, minimum: 0 }
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, active, createdAt, updatedAt]
+      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -4034,6 +4187,7 @@ components:
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
+        emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         active: { type: boolean }
       required: [name, description, amountMinor, currency, periodDays, contactLimit, active]
     SubscriptionGiftInput:
@@ -4055,6 +4209,7 @@ components:
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
+        emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         active: { type: boolean }
     ContactQuota:
       type: object
@@ -4130,11 +4285,17 @@ components:
       type: object
       properties:
         packageId: { type: string, format: uuid }
+        senderAccountIdsToKeep:
+          type: array
+          items: { type: string, format: uuid }
       required: [packageId]
     ActivateFreeSubscriptionInput:
       type: object
       properties:
         packageId: { type: string, format: uuid }
+        senderAccountIdsToKeep:
+          type: array
+          items: { type: string, format: uuid }
       required: [packageId]
     SubscriptionOrderCreated:
       type: object

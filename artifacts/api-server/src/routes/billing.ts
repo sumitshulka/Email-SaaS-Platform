@@ -46,10 +46,12 @@ import {
 } from "@workspace/api-zod";
 import {
   db,
+  emailCampaignsTable,
   paymentsTable,
   razorpayConfigurationTable,
   razorpayWebhookEventsTable,
   subscriptionPackagesTable,
+  tenantSendingConfigurationTable,
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
@@ -77,6 +79,68 @@ import { getPlatformSettings } from "../lib/platform-settings";
 import { requireSuperadmin, requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
+
+async function validateSenderAccountRetention(
+  userId: string,
+  packageLimit: number,
+  requestedIds: string[] | undefined,
+): Promise<
+  | { ok: true; accountIdsToKeep: string[] | null }
+  | { ok: false; message: string }
+> {
+  const accounts = await db
+    .select({ id: tenantSendingConfigurationTable.id })
+    .from(tenantSendingConfigurationTable)
+    .where(eq(tenantSendingConfigurationTable.userId, userId));
+  const needsRetention = accounts.length > packageLimit;
+  if (needsRetention && requestedIds === undefined) {
+    return {
+      ok: false,
+      message: "Choose which SMTP sender accounts to keep before changing to this package.",
+    };
+  }
+  if (requestedIds !== undefined) {
+    const ownedIds = new Set(accounts.map((account) => account.id));
+    if (
+      new Set(requestedIds).size !== requestedIds.length ||
+      requestedIds.some((id) => !ownedIds.has(id)) ||
+      requestedIds.length > packageLimit ||
+      (needsRetention && requestedIds.length !== packageLimit)
+    ) {
+      return {
+        ok: false,
+        message: "Choose the number of SMTP sender accounts allowed by this package.",
+      };
+    }
+  }
+  if (!needsRetention || requestedIds === undefined) {
+    return { ok: true, accountIdsToKeep: null };
+  }
+  const kept = new Set(requestedIds);
+  const removedIds = accounts
+    .map((account) => account.id)
+    .filter((id) => !kept.has(id));
+  if (removedIds.length > 0) {
+    const [activeCampaign] = await db
+      .select({ id: emailCampaignsTable.id })
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          inArray(emailCampaignsTable.senderAccountId, removedIds),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
+        ),
+      )
+      .limit(1);
+    if (activeCampaign) {
+      return {
+        ok: false,
+        message: "Finish or reassign active campaigns before removing their SMTP sender accounts.",
+      };
+    }
+  }
+  return { ok: true, accountIdsToKeep: requestedIds };
+}
 
 function utcDayStart(value: string): Date | null {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -1011,10 +1075,55 @@ router.post(
       return;
     }
 
-    const subscription = await activateFreePackageForUser({
-      userId: req.authUser!.id,
-      packageId: parsed.data.packageId,
-    });
+    const [selectedPackage] = await db
+      .select()
+      .from(subscriptionPackagesTable)
+      .where(
+        and(
+          eq(subscriptionPackagesTable.id, parsed.data.packageId),
+          eq(subscriptionPackagesTable.active, true),
+          eq(subscriptionPackagesTable.amountMinor, 0),
+        ),
+      )
+      .limit(1);
+    if (!selectedPackage) {
+      res.status(404).json({
+        error: "That free package is not available for activation.",
+        code: "PACKAGE_NOT_AVAILABLE",
+      });
+      return;
+    }
+    const retention = await validateSenderAccountRetention(
+      req.authUser!.id,
+      selectedPackage.emailAccountLimit,
+      parsed.data.senderAccountIdsToKeep,
+    );
+    if (!retention.ok) {
+      res.status(409).json({
+        error: retention.message,
+        code: "SENDER_ACCOUNT_RETENTION_REQUIRED",
+      });
+      return;
+    }
+    let subscription;
+    try {
+      subscription = await activateFreePackageForUser({
+        userId: req.authUser!.id,
+        packageId: parsed.data.packageId,
+        ...(retention.accountIdsToKeep !== null
+          ? { senderAccountIdsToKeep: retention.accountIdsToKeep }
+          : {}),
+      });
+    } catch (error) {
+      res.status(409).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Choose the SMTP sender accounts to retain for this package.",
+        code: "SENDER_ACCOUNT_RETENTION_REQUIRED",
+      });
+      return;
+    }
     if (!subscription) {
       res.status(404).json({
         error: "That free package is not available for activation.",
@@ -1069,6 +1178,18 @@ router.post(
       });
       return;
     }
+    const retention = await validateSenderAccountRetention(
+      req.authUser!.id,
+      pkg.emailAccountLimit,
+      parsed.data.senderAccountIdsToKeep,
+    );
+    if (!retention.ok) {
+      res.status(409).json({
+        error: retention.message,
+        code: "SENDER_ACCOUNT_RETENTION_REQUIRED",
+      });
+      return;
+    }
 
     const config = await getRazorpayConfiguration();
     if (!config) {
@@ -1089,6 +1210,7 @@ router.post(
         currency: pkg.currency,
         status: "created",
         razorpayEnvironment: config.environment,
+        senderAccountIdsToKeep: retention.accountIdsToKeep,
       })
       .returning();
     try {

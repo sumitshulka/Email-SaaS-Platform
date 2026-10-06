@@ -126,6 +126,8 @@ import type {
   SupportTicketInput,
   SupportTicketMessageInput,
   SupportTicketStatusUpdate,
+  TenantSendingAccountResponse,
+  TenantSendingAccounts,
   TenantSendingConnectionTestFailure,
   TenantSendingConnectionTestInput,
   TenantSendingConnectionTestResponse,
@@ -1738,6 +1740,408 @@ export const useUpdateTenantSendingSettings = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getUpdateTenantSendingSettingsMutationOptions(options));
+    }
+
+export const getListTenantSendingAccountsUrl = () => {
+
+
+
+
+  return `/api/sending/accounts`
+}
+
+/**
+ * @summary List SMTP sender accounts and the authenticated tenant's package allowance
+ */
+export const listTenantSendingAccounts = async ( options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingAccounts> => {
+
+  return customFetch<TenantSendingAccounts>(getListTenantSendingAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTenantSendingAccountsQueryKey = () => {
+    return [
+    `/api/sending/accounts`
+    ] as const;
+    }
+
+
+export const getListTenantSendingAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listTenantSendingAccounts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTenantSendingAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTenantSendingAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTenantSendingAccounts>>> = ({ signal }) => listTenantSendingAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTenantSendingAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTenantSendingAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listTenantSendingAccounts>>>
+export type ListTenantSendingAccountsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List SMTP sender accounts and the authenticated tenant's package allowance
+ */
+
+export function useListTenantSendingAccounts<TData = Awaited<ReturnType<typeof listTenantSendingAccounts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTenantSendingAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTenantSendingAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateTenantSendingAccountUrl = () => {
+
+
+
+
+  return `/api/sending/accounts`
+}
+
+/**
+ * @summary Create an SMTP sender account within the tenant's package allowance
+ */
+export const createTenantSendingAccount = async (tenantSendingSettingsInput: TenantSendingSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingAccountResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantSendingAccountResponse>(getCreateTenantSendingAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tenantSendingSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTenantSendingAccountMutationKey = () => ['createTenantSendingAccount'] as const;
+
+export const getCreateTenantSendingAccountMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTenantSendingAccount>>, TError,CreateTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTenantSendingAccount>>, TError,CreateTenantSendingAccountMutationVariables, TContext> => {
+
+const mutationKey = getCreateTenantSendingAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTenantSendingAccount>>, CreateTenantSendingAccountMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTenantSendingAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTenantSendingAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createTenantSendingAccount>>>
+    export type CreateTenantSendingAccountMutationBody = BodyType<TenantSendingSettingsInput>
+    export type CreateTenantSendingAccountMutationError = ErrorType<ApiError>
+    export type CreateTenantSendingAccountMutationVariables = {data: BodyType<TenantSendingSettingsInput>}
+
+    /**
+ * @summary Create an SMTP sender account within the tenant's package allowance
+ */
+export const useCreateTenantSendingAccount = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTenantSendingAccount>>, TError,CreateTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTenantSendingAccount>>,
+        TError,
+        CreateTenantSendingAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateTenantSendingAccountMutationOptions(options));
+    }
+
+export const getUpdateTenantSendingAccountUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}`
+}
+
+/**
+ * @summary Update an SMTP sender account owned by the authenticated tenant
+ */
+export const updateTenantSendingAccount = async (accountId: string,
+    tenantSendingSettingsInput: TenantSendingSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingAccountResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantSendingAccountResponse>(getUpdateTenantSendingAccountUrl(accountId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tenantSendingSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateTenantSendingAccountMutationKey = () => ['updateTenantSendingAccount'] as const;
+
+export const getUpdateTenantSendingAccountMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantSendingAccount>>, TError,UpdateTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTenantSendingAccount>>, TError,UpdateTenantSendingAccountMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTenantSendingAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTenantSendingAccount>>, UpdateTenantSendingAccountMutationVariables> = (props) => {
+          const {accountId,data} = props ?? {};
+
+          return  updateTenantSendingAccount(accountId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTenantSendingAccountMutationResult = NonNullable<Awaited<ReturnType<typeof updateTenantSendingAccount>>>
+    export type UpdateTenantSendingAccountMutationBody = BodyType<TenantSendingSettingsInput>
+    export type UpdateTenantSendingAccountMutationError = ErrorType<ApiError>
+    export type UpdateTenantSendingAccountMutationVariables = {accountId: string;data: BodyType<TenantSendingSettingsInput>}
+
+    /**
+ * @summary Update an SMTP sender account owned by the authenticated tenant
+ */
+export const useUpdateTenantSendingAccount = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantSendingAccount>>, TError,UpdateTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTenantSendingAccount>>,
+        TError,
+        UpdateTenantSendingAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTenantSendingAccountMutationOptions(options));
+    }
+
+export const getDeleteTenantSendingAccountUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}`
+}
+
+/**
+ * @summary Delete an SMTP sender account not used by an active campaign
+ */
+export const deleteTenantSendingAccount = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteTenantSendingAccountUrl(accountId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTenantSendingAccountMutationKey = () => ['deleteTenantSendingAccount'] as const;
+
+export const getDeleteTenantSendingAccountMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTenantSendingAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, DeleteTenantSendingAccountMutationVariables> = (props) => {
+          const {accountId} = props ?? {};
+
+          return  deleteTenantSendingAccount(accountId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTenantSendingAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTenantSendingAccount>>>
+
+    export type DeleteTenantSendingAccountMutationError = ErrorType<ApiError>
+    export type DeleteTenantSendingAccountMutationVariables = {accountId: string}
+
+    /**
+ * @summary Delete an SMTP sender account not used by an active campaign
+ */
+export const useDeleteTenantSendingAccount = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTenantSendingAccount>>,
+        TError,
+        DeleteTenantSendingAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTenantSendingAccountMutationOptions(options));
+    }
+
+export const getSetPrimaryTenantSendingAccountUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}/primary`
+}
+
+/**
+ * @summary Make an SMTP sender account the default for campaigns without an explicit sender
+ */
+export const setPrimaryTenantSendingAccount = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<TenantSendingAccountResponse> => {
+
+  return customFetch<TenantSendingAccountResponse>(getSetPrimaryTenantSendingAccountUrl(accountId),
+  {
+    ...options,
+    method: 'PUT'
+
+
+  }
+);}
+
+
+
+
+
+export const getSetPrimaryTenantSendingAccountMutationKey = () => ['setPrimaryTenantSendingAccount'] as const;
+
+export const getSetPrimaryTenantSendingAccountMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPrimaryTenantSendingAccount>>, TError,SetPrimaryTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setPrimaryTenantSendingAccount>>, TError,SetPrimaryTenantSendingAccountMutationVariables, TContext> => {
+
+const mutationKey = getSetPrimaryTenantSendingAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPrimaryTenantSendingAccount>>, SetPrimaryTenantSendingAccountMutationVariables> = (props) => {
+          const {accountId} = props ?? {};
+
+          return  setPrimaryTenantSendingAccount(accountId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPrimaryTenantSendingAccountMutationResult = NonNullable<Awaited<ReturnType<typeof setPrimaryTenantSendingAccount>>>
+
+    export type SetPrimaryTenantSendingAccountMutationError = ErrorType<ApiError>
+    export type SetPrimaryTenantSendingAccountMutationVariables = {accountId: string}
+
+    /**
+ * @summary Make an SMTP sender account the default for campaigns without an explicit sender
+ */
+export const useSetPrimaryTenantSendingAccount = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPrimaryTenantSendingAccount>>, TError,SetPrimaryTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setPrimaryTenantSendingAccount>>,
+        TError,
+        SetPrimaryTenantSendingAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetPrimaryTenantSendingAccountMutationOptions(options));
     }
 
 export const getTestTenantSendingSettingsUrl = () => {

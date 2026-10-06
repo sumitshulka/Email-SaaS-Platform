@@ -502,6 +502,215 @@ export const UpdateTenantSendingSettingsResponse = zod.object({
 
 
 /**
+ * @summary List SMTP sender accounts and the authenticated tenant's package allowance
+ */
+export const listTenantSendingAccountsResponseAccountsItemTwoActiveCampaignCountMin = 0;
+
+export const listTenantSendingAccountsResponseEmailAccountLimitMin = 0;
+
+export const listTenantSendingAccountsResponseConfiguredCountMin = 0;
+
+export const listTenantSendingAccountsResponseScheduledDowngradeOneEmailAccountLimitMin = 0;
+
+
+
+export const ListTenantSendingAccountsResponse = zod.object({
+  "accounts": zod.array(zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().nullable(),
+  "port": zod.number().int().nullable(),
+  "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "credentialsConfigured": zod.boolean(),
+  "fromName": zod.string().nullable(),
+  "fromEmail": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "verified": zod.boolean(),
+  "verifiedAt": zod.coerce.date().nullable(),
+  "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
+  "connectionCheckAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "id": zod.string().uuid(),
+  "isPrimary": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "activeCampaignCount": zod.number().int().min(listTenantSendingAccountsResponseAccountsItemTwoActiveCampaignCountMin)
+}))),
+  "emailAccountLimit": zod.number().int().min(listTenantSendingAccountsResponseEmailAccountLimitMin),
+  "configuredCount": zod.number().int().min(listTenantSendingAccountsResponseConfiguredCountMin),
+  "overLimit": zod.boolean(),
+  "scheduledDowngrade": zod.union([zod.object({
+  "startsAt": zod.coerce.date(),
+  "packageName": zod.string(),
+  "emailAccountLimit": zod.number().int().min(listTenantSendingAccountsResponseScheduledDowngradeOneEmailAccountLimitMin),
+  "accountIdsToKeep": zod.array(zod.string().uuid())
+}),zod.null()])
+})
+
+
+/**
+ * @summary Create an SMTP sender account within the tenant's package allowance
+ */
+export const createTenantSendingAccountBodyHostMax = 255;
+
+export const createTenantSendingAccountBodyPortMax = 65535;
+
+export const createTenantSendingAccountBodyUsernameMax = 254;
+
+export const createTenantSendingAccountBodyPasswordMax = 512;
+
+export const createTenantSendingAccountBodyFromNameMax = 120;
+
+
+
+export const CreateTenantSendingAccountBody = zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().min(1).max(createTenantSendingAccountBodyHostMax),
+  "port": zod.number().int().min(1).max(createTenantSendingAccountBodyPortMax),
+  "encryption": zod.enum(['none', 'ssl', 'tls']),
+  "username": zod.string().min(1).max(createTenantSendingAccountBodyUsernameMax).optional(),
+  "password": zod.string().max(createTenantSendingAccountBodyPasswordMax).optional(),
+  "fromName": zod.string().min(1).max(createTenantSendingAccountBodyFromNameMax),
+  "fromEmail": zod.string().email(),
+  "replyTo": zod.string().email().optional()
+})
+
+export const createTenantSendingAccountResponseAccountTwoActiveCampaignCountMin = 0;
+
+
+
+export const CreateTenantSendingAccountResponse = zod.object({
+  "account": zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().nullable(),
+  "port": zod.number().int().nullable(),
+  "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "credentialsConfigured": zod.boolean(),
+  "fromName": zod.string().nullable(),
+  "fromEmail": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "verified": zod.boolean(),
+  "verifiedAt": zod.coerce.date().nullable(),
+  "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
+  "connectionCheckAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "id": zod.string().uuid(),
+  "isPrimary": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "activeCampaignCount": zod.number().int().min(createTenantSendingAccountResponseAccountTwoActiveCampaignCountMin)
+}))
+})
+
+
+/**
+ * @summary Update an SMTP sender account owned by the authenticated tenant
+ */
+export const UpdateTenantSendingAccountParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const updateTenantSendingAccountBodyHostMax = 255;
+
+export const updateTenantSendingAccountBodyPortMax = 65535;
+
+export const updateTenantSendingAccountBodyUsernameMax = 254;
+
+export const updateTenantSendingAccountBodyPasswordMax = 512;
+
+export const updateTenantSendingAccountBodyFromNameMax = 120;
+
+
+
+export const UpdateTenantSendingAccountBody = zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().min(1).max(updateTenantSendingAccountBodyHostMax),
+  "port": zod.number().int().min(1).max(updateTenantSendingAccountBodyPortMax),
+  "encryption": zod.enum(['none', 'ssl', 'tls']),
+  "username": zod.string().min(1).max(updateTenantSendingAccountBodyUsernameMax).optional(),
+  "password": zod.string().max(updateTenantSendingAccountBodyPasswordMax).optional(),
+  "fromName": zod.string().min(1).max(updateTenantSendingAccountBodyFromNameMax),
+  "fromEmail": zod.string().email(),
+  "replyTo": zod.string().email().optional()
+})
+
+export const updateTenantSendingAccountResponseAccountTwoActiveCampaignCountMin = 0;
+
+
+
+export const UpdateTenantSendingAccountResponse = zod.object({
+  "account": zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().nullable(),
+  "port": zod.number().int().nullable(),
+  "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "credentialsConfigured": zod.boolean(),
+  "fromName": zod.string().nullable(),
+  "fromEmail": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "verified": zod.boolean(),
+  "verifiedAt": zod.coerce.date().nullable(),
+  "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
+  "connectionCheckAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "id": zod.string().uuid(),
+  "isPrimary": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "activeCampaignCount": zod.number().int().min(updateTenantSendingAccountResponseAccountTwoActiveCampaignCountMin)
+}))
+})
+
+
+/**
+ * @summary Delete an SMTP sender account not used by an active campaign
+ */
+export const DeleteTenantSendingAccountParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const DeleteTenantSendingAccountResponse = zod.void()
+
+
+/**
+ * @summary Make an SMTP sender account the default for campaigns without an explicit sender
+ */
+export const SetPrimaryTenantSendingAccountParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const setPrimaryTenantSendingAccountResponseAccountTwoActiveCampaignCountMin = 0;
+
+
+
+export const SetPrimaryTenantSendingAccountResponse = zod.object({
+  "account": zod.object({
+  "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
+  "host": zod.string().nullable(),
+  "port": zod.number().int().nullable(),
+  "encryption": zod.union([zod.literal('none'),zod.literal('ssl'),zod.literal('tls'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "credentialsConfigured": zod.boolean(),
+  "fromName": zod.string().nullable(),
+  "fromEmail": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "verified": zod.boolean(),
+  "verifiedAt": zod.coerce.date().nullable(),
+  "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
+  "connectionCheckAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "id": zod.string().uuid(),
+  "isPrimary": zod.boolean(),
+  "lastUsedAt": zod.coerce.date().nullable(),
+  "activeCampaignCount": zod.number().int().min(setPrimaryTenantSendingAccountResponseAccountTwoActiveCampaignCountMin)
+}))
+})
+
+
+/**
  * @summary Send a test message using the tenant's current SMTP settings
  */
 export const testTenantSendingSettingsBodySettingsHostMax = 255;
@@ -518,6 +727,7 @@ export const testTenantSendingSettingsBodySettingsFromNameMax = 120;
 
 export const TestTenantSendingSettingsBody = zod.object({
   "toEmail": zod.string().email(),
+  "accountId": zod.string().uuid().optional(),
   "settings": zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().min(1).max(testTenantSendingSettingsBodySettingsHostMax),
@@ -553,6 +763,7 @@ export const testTenantSendingConnectionBodySettingsFromNameMax = 120;
 
 
 export const TestTenantSendingConnectionBody = zod.object({
+  "accountId": zod.string().uuid().optional(),
   "settings": zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().min(1).max(testTenantSendingConnectionBodySettingsHostMax),
@@ -2708,6 +2919,7 @@ export const listCampaignsResponseObjectiveMax = 500;
 
 export const ListCampaignsResponseItem = zod.object({
   "id": zod.string().uuid(),
+  "senderAccountId": zod.string().uuid().nullable(),
   "name": zod.string(),
   "objective": zod.string().max(listCampaignsResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -2748,6 +2960,7 @@ export const createCampaignBodyHtmlBodyMax = 100000;
 
 
 export const CreateCampaignBody = zod.object({
+  "senderAccountId": zod.string().uuid().nullish(),
   "name": zod.string().min(1).max(createCampaignBodyNameMax),
   "objective": zod.string().max(createCampaignBodyObjectiveMax).optional(),
   "subject": zod.string().min(1).max(createCampaignBodySubjectMax),
@@ -2763,6 +2976,7 @@ export const createCampaignResponseObjectiveMax = 500;
 
 export const CreateCampaignResponse = zod.object({
   "id": zod.string().uuid(),
+  "senderAccountId": zod.string().uuid().nullable(),
   "name": zod.string(),
   "objective": zod.string().max(createCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -2849,6 +3063,7 @@ export const getCampaignDashboardResponseCampaignObjectiveMax = 500;
 export const GetCampaignDashboardResponse = zod.object({
   "campaign": zod.object({
   "id": zod.string().uuid(),
+  "senderAccountId": zod.string().uuid().nullable(),
   "name": zod.string(),
   "objective": zod.string().max(getCampaignDashboardResponseCampaignObjectiveMax).optional(),
   "subject": zod.string(),
@@ -2918,6 +3133,7 @@ export const updateCampaignBodyHtmlBodyMax = 100000;
 
 
 export const UpdateCampaignBody = zod.object({
+  "senderAccountId": zod.string().uuid().nullish(),
   "name": zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
   "objective": zod.string().max(updateCampaignBodyObjectiveMax).optional(),
   "subject": zod.string().min(1).max(updateCampaignBodySubjectMax).optional(),
@@ -2933,6 +3149,7 @@ export const updateCampaignResponseObjectiveMax = 500;
 
 export const UpdateCampaignResponse = zod.object({
   "id": zod.string().uuid(),
+  "senderAccountId": zod.string().uuid().nullable(),
   "name": zod.string(),
   "objective": zod.string().max(updateCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -3098,6 +3315,7 @@ export const sendCampaignResponseObjectiveMax = 500;
 
 export const SendCampaignResponse = zod.object({
   "id": zod.string().uuid(),
+  "senderAccountId": zod.string().uuid().nullable(),
   "name": zod.string(),
   "objective": zod.string().max(sendCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -4009,6 +4227,8 @@ export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
 
 export const listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
 
+export const listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
+
 
 
 export const ListAdminSubscriptionPackagesResponse = zod.object({
@@ -4020,6 +4240,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "currency": zod.string().min(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4044,6 +4265,9 @@ export const createSubscriptionPackageBodyPeriodDaysMax = 3660;
 export const createSubscriptionPackageBodyContactLimitMin = 0;
 export const createSubscriptionPackageBodyContactLimitMax = 10000000;
 
+export const createSubscriptionPackageBodyEmailAccountLimitMin = 0;
+export const createSubscriptionPackageBodyEmailAccountLimitMax = 100;
+
 
 
 export const CreateSubscriptionPackageBody = zod.object({
@@ -4053,6 +4277,7 @@ export const CreateSubscriptionPackageBody = zod.object({
   "currency": zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
   "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
   "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
+  "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "active": zod.boolean()
 })
 
@@ -4060,6 +4285,8 @@ export const createSubscriptionPackageResponseCurrencyMin = 3;
 export const createSubscriptionPackageResponseCurrencyMax = 3;
 
 export const createSubscriptionPackageResponseContactLimitMin = 0;
+
+export const createSubscriptionPackageResponseEmailAccountLimitMin = 0;
 
 
 
@@ -4071,6 +4298,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "currency": zod.string().min(createSubscriptionPackageResponseCurrencyMin).max(createSubscriptionPackageResponseCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4098,6 +4326,9 @@ export const updateSubscriptionPackageBodyPeriodDaysMax = 3660;
 export const updateSubscriptionPackageBodyContactLimitMin = 0;
 export const updateSubscriptionPackageBodyContactLimitMax = 10000000;
 
+export const updateSubscriptionPackageBodyEmailAccountLimitMin = 0;
+export const updateSubscriptionPackageBodyEmailAccountLimitMax = 100;
+
 
 
 export const UpdateSubscriptionPackageBody = zod.object({
@@ -4107,6 +4338,7 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "currency": zod.string().regex(updateSubscriptionPackageBodyCurrencyRegExp).optional(),
   "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
+  "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "active": zod.boolean().optional()
 })
 
@@ -4114,6 +4346,8 @@ export const updateSubscriptionPackageResponseCurrencyMin = 3;
 export const updateSubscriptionPackageResponseCurrencyMax = 3;
 
 export const updateSubscriptionPackageResponseContactLimitMin = 0;
+
+export const updateSubscriptionPackageResponseEmailAccountLimitMin = 0;
 
 
 
@@ -4125,6 +4359,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "currency": zod.string().min(updateSubscriptionPackageResponseCurrencyMin).max(updateSubscriptionPackageResponseCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4144,6 +4379,8 @@ export const giftAdminSubscriptionResponsePackageCurrencyMax = 3;
 
 export const giftAdminSubscriptionResponsePackageContactLimitMin = 0;
 
+export const giftAdminSubscriptionResponsePackageEmailAccountLimitMin = 0;
+
 
 
 export const GiftAdminSubscriptionResponse = zod.object({
@@ -4159,6 +4396,7 @@ export const GiftAdminSubscriptionResponse = zod.object({
   "currency": zod.string().min(giftAdminSubscriptionResponsePackageCurrencyMin).max(giftAdminSubscriptionResponsePackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4174,6 +4412,8 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax = 
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
 
+export const listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
+
 
 
 export const ListAvailableSubscriptionPackagesResponse = zod.object({
@@ -4185,6 +4425,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "currency": zod.string().min(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4199,6 +4440,8 @@ export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin = 3
 export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax = 3;
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin = 0;
+
+export const getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
 
 
@@ -4216,6 +4459,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "currency": zod.string().min(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4228,13 +4472,16 @@ export const GetCurrentSubscriptionResponse = zod.object({
  * @summary Activate a free package without creating a payment or Razorpay order
  */
 export const ActivateFreeSubscriptionBody = zod.object({
-  "packageId": zod.string().uuid()
+  "packageId": zod.string().uuid(),
+  "senderAccountIdsToKeep": zod.array(zod.string().uuid()).optional()
 })
 
 export const activateFreeSubscriptionResponseSubscriptionPackageCurrencyMin = 3;
 export const activateFreeSubscriptionResponseSubscriptionPackageCurrencyMax = 3;
 
 export const activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin = 0;
+
+export const activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin = 0;
 
 
 
@@ -4252,6 +4499,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "currency": zod.string().min(activateFreeSubscriptionResponseSubscriptionPackageCurrencyMin).max(activateFreeSubscriptionResponseSubscriptionPackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4264,7 +4512,8 @@ export const ActivateFreeSubscriptionResponse = zod.object({
  * @summary Create a server-priced Razorpay order for a package
  */
 export const CreateSubscriptionOrderBody = zod.object({
-  "packageId": zod.string().uuid()
+  "packageId": zod.string().uuid(),
+  "senderAccountIdsToKeep": zod.array(zod.string().uuid()).optional()
 })
 
 export const CreateSubscriptionOrderResponse = zod.object({
@@ -4303,6 +4552,8 @@ export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax = 3;
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin = 0;
 
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
+
 
 
 export const VerifyRazorpayPaymentResponse = zod.object({
@@ -4321,6 +4572,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "currency": zod.string().min(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

@@ -8,5 +8,6 @@
 import type { TenantSendingSettingsInput } from './tenantSendingSettingsInput';
 
 export interface TenantSendingConnectionTestInput {
+  accountId?: string;
   settings: TenantSendingSettingsInput;
 }

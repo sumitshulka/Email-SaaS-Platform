@@ -31,9 +31,11 @@ export const emailCampaignRecipientStatusEnum = pgEnum(
 export const tenantSendingConfigurationTable = pgTable(
   "tenant_sending_configurations",
   {
+    id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id")
-      .primaryKey()
+      .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
+    isPrimary: boolean("is_primary").notNull().default(true),
     provider: varchar("provider", { length: 32 }).notNull().default("other"),
     host: varchar("host", { length: 255 }).notNull(),
     port: integer("port").notNull(),
@@ -46,11 +48,21 @@ export const tenantSendingConfigurationTable = pgTable(
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     connectionCheckStatus: varchar("connection_check_status", { length: 16 }),
     connectionCheckAt: timestamp("connection_check_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
+  (table) => [
+    index("tenant_sending_configurations_user_idx").on(table.userId),
+    uniqueIndex("tenant_sending_configurations_primary_unique")
+      .on(table.userId)
+      .where(sql`${table.isPrimary} = true`),
+  ],
 );
 
 export const gmailMailboxConnectionsTable = pgTable(
@@ -258,6 +270,10 @@ export const emailCampaignsTable = pgTable(
     listId: uuid("list_id").references(() => contactListsTable.id, {
       onDelete: "set null",
     }),
+    senderAccountId: uuid("sender_account_id").references(
+      () => tenantSendingConfigurationTable.id,
+      { onDelete: "set null" },
+    ),
     listIds: uuid("list_ids")
       .array()
       .notNull()
@@ -283,6 +299,7 @@ export const emailCampaignsTable = pgTable(
     index("email_campaigns_user_created_idx").on(table.userId, table.createdAt),
     index("email_campaigns_user_status_idx").on(table.userId, table.status),
     index("email_campaigns_list_idx").on(table.listId),
+    index("email_campaigns_sender_account_idx").on(table.senderAccountId),
   ],
 );
 

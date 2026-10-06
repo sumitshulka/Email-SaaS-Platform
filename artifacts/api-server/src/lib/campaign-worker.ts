@@ -17,6 +17,7 @@ import {
   emailCampaignsTable,
   emailSendAttemptsTable,
   tenantSendingConfigurationTable,
+  usersTable,
   type EmailCampaign,
   type EmailCampaignRecipient,
   type TenantSendingConfiguration,
@@ -332,14 +333,12 @@ async function claimDelivery(
 ): Promise<DeliveryClaim | null> {
   const now = new Date();
   return db.transaction(async (tx) => {
-    // Lock this tenant's sender row first so concurrent workers cannot race the
-    // rate-limit ledger for the same workspace.
-    const [sender] = await tx
-      .select()
-      .from(tenantSendingConfigurationTable)
-      .where(eq(tenantSendingConfigurationTable.userId, userId))
+    // Multiple senders still share one tenant-wide rate-limit ledger.
+    await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
       .for("update");
-    if (!sender?.verifiedAt) return null;
 
     const [recipient] = await tx
       .select()
@@ -383,6 +382,25 @@ async function claimDelivery(
         .where(eq(emailCampaignRecipientsTable.id, recipient.id));
       return { completedCampaignId: recipient.campaignId };
     }
+
+    const [sender] = await tx
+      .select()
+      .from(tenantSendingConfigurationTable)
+      .where(
+        and(
+          eq(tenantSendingConfigurationTable.userId, userId),
+          campaign.senderAccountId
+            ? eq(tenantSendingConfigurationTable.id, campaign.senderAccountId)
+            : undefined,
+        ),
+      )
+      .orderBy(
+        desc(tenantSendingConfigurationTable.isPrimary),
+        asc(tenantSendingConfigurationTable.createdAt),
+      )
+      .limit(1)
+      .for("update");
+    if (!sender?.verifiedAt) return null;
 
     let personalization: CampaignPersonalization;
     if (recipient.contactId) {
@@ -515,6 +533,10 @@ async function claimDelivery(
           inArray(emailCampaignsTable.status, ["queued", "sending"]),
         ),
       );
+    await tx
+      .update(tenantSendingConfigurationTable)
+      .set({ lastUsedAt: now, updatedAt: now })
+      .where(eq(tenantSendingConfigurationTable.id, sender.id));
     return {
       sender,
       campaign,

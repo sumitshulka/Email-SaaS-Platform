@@ -19,18 +19,19 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey,
+  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useStartGmailMailboxConnection,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetTenantSendingSettings,
-  useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, usePreviewCampaign, useSendCampaign,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary,
+  useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
+  useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
-  useUpdateContactList, useUpdateTenantSendingSettings,
+  useUpdateContactList,
 } from '@workspace/api-client-react';
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
-  ContactAudienceSegment, ContactExportInput, TenantSendingSettings, TenantSendingSettingsInput,
+  ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput,
 } from '@workspace/api-client-react';
 import { downloadWorkbook } from '@/lib/download-workbook';
 
@@ -115,8 +116,11 @@ const blankSettings = {
 };
 
 export function SendingSettingsPage() {
-  const query = useGetTenantSendingSettings();
-  const update = useUpdateTenantSendingSettings();
+  const query = useListTenantSendingAccounts();
+  const createAccount = useCreateTenantSendingAccount();
+  const updateAccount = useUpdateTenantSendingAccount();
+  const deleteAccount = useDeleteTenantSendingAccount();
+  const setPrimaryAccount = useSetPrimaryTenantSendingAccount();
   const test = useTestTenantSendingSettings();
   const connectionTest = useTestTenantSendingConnection();
   const gmailConnection = useGetGmailMailboxConnection({
@@ -130,6 +134,7 @@ export function SendingSettingsPage() {
   const qc = useQueryClient();
   const { notice, setNotice, dismiss } = useNotice();
   const [form, setForm] = useState(blankSettings);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
   const [initialized, setInitialized] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [connectionResult, setConnectionResult] = useState<{
@@ -138,12 +143,26 @@ export function SendingSettingsPage() {
     checkedAt: string;
     savedSettingsUpdated: boolean;
   } | null>(null);
-  const settings = query.data as TenantSendingSettings | undefined;
+  const accounts = query.data?.accounts ?? [];
+  const settings = accounts.find(account => account.id === selectedAccountId);
+  const formForAccount = (account?: TenantSendingAccount) => account ? ({
+    provider: account.provider,
+    host: account.host || '',
+    port: String(account.port || 587),
+    encryption: account.encryption || 'tls',
+    username: '',
+    password: '',
+    fromName: account.fromName || '',
+    fromEmail: account.fromEmail || '',
+    replyTo: account.replyTo || '',
+  }) : blankSettings;
   useEffect(() => {
-    if (!settings || initialized) return;
-    setForm({ provider: settings.provider, host: settings.host || '', port: String(settings.port || 587), encryption: settings.encryption || 'tls', username: '', password: '', fromName: settings.fromName || '', fromEmail: settings.fromEmail || '', replyTo: settings.replyTo || '' });
+    if (!query.data || initialized) return;
+    const initial = accounts.find(account => account.isPrimary) ?? accounts[0];
+    setSelectedAccountId(initial?.id ?? '');
+    setForm(formForAccount(initial));
     setInitialized(true);
-  }, [settings, initialized]);
+  }, [query.data, accounts, initialized]);
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get('gmail');
     if (result === 'connected') {
@@ -166,13 +185,45 @@ export function SendingSettingsPage() {
     onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
   });
   const change = (key: keyof typeof form, value: string) => setForm(current => ({ ...current, [key]: value }));
+  const refreshSenderAccounts = () => {
+    void qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+    void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+  };
+  const selectAccount = (accountId: string) => {
+    setSelectedAccountId(accountId);
+    setForm(formForAccount(accounts.find(account => account.id === accountId)));
+    setConnectionResult(null);
+  };
+  const addAccount = () => {
+    setSelectedAccountId('');
+    setForm(blankSettings);
+    setConnectionResult(null);
+  };
   const save = (e: FormEvent) => {
     e.preventDefault();
     const data: TenantSendingSettingsInput = currentSendingSettings();
-    update.mutate({ data }, {
-      onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); setForm(v => ({ ...v, password: '' })); setNotice({ kind: 'success', text: 'Sender identity saved. Your credentials remain encrypted in this workspace.' }); },
-      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
-    });
+    const onSuccess = (account?: TenantSendingAccount) => {
+      refreshSenderAccounts();
+      if (account) {
+        setSelectedAccountId(account.id);
+        setInitialized(true);
+      }
+      setForm(value => ({ ...value, password: '' }));
+      setNotice({ kind: 'success', text: 'Sender identity saved. SMTP credentials remain encrypted in this workspace.' });
+    };
+    const onError = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
+    if (selectedAccountId) {
+      updateAccount.mutate({ accountId: selectedAccountId, data }, {
+        onSuccess: response => onSuccess(response.account),
+        onError,
+      });
+    } else {
+      createAccount.mutate({ data }, {
+        onSuccess: response => onSuccess(response.account),
+        onError,
+      });
+    }
   };
   const currentSendingSettings = (): TenantSendingSettingsInput => ({
       provider: form.provider, host: form.host.trim(), port: Number(form.port), encryption: form.encryption,
@@ -188,7 +239,7 @@ export function SendingSettingsPage() {
   );
   const runConnectionTest = () => {
     setConnectionResult(null);
-    connectionTest.mutate({ data: { settings: currentSendingSettings() } }, {
+    connectionTest.mutate({ data: { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), settings: currentSendingSettings() } }, {
       onSuccess: response => {
         setConnectionResult({
           kind: 'success',
@@ -196,7 +247,7 @@ export function SendingSettingsPage() {
           checkedAt: response.checkedAt,
           savedSettingsUpdated: response.savedSettingsUpdated,
         });
-        void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+        refreshSenderAccounts();
         setNotice({ kind: 'success', text: response.message });
       },
       onError: error => {
@@ -225,27 +276,95 @@ export function SendingSettingsPage() {
               errorData.savedSettingsUpdated === true,
             ),
         });
-        void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+        refreshSenderAccounts();
         setNotice({ kind: 'error', text: message });
       },
     });
   };
   const runTest = (e: FormEvent) => {
     e.preventDefault();
-    test.mutate({ data: { settings: currentSendingSettings(), toEmail: testEmail.trim() } }, {
+    test.mutate({ data: { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), settings: currentSendingSettings(), toEmail: testEmail.trim() } }, {
       onSuccess: response => {
         if (response.verifiedAt) {
-          void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
-          void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+          refreshSenderAccounts();
         }
         setNotice({ kind: 'success', text: response.message || 'SMTP accepted the test message; check the recipient mailbox to confirm it arrived.' });
       },
       onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
     });
   };
+  const makePrimary = (account: TenantSendingAccount) => setPrimaryAccount.mutate(
+    { accountId: account.id },
+    {
+      onSuccess: () => {
+        refreshSenderAccounts();
+        setNotice({ kind: 'success', text: `${account.fromEmail} is now the default campaign sender.` });
+      },
+      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+    },
+  );
+  const removeAccount = (account: TenantSendingAccount) => {
+    const confirmed = window.confirm(
+      `Remove ${account.fromEmail} from this workspace? Its saved SMTP credentials will be deleted. Draft campaigns will no longer be assigned to this sender.`,
+    );
+    if (!confirmed) return;
+    deleteAccount.mutate(
+      { accountId: account.id },
+      {
+        onSuccess: async () => {
+          await qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+          if (selectedAccountId === account.id) {
+            setSelectedAccountId('');
+            setInitialized(false);
+            setForm(blankSettings);
+          }
+          setNotice({ kind: 'success', text: 'SMTP sender account and its saved credentials were removed.' });
+        },
+        onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+      },
+    );
+  };
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => void query.refetch()} label="sender settings"><>
     <Heading eyebrow="SENDING / IDENTITY" title="Email Setup" detail="Configure the email account this workspace uses to send campaigns and monitor delivery."/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
+    <section data-testid="section-sender-accounts" className={`${panelClass} mb-5 p-5 sm:p-6`}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">SENDER ACCOUNTS</div>
+          <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">SMTP accounts for campaigns</h2>
+          <p className="mt-1 text-[12px] leading-5 text-[#687484]">Each connected SMTP account uses one slot in your subscription. Gmail bounce monitoring is managed separately below.</p>
+        </div>
+        <span data-testid="text-sender-account-usage" className="rounded-md border border-[#dce4eb] bg-[#f7f9fb] px-3 py-2 text-[11px] font-semibold text-[#405469]">
+          {query.data?.configuredCount ?? accounts.length} of {query.data?.emailAccountLimit ?? 1} account slots used
+        </span>
+      </div>
+      {query.data?.overLimit && <p role="alert" className="mt-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2.5 text-[11px] leading-5 text-[#895b2f]">This workspace has more SMTP accounts than its current package allows. Remove accounts until you are within the limit. Campaign sending is paused until then.</p>}
+      {query.data?.scheduledDowngrade && <p data-testid="text-scheduled-sender-retention" className="mt-4 rounded-md border border-[#d6e3ef] bg-[#f3f7fb] px-3 py-2.5 text-[11px] leading-5 text-[#385c7e]">
+        {query.data.scheduledDowngrade.packageName} starts {formatDate(query.data.scheduledDowngrade.startsAt)}. {query.data.scheduledDowngrade.accountIdsToKeep.length} selected SMTP account{query.data.scheduledDowngrade.accountIdsToKeep.length === 1 ? '' : 's'} will stay; other saved accounts will be removed then.
+      </p>}
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
+        {accounts.map(account => <article key={account.id} data-testid={`card-sender-account-${account.id}`} className={`rounded-md border p-3 ${selectedAccountId === account.id ? 'border-[#8eafd0] bg-[#f5f9fd]' : 'border-[#e3e8ed] bg-white'}`}>
+          <button type="button" data-testid={`button-select-sender-account-${account.id}`} onClick={() => selectAccount(account.id)} className="block w-full text-left">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate text-[12px] font-semibold text-[#28394d]">{account.fromEmail}</span>
+              {account.isPrimary && <Status tone="blue">default</Status>}
+              {account.verified && <Status tone="green">verified</Status>}
+            </div>
+            <p className="mt-1 truncate text-[11px] text-[#778392]">{account.fromName} · {account.host}:{account.port}</p>
+            {account.activeCampaignCount > 0 && <p className="mt-1 text-[10px] text-[#895b2f]">{account.activeCampaignCount} queued or sending campaign{account.activeCampaignCount === 1 ? '' : 's'}</p>}
+          </button>
+          <div className="mt-2 flex flex-wrap gap-2 border-t border-[#edf0f2] pt-2">
+            {!account.isPrimary && <button type="button" data-testid={`button-primary-sender-account-${account.id}`} onClick={() => makePrimary(account)} disabled={setPrimaryAccount.isPending} className="text-[10px] font-semibold text-[#245b9b] hover:underline disabled:opacity-50">Make default</button>}
+            <button type="button" data-testid={`button-delete-sender-account-${account.id}`} onClick={() => removeAccount(account)} disabled={account.activeCampaignCount > 0 || deleteAccount.isPending} className="text-[10px] font-semibold text-[#a44f42] hover:underline disabled:cursor-not-allowed disabled:opacity-45">Remove</button>
+          </div>
+        </article>)}
+        <button type="button" data-testid="button-add-sender-account" onClick={addAccount} disabled={accounts.length >= (query.data?.emailAccountLimit ?? 1)} className="flex min-h-20 items-center justify-center gap-2 rounded-md border border-dashed border-[#ccd7e1] bg-[#fbfcfd] px-3 text-[11px] font-semibold text-[#38638a] hover:bg-[#f4f8fb] disabled:cursor-not-allowed disabled:opacity-50">
+          <CirclePlus className="h-4 w-4"/>Add SMTP account
+        </button>
+      </div>
+    </section>
     <section data-testid="section-gmail-bounce-monitor" className={`${panelClass} mb-5 p-5 sm:p-6`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
@@ -300,7 +419,7 @@ export function SendingSettingsPage() {
           <Field label="From email" value={form.fromEmail} onChange={v => change('fromEmail', v)} type="email" placeholder="hello@example.com" required testId="input-from-email"/>
           <div className="sm:col-span-2"><Field label="Reply-to address" value={form.replyTo} onChange={v => change('replyTo', v)} type="email" placeholder="Optional — defaults to from address" testId="input-reply-to"/></div>
         </div>
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={update.isPending}>{update.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}{update.isPending ? 'Saving settings' : 'Save sender settings'}</Button></div>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={updateAccount.isPending || createAccount.isPending}>{(updateAccount.isPending || createAccount.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{(updateAccount.isPending || createAccount.isPending) ? 'Saving settings' : selectedAccountId ? 'Save sender settings' : 'Add sender account'}</Button></div>
       </form>
        <div className={`${panelClass} overflow-hidden`}>
          <div className="bg-[#f5f8fb] p-5"><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">CONNECTION CHECK</div><h2 className="display mt-2 text-[19px] font-bold text-[#1c2b3d]">Test SMTP settings</h2><p className="mt-2 text-[12px] leading-5 text-[#718091]">Use the values currently in the form. You can check login without sending, or send a real test email to confirm the server accepts a message.</p></div>
@@ -1006,13 +1125,13 @@ export function ListsPage() {
   </></QueryState>;
 }
 
-type CampaignForm = { name: string; objective: string; subject: string; textBody: string; htmlBody: string; listIds: string[] };
-const blankCampaign: CampaignForm = { name: '', objective: '', subject: '', textBody: '', htmlBody: '', listIds: [] };
+type CampaignForm = { name: string; objective: string; subject: string; textBody: string; htmlBody: string; listIds: string[]; senderAccountId: string };
+const blankCampaign: CampaignForm = { name: '', objective: '', subject: '', textBody: '', htmlBody: '', listIds: [], senderAccountId: '' };
 
 export function CampaignsPage() {
   const [, setLocation] = useLocation();
   const subjectInputRef = useRef<HTMLInputElement>(null);
-  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists();
+  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const previewCampaign = usePreviewCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -1030,6 +1149,8 @@ export function CampaignsPage() {
   const [queueStartError, setQueueStartError] = useState<string | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
+  const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
+  const primarySenderAccountId = senderAccounts.find(account => account.isPrimary)?.id ?? senderAccounts[0]?.id ?? '';
   const sampleContactsParams = { limit: 100, listIds: form.listIds, subscribed: true };
   const contactsQuery = useListContactOptions(sampleContactsParams, {
     query: {
@@ -1118,8 +1239,8 @@ export function CampaignsPage() {
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [] }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subject: campaign.subject, textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -1186,7 +1307,7 @@ export function CampaignsPage() {
     if (!form.listIds.length || !audienceCheckReady || audienceActionInProgress.current) return;
     audienceActionInProgress.current = true;
     setAudienceActionPending(true);
-    const data = { name: form.name.trim(), objective: form.objective.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: [...form.listIds] };
+    const data = { name: form.name.trim(), objective: form.objective.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: [...form.listIds], senderAccountId: form.senderAccountId || null };
     try {
       const audience = await campaignAudienceQuery.refetch();
       if (audience.isError || !audience.data) {
@@ -1272,6 +1393,14 @@ export function CampaignsPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="min-w-0 space-y-3">
             <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>
+            <label className="block min-w-0">
+              <span className={labelClass}>SMTP sender account</span>
+              <select data-testid="select-campaign-sender-account" className={inputClass} value={form.senderAccountId} onChange={event => setForm(current => ({ ...current, senderAccountId: event.target.value }))} disabled={senderAccountsQuery.isLoading}>
+                <option value="">Use the default account</option>
+                {senderAccounts.map(account => <option key={account.id} value={account.id}>{account.fromEmail}{account.isPrimary ? ' · default' : ''}{account.verified ? '' : ' · not verified'}</option>)}
+              </select>
+              <span className="mt-1 block text-[10px] leading-4 text-[#808a97]">{senderAccounts.length ? 'The chosen account sends this campaign. The default account is used when no account is selected.' : 'No SMTP account is configured. Add and verify one in Email Setup before queueing this campaign.'}</span>
+            </label>
             <label className="block min-w-0">
               <span className={labelClass}>Campaign objective</span>
               <textarea data-testid="input-campaign-objective" rows={3} maxLength={500} value={form.objective} onChange={event => setForm(current => ({ ...current, objective: event.target.value }))} placeholder="What should this campaign achieve?" className="w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none placeholder:text-[#a0a8b3] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/>

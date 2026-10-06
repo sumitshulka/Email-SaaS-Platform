@@ -7,6 +7,8 @@
  */
 
 export interface CampaignUpdate {
+  /** @nullable */
+  senderAccountId?: string | null;
   /**
      * @minLength 1
      * @maxLength 160

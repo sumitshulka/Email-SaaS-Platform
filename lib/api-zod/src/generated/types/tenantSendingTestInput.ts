@@ -9,5 +9,6 @@ import type { TenantSendingSettingsInput } from './tenantSendingSettingsInput';
 
 export interface TenantSendingTestInput {
   toEmail: string;
+  accountId?: string;
   settings: TenantSendingSettingsInput;
 }

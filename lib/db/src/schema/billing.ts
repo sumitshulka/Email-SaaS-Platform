@@ -42,6 +42,7 @@ export const subscriptionPackagesTable = pgTable(
     currency: varchar("currency", { length: 3 }).notNull().default("INR"),
     periodDays: integer("period_days").notNull(),
     contactLimit: integer("contact_limit").notNull().default(5000),
+    emailAccountLimit: integer("email_account_limit").notNull().default(1),
     active: boolean("active").notNull().default(true),
     createdBy: uuid("created_by").references(() => usersTable.id, {
       onDelete: "set null",
@@ -106,6 +107,7 @@ export const paymentsTable = pgTable(
     razorpayEnvironment: razorpayEnvironmentEnum("razorpay_environment"),
     razorpayOrderId: varchar("razorpay_order_id", { length: 80 }),
     razorpayPaymentId: varchar("razorpay_payment_id", { length: 80 }),
+    senderAccountIdsToKeep: uuid("sender_account_ids_to_keep").array(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -142,6 +144,7 @@ export const userSubscriptionsTable = pgTable(
     status: subscriptionStatusEnum("status").notNull().default("active"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    senderAccountIdsToKeep: uuid("sender_account_ids_to_keep").array(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

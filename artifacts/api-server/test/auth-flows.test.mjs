@@ -189,6 +189,7 @@ memory.public.none(`
     currency varchar(3) NOT NULL DEFAULT 'INR',
     period_days integer NOT NULL,
     contact_limit integer NOT NULL DEFAULT 5000,
+    email_account_limit integer NOT NULL DEFAULT 1,
     active boolean NOT NULL DEFAULT true,
     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
     updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -206,6 +207,7 @@ memory.public.none(`
     amount_minor integer NOT NULL,
     currency varchar(3) NOT NULL,
     status payment_status NOT NULL DEFAULT 'created',
+    sender_account_ids_to_keep uuid[],
     razorpay_environment razorpay_environment,
     razorpay_order_id varchar(80),
     razorpay_payment_id varchar(80),
@@ -220,6 +222,7 @@ memory.public.none(`
     status subscription_status NOT NULL DEFAULT 'active',
     starts_at timestamptz NOT NULL,
     ends_at timestamptz NOT NULL,
+    sender_account_ids_to_keep uuid[],
     created_at timestamptz NOT NULL DEFAULT now()
   );
   CREATE TABLE audit_logs (
@@ -235,7 +238,11 @@ memory.public.none(`
   CREATE TYPE email_campaign_status AS ENUM ('draft', 'queued', 'sending', 'completed');
   CREATE TYPE email_campaign_recipient_status AS ENUM ('queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown');
   CREATE TABLE tenant_sending_configurations (
-    user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_primary boolean NOT NULL DEFAULT true,
+    last_used_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now(),
     provider varchar(32) NOT NULL DEFAULT 'other',
     host varchar(255) NOT NULL,
     port integer NOT NULL,
@@ -369,6 +376,7 @@ memory.public.none(`
   CREATE TABLE email_campaigns (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_account_id uuid REFERENCES tenant_sending_configurations(id) ON DELETE SET NULL,
     list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
     list_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
     name varchar(160) NOT NULL,
@@ -2095,7 +2103,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(afterInvalidImports.body.contacts.length, 1);
   });
 
-  it("stores package contact limits and returns them from create and update", async () => {
+  it("stores package contact and SMTP account limits and returns them from create and update", async () => {
     const admin = await loggedInUser({
       username: "package-limit-admin",
       role: "SUPERADMIN",
@@ -2110,24 +2118,28 @@ describe("tenant contact management and package quotas", { concurrency: false },
         currency: "INR",
         periodDays: 30,
         contactLimit: 1250,
+        emailAccountLimit: 2,
         active: true,
       },
     });
     assert.equal(created.response.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.contactLimit, 1250);
+    assert.equal(created.body.emailAccountLimit, 2);
 
     const updated = await api(`/admin/billing/packages/${created.body.id}`, {
       method: "PATCH",
       cookie: admin.cookie,
-      body: { contactLimit: 2400 },
+      body: { contactLimit: 2400, emailAccountLimit: 4 },
     });
     assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
     assert.equal(updated.body.contactLimit, 2400);
+    assert.equal(updated.body.emailAccountLimit, 4);
     const [saved] = await db
       .select()
       .from(dbModule.subscriptionPackagesTable)
       .where(eq(dbModule.subscriptionPackagesTable.id, created.body.id));
     assert.equal(saved.contactLimit, 2400);
+    assert.equal(saved.emailAccountLimit, 4);
   });
 
   it("creates and activates free packages without a payment or Razorpay order", async () => {
@@ -5341,6 +5353,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         currency: "INR",
         periodDays: 30,
         contactLimit: 10,
+        emailAccountLimit: 2,
       })
       .returning();
     await db.insert(dbModule.userSubscriptionsTable).values([
@@ -5759,6 +5772,49 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(crossTenantRecipientSummary.response.status, 400);
 
+    const backupSender = await api("/sending/accounts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        provider: "other",
+        host: "smtp.backup.owner.test",
+        port: 465,
+        encryption: "ssl",
+        username: "smtp-backup-user",
+        password: "smtp-backup-secret",
+        fromName: "Backup Owner Mail",
+        fromEmail: "backup@owner.test",
+      },
+    });
+    assert.equal(backupSender.response.status, 201, JSON.stringify(backupSender.body));
+    assert.equal(backupSender.body.account.isPrimary, false);
+    assert.equal(backupSender.body.account.fromEmail, "backup@owner.test");
+    await db
+      .update(dbModule.tenantSendingConfigurationTable)
+      .set({ verifiedAt: new Date() })
+      .where(eq(dbModule.tenantSendingConfigurationTable.id, backupSender.body.account.id));
+    const sendingAccounts = await api("/sending/accounts", { cookie: owner.cookie });
+    assert.equal(sendingAccounts.response.status, 200);
+    assert.equal(sendingAccounts.body.emailAccountLimit, 2);
+    assert.equal(sendingAccounts.body.configuredCount, 2);
+    assert.equal(sendingAccounts.body.overLimit, false);
+    const thirdSender = await api("/sending/accounts", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        provider: "other",
+        host: "smtp.third.owner.test",
+        port: 587,
+        encryption: "tls",
+        username: "smtp-third-user",
+        password: "smtp-third-secret",
+        fromName: "Third Owner Mail",
+        fromEmail: "third@owner.test",
+      },
+    });
+    assert.equal(thirdSender.response.status, 409);
+    assert.equal(thirdSender.body.code, "SENDER_ACCOUNT_LIMIT_REACHED");
+
     const campaign = await api("/campaigns", {
       method: "POST",
       cookie: owner.cookie,
@@ -5769,9 +5825,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           textBody: "Hello {{firstName}} from the campaign.",
           htmlBody: "<p>Draft <em>format</em></p>",
         listIds: [ownerSecondaryList.body.id, ownerList.body.id],
+        senderAccountId: backupSender.body.account.id,
       },
     });
     assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+    assert.equal(campaign.body.senderAccountId, backupSender.body.account.id);
     assert.equal(campaign.body.objective, "Share the launch update with active subscribers.");
     assert.equal(campaign.body.htmlBody, "<p>Draft <em>format</em></p>");
     assert.equal(campaign.body.listId, ownerSecondaryList.body.id);
@@ -5867,6 +5925,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
     assert.equal(queued.body.recipients, 3);
     assert.ok(queued.body.scheduledAt);
+    const inUseSenderDeletion = await api(
+      `/sending/accounts/${backupSender.body.account.id}`,
+      { method: "DELETE", cookie: owner.cookie },
+    );
+    assert.equal(inUseSenderDeletion.response.status, 409);
     const queuedRecipients = await db
       .select({
         email: dbModule.emailCampaignRecipientsTable.email,
@@ -6046,6 +6109,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         message.subject.startsWith("A workspace update for "),
       ).length,
       2,
+    );
+    assert.ok(
+      testedEmailConfigurations.some(
+        (configuration) => configuration.host === "smtp.backup.owner.test",
+      ),
+      "queued campaign should send through its explicitly selected SMTP account",
     );
     const personalizedDelivery = tenantDeliveries.find(
       (message) => message.to === "one@owner.test",
@@ -6668,6 +6737,115 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(terminalUnknownReport.body.summary.sendFailed, 1);
     assert.equal(terminalUnknownReport.body.summary.smtpAccepted, 0);
+  });
+
+  it("retains the selected SMTP sender and removes the other account when a lower-limit package starts", async () => {
+    const owner = await loggedInUser({ username: "sender-retention-owner" });
+    const [paidPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Two sender package",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 100,
+        emailAccountLimit: 2,
+      })
+      .returning();
+    const [currentSubscription] = await db
+      .insert(dbModule.userSubscriptionsTable)
+      .values({
+        userId: owner.user.id,
+        packageId: paidPackage.id,
+        status: "active",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60 * 60_000),
+      })
+      .returning();
+    const createSender = async (host, fromEmail) =>
+      api("/sending/accounts", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: {
+          provider: "other",
+          host,
+          port: 587,
+          encryption: "tls",
+          username: `${fromEmail}-user`,
+          password: `${fromEmail}-secret`,
+          fromName: "Retention Test",
+          fromEmail,
+        },
+      });
+    const retained = await createSender("smtp.keep.test", "keep@retention.test");
+    const removed = await createSender("smtp.remove.test", "remove@retention.test");
+    assert.equal(retained.response.status, 201, JSON.stringify(retained.body));
+    assert.equal(removed.response.status, 201, JSON.stringify(removed.body));
+    assert.equal(retained.body.account.isPrimary, true);
+    assert.equal(removed.body.account.isPrimary, false);
+    const [freePackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "One sender package",
+        description: "",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 100,
+        emailAccountLimit: 1,
+      })
+      .returning();
+
+    const downgrade = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        packageId: freePackage.id,
+        senderAccountIdsToKeep: [retained.body.account.id],
+      },
+    });
+    assert.equal(downgrade.response.status, 200, JSON.stringify(downgrade.body));
+    const beforeStart = await api("/sending/accounts", { cookie: owner.cookie });
+    assert.equal(beforeStart.body.configuredCount, 2);
+    assert.equal(beforeStart.body.scheduledDowngrade.emailAccountLimit, 1);
+    assert.deepEqual(beforeStart.body.scheduledDowngrade.accountIdsToKeep, [
+      retained.body.account.id,
+    ]);
+
+    const [scheduledSubscription] = await db
+      .select()
+      .from(dbModule.userSubscriptionsTable)
+      .where(
+        and(
+          eq(dbModule.userSubscriptionsTable.userId, owner.user.id),
+          eq(dbModule.userSubscriptionsTable.packageId, freePackage.id),
+        ),
+      );
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({ endsAt: new Date(Date.now() - 1000) })
+      .where(eq(dbModule.userSubscriptionsTable.id, currentSubscription.id));
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({
+        startsAt: new Date(Date.now() - 1000),
+        endsAt: new Date(Date.now() + 24 * 60 * 60_000),
+      })
+      .where(eq(dbModule.userSubscriptionsTable.id, scheduledSubscription.id));
+
+    const afterStart = await api("/sending/accounts", { cookie: owner.cookie });
+    assert.equal(afterStart.response.status, 200, JSON.stringify(afterStart.body));
+    assert.equal(afterStart.body.emailAccountLimit, 1);
+    assert.equal(afterStart.body.configuredCount, 1);
+    assert.equal(afterStart.body.overLimit, false);
+    assert.equal(afterStart.body.accounts[0].id, retained.body.account.id);
+    assert.equal(afterStart.body.scheduledDowngrade, null);
+    const deletedSender = await api(
+      `/sending/accounts/${removed.body.account.id}`,
+      { method: "DELETE", cookie: owner.cookie },
+    );
+    assert.equal(deletedSender.response.status, 404);
   });
 });
 

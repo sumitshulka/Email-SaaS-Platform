@@ -446,6 +446,37 @@ export interface TenantSendingSettings {
   updatedAt: string | null;
 }
 
+export type TenantSendingAccount = TenantSendingSettings & ({
+  id: string;
+  isPrimary: boolean;
+  /** @nullable */
+  lastUsedAt: string | null;
+  /** @minimum 0 */
+  activeCampaignCount: number;
+});
+
+export type TenantSendingAccountsScheduledDowngrade = {
+  startsAt: string;
+  packageName: string;
+  /** @minimum 0 */
+  emailAccountLimit: number;
+  accountIdsToKeep: string[];
+} | null;
+
+export interface TenantSendingAccounts {
+  accounts: TenantSendingAccount[];
+  /** @minimum 0 */
+  emailAccountLimit: number;
+  /** @minimum 0 */
+  configuredCount: number;
+  overLimit: boolean;
+  scheduledDowngrade: TenantSendingAccountsScheduledDowngrade;
+}
+
+export interface TenantSendingAccountResponse {
+  account: TenantSendingAccount;
+}
+
 export type TenantSendingSettingsInputProvider = typeof TenantSendingSettingsInputProvider[keyof typeof TenantSendingSettingsInputProvider];
 
 
@@ -644,6 +675,7 @@ export interface Microsoft365TraceConnection {
 
 export interface TenantSendingTestInput {
   toEmail: string;
+  accountId?: string;
   settings: TenantSendingSettingsInput;
 }
 
@@ -654,6 +686,7 @@ export interface TenantSendingTestResponse {
 }
 
 export interface TenantSendingConnectionTestInput {
+  accountId?: string;
   settings: TenantSendingSettingsInput;
 }
 
@@ -1875,6 +1908,8 @@ export const CampaignSummaryStatus = {
 
 export interface CampaignSummary {
   id: string;
+  /** @nullable */
+  senderAccountId: string | null;
   name: string;
   /** @maxLength 500 */
   objective?: string;
@@ -2111,6 +2146,8 @@ export interface CampaignDeliveryReport {
 }
 
 export interface CampaignInput {
+  /** @nullable */
+  senderAccountId?: string | null;
   /**
      * @minLength 1
      * @maxLength 160
@@ -2140,6 +2177,8 @@ export interface CampaignInput {
 }
 
 export interface CampaignUpdate {
+  /** @nullable */
+  senderAccountId?: string | null;
   /**
      * @minLength 1
      * @maxLength 160
@@ -2748,6 +2787,8 @@ export interface SubscriptionPackage {
   periodDays: number;
   /** @minimum 0 */
   contactLimit: number;
+  /** @minimum 0 */
+  emailAccountLimit: number;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -2783,6 +2824,11 @@ export interface SubscriptionPackageInput {
      * @maximum 10000000
      */
   contactLimit: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  emailAccountLimit?: number;
   active: boolean;
 }
 
@@ -2817,6 +2863,11 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 10000000
      */
   contactLimit?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  emailAccountLimit?: number;
   active?: boolean;
 }
 
@@ -2901,10 +2952,12 @@ export interface ContactFilterOptions {
 
 export interface CreateSubscriptionOrderInput {
   packageId: string;
+  senderAccountIdsToKeep?: string[];
 }
 
 export interface ActivateFreeSubscriptionInput {
   packageId: string;
+  senderAccountIdsToKeep?: string[];
 }
 
 export interface SubscriptionOrderCreated {
