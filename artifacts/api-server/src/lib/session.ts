@@ -12,6 +12,19 @@ import { constantTimeEqual, randomToken, requireSessionSecret, sha256 } from "./
 
 const SESSION_COOKIE = "mailflow_session";
 
+function sessionCookieOptions(req: Request, expires?: Date) {
+  const secure = process.env.NODE_ENV === "production" || req.secure;
+  const embeddedPreview = process.env.NODE_ENV !== "production" && req.secure;
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: embeddedPreview ? ("none" as const) : ("lax" as const),
+    path: "/",
+    ...(expires ? { expires } : {}),
+  };
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -58,13 +71,11 @@ export async function createUserSession(
     expiresAt,
   });
 
-  res.cookie(SESSION_COOKIE, signSessionToken(token), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    expires: expiresAt,
-  });
+  res.cookie(
+    SESSION_COOKIE,
+    signSessionToken(token),
+    sessionCookieOptions(req, expiresAt),
+  );
 }
 
 export async function revokeCurrentSession(req: Request): Promise<void> {
@@ -75,13 +86,8 @@ export async function revokeCurrentSession(req: Request): Promise<void> {
     .where(eq(userSessionsTable.tokenHash, req.sessionTokenHash));
 }
 
-export function clearSessionCookie(res: Response): void {
-  res.clearCookie(SESSION_COOKIE, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+export function clearSessionCookie(res: Response, req: Request): void {
+  res.clearCookie(SESSION_COOKIE, sessionCookieOptions(req));
 }
 
 export async function loadSession(

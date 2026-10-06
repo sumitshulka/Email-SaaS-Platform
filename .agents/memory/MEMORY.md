@@ -20,3 +20,4 @@
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
 - [Browser-test resource contention](browser-test-resource-contention.md) — concurrent Vite and Chromium startups can time out; reuse the running web server when available.
 - [Radix dropdown browser checks](radix-dropdown-browser-checks.md) — after list status updates, verify pointer and keyboard ways to reopen the menu separately.
+- [Preview session cookies](preview-session-cookies.md) — HTTPS embedded previews need iframe-compatible cookies; keep local HTTP and production policies distinct.

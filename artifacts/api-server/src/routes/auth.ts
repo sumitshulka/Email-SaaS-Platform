@@ -576,7 +576,7 @@ router.get("/auth/me", requireAuth, (req, res): void => {
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
   await revokeCurrentSession(req);
-  clearSessionCookie(res);
+  clearSessionCookie(res, req);
   res.sendStatus(204);
 });
 

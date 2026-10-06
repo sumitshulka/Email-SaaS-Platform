@@ -3401,6 +3401,29 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(revoked.revokedAt);
   });
 
+  it("issues an iframe-compatible session cookie for secure development previews", async () => {
+    const user = await createUser({
+      username: "secure-preview-cookie",
+      email: "secure-preview-cookie@example.test",
+    });
+    const loginResult = await api("/auth/login", {
+      method: "POST",
+      body: {
+        identifier: user.email,
+        password: "Initial-user-password-2026!",
+      },
+      headers: { "x-forwarded-proto": "https" },
+    });
+
+    assert.equal(loginResult.response.status, 200);
+    const setCookie = loginResult.response.headers.get("set-cookie") ?? "";
+    assert.match(setCookie, /SameSite=None/i);
+    assert.match(setCookie, /Secure/i);
+
+    const current = await api("/auth/me", { cookie: loginResult.cookie });
+    assert.equal(current.response.status, 200);
+  });
+
   it("sends password resets through the test transport, rotates the password, and revokes sessions", async () => {
     const { user, cookie } = await loggedInUser();
     const resetRequest = await api("/auth/forgot-password", {
