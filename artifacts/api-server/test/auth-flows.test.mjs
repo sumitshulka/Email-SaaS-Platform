@@ -3272,6 +3272,92 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
+  it("keeps company detail, updates, and deletion scoped to the owning workspace", async () => {
+    const owner = await loggedInUser({
+      username: "company-private-owner",
+      email: "company-private-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "company-private-other",
+      email: "company-private-other@example.test",
+    });
+    const [ownerCompany] = await db.insert(dbModule.companiesTable).values({
+      userId: owner.user.id,
+      companyName: "Owner Company",
+      companyDomain: "owner-private.test",
+      companyDomainKey: "owner-private.test",
+      companyIndustry: "Technology",
+    }).returning();
+    const [otherCompany] = await db.insert(dbModule.companiesTable).values({
+      userId: other.user.id,
+      companyName: "Other Workspace Company",
+      companyDomain: "other-private.test",
+      companyDomainKey: "other-private.test",
+      companyIndustry: "Finance",
+    }).returning();
+
+    const ownerDetail = await api(`/companies/${ownerCompany.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(ownerDetail.response.status, 200, JSON.stringify(ownerDetail.body));
+    assert.equal(ownerDetail.body.company.id, ownerCompany.id);
+    assert.equal(ownerDetail.body.company.companyName, "Owner Company");
+
+    const foreignDetail = await api(`/companies/${otherCompany.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(foreignDetail.response.status, 404);
+    assert.equal(foreignDetail.body.code, "COMPANY_NOT_FOUND");
+
+    const foreignUpdate = await api(`/companies/${otherCompany.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        companyName: "Changed by another workspace",
+        companyDomain: "changed-private.test",
+      },
+    });
+    assert.equal(foreignUpdate.response.status, 404);
+    assert.equal(foreignUpdate.body.code, "COMPANY_NOT_FOUND");
+
+    const foreignDelete = await api(`/companies/${otherCompany.id}`, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(foreignDelete.response.status, 404);
+    assert.equal(foreignDelete.body.code, "COMPANY_NOT_FOUND");
+
+    const ownerUpdate = await api(`/companies/${ownerCompany.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        companyName: "Updated Owner Company",
+        companyIndustry: "Aerospace",
+      },
+    });
+    assert.equal(ownerUpdate.response.status, 200, JSON.stringify(ownerUpdate.body));
+    assert.equal(ownerUpdate.body.companyName, "Updated Owner Company");
+    assert.equal(ownerUpdate.body.companyIndustry, "Aerospace");
+
+    const otherOwnerDetail = await api(`/companies/${otherCompany.id}`, {
+      cookie: other.cookie,
+    });
+    assert.equal(otherOwnerDetail.response.status, 200, JSON.stringify(otherOwnerDetail.body));
+    assert.equal(otherOwnerDetail.body.company.companyName, "Other Workspace Company");
+    assert.equal(otherOwnerDetail.body.company.companyDomain, "other-private.test");
+    assert.equal(otherOwnerDetail.body.company.companyIndustry, "Finance");
+
+    const [storedForeignCompany] = await db
+      .select()
+      .from(dbModule.companiesTable)
+      .where(eq(dbModule.companiesTable.id, otherCompany.id));
+    assert.ok(storedForeignCompany, "a foreign delete must not remove the company");
+    assert.equal(storedForeignCompany.userId, other.user.id);
+    assert.equal(storedForeignCompany.companyName, "Other Workspace Company");
+    assert.equal(storedForeignCompany.companyDomain, "other-private.test");
+    assert.equal(storedForeignCompany.companyIndustry, "Finance");
+  });
+
   it("searches a bounded page of tenant-owned companies by name or domain", async () => {
     const owner = await loggedInUser({
       username: "company-search-owner",
