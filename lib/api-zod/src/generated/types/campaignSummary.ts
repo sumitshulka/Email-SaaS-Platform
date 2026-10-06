@@ -11,6 +11,11 @@ export interface CampaignSummary {
   id: string;
   /** @nullable */
   senderAccountId: string | null;
+  /**
+     * SMTP sender address captured when queued; drafts use the currently assigned account address.
+     * @nullable
+     */
+  senderEmail: string | null;
   name: string;
   /** @maxLength 500 */
   objective?: string;

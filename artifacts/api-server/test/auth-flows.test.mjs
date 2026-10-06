@@ -377,6 +377,7 @@ memory.public.none(`
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     sender_account_id uuid REFERENCES tenant_sending_configurations(id) ON DELETE SET NULL,
+    sender_email varchar(254),
     list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
     list_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
     name varchar(160) NOT NULL,
@@ -5831,6 +5832,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     });
     assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
     assert.equal(campaign.body.senderAccountId, backupSender.body.account.id);
+    assert.equal(campaign.body.senderEmail, "backup@owner.test");
     assert.equal(campaign.body.objective, "Share the launch update with active subscribers.");
     assert.equal(campaign.body.htmlBody, "<p>Draft <em>format</em></p>");
     assert.equal(campaign.body.listId, ownerSecondaryList.body.id);
@@ -5966,6 +5968,22 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const queuedDashboard = await api(`/campaigns/${campaign.body.id}`, {
       cookie: owner.cookie,
     });
+    await db
+      .update(dbModule.tenantSendingConfigurationTable)
+      .set({ fromEmail: "changed@owner.test" })
+      .where(eq(dbModule.tenantSendingConfigurationTable.id, backupSender.body.account.id));
+    const dashboardAfterSenderEdit = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(
+      dashboardAfterSenderEdit.body.campaign.senderEmail,
+      "backup@owner.test",
+      "queued campaigns retain the sender address captured when they were queued",
+    );
+    await db
+      .update(dbModule.tenantSendingConfigurationTable)
+      .set({ fromEmail: "backup@owner.test" })
+      .where(eq(dbModule.tenantSendingConfigurationTable.id, backupSender.body.account.id));
     assert.equal(queuedDashboard.body.pacing.emailsPerHour, 1);
     assert.equal(queuedDashboard.body.pacing.remainingEmails, 3);
 

@@ -656,6 +656,31 @@ async function campaignPayloads(userId: string) {
     .from(emailCampaignsTable)
     .where(eq(emailCampaignsTable.userId, userId))
     .orderBy(desc(emailCampaignsTable.createdAt));
+  const senderAccountIds = [
+    ...new Set(
+      campaigns
+        .map((campaign) => campaign.senderAccountId)
+        .filter((senderAccountId): senderAccountId is string => senderAccountId !== null),
+    ),
+  ];
+  const senderAccounts =
+    senderAccountIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: tenantSendingConfigurationTable.id,
+            fromEmail: tenantSendingConfigurationTable.fromEmail,
+          })
+          .from(tenantSendingConfigurationTable)
+          .where(
+            and(
+              eq(tenantSendingConfigurationTable.userId, userId),
+              inArray(tenantSendingConfigurationTable.id, senderAccountIds),
+            ),
+          );
+  const senderEmailById = new Map(
+    senderAccounts.map((senderAccount) => [senderAccount.id, senderAccount.fromEmail]),
+  );
   const draftListIds = [
     ...new Set(
       campaigns
@@ -832,6 +857,10 @@ async function campaignPayloads(userId: string) {
             );
     return {
       ...campaign,
+      senderEmail:
+        campaign.senderEmail ??
+        senderEmailById.get(campaign.senderAccountId ?? "") ??
+        null,
       listId: listIds[0] ?? campaign.listId ?? null,
       listIds,
       ...deliveryCounts,
@@ -4211,6 +4240,8 @@ router.post(
         .update(emailCampaignsTable)
         .set({
           status: "queued",
+          senderAccountId: sender.id,
+          senderEmail: sender.fromEmail,
           queuedAt: now,
           scheduledAt,
           updatedAt: now,

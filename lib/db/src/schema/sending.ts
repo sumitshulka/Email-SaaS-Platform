@@ -274,6 +274,7 @@ export const emailCampaignsTable = pgTable(
       () => tenantSendingConfigurationTable.id,
       { onDelete: "set null" },
     ),
+    senderEmail: varchar("sender_email", { length: 254 }),
     listIds: uuid("list_ids")
       .array()
       .notNull()
@@ -465,6 +466,7 @@ export const insertContactListSchema = createInsertSchema(contactListsTable).omi
 });
 export const insertEmailCampaignSchema = createInsertSchema(emailCampaignsTable).omit({
   id: true,
+  senderEmail: true,
   createdAt: true,
   updatedAt: true,
 });

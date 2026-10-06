@@ -2920,6 +2920,7 @@ export const listCampaignsResponseObjectiveMax = 500;
 export const ListCampaignsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
   "name": zod.string(),
   "objective": zod.string().max(listCampaignsResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -2977,6 +2978,7 @@ export const createCampaignResponseObjectiveMax = 500;
 export const CreateCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
   "name": zod.string(),
   "objective": zod.string().max(createCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -3064,6 +3066,7 @@ export const GetCampaignDashboardResponse = zod.object({
   "campaign": zod.object({
   "id": zod.string().uuid(),
   "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
   "name": zod.string(),
   "objective": zod.string().max(getCampaignDashboardResponseCampaignObjectiveMax).optional(),
   "subject": zod.string(),
@@ -3150,6 +3153,7 @@ export const updateCampaignResponseObjectiveMax = 500;
 export const UpdateCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
   "name": zod.string(),
   "objective": zod.string().max(updateCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
@@ -3316,6 +3320,7 @@ export const sendCampaignResponseObjectiveMax = 500;
 export const SendCampaignResponse = zod.object({
   "id": zod.string().uuid(),
   "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
   "name": zod.string(),
   "objective": zod.string().max(sendCampaignResponseObjectiveMax).optional(),
   "subject": zod.string(),
