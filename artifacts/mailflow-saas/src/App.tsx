@@ -220,7 +220,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     items: [
       { href: '/companies', label: 'Companies', icon: Building2 },
       { href: '/contacts', label: 'Contacts', icon: Users },
-      { href: '/contact-field-settings', label: 'Contact fields', icon: Settings2 },
+      { href: '/contact-field-settings', label: 'Contact Fields', icon: Settings2 },
     ],
   },
   {
