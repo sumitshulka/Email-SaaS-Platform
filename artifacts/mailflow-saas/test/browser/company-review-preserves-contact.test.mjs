@@ -128,6 +128,16 @@ function contactDirectoryFixtures() {
       lifecycleStage: 'Lead',
       leadStatus: 'Qualified',
       leadSource: 'Referral',
+      lastEmail: {
+        id: 'browser-filter-last-email-id',
+        campaignId: 'browser-filter-last-campaign-id',
+        campaignName: 'October product update',
+        subject: 'A long campaign subject that should not appear in the compact cell',
+        status: 'delivered',
+        attempts: 1,
+        lastAttemptAt: '2026-10-05T12:15:00.000Z',
+        deliveredAt: '2026-10-05T12:16:00.000Z',
+      },
       createdAt: '2026-10-05T10:00:00.000Z',
     },
     {
@@ -463,6 +473,15 @@ describe('company profile review and contact data preservation', { concurrency: 
       const rows = page.locator('tr[data-testid^="row-contact-"]');
       await page.getByTestId('row-contact-browser-filter-customer-id').waitFor({ state: 'visible' });
       assert.equal(await rows.count(), 3, 'all contacts should appear before filtering');
+      const nameRow = page.getByTestId(`row-contact-${contactId}`);
+      assert.equal(await nameRow.getByTestId(`link-contact-${contactId}`).innerText(), 'Casey Rivera');
+      assert.ok((await nameRow.innerText()).includes('casey.rivera@example.test'));
+      assert.equal((await nameRow.innerText()).includes('Northstar Labs'), false, 'company details stay on the contact detail page');
+      const lastEmailCell = page.getByTestId(`cell-contact-last-email-${contactId}`);
+      assert.equal(await page.getByTestId(`contact-last-email-campaign-${contactId}`).innerText(), 'October product update');
+      assert.ok(await page.getByTestId(`contact-last-email-date-${contactId}`).innerText());
+      assert.equal(await lastEmailCell.locator(':scope > div > div').count(), 2, 'the last email cell should render exactly two detail rows');
+      assert.equal((await lastEmailCell.innerText()).includes('A long campaign subject'), false);
       await page.screenshot({ path: '/tmp/mailflow-contacts-directory-desktop.png', fullPage: true });
 
       await page.getByTestId('select-contact-list-filter').selectOption(filterList.id);
