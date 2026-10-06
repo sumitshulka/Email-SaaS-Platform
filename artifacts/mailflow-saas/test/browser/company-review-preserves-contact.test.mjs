@@ -503,6 +503,82 @@ describe('company profile review and contact data preservation', { concurrency: 
     }
   });
 
+  it('combines company directory filters and clears them together', async () => {
+    const companies = [
+      {
+        ...company,
+        id: 'browser-company-filter-northstar',
+        companyName: 'Northstar Labs',
+        companyIndustry: 'Biotechnology',
+        companySize: '51-200',
+        companyRevenueRange: '5M-10M',
+        companyLocation: 'Seattle, WA',
+      },
+      {
+        ...company,
+        id: 'browser-company-filter-west-labs',
+        companyName: 'West Labs',
+        companyIndustry: 'Biotechnology',
+        companySize: '11-50',
+        companyRevenueRange: '1M-5M',
+        companyLocation: 'Portland, OR',
+      },
+      {
+        ...company,
+        id: 'browser-company-filter-atlas',
+        companyName: 'Atlas Capital',
+        companyIndustry: 'Finance',
+        companySize: '51-200',
+        companyRevenueRange: '5M-10M',
+        companyLocation: 'New York, NY',
+      },
+    ];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { companies });
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/companies`);
+
+      const rows = page.locator('tr[data-testid^="row-company-"]');
+      await page.getByTestId('row-company-browser-company-filter-northstar').waitFor({ state: 'visible' });
+      assert.equal(await rows.count(), 3, 'all companies should appear before filtering');
+      assert.equal(
+        await page.getByTestId('text-company-location-browser-company-filter-northstar').innerText(),
+        'Seattle, WA',
+      );
+
+      await page.getByTestId('select-company-industry-filter').selectOption({ label: 'Biotechnology' });
+      assert.equal(await rows.count(), 2, 'industry should narrow the directory');
+      await page.getByTestId('select-company-size-filter').selectOption({ label: '51-200' });
+      assert.equal(await rows.count(), 1, 'company size should combine with industry');
+      assert.equal(await page.getByTestId('row-company-browser-company-filter-northstar').isVisible(), true);
+
+      await page.getByTestId('input-company-location-filter').fill('seattle');
+      assert.equal(await rows.count(), 1, 'location filtering should ignore letter case');
+      await page.getByTestId('select-company-revenue-filter').selectOption({ label: '1M-5M' });
+      assert.equal(await rows.count(), 0, 'conflicting criteria should show no matching companies');
+      await page.getByText('No matching companies', { exact: true }).waitFor({ state: 'visible' });
+
+      await page.getByTestId('button-clear-company-filters').click();
+      assert.equal(await rows.count(), 3, 'clear filters should restore all companies');
+      assert.equal(await page.getByTestId('select-company-industry-filter').inputValue(), '');
+      assert.equal(await page.getByTestId('select-company-size-filter').inputValue(), '');
+      assert.equal(await page.getByTestId('select-company-revenue-filter').inputValue(), '');
+      assert.equal(await page.getByTestId('input-company-location-filter').inputValue(), '');
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      const pageOverflowsHorizontally = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      assert.equal(pageOverflowsHorizontally, false, 'filters should not cause page-level horizontal overflow on mobile');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('shows the unlinked profile and reason, preserves it on save, and links only after an explicit choice', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
