@@ -69,6 +69,10 @@ const listUpdates = [];
 const listDeletes = [];
 const dashboardRequests = [];
 const campaignAudienceRequests = [];
+const campaignAudienceResponses = [];
+const campaignUpdates = [];
+const campaignQueues = [];
+let campaignAudienceSummaryOverride = null;
 
 let serverProcess;
 let serverOutput = '';
@@ -180,11 +184,15 @@ async function installApiFixtures(context) {
     if (pathname === '/api/campaigns/recipient-summary' && method === 'GET') {
       const listIds = new URL(request.url()).searchParams.getAll('listIds');
       campaignAudienceRequests.push(listIds);
-      const uniqueRecipients = listIds.reduce(
-        (total, listId) => total + (lists.find(list => list.id === listId)?.contactCount ?? 0),
-        0,
-      );
-      await route.fulfill({ status: 200, json: { uniqueRecipients, overlappingRecipients: 0 } });
+      const summary = campaignAudienceSummaryOverride ?? {
+        uniqueRecipients: listIds.reduce(
+          (total, listId) => total + (lists.find(list => list.id === listId)?.contactCount ?? 0),
+          0,
+        ),
+        overlappingRecipients: 0,
+      };
+      campaignAudienceResponses.push({ ...summary });
+      await route.fulfill({ status: 200, json: summary });
       return;
     }
     if (pathname === '/api/contacts' && method === 'GET') {
@@ -200,6 +208,34 @@ async function installApiFixtures(context) {
     }
     if (pathname === '/api/campaigns' && method === 'GET') {
       await route.fulfill({ status: 200, json: campaigns });
+      return;
+    }
+    const campaignMatch = pathname.match(/^\/api\/campaigns\/([^/]+)$/);
+    if (campaignMatch && method === 'PATCH') {
+      const campaignData = campaignById.get(campaignMatch[1]);
+      if (!campaignData) {
+        await route.fulfill({ status: 404, json: { error: 'Campaign not found.' } });
+        return;
+      }
+      const data = request.postDataJSON();
+      campaignUpdates.push({ id: campaignData.id, data });
+      Object.assign(campaignData, data, { listId: data.listIds?.[0] ?? campaignData.listId, updatedAt: '2026-01-02T00:00:00.000Z' });
+      await delay(150);
+      await route.fulfill({ status: 200, json: campaignData });
+      return;
+    }
+    const campaignSendMatch = pathname.match(/^\/api\/campaigns\/([^/]+)\/send$/);
+    if (campaignSendMatch && method === 'POST') {
+      const campaignData = campaignById.get(campaignSendMatch[1]);
+      if (!campaignData) {
+        await route.fulfill({ status: 404, json: { error: 'Campaign not found.' } });
+        return;
+      }
+      const data = request.postDataJSON();
+      campaignQueues.push({ id: campaignData.id, data });
+      Object.assign(campaignData, { status: 'queued', scheduledAt: data.scheduledAt, updatedAt: '2026-01-02T00:00:00.000Z' });
+      await delay(200);
+      await route.fulfill({ status: 201, json: campaignData });
       return;
     }
     const listMatch = pathname.match(/^\/api\/contact-lists\/([^/]+)$/);
@@ -277,6 +313,11 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     listUpdates.length = 0;
     listDeletes.length = 0;
     dashboardRequests.length = 0;
+    campaignAudienceRequests.length = 0;
+    campaignAudienceResponses.length = 0;
+    campaignUpdates.length = 0;
+    campaignQueues.length = 0;
+    campaignAudienceSummaryOverride = null;
     await startWebServer();
     const executablePath =
       process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
@@ -479,6 +520,83 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       assert.deepEqual(pageErrors, [], 'campaign audience selection should render without browser errors');
     } finally {
       await context.close();
+    }
+  });
+
+  it('refreshes audience totals and overlap before saving and queueing without discarding draft edits', async () => {
+    lists.splice(0, lists.length,
+      { id: listOneId, name: 'Launch audience', active: true, contactCount: 2, createdAt: date, updatedAt: date },
+      { id: listTwoId, name: 'Customer updates', active: true, contactCount: 1, createdAt: date, updatedAt: date },
+    );
+    const editableCampaign = campaignById.get('browser-campaign-one');
+    editableCampaign.listId = listOneId;
+    editableCampaign.listIds = [listOneId, listTwoId];
+    campaignAudienceRequests.length = 0;
+    campaignAudienceResponses.length = 0;
+    campaignUpdates.length = 0;
+    campaignQueues.length = 0;
+    campaignAudienceSummaryOverride = { uniqueRecipients: 2, overlappingRecipients: 0 };
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+
+      const audienceSummary = page.getByTestId('campaign-audience-summary');
+      const subject = page.getByTestId('input-campaign-subject');
+      await audienceSummary.getByText('2 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      await subject.fill('Unsaved subject survives audience refresh');
+
+      campaignAudienceSummaryOverride = { uniqueRecipients: 4, overlappingRecipients: 1 };
+      await page.getByTestId('button-refresh-campaign-audience').click();
+      await audienceSummary.getByText('4 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      await audienceSummary.getByText('1 addresses appear in multiple selected lists.', { exact: false }).waitFor({ state: 'visible' });
+      assert.equal(await subject.inputValue(), 'Unsaved subject survives audience refresh', 'refreshing the count must not reset unsaved campaign fields');
+
+      campaignAudienceSummaryOverride = { uniqueRecipients: 5, overlappingRecipients: 2 };
+      await page.getByTestId('button-submit-campaign').click();
+      await audienceSummary.getByText('5 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      await audienceSummary.getByText('2 addresses appear in multiple selected lists.', { exact: false }).waitFor({ state: 'visible' });
+      await page.getByText('Draft changes saved.', { exact: true }).waitFor({ state: 'visible' });
+      assert.deepEqual(campaignAudienceResponses.at(-1), { uniqueRecipients: 5, overlappingRecipients: 2 }, 'saving must recheck the latest audience summary');
+      assert.equal(campaignUpdates.at(-1).data.subject, 'Unsaved subject survives audience refresh');
+      assert.deepEqual(campaignUpdates.at(-1).data.listIds, [listOneId, listTwoId]);
+
+      await page.getByTestId('button-queue-campaign-browser-campaign-one').click();
+      await page.getByTestId('dialog-campaign-action').waitFor({ state: 'visible' });
+      const startAt = new Date(Date.now() + 60 * 60 * 1000);
+      const startAtValue = [
+        startAt.getFullYear(),
+        String(startAt.getMonth() + 1).padStart(2, '0'),
+        String(startAt.getDate()).padStart(2, '0'),
+      ].join('-') + `T${String(startAt.getHours()).padStart(2, '0')}:${String(startAt.getMinutes()).padStart(2, '0')}`;
+      await page.getByTestId('input-campaign-start-at').fill(startAtValue);
+
+      campaignAudienceSummaryOverride = { uniqueRecipients: 6, overlappingRecipients: 2 };
+      const queueResponse = page.waitForResponse(response =>
+        response.url().includes('/api/campaigns/browser-campaign-one/send') && response.request().method() === 'POST',
+      );
+      await page.getByTestId('button-confirm-action').click();
+      await page.getByTestId('queue-audience-summary').getByText('6 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      await page.getByTestId('queue-audience-summary').getByText('2 addresses are on more than one selected list.', { exact: false }).waitFor({ state: 'visible' });
+      assert.deepEqual(campaignAudienceResponses.at(-1), { uniqueRecipients: 6, overlappingRecipients: 2 }, 'queueing must recheck the latest audience summary');
+      assert.equal((await queueResponse).status(), 201);
+      assert.equal(campaignQueues.at(-1).id, 'browser-campaign-one');
+      assert.equal(campaignQueues.at(-1).data.scheduledAt, new Date(startAtValue).toISOString());
+      assert.deepEqual(pageErrors, [], 'audience refresh, save, and queue should not produce browser errors');
+    } finally {
+      await context.close();
+      campaignAudienceSummaryOverride = null;
+      editableCampaign.status = 'draft';
+      editableCampaign.scheduledAt = null;
+      editableCampaign.subject = 'Launch follow-up subject';
+      editableCampaign.listId = listOneId;
+      editableCampaign.listIds = [listOneId];
     }
   });
 

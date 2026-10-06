@@ -1017,6 +1017,8 @@ export function CampaignsPage() {
   const previewCampaign = usePreviewCampaign();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const [audienceActionPending, setAudienceActionPending] = useState(false);
+  const audienceActionInProgress = useRef(false);
   const [campaignListSearch, setCampaignListSearch] = useState('');
   const [showSelectedCampaignLists, setShowSelectedCampaignLists] = useState(false);
   const [sampleContactId, setSampleContactId] = useState('');
@@ -1066,6 +1068,10 @@ export function CampaignsPage() {
         queryKey: getGetCampaignRecipientSummaryQueryKey({ listIds: campaignAudienceListIds }),
         enabled: campaignAudienceListIds.length > 0,
         staleTime: 0,
+        refetchInterval: campaignAudienceListIds.length > 0 && (editing !== undefined || pendingAction?.kind === 'queue')
+          ? 30_000
+          : false,
+        refetchIntervalInBackground: false,
       },
     },
   );
@@ -1175,14 +1181,26 @@ export function CampaignsPage() {
       input?.setSelectionRange(start + token.length, start + token.length);
     });
   };
-  const save = (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.listIds.length || !audienceCheckReady) return;
-    const data = { name: form.name.trim(), objective: form.objective.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: form.listIds };
-    const success = () => { refresh(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
-    const fail = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
-    if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
-    else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
+    if (!form.listIds.length || !audienceCheckReady || audienceActionInProgress.current) return;
+    audienceActionInProgress.current = true;
+    setAudienceActionPending(true);
+    const data = { name: form.name.trim(), objective: form.objective.trim(), subject: form.subject.trim(), textBody: form.textBody.trim(), htmlBody: form.htmlBody.trim(), listIds: [...form.listIds] };
+    try {
+      const audience = await campaignAudienceQuery.refetch();
+      if (audience.isError || !audience.data) {
+        setNotice({ kind: 'error', text: 'We couldn’t verify the current audience. Retry before saving this campaign.' });
+        return;
+      }
+      const success = () => { refresh(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
+      const fail = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
+      if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
+      else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
+    } finally {
+      audienceActionInProgress.current = false;
+      setAudienceActionPending(false);
+    }
   };
   const queue = (campaign: CampaignSummary) => {
     setServerMinimumStartAt(null);
@@ -1191,26 +1209,38 @@ export function CampaignsPage() {
     setPendingAction({ kind: 'queue', campaign });
   };
   const del = (campaign: CampaignSummary) => setPendingAction({ kind: 'delete', campaign });
-  const confirmCampaignAction = () => {
+  const confirmCampaignAction = async () => {
     if (!pendingAction) return;
     const action = pendingAction;
     if (action.kind === 'queue') {
-      if (!queueStartIsValid || !queueStartDate || !audienceCheckReady) return;
-      send.mutate({ campaignId: action.campaign.id, data: { scheduledAt: queueStartDate.toISOString() } }, {
-        onSuccess: response => { setPendingAction(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
-        onError: error => {
-          const apiError = (error as { data?: { code?: string; earliestStartAt?: string | null } }).data;
-          if (apiError?.code === 'CAMPAIGN_START_TOO_EARLY' && apiError.earliestStartAt) {
-            const earliest = new Date(apiError.earliestStartAt);
-            setServerMinimumStartAt(earliest);
-            setQueueStartAt(dateTimeLocalValue(roundUpToMinute(earliest)));
-            setQueueStartError(`Delivery estimates changed. The earliest available start is ${formatDate(apiError.earliestStartAt)}.`);
-            return;
-          }
-          setPendingAction(null);
-          setNotice({ kind: 'error', text: mutationError(error) });
-        },
-      });
+      if (!queueStartIsValid || !queueStartDate || !audienceCheckReady || audienceActionInProgress.current) return;
+      audienceActionInProgress.current = true;
+      setAudienceActionPending(true);
+      try {
+        const audience = await campaignAudienceQuery.refetch();
+        if (audience.isError || !audience.data) {
+          setNotice({ kind: 'error', text: 'We couldn’t verify the current audience. Retry before queueing this campaign.' });
+          return;
+        }
+        send.mutate({ campaignId: action.campaign.id, data: { scheduledAt: queueStartDate.toISOString() } }, {
+          onSuccess: response => { setPendingAction(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
+          onError: error => {
+            const apiError = (error as { data?: { code?: string; earliestStartAt?: string | null } }).data;
+            if (apiError?.code === 'CAMPAIGN_START_TOO_EARLY' && apiError.earliestStartAt) {
+              const earliest = new Date(apiError.earliestStartAt);
+              setServerMinimumStartAt(earliest);
+              setQueueStartAt(dateTimeLocalValue(roundUpToMinute(earliest)));
+              setQueueStartError(`Delivery estimates changed. The earliest available start is ${formatDate(apiError.earliestStartAt)}.`);
+              return;
+            }
+            setPendingAction(null);
+            setNotice({ kind: 'error', text: mutationError(error) });
+          },
+        });
+      } finally {
+        audienceActionInProgress.current = false;
+        setAudienceActionPending(false);
+      }
     } else {
       remove.mutate({ campaignId: action.campaign.id }, {
         onSuccess: () => { setPendingAction(null); refresh(); setNotice({ kind: 'success', text: 'Campaign draft deleted.' }); },
@@ -1320,7 +1350,15 @@ export function CampaignsPage() {
                 : <p>No subscribed email addresses currently overlap. If a contact is added to multiple lists before sending, they will still receive one email only.</p>}
             </>}
           </div>
-          {campaignAudienceQuery.isError && <Button variant="outline" testId="button-retry-campaign-audience" onClick={() => void campaignAudienceQuery.refetch()}>Retry</Button>}
+          <Button
+            variant="quiet"
+            testId="button-refresh-campaign-audience"
+            disabled={campaignAudienceQuery.isFetching || audienceActionPending}
+            onClick={() => void campaignAudienceQuery.refetch()}
+          >
+            {campaignAudienceQuery.isFetching && <LoaderCircle className="h-3.5 w-3.5 animate-spin"/>}
+            {campaignAudienceQuery.isError ? 'Retry audience' : 'Refresh audience'}
+          </Button>
         </div>}
          <label className="block"><span className={labelClass}>Email subject</span><input ref={subjectInputRef} data-testid="input-campaign-subject" className={inputClass} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="A concise subject your audience will recognize" required maxLength={200}/></label>
          <div className="-mt-2 flex flex-wrap items-center gap-1.5"><span className="mr-1 text-[10px] text-[#7e8996]">Insert a subject field:</span>{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertSubjectPlaceholder(token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-subject-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
@@ -1347,7 +1385,7 @@ export function CampaignsPage() {
            </div>}
          </section>
          <div className="flex items-center gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] text-[#607186]"><Users className="h-4 w-4 shrink-0 text-[#245b9b]"/>Only subscribed contacts are eligible. Duplicate email addresses are removed when the campaign is queued.</div>
-         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save draft' : 'Create draft'}</Button></div>
+         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>
     </Modal>}
      <ConfirmActionDialog
@@ -1358,7 +1396,7 @@ export function CampaignsPage() {
          : pendingAction ? `Permanently delete the draft “${pendingAction.campaign.name}”? This cannot be undone.` : ''}
        confirmLabel={pendingAction?.kind === 'queue' ? 'Queue campaign' : 'Delete draft'}
        destructive={pendingAction?.kind !== 'queue'}
-       pending={send.isPending || remove.isPending}
+       pending={audienceActionPending || send.isPending || remove.isPending}
          confirmDisabled={pendingAction?.kind === 'queue' && (!queueStartIsValid || !audienceCheckReady)}
        onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) setPendingAction(null); }}
        onConfirm={confirmCampaignAction}
