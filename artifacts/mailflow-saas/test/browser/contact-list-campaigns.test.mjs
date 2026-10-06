@@ -68,6 +68,7 @@ const campaignById = new Map(campaigns.map(item => [item.id, item]));
 const listUpdates = [];
 const listDeletes = [];
 const dashboardRequests = [];
+const campaignAudienceRequests = [];
 
 let serverProcess;
 let serverOutput = '';
@@ -169,6 +170,21 @@ async function installApiFixtures(context) {
     }
     if (pathname === '/api/contact-lists' && method === 'GET') {
       await route.fulfill({ status: 200, json: lists });
+      return;
+    }
+    if (pathname === '/api/contacts/options' && method === 'GET') {
+      const limit = Number(new URL(request.url()).searchParams.get('limit') ?? 30);
+      await route.fulfill({ status: 200, json: { contacts: [], total: 0, limit } });
+      return;
+    }
+    if (pathname === '/api/campaigns/recipient-summary' && method === 'GET') {
+      const listIds = new URL(request.url()).searchParams.getAll('listIds');
+      campaignAudienceRequests.push(listIds);
+      const uniqueRecipients = listIds.reduce(
+        (total, listId) => total + (lists.find(list => list.id === listId)?.contactCount ?? 0),
+        0,
+      );
+      await route.fulfill({ status: 200, json: { uniqueRecipients, overlappingRecipients: 0 } });
       return;
     }
     if (pathname === '/api/contacts' && method === 'GET') {
@@ -374,6 +390,175 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       assert.equal(await page.getByTestId(`card-list-${listOneId}`).count(), 1);
       assert.equal(await page.getByTestId(`card-list-${listTwoId}`).count(), 1);
       assert.deepEqual(pageErrors, [], 'list and campaign pages should render without browser errors');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('keeps search selection isolated and updates audience totals and order for bulk add and clear', async () => {
+    lists.splice(0, lists.length,
+      { id: listOneId, name: 'Launch audience', active: true, contactCount: 2, createdAt: date, updatedAt: date },
+      { id: listTwoId, name: 'Customer updates', active: false, contactCount: 1, createdAt: date, updatedAt: date },
+      { id: emptyListId, name: 'Unused audience', active: true, contactCount: 0, createdAt: date, updatedAt: date },
+      { id: 'spring-wave-a', name: 'Spring wave A', active: true, contactCount: 4, createdAt: date, updatedAt: date },
+      { id: 'spring-wave-b', name: 'Spring wave B', active: true, contactCount: 5, createdAt: date, updatedAt: date },
+      { id: 'spring-archive', name: 'Spring archive', active: false, contactCount: 7, createdAt: date, updatedAt: date },
+    );
+    const editableCampaign = campaignById.get('browser-campaign-one');
+    editableCampaign.listId = listOneId;
+    editableCampaign.listIds = [listOneId];
+    campaignAudienceRequests.length = 0;
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+      const picker = page.getByTestId('campaign-list-picker');
+      const order = page.getByTestId('campaign-list-order');
+      const audienceSummary = page.getByTestId('campaign-audience-summary');
+      await audienceSummary.getByText('2 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+
+      const search = page.getByTestId('input-campaign-list-search');
+      await search.fill('Spring');
+      await picker.getByTestId('checkbox-campaign-list-spring-wave-a').waitFor({ state: 'visible' });
+      assert.equal(await picker.locator('input[type="checkbox"]').count(), 3, 'search should show only matching lists');
+      assert.equal(await page.getByTestId('checkbox-campaign-list-spring-archive').isDisabled(), true, 'inactive matches must not be newly selectable');
+      assert.deepEqual(
+        await order.locator('[data-testid^="button-campaign-list-up-"]').evaluateAll(buttons =>
+          buttons.map(button => button.getAttribute('data-testid').replace('button-campaign-list-up-', '')),
+        ),
+        [listOneId],
+        'searching must not change the selected list outside the search result',
+      );
+
+      await page.getByTestId('checkbox-campaign-list-spring-wave-b').check();
+      await audienceSummary.getByText('7 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      assert.deepEqual(
+        await order.locator('[data-testid^="button-campaign-list-up-"]').evaluateAll(buttons =>
+          buttons.map(button => button.getAttribute('data-testid').replace('button-campaign-list-up-', '')),
+        ),
+        [listOneId, 'spring-wave-b'],
+        'a manually selected match should follow the existing outside-search priority',
+      );
+
+      await search.fill('');
+      await page.getByTestId('button-campaign-lists-selected').click();
+      assert.equal(await picker.locator('input[type="checkbox"]').count(), 2, 'selected-only view should retain both selected lists');
+      assert.equal(await page.getByTestId(`checkbox-campaign-list-${listOneId}`).isChecked(), true);
+      assert.equal(await page.getByTestId('checkbox-campaign-list-spring-wave-b').isChecked(), true);
+      assert.equal(await page.getByTestId('checkbox-campaign-list-spring-wave-a').count(), 0);
+
+      await page.getByTestId('button-campaign-lists-all').click();
+      await search.fill('Spring');
+      await page.getByTestId('button-add-matching-campaign-lists').click();
+      await audienceSummary.getByText('11 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      assert.deepEqual(
+        await order.locator('[data-testid^="button-campaign-list-up-"]').evaluateAll(buttons =>
+          buttons.map(button => button.getAttribute('data-testid').replace('button-campaign-list-up-', '')),
+        ),
+        [listOneId, 'spring-wave-b', 'spring-wave-a'],
+        'bulk add should append new active matches without changing established processing priority',
+      );
+      assert.equal(await page.getByTestId('checkbox-campaign-list-spring-archive').count(), 1);
+      assert.equal(await page.getByTestId('checkbox-campaign-list-spring-archive').isChecked(), false);
+
+      await page.getByTestId('button-clear-campaign-lists').click();
+      await page.locator('[data-testid="campaign-list-order"]').waitFor({ state: 'detached' });
+      await page.getByTestId('campaign-audience-summary').waitFor({ state: 'detached' });
+      assert.equal(await page.locator('fieldset').getByText('0 selected', { exact: true }).count(), 1);
+      assert.deepEqual(
+        campaignAudienceRequests.at(-1),
+        [listOneId, 'spring-wave-b', 'spring-wave-a'],
+        'bulk add should refresh the audience count using the intended processing order before clear',
+      );
+      assert.deepEqual(pageErrors, [], 'campaign audience selection should render without browser errors');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('keeps the list picker and processing order scrollable and bounded with 80 matching lists', async () => {
+    const largeLists = [
+      { id: listOneId, name: 'Launch audience', active: true, contactCount: 2, createdAt: date, updatedAt: date },
+      ...Array.from({ length: 80 }, (_, index) => {
+        const number = String(index + 1).padStart(3, '0');
+        return {
+          id: `volume-list-${number}`,
+          name: `Volume List ${number}`,
+          active: true,
+          contactCount: 1,
+          createdAt: date,
+          updatedAt: date,
+        };
+      }),
+    ];
+    lists.splice(0, lists.length, ...largeLists);
+    const editableCampaign = campaignById.get('browser-campaign-one');
+    editableCampaign.listId = listOneId;
+    editableCampaign.listIds = [listOneId];
+    campaignAudienceRequests.length = 0;
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+      const picker = page.getByTestId('campaign-list-picker');
+      const order = page.getByTestId('campaign-list-order');
+
+      await page.getByTestId('input-campaign-list-search').fill('Volume List');
+      await page.getByTestId('button-add-matching-campaign-lists').click();
+      await page.getByTestId('campaign-audience-summary')
+        .getByText('82 unique subscribed email addresses', { exact: false })
+        .waitFor({ state: 'visible' });
+      assert.equal(await order.locator('li').count(), 81, 'the existing priority and all 80 newly matched lists should be represented');
+
+      const pickerMetrics = await picker.evaluate(element => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
+        overflowY: getComputedStyle(element).overflowY,
+      }));
+      assert.equal(pickerMetrics.overflowY, 'auto');
+      assert.ok(pickerMetrics.clientHeight <= pickerMetrics.maxHeight, 'the picker must not grow beyond its max height');
+      assert.ok(pickerMetrics.scrollHeight > pickerMetrics.clientHeight, 'the picker should scroll when the list exceeds its visible area');
+
+      const lastCheckbox = page.getByTestId('checkbox-campaign-list-volume-list-080');
+      await lastCheckbox.scrollIntoViewIfNeeded();
+      assert.equal(await lastCheckbox.isChecked(), true, 'the last picker option should remain reachable and selected');
+      assert.ok(await picker.evaluate(element => element.scrollTop > 0), 'scrolling to the last option should move the picker');
+
+      const orderMetrics = await order.evaluate(element => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
+        overflowY: getComputedStyle(element).overflowY,
+      }));
+      assert.equal(orderMetrics.overflowY, 'auto');
+      assert.ok(orderMetrics.clientHeight <= orderMetrics.maxHeight, 'the order panel must not grow beyond its max height');
+      assert.ok(orderMetrics.scrollHeight > orderMetrics.clientHeight, 'the order panel should scroll when many lists are selected');
+
+      const orderIds = () => order.locator('[data-testid^="button-campaign-list-up-"]').evaluateAll(buttons =>
+        buttons.map(button => button.getAttribute('data-testid').replace('button-campaign-list-up-', '')),
+      );
+      const beforeMove = await orderIds();
+      const lastOrderButton = page.getByTestId('button-campaign-list-up-volume-list-080');
+      await lastOrderButton.scrollIntoViewIfNeeded();
+      assert.ok(await order.evaluate(element => element.scrollTop > 0), 'the last selected list should be reachable by scrolling the order panel');
+      await lastOrderButton.click();
+      const afterMove = await orderIds();
+      assert.deepEqual(afterMove.slice(0, -2), beforeMove.slice(0, -2));
+      assert.deepEqual(afterMove.slice(-2), ['volume-list-080', 'volume-list-079'], 'a list at the end of a long order can still be moved earlier');
+      assert.deepEqual(pageErrors, [], 'large campaign audiences should render without browser errors');
     } finally {
       await context.close();
     }
