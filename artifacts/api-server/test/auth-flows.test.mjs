@@ -2875,6 +2875,76 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(afterMove.body.companyId, company.id);
   });
 
+  it("lists only each workspace's companies and counts only its contacts", async () => {
+    const owner = await loggedInUser({
+      username: "company-list-owner",
+      email: "company-list-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "company-list-other",
+      email: "company-list-other@example.test",
+    });
+    const [ownerCompany] = await db.insert(dbModule.companiesTable).values({
+      userId: owner.user.id,
+      companyName: "Shared Company Name",
+      companyDomain: "owner-shared.test",
+      companyDomainKey: "owner-shared.test",
+    }).returning();
+    const [otherCompany] = await db.insert(dbModule.companiesTable).values({
+      userId: other.user.id,
+      companyName: "Shared Company Name",
+      companyDomain: "other-shared.test",
+      companyDomainKey: "other-shared.test",
+    }).returning();
+
+    const addContacts = async (userId, companyId, prefix, count) => {
+      await db.insert(dbModule.contactsTable).values(
+        Array.from({ length: count }, (_, index) => ({
+          userId,
+          companyId,
+          email: `${prefix}-${index}@company-list.test`,
+        })),
+      );
+      await db.insert(dbModule.contactsTable).values({
+        userId,
+        email: `${prefix}-unlinked@company-list.test`,
+        companyName: "Shared Company Name",
+      });
+    };
+    await addContacts(owner.user.id, ownerCompany.id, "owner-contact", 2);
+    await addContacts(other.user.id, otherCompany.id, "other-contact", 3);
+
+    const ownerCompanies = await api("/companies", { cookie: owner.cookie });
+    assert.equal(ownerCompanies.response.status, 200, JSON.stringify(ownerCompanies.body));
+    assert.deepEqual(
+      ownerCompanies.body.companies.map(({ id, companyName, contactCount }) => ({
+        id,
+        companyName,
+        contactCount,
+      })),
+      [{
+        id: ownerCompany.id,
+        companyName: "Shared Company Name",
+        contactCount: 2,
+      }],
+    );
+
+    const otherCompanies = await api("/companies", { cookie: other.cookie });
+    assert.equal(otherCompanies.response.status, 200, JSON.stringify(otherCompanies.body));
+    assert.deepEqual(
+      otherCompanies.body.companies.map(({ id, companyName, contactCount }) => ({
+        id,
+        companyName,
+        contactCount,
+      })),
+      [{
+        id: otherCompany.id,
+        companyName: "Shared Company Name",
+        contactCount: 3,
+      }],
+    );
+  });
+
   it("creates tenant-scoped shared companies from matching domains and preserves conflicts", async () => {
     const owner = await loggedInUser({ username: "company-owner" });
     const other = await loggedInUser({ username: "company-other" });
