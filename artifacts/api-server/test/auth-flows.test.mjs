@@ -2326,6 +2326,247 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(allowedAfterDelete.response.status, 201, JSON.stringify(allowedAfterDelete.body));
   });
 
+  it("keeps large contact directory and picker responses bounded with exact tenant totals", async (t) => {
+    const owner = await loggedInUser({ username: "large-contact-directory-owner" });
+    const other = await loggedInUser({ username: "large-contact-directory-other" });
+    const [priorityList] = await db
+      .insert(dbModule.contactListsTable)
+      .values({ userId: owner.user.id, name: "Priority contacts" })
+      .returning();
+    const ownerCount = 1200;
+    const otherCount = 48;
+    const idByIndex = new Map();
+    const seededAt = Date.now();
+
+    const ownerRows = Array.from({ length: ownerCount }, (_, index) => {
+      const id = randomUUID();
+      idByIndex.set(index, id);
+      return {
+        id,
+        userId: owner.user.id,
+        name: `Person ${index} LargeTenant`,
+        email: `person-${String(index).padStart(4, "0")}@large-tenant.test`,
+        firstName: `Person${index}`,
+        lastName: "LargeTenant",
+        companyName: index % 10 === 0 ? "Priority Partner Group" : "General Account",
+        jobTitle: "Operations Manager",
+        lifecycleStage: index % 3 === 0 ? "Customer" : "Lead",
+        leadStatus: index % 2 === 0 ? "Qualified" : "New",
+        leadSource: index % 5 === 0 ? "Webinar" : "Import",
+        notes: `Synthetic large-tenant contact record ${index} with a short realistic note.`,
+        subscribed: index % 2 === 0,
+        createdAt: new Date(seededAt - index * 1000),
+      };
+    });
+    const ownerContactIds = new Set(ownerRows.map((contact) => contact.id));
+    for (let offset = 0; offset < ownerRows.length; offset += 200) {
+      await db
+        .insert(dbModule.contactsTable)
+        .values(ownerRows.slice(offset, offset + 200));
+    }
+
+    const ownerMemberships = ownerRows
+      .filter((_, index) => index % 4 === 0)
+      .map((contact) => ({
+        userId: owner.user.id,
+        listId: priorityList.id,
+        contactId: contact.id,
+      }));
+    for (let offset = 0; offset < ownerMemberships.length; offset += 200) {
+      await db
+        .insert(dbModule.contactListMembersTable)
+        .values(ownerMemberships.slice(offset, offset + 200));
+    }
+
+    const otherRows = Array.from({ length: otherCount }, (_, index) => ({
+      id: randomUUID(),
+      userId: other.user.id,
+      name: `Outside Tenant ${index}`,
+      email: `outside-${String(index).padStart(3, "0")}@other-tenant.test`,
+      firstName: `Outside${index}`,
+      lastName: "Tenant",
+      companyName: "Priority Partner Group",
+      lifecycleStage: "Customer",
+      leadSource: "Webinar",
+      subscribed: true,
+      createdAt: new Date(seededAt - index * 1000),
+    }));
+    await db.insert(dbModule.contactsTable).values(otherRows);
+
+    const measurements = [];
+    const measuredGet = async (label, path, cookie, kind) => {
+      const startedAt = performance.now();
+      const result = await api(path, { cookie });
+      const elapsedMs = Number((performance.now() - startedAt).toFixed(2));
+      const responseBytes = Buffer.byteLength(JSON.stringify(result.body));
+      const responseBudgetBytes =
+        kind === "directory" ? 128 * 1024 : 32 * 1024;
+      measurements.push({
+        endpoint: label,
+        responseBytes,
+        responseBudgetBytes,
+        elapsedMs,
+      });
+      assert.ok(
+        responseBytes <= responseBudgetBytes,
+        `${label} response was ${responseBytes} bytes; expected at most ${responseBudgetBytes}`,
+      );
+      return result;
+    };
+
+    const firstPage = await measuredGet(
+      "directory page 1",
+      "/contacts?page=1&pageSize=40&includeHistory=false",
+      owner.cookie,
+      "directory",
+    );
+    assert.equal(firstPage.response.status, 200, JSON.stringify(firstPage.body));
+    assert.equal(firstPage.body.contacts.length, 40);
+    assert.equal(firstPage.body.total, ownerCount);
+    assert.equal(firstPage.body.page, 1);
+    assert.equal(firstPage.body.pageSize, 40);
+    assert.equal(firstPage.body.pageCount, 30);
+    assert.equal(firstPage.body.workspaceTotal, ownerCount);
+    assert.equal(firstPage.body.workspaceSubscribed, ownerCount / 2);
+    assert.deepEqual(
+      firstPage.body.contacts.map((contact) => contact.id),
+      Array.from({ length: 40 }, (_, index) => idByIndex.get(index)),
+    );
+
+    const secondPage = await measuredGet(
+      "directory page 2",
+      "/contacts?page=2&pageSize=40&includeHistory=false",
+      owner.cookie,
+      "directory",
+    );
+    assert.equal(secondPage.response.status, 200, JSON.stringify(secondPage.body));
+    assert.equal(secondPage.body.contacts.length, 40);
+    assert.equal(secondPage.body.total, ownerCount);
+    assert.equal(secondPage.body.page, 2);
+    assert.deepEqual(
+      secondPage.body.contacts.map((contact) => contact.id),
+      Array.from({ length: 40 }, (_, index) => idByIndex.get(index + 40)),
+    );
+
+    const lastPage = await measuredGet(
+      "directory last page",
+      "/contacts?page=30&pageSize=40&includeHistory=false",
+      owner.cookie,
+      "directory",
+    );
+    assert.equal(lastPage.response.status, 200, JSON.stringify(lastPage.body));
+    assert.equal(lastPage.body.contacts.length, 40);
+    assert.equal(lastPage.body.total, ownerCount);
+    assert.deepEqual(
+      lastPage.body.contacts.map((contact) => contact.id),
+      Array.from({ length: 40 }, (_, index) => idByIndex.get(index + 1160)),
+    );
+
+    const filteredDirectory = await measuredGet(
+      "filtered directory",
+      "/contacts?search=priority&status=subscribed&lifecycleStage=Customer&leadSource=Webinar&page=2&pageSize=7&includeHistory=false",
+      owner.cookie,
+      "directory",
+    );
+    assert.equal(
+      filteredDirectory.response.status,
+      200,
+      JSON.stringify(filteredDirectory.body),
+    );
+    assert.equal(filteredDirectory.body.total, 40);
+    assert.equal(filteredDirectory.body.page, 2);
+    assert.equal(filteredDirectory.body.pageSize, 7);
+    assert.equal(filteredDirectory.body.pageCount, 6);
+    assert.equal(filteredDirectory.body.contacts.length, 7);
+    assert.deepEqual(
+      filteredDirectory.body.contacts.map((contact) => contact.id),
+      Array.from({ length: 7 }, (_, index) => idByIndex.get(210 + index * 30)),
+    );
+
+    const listDirectory = await measuredGet(
+      "list-filtered directory",
+      `/contacts?listId=${priorityList.id}&page=4&pageSize=11&includeHistory=false`,
+      owner.cookie,
+      "directory",
+    );
+    assert.equal(listDirectory.response.status, 200, JSON.stringify(listDirectory.body));
+    assert.equal(listDirectory.body.total, 300);
+    assert.equal(listDirectory.body.pageCount, 28);
+    assert.equal(listDirectory.body.contacts.length, 11);
+    assert.deepEqual(
+      listDirectory.body.contacts.map((contact) => contact.id),
+      Array.from({ length: 11 }, (_, index) => idByIndex.get(132 + index * 4)),
+    );
+
+    const matchingPicker = await measuredGet(
+      "search-filtered picker",
+      "/contacts/options?search=priority&limit=17",
+      owner.cookie,
+      "picker",
+    );
+    assert.equal(matchingPicker.response.status, 200, JSON.stringify(matchingPicker.body));
+    assert.equal(matchingPicker.body.total, 120);
+    assert.equal(matchingPicker.body.limit, 17);
+    assert.equal(matchingPicker.body.contacts.length, 17);
+    assert.ok(
+      matchingPicker.body.contacts.every((contact) =>
+        ownerContactIds.has(contact.id),
+      ),
+      "picker results should contain only the signed-in tenant's contacts",
+    );
+
+    const listPicker = await measuredGet(
+      "list-filtered picker",
+      `/contacts/options?listId=${priorityList.id}&limit=19`,
+      owner.cookie,
+      "picker",
+    );
+    assert.equal(listPicker.response.status, 200, JSON.stringify(listPicker.body));
+    assert.equal(listPicker.body.total, 300);
+    assert.equal(listPicker.body.limit, 19);
+    assert.equal(listPicker.body.contacts.length, 19);
+    assert.ok(
+      listPicker.body.contacts.every((contact) =>
+        contact.listIds.includes(priorityList.id),
+      ),
+    );
+
+    const otherDirectory = await measuredGet(
+      "other tenant directory",
+      "/contacts?page=1&pageSize=20&includeHistory=false",
+      other.cookie,
+      "directory",
+    );
+    assert.equal(otherDirectory.response.status, 200, JSON.stringify(otherDirectory.body));
+    assert.equal(otherDirectory.body.total, otherCount);
+    assert.equal(otherDirectory.body.workspaceTotal, otherCount);
+    assert.equal(otherDirectory.body.contacts.length, 20);
+    assert.ok(
+      otherDirectory.body.contacts.every((contact) =>
+        contact.email.endsWith("@other-tenant.test"),
+      ),
+    );
+
+    const otherPicker = await measuredGet(
+      "other tenant picker",
+      "/contacts/options?search=priority&limit=20",
+      other.cookie,
+      "picker",
+    );
+    assert.equal(otherPicker.response.status, 200, JSON.stringify(otherPicker.body));
+    assert.equal(otherPicker.body.total, otherCount);
+    assert.equal(otherPicker.body.contacts.length, 20);
+    assert.ok(
+      otherPicker.body.contacts.every((contact) =>
+        contact.email.endsWith("@other-tenant.test"),
+      ),
+    );
+
+    t.diagnostic(
+      `Large-tenant contact endpoint measurements (1200 owner contacts): ${JSON.stringify(measurements)}`,
+    );
+  });
+
   it("imports partial batches with required names, optional fields, duplicate protection, and quota results", async () => {
     const owner = await loggedInUser({
       username: "contact-import-owner",
