@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { getSearchCompaniesQueryKey, useSearchCompanies } from '@workspace/api-client-react';
 import type { CompanySearchResultItem, ContactDirectoryFilters, ContactList } from '@workspace/api-client-react';
@@ -63,6 +63,9 @@ function CompanyFilter({
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [activeOptionId, setActiveOptionId] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const query = search.trim();
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(query), 200);
@@ -70,7 +73,11 @@ function CompanyFilter({
   }, [query]);
   useEffect(() => {
     setPage(1);
+    setActiveOptionId(null);
   }, [debouncedSearch]);
+  useEffect(() => {
+    setActiveOptionId(null);
+  }, [page]);
   const companiesQuery = useSearchCompanies(
     { search: debouncedSearch, page, pageSize: COMPANY_SEARCH_PAGE_SIZE },
     { query: { queryKey: getSearchCompaniesQueryKey({ search: debouncedSearch, page, pageSize: COMPANY_SEARCH_PAGE_SIZE }), enabled: open, staleTime: 30_000 } },
@@ -83,37 +90,81 @@ function CompanyFilter({
   const lastResult = (page - 1) * pageSize + visible.length;
   const loading = query !== debouncedSearch || companiesQuery.isLoading || (companiesQuery.isFetching && !companiesQuery.data);
   const error = companiesQuery.isError && !companiesQuery.data;
+  const selectableOptions: Array<{ id: string; value: string; company?: CompanySearchResultItem }> = [
+    { id: 'contact-company-option-all', value: 'all' },
+    { id: 'contact-company-option-none', value: CONTACT_FILTER_NONE },
+    ...(!loading && !error ? visible.map(company => ({
+      id: `contact-company-option-${company.id}`,
+      value: company.id,
+      company,
+    })) : []),
+  ];
+  const activeOption = selectableOptions.find(option => option.id === activeOptionId);
   const choose = (nextValue: string, company?: CompanySearchResultItem) => {
     onChange(nextValue, company);
     setSearch('');
     setDebouncedSearch('');
     setPage(1);
+    setActiveOptionId(null);
     setOpen(false);
   };
 
   return (
-    <div className="relative min-w-0">
+    <div
+      ref={containerRef}
+      onBlur={event => {
+        if (!containerRef.current?.contains(event.relatedTarget as Node | null)) {
+          setActiveOptionId(null);
+          setOpen(false);
+        }
+      }}
+      className="relative min-w-0"
+    >
       <label className="block">
         <span className="mb-1.5 block text-[11px] font-semibold text-[#415166]">Company</span>
         <span className="relative block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8795a5]"/>
           <input
+            ref={inputRef}
             data-testid="select-contact-company-filter"
             type="search"
             role="combobox"
             aria-label="Company"
             aria-expanded={open}
             aria-controls="contact-company-options"
+            aria-activedescendant={open && activeOption ? activeOption.id : undefined}
             aria-autocomplete="list"
             value={open ? search : selectedCompanyName ?? ''}
-            onFocus={() => { setSearch(''); setDebouncedSearch(''); setPage(1); setOpen(true); }}
-            onChange={event => { setSearch(event.target.value); setOpen(true); }}
-            onBlur={() => setOpen(false)}
+            onFocus={() => {
+              if (!open) {
+                setSearch('');
+                setDebouncedSearch('');
+                setPage(1);
+                setActiveOptionId(null);
+                setOpen(true);
+              }
+            }}
+            onChange={event => { setSearch(event.target.value); setActiveOptionId(null); setOpen(true); }}
             onKeyDown={event => {
-              if (event.key === 'Escape') setOpen(false);
-              if (event.key === 'Enter' && open && visible[0]) {
+              if (event.key === 'Escape' && open) {
                 event.preventDefault();
-                choose(visible[0].id, visible[0]);
+                setActiveOptionId(null);
+                setOpen(false);
+                return;
+              }
+              if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && open) {
+                event.preventDefault();
+                const currentIndex = selectableOptions.findIndex(option => option.id === activeOptionId);
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                const nextIndex = currentIndex === -1
+                  ? (direction > 0 ? 0 : selectableOptions.length - 1)
+                  : Math.max(0, Math.min(selectableOptions.length - 1, currentIndex + direction));
+                setActiveOptionId(selectableOptions[nextIndex].id);
+                return;
+              }
+              if (event.key === 'Enter' && open && activeOption) {
+                event.preventDefault();
+                choose(activeOption.value, activeOption.company);
               }
             }}
             placeholder="Search companies…"
@@ -127,10 +178,40 @@ function CompanyFilter({
           id="contact-company-options"
           role="listbox"
           aria-label="Company options"
+          onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setActiveOptionId(null);
+              setOpen(false);
+              inputRef.current?.focus();
+            }
+          }}
           className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-[#d6e0eb] bg-white p-1 shadow-lg"
         >
-          <button type="button" role="option" aria-selected={value === 'all'} onMouseDown={event => event.preventDefault()} onClick={() => choose('all')} className="block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa]">Any company</button>
-          <button type="button" role="option" aria-selected={value === CONTACT_FILTER_NONE} onMouseDown={event => event.preventDefault()} onClick={() => choose(CONTACT_FILTER_NONE)} className="block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa]">No company</button>
+          <button
+            id="contact-company-option-all"
+            type="button"
+            role="option"
+            tabIndex={-1}
+            aria-selected={value === 'all'}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => choose('all')}
+            className={`block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa] ${activeOptionId === 'contact-company-option-all' ? 'bg-[#f2f6fa]' : ''}`}
+          >
+            Any company
+          </button>
+          <button
+            id="contact-company-option-none"
+            type="button"
+            role="option"
+            tabIndex={-1}
+            aria-selected={value === CONTACT_FILTER_NONE}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => choose(CONTACT_FILTER_NONE)}
+            className={`block w-full rounded px-3 py-2 text-left text-[12px] font-medium text-[#354a60] hover:bg-[#f2f6fa] ${activeOptionId === 'contact-company-option-none' ? 'bg-[#f2f6fa]' : ''}`}
+          >
+            No company
+          </button>
           <div className="my-1 border-t border-[#edf0f3]"/>
           {loading ? <p className="px-3 py-2 text-[11px] text-[#788696]">Loading companies…</p>
             : error ? <div className="px-3 py-2"><p role="alert" className="text-[11px] text-[#a84926]">Company options could not be loaded.</p><button type="button" onMouseDown={event => event.preventDefault()} onClick={() => void companiesQuery.refetch()} className="mt-1 text-[11px] font-semibold text-[#245b9b] hover:underline">Retry</button></div>
@@ -139,11 +220,13 @@ function CompanyFilter({
                 key={company.id}
                 type="button"
                 role="option"
+                id={`contact-company-option-${company.id}`}
+                tabIndex={-1}
                 aria-selected={value === company.id}
                 data-testid={`option-contact-company-${company.id}`}
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => choose(company.id, company)}
-                className="block w-full rounded px-3 py-2 text-left hover:bg-[#f2f6fa]"
+                className={`block w-full rounded px-3 py-2 text-left hover:bg-[#f2f6fa] ${activeOptionId === `contact-company-option-${company.id}` ? 'bg-[#f2f6fa]' : ''}`}
               >
                 <span className="block truncate text-[12px] font-medium text-[#354a60]">{company.companyName}</span>
                 {company.companyDomain && <span className="mt-0.5 block truncate text-[10px] text-[#8290a0]">{company.companyDomain}</span>}
@@ -160,7 +243,11 @@ function CompanyFilter({
                   data-testid="button-contact-company-previous-page"
                   disabled={page <= 1 || companiesQuery.isFetching}
                   onMouseDown={event => event.preventDefault()}
-                  onClick={() => setPage(currentPage => Math.max(1, currentPage - 1))}
+                  onClick={() => {
+                    setActiveOptionId(null);
+                    setPage(currentPage => Math.max(1, currentPage - 1));
+                    inputRef.current?.focus();
+                  }}
                   className="rounded px-2 py-1 text-[10px] font-semibold text-[#315879] hover:bg-[#f2f6fa] disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Previous
@@ -171,7 +258,11 @@ function CompanyFilter({
                   data-testid="button-contact-company-next-page"
                   disabled={page >= pageCount || companiesQuery.isFetching}
                   onMouseDown={event => event.preventDefault()}
-                  onClick={() => setPage(currentPage => Math.min(pageCount, currentPage + 1))}
+                  onClick={() => {
+                    setActiveOptionId(null);
+                    setPage(currentPage => Math.min(pageCount, currentPage + 1));
+                    inputRef.current?.focus();
+                  }}
                   className="rounded px-2 py-1 text-[10px] font-semibold text-[#315879] hover:bg-[#f2f6fa] disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Next

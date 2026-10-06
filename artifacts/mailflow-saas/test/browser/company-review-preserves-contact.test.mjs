@@ -711,6 +711,133 @@ describe('company profile review and contact data preservation', { concurrency: 
     }
   });
 
+  it('supports keyboard navigation and selection across company-search pages', async () => {
+    const matchingCompanyCount = 52;
+    const companies = Array.from({ length: matchingCompanyCount }, (_, index) => ({
+      ...company,
+      id: `browser-keyboard-company-${String(index).padStart(3, '0')}`,
+      companyName: `Harbor Directory ${String(index).padStart(3, '0')}`,
+      companyDomain: `harbor-${String(index).padStart(3, '0')}.example.test`,
+    }));
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { companies });
+      const page = await context.newPage();
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/contacts`);
+      await page.getByTestId('row-contact-browser-filter-customer-id').waitFor({ state: 'visible' });
+
+      const companySearch = page.getByTestId('select-contact-company-filter');
+      await companySearch.fill('Harbor Directory');
+      await page.getByText(
+        `Showing 1–40 of ${matchingCompanyCount} matches. Refine your search or browse pages.`,
+        { exact: true },
+      ).waitFor({ state: 'visible' });
+
+      await companySearch.press('ArrowDown');
+      assert.equal(await companySearch.getAttribute('aria-activedescendant'), 'contact-company-option-all');
+      await companySearch.press('ArrowDown');
+      assert.equal(await companySearch.getAttribute('aria-activedescendant'), 'contact-company-option-none');
+      await companySearch.press('ArrowDown');
+      assert.equal(
+        await companySearch.getAttribute('aria-activedescendant'),
+        'contact-company-option-browser-keyboard-company-000',
+        'the first company should follow the two fixed choices',
+      );
+      await companySearch.press('ArrowDown');
+      assert.equal(
+        await companySearch.getAttribute('aria-activedescendant'),
+        'contact-company-option-browser-keyboard-company-001',
+      );
+      await companySearch.press('ArrowUp');
+      assert.equal(
+        await companySearch.getAttribute('aria-activedescendant'),
+        'contact-company-option-browser-keyboard-company-000',
+      );
+
+      await page.keyboard.press('Tab');
+      const nextPageButton = page.getByTestId('button-contact-company-next-page');
+      assert.equal(
+        await nextPageButton.evaluate(button => document.activeElement === button),
+        true,
+        'keyboard focus should move from the combobox to the enabled page control',
+      );
+      await page.keyboard.press('Enter');
+      await page.getByText(
+        `Showing 41–${matchingCompanyCount} of ${matchingCompanyCount} matches. Refine your search or browse pages.`,
+        { exact: true },
+      ).waitFor({ state: 'visible' });
+      assert.equal(await companySearch.getAttribute('aria-activedescendant'), null, 'a page change should clear the old active choice');
+      assert.equal(
+        await companySearch.evaluate(input => document.activeElement === input),
+        true,
+        'paging should return keyboard focus to the combobox',
+      );
+      await companySearch.press('ArrowDown');
+      await companySearch.press('ArrowDown');
+      await companySearch.press('ArrowDown');
+      assert.equal(
+        await companySearch.getAttribute('aria-activedescendant'),
+        'contact-company-option-browser-keyboard-company-040',
+        'keyboard navigation should start at the first company on the new page',
+      );
+
+      await page.keyboard.press('Tab');
+      const previousPageButton = page.getByTestId('button-contact-company-previous-page');
+      assert.equal(
+        await previousPageButton.evaluate(button => document.activeElement === button),
+        true,
+        'the previous-page control should be keyboard reachable on later pages',
+      );
+      await page.keyboard.press('Enter');
+      await page.getByText(
+        `Showing 1–40 of ${matchingCompanyCount} matches. Refine your search or browse pages.`,
+        { exact: true },
+      ).waitFor({ state: 'visible' });
+      assert.equal(await companySearch.getAttribute('aria-activedescendant'), null, 'returning to the previous page should clear the old active choice');
+      await companySearch.press('ArrowDown');
+      await companySearch.press('ArrowDown');
+      await companySearch.press('ArrowDown');
+      assert.equal(
+        await companySearch.getAttribute('aria-activedescendant'),
+        'contact-company-option-browser-keyboard-company-000',
+        'keyboard navigation should restart from the first company on the previous page',
+      );
+
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Enter');
+      await page.getByText(
+        `Showing 41–${matchingCompanyCount} of ${matchingCompanyCount} matches. Refine your search or browse pages.`,
+        { exact: true },
+      ).waitFor({ state: 'visible' });
+      assert.equal(await companySearch.getAttribute('aria-activedescendant'), null, 'paging forward again should clear the previous highlight');
+      await companySearch.press('ArrowDown');
+      await companySearch.press('ArrowDown');
+      await companySearch.press('ArrowDown');
+      assert.equal(
+        await companySearch.getAttribute('aria-activedescendant'),
+        'contact-company-option-browser-keyboard-company-040',
+      );
+      await companySearch.press('Enter');
+      assert.equal(await companySearch.getAttribute('aria-expanded'), 'false', 'Enter should choose the active company and close the picker');
+      assert.equal(await companySearch.inputValue(), 'Harbor Directory 040', 'the selected company should be shown in the filter');
+
+      await companySearch.evaluate(input => input.blur());
+      await companySearch.focus();
+      await page.getByRole('listbox', { name: 'Company options' }).waitFor({ state: 'visible' });
+      await companySearch.press('Escape');
+      assert.equal(await companySearch.getAttribute('aria-expanded'), 'false', 'Escape should close the company picker');
+      assert.equal(await page.getByRole('listbox', { name: 'Company options' }).count(), 0);
+      assert.equal(await companySearch.inputValue(), 'Harbor Directory 040', 'Escape should keep the current company filter');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('combines company directory filters and clears them together', async () => {
     const companies = [
       {
