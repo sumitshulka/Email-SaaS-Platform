@@ -1792,6 +1792,119 @@ describe("Razorpay environment configuration", { concurrency: false }, () => {
   });
 });
 
+describe("online payment availability", { concurrency: false }, () => {
+  it("lets superadmins gate new paid checkouts while preserving free activation and existing checkout behavior", async () => {
+    const admin = await loggedInUser({
+      username: "online-payment-admin",
+      role: "SUPERADMIN",
+    });
+    const customer = await loggedInUser({ username: "online-payment-customer" });
+
+    const initialSettings = await api("/admin/billing/online-payments", {
+      cookie: admin.cookie,
+    });
+    assert.equal(initialSettings.response.status, 200);
+    assert.equal(initialSettings.body.enabled, true);
+
+    const initialAvailability = await api(
+      "/subscriptions/payment-availability",
+      { cookie: customer.cookie },
+    );
+    assert.equal(initialAvailability.response.status, 200);
+    assert.equal(initialAvailability.body.enabled, true);
+    assert.equal(initialAvailability.body.superadminEmail, admin.user.email);
+
+    const unauthorizedUpdate = await api("/admin/billing/online-payments", {
+      method: "PUT",
+      cookie: customer.cookie,
+      body: { enabled: false },
+    });
+    assert.equal(unauthorizedUpdate.response.status, 403);
+
+    const paidPackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Online checkout plan",
+        description: "Paid access",
+        amountMinor: 1900,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        active: true,
+      },
+    });
+    assert.equal(paidPackage.response.status, 201, JSON.stringify(paidPackage.body));
+
+    const disabledSettings = await api("/admin/billing/online-payments", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { enabled: false },
+    });
+    assert.equal(disabledSettings.response.status, 200);
+    assert.equal(disabledSettings.body.enabled, false);
+
+    const disabledAvailability = await api(
+      "/subscriptions/payment-availability",
+      { cookie: customer.cookie },
+    );
+    assert.equal(disabledAvailability.body.enabled, false);
+    assert.equal(disabledAvailability.body.superadminEmail, admin.user.email);
+
+    const blockedOrder = await api("/subscriptions/orders", {
+      method: "POST",
+      cookie: customer.cookie,
+      body: { packageId: paidPackage.body.id },
+    });
+    assert.equal(blockedOrder.response.status, 503);
+    assert.equal(blockedOrder.body.code, "ONLINE_PAYMENTS_DISABLED");
+    const paymentsWhileDisabled = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.userId, customer.user.id));
+    assert.equal(paymentsWhileDisabled.length, 0);
+
+    const freePackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Free access plan",
+        description: "No payment required",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        active: true,
+      },
+    });
+    assert.equal(freePackage.response.status, 201, JSON.stringify(freePackage.body));
+    const freeActivation = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: customer.cookie,
+      body: { packageId: freePackage.body.id },
+    });
+    assert.equal(freeActivation.response.status, 200, JSON.stringify(freeActivation.body));
+
+    const enabledSettings = await api("/admin/billing/online-payments", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { enabled: true },
+    });
+    assert.equal(enabledSettings.response.status, 200);
+    assert.equal(enabledSettings.body.enabled, true);
+
+    const orderWithoutGatewayConfig = await api("/subscriptions/orders", {
+      method: "POST",
+      cookie: customer.cookie,
+      body: { packageId: paidPackage.body.id },
+    });
+    assert.equal(orderWithoutGatewayConfig.response.status, 503);
+    assert.equal(orderWithoutGatewayConfig.body.code, "RAZORPAY_NOT_CONFIGURED");
+  });
+});
+
 describe("tenant contact management and package quotas", { concurrency: false }, () => {
   it("stores full contact filters and scopes saved segment CRUD by tenant", async () => {
     const owner = await loggedInUser({ username: "segment-owner" });

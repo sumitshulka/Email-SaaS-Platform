@@ -26,7 +26,9 @@ import {
   GiftAdminSubscriptionBody,
   GiftAdminSubscriptionResponse,
   GetCurrentSubscriptionResponse,
+  GetOnlinePaymentSettingsResponse,
   GetRazorpaySettingsResponse,
+  GetSubscriptionPaymentAvailabilityResponse,
   ListAdminSubscriptionPackagesResponse,
   ListAvailableSubscriptionPackagesResponse,
   ListAdminFinancePaymentsQueryParams,
@@ -36,6 +38,8 @@ import {
   SetActiveRazorpayEnvironmentResponse,
   TestRazorpayConnectionBody,
   TestRazorpayConnectionResponse,
+  UpdateOnlinePaymentSettingsBody,
+  UpdateOnlinePaymentSettingsResponse,
   UpdateRazorpaySettingsBody,
   UpdateRazorpaySettingsResponse,
   UpdateSubscriptionPackageBody,
@@ -51,6 +55,7 @@ import {
   razorpayConfigurationTable,
   razorpayWebhookEventsTable,
   subscriptionPackagesTable,
+  systemConfigurationTable,
   tenantSendingConfigurationTable,
   userSubscriptionsTable,
   usersTable,
@@ -79,6 +84,37 @@ import { getPlatformSettings } from "../lib/platform-settings";
 import { requireSuperadmin, requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
+const ONLINE_PAYMENT_CONFIGURATION_KEY = "billing_online_payments";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function loadOnlinePaymentSettings(): Promise<{
+  enabled: boolean;
+  updatedAt: string | null;
+}> {
+  const [row] = await db
+    .select({
+      value: systemConfigurationTable.value,
+      updatedAt: systemConfigurationTable.updatedAt,
+    })
+    .from(systemConfigurationTable)
+    .where(eq(systemConfigurationTable.key, ONLINE_PAYMENT_CONFIGURATION_KEY))
+    .limit(1);
+
+  if (!row) {
+    // Preserve existing checkout behavior when the setting has never been saved.
+    return { enabled: true, updatedAt: null };
+  }
+  return {
+    enabled:
+      isRecord(row.value) && typeof row.value.enabled === "boolean"
+        ? row.value.enabled
+        : false,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
 
 async function validateSenderAccountRetention(
   userId: string,
@@ -581,6 +617,61 @@ router.get(
       .where(eq(razorpayConfigurationTable.id, "platform"))
       .limit(1);
     res.json(GetRazorpaySettingsResponse.parse(serializeRazorpaySettings(config)));
+  },
+);
+
+router.get(
+  "/admin/billing/online-payments",
+  requireSuperadmin,
+  async (_req, res): Promise<void> => {
+    res.json(
+      GetOnlinePaymentSettingsResponse.parse(await loadOnlinePaymentSettings()),
+    );
+  },
+);
+
+router.put(
+  "/admin/billing/online-payments",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = UpdateOnlinePaymentSettingsBody.safeParse(req.body);
+    if (!parsed.success) {
+      invalidInput(res, "Choose whether online payments should be enabled.");
+      return;
+    }
+
+    const updatedAt = new Date();
+    await db
+      .insert(systemConfigurationTable)
+      .values({
+        key: ONLINE_PAYMENT_CONFIGURATION_KEY,
+        value: { enabled: parsed.data.enabled },
+        updatedBy: req.authUser!.id,
+        updatedAt,
+      })
+      .onConflictDoUpdate({
+        target: systemConfigurationTable.key,
+        set: {
+          value: { enabled: parsed.data.enabled },
+          updatedBy: req.authUser!.id,
+          updatedAt,
+        },
+      });
+
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "online_payments.availability_updated",
+      entity: "system_configuration",
+      entityId: ONLINE_PAYMENT_CONFIGURATION_KEY,
+      ipAddress: req.ip,
+      metadata: { enabled: parsed.data.enabled },
+    });
+
+    res.json(
+      UpdateOnlinePaymentSettingsResponse.parse(
+        await loadOnlinePaymentSettings(),
+      ),
+    );
   },
 );
 
@@ -1131,6 +1222,34 @@ router.get(
   },
 );
 
+router.get(
+  "/subscriptions/payment-availability",
+  requireUserRole,
+  async (_req, res): Promise<void> => {
+    const [settings, superadmins] = await Promise.all([
+      loadOnlinePaymentSettings(),
+      db
+        .select({ email: usersTable.email })
+        .from(usersTable)
+        .where(
+          and(
+            eq(usersTable.role, "SUPERADMIN"),
+            eq(usersTable.active, true),
+            isNull(usersTable.deletedAt),
+          ),
+        )
+        .orderBy(asc(usersTable.createdAt), asc(usersTable.id))
+        .limit(1),
+    ]);
+    res.json(
+      GetSubscriptionPaymentAvailabilityResponse.parse({
+        enabled: settings.enabled,
+        superadminEmail: superadmins[0]?.email ?? null,
+      }),
+    );
+  },
+);
+
 router.post(
   "/subscriptions/free",
   requireUserRole,
@@ -1255,6 +1374,14 @@ router.post(
       res.status(400).json({
         error: "Free packages are activated directly and do not use Razorpay Checkout.",
         code: "FREE_PACKAGE_REQUIRES_DIRECT_ACTIVATION",
+      });
+      return;
+    }
+    if (!(await loadOnlinePaymentSettings()).enabled) {
+      res.status(503).json({
+        error:
+          "Online payments are not active at the moment. Contact the platform administrator to activate your account.",
+        code: "ONLINE_PAYMENTS_DISABLED",
       });
       return;
     }

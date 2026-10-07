@@ -2931,6 +2931,22 @@ export interface RazorpaySettings {
   updatedAt: string | null;
 }
 
+export interface OnlinePaymentSettings {
+  enabled: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface OnlinePaymentSettingsInput {
+  enabled: boolean;
+}
+
+export interface SubscriptionPaymentAvailability {
+  enabled: boolean;
+  /** @nullable */
+  superadminEmail: string | null;
+}
+
 export interface RazorpaySettingsInput {
   environment: RazorpayEnvironment;
   /**

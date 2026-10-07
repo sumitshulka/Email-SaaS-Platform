@@ -568,7 +568,9 @@ describe('company profile review and contact data preservation', { concurrency: 
   it('filters the contacts directory by search, list, subscription, and CRM fields', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
-      await installApiFixtures(context);
+      const directoryContacts = contactDirectoryFixtures();
+      directoryContacts[0].linkedinUrl = 'https://www.linkedin.com/in/casey-rivera';
+      await installApiFixtures(context, { contacts: directoryContacts });
       const page = await context.newPage();
       await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
@@ -584,6 +586,20 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.equal(await nameRow.getByTestId(`link-contact-${contactId}`).innerText(), 'Casey Rivera');
       assert.ok((await nameRow.innerText()).includes('casey.rivera@example.test'));
       assert.equal((await nameRow.innerText()).includes('Northstar Labs'), false, 'company details stay on the contact detail page');
+      const historyAction = nameRow.getByTestId(`button-contact-history-${contactId}`);
+      const editAction = nameRow.getByTestId(`button-edit-contact-${contactId}`);
+      const deleteAction = nameRow.getByTestId(`button-delete-contact-${contactId}`);
+      assert.equal(await historyAction.innerText(), '', 'email history action should be icon-only');
+      assert.equal(await editAction.innerText(), '', 'edit action should be icon-only');
+      assert.equal(await deleteAction.innerText(), '', 'delete action should be icon-only');
+      assert.equal(await historyAction.getAttribute('aria-label'), 'Email history for Casey Rivera');
+      assert.equal(await editAction.getAttribute('aria-label'), 'Edit Casey Rivera');
+      assert.equal(await deleteAction.getAttribute('aria-label'), 'Delete Casey Rivera');
+      const linkedinAction = nameRow.getByTestId(`link-contact-linkedin-${contactId}`);
+      assert.equal(await linkedinAction.getAttribute('href'), 'https://www.linkedin.com/in/casey-rivera');
+      assert.equal(await linkedinAction.getAttribute('target'), '_blank');
+      assert.ok((await linkedinAction.getAttribute('rel')).includes('noopener'));
+      assert.equal(await page.getByTestId('row-contact-browser-filter-customer-id').getByTestId('link-contact-linkedin-browser-filter-customer-id').count(), 0, 'contacts without a LinkedIn URL should not show the LinkedIn action');
       const lastEmailCell = page.getByTestId(`cell-contact-last-email-${contactId}`);
       assert.equal(await page.getByTestId(`contact-last-email-campaign-${contactId}`).innerText(), 'October product update');
       assert.ok(await page.getByTestId(`contact-last-email-date-${contactId}`).innerText());

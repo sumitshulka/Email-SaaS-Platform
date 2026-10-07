@@ -2449,6 +2449,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RazorpaySettings"
+  /admin/billing/online-payments:
+    get:
+      operationId: getOnlinePaymentSettings
+      tags: [billing]
+      summary: Get the online payment availability switch
+      responses:
+        "200":
+          description: Online payment availability and last update time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlinePaymentSettings"
+    put:
+      operationId: updateOnlinePaymentSettings
+      tags: [billing]
+      summary: Enable or disable new online payment checkouts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnlinePaymentSettingsInput"
+      responses:
+        "200":
+          description: Updated online payment availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlinePaymentSettings"
   /admin/billing/razorpay/active:
     put:
       operationId: setActiveRazorpayEnvironment
@@ -2578,6 +2607,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SubscriptionPackageList"
+  /subscriptions/payment-availability:
+    get:
+      operationId: getSubscriptionPaymentAvailability
+      tags: [billing]
+      summary: Get online payment status and the platform contact address
+      description: Requires an authenticated customer account. The contact address is the active superadmin email.
+      responses:
+        "200":
+          description: Whether paid checkout is available and whom to contact if it is not
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPaymentAvailability"
   /subscriptions/current:
     get:
       operationId: getCurrentSubscription
@@ -2634,6 +2676,8 @@ paths:
                 $ref: "#/components/schemas/SubscriptionOrderCreated"
         "400":
           description: Invalid package selection or a free package that must use direct activation
+        "503":
+          description: Online payments are disabled or Razorpay is not configured
   /subscriptions/verify:
     post:
       operationId: verifyRazorpayPayment
@@ -4307,6 +4351,23 @@ components:
         production: { $ref: "#/components/schemas/RazorpayEnvironmentSettings" }
         updatedAt: { type: ["string", "null"], format: date-time }
       required: [activeEnvironment, sandbox, production, updatedAt]
+    OnlinePaymentSettings:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [enabled, updatedAt]
+    OnlinePaymentSettingsInput:
+      type: object
+      properties:
+        enabled: { type: boolean }
+      required: [enabled]
+    SubscriptionPaymentAvailability:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        superadminEmail: { type: ["string", "null"], format: email }
+      required: [enabled, superadminEmail]
     RazorpaySettingsInput:
       type: object
       properties:

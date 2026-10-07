@@ -4,12 +4,12 @@ import {
   Activity, CircleAlert, CreditCard, Gift, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck, X,
 } from 'lucide-react';
 import {
-  getGetRazorpaySettingsQueryKey, getListAdminSubscriptionPackagesQueryKey, getListAdminUsersQueryKey,
+  getGetOnlinePaymentSettingsQueryKey, getGetRazorpaySettingsQueryKey, getListAdminSubscriptionPackagesQueryKey, getListAdminUsersQueryKey,
   getListAvailableSubscriptionPackagesQueryKey,
-  useCreateSubscriptionPackage, useGetRazorpaySettings, useGiftAdminSubscription, useListAdminSubscriptionPackages,
+  useCreateSubscriptionPackage, useGetOnlinePaymentSettings, useGetRazorpaySettings, useGiftAdminSubscription, useListAdminSubscriptionPackages,
   useListAdminUsers,
   useSetActiveRazorpayEnvironment, useTestRazorpayConnection,
-  useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
+  useUpdateOnlinePaymentSettings, useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
 } from '@workspace/api-client-react';
 import type { AdminUser, SubscriptionPackage, SubscriptionPackageInput } from '@workspace/api-client-react';
 
@@ -77,8 +77,10 @@ function inputMinor(amount: string, currency: string) {
 
 export default function AdminBillingPage() {
   const queryClient = useQueryClient();
+  const onlinePaymentsQuery = useGetOnlinePaymentSettings();
   const settingsQuery = useGetRazorpaySettings();
   const packagesQuery = useListAdminSubscriptionPackages();
+  const updateOnlinePayments = useUpdateOnlinePaymentSettings();
   const saveSettings = useUpdateRazorpaySettings();
   const testConnection = useTestRazorpayConnection();
   const activateEnvironment = useSetActiveRazorpayEnvironment();
@@ -86,6 +88,8 @@ export default function AdminBillingPage() {
   const updatePackage = useUpdateSubscriptionPackage();
   const giftSubscription = useGiftAdminSubscription();
   const settings = settingsQuery.data;
+  const onlinePaymentsEnabled = onlinePaymentsQuery.data?.enabled ?? true;
+  const onlinePaymentsUpdatedAt = onlinePaymentsQuery.data?.updatedAt ?? null;
   const packages = packagesQuery.data?.packages ?? [];
   const sendingLimits = packagesQuery.data?.sendingLimits;
   const [giftSearch, setGiftSearch] = useState('');
@@ -211,17 +215,30 @@ export default function AdminBillingPage() {
     });
   };
 
-  if (settingsQuery.isLoading || packagesQuery.isLoading) {
+  const setOnlinePaymentsEnabled = (enabled: boolean) => {
+    setNotice(null);
+    updateOnlinePayments.mutate({ data: { enabled } }, {
+      onSuccess: result => {
+        queryClient.setQueryData(getGetOnlinePaymentSettingsQueryKey(), result);
+        announce(result.enabled
+          ? 'Online payments are enabled for new paid checkouts.'
+          : 'New paid checkouts are disabled. Free plan activation remains available.');
+      },
+      onError: error => setNotice({ text: errorText(error), bad: true }),
+    });
+  };
+
+  if (onlinePaymentsQuery.isLoading || settingsQuery.isLoading || packagesQuery.isLoading) {
     return <div className="space-y-5" aria-label="Loading billing administration" data-testid="loading-admin-billing">
       <div className="h-8 w-60 animate-pulse rounded bg-[#e9eef2]"/>
       <div className="h-56 animate-pulse rounded-lg bg-[#edf1f4]"/>
       <div className="h-72 animate-pulse rounded-lg bg-[#edf1f4]"/>
     </div>;
   }
-  if (settingsQuery.isError || packagesQuery.isError) {
+  if (onlinePaymentsQuery.isError || settingsQuery.isError || packagesQuery.isError) {
     return <Panel className="flex flex-wrap items-center justify-between gap-4 p-6" data-testid="error-admin-billing">
       <div className="flex items-center gap-3"><CircleAlert className="h-5 w-5 text-[#bd692d]"/><div><h1 className="font-semibold text-[#1b2b3d]">Billing data is unavailable</h1><p className="mt-1 text-sm text-[#728092]">No changes were made. Retry loading the billing controls.</p></div></div>
-      <button data-testid="button-retry-admin-billing" onClick={() => { void settingsQuery.refetch(); void packagesQuery.refetch(); }} className="rounded-md border border-[#d6dfe7] px-4 py-2 text-sm font-semibold text-[#294d70]">Retry</button>
+      <button data-testid="button-retry-admin-billing" onClick={() => { void onlinePaymentsQuery.refetch(); void settingsQuery.refetch(); void packagesQuery.refetch(); }} className="rounded-md border border-[#d6dfe7] px-4 py-2 text-sm font-semibold text-[#294d70]">Retry</button>
     </Panel>;
   }
 
@@ -309,6 +326,41 @@ export default function AdminBillingPage() {
           </button>
         </div>
       </form>
+    </Panel>
+
+    <Panel className="overflow-hidden" testId="online-payment-settings-panel">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9edf1] px-5 py-4 md:px-6">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><CreditCard className="h-[17px] w-[17px]"/></span>
+          <div>
+            <h2 className="text-[15px] font-bold text-[#1d2d40]">Online payment availability</h2>
+            <p className="mt-0.5 text-[11px] text-[#788696]">Control whether customers can start paid subscription checkouts.</p>
+          </div>
+        </div>
+        <span data-testid="status-online-payment-setting" className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${onlinePaymentsEnabled ? 'bg-[#eaf5ef] text-[#347452]' : 'bg-[#fff3e8] text-[#a85c21]'}`}>
+          {onlinePaymentsEnabled ? 'Enabled' : 'Disabled'}
+        </span>
+      </div>
+      <div className="space-y-3 p-5 md:p-6">
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#dfe7ed] bg-[#f8fafb] p-4">
+          <input
+            data-testid="checkbox-enable-online-payments"
+            type="checkbox"
+            checked={onlinePaymentsEnabled}
+            disabled={updateOnlinePayments.isPending}
+            onChange={event => setOnlinePaymentsEnabled(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#245b9b] disabled:cursor-not-allowed"
+          />
+          <span className="min-w-0">
+            <span className="block text-[12px] font-semibold text-[#2b3d50]">Enable Online Payments</span>
+            <span className="mt-1 block text-[11px] leading-5 text-[#687b8d]">
+              When off, users cannot create new paid checkouts and will see the superadmin contact email on their Plans page. Free plan activation and confirmation of existing payments continue to work.
+            </span>
+          </span>
+          {updateOnlinePayments.isPending && <LoaderCircle aria-label="Saving online payment setting" className="ml-auto mt-0.5 h-4 w-4 shrink-0 animate-spin text-[#456d91]"/>}
+        </label>
+        {onlinePaymentsUpdatedAt && <p data-testid="text-online-payment-updated" className="text-[10px] text-[#8994a0]">Availability last changed {new Date(onlinePaymentsUpdatedAt).toLocaleString()}</p>}
+      </div>
     </Panel>
 
     <Panel className="overflow-hidden">

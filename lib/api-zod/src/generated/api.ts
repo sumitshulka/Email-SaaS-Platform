@@ -4494,6 +4494,28 @@ export const UpdateRazorpaySettingsResponse = zod.object({
 
 
 /**
+ * @summary Get the online payment availability switch
+ */
+export const GetOnlinePaymentSettingsResponse = zod.object({
+  "enabled": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Enable or disable new online payment checkouts
+ */
+export const UpdateOnlinePaymentSettingsBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateOnlinePaymentSettingsResponse = zod.object({
+  "enabled": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Select the active Razorpay environment
  */
 export const SetActiveRazorpayEnvironmentBody = zod.object({
@@ -4764,6 +4786,16 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "emailsPerHourPerSmtp": zod.number().int().min(1),
   "emailsPerDayPerSmtp": zod.number().int().min(1)
 }).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.')
+})
+
+
+/**
+ * Requires an authenticated customer account. The contact address is the active superadmin email.
+ * @summary Get online payment status and the platform contact address
+ */
+export const GetSubscriptionPaymentAvailabilityResponse = zod.object({
+  "enabled": zod.boolean(),
+  "superadminEmail": zod.string().email().nullable()
 })
 
 

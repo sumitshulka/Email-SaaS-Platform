@@ -106,6 +106,8 @@ import type {
   Microsoft365TraceBackfillInput,
   Microsoft365TraceConnectInput,
   Microsoft365TraceConnection,
+  OnlinePaymentSettings,
+  OnlinePaymentSettingsInput,
   PasswordPolicy,
   PaymentVerificationResult,
   PlatformSettings,
@@ -125,6 +127,7 @@ import type {
   SubscriptionPackageInput,
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
+  SubscriptionPaymentAvailability,
   SubscriptionSummary,
   SupportTicketCollection,
   SupportTicketDetail,
@@ -8643,6 +8646,171 @@ export const useUpdateRazorpaySettings = <TError = ErrorType<unknown>,
       return useMutation(getUpdateRazorpaySettingsMutationOptions(options));
     }
 
+export const getGetOnlinePaymentSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/billing/online-payments`
+}
+
+/**
+ * @summary Get the online payment availability switch
+ */
+export const getOnlinePaymentSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<OnlinePaymentSettings> => {
+
+  return customFetch<OnlinePaymentSettings>(getGetOnlinePaymentSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOnlinePaymentSettingsQueryKey = () => {
+    return [
+    `/api/admin/billing/online-payments`
+    ] as const;
+    }
+
+
+export const getGetOnlinePaymentSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getOnlinePaymentSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOnlinePaymentSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOnlinePaymentSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOnlinePaymentSettings>>> = ({ signal }) => getOnlinePaymentSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOnlinePaymentSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOnlinePaymentSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getOnlinePaymentSettings>>>
+export type GetOnlinePaymentSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the online payment availability switch
+ */
+
+export function useGetOnlinePaymentSettings<TData = Awaited<ReturnType<typeof getOnlinePaymentSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOnlinePaymentSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOnlinePaymentSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateOnlinePaymentSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/billing/online-payments`
+}
+
+/**
+ * @summary Enable or disable new online payment checkouts
+ */
+export const updateOnlinePaymentSettings = async (onlinePaymentSettingsInput: OnlinePaymentSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<OnlinePaymentSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<OnlinePaymentSettings>(getUpdateOnlinePaymentSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(onlinePaymentSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateOnlinePaymentSettingsMutationKey = () => ['updateOnlinePaymentSettings'] as const;
+
+export const getUpdateOnlinePaymentSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOnlinePaymentSettings>>, TError,UpdateOnlinePaymentSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOnlinePaymentSettings>>, TError,UpdateOnlinePaymentSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateOnlinePaymentSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOnlinePaymentSettings>>, UpdateOnlinePaymentSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateOnlinePaymentSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOnlinePaymentSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateOnlinePaymentSettings>>>
+    export type UpdateOnlinePaymentSettingsMutationBody = BodyType<OnlinePaymentSettingsInput>
+    export type UpdateOnlinePaymentSettingsMutationError = ErrorType<unknown>
+    export type UpdateOnlinePaymentSettingsMutationVariables = {data: BodyType<OnlinePaymentSettingsInput>}
+
+    /**
+ * @summary Enable or disable new online payment checkouts
+ */
+export const useUpdateOnlinePaymentSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOnlinePaymentSettings>>, TError,UpdateOnlinePaymentSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOnlinePaymentSettings>>,
+        TError,
+        UpdateOnlinePaymentSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateOnlinePaymentSettingsMutationOptions(options));
+    }
+
 export const getSetActiveRazorpayEnvironmentUrl = () => {
 
 
@@ -9227,6 +9395,84 @@ export function useListAvailableSubscriptionPackages<TData = Awaited<ReturnType<
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAvailableSubscriptionPackagesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSubscriptionPaymentAvailabilityUrl = () => {
+
+
+
+
+  return `/api/subscriptions/payment-availability`
+}
+
+/**
+ * Requires an authenticated customer account. The contact address is the active superadmin email.
+ * @summary Get online payment status and the platform contact address
+ */
+export const getSubscriptionPaymentAvailability = async ( options?: Parameters<typeof customFetch>[1]): Promise<SubscriptionPaymentAvailability> => {
+
+  return customFetch<SubscriptionPaymentAvailability>(getGetSubscriptionPaymentAvailabilityUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSubscriptionPaymentAvailabilityQueryKey = () => {
+    return [
+    `/api/subscriptions/payment-availability`
+    ] as const;
+    }
+
+
+export const getGetSubscriptionPaymentAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSubscriptionPaymentAvailabilityQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>> = ({ signal }) => getSubscriptionPaymentAvailability({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSubscriptionPaymentAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>>
+export type GetSubscriptionPaymentAvailabilityQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get online payment status and the platform contact address
+ */
+
+export function useGetSubscriptionPaymentAvailability<TData = Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionPaymentAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSubscriptionPaymentAvailabilityQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
