@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  inArray,
   ilike,
   isNull,
   ne,
@@ -12,6 +13,8 @@ import {
 import { Router, type IRouter } from "express";
 import { alias } from "drizzle-orm/pg-core";
 import {
+  BulkImportGlobalCompaniesBody,
+  BulkImportGlobalCompaniesResponse,
   CreateGlobalCompanyBody,
   DeleteGlobalCompanyParams,
   ListAdminGlobalCompaniesQueryParams,
@@ -114,6 +117,155 @@ router.get(
       page,
       pageSize,
     });
+  },
+);
+
+router.post(
+  "/admin/global-companies/bulk-import",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = BulkImportGlobalCompaniesBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Choose a valid batch of up to 25 company profiles.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const rowNumbers = parsed.data.rows.map((row) => row.rowNumber);
+    if (new Set(rowNumbers).size !== rowNumbers.length) {
+      res.status(400).json({
+        error: "Each imported file row must have a unique row number.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const results = new Map<
+      number,
+      {
+        rowNumber: number;
+        companyName: string;
+        status: "imported" | "duplicate" | "invalid";
+        reason: string | null;
+      }
+    >();
+    const seenDomains = new Map<string, number>();
+    const candidates: Array<{
+      rowNumber: number;
+      profile: CompanyProfileValues;
+      companyName: string;
+      domainKey: string | null;
+    }> = [];
+
+    for (const row of parsed.data.rows) {
+      const profile = companyProfileFrom(row.company);
+      const companyName = profile.companyName?.trim() ?? "";
+      const invalidDomain =
+        (Boolean(profile.companyDomain) &&
+          !normalizeCompanyDomain(profile.companyDomain)) ||
+        (Boolean(profile.companyWebsiteUrl) &&
+          !normalizeCompanyDomain(profile.companyWebsiteUrl));
+
+      if (!companyName || invalidDomain) {
+        results.set(row.rowNumber, {
+          rowNumber: row.rowNumber,
+          companyName: companyName || "(blank company name)",
+          status: "invalid",
+          reason: !companyName
+            ? "Company name is required."
+            : "Enter a valid company domain or website URL.",
+        });
+        continue;
+      }
+
+      const domainKey = companyDomainKey(profile);
+      const priorRow = domainKey ? seenDomains.get(domainKey) : undefined;
+      if (domainKey && priorRow !== undefined) {
+        results.set(row.rowNumber, {
+          rowNumber: row.rowNumber,
+          companyName,
+          status: "duplicate",
+          reason: `Duplicate of row ${priorRow} in this file.`,
+        });
+        continue;
+      }
+      if (domainKey) seenDomains.set(domainKey, row.rowNumber);
+      candidates.push({ rowNumber: row.rowNumber, profile, companyName, domainKey });
+    }
+
+    await db.transaction(async (tx) => {
+      const domainKeys = candidates
+        .map((row) => row.domainKey)
+        .filter((key): key is string => key !== null);
+      const existing = domainKeys.length
+        ? await tx
+            .select({ companyDomainKey: globalCompaniesTable.companyDomainKey })
+            .from(globalCompaniesTable)
+            .where(inArray(globalCompaniesTable.companyDomainKey, domainKeys))
+        : [];
+      const existingKeys = new Set(
+        existing.flatMap((row) =>
+          row.companyDomainKey ? [row.companyDomainKey] : [],
+        ),
+      );
+      const pending = candidates.filter((row) => {
+        if (!row.domainKey || !existingKeys.has(row.domainKey)) return true;
+        results.set(row.rowNumber, {
+          rowNumber: row.rowNumber,
+          companyName: row.companyName,
+          status: "duplicate",
+          reason: "A global company already uses this domain.",
+        });
+        return false;
+      });
+
+      if (!pending.length) return;
+      const inserted = await tx
+        .insert(globalCompaniesTable)
+        .values(
+          pending.map((row) => ({
+            ...row.profile,
+            companyName: row.companyName,
+            companyDomainKey: row.domainKey,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ companyDomainKey: globalCompaniesTable.companyDomainKey });
+      const insertedKeys = new Set(
+        inserted.flatMap((row) =>
+          row.companyDomainKey ? [row.companyDomainKey] : [],
+        ),
+      );
+
+      for (const row of pending) {
+        if (row.domainKey && !insertedKeys.has(row.domainKey)) {
+          results.set(row.rowNumber, {
+            rowNumber: row.rowNumber,
+            companyName: row.companyName,
+            status: "duplicate",
+            reason: "A global company with this domain was added at the same time.",
+          });
+          continue;
+        }
+        results.set(row.rowNumber, {
+          rowNumber: row.rowNumber,
+          companyName: row.companyName,
+          status: "imported",
+          reason: null,
+        });
+      }
+    });
+
+    const responseRows = parsed.data.rows.map((row) => results.get(row.rowNumber)!);
+    const response = BulkImportGlobalCompaniesResponse.parse({
+      imported: responseRows.filter((row) => row.status === "imported").length,
+      duplicates: responseRows.filter((row) => row.status === "duplicate").length,
+      invalid: responseRows.filter((row) => row.status === "invalid").length,
+      rows: responseRows,
+    });
+    res.json(response);
   },
 );
 

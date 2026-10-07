@@ -1802,6 +1802,78 @@ export const CreateGlobalCompanyResponse = zod.object({
 
 
 /**
+ * @summary Import a bounded batch of company profiles into the global catalog
+ */
+export const bulkImportGlobalCompaniesBodyRowsItemRowNumberMin = 2;
+export const bulkImportGlobalCompaniesBodyRowsItemRowNumberMax = 10001;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyNameMax = 200;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyWebsiteUrlMax = 2048;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDomainMax = 255;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyIndustryMax = 120;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanySizeMax = 80;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyRevenueRangeMax = 80;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDescriptionMax = 10000;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyPhoneNumberMax = 40;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLinkedinUrlMax = 2048;
+
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLocationMax = 200;
+
+export const bulkImportGlobalCompaniesBodyRowsMax = 25;
+
+
+
+export const BulkImportGlobalCompaniesBody = zod.object({
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().int().min(bulkImportGlobalCompaniesBodyRowsItemRowNumberMin).max(bulkImportGlobalCompaniesBodyRowsItemRowNumberMax),
+  "company": zod.object({
+  "companyName": zod.string().min(1).max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyWebsiteUrlMax).optional(),
+  "companyDomain": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDomainMax).optional(),
+  "companyIndustry": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyIndustryMax).optional(),
+  "companySize": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanySizeMax).optional(),
+  "companyRevenueRange": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyRevenueRangeMax).optional(),
+  "companyDescription": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDescriptionMax).optional(),
+  "companyPhoneNumber": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyPhoneNumberMax).optional(),
+  "companyLinkedinUrl": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLinkedinUrlMax).optional(),
+  "companyLocation": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLocationMax).optional()
+})
+})).min(1).max(bulkImportGlobalCompaniesBodyRowsMax)
+})
+
+export const bulkImportGlobalCompaniesResponseImportedMin = 0;
+
+export const bulkImportGlobalCompaniesResponseDuplicatesMin = 0;
+
+export const bulkImportGlobalCompaniesResponseInvalidMin = 0;
+
+export const bulkImportGlobalCompaniesResponseRowsItemRowNumberMin = 2;
+export const bulkImportGlobalCompaniesResponseRowsItemRowNumberMax = 10001;
+
+
+
+export const BulkImportGlobalCompaniesResponse = zod.object({
+  "imported": zod.number().int().min(bulkImportGlobalCompaniesResponseImportedMin),
+  "duplicates": zod.number().int().min(bulkImportGlobalCompaniesResponseDuplicatesMin),
+  "invalid": zod.number().int().min(bulkImportGlobalCompaniesResponseInvalidMin),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().int().min(bulkImportGlobalCompaniesResponseRowsItemRowNumberMin).max(bulkImportGlobalCompaniesResponseRowsItemRowNumberMax),
+  "companyName": zod.string(),
+  "status": zod.enum(['imported', 'duplicate', 'invalid']),
+  "reason": zod.string().nullable()
+}))
+})
+
+
+/**
  * @summary Update a global company profile and all linked workspace profiles
  */
 export const UpdateGlobalCompanyParams = zod.object({

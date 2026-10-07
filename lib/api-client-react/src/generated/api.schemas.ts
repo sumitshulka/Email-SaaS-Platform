@@ -879,6 +879,54 @@ export interface GlobalCompanyInput {
   companyLocation?: string;
 }
 
+export interface GlobalCompanyBulkImportRowInput {
+  /**
+     * @minimum 2
+     * @maximum 10001
+     */
+  rowNumber: number;
+  company: GlobalCompanyInput;
+}
+
+export interface GlobalCompanyBulkImportInput {
+  /**
+     * @minItems 1
+     * @maxItems 25
+     */
+  rows: GlobalCompanyBulkImportRowInput[];
+}
+
+export type GlobalCompanyBulkImportRowResultStatus = typeof GlobalCompanyBulkImportRowResultStatus[keyof typeof GlobalCompanyBulkImportRowResultStatus];
+
+
+export const GlobalCompanyBulkImportRowResultStatus = {
+  imported: 'imported',
+  duplicate: 'duplicate',
+  invalid: 'invalid',
+} as const;
+
+export interface GlobalCompanyBulkImportRowResult {
+  /**
+     * @minimum 2
+     * @maximum 10001
+     */
+  rowNumber: number;
+  companyName: string;
+  status: GlobalCompanyBulkImportRowResultStatus;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface GlobalCompanyBulkImportResult {
+  /** @minimum 0 */
+  imported: number;
+  /** @minimum 0 */
+  duplicates: number;
+  /** @minimum 0 */
+  invalid: number;
+  rows: GlobalCompanyBulkImportRowResult[];
+}
+
 export interface GlobalCompanyUpdate {
   /**
      * @minLength 1
