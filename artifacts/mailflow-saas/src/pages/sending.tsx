@@ -1774,7 +1774,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         <div className="mb-5 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
           <section className={`${panelClass} p-5`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery pacing</h2><p className="mt-1 text-[11px] text-[#788392]">Based on the workspace limits set by the superadmin.</p></div>
+              <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery pacing</h2><p className="mt-1 text-[11px] text-[#788392]">Caps apply independently to each configured SMTP mailbox.</p></div>
               <Clock3 className="h-5 w-5 text-[#245b9b]"/>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -1782,12 +1782,12 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
               <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">{isPausedForMaintenance ? 'Delivery paused' : 'Estimated finish'}</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{isPausedForMaintenance ? 'Will resume automatically' : campaign.status === 'completed' ? formatDate(campaign.completedAt) : pacing.estimatedCompletionAt ? formatDate(pacing.estimatedCompletionAt) : 'No emails waiting'}</div></div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div><div className="text-[10px] text-[#85909d]">Hourly cap</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerHour.toLocaleString()} emails/hour</div></div>
-              <div><div className="text-[10px] text-[#85909d]">Daily cap</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerDay.toLocaleString()} emails/day</div></div>
+              <div><div className="text-[10px] text-[#85909d]">Hourly cap per SMTP</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerHour.toLocaleString()} emails / rolling hour</div></div>
+              <div><div className="text-[10px] text-[#85909d]">Daily cap per SMTP</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerDay.toLocaleString()} emails / rolling 24 hours</div></div>
               <div><div className="text-[10px] text-[#85909d]">Minimum spacing</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">One email every {formatDeliveryDuration(pacing.minimumSpacingSeconds)}</div></div>
             </div>
             {campaign.status === 'draft' && pacing.remainingEmails > pacing.maxCampaignSize && <div className="mt-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]"><AlertCircle className="mr-2 inline h-4 w-4"/>This audience exceeds the current maximum campaign size of {pacing.maxCampaignSize.toLocaleString()} emails, so it cannot be queued yet.</div>}
-            <p className="mt-4 border-t border-[#edf0f2] pt-3 text-[10px] leading-5 text-[#8993a0]">This estimate includes recipients already queued ahead of this campaign and the shared hourly and daily limits. SMTP response time and retries are uncertain, so actual finish times may differ.</p>
+            <p className="mt-4 border-t border-[#edf0f2] pt-3 text-[10px] leading-5 text-[#8993a0]">This campaign uses the hourly and daily caps for its selected SMTP mailbox. Other campaigns using that same mailbox share its allowance; different mailboxes have separate allowances. SMTP response time and retries are uncertain, so actual finish times may differ.</p>
           </section>
 
           <section className={`${panelClass} p-5`}>

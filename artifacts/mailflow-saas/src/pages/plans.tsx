@@ -7,7 +7,7 @@ import {
   useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCurrentSubscription, useListAvailableSubscriptionPackages,
   useListTenantSendingAccounts, useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
-import type { SubscriptionOrderCreated, SubscriptionPackage, TenantSendingAccount } from '@workspace/api-client-react';
+import type { SubscriptionOrderCreated, SubscriptionPackage, SubscriptionPackageList, TenantSendingAccount } from '@workspace/api-client-react';
 import {
   trackEvent,
   trackFreeActivationOutcome,
@@ -78,9 +78,16 @@ function durationLabel(days: number) {
   return `${days} days`;
 }
 
-function PackageCard({ item, featured, pending, disabled, onPurchase }: {
-  item: SubscriptionPackage; featured: boolean; pending: boolean; disabled: boolean; onPurchase: () => void;
+function PackageCard({ item, featured, pending, disabled, onPurchase, sendingLimits }: {
+  item: SubscriptionPackage;
+  featured: boolean;
+  pending: boolean;
+  disabled: boolean;
+  onPurchase: () => void;
+  sendingLimits: SubscriptionPackageList['sendingLimits'];
 }) {
+  const combinedHourly = sendingLimits.emailsPerHourPerSmtp * item.emailAccountLimit;
+  const combinedDaily = sendingLimits.emailsPerDayPerSmtp * item.emailAccountLimit;
   return <article data-testid={`card-plan-${item.id}`} className={`flex min-h-[330px] flex-col rounded-lg border p-4 sm:p-5 md:p-6 ${featured ? 'border-[#224e78] bg-[#f1f6fa] shadow-[0_8px_26px_rgba(35,70,104,.09)]' : 'border-[#e0e6eb] bg-white'}`}>
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
@@ -115,8 +122,19 @@ function PackageCard({ item, featured, pending, disabled, onPurchase }: {
           <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
           <span className="min-w-0 break-words">Up to {item.emailAccountLimit} SMTP sender account{item.emailAccountLimit === 1 ? '' : 's'}</span>
         </div>
+        <div data-testid={`text-plan-hourly-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">Up to {sendingLimits.emailsPerHourPerSmtp.toLocaleString()} campaign attempts per rolling hour, per SMTP mailbox</span>
+        </div>
+        <div data-testid={`text-plan-daily-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">Up to {sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per rolling 24 hours, per SMTP mailbox</span>
+        </div>
       </div>
     </div>
+    <p data-testid={`text-plan-total-send-capacity-${item.id}`} className="mt-2 text-[10px] leading-4 text-[#718192]">
+      With all {item.emailAccountLimit} mailbox{item.emailAccountLimit === 1 ? '' : 'es'} configured: up to {combinedHourly.toLocaleString()} campaign attempts/hour and {combinedDaily.toLocaleString()}/24 hours. Retries count; provider limits may be lower.
+    </p>
 
     <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled} className={`mt-4 inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-center text-[12px] font-semibold leading-4 transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
       {pending ? <><LoaderCircle className="h-4 w-4 shrink-0 animate-spin"/><span className="min-w-0 break-words">{item.amountMinor === 0 ? 'Activating free plan' : 'Starting secure checkout'}</span></> : <><span className="min-w-0 break-words">{item.amountMinor === 0 ? `Activate ${item.name}` : `Choose ${item.name}`}</span><ArrowRight className="h-4 w-4 shrink-0"/></>}
@@ -333,7 +351,7 @@ export default function PlansPage() {
     <section>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[9px] uppercase tracking-[.18em] text-[#8290a0]">AVAILABLE TERMS</div><h2 className="display text-[23px] font-bold text-[#1d2d40]">Select a package</h2></div><div className="flex items-center gap-2 text-[10px] text-[#718193]"><ShieldCheck className="h-4 w-4 text-[#48769e]"/>Verified server-side before activation</div></div>
       {packages.length === 0 ? <section data-testid="empty-plans" className="rounded-lg border border-dashed border-[#d8e1e8] bg-[#fbfcfd] px-6 py-12 text-center"><CreditCard className="mx-auto h-7 w-7 text-[#8798a8]"/><h3 className="mt-3 text-[14px] font-semibold text-[#2b3e51]">No plans are available right now</h3><p className="mt-1 text-[12px] text-[#778797]">Please check back later or contact your workspace administrator.</p></section> :
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{packages.map(pkg => <PackageCard key={pkg.id} item={pkg} featured={activeSubscription?.package.id === pkg.id} pending={startingPackage === pkg.id} disabled={busy || startingPackage !== null || checkoutOrder !== null || pendingPackage !== null} onPurchase={() => purchase(pkg)}/>)}</div>}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{packages.map(pkg => <PackageCard key={pkg.id} item={pkg} featured={activeSubscription?.package.id === pkg.id} pending={startingPackage === pkg.id} disabled={busy || startingPackage !== null || checkoutOrder !== null || pendingPackage !== null} sendingLimits={packagesQuery.data!.sendingLimits} onPurchase={() => purchase(pkg)}/>)}</div>}
     </section>
 
     {pendingPackage && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#101d2a]/55 p-4" data-testid="dialog-sender-retention">

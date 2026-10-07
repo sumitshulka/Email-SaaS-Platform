@@ -2979,8 +2979,19 @@ export interface SubscriptionPackage {
   updatedAt: string;
 }
 
+/**
+ * Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.
+ */
+export interface SmtpSendingLimits {
+  /** @minimum 1 */
+  emailsPerHourPerSmtp: number;
+  /** @minimum 1 */
+  emailsPerDayPerSmtp: number;
+}
+
 export interface SubscriptionPackageList {
   packages: SubscriptionPackage[];
+  sendingLimits: SmtpSendingLimits;
 }
 
 export interface SubscriptionPackageInput {

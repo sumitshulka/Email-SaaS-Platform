@@ -4543,6 +4543,8 @@ export const listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitM
 
 
 
+
+
 export const ListAdminSubscriptionPackagesResponse = zod.object({
   "packages": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -4556,7 +4558,11 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
-}))
+})),
+  "sendingLimits": zod.object({
+  "emailsPerHourPerSmtp": zod.number().int().min(1),
+  "emailsPerDayPerSmtp": zod.number().int().min(1)
+}).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.')
 })
 
 
@@ -4729,6 +4735,8 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLi
 
 
 
+
+
 export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "packages": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -4742,7 +4750,11 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
-}))
+})),
+  "sendingLimits": zod.object({
+  "emailsPerHourPerSmtp": zod.number().int().min(1),
+  "emailsPerDayPerSmtp": zod.number().int().min(1)
+}).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.')
 })
 
 

@@ -4350,7 +4350,16 @@ components:
         packages:
           type: array
           items: { $ref: "#/components/schemas/SubscriptionPackage" }
-      required: [packages]
+        sendingLimits:
+          $ref: "#/components/schemas/SmtpSendingLimits"
+      required: [packages, sendingLimits]
+    SmtpSendingLimits:
+      type: object
+      description: Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.
+      properties:
+        emailsPerHourPerSmtp: { type: integer, minimum: 1 }
+        emailsPerDayPerSmtp: { type: integer, minimum: 1 }
+      required: [emailsPerHourPerSmtp, emailsPerDayPerSmtp]
     SubscriptionPackageInput:
       type: object
       properties:

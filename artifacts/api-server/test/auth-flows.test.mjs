@@ -424,6 +424,7 @@ memory.public.none(`
   CREATE TABLE email_send_attempts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_account_id uuid,
     recipient_id uuid NOT NULL REFERENCES email_campaign_recipients(id) ON DELETE CASCADE,
     message_id varchar(512),
     smtp_response text,
@@ -2114,6 +2115,20 @@ describe("tenant contact management and package quotas", { concurrency: false },
       username: "package-limit-admin",
       role: "SUPERADMIN",
     });
+    const configuredSendingLimits = {
+      defaultEmailsPerHour: 42,
+      maxEmailsPerDay: 420,
+    };
+    await db
+      .insert(dbModule.systemConfigurationTable)
+      .values({
+        key: "platform",
+        value: configuredSendingLimits,
+      })
+      .onConflictDoUpdate({
+        target: dbModule.systemConfigurationTable.key,
+        set: { value: configuredSendingLimits },
+      });
     const created = await api("/admin/billing/packages", {
       method: "POST",
       cookie: admin.cookie,
@@ -2146,6 +2161,22 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .where(eq(dbModule.subscriptionPackagesTable.id, created.body.id));
     assert.equal(saved.contactLimit, 2400);
     assert.equal(saved.emailAccountLimit, 4);
+
+    const adminPackages = await api("/admin/billing/packages", {
+      cookie: admin.cookie,
+    });
+    assert.equal(adminPackages.response.status, 200);
+    assert.deepEqual(adminPackages.body.sendingLimits, {
+      emailsPerHourPerSmtp: 42,
+      emailsPerDayPerSmtp: 420,
+    });
+    const publicPackages = await api("/subscriptions/packages");
+    assert.equal(publicPackages.response.status, 200);
+    assert.deepEqual(publicPackages.body.sendingLimits, {
+      emailsPerHourPerSmtp: 42,
+      emailsPerDayPerSmtp: 420,
+    });
+    assert.ok(publicPackages.body.packages.some((pkg) => pkg.id === created.body.id));
   });
 
   it("creates and activates free packages without a payment or Razorpay order", async () => {
@@ -7078,9 +7109,9 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     });
     assert.equal(backlogCampaign.response.status, 201, JSON.stringify(backlogCampaign.body));
     assert.ok(
-      backlogCampaign.body.estimatedDurationSeconds >
+      backlogCampaign.body.estimatedDurationSeconds <=
         queuedDashboard.body.pacing.estimatedDurationSeconds,
-      "a draft estimate includes already queued work ahead of it",
+      "a campaign on a different SMTP mailbox should not wait on this mailbox's rate cap",
     );
     const tooEarly = await api(`/campaigns/${backlogCampaign.body.id}/send`, {
       method: "POST",
@@ -7191,13 +7222,37 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           defaultEmailsPerHour: 1,
           deliveryTrackingEnabled: true,
           maintenanceMode: false,
-          maxEmailsPerDay: 2,
+          maxEmailsPerDay: 1,
           maxConcurrentCampaigns: 2,
         },
       })
       .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+    const [primaryMailboxRecipient] = await db
+      .select({ id: dbModule.emailCampaignRecipientsTable.id })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(
+        eq(
+          dbModule.emailCampaignRecipientsTable.campaignId,
+          backlogCampaign.body.id,
+        ),
+      )
+      .limit(1);
+    assert.ok(primaryMailboxRecipient);
+    const [otherMailboxAttempt] = await db
+      .insert(dbModule.emailSendAttemptsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: senderAfterDraftTest.id,
+        recipientId: primaryMailboxRecipient.id,
+        outcome: "smtp_accepted",
+        attemptedAt: new Date(),
+      })
+      .returning({ id: dbModule.emailSendAttemptsTable.id });
     const firstBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
     assert.equal(firstBatch, 1);
+    await db
+      .delete(dbModule.emailSendAttemptsTable)
+      .where(eq(dbModule.emailSendAttemptsTable.id, otherMailboxAttempt.id));
     const afterRateLimit = await api("/campaigns", { cookie: owner.cookie });
     const partialCampaign = afterRateLimit.body.find((item) => item.id === campaign.body.id);
     assert.equal(partialCampaign.delivered, 1);
@@ -7223,7 +7278,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     await db
       .update(dbModule.emailCampaignRecipientsTable)
       .set({ nextAttemptAt: new Date(Date.now() - 1000) })
-      .where(eq(dbModule.emailCampaignRecipientsTable.status, "queued"));
+      .where(
+        and(
+          eq(dbModule.emailCampaignRecipientsTable.status, "queued"),
+          eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id),
+        ),
+      );
     const pacedBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
     assert.equal(pacedBatch, 0, "a raised hourly cap must not send before the minimum spacing interval");
     await db
@@ -7233,7 +7293,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     await db
       .update(dbModule.emailCampaignRecipientsTable)
       .set({ nextAttemptAt: new Date(Date.now() - 1000) })
-      .where(eq(dbModule.emailCampaignRecipientsTable.status, "queued"));
+      .where(
+        and(
+          eq(dbModule.emailCampaignRecipientsTable.status, "queued"),
+          eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id),
+        ),
+      );
     const secondBatch = await campaignWorkerModule.processPendingCampaignDeliveries();
     assert.equal(secondBatch, 1);
 
@@ -7303,6 +7368,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .from(dbModule.emailSendAttemptsTable)
       .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
     assert.equal(recordedAttempts.length, 2);
+    assert.ok(
+      recordedAttempts.every(
+        (attempt) => attempt.senderAccountId === backupSender.body.account.id,
+      ),
+    );
     assert.ok(recordedAttempts.every((attempt) => attempt.dsnRequested));
     assert.ok(
       recordedAttempts.every((attempt) =>

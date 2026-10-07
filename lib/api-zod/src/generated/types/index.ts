@@ -195,6 +195,7 @@ export * from './registerInput';
 export * from './resetPasswordInput';
 export * from './searchCompaniesParams';
 export * from './setActiveRazorpayEnvironmentInput';
+export * from './smtpSendingLimits';
 export * from './subscriptionGiftInput';
 export * from './subscriptionOrderCreated';
 export * from './subscriptionPackage';

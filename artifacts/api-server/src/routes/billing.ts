@@ -859,6 +859,7 @@ router.get(
   "/admin/billing/packages",
   requireSuperadmin,
   async (_req, res): Promise<void> => {
+    const settings = await getPlatformSettings();
     const packages = await db
       .select()
       .from(subscriptionPackagesTable)
@@ -866,6 +867,10 @@ router.get(
     res.json(
       ListAdminSubscriptionPackagesResponse.parse({
         packages: packages.map(serializePackage),
+        sendingLimits: {
+          emailsPerHourPerSmtp: settings.defaultEmailsPerHour,
+          emailsPerDayPerSmtp: settings.maxEmailsPerDay,
+        },
       }),
     );
   },
@@ -1036,6 +1041,10 @@ router.get(
     res.json(
       ListAvailableSubscriptionPackagesResponse.parse({
         packages: packages.map(serializePackage),
+        sendingLimits: {
+          emailsPerHourPerSmtp: settings.defaultEmailsPerHour,
+          emailsPerDayPerSmtp: settings.maxEmailsPerDay,
+        },
       }),
     );
   },

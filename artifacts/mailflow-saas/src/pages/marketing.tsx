@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useListAvailableSubscriptionPackages } from '@workspace/api-client-react';
 import { MailflowBrand } from '@/components/brand';
-import type { SubscriptionPackage } from '@workspace/api-client-react';
+import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
 
 const homeMeta = {
   title: 'Mailflow — thoughtful email marketing, in your hands',
@@ -330,8 +330,14 @@ function formatMoney(pkg: SubscriptionPackage) {
   }
 }
 
-function PackageCard({ pkg, index }: { pkg: SubscriptionPackage; index: number }) {
+function PackageCard({ pkg, index, sendingLimits }: {
+  pkg: SubscriptionPackage;
+  index: number;
+  sendingLimits: SubscriptionPackageList['sendingLimits'];
+}) {
   const cadence = pkg.periodDays === 1 ? 'per day' : pkg.periodDays === 7 ? 'per week' : pkg.periodDays === 30 ? 'per month' : pkg.periodDays === 365 ? 'per year' : `per ${pkg.periodDays} days`;
+  const combinedHourly = sendingLimits.emailsPerHourPerSmtp * pkg.emailAccountLimit;
+  const combinedDaily = sendingLimits.emailsPerDayPerSmtp * pkg.emailAccountLimit;
   return (
     <article className={`mf-plan-card ${index === 1 ? 'plan-featured' : ''}`} data-testid={`card-package-${pkg.id}`}>
       <div className="plan-card-top"><span className="plan-overline">{String(index + 1).padStart(2, '0')} / MAILFLOW PLAN</span>{index === 1 && <span className="plan-featured-tag">A LITTLE MORE ROOM</span>}</div>
@@ -343,10 +349,14 @@ function PackageCard({ pkg, index }: { pkg: SubscriptionPackage; index: number }
       <ul className="plan-limits">
         <li><span className="limit-icon"><ContactRound size={15}/></span><span>Up to <b>{pkg.contactLimit.toLocaleString()}</b> contacts</span></li>
         <li><span className="limit-icon"><Mail size={15}/></span><span><b>{pkg.emailAccountLimit.toLocaleString()}</b> SMTP sender {pkg.emailAccountLimit === 1 ? 'account' : 'accounts'}</span></li>
+        <li data-testid={`text-package-hourly-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}</b> campaign attempts per rolling hour, per SMTP mailbox</span></li>
+        <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
       <Link href="/register" className={`mf-button plan-button ${index === 1 ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
-      <p className="plan-footnote">Sending uses your configured SMTP account.</p>
+      <p className="plan-footnote" data-testid={`text-package-total-send-capacity-${pkg.id}`}>
+        With all {pkg.emailAccountLimit} SMTP {pkg.emailAccountLimit === 1 ? 'mailbox' : 'mailboxes'} configured: up to {combinedHourly.toLocaleString()} campaign attempts per rolling hour and {combinedDaily.toLocaleString()} per rolling 24 hours. Retries count; your SMTP provider may impose lower limits.
+      </p>
     </article>
   );
 }
@@ -369,12 +379,12 @@ function PricingContent() {
           {packagesQuery.isLoading ? <div className="mf-plans-skeleton" aria-label="Loading available plans"><div/><div/><div/></div> :
             packagesQuery.isError ? <div className="mf-pricing-state error-state" role="alert"><span className="state-icon"><CircleAlert size={21}/></span><div><h3>Plans aren’t available right now.</h3><p>We couldn’t load the current plan list. Please try again.</p></div><button type="button" className="mf-button button-outline retry-button" data-testid="button-retry-packages" onClick={() => packagesQuery.refetch()}>Try again <ArrowRight size={15}/></button></div> :
               packages.length === 0 ? <div className="mf-pricing-state empty-state"><span className="state-icon"><Sparkles size={20}/></span><div><h3>No plans are available just now.</h3><p>Available plans are managed by the Mailflow team. Please check back soon.</p></div></div> :
-                <div className="mf-plan-grid">{packages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index}/>)}</div>}
+                <div className="mf-plan-grid">{packages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index} sendingLimits={packagesQuery.data!.sendingLimits}/>)}</div>}
           <div className="mf-pricing-note"><ShieldCheck size={17}/><p>Your sending account is configured separately. Mailflow records SMTP outcomes; an accepted message is not the same as confirmed inbox delivery.</p></div>
         </div>
       </section>
       <section className="mf-pricing-bottom"><div><span className="mf-small-label">STILL FINDING YOUR FEET?</span><h2>Start with the people<br/>you already know.</h2><p>Build your workspace around real contacts, companies and campaign plans.</p></div><Link href="/register" className="mf-button" data-testid="pricing-bottom-register">Create your account <ArrowRight size={16}/></Link></section>
-      <section className="mf-pricing-faq"><div className="mf-section-wrap faq-layout"><div><SectionEyebrow>Good to know</SectionEyebrow><h2>A few useful<br/>clarifications.</h2></div><div className="faq-items"><details><summary data-testid="faq-sending-service">Does Mailflow include a sending service?<ChevronDown size={17}/></summary><p>Mailflow campaigns are sent using your configured SMTP account. You choose and set up the sending provider.</p></details><details><summary data-testid="faq-campaign-outcome">What does a campaign outcome tell me?<ChevronDown size={17}/></summary><p>Mailflow can show recorded SMTP outcomes, such as accepted or rejected responses. SMTP acceptance does not confirm that a message reached a recipient’s inbox.</p></details><details><summary data-testid="faq-plan-limits">Where do the listed plan limits come from?<ChevronDown size={17}/></summary><p>The plans shown above are loaded from the current public plan list. The Mailflow team manages which plans are available.</p></details></div></div></section>
+      <section className="mf-pricing-faq"><div className="mf-section-wrap faq-layout"><div><SectionEyebrow>Good to know</SectionEyebrow><h2>A few useful<br/>clarifications.</h2></div><div className="faq-items"><details><summary data-testid="faq-sending-service">Does Mailflow include a sending service?<ChevronDown size={17}/></summary><p>Mailflow campaigns are sent using your configured SMTP account. You choose and set up the sending provider.</p></details><details><summary data-testid="faq-sending-limits">How do SMTP sending limits work?<ChevronDown size={17}/></summary><p>Each configured SMTP mailbox gets the same platform-set hourly and daily campaign-attempt limits, independent of package. Each mailbox has its own rolling allowance, shared by campaigns using that mailbox. Automatic retries count, and your SMTP provider may impose lower limits.</p></details><details><summary data-testid="faq-campaign-outcome">What does a campaign outcome tell me?<ChevronDown size={17}/></summary><p>Mailflow can show recorded SMTP outcomes, such as accepted or rejected responses. SMTP acceptance does not confirm that a message reached a recipient’s inbox.</p></details><details><summary data-testid="faq-plan-limits">Where do the listed plan limits come from?<ChevronDown size={17}/></summary><p>The plans shown above are loaded from the current public plan list. The Mailflow team manages which plans are available.</p></details></div></div></section>
     </main>
   );
 }

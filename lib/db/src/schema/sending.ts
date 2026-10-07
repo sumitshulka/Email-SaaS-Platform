@@ -277,10 +277,9 @@ export const emailCampaignsTable = pgTable(
     listId: uuid("list_id").references(() => contactListsTable.id, {
       onDelete: "set null",
     }),
-    senderAccountId: uuid("sender_account_id").references(
-      () => tenantSendingConfigurationTable.id,
-      { onDelete: "set null" },
-    ),
+    // Keep the mailbox UUID as a historical attribution key even after a
+    // sender account is deleted.
+    senderAccountId: uuid("sender_account_id"),
     senderEmail: varchar("sender_email", { length: 254 }),
     listIds: uuid("list_ids")
       .array()
@@ -397,6 +396,10 @@ export const emailSendAttemptsTable = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
+    senderAccountId: uuid("sender_account_id").references(
+      () => tenantSendingConfigurationTable.id,
+      { onDelete: "set null" },
+    ),
     recipientId: uuid("recipient_id")
       .notNull()
       .references(() => emailCampaignRecipientsTable.id, {
@@ -417,6 +420,10 @@ export const emailSendAttemptsTable = pgTable(
   (table) => [
     index("email_send_attempts_user_time_idx").on(
       table.userId,
+      table.attemptedAt,
+    ),
+    index("email_send_attempts_sender_time_idx").on(
+      table.senderAccountId,
       table.attemptedAt,
     ),
     index("email_send_attempts_user_message_idx").on(

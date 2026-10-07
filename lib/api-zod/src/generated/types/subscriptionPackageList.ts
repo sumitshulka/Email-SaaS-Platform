@@ -5,8 +5,10 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { SmtpSendingLimits } from './smtpSendingLimits';
 import type { SubscriptionPackage } from './subscriptionPackage';
 
 export interface SubscriptionPackageList {
   packages: SubscriptionPackage[];
+  sendingLimits: SmtpSendingLimits;
 }

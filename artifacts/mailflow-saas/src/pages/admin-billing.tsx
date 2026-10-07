@@ -86,6 +86,7 @@ export default function AdminBillingPage() {
   const giftSubscription = useGiftAdminSubscription();
   const settings = settingsQuery.data;
   const packages = packagesQuery.data?.packages ?? [];
+  const sendingLimits = packagesQuery.data?.sendingLimits;
   const [giftSearch, setGiftSearch] = useState('');
   const [giftRecipient, setGiftRecipient] = useState<AdminUser | null>(null);
   const [giftPackageId, setGiftPackageId] = useState('');
@@ -367,6 +368,9 @@ export default function AdminBillingPage() {
         <div className="mb-4 flex items-center justify-between"><h3 className="text-[14px] font-bold text-[#23364b]">{editing ? `Edit ${editing.name}` : 'Create a package'}</h3>
           <button data-testid="button-close-package-form" onClick={resetPackageForm} className="rounded px-2 py-1 text-[11px] font-semibold text-[#6f7e8e] hover:bg-[#f1f4f6]">Close</button></div>
         <form onSubmit={submitPackage} className="space-y-4">
+          {sendingLimits && <div data-testid="text-admin-package-sending-limits" className="rounded-md border border-[#d7e4ef] bg-[#f3f8fc] px-3.5 py-3 text-[11px] leading-5 text-[#47627b]">
+            Platform settings apply the same independent allowance to each SMTP mailbox for every package: {sendingLimits.emailsPerHourPerSmtp.toLocaleString()} campaign attempts per rolling hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per rolling 24 hours. Package SMTP slots determine how many mailboxes customers can configure; retries count toward the limits.
+          </div>}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <Field label="Package name" value={draft.name} onChange={name => setDraft(d => ({ ...d, name }))} testId="input-package-name" placeholder="e.g. Team monthly"/>
              <Field label="Price" value={draft.amount} onChange={amount => setDraft(d => ({ ...d, amount }))} testId="input-package-amount" type="number" step="any" min={0} placeholder="0.00" disabled={draft.free} hint={draft.free ? 'Free packages activate without Razorpay Checkout.' : undefined}/>
@@ -391,7 +395,7 @@ export default function AdminBillingPage() {
           <div className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] gap-4 border-b border-[#e7ecf0] bg-[#f7f9fa] px-5 py-3 mono text-[9px] uppercase tracking-[.15em] text-[#83909d] md:grid"><span>Package</span><span>Rate & term</span><span>Visibility</span><span>Last updated</span><span className="text-right">Actions</span></div>
           <div className="divide-y divide-[#edf0f2]">{packages.map(pkg => <article key={pkg.id} data-testid={`row-subscription-package-${pkg.id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] md:items-center md:gap-4">
             <div><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
-             <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div></div>
+             <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div>{sendingLimits && <div data-testid={`text-admin-package-send-limits-${pkg.id}`} className="mt-1 text-[10px] leading-4 text-[#597086]">{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}/hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()}/24h per SMTP mailbox</div>}</div>
             <div><span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
             <div className="text-[11px] text-[#788695] md:text-[10px]">{new Date(pkg.updatedAt).toLocaleDateString()}</div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">

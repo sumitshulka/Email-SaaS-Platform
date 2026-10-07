@@ -87,8 +87,14 @@ export function getMinimumEmailSpacingSeconds(
 
 export type CampaignQueueEstimateRecipient = {
   campaignId: string;
+  senderAccountId: string | null;
   nextAttemptAt: Date;
   createdAt: Date;
+};
+
+export type CampaignQueueEstimateAttempt = {
+  senderAccountId: string | null;
+  attemptedAt: Date;
 };
 
 type DeliveryForecastState = {
@@ -219,17 +225,35 @@ export function estimateCampaignQueueDeliverySeconds(
     PlatformSettingsInput,
     "defaultEmailsPerHour" | "maxEmailsPerDay" | "queuePollingSeconds"
   >,
-  recentAttempts: Date[] = [],
+  recentAttempts: CampaignQueueEstimateAttempt[] = [],
   now = new Date(),
 ): {
   durationSecondsByCampaign: Map<string, number>;
-  projectedAttemptTimes: Date[];
+  projectedAttemptTimesBySenderAccount: Map<string | null, Date[]>;
 } {
   const nowMs = now.getTime();
-  const historicalAttempts = recentAttempts.filter(
-    (attempt) => attempt.getTime() <= nowMs,
-  );
-  const state = createDeliveryForecastState(historicalAttempts);
+  const historicalAttemptsBySender = new Map<string | null, Date[]>();
+  for (const attempt of recentAttempts) {
+    if (attempt.attemptedAt.getTime() > nowMs) continue;
+    const attempts =
+      historicalAttemptsBySender.get(attempt.senderAccountId) ?? [];
+    attempts.push(attempt.attemptedAt);
+    historicalAttemptsBySender.set(attempt.senderAccountId, attempts);
+  }
+  const statesBySender = new Map<string | null, DeliveryForecastState>();
+  const stateForSender = (senderAccountId: string | null) => {
+    let state = statesBySender.get(senderAccountId);
+    if (!state) {
+      state = createDeliveryForecastState(
+        historicalAttemptsBySender.get(senderAccountId) ?? [],
+      );
+      statesBySender.set(senderAccountId, state);
+    }
+    return state;
+  };
+  for (const senderAccountId of historicalAttemptsBySender.keys()) {
+    stateForSender(senderAccountId);
+  }
   const orderedRecipients = recipients
     .map((recipient, index) => ({ ...recipient, index }))
     .sort(
@@ -241,6 +265,7 @@ export function estimateCampaignQueueDeliverySeconds(
   const durationSecondsByCampaign = new Map<string, number>();
 
   for (const recipient of orderedRecipients) {
+    const state = stateForSender(recipient.senderAccountId);
     const scheduledAt = scheduleForecastAttempt(
       state,
       recipient.nextAttemptAt.getTime(),
@@ -251,7 +276,8 @@ export function estimateCampaignQueueDeliverySeconds(
       scheduledAt,
       nowMs,
       settings,
-      historicalAttempts.length > 0,
+      (historicalAttemptsBySender.get(recipient.senderAccountId)?.length ??
+        0) > 0,
     );
     durationSecondsByCampaign.set(
       recipient.campaignId,
@@ -264,7 +290,12 @@ export function estimateCampaignQueueDeliverySeconds(
 
   return {
     durationSecondsByCampaign,
-    projectedAttemptTimes: state.attempts.map((attempt) => new Date(attempt)),
+    projectedAttemptTimesBySenderAccount: new Map(
+      Array.from(statesBySender, ([senderAccountId, state]) => [
+        senderAccountId,
+        state.attempts.map((attempt) => new Date(attempt)),
+      ]),
+    ),
   };
 }
 

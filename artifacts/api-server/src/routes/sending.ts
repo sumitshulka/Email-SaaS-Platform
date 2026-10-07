@@ -737,9 +737,26 @@ async function campaignPayloads(userId: string) {
     getPlatformSettings(),
   ]);
   const estimateNow = new Date();
+  const senderAccountByCampaign = new Map(
+    campaigns.map((campaign) => [campaign.id, campaign.senderAccountId]),
+  );
   const recentAttempts = await db
-    .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
+    .select({
+      senderAccountId: sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId})`,
+      attemptedAt: emailSendAttemptsTable.attemptedAt,
+    })
     .from(emailSendAttemptsTable)
+    .leftJoin(
+      emailCampaignRecipientsTable,
+      eq(
+        emailCampaignRecipientsTable.id,
+        emailSendAttemptsTable.recipientId,
+      ),
+    )
+    .leftJoin(
+      emailCampaignsTable,
+      eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+    )
     .where(
       and(
         eq(emailSendAttemptsTable.userId, userId),
@@ -781,6 +798,8 @@ async function campaignPayloads(userId: string) {
     )
     .map((recipient) => ({
       campaignId: recipient.campaignId,
+      senderAccountId:
+        senderAccountByCampaign.get(recipient.campaignId) ?? null,
       nextAttemptAt:
         recipient.nextAttemptAt > queuedWorkStartAt
           ? recipient.nextAttemptAt
@@ -790,7 +809,7 @@ async function campaignPayloads(userId: string) {
   const queueForecast = estimateCampaignQueueDeliverySeconds(
     queuedRecipients,
     settings,
-    recentAttempts.map((attempt) => attempt.attemptedAt),
+    recentAttempts,
     estimateNow,
   );
   const counts = new Map<
@@ -858,8 +877,13 @@ async function campaignPayloads(userId: string) {
           ? estimateCampaignDeliveryAfterQueueSeconds(
               remainingRecipients,
               settings,
-              queueForecast.projectedAttemptTimes,
-              recentAttempts.length > 0,
+              queueForecast.projectedAttemptTimesBySenderAccount.get(
+                campaign.senderAccountId,
+              ) ?? [],
+              recentAttempts.some(
+                (attempt) =>
+                  attempt.senderAccountId === campaign.senderAccountId,
+              ),
               estimateNow,
               queuedWorkStartAt,
             )
@@ -4309,6 +4333,7 @@ router.post(
       const activeCampaigns = await tx
         .select({
           id: emailCampaignsTable.id,
+          senderAccountId: emailCampaignsTable.senderAccountId,
           status: emailCampaignsTable.status,
           scheduledAt: emailCampaignsTable.scheduledAt,
         })
@@ -4320,6 +4345,9 @@ router.post(
           ),
         );
       const activeCampaignIds = activeCampaigns.map((item) => item.id);
+      const senderAccountByActiveCampaign = new Map(
+        activeCampaigns.map((item) => [item.id, item.senderAccountId]),
+      );
       const activeRecipients =
         activeCampaignIds.length === 0
           ? []
@@ -4353,6 +4381,8 @@ router.post(
         .filter((recipient) => recipient.status === "queued")
         .map((recipient) => ({
           campaignId: recipient.campaignId,
+          senderAccountId:
+            senderAccountByActiveCampaign.get(recipient.campaignId) ?? null,
           nextAttemptAt:
             recipient.nextAttemptAt > queuedWorkStartAt
               ? recipient.nextAttemptAt
@@ -4363,8 +4393,25 @@ router.post(
         activeCampaignIds.length === 0
           ? []
           : await tx
-              .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
+              .select({
+                senderAccountId: sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId})`,
+                attemptedAt: emailSendAttemptsTable.attemptedAt,
+              })
               .from(emailSendAttemptsTable)
+              .leftJoin(
+                emailCampaignRecipientsTable,
+                eq(
+                  emailCampaignRecipientsTable.id,
+                  emailSendAttemptsTable.recipientId,
+                ),
+              )
+              .leftJoin(
+                emailCampaignsTable,
+                eq(
+                  emailCampaignsTable.id,
+                  emailCampaignRecipientsTable.campaignId,
+                ),
+              )
               .where(
                 and(
                   eq(emailSendAttemptsTable.userId, userId),
@@ -4378,7 +4425,7 @@ router.post(
       const queueForecast = estimateCampaignQueueDeliverySeconds(
         queuedRecipients,
         settings,
-        recentAttempts.map((attempt) => attempt.attemptedAt),
+        recentAttempts,
         now,
       );
       const latestActiveFinishSeconds = activeCampaigns.reduce(
@@ -4618,7 +4665,10 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
         ),
       ),
     db
-      .select({ verifiedAt: tenantSendingConfigurationTable.verifiedAt })
+      .select({
+        id: tenantSendingConfigurationTable.id,
+        verifiedAt: tenantSendingConfigurationTable.verifiedAt,
+      })
       .from(tenantSendingConfigurationTable)
       .where(eq(tenantSendingConfigurationTable.userId, userId))
       .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
@@ -4675,6 +4725,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     db
       .select({
         id: emailCampaignsTable.id,
+        senderAccountId: emailCampaignsTable.senderAccountId,
         name: emailCampaignsTable.name,
         status: emailCampaignsTable.status,
         queuedAt: emailCampaignsTable.queuedAt,
@@ -4693,6 +4744,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     db
       .select({
         id: emailCampaignsTable.id,
+        senderAccountId: emailCampaignsTable.senderAccountId,
         name: emailCampaignsTable.name,
         status: emailCampaignsTable.status,
         queuedAt: emailCampaignsTable.queuedAt,
@@ -4737,31 +4789,33 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
             ),
           db
             .select({
-              campaignId: emailCampaignRecipientsTable.campaignId,
+              senderAccountId: sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId}, ${sender?.id ?? null})`,
               value: count(),
             })
             .from(emailSendAttemptsTable)
-            .innerJoin(
+            .leftJoin(
               emailCampaignRecipientsTable,
-              and(
-                eq(
-                  emailCampaignRecipientsTable.id,
-                  emailSendAttemptsTable.recipientId,
-                ),
-                eq(
-                  emailCampaignRecipientsTable.userId,
-                  emailSendAttemptsTable.userId,
-                ),
+              eq(
+                emailCampaignRecipientsTable.id,
+                emailSendAttemptsTable.recipientId,
+              ),
+            )
+            .leftJoin(
+              emailCampaignsTable,
+              eq(
+                emailCampaignsTable.id,
+                emailCampaignRecipientsTable.campaignId,
               ),
             )
             .where(
               and(
                 eq(emailSendAttemptsTable.userId, userId),
                 gte(emailSendAttemptsTable.attemptedAt, hourStart),
-                inArray(emailCampaignRecipientsTable.campaignId, campaignIds),
               ),
             )
-            .groupBy(emailCampaignRecipientsTable.campaignId),
+            .groupBy(
+              sql`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId}, ${sender?.id ?? null})`,
+            ),
         ])
       : [[], []];
   const countsByCampaign = new Map<
@@ -4799,8 +4853,11 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     }
     countsByCampaign.set(row.campaignId, countsForCampaign);
   }
-  const attemptsByCampaign = new Map(
-    campaignAttemptRows.map((row) => [row.campaignId, Number(row.value)]),
+  const attemptsBySender = new Map(
+    campaignAttemptRows.map((row) => [
+      row.senderAccountId ?? "",
+      Number(row.value),
+    ]),
   );
   const dashboardCampaigns = campaigns.map((campaign) => {
     const countsForCampaign = countsByCampaign.get(campaign.id) ?? {
@@ -4811,7 +4868,10 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       suppressed: 0,
       unknown: 0,
     };
-    const attemptsThisHour = attemptsByCampaign.get(campaign.id) ?? 0;
+    const senderAccountId = campaign.senderAccountId ?? sender?.id ?? null;
+    const attemptsThisHour = senderAccountId
+      ? attemptsBySender.get(senderAccountId) ?? 0
+      : 0;
     const isActive =
       campaign.status === "queued" || campaign.status === "sending";
     return {

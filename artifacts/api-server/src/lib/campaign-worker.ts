@@ -7,8 +7,10 @@ import {
   eq,
   gte,
   inArray,
+  isNull,
   lte,
   lt,
+  or,
 } from "drizzle-orm";
 import {
   contactsTable,
@@ -248,6 +250,7 @@ async function markInterruptedDeliveriesUnknown(): Promise<void> {
 async function rateLimitDelay(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   userId: string,
+  senderAccountId: string,
   now: Date,
   hourlyLimit: number,
   dailyLimit: number,
@@ -255,21 +258,57 @@ async function rateLimitDelay(
 ): Promise<Date | null> {
   const hourStart = new Date(now.getTime() - 60 * 60 * 1000);
   const dayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const senderAttemptScope = and(
+    eq(emailSendAttemptsTable.userId, userId),
+    or(
+      eq(emailSendAttemptsTable.senderAccountId, senderAccountId),
+      and(
+        isNull(emailSendAttemptsTable.senderAccountId),
+        eq(emailCampaignsTable.senderAccountId, senderAccountId),
+      ),
+      and(
+        isNull(emailSendAttemptsTable.senderAccountId),
+        isNull(emailCampaignsTable.senderAccountId),
+      ),
+    ),
+  );
   const [hourly] = await tx
     .select({ value: count() })
     .from(emailSendAttemptsTable)
+    .leftJoin(
+      emailCampaignRecipientsTable,
+      eq(
+        emailCampaignRecipientsTable.id,
+        emailSendAttemptsTable.recipientId,
+      ),
+    )
+    .leftJoin(
+      emailCampaignsTable,
+      eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+    )
     .where(
       and(
-        eq(emailSendAttemptsTable.userId, userId),
+        senderAttemptScope,
         gte(emailSendAttemptsTable.attemptedAt, hourStart),
       ),
     );
   const [daily] = await tx
     .select({ value: count() })
     .from(emailSendAttemptsTable)
+    .leftJoin(
+      emailCampaignRecipientsTable,
+      eq(
+        emailCampaignRecipientsTable.id,
+        emailSendAttemptsTable.recipientId,
+      ),
+    )
+    .leftJoin(
+      emailCampaignsTable,
+      eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+    )
     .where(
       and(
-        eq(emailSendAttemptsTable.userId, userId),
+        senderAttemptScope,
         gte(emailSendAttemptsTable.attemptedAt, dayStart),
       ),
     );
@@ -278,7 +317,18 @@ async function rateLimitDelay(
   const [latestAttempt] = await tx
     .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
     .from(emailSendAttemptsTable)
-    .where(eq(emailSendAttemptsTable.userId, userId))
+    .leftJoin(
+      emailCampaignRecipientsTable,
+      eq(
+        emailCampaignRecipientsTable.id,
+        emailSendAttemptsTable.recipientId,
+      ),
+    )
+    .leftJoin(
+      emailCampaignsTable,
+      eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+    )
+    .where(senderAttemptScope)
     .orderBy(desc(emailSendAttemptsTable.attemptedAt))
     .limit(1);
   if (latestAttempt) {
@@ -296,9 +346,20 @@ async function rateLimitDelay(
     const [oldest] = await tx
       .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
       .from(emailSendAttemptsTable)
+      .leftJoin(
+        emailCampaignRecipientsTable,
+        eq(
+          emailCampaignRecipientsTable.id,
+          emailSendAttemptsTable.recipientId,
+        ),
+      )
+      .leftJoin(
+        emailCampaignsTable,
+        eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+      )
       .where(
         and(
-          eq(emailSendAttemptsTable.userId, userId),
+          senderAttemptScope,
           gte(emailSendAttemptsTable.attemptedAt, hourStart),
         ),
       )
@@ -318,9 +379,20 @@ async function rateLimitDelay(
     const [oldest] = await tx
       .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
       .from(emailSendAttemptsTable)
+      .leftJoin(
+        emailCampaignRecipientsTable,
+        eq(
+          emailCampaignRecipientsTable.id,
+          emailSendAttemptsTable.recipientId,
+        ),
+      )
+      .leftJoin(
+        emailCampaignsTable,
+        eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+      )
       .where(
         and(
-          eq(emailSendAttemptsTable.userId, userId),
+          senderAttemptScope,
           gte(emailSendAttemptsTable.attemptedAt, dayStart),
         ),
       )
@@ -373,7 +445,8 @@ async function claimDelivery(
       return null;
     }
 
-    // Multiple senders still share one tenant-wide rate-limit ledger.
+    // Keep tenant claims serialized so concurrent workers cannot overshoot
+    // the independent cap for this SMTP mailbox.
     await tx
       .select({ id: usersTable.id })
       .from(usersTable)
@@ -528,6 +601,7 @@ async function claimDelivery(
     const rateDelay = await rateLimitDelay(
       tx,
       userId,
+      sender.id,
       now,
       hourlyLimit,
       dailyLimit,
@@ -568,6 +642,7 @@ async function claimDelivery(
     await tx.insert(emailSendAttemptsTable).values({
       id: attemptId,
       userId,
+      senderAccountId: sender.id,
       recipientId: recipient.id,
       messageId,
       dsnRequested,
