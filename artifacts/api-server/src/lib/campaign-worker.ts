@@ -774,9 +774,10 @@ export async function processPendingCampaignDeliveries(
       const evidence = smtpFailureEvidence(error, claimed.sender);
       const permanentSmtpRejection =
         evidence.smtpCode !== undefined && evidence.smtpCode >= 500;
+      const retriesUsed = claimed.recipient.attempts - 1;
       const retry =
         !permanentSmtpRejection &&
-        claimed.recipient.attempts <= settings.retryAttempts;
+        retriesUsed < settings.retryAttempts;
       const errorMessage = safeAttemptError(
         deliveryError(error),
         claimed.sender,

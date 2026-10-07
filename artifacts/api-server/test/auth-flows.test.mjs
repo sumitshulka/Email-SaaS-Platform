@@ -6200,6 +6200,153 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     }
   });
 
+  it("stops retrying transient campaign failures after the configured retry limit", async () => {
+    const owner = await loggedInUser({
+      username: "campaign-retry-limit-owner",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "retry-limit@campaign.test",
+        firstName: "Retry limit",
+        subscribed: true,
+      })
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.retry-limit.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("retry-limit-user"),
+        passwordEncrypted: securityModule.encryptSecret("retry-limit-password"),
+        fromName: "Retry Limit Test",
+        fromEmail: "sender@retry-limit.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Retry limit",
+        subject: "Retry limit test",
+        textBody: "This message should stop after the configured retries.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    const retryLimit = 2;
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        retryAttempts: retryLimit,
+        retryDelaySeconds: 60,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let sendCount = 0;
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      sendCount += 1;
+      throw Object.assign(new Error("temporary connection failure"), {
+        code: "ECONNECTION",
+        command: "CONN",
+      });
+    });
+
+    try {
+      for (
+        let attemptNumber = 1;
+        attemptNumber <= retryLimit + 1;
+        attemptNumber += 1
+      ) {
+        assert.equal(
+          await campaignWorkerModule.processPendingCampaignDeliveries(1),
+          1,
+        );
+        assert.equal(sendCount, attemptNumber);
+
+        const [savedRecipient] = await db
+          .select()
+          .from(dbModule.emailCampaignRecipientsTable)
+          .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+        assert.equal(savedRecipient.attempts, attemptNumber);
+        assert.equal(
+          savedRecipient.status,
+          attemptNumber <= retryLimit ? "queued" : "bounced",
+        );
+
+        if (attemptNumber <= retryLimit) {
+          assert.ok(savedRecipient.nextAttemptAt.getTime() > Date.now());
+          await db
+            .update(dbModule.emailCampaignRecipientsTable)
+            .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+            .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+          await db
+            .update(dbModule.emailSendAttemptsTable)
+            .set({ attemptedAt: new Date(Date.now() - 60_000) })
+            .where(
+              eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id),
+            );
+        }
+      }
+
+      const attemptHistory = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(attemptHistory.length, retryLimit + 1);
+      assert.ok(
+        attemptHistory.every((attempt) => attempt.outcome === "send_failed"),
+      );
+      assert.ok(attemptHistory.every((attempt) => attempt.completedAt));
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        0,
+      );
+      assert.equal(sendCount, retryLimit + 1);
+      const finalAttemptHistory = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(finalAttemptHistory.length, retryLimit + 1);
+      const [terminalRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(terminalRecipient.status, "bounced");
+      assert.equal(terminalRecipient.attempts, retryLimit + 1);
+    } finally {
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
     const owner = await loggedInUser({ username: "sending-owner" });
     const other = await loggedInUser({ username: "sending-other" });
