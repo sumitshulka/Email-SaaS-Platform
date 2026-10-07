@@ -1,0 +1,1290 @@
+# Global Company Intelligence — Implementation Specification
+
+## 1. Objective
+
+Extend the existing Global Company DB with an on-demand **Company Intelligence** capability.
+
+The system must NOT research companies automatically.
+
+The Intelligence/Research workflow must execute **only when the user explicitly clicks the `Research` button for a specific company**.
+
+The purpose of Company Intelligence is to create a reusable, structured intelligence profile that can later be used by:
+
+- AI email generation
+- Lead qualification
+- Prospect scoring
+- Campaign personalization
+- Sales recommendations
+- Company discovery
+- Future AI sales workflows
+
+The research should be stored against the company and reused until it becomes stale.
+
+---
+
+# 2. Core Principle
+
+There are two separate layers:
+
+### Layer 1 — Global Company DB
+
+Contains company master information.
+
+Examples:
+
+- Company name
+- Website
+- Industry
+- Country
+- Address
+- Employee range
+- Company identifiers
+- Other manually entered company data
+
+This data should NOT require AI research.
+
+### Layer 2 — Company Intelligence
+
+AI-generated research about the company.
+
+This is created/updated ONLY through the Research button.
+
+```text
+Global Company DB
+        │
+        │ User clicks Research
+        ▼
+Research / Intelligence Engine
+        │
+        ├── Web Research
+        ├── LLM Analysis
+        ├── Fact Extraction
+        ├── Signal Detection
+        └── Opportunity Analysis
+        │
+        ▼
+Company Intelligence JSON
+        │
+        ▼
+Stored against Company
+```
+
+---
+
+# 3. Research Trigger
+
+The Research function must NEVER execute automatically when:
+
+- A company is created
+- A company is edited
+- A user searches for a company
+- A company is selected
+- An email is created
+- A user opens the company profile
+- A user logs in
+- A campaign is created
+
+The only standard trigger is:
+
+### `Research` button
+
+Example:
+
+```text
+Company List
+
+Oracle
+Technology
+USA
+
+[View] [Research]
+```
+
+When the user clicks:
+
+**Research**
+
+show a confirmation/modal:
+
+> Research this company using AI?
+>
+> This will use AI research resources and update the company's intelligence profile.
+>
+> [Cancel] [Start Research]
+
+After confirmation, execute the intelligence workflow.
+
+---
+
+# 4. Research Button States
+
+The button should have different states.
+
+### No research exists
+
+```text
+[ Research ]
+```
+
+### Research in progress
+
+```text
+[ Researching... ]
+```
+
+Button must be disabled.
+
+### Research completed
+
+```text
+[ View Intelligence ] [ Re-research ]
+```
+
+### Research is stale
+
+```text
+[ Research Update ]
+```
+
+### Research failed
+
+```text
+[ Retry Research ]
+```
+
+---
+
+# 5. Research Frequency / Cost Protection
+
+Do NOT allow repeated accidental research.
+
+Store:
+
+```json
+{
+  "research_status": "completed",
+  "researched_at": "2026-10-07T18:00:00Z",
+  "research_version": "1.0"
+}
+```
+
+If the user clicks Research again within the configured freshness period, show:
+
+> This company was researched recently on 7 Oct 2026.
+>
+> Re-researching will consume AI research resources.
+>
+> [Cancel] [Research Again]
+
+Do not block deliberate re-research.
+
+The user can always explicitly override.
+
+Recommended default freshness:
+
+**30 days**
+
+This should be configurable by Superadmin.
+
+---
+
+# 6. Research Workflow
+
+When Research is triggered:
+
+### Step 1 — Load company master record
+
+Retrieve:
+
+- Company ID
+- Company name
+- Website
+- Industry
+- Country
+- Existing company description
+- Any other existing Global DB information
+
+### Step 2 — Research external sources
+
+Research should prioritize:
+
+1. Official company website
+2. Official company product/service pages
+3. Official company newsroom/press releases
+4. Investor relations pages, where applicable
+5. Regulatory/public filings where applicable
+6. Reliable business/industry sources
+7. Other credible sources
+
+Do NOT rely exclusively on search snippets.
+
+### Step 3 — Collect research evidence
+
+The research engine should collect relevant evidence before asking the LLM to produce the final intelligence profile.
+
+### Step 4 — LLM analysis
+
+The LLM should transform the evidence into structured intelligence.
+
+### Step 5 — Validate JSON
+
+The LLM response must conform to the predefined JSON schema.
+
+Do not store arbitrary LLM output.
+
+### Step 6 — Save intelligence
+
+Save the structured intelligence against the Company ID.
+
+### Step 7 — Save source references
+
+Every externally derived claim should be traceable to one or more sources.
+
+### Step 8 — Update research metadata
+
+Record:
+
+- researched_at
+- research version
+- model used
+- research status
+- source count
+- research duration
+- token usage if available
+- estimated research cost if available
+
+---
+
+# 7. Intelligence Data Model
+
+Do NOT store intelligence as a single large text field.
+
+Use structured JSON.
+
+Recommended top-level structure:
+
+```json
+{
+  "company_id": "CMP-000123",
+
+  "research": {
+    "version": "1.0",
+    "status": "completed",
+    "researched_at": "2026-10-07T18:00:00Z",
+    "valid_until": "2026-11-06T18:00:00Z",
+
+    "executive_summary": {},
+
+    "company_profile": {},
+
+    "business": {},
+
+    "technology": {},
+
+    "current_signals": [],
+
+    "opportunity_signals": [],
+
+    "sales_intelligence": {},
+
+    "competitors": [],
+
+    "sources": []
+  }
+}
+```
+
+---
+
+# 8. Executive Summary
+
+Schema:
+
+```json
+{
+  "one_liner": "",
+  "business_summary": "",
+  "key_observations": []
+}
+```
+
+Example:
+
+```json
+{
+  "one_liner": "Global enterprise technology company providing cloud infrastructure, database and enterprise applications.",
+  "business_summary": "Oracle provides enterprise software, cloud infrastructure and business applications to organizations globally.",
+  "key_observations": [
+    "Large enterprise customer base",
+    "Strong cloud and enterprise applications presence",
+    "Extensive SCM and procurement capabilities"
+  ]
+}
+```
+
+This section is primarily for human viewing.
+
+---
+
+# 9. Company Profile
+
+Store relatively stable company information.
+
+```json
+{
+  "industry": "",
+  "sub_industry": "",
+  "company_type": "",
+  "founded_year": null,
+  "headquarters": "",
+  "operating_regions": [],
+  "employee_range": "",
+  "revenue_range": "",
+  "ownership": "",
+  "parent_company": ""
+}
+```
+
+Important:
+
+Do not overwrite the Global Company DB master fields automatically unless explicitly configured.
+
+Research can suggest updated information, but the intelligence layer should remain separate.
+
+---
+
+# 10. Business Intelligence
+
+```json
+{
+  "business_model": "",
+  "products_services": [],
+  "customer_segments": [],
+  "key_markets": [],
+  "business_units": [],
+  "competitive_position": ""
+}
+```
+
+Example:
+
+```json
+{
+  "business_model": "B2B enterprise technology",
+  "products_services": [
+    "Cloud Infrastructure",
+    "Database",
+    "Enterprise Applications",
+    "Supply Chain Management",
+    "Procurement"
+  ],
+  "customer_segments": [
+    "Large enterprises",
+    "Government",
+    "Mid-market organizations"
+  ],
+  "key_markets": [
+    "North America",
+    "Europe",
+    "Asia-Pacific"
+  ]
+}
+```
+
+---
+
+# 11. Technology Intelligence
+
+Use categories.
+
+```json
+{
+  "erp": [],
+  "crm": [],
+  "hrms": [],
+  "lms": [],
+  "scm": [],
+  "procurement": [],
+  "inventory": [],
+  "cloud": [],
+  "data_platforms": [],
+  "ai_platforms": [],
+  "other": []
+}
+```
+
+Each technology item should preferably contain:
+
+```json
+{
+  "name": "Oracle Fusion SCM",
+  "confidence": 0.96,
+  "source_ids": ["SRC-001"]
+}
+```
+
+Do NOT guess technology usage.
+
+Only record technology when supported by evidence.
+
+---
+
+# 12. Current Signals
+
+This is a critical section.
+
+Every signal MUST be dated.
+
+Never store an undated current signal.
+
+Schema:
+
+```json
+{
+  "signal_id": "SIG-001",
+  "type": "expansion",
+  "title": "",
+  "description": "",
+  "event_date": "2026-09-20",
+  "source_published_date": "2026-09-20",
+  "observed_at": "2026-10-07T18:00:00Z",
+  "importance": "high",
+  "sales_relevance": [],
+  "confidence": 0.92,
+  "source_ids": ["SRC-001"]
+}
+```
+
+Possible signal types:
+
+```text
+expansion
+acquisition
+funding
+partnership
+product_launch
+technology_adoption
+ai_initiative
+digital_transformation
+hiring
+facility_expansion
+market_entry
+contract
+leadership_change
+cost_reduction
+restructuring
+sustainability
+supply_chain
+procurement
+other
+```
+
+Signals should normally be limited to meaningful recent events.
+
+Do not fill the database with irrelevant news.
+
+---
+
+# 13. Opportunity Signals
+
+Opportunity signals are AI interpretations, NOT facts.
+
+Schema:
+
+```json
+{
+  "opportunity_id": "OPP-001",
+  "type": "potential_pain_point",
+  "statement": "",
+  "basis": [],
+  "confidence": 0.71,
+  "generated_at": "2026-10-07T18:00:00Z",
+  "source_ids": []
+}
+```
+
+Possible types:
+
+```text
+potential_pain_point
+growth_opportunity
+technology_gap
+operational_complexity
+digital_transformation
+cost_optimization
+compliance
+inventory_complexity
+workforce
+data_modernization
+ai_adoption
+```
+
+Important rule:
+
+AI inference must never be presented as a confirmed company fact.
+
+Example:
+
+BAD:
+
+> Oracle has inventory visibility problems.
+
+GOOD:
+
+> Oracle's large distributed operations may create opportunities for enhanced inventory visibility.
+
+---
+
+# 14. Sales Intelligence
+
+This section should answer:
+
+> Why might this company be relevant to a seller?
+
+Schema:
+
+```json
+{
+  "buying_signals": [],
+  "potential_pain_points": [],
+  "digital_transformation_signals": [],
+  "growth_signals": [],
+  "risk_signals": []
+}
+```
+
+Each item should preferably include:
+
+```json
+{
+  "statement": "",
+  "confidence": 0.0,
+  "basis": [],
+  "source_ids": []
+}
+```
+
+This information will later be used by the AI email-writing engine.
+
+---
+
+# 15. Competitors
+
+Store only meaningful competitors supported by research.
+
+```json
+[
+  {
+    "name": "",
+    "category": "",
+    "relationship": "direct",
+    "confidence": 0.82,
+    "source_ids": []
+  }
+]
+```
+
+Possible relationship:
+
+```text
+direct
+indirect
+adjacent
+```
+
+Do not attempt to generate a huge competitor list.
+
+---
+
+# 16. Sources
+
+Every source used during research should be stored.
+
+```json
+{
+  "source_id": "SRC-001",
+  "source_type": "company_website",
+  "title": "",
+  "url": "",
+  "publisher": "",
+  "published_date": "",
+  "accessed_at": "2026-10-07T18:00:00Z",
+  "reliability": "high"
+}
+```
+
+Source types:
+
+```text
+company_website
+company_product_page
+company_newsroom
+investor_relation
+regulatory_filing
+government
+reputable_news
+industry_source
+other
+```
+
+---
+
+# 17. Source Reliability
+
+Use:
+
+```text
+high
+medium
+low
+```
+
+Recommended logic:
+
+### High
+
+Official company website, regulatory filing, government source.
+
+### Medium
+
+Established business publication or credible industry publication.
+
+### Low
+
+Aggregators, directories, blogs or unverified sources.
+
+Low-confidence sources should not be used for strong personalization claims.
+
+---
+
+# 18. No Key People
+
+Do NOT create or store a `key_people` section in Company Intelligence.
+
+People change too frequently and should eventually be handled through a separate contact/prospect intelligence module.
+
+Company Intelligence should remain focused on the company.
+
+---
+
+# 19. Research Freshness
+
+Store:
+
+```json
+{
+  "researched_at": "2026-10-07T18:00:00Z",
+  "valid_until": "2026-11-06T18:00:00Z",
+  "freshness_status": "fresh"
+}
+```
+
+Possible statuses:
+
+```text
+fresh
+aging
+stale
+```
+
+Recommended:
+
+```text
+0–30 days = fresh
+31–90 days = aging
+91+ days = stale
+```
+
+These thresholds should be configurable.
+
+---
+
+# 20. Research UI
+
+When intelligence exists, the company page should show:
+
+## Company Intelligence
+
+**Research Status:** Fresh
+
+**Last researched:** 7 Oct 2026
+
+**Research confidence:** 92%
+
+**Sources:** 8
+
+[ Re-research ]
+
+---
+
+### Executive Summary
+
+Show `one_liner` and `business_summary`.
+
+---
+
+### Company Profile
+
+Display important structured fields.
+
+---
+
+### Business
+
+Show:
+
+- Products/services
+- Markets
+- Customer segments
+- Business model
+
+---
+
+### Technology
+
+Display technology categories as cards/tags.
+
+Example:
+
+```text
+ERP
+Oracle Fusion
+
+SCM
+Oracle Fusion SCM
+
+Cloud
+Oracle Cloud Infrastructure
+```
+
+---
+
+### Recent Signals
+
+Display newest signals first.
+
+Each signal must show:
+
+```text
+[HIGH]
+
+Oracle expands cloud investment
+
+20 Sep 2026
+
+Description...
+
+Source
+```
+
+---
+
+### Opportunity Signals
+
+Clearly label these as:
+
+**AI-Identified Opportunities**
+
+Do not make them look like verified company facts.
+
+---
+
+### Sales Intelligence
+
+Show:
+
+- Buying signals
+- Potential pain points
+- Growth signals
+- Digital transformation signals
+
+---
+
+### Sources
+
+Show all sources with clickable links.
+
+---
+
+# 21. Research History
+
+Do NOT overwrite historical research blindly.
+
+Maintain research history.
+
+Example:
+
+```text
+Research History
+
+07 Oct 2026
+Version 1.2
+8 sources
+
+01 Sep 2026
+Version 1.1
+6 sources
+
+01 Aug 2026
+Version 1.0
+5 sources
+```
+
+Allow the current intelligence profile to be derived from the latest successful research.
+
+This will also allow future comparison:
+
+> What changed about this company since the previous research?
+
+---
+
+# 22. Research Cost Tracking
+
+Every research execution should record internal usage.
+
+Example:
+
+```json
+{
+  "research_usage": {
+    "model": "GPT-6 Luna",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "web_searches": 0,
+    "estimated_cost_usd": 0,
+    "estimated_cost_inr": 0
+  }
+}
+```
+
+This is important for the SaaS unit economics.
+
+Do not expose internal cost to normal users.
+
+Superadmin should be able to see it.
+
+---
+
+# 23. Research Execution Record
+
+Create a separate research job record.
+
+```json
+{
+  "job_id": "JOB-123",
+  "company_id": "CMP-000123",
+  "requested_by": "USER-123",
+  "started_at": "",
+  "completed_at": "",
+  "status": "completed",
+  "model": "",
+  "source_count": 8,
+  "web_search_count": 3,
+  "estimated_cost": 0,
+  "error": null
+}
+```
+
+Possible statuses:
+
+```text
+queued
+running
+completed
+failed
+cancelled
+```
+
+This is preferable to relying only on the company record.
+
+---
+
+# 24. Error Handling
+
+If research fails:
+
+Do not delete the existing intelligence.
+
+Example:
+
+```text
+Existing research:
+07 Sep 2026
+
+New research:
+Failed
+
+Result:
+Keep 07 Sep research as current intelligence.
+Mark latest research attempt as failed.
+```
+
+Show:
+
+> Research could not be completed. Existing intelligence has been retained.
+
+This prevents a failed API call from destroying useful company intelligence.
+
+---
+
+# 25. Duplicate Research Protection
+
+Prevent simultaneous research jobs for the same company.
+
+If:
+
+```text
+Company = Oracle
+Research status = running
+```
+
+another Research request should return:
+
+> Research is already in progress for this company.
+
+Do not launch a second job.
+
+---
+
+# 26. LLM Prompt Requirements
+
+The research-analysis LLM must be explicitly instructed:
+
+1. Use only supplied research evidence.
+2. Do not invent facts.
+3. Distinguish facts from inference.
+4. Every current signal must have a date.
+5. Every externally derived claim must have a source.
+6. Do not invent people.
+7. Do not infer technology usage without evidence.
+8. Do not create unsupported revenue/employee figures.
+9. Use confidence scores.
+10. Return ONLY valid JSON matching the defined schema.
+
+The backend must validate the JSON before storing it.
+
+---
+
+# 27. Research Quality Rules
+
+The LLM should prioritize:
+
+**Official source > regulatory/government source > credible business source > industry source > other source**
+
+If conflicting information exists:
+
+- retain the higher-quality source
+- flag the conflict
+- reduce confidence
+- do not arbitrarily choose a number
+
+---
+
+# 28. Important Cost-Control Rule
+
+Research must be **company-level**, not email-level.
+
+Once Company A has intelligence:
+
+```text
+User 1 → Oracle → use existing intelligence
+User 2 → Oracle → use existing intelligence
+User 3 → Oracle → use existing intelligence
+```
+
+No new research should occur unless:
+
+- intelligence is stale AND
+- the user explicitly requests research
+
+or:
+
+- user explicitly chooses `Re-research`.
+
+The email-generation system must NEVER automatically trigger fresh company research in V1.
+
+---
+
+# 29. Future Email Integration
+
+Later, the email engine should receive something like:
+
+```text
+Company Master Data
++
+Latest Company Intelligence
++
+User Product
++
+Marketing Intent
++
+Target Role
+```
+
+The email engine can then determine:
+
+> Which intelligence is relevant to this particular email?
+
+For example:
+
+```text
+Company:
+Oracle
+
+Product:
+Inviqo
+
+Target:
+Procurement Head
+
+Relevant intelligence:
+- Oracle already has SCM capabilities
+- Complex enterprise operations
+- Existing procurement ecosystem
+- Recent supply-chain/technology signal
+
+Email strategy:
+Position Inviqo as complementary rather than replacement.
+```
+
+The email generator should NOT perform fresh research itself.
+
+---
+
+# 30. Superadmin Controls
+
+Superadmin should be able to configure:
+
+### Research settings
+
+- Research freshness period
+- Maximum research depth
+- Preferred LLM
+- Backup LLM
+- Maximum web searches per research
+- Allowed source types
+- Research credit cost
+- Deep research availability
+
+### Monitoring
+
+Show:
+
+- Total companies
+- Companies researched
+- Researches this month
+- Successful researches
+- Failed researches
+- Average research cost
+- Total AI cost
+- Average searches/company
+- Average tokens/company
+
+---
+
+# 31. Critical Architectural Requirement
+
+Keep the following components separate:
+
+```text
+Company Master
+      │
+      ├── Company data
+      │
+      ▼
+Company Intelligence
+      │
+      ├── Research profile
+      ├── Signals
+      ├── Opportunities
+      └── Sources
+      │
+      ▼
+Research Jobs
+      │
+      └── Execution/cost/history
+```
+
+Do not combine everything into the Company table.
+
+---
+
+# 32. V1 Acceptance Criteria
+
+The implementation is complete only when all of the following work:
+
+### AC-01
+
+Creating a company does NOT trigger AI research.
+
+### AC-02
+
+Opening a company does NOT trigger AI research.
+
+### AC-03
+
+Searching the Global Company DB does NOT trigger AI research.
+
+### AC-04
+
+Only clicking `Research` starts a research job.
+
+### AC-05
+
+Research status is visible.
+
+### AC-06
+
+Only one research job can run for a company at a time.
+
+### AC-07
+
+Research produces schema-valid structured JSON.
+
+### AC-08
+
+Every current signal contains a date.
+
+### AC-09
+
+Every external claim has a source reference.
+
+### AC-10
+
+AI inferences are clearly separated from facts.
+
+### AC-11
+
+Key people are NOT stored.
+
+### AC-12
+
+Failed research does not destroy previous successful research.
+
+### AC-13
+
+Research history is retained.
+
+### AC-14
+
+Research usage/cost is recorded.
+
+### AC-15
+
+Fresh intelligence is reused rather than automatically re-researched.
+
+### AC-16
+
+Email generation can later consume the existing intelligence without triggering new research.
+
+### AC-17
+
+Superadmin can see research usage and costs.
+
+### AC-18
+
+The system never silently performs research in the background.
+
+---
+
+# 33. Recommended V1 Research Button UX
+
+Company list:
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│ Oracle                                                     │
+│ Technology · USA                                           │
+│                                                            │
+│ Intelligence: ● Researched 7 Oct 2026                     │
+│                                                            │
+│ [View Company] [View Intelligence] [Re-research]           │
+└────────────────────────────────────────────────────────────┘
+```
+
+For an unresearched company:
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│ ABC Technologies                                           │
+│ IT Services · India                                        │
+│                                                            │
+│ Intelligence: Not researched                              │
+│                                                            │
+│ [View Company] [Research]                                  │
+└────────────────────────────────────────────────────────────┘
+```
+
+When clicked:
+
+```text
+Research ABC Technologies?
+
+AI will research publicly available information and create
+a structured Company Intelligence profile.
+
+Estimated research usage: 1 research operation
+
+[Cancel]                     [Start Research]
+```
+
+Then:
+
+```text
+Researching ABC Technologies...
+
+✓ Company information
+✓ Business analysis
+✓ Technology intelligence
+✓ Recent signals
+✓ Opportunity analysis
+✓ Sources
+
+Research completed.
+```
+
+---
+
+# 34. Most Important Product Rule
+
+**Do not make the Research button merely generate a summary.**
+
+It should create a reusable **Company Intelligence Asset**.
+
+The summary is just the UI representation.
+
+The underlying structured intelligence is what will later power the entire AI sales/email platform.
+
+End state:
+
+```text
+GLOBAL COMPANY DB
+       │
+       │ Manual / imported company data
+       ▼
+COMPANY RECORD
+       │
+       │ Explicit Research click
+       ▼
+COMPANY INTELLIGENCE
+       │
+       ├── Facts
+       ├── Business
+       ├── Technology
+       ├── Dated Signals
+       ├── AI Opportunities
+       ├── Sales Intelligence
+       ├── Competitors
+       └── Sources
+       │
+       ▼
+REUSABLE AI KNOWLEDGE
+       │
+       ├── Email Generation
+       ├── Lead Scoring
+       ├── Campaign Personalization
+       ├── Prospect Discovery
+       └── Future AI Sales Agent
+```
+
+The **Global Company DB is the asset**, and **Research is an explicit, metered enrichment action**. No company should incur an AI research cost simply because it exists in the database.
