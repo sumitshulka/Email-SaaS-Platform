@@ -1041,6 +1041,8 @@ export interface CompanyInput {
   companyLinkedinUrl?: string;
   /** @maxLength 200 */
   companyLocation?: string;
+  /** Explicitly add this company profile to the global catalog; contacts remain private */
+  shareWithGlobal?: boolean;
 }
 
 export type CompanyExportColumn = typeof CompanyExportColumn[keyof typeof CompanyExportColumn];

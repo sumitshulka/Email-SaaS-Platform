@@ -2094,7 +2094,8 @@ export const CreateCompanyBody = zod.object({
   "companyDescription": zod.string().max(createCompanyBodyCompanyDescriptionMax).optional(),
   "companyPhoneNumber": zod.string().max(createCompanyBodyCompanyPhoneNumberMax).optional(),
   "companyLinkedinUrl": zod.string().max(createCompanyBodyCompanyLinkedinUrlMax).optional(),
-  "companyLocation": zod.string().max(createCompanyBodyCompanyLocationMax).optional()
+  "companyLocation": zod.string().max(createCompanyBodyCompanyLocationMax).optional(),
+  "shareWithGlobal": zod.boolean().optional().describe('Explicitly add this company profile to the global catalog; contacts remain private')
 })
 
 export const createCompanyResponseCompanyNameMax = 200;

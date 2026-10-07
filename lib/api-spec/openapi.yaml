@@ -1171,7 +1171,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "409":
-          description: A company with this domain already exists in the tenant
+          description: A company with this domain already exists in the tenant, or the domain is already in the global catalog when sharing is requested
           content:
             application/json:
               schema:
@@ -3608,6 +3608,7 @@ components:
         companyPhoneNumber: { type: string, maxLength: 40 }
         companyLinkedinUrl: { type: string, maxLength: 2048 }
         companyLocation: { type: string, maxLength: 200 }
+        shareWithGlobal: { type: boolean, description: Explicitly add this company profile to the global catalog; contacts remain private }
       required: [companyName]
     CompanyExportColumn:
       type: string

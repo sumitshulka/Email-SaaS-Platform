@@ -33,6 +33,7 @@ import {
   companiesTable,
   contactsTable,
   db,
+  globalCompaniesTable,
   usersTable,
 } from "@workspace/db";
 import ExcelJS from "exceljs";
@@ -433,6 +434,7 @@ router.post("/companies", requireUserRole, async (req, res): Promise<void> => {
   const profile = cleanCompanyInput(parsed.data as Record<string, unknown>);
   const domainKey = companyDomainKey(profile);
   const companyName = profile.companyName;
+  const shareWithGlobal = parsed.data.shareWithGlobal === true;
   if (!companyName || !validDomain(profile)) {
     res.status(400).json({ error: "Enter a company name and a valid company domain.", code: "INVALID_INPUT" });
     return;
@@ -459,6 +461,28 @@ router.post("/companies", requireUserRole, async (req, res): Promise<void> => {
         .limit(1);
       if (duplicate) return { kind: "duplicate" as const };
     }
+    let globalCompanyId: string | null = null;
+    if (shareWithGlobal) {
+      if (domainKey) {
+        const [globalDuplicate] = await tx
+          .select({ id: globalCompaniesTable.id })
+          .from(globalCompaniesTable)
+          .where(eq(globalCompaniesTable.companyDomainKey, domainKey))
+          .limit(1);
+        if (globalDuplicate) {
+          return { kind: "global_domain_exists" as const };
+        }
+      }
+      const [globalCompany] = await tx
+        .insert(globalCompaniesTable)
+        .values({ ...profile, companyName, companyDomainKey: domainKey })
+        .onConflictDoNothing()
+        .returning({ id: globalCompaniesTable.id });
+      if (!globalCompany) {
+        return { kind: "global_domain_exists" as const };
+      }
+      globalCompanyId = globalCompany.id;
+    }
     const [created] = await tx
       .insert(companiesTable)
       .values({
@@ -466,6 +490,7 @@ router.post("/companies", requireUserRole, async (req, res): Promise<void> => {
         ...profile,
         companyName,
         companyDomainKey: domainKey,
+        globalCompanyId,
       })
       .returning();
     return created ? { kind: "created" as const, company: created } : { kind: "missing_user" as const };
@@ -474,6 +499,13 @@ router.post("/companies", requireUserRole, async (req, res): Promise<void> => {
     res.status(409).json({
       error: "A company with this domain already exists. Link contacts to that company instead.",
       code: "COMPANY_DOMAIN_EXISTS",
+    });
+    return;
+  }
+  if (result.kind === "global_domain_exists") {
+    res.status(409).json({
+      error: "A company with this domain is already in the Global Company DB. Browse the global catalog to add the existing profile to your workspace.",
+      code: "GLOBAL_COMPANY_DOMAIN_EXISTS",
     });
     return;
   }

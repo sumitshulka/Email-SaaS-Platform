@@ -3942,6 +3942,115 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
+  it("adds a user company to the global catalog only after explicit sharing", async () => {
+    const admin = await loggedInUser({
+      username: "global-share-superadmin",
+      role: "SUPERADMIN",
+    });
+    const owner = await loggedInUser({
+      username: "global-share-owner",
+      email: "global-share-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "global-share-other",
+      email: "global-share-other@example.test",
+    });
+
+    const privateCompany = await api("/companies", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        companyName: "Private Workspace Company",
+        companyDomain: "private-workspace-company.test",
+      },
+    });
+    assert.equal(privateCompany.response.status, 201, JSON.stringify(privateCompany.body));
+    assert.equal(privateCompany.body.globalCompanyId, null);
+    const privateCatalogSearch = await api(
+      "/admin/global-companies?search=private-workspace-company",
+      { cookie: admin.cookie },
+    );
+    assert.equal(privateCatalogSearch.response.status, 200);
+    assert.equal(privateCatalogSearch.body.total, 0);
+
+    const sharedCompany = await api("/companies", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        companyName: "Opted In Workspace Company",
+        companyDomain: "opted-in-workspace-company.test",
+        companyIndustry: "Technology",
+        shareWithGlobal: true,
+      },
+    });
+    assert.equal(sharedCompany.response.status, 201, JSON.stringify(sharedCompany.body));
+    assert.ok(sharedCompany.body.globalCompanyId);
+
+    const adminCatalogSearch = await api(
+      "/admin/global-companies?search=opted-in-workspace-company",
+      { cookie: admin.cookie },
+    );
+    assert.equal(adminCatalogSearch.response.status, 200);
+    assert.equal(adminCatalogSearch.body.total, 1);
+    assert.equal(
+      adminCatalogSearch.body.globalCompanies[0].id,
+      sharedCompany.body.globalCompanyId,
+    );
+    assert.equal(
+      adminCatalogSearch.body.globalCompanies[0].companyName,
+      "Opted In Workspace Company",
+    );
+    assert.equal(
+      adminCatalogSearch.body.globalCompanies.some(
+        (company) => company.companyName === "Private Workspace Company",
+      ),
+      false,
+    );
+
+    const duplicateShare = await api("/companies", {
+      method: "POST",
+      cookie: other.cookie,
+      body: {
+        companyName: "Duplicate Shared Domain",
+        companyDomain: "opted-in-workspace-company.test",
+        shareWithGlobal: true,
+      },
+    });
+    assert.equal(duplicateShare.response.status, 409);
+    assert.equal(duplicateShare.body.code, "GLOBAL_COMPANY_DOMAIN_EXISTS");
+
+    const otherDirectory = await api(
+      "/companies/global/search?search=opted-in-workspace-company",
+      { cookie: other.cookie },
+    );
+    assert.equal(otherDirectory.response.status, 200);
+    assert.equal(otherDirectory.body.total, 1);
+    const otherAdded = await api(
+      `/companies/global/${sharedCompany.body.globalCompanyId}/add`,
+      { method: "POST", cookie: other.cookie },
+    );
+    assert.equal(otherAdded.response.status, 201);
+
+    const [privateContact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      companyId: sharedCompany.body.id,
+      name: "Private Contact",
+      email: "private-contact@opted-in-workspace-company.test",
+      notes: "TENANT-CONTACT-MUST-STAY-PRIVATE",
+    }).returning();
+    const adminCatalogWithContact = await api(
+      "/admin/global-companies?search=opted-in-workspace-company",
+      { cookie: admin.cookie },
+    );
+    const serializedCatalog = JSON.stringify(adminCatalogWithContact.body);
+    assert.equal(serializedCatalog.includes(privateContact.email), false);
+    assert.equal(serializedCatalog.includes("TENANT-CONTACT-MUST-STAY-PRIVATE"), false);
+    assert.equal(
+      (await api("/contacts", { cookie: admin.cookie })).response.status,
+      403,
+    );
+  });
+
   it("searches a bounded page of tenant-owned companies by name or domain", async () => {
     const owner = await loggedInUser({
       username: "company-search-owner",
