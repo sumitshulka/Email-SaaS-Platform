@@ -270,6 +270,40 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
   },
 ];
 
+function UserNotificationsHeaderAction() {
+  const notificationQuery = useGetUserNotifications({ query: {
+    queryKey: getGetUserNotificationsQueryKey(),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+  } });
+  const unreadCount = notificationQuery.data?.unread.length ?? 0;
+  const label = unreadCount
+    ? `Notifications, ${unreadCount} unread ${unreadCount === 1 ? 'notification' : 'notifications'}`
+    : 'Notifications';
+
+  return (
+    <Link
+      href="/notifications"
+      data-testid="link-header-notifications"
+      aria-label={label}
+      title={label}
+      className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] transition-colors hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8]"
+    >
+      <Bell aria-hidden="true" className="h-4 w-4"/>
+      {unreadCount > 0 && (
+        <span
+          data-testid="badge-header-unread-notifications"
+          aria-hidden="true"
+          className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full border-2 border-white bg-[#c45f22] px-1 text-[9px] font-bold leading-none text-white shadow-sm"
+        >
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 function AppShell({ user, children, admin = false }: { user: AuthUser; children: ReactNode; admin?: boolean }) {
   const [location, setLocation] = useLocation();
   const logout = useLogout();
@@ -347,6 +381,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
             <span className="hidden items-center gap-1.5 text-[11px] text-[#7d8794] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#4c82bb]"/>Signed in</span>
             <div className="h-4 w-px bg-[#e3e7eb]"/>
             <span className="mono text-[10px] text-[#7d8794]">{user.timezone}</span>
+            {!admin && user.role === 'USER' && <UserNotificationsHeaderAction/>}
             <Link href="/profile" data-testid="link-header-profile" className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] hover:bg-[#f4f6f8]"><UserRound className="h-4 w-4"/></Link>
             <button
               type="button"

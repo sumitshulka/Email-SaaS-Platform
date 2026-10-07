@@ -731,6 +731,10 @@ describe('notification creation, display, and per-account read history', { concu
       const firstPage = await firstContext.newPage();
       await signIn(firstPage, firstCustomer, '/dashboard');
       await firstPage.getByRole('heading', { name: 'Good to see you, again.' }).waitFor();
+      const headerNotifications = firstPage.getByTestId('link-header-notifications');
+      assert.equal(await headerNotifications.getAttribute('href'), '/notifications');
+      await firstPage.getByTestId('badge-header-unread-notifications').waitFor({ state: 'visible' });
+      assert.equal(await firstPage.getByTestId('badge-header-unread-notifications').innerText(), '2');
       await firstPage.getByTestId(`dashboard-notification-${broadcastId}`).waitFor({ state: 'visible' });
       await firstPage.getByTestId(`dashboard-notification-${focusedId}`).waitFor({ state: 'visible' });
 
@@ -742,6 +746,9 @@ describe('notification creation, display, and per-account read history', { concu
       assert.equal((await firstReadResponse).status(), 200);
       await firstPage.getByTestId(`dashboard-notification-${broadcastId}`).waitFor({ state: 'detached' });
       await firstPage.getByTestId(`dashboard-notification-${focusedId}`).waitFor({ state: 'visible' });
+      await firstPage.waitForFunction(() =>
+        document.querySelector('[data-testid="badge-header-unread-notifications"]')?.textContent?.trim() === '1',
+      );
 
       await firstPage.goto(`${baseUrl}/notifications`);
       await firstPage.getByRole('heading', { name: 'Notifications' }).waitFor();
@@ -770,6 +777,8 @@ describe('notification creation, display, and per-account read history', { concu
       const secondPage = await secondContext.newPage();
       await signIn(secondPage, secondCustomer, '/dashboard');
       await secondPage.getByRole('heading', { name: 'Good to see you, again.' }).waitFor();
+      await secondPage.getByTestId('badge-header-unread-notifications').waitFor({ state: 'visible' });
+      assert.equal(await secondPage.getByTestId('badge-header-unread-notifications').innerText(), '1');
       await secondPage.getByTestId(`dashboard-notification-${broadcastId}`).waitFor({ state: 'visible' });
       assert.equal(
         await secondPage.getByTestId(`dashboard-notification-${focusedId}`).count(),
