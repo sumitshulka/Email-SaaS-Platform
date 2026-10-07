@@ -191,6 +191,7 @@ memory.public.none(`
     contact_limit integer NOT NULL DEFAULT 5000,
     email_account_limit integer NOT NULL DEFAULT 1,
     active boolean NOT NULL DEFAULT true,
+    preferred boolean NOT NULL DEFAULT false,
     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
     updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -199,6 +200,9 @@ memory.public.none(`
   CREATE UNIQUE INDEX subscription_packages_single_free_unique
     ON subscription_packages (amount_minor)
     WHERE amount_minor = 0;
+  CREATE UNIQUE INDEX subscription_packages_single_preferred_unique
+    ON subscription_packages (preferred)
+    WHERE preferred = true;
   CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2140,12 +2144,14 @@ describe("tenant contact management and package quotas", { concurrency: false },
         periodDays: 30,
         contactLimit: 1250,
         emailAccountLimit: 2,
+        preferred: true,
         active: true,
       },
     });
     assert.equal(created.response.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.contactLimit, 1250);
     assert.equal(created.body.emailAccountLimit, 2);
+    assert.equal(created.body.preferred, true);
 
     const updated = await api(`/admin/billing/packages/${created.body.id}`, {
       method: "PATCH",
@@ -2155,12 +2161,35 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
     assert.equal(updated.body.contactLimit, 2400);
     assert.equal(updated.body.emailAccountLimit, 4);
+    assert.equal(updated.body.preferred, true);
     const [saved] = await db
       .select()
       .from(dbModule.subscriptionPackagesTable)
       .where(eq(dbModule.subscriptionPackagesTable.id, created.body.id));
     assert.equal(saved.contactLimit, 2400);
     assert.equal(saved.emailAccountLimit, 4);
+
+    const replacementPreferred = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Preferred Growth",
+        description: "Second package",
+        amountMinor: 29900,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 5000,
+        emailAccountLimit: 3,
+        preferred: true,
+        active: true,
+      },
+    });
+    assert.equal(
+      replacementPreferred.response.status,
+      201,
+      JSON.stringify(replacementPreferred.body),
+    );
+    assert.equal(replacementPreferred.body.preferred, true);
 
     const adminPackages = await api("/admin/billing/packages", {
       cookie: admin.cookie,
@@ -2170,6 +2199,21 @@ describe("tenant contact management and package quotas", { concurrency: false },
       emailsPerHourPerSmtp: 42,
       emailsPerDayPerSmtp: 420,
     });
+    assert.deepEqual(
+      adminPackages.body.packages
+        .filter((pkg) => pkg.preferred)
+        .map((pkg) => pkg.id),
+      [replacementPreferred.body.id],
+    );
+
+    const promoted = await api(`/admin/billing/packages/${created.body.id}`, {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: { preferred: true },
+    });
+    assert.equal(promoted.response.status, 200, JSON.stringify(promoted.body));
+    assert.equal(promoted.body.preferred, true);
+
     const publicPackages = await api("/subscriptions/packages");
     assert.equal(publicPackages.response.status, 200);
     assert.deepEqual(publicPackages.body.sendingLimits, {
@@ -2177,6 +2221,12 @@ describe("tenant contact management and package quotas", { concurrency: false },
       emailsPerDayPerSmtp: 420,
     });
     assert.ok(publicPackages.body.packages.some((pkg) => pkg.id === created.body.id));
+    assert.deepEqual(
+      publicPackages.body.packages
+        .filter((pkg) => pkg.preferred)
+        .map((pkg) => pkg.id),
+      [created.body.id],
+    );
   });
 
   it("creates and activates free packages without a payment or Razorpay order", async () => {
