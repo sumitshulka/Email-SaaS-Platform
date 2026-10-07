@@ -30,6 +30,7 @@ import AdminBillingPage from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminAIProviderPage from '@/pages/admin-ai-provider';
+import { AdminGlobalCompaniesPage } from '@/pages/admin-global-companies';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
@@ -268,6 +269,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
       { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
       { href: '/admin/ai-provider', label: 'AI integration', icon: BrainCircuit },
+      { href: '/admin/global-companies', label: 'Global companies', icon: Building2 },
     ],
   },
 ];
@@ -1173,6 +1175,7 @@ function Routes() {
     <Route path="/admin/settings">{() => <RouteGate admin>{() => <AdminSettingsPage/>}</RouteGate>}</Route>
     <Route path="/admin/google-oauth">{() => <RouteGate admin>{() => <AdminGoogleOAuthPage/>}</RouteGate>}</Route>
     <Route path="/admin/ai-provider">{() => <RouteGate admin>{() => <AdminAIProviderPage/>}</RouteGate>}</Route>
+    <Route path="/admin/global-companies">{() => <RouteGate admin>{() => <AdminGlobalCompaniesPage/>}</RouteGate>}</Route>
     <Route path="/plans">{() => <RouteGate>{() => <PlansPage/>}</RouteGate>}</Route>
     <Route path="/profile">{() => <RouteGate>{u => <ProfilePage user={u}/>}</RouteGate>}</Route>
     <Route component={NotFound}/>

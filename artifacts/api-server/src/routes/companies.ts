@@ -548,6 +548,9 @@ router.patch(
         .limit(1)
         .for("update");
       if (!company) return { kind: "not_found" as const };
+      if (company.globalCompanyId) {
+        return { kind: "global_managed" as const };
+      }
 
       const profile = cleanCompanyInput(parsed.data as Record<string, unknown>, company);
       const domainKey = companyDomainKey(profile);
@@ -583,6 +586,13 @@ router.patch(
     });
     if (result.kind === "not_found") {
       res.status(404).json({ error: "Company not found.", code: "COMPANY_NOT_FOUND" });
+      return;
+    }
+    if (result.kind === "global_managed") {
+      res.status(409).json({
+        error: "This company profile is managed by the global company catalog.",
+        code: "GLOBAL_COMPANY_MANAGED",
+      });
       return;
     }
     if (result.kind === "invalid") {

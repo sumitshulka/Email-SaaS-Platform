@@ -717,6 +717,8 @@ export interface TenantSendingConnectionTestFailure {
 
 export interface Company {
   id: string;
+  /** @nullable */
+  globalCompanyId: string | null;
   /** @maxLength 200 */
   companyName: string;
   /**
@@ -766,6 +768,168 @@ export interface Company {
   companyLocation: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GlobalCompany {
+  id: string;
+  /** @maxLength 200 */
+  companyName: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GlobalCompanyAdminCollection {
+  globalCompanies: GlobalCompany[];
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+}
+
+export type GlobalCompanyDirectoryItem = GlobalCompany & {
+  alreadyAdded: boolean;
+};
+
+export interface GlobalCompanyDirectoryResults {
+  companies: GlobalCompanyDirectoryItem[];
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+}
+
+export interface GlobalCompanyInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  companyName: string;
+  /** @maxLength 2048 */
+  companyWebsiteUrl?: string;
+  /** @maxLength 255 */
+  companyDomain?: string;
+  /** @maxLength 120 */
+  companyIndustry?: string;
+  /** @maxLength 80 */
+  companySize?: string;
+  /** @maxLength 80 */
+  companyRevenueRange?: string;
+  /** @maxLength 10000 */
+  companyDescription?: string;
+  /** @maxLength 40 */
+  companyPhoneNumber?: string;
+  /** @maxLength 2048 */
+  companyLinkedinUrl?: string;
+  /** @maxLength 200 */
+  companyLocation?: string;
+}
+
+export interface GlobalCompanyUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  companyName?: string;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyWebsiteUrl?: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  companyDomain?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyIndustry?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companySize?: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  companyRevenueRange?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  companyDescription?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  companyPhoneNumber?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  companyLinkedinUrl?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyLocation?: string | null;
 }
 
 export type CompanyListItem = Company & {
@@ -3420,6 +3584,40 @@ subscribed?: boolean;
  * @maxItems 100
  */
 listIds?: string[];
+};
+
+export type ListAdminGlobalCompaniesParams = {
+/**
+ * @maxLength 200
+ */
+search?: string;
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type SearchGlobalCompaniesParams = {
+/**
+ * @maxLength 200
+ */
+search?: string;
+/**
+ * @minimum 1
+ * @maximum 100000
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
 };
 
 export type SearchCompaniesParams = {

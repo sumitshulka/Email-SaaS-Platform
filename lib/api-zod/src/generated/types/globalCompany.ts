@@ -6,10 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Company {
+export interface GlobalCompany {
   id: string;
-  /** @nullable */
-  globalCompanyId: string | null;
   /** @maxLength 200 */
   companyName: string;
   /**

@@ -65,6 +65,7 @@ memory.public.none(`
   CREATE TABLE companies (
     id uuid PRIMARY KEY,
     user_id uuid NOT NULL,
+    global_company_id uuid,
     company_name varchar(200) NOT NULL,
     company_website_url varchar(2048),
     company_domain varchar(255),

@@ -6,57 +6,55 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Company {
-  id: string;
-  /** @nullable */
-  globalCompanyId: string | null;
-  /** @maxLength 200 */
-  companyName: string;
+export interface GlobalCompanyUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  companyName?: string;
   /**
      * @maxLength 2048
      * @nullable
      */
-  companyWebsiteUrl: string | null;
+  companyWebsiteUrl?: string | null;
   /**
      * @maxLength 255
      * @nullable
      */
-  companyDomain: string | null;
+  companyDomain?: string | null;
   /**
      * @maxLength 120
      * @nullable
      */
-  companyIndustry: string | null;
+  companyIndustry?: string | null;
   /**
      * @maxLength 80
      * @nullable
      */
-  companySize: string | null;
+  companySize?: string | null;
   /**
      * @maxLength 80
      * @nullable
      */
-  companyRevenueRange: string | null;
+  companyRevenueRange?: string | null;
   /**
      * @maxLength 10000
      * @nullable
      */
-  companyDescription: string | null;
+  companyDescription?: string | null;
   /**
      * @maxLength 40
      * @nullable
      */
-  companyPhoneNumber: string | null;
+  companyPhoneNumber?: string | null;
   /**
      * @maxLength 2048
      * @nullable
      */
-  companyLinkedinUrl: string | null;
+  companyLinkedinUrl?: string | null;
   /**
      * @maxLength 200
      * @nullable
      */
-  companyLocation: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  companyLocation?: string | null;
 }

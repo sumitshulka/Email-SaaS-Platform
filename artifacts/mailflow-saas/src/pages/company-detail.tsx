@@ -11,6 +11,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
+import { LinkedGlobalProfileNotice } from '@/pages/global-company-directory';
 import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 
@@ -116,7 +117,6 @@ export function CompanyDetailPage() {
 
   if (query.isLoading) return <div aria-label="Loading company details" className="space-y-5" data-testid="loading-company-detail"><div className="h-5 w-40 animate-pulse rounded bg-[#edf0f3]"/><div className="h-36 animate-pulse rounded-lg bg-[#f1f3f5]"/><div className="h-64 animate-pulse rounded-lg bg-[#f1f3f5]"/></div>;
   if (query.isError || !company) return <section className={`${panel} flex flex-col items-start gap-3 p-6`} role="alert" data-testid="error-company-detail"><div className="flex items-center gap-2 text-sm font-semibold text-[#26364a]"><CircleAlert className="h-4 w-4 text-[#c16d31]"/>Company details could not be loaded</div><p className="text-xs text-[#778291]">The record may have been removed, or your workspace data could not be reached.</p><div className="flex gap-2"><button type="button" data-testid="button-retry-company-detail" onClick={() => void query.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button><Link href="/companies" data-testid="link-back-companies-error" className="rounded-md px-3 py-2 text-xs font-semibold text-[#245b9b] no-underline">Company directory</Link></div></section>;
-
   const deleteCurrentCompany = () => {
     deleteCompany.mutate({ companyId: company.id }, {
       onSuccess: () => {
@@ -132,7 +132,7 @@ export function CompanyDetailPage() {
       },
       onError: error => {
         setDeleteConfirmationOpen(false);
-        setNotice({ type: 'error', text: `The company was not deleted. ${errorText(error)}` });
+        setNotice({ type: 'error', text: `${company.globalCompanyId ? 'The workspace link was not removed.' : 'The company was not deleted.'} ${errorText(error)}` });
       },
     });
   };
@@ -142,11 +142,13 @@ export function CompanyDetailPage() {
       open={deleteConfirmationOpen}
       onOpenChange={setDeleteConfirmationOpen}
       onConfirm={deleteCurrentCompany}
-      title={`Delete ${company.companyName}?`}
-      description={linked.length
-        ? `${linked.length} ${linked.length === 1 ? 'contact is' : 'contacts are'} linked to this company. Their contact records will stay, be unlinked, and keep the shared company profile details. The company and its associations will be permanently removed.`
-        : 'This company and its profile will be permanently removed. Any contacts still linked when you confirm will remain as contact records, be unlinked, and keep the shared company profile details.'}
-      confirmLabel="Delete company"
+      title={company.globalCompanyId ? `Remove ${company.companyName} from your workspace?` : `Delete ${company.companyName}?`}
+      description={company.globalCompanyId
+        ? `The global catalog profile will remain available. ${linked.length ? `${linked.length} ${linked.length === 1 ? 'contact association will' : 'contact associations will'} be unlinked from this workspace company; their private contact records will stay in your workspace and will not be deleted.` : 'Any contact associations will be unlinked; contact records will stay in your workspace and will not be deleted.'}`
+        : linked.length
+          ? `${linked.length} ${linked.length === 1 ? 'contact is' : 'contacts are'} linked to this company. Their contact records will stay, be unlinked, and keep the shared company profile details. The company and its associations will be permanently removed.`
+          : 'This company and its profile will be permanently removed. Any contacts still linked when you confirm will remain as contact records, be unlinked, and keep the shared company profile details.'}
+      confirmLabel={company.globalCompanyId ? 'Remove workspace link' : 'Delete company'}
       pending={deleteCompany.isPending}
       testId="dialog-delete-company"
     >
@@ -168,17 +170,18 @@ export function CompanyDetailPage() {
       onCancel={() => setReplacement(null)} onConfirm={target => linkContact(target, true)} />
     <Link href="/companies" data-testid="link-back-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Company directory</Link>
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] text-[#245b9b]"><Building2 className="h-5 w-5"/></span><div className="min-w-0"><div className="mono mb-1 text-[9px] uppercase tracking-[.16em] text-[#7d8794]">SHARED COMPANY / {company.id.slice(0, 8)}</div><h1 data-testid="text-company-name" className="display break-words text-[28px] font-bold leading-tight text-[#172334]">{company.companyName}</h1><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#758394]"><span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5"/>{company.companyDomain || 'Domain not provided'}</span>{company.companyLocation && <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{company.companyLocation}</span>}</div></div></div>
-      <button type="button" data-testid="button-edit-company" onClick={() => setEditorOpen(true)} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa]"><Pencil className="h-3.5 w-3.5"/>Edit profile</button>
+      <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] text-[#245b9b]"><Building2 className="h-5 w-5"/></span><div className="min-w-0"><div className="mono mb-1 text-[9px] uppercase tracking-[.16em] text-[#7d8794]">{company.globalCompanyId ? 'GLOBAL CATALOG LINK' : 'SHARED COMPANY'} / {company.id.slice(0, 8)}</div><h1 data-testid="text-company-name" className="display break-words text-[28px] font-bold leading-tight text-[#172334]">{company.companyName}</h1><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#758394]"><span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5"/>{company.companyDomain || 'Domain not provided'}</span>{company.companyLocation && <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{company.companyLocation}</span>}</div></div></div>
+      {!company.globalCompanyId && <button type="button" data-testid="button-edit-company" onClick={() => setEditorOpen(true)} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa]"><Pencil className="h-3.5 w-3.5"/>Edit profile</button>}
     </header>
     {notice && <div role={notice.type === 'error' ? 'alert' : 'status'} data-testid="status-company-detail" className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${notice.type === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{notice.text}</div>}
+    {company.globalCompanyId && <LinkedGlobalProfileNotice companyName={company.companyName}/>}
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)]">
       <section className={`${panel} overflow-hidden`} data-testid="panel-company-profile">
-        <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">COMPANY PROFILE</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Organization details</h2></header>
+        <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">{company.globalCompanyId ? 'GLOBAL CATALOG PROFILE' : 'COMPANY PROFILE'}</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Organization details</h2></header>
         <div className="p-5">
           <dl className="grid gap-x-5 sm:grid-cols-2">{profileFields.map(([label, key]) => <div key={key} className="min-w-0 border-b border-[#edf0f2] py-3"><dt className="mono text-[9px] uppercase tracking-[.1em] text-[#8a96a4]">{label}</dt><dd data-testid={`text-company-${key}`} className="mt-1 break-words text-[11px] leading-5 text-[#3b4d61]">{company[key] || <span className="text-[#9aa4af]">Not provided</span>}</dd></div>)}</dl>
           <div className="mt-4"><div className="mono mb-1.5 text-[9px] uppercase tracking-[.1em] text-[#8a96a4]">DESCRIPTION</div><p data-testid="text-company-description" className="whitespace-pre-wrap text-[11px] leading-5 text-[#637285]">{company.companyDescription || 'No description provided.'}</p></div>
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] pt-4"><span data-testid="text-company-updated-at" className="text-[10px] text-[#8994a1]">Updated {prettyDate(company.updatedAt)}</span><button type="button" data-testid="button-delete-company" disabled={deleteCompany.isPending} title="Delete company and restore its profile to linked contacts" onClick={() => { setNotice(null); setDeleteConfirmationOpen(true); }} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[10px] font-semibold text-[#a35c31] hover:bg-[#fff5ec] disabled:cursor-not-allowed disabled:text-[#b8b0aa]"><Trash2 className="h-3.5 w-3.5"/>{deleteCompany.isPending ? 'Deleting…' : 'Delete company'}</button></div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] pt-4"><span data-testid="text-company-updated-at" className="text-[10px] text-[#8994a1]">{company.globalCompanyId ? 'Catalog profile updated' : 'Updated'} {prettyDate(company.updatedAt)}</span><button type="button" data-testid="button-delete-company" disabled={deleteCompany.isPending} title={company.globalCompanyId ? 'Remove the workspace link; the global catalog profile remains and tenant contact records are not deleted' : 'Delete company and restore its profile to linked contacts'} onClick={() => { setNotice(null); setDeleteConfirmationOpen(true); }} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-[10px] font-semibold text-[#a35c31] hover:bg-[#fff5ec] disabled:cursor-not-allowed disabled:text-[#b8b0aa]"><Trash2 className="h-3.5 w-3.5"/>{deleteCompany.isPending ? (company.globalCompanyId ? 'Removing…' : 'Deleting…') : (company.globalCompanyId ? 'Remove workspace link' : 'Delete company')}</button></div>
         </div>
       </section>
       <div className="space-y-5">
@@ -201,6 +204,6 @@ export function CompanyDetailPage() {
         </section>
       </div>
     </div>
-    {editorOpen && <CompanyEditor company={company as Company} onClose={() => setEditorOpen(false)} onSaved={() => { setEditorOpen(false); setNotice({ type: 'success', text: 'Company profile saved.' }); void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) }); void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() }); }}/>}
+    {editorOpen && !company.globalCompanyId && <CompanyEditor company={company as Company} onClose={() => setEditorOpen(false)} onSaved={() => { setEditorOpen(false); setNotice({ type: 'success', text: 'Company profile saved.' }); void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) }); void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() }); }}/>}
   </div>;
 }

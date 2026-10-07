@@ -967,6 +967,174 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/global-companies:
+    get:
+      operationId: listAdminGlobalCompanies
+      tags: [admin]
+      summary: List and search the superadmin-managed global company catalog
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 200, default: "" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: A page of global company profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalCompanyAdminCollection"
+        "400":
+          description: Invalid search or pagination values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createGlobalCompany
+      tags: [admin]
+      summary: Add a company profile to the global catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalCompanyInput"
+      responses:
+        "201":
+          description: Global company created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalCompany"
+        "400":
+          description: Invalid company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A global company already uses this domain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/global-companies/{globalCompanyId}:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateGlobalCompany
+      tags: [admin]
+      summary: Update a global company profile and all linked workspace profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalCompanyUpdate"
+      responses:
+        "200":
+          description: Updated global company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalCompany"
+        "400":
+          description: Invalid company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Global company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A workspace company already uses the requested domain
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteGlobalCompany
+      tags: [admin]
+      summary: Remove a global listing while preserving workspace profiles and contacts
+      responses:
+        "204":
+          description: Global company removed
+        "404":
+          description: Global company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /companies/global/search:
+    get:
+      operationId: searchGlobalCompanies
+      tags: [contacts]
+      summary: Search the global company catalog for the authenticated workspace
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string, maxLength: 200, default: "" }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: A page of global company profiles and workspace membership flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalCompanyDirectoryResults"
+        "400":
+          description: Invalid search or pagination values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /companies/global/{globalCompanyId}/add:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: addGlobalCompanyToWorkspace
+      tags: [contacts]
+      summary: Add a live-linked global company profile to the authenticated workspace
+      responses:
+        "201":
+          description: Workspace company linked to the global catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+        "404":
+          description: Global company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The company is already in the workspace or its domain conflicts with a private company
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /companies:
     get:
       operationId: listCompanies
@@ -3266,6 +3434,24 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
+        globalCompanyId: { type: ["string", "null"], format: uuid }
+        companyName: { type: string, maxLength: 200 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, globalCompanyId, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+    GlobalCompany:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
         companyName: { type: string, maxLength: 200 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
@@ -3279,6 +3465,60 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+    GlobalCompanyAdminCollection:
+      type: object
+      properties:
+        globalCompanies:
+          type: array
+          items: { $ref: "#/components/schemas/GlobalCompany" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+      required: [globalCompanies, total, page, pageSize]
+    GlobalCompanyDirectoryItem:
+      allOf:
+        - $ref: "#/components/schemas/GlobalCompany"
+        - type: object
+          properties:
+            alreadyAdded: { type: boolean }
+          required: [alreadyAdded]
+    GlobalCompanyDirectoryResults:
+      type: object
+      properties:
+        companies:
+          type: array
+          items: { $ref: "#/components/schemas/GlobalCompanyDirectoryItem" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+      required: [companies, total, page, pageSize]
+    GlobalCompanyInput:
+      type: object
+      properties:
+        companyName: { type: string, minLength: 1, maxLength: 200 }
+        companyWebsiteUrl: { type: string, maxLength: 2048 }
+        companyDomain: { type: string, maxLength: 255 }
+        companyIndustry: { type: string, maxLength: 120 }
+        companySize: { type: string, maxLength: 80 }
+        companyRevenueRange: { type: string, maxLength: 80 }
+        companyDescription: { type: string, maxLength: 10000 }
+        companyPhoneNumber: { type: string, maxLength: 40 }
+        companyLinkedinUrl: { type: string, maxLength: 2048 }
+        companyLocation: { type: string, maxLength: 200 }
+      required: [companyName]
+    GlobalCompanyUpdate:
+      type: object
+      properties:
+        companyName: { type: string, minLength: 1, maxLength: 200 }
+        companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyIndustry: { type: ["string", "null"], maxLength: 120 }
+        companySize: { type: ["string", "null"], maxLength: 80 }
+        companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
+        companyDescription: { type: ["string", "null"], maxLength: 10000 }
+        companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
+        companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
+        companyLocation: { type: ["string", "null"], maxLength: 200 }
     CompanyListItem:
       allOf:
         - $ref: "#/components/schemas/Company"

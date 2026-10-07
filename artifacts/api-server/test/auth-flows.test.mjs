@@ -261,9 +261,27 @@ memory.public.none(`
     connection_check_at timestamptz,
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE global_companies (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_name varchar(200) NOT NULL,
+    company_website_url varchar(2048),
+    company_domain varchar(255),
+    company_domain_key varchar(255),
+    company_industry varchar(120),
+    company_size varchar(80),
+    company_revenue_range varchar(80),
+    company_description text,
+    company_phone_number varchar(40),
+    company_linkedin_url varchar(2048),
+    company_location varchar(200),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (company_domain_key)
+  );
   CREATE TABLE companies (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    global_company_id uuid REFERENCES global_companies(id) ON DELETE SET NULL,
     company_name varchar(200) NOT NULL,
     company_website_url varchar(2048),
     company_domain varchar(255),
@@ -278,7 +296,8 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (id, user_id),
-    UNIQUE (user_id, company_domain_key)
+    UNIQUE (user_id, company_domain_key),
+    UNIQUE (user_id, global_company_id)
   );
   CREATE TABLE contacts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -659,6 +678,7 @@ beforeEach(async () => {
   await db.delete(dbModule.contactsTable);
   await db.delete(dbModule.contactFieldOptionsTable);
   await db.delete(dbModule.companiesTable);
+  await db.delete(dbModule.globalCompaniesTable);
   await db.delete(dbModule.contactListsTable);
   await db.delete(dbModule.tenantSendingConfigurationTable);
   await db.delete(dbModule.auditLogsTable);
@@ -3725,6 +3745,201 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(storedForeignCompany.companyName, "Other Workspace Company");
     assert.equal(storedForeignCompany.companyDomain, "other-private.test");
     assert.equal(storedForeignCompany.companyIndustry, "Finance");
+  });
+
+  it("keeps the global company catalog contact-free while linked profiles remain live and tenant-private", async () => {
+    const admin = await loggedInUser({
+      username: "global-company-superadmin",
+      role: "SUPERADMIN",
+    });
+    const owner = await loggedInUser({
+      username: "global-company-owner",
+      email: "global-company-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "global-company-other",
+      email: "global-company-other@example.test",
+    });
+
+    const unauthenticatedAdminList = await api("/admin/global-companies");
+    assert.equal(unauthenticatedAdminList.response.status, 401);
+    const customerAdminList = await api("/admin/global-companies", {
+      cookie: owner.cookie,
+    });
+    assert.equal(customerAdminList.response.status, 403);
+    const customerAdminCreate = await api("/admin/global-companies", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { companyName: "Must not be created" },
+    });
+    assert.equal(customerAdminCreate.response.status, 403);
+
+    const created = await api("/admin/global-companies", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        companyName: "Northwind Global",
+        companyDomain: "northwind-global.test",
+        companyIndustry: "Technology",
+        companyLocation: "London",
+        companyDescription: "Public company profile only",
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    const globalCompanyId = created.body.id;
+    assert.equal(created.body.companyDomain, "northwind-global.test");
+    assert.equal("contacts" in created.body, false);
+    assert.equal("contactCount" in created.body, false);
+    assert.equal("companyDomainKey" in created.body, false);
+
+    const directory = await api("/companies/global/search?search=northwind", {
+      cookie: owner.cookie,
+    });
+    assert.equal(directory.response.status, 200, JSON.stringify(directory.body));
+    assert.equal(directory.body.total, 1);
+    assert.equal(directory.body.companies[0].id, globalCompanyId);
+    assert.equal(directory.body.companies[0].alreadyAdded, false);
+    assert.equal("contactCount" in directory.body.companies[0], false);
+
+    const ownerAdded = await api(
+      `/companies/global/${globalCompanyId}/add`,
+      { method: "POST", cookie: owner.cookie },
+    );
+    assert.equal(ownerAdded.response.status, 201, JSON.stringify(ownerAdded.body));
+    const ownerCompanyId = ownerAdded.body.id;
+    assert.equal(ownerAdded.body.globalCompanyId, globalCompanyId);
+    const otherAdded = await api(
+      `/companies/global/${globalCompanyId}/add`,
+      { method: "POST", cookie: other.cookie },
+    );
+    assert.equal(otherAdded.response.status, 201, JSON.stringify(otherAdded.body));
+    assert.equal(otherAdded.body.globalCompanyId, globalCompanyId);
+
+    const duplicateAdd = await api(
+      `/companies/global/${globalCompanyId}/add`,
+      { method: "POST", cookie: owner.cookie },
+    );
+    assert.equal(duplicateAdd.response.status, 409);
+    assert.equal(duplicateAdd.body.code, "GLOBAL_COMPANY_ALREADY_ADDED");
+
+    const [ownerContact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      companyId: ownerCompanyId,
+      name: "Owner Private Contact",
+      email: "owner-private-contact@northwind.test",
+      notes: "OWNER-CONTACT-SECRET",
+    }).returning();
+    const [otherContact] = await db.insert(dbModule.contactsTable).values({
+      userId: other.user.id,
+      companyId: otherAdded.body.id,
+      name: "Other Private Contact",
+      email: "other-private-contact@northwind.test",
+      notes: "OTHER-CONTACT-SECRET",
+    }).returning();
+
+    const adminContacts = await api("/contacts", { cookie: admin.cookie });
+    assert.equal(adminContacts.response.status, 403);
+    const adminCompanies = await api("/companies", { cookie: admin.cookie });
+    assert.equal(adminCompanies.response.status, 403);
+    const adminDirectory = await api("/admin/global-companies", {
+      cookie: admin.cookie,
+    });
+    assert.equal(adminDirectory.response.status, 200);
+    const serializedAdminDirectory = JSON.stringify(adminDirectory.body);
+    assert.equal(serializedAdminDirectory.includes(ownerContact.email), false);
+    assert.equal(serializedAdminDirectory.includes(otherContact.email), false);
+    assert.equal(serializedAdminDirectory.includes("OWNER-CONTACT-SECRET"), false);
+    assert.equal(serializedAdminDirectory.includes("OTHER-CONTACT-SECRET"), false);
+    assert.equal(
+      Object.keys(adminDirectory.body.globalCompanies[0]).some((key) =>
+        /contact/i.test(key),
+      ),
+      false,
+    );
+
+    const ownerDetail = await api(`/companies/${ownerCompanyId}`, {
+      cookie: owner.cookie,
+    });
+    const otherDetail = await api(`/companies/${otherAdded.body.id}`, {
+      cookie: other.cookie,
+    });
+    assert.deepEqual(ownerDetail.body.contacts.map((contact) => contact.id), [
+      ownerContact.id,
+    ]);
+    assert.deepEqual(otherDetail.body.contacts.map((contact) => contact.id), [
+      otherContact.id,
+    ]);
+
+    const managedEdit = await api(`/companies/${ownerCompanyId}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { companyName: "Private override" },
+    });
+    assert.equal(managedEdit.response.status, 409);
+    assert.equal(managedEdit.body.code, "GLOBAL_COMPANY_MANAGED");
+
+    await db.insert(dbModule.companiesTable).values({
+      userId: owner.user.id,
+      companyName: "Owner's private company",
+      companyDomain: "reserved-private.test",
+      companyDomainKey: "reserved-private.test",
+    });
+    const blockedSharedUpdate = await api(
+      `/admin/global-companies/${globalCompanyId}`,
+      {
+        method: "PATCH",
+        cookie: admin.cookie,
+        body: { companyDomain: "reserved-private.test" },
+      },
+    );
+    assert.equal(blockedSharedUpdate.response.status, 409);
+    assert.equal(blockedSharedUpdate.body.code, "GLOBAL_COMPANY_DOMAIN_CONFLICT");
+
+    const updated = await api(`/admin/global-companies/${globalCompanyId}`, {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: {
+        companyName: "Northwind Global Updated",
+        companyDomain: "northwind-updated.test",
+        companyLocation: "Manchester",
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    const ownerAfterUpdate = await api(`/companies/${ownerCompanyId}`, {
+      cookie: owner.cookie,
+    });
+    const otherAfterUpdate = await api(`/companies/${otherAdded.body.id}`, {
+      cookie: other.cookie,
+    });
+    assert.equal(ownerAfterUpdate.body.company.companyName, "Northwind Global Updated");
+    assert.equal(ownerAfterUpdate.body.company.companyDomain, "northwind-updated.test");
+    assert.equal(otherAfterUpdate.body.company.companyLocation, "Manchester");
+    assert.deepEqual(ownerAfterUpdate.body.contacts.map((contact) => contact.id), [
+      ownerContact.id,
+    ]);
+    assert.equal(ownerAfterUpdate.body.contacts[0].email, ownerContact.email);
+
+    const removed = await api(`/admin/global-companies/${globalCompanyId}`, {
+      method: "DELETE",
+      cookie: admin.cookie,
+    });
+    assert.equal(removed.response.status, 204);
+    const ownerAfterDelete = await api(`/companies/${ownerCompanyId}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(ownerAfterDelete.response.status, 200);
+    assert.equal(ownerAfterDelete.body.company.globalCompanyId, null);
+    assert.equal(ownerAfterDelete.body.company.companyName, "Northwind Global Updated");
+    assert.deepEqual(ownerAfterDelete.body.contacts.map((contact) => contact.id), [
+      ownerContact.id,
+    ]);
+    const ownerListAfterDelete = await api("/companies", { cookie: owner.cookie });
+    assert.equal(
+      ownerListAfterDelete.body.companies.some(
+        (company) => company.id === ownerCompanyId,
+      ),
+      true,
+    );
   });
 
   it("searches a bounded page of tenant-owned companies by name or domain", async () => {

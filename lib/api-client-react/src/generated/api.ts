@@ -91,6 +91,11 @@ import type {
   FreeSubscriptionActivation,
   GetCampaignDeliveryReportParams,
   GetCampaignRecipientSummaryParams,
+  GlobalCompany,
+  GlobalCompanyAdminCollection,
+  GlobalCompanyDirectoryResults,
+  GlobalCompanyInput,
+  GlobalCompanyUpdate,
   GmailMailboxConnection,
   GmailOAuthStart,
   GoogleOAuthSettings,
@@ -98,6 +103,7 @@ import type {
   HealthStatus,
   ImportContactsParams,
   ListAdminFinancePaymentsParams,
+  ListAdminGlobalCompaniesParams,
   ListAdminNotificationsParams,
   ListAdminSupportTicketsParams,
   ListAdminUsersParams,
@@ -123,6 +129,7 @@ import type {
   RegisterInput,
   ResetPasswordInput,
   SearchCompaniesParams,
+  SearchGlobalCompaniesParams,
   SetActiveRazorpayEnvironmentInput,
   SubscriptionGiftInput,
   SubscriptionOrderCreated,
@@ -3714,6 +3721,499 @@ export const useExportCompanies = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getExportCompaniesMutationOptions(options));
+    }
+
+export const getListAdminGlobalCompaniesUrl = (params?: ListAdminGlobalCompaniesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/global-companies?${stringifiedParams}` : `/api/admin/global-companies`
+}
+
+/**
+ * @summary List and search the superadmin-managed global company catalog
+ */
+export const listAdminGlobalCompanies = async (params?: ListAdminGlobalCompaniesParams, options?: Parameters<typeof customFetch>[1]): Promise<GlobalCompanyAdminCollection> => {
+
+  return customFetch<GlobalCompanyAdminCollection>(getListAdminGlobalCompaniesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminGlobalCompaniesQueryKey = (params?: ListAdminGlobalCompaniesParams,) => {
+    return [
+    `/api/admin/global-companies`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminGlobalCompaniesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminGlobalCompanies>>, TError = ErrorType<ApiError>>(params?: ListAdminGlobalCompaniesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminGlobalCompanies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminGlobalCompaniesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminGlobalCompanies>>> = ({ signal }) => listAdminGlobalCompanies(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminGlobalCompanies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminGlobalCompaniesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminGlobalCompanies>>>
+export type ListAdminGlobalCompaniesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List and search the superadmin-managed global company catalog
+ */
+
+export function useListAdminGlobalCompanies<TData = Awaited<ReturnType<typeof listAdminGlobalCompanies>>, TError = ErrorType<ApiError>>(
+ params?: ListAdminGlobalCompaniesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminGlobalCompanies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminGlobalCompaniesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGlobalCompanyUrl = () => {
+
+
+
+
+  return `/api/admin/global-companies`
+}
+
+/**
+ * @summary Add a company profile to the global catalog
+ */
+export const createGlobalCompany = async (globalCompanyInput: GlobalCompanyInput, options?: Parameters<typeof customFetch>[1]): Promise<GlobalCompany> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GlobalCompany>(getCreateGlobalCompanyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(globalCompanyInput)
+  }
+);}
+
+
+
+
+
+export const getCreateGlobalCompanyMutationKey = () => ['createGlobalCompany'] as const;
+
+export const getCreateGlobalCompanyMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGlobalCompany>>, TError,CreateGlobalCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGlobalCompany>>, TError,CreateGlobalCompanyMutationVariables, TContext> => {
+
+const mutationKey = getCreateGlobalCompanyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGlobalCompany>>, CreateGlobalCompanyMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGlobalCompany(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGlobalCompanyMutationResult = NonNullable<Awaited<ReturnType<typeof createGlobalCompany>>>
+    export type CreateGlobalCompanyMutationBody = BodyType<GlobalCompanyInput>
+    export type CreateGlobalCompanyMutationError = ErrorType<ApiError>
+    export type CreateGlobalCompanyMutationVariables = {data: BodyType<GlobalCompanyInput>}
+
+    /**
+ * @summary Add a company profile to the global catalog
+ */
+export const useCreateGlobalCompany = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGlobalCompany>>, TError,CreateGlobalCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGlobalCompany>>,
+        TError,
+        CreateGlobalCompanyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateGlobalCompanyMutationOptions(options));
+    }
+
+export const getUpdateGlobalCompanyUrl = (globalCompanyId: string,) => {
+
+
+
+
+  return `/api/admin/global-companies/${globalCompanyId}`
+}
+
+/**
+ * @summary Update a global company profile and all linked workspace profiles
+ */
+export const updateGlobalCompany = async (globalCompanyId: string,
+    globalCompanyUpdate: GlobalCompanyUpdate, options?: Parameters<typeof customFetch>[1]): Promise<GlobalCompany> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GlobalCompany>(getUpdateGlobalCompanyUrl(globalCompanyId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(globalCompanyUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateGlobalCompanyMutationKey = () => ['updateGlobalCompany'] as const;
+
+export const getUpdateGlobalCompanyMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGlobalCompany>>, TError,UpdateGlobalCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateGlobalCompany>>, TError,UpdateGlobalCompanyMutationVariables, TContext> => {
+
+const mutationKey = getUpdateGlobalCompanyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateGlobalCompany>>, UpdateGlobalCompanyMutationVariables> = (props) => {
+          const {globalCompanyId,data} = props ?? {};
+
+          return  updateGlobalCompany(globalCompanyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateGlobalCompanyMutationResult = NonNullable<Awaited<ReturnType<typeof updateGlobalCompany>>>
+    export type UpdateGlobalCompanyMutationBody = BodyType<GlobalCompanyUpdate>
+    export type UpdateGlobalCompanyMutationError = ErrorType<ApiError>
+    export type UpdateGlobalCompanyMutationVariables = {globalCompanyId: string;data: BodyType<GlobalCompanyUpdate>}
+
+    /**
+ * @summary Update a global company profile and all linked workspace profiles
+ */
+export const useUpdateGlobalCompany = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateGlobalCompany>>, TError,UpdateGlobalCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateGlobalCompany>>,
+        TError,
+        UpdateGlobalCompanyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateGlobalCompanyMutationOptions(options));
+    }
+
+export const getDeleteGlobalCompanyUrl = (globalCompanyId: string,) => {
+
+
+
+
+  return `/api/admin/global-companies/${globalCompanyId}`
+}
+
+/**
+ * @summary Remove a global listing while preserving workspace profiles and contacts
+ */
+export const deleteGlobalCompany = async (globalCompanyId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteGlobalCompanyUrl(globalCompanyId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteGlobalCompanyMutationKey = () => ['deleteGlobalCompany'] as const;
+
+export const getDeleteGlobalCompanyMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGlobalCompany>>, TError,DeleteGlobalCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGlobalCompany>>, TError,DeleteGlobalCompanyMutationVariables, TContext> => {
+
+const mutationKey = getDeleteGlobalCompanyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGlobalCompany>>, DeleteGlobalCompanyMutationVariables> = (props) => {
+          const {globalCompanyId} = props ?? {};
+
+          return  deleteGlobalCompany(globalCompanyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGlobalCompanyMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGlobalCompany>>>
+
+    export type DeleteGlobalCompanyMutationError = ErrorType<ApiError>
+    export type DeleteGlobalCompanyMutationVariables = {globalCompanyId: string}
+
+    /**
+ * @summary Remove a global listing while preserving workspace profiles and contacts
+ */
+export const useDeleteGlobalCompany = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGlobalCompany>>, TError,DeleteGlobalCompanyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGlobalCompany>>,
+        TError,
+        DeleteGlobalCompanyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteGlobalCompanyMutationOptions(options));
+    }
+
+export const getSearchGlobalCompaniesUrl = (params?: SearchGlobalCompaniesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/companies/global/search?${stringifiedParams}` : `/api/companies/global/search`
+}
+
+/**
+ * @summary Search the global company catalog for the authenticated workspace
+ */
+export const searchGlobalCompanies = async (params?: SearchGlobalCompaniesParams, options?: Parameters<typeof customFetch>[1]): Promise<GlobalCompanyDirectoryResults> => {
+
+  return customFetch<GlobalCompanyDirectoryResults>(getSearchGlobalCompaniesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchGlobalCompaniesQueryKey = (params?: SearchGlobalCompaniesParams,) => {
+    return [
+    `/api/companies/global/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchGlobalCompaniesQueryOptions = <TData = Awaited<ReturnType<typeof searchGlobalCompanies>>, TError = ErrorType<ApiError>>(params?: SearchGlobalCompaniesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchGlobalCompanies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchGlobalCompaniesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchGlobalCompanies>>> = ({ signal }) => searchGlobalCompanies(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchGlobalCompanies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchGlobalCompaniesQueryResult = NonNullable<Awaited<ReturnType<typeof searchGlobalCompanies>>>
+export type SearchGlobalCompaniesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Search the global company catalog for the authenticated workspace
+ */
+
+export function useSearchGlobalCompanies<TData = Awaited<ReturnType<typeof searchGlobalCompanies>>, TError = ErrorType<ApiError>>(
+ params?: SearchGlobalCompaniesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchGlobalCompanies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchGlobalCompaniesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAddGlobalCompanyToWorkspaceUrl = (globalCompanyId: string,) => {
+
+
+
+
+  return `/api/companies/global/${globalCompanyId}/add`
+}
+
+/**
+ * @summary Add a live-linked global company profile to the authenticated workspace
+ */
+export const addGlobalCompanyToWorkspace = async (globalCompanyId: string, options?: Parameters<typeof customFetch>[1]): Promise<Company> => {
+
+  return customFetch<Company>(getAddGlobalCompanyToWorkspaceUrl(globalCompanyId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAddGlobalCompanyToWorkspaceMutationKey = () => ['addGlobalCompanyToWorkspace'] as const;
+
+export const getAddGlobalCompanyToWorkspaceMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addGlobalCompanyToWorkspace>>, TError,AddGlobalCompanyToWorkspaceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addGlobalCompanyToWorkspace>>, TError,AddGlobalCompanyToWorkspaceMutationVariables, TContext> => {
+
+const mutationKey = getAddGlobalCompanyToWorkspaceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addGlobalCompanyToWorkspace>>, AddGlobalCompanyToWorkspaceMutationVariables> = (props) => {
+          const {globalCompanyId} = props ?? {};
+
+          return  addGlobalCompanyToWorkspace(globalCompanyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddGlobalCompanyToWorkspaceMutationResult = NonNullable<Awaited<ReturnType<typeof addGlobalCompanyToWorkspace>>>
+
+    export type AddGlobalCompanyToWorkspaceMutationError = ErrorType<ApiError>
+    export type AddGlobalCompanyToWorkspaceMutationVariables = {globalCompanyId: string}
+
+    /**
+ * @summary Add a live-linked global company profile to the authenticated workspace
+ */
+export const useAddGlobalCompanyToWorkspace = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addGlobalCompanyToWorkspace>>, TError,AddGlobalCompanyToWorkspaceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addGlobalCompanyToWorkspace>>,
+        TError,
+        AddGlobalCompanyToWorkspaceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAddGlobalCompanyToWorkspaceMutationOptions(options));
     }
 
 export const getListCompaniesUrl = () => {

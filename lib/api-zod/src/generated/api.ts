@@ -1162,6 +1162,7 @@ export const ListContactsResponse = zod.object({
   "companyId": zod.string().uuid().nullable(),
   "company": zod.union([zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyDomainMax).nullable(),
@@ -1570,6 +1571,7 @@ export const CreateContactResponse = zod.object({
   "companyId": zod.string().uuid().nullable(),
   "company": zod.union([zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(createContactResponseCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createContactResponseCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(createContactResponseCompanyOneCompanyDomainMax).nullable(),
@@ -1654,6 +1656,361 @@ export const ExportCompaniesResponse = zod.unknown()
 
 
 /**
+ * @summary List and search the superadmin-managed global company catalog
+ */
+export const listAdminGlobalCompaniesQuerySearchDefault = ``;
+export const listAdminGlobalCompaniesQuerySearchMax = 200;
+
+export const listAdminGlobalCompaniesQueryPageDefault = 1;
+export const listAdminGlobalCompaniesQueryPageMax = 100000;
+
+export const listAdminGlobalCompaniesQueryPageSizeDefault = 25;
+export const listAdminGlobalCompaniesQueryPageSizeMax = 100;
+
+
+
+export const ListAdminGlobalCompaniesQueryParams = zod.object({
+  "search": zod.coerce.string().max(listAdminGlobalCompaniesQuerySearchMax).default(listAdminGlobalCompaniesQuerySearchDefault),
+  "page": zod.coerce.number().int().min(1).max(listAdminGlobalCompaniesQueryPageMax).default(listAdminGlobalCompaniesQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminGlobalCompaniesQueryPageSizeMax).default(listAdminGlobalCompaniesQueryPageSizeDefault)
+})
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyNameMax = 200;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyWebsiteUrlMax = 2048;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyDomainMax = 255;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyIndustryMax = 120;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanySizeMax = 80;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyRevenueRangeMax = 80;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyDescriptionMax = 10000;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyPhoneNumberMax = 40;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLinkedinUrlMax = 2048;
+
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLocationMax = 200;
+
+export const listAdminGlobalCompaniesResponseTotalMin = 0;
+
+
+export const listAdminGlobalCompaniesResponsePageSizeMax = 100;
+
+
+
+export const ListAdminGlobalCompaniesResponse = zod.object({
+  "globalCompanies": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number().int().min(listAdminGlobalCompaniesResponseTotalMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(listAdminGlobalCompaniesResponsePageSizeMax)
+})
+
+
+/**
+ * @summary Add a company profile to the global catalog
+ */
+export const createGlobalCompanyBodyCompanyNameMax = 200;
+
+export const createGlobalCompanyBodyCompanyWebsiteUrlMax = 2048;
+
+export const createGlobalCompanyBodyCompanyDomainMax = 255;
+
+export const createGlobalCompanyBodyCompanyIndustryMax = 120;
+
+export const createGlobalCompanyBodyCompanySizeMax = 80;
+
+export const createGlobalCompanyBodyCompanyRevenueRangeMax = 80;
+
+export const createGlobalCompanyBodyCompanyDescriptionMax = 10000;
+
+export const createGlobalCompanyBodyCompanyPhoneNumberMax = 40;
+
+export const createGlobalCompanyBodyCompanyLinkedinUrlMax = 2048;
+
+export const createGlobalCompanyBodyCompanyLocationMax = 200;
+
+
+
+export const CreateGlobalCompanyBody = zod.object({
+  "companyName": zod.string().min(1).max(createGlobalCompanyBodyCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(createGlobalCompanyBodyCompanyWebsiteUrlMax).optional(),
+  "companyDomain": zod.string().max(createGlobalCompanyBodyCompanyDomainMax).optional(),
+  "companyIndustry": zod.string().max(createGlobalCompanyBodyCompanyIndustryMax).optional(),
+  "companySize": zod.string().max(createGlobalCompanyBodyCompanySizeMax).optional(),
+  "companyRevenueRange": zod.string().max(createGlobalCompanyBodyCompanyRevenueRangeMax).optional(),
+  "companyDescription": zod.string().max(createGlobalCompanyBodyCompanyDescriptionMax).optional(),
+  "companyPhoneNumber": zod.string().max(createGlobalCompanyBodyCompanyPhoneNumberMax).optional(),
+  "companyLinkedinUrl": zod.string().max(createGlobalCompanyBodyCompanyLinkedinUrlMax).optional(),
+  "companyLocation": zod.string().max(createGlobalCompanyBodyCompanyLocationMax).optional()
+})
+
+export const createGlobalCompanyResponseCompanyNameMax = 200;
+
+export const createGlobalCompanyResponseCompanyWebsiteUrlMax = 2048;
+
+export const createGlobalCompanyResponseCompanyDomainMax = 255;
+
+export const createGlobalCompanyResponseCompanyIndustryMax = 120;
+
+export const createGlobalCompanyResponseCompanySizeMax = 80;
+
+export const createGlobalCompanyResponseCompanyRevenueRangeMax = 80;
+
+export const createGlobalCompanyResponseCompanyDescriptionMax = 10000;
+
+export const createGlobalCompanyResponseCompanyPhoneNumberMax = 40;
+
+export const createGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
+
+export const createGlobalCompanyResponseCompanyLocationMax = 200;
+
+
+
+export const CreateGlobalCompanyResponse = zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string().max(createGlobalCompanyResponseCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(createGlobalCompanyResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(createGlobalCompanyResponseCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(createGlobalCompanyResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(createGlobalCompanyResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(createGlobalCompanyResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(createGlobalCompanyResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(createGlobalCompanyResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(createGlobalCompanyResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(createGlobalCompanyResponseCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a global company profile and all linked workspace profiles
+ */
+export const UpdateGlobalCompanyParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const updateGlobalCompanyBodyCompanyNameMax = 200;
+
+export const updateGlobalCompanyBodyCompanyWebsiteUrlMax = 2048;
+
+export const updateGlobalCompanyBodyCompanyDomainMax = 255;
+
+export const updateGlobalCompanyBodyCompanyIndustryMax = 120;
+
+export const updateGlobalCompanyBodyCompanySizeMax = 80;
+
+export const updateGlobalCompanyBodyCompanyRevenueRangeMax = 80;
+
+export const updateGlobalCompanyBodyCompanyDescriptionMax = 10000;
+
+export const updateGlobalCompanyBodyCompanyPhoneNumberMax = 40;
+
+export const updateGlobalCompanyBodyCompanyLinkedinUrlMax = 2048;
+
+export const updateGlobalCompanyBodyCompanyLocationMax = 200;
+
+
+
+export const UpdateGlobalCompanyBody = zod.object({
+  "companyName": zod.string().min(1).max(updateGlobalCompanyBodyCompanyNameMax).optional(),
+  "companyWebsiteUrl": zod.string().max(updateGlobalCompanyBodyCompanyWebsiteUrlMax).nullish(),
+  "companyDomain": zod.string().max(updateGlobalCompanyBodyCompanyDomainMax).nullish(),
+  "companyIndustry": zod.string().max(updateGlobalCompanyBodyCompanyIndustryMax).nullish(),
+  "companySize": zod.string().max(updateGlobalCompanyBodyCompanySizeMax).nullish(),
+  "companyRevenueRange": zod.string().max(updateGlobalCompanyBodyCompanyRevenueRangeMax).nullish(),
+  "companyDescription": zod.string().max(updateGlobalCompanyBodyCompanyDescriptionMax).nullish(),
+  "companyPhoneNumber": zod.string().max(updateGlobalCompanyBodyCompanyPhoneNumberMax).nullish(),
+  "companyLinkedinUrl": zod.string().max(updateGlobalCompanyBodyCompanyLinkedinUrlMax).nullish(),
+  "companyLocation": zod.string().max(updateGlobalCompanyBodyCompanyLocationMax).nullish()
+})
+
+export const updateGlobalCompanyResponseCompanyNameMax = 200;
+
+export const updateGlobalCompanyResponseCompanyWebsiteUrlMax = 2048;
+
+export const updateGlobalCompanyResponseCompanyDomainMax = 255;
+
+export const updateGlobalCompanyResponseCompanyIndustryMax = 120;
+
+export const updateGlobalCompanyResponseCompanySizeMax = 80;
+
+export const updateGlobalCompanyResponseCompanyRevenueRangeMax = 80;
+
+export const updateGlobalCompanyResponseCompanyDescriptionMax = 10000;
+
+export const updateGlobalCompanyResponseCompanyPhoneNumberMax = 40;
+
+export const updateGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
+
+export const updateGlobalCompanyResponseCompanyLocationMax = 200;
+
+
+
+export const UpdateGlobalCompanyResponse = zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string().max(updateGlobalCompanyResponseCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(updateGlobalCompanyResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(updateGlobalCompanyResponseCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(updateGlobalCompanyResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(updateGlobalCompanyResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(updateGlobalCompanyResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(updateGlobalCompanyResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(updateGlobalCompanyResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(updateGlobalCompanyResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(updateGlobalCompanyResponseCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a global listing while preserving workspace profiles and contacts
+ */
+export const DeleteGlobalCompanyParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const DeleteGlobalCompanyResponse = zod.void()
+
+
+/**
+ * @summary Search the global company catalog for the authenticated workspace
+ */
+export const searchGlobalCompaniesQuerySearchDefault = ``;
+export const searchGlobalCompaniesQuerySearchMax = 200;
+
+export const searchGlobalCompaniesQueryPageDefault = 1;
+export const searchGlobalCompaniesQueryPageMax = 100000;
+
+export const searchGlobalCompaniesQueryPageSizeDefault = 25;
+export const searchGlobalCompaniesQueryPageSizeMax = 100;
+
+
+
+export const SearchGlobalCompaniesQueryParams = zod.object({
+  "search": zod.coerce.string().max(searchGlobalCompaniesQuerySearchMax).default(searchGlobalCompaniesQuerySearchDefault),
+  "page": zod.coerce.number().int().min(1).max(searchGlobalCompaniesQueryPageMax).default(searchGlobalCompaniesQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(searchGlobalCompaniesQueryPageSizeMax).default(searchGlobalCompaniesQueryPageSizeDefault)
+})
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyNameMax = 200;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax = 2048;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyDomainMax = 255;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyIndustryMax = 120;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanySizeMax = 80;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyRevenueRangeMax = 80;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyDescriptionMax = 10000;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyPhoneNumberMax = 40;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyLinkedinUrlMax = 2048;
+
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyLocationMax = 200;
+
+export const searchGlobalCompaniesResponseTotalMin = 0;
+
+
+export const searchGlobalCompaniesResponsePageSizeMax = 100;
+
+
+
+export const SearchGlobalCompaniesResponse = zod.object({
+  "companies": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "alreadyAdded": zod.boolean()
+}))),
+  "total": zod.number().int().min(searchGlobalCompaniesResponseTotalMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(searchGlobalCompaniesResponsePageSizeMax)
+})
+
+
+/**
+ * @summary Add a live-linked global company profile to the authenticated workspace
+ */
+export const AddGlobalCompanyToWorkspaceParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const addGlobalCompanyToWorkspaceResponseCompanyNameMax = 200;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyWebsiteUrlMax = 2048;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyDomainMax = 255;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyIndustryMax = 120;
+
+export const addGlobalCompanyToWorkspaceResponseCompanySizeMax = 80;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyRevenueRangeMax = 80;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyDescriptionMax = 10000;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyPhoneNumberMax = 40;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyLinkedinUrlMax = 2048;
+
+export const addGlobalCompanyToWorkspaceResponseCompanyLocationMax = 200;
+
+
+
+export const AddGlobalCompanyToWorkspaceResponse = zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
+  "companyName": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List companies and their linked-contact counts for the authenticated tenant
  */
 export const listCompaniesResponseCompaniesItemOneCompanyNameMax = 200;
@@ -1683,6 +2040,7 @@ export const listCompaniesResponseCompaniesItemTwoContactCountMin = 0;
 export const ListCompaniesResponse = zod.object({
   "companies": zod.array(zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyDomainMax).nullable(),
@@ -1763,6 +2121,7 @@ export const createCompanyResponseCompanyLocationMax = 200;
 
 export const CreateCompanyResponse = zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(createCompanyResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createCompanyResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(createCompanyResponseCompanyDomainMax).nullable(),
@@ -1916,6 +2275,7 @@ export const getCompanyResponseCompanyCompanyLocationMax = 200;
 export const GetCompanyResponse = zod.object({
   "company": zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(getCompanyResponseCompanyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(getCompanyResponseCompanyCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(getCompanyResponseCompanyCompanyDomainMax).nullable(),
@@ -2004,6 +2364,7 @@ export const updateCompanyResponseCompanyLocationMax = 200;
 
 export const UpdateCompanyResponse = zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(updateCompanyResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(updateCompanyResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(updateCompanyResponseCompanyDomainMax).nullable(),
@@ -2306,6 +2667,7 @@ export const GetContactResponse = zod.object({
   "companyId": zod.string().uuid().nullable(),
   "company": zod.union([zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(getContactResponseCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(getContactResponseCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(getContactResponseCompanyOneCompanyDomainMax).nullable(),
@@ -2576,6 +2938,7 @@ export const UpdateContactResponse = zod.object({
   "companyId": zod.string().uuid().nullable(),
   "company": zod.union([zod.object({
   "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
   "companyName": zod.string().max(updateContactResponseCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(updateContactResponseCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(updateContactResponseCompanyOneCompanyDomainMax).nullable(),

@@ -31,3 +31,4 @@
 - [Online payment availability](online-payment-gate.md) — default on for compatibility; off blocks only new paid checkouts, not free activation or settlement.
 - [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
 - [Campaign claim atomicity](campaign-claim-atomicity.md) — win the conditional queued-to-sending transition before recording an attempt or calling SMTP.
+- [Global company privacy](global-company-privacy.md) — keep the global catalog profile-only; contacts stay tenant-private while linked company profiles sync.
