@@ -16,6 +16,7 @@ import {
   emailCampaignRecipientsTable,
   emailCampaignsTable,
   emailSendAttemptsTable,
+  systemConfigurationTable,
   tenantSendingConfigurationTable,
   usersTable,
   type EmailCampaign,
@@ -35,12 +36,20 @@ import {
 } from "./campaign-template";
 import { logger } from "./logger";
 import {
+  defaultPlatformSettings,
   getMinimumEmailSpacingSeconds,
   getPlatformSettings,
 } from "./platform-settings";
 
 const MAX_DELIVERIES_PER_TICK = 100;
 const STALE_DELIVERY_MINUTES = 10;
+let beforeDeliveryClaimForTests: (() => Promise<void>) | null = null;
+
+export function setBeforeDeliveryClaimForTests(
+  callback: (() => Promise<void>) | null,
+): void {
+  beforeDeliveryClaimForTests = callback;
+}
 
 type DeliveryClaim =
   | {
@@ -338,6 +347,32 @@ async function claimDelivery(
 ): Promise<DeliveryClaim | null> {
   const now = new Date();
   return db.transaction(async (tx) => {
+    // Ensure there is a row to lock, including on a fresh install where
+    // getPlatformSettings() is still serving its defaults.
+    await tx
+      .insert(systemConfigurationTable)
+      .values({ key: "platform", value: defaultPlatformSettings })
+      .onConflictDoNothing();
+
+    // Serialize the maintenance check with settings updates. The settings row
+    // lock keeps a concurrent maintenance enable from slipping between this
+    // check and the queued-to-sending claim below.
+    const [platformConfiguration] = await tx
+      .select({ value: systemConfigurationTable.value })
+      .from(systemConfigurationTable)
+      .where(eq(systemConfigurationTable.key, "platform"))
+      .for("update");
+    const platformValue = platformConfiguration?.value;
+    if (
+      platformValue &&
+      typeof platformValue === "object" &&
+      !Array.isArray(platformValue) &&
+      "maintenanceMode" in platformValue &&
+      platformValue.maintenanceMode === true
+    ) {
+      return null;
+    }
+
     // Multiple senders still share one tenant-wide rate-limit ledger.
     await tx
       .select({ id: usersTable.id })
@@ -677,6 +712,7 @@ export async function processPendingCampaignDeliveries(
   let processed = 0;
   for (const candidate of candidates) {
     if ((await getPlatformSettings()).maintenanceMode) break;
+    await beforeDeliveryClaimForTests?.();
     const claimed = await claimDelivery(
       candidate.id,
       candidate.userId,

@@ -5415,6 +5415,146 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("does not claim a recipient when maintenance starts after the worker check", async () => {
+    const owner = await loggedInUser({
+      username: "maintenance-claim-race-owner",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "claim-race@maintenance.test",
+        firstName: "Claim race",
+        subscribed: true,
+      })
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.maintenance.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("maintenance-user"),
+        passwordEncrypted: securityModule.encryptSecret("maintenance-password"),
+        fromName: "Maintenance Test",
+        fromEmail: "sender@maintenance.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Maintenance claim race",
+        subject: "A campaign update",
+        textBody: "This message should remain queued during maintenance.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    const settingsValue = {
+      maintenanceMode: false,
+      defaultEmailsPerHour: 3600,
+      maxEmailsPerDay: 100,
+      queuePollingSeconds: 1,
+      deliveryTrackingEnabled: true,
+    };
+    let markClaimCheckReached;
+    const claimCheckReached = new Promise((resolve) => {
+      markClaimCheckReached = resolve;
+    });
+    let resumeClaim;
+    const claimGate = new Promise((resolve) => {
+      resumeClaim = resolve;
+    });
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+    campaignWorkerModule.setBeforeDeliveryClaimForTests(async () => {
+      markClaimCheckReached();
+      await claimGate;
+    });
+
+    try {
+      const worker = campaignWorkerModule.processPendingCampaignDeliveries(1);
+      await claimCheckReached;
+      await db
+        .insert(dbModule.systemConfigurationTable)
+        .values({
+          key: "platform",
+          value: { ...settingsValue, maintenanceMode: true },
+        })
+        .onConflictDoUpdate({
+          target: dbModule.systemConfigurationTable.key,
+          set: {
+            value: { ...settingsValue, maintenanceMode: true },
+            updatedAt: new Date(),
+          },
+        });
+      resumeClaim();
+
+      assert.equal(await worker, 0);
+      assert.deepEqual(deliveredTo, []);
+      const [pausedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(pausedRecipient.status, "queued");
+      assert.equal(pausedRecipient.attempts, 0);
+      const attemptsDuringMaintenance = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(attemptsDuringMaintenance.length, 0);
+
+      campaignWorkerModule.setBeforeDeliveryClaimForTests(null);
+      await db
+        .update(dbModule.systemConfigurationTable)
+        .set({ value: settingsValue, updatedAt: new Date() })
+        .where(eq(dbModule.systemConfigurationTable.key, "platform"));
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+      assert.deepEqual(deliveredTo, [recipient.email]);
+      const [resumedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(resumedRecipient.status, "delivered");
+      assert.equal(resumedRecipient.attempts, 1);
+    } finally {
+      resumeClaim();
+      campaignWorkerModule.setBeforeDeliveryClaimForTests(null);
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("sends a queued recipient once when two campaign workers run concurrently", async () => {
     const owner = await loggedInUser({
       username: "concurrent-campaign-worker-owner",
