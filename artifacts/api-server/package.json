@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test": "node --import tsx --test test/*.test.mjs",
+    "test:postgres-maintenance-race": "node --import tsx --test test/postgres-maintenance-race.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
