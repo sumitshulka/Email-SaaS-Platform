@@ -202,11 +202,156 @@ function redirectToSettings(
   res.redirect(303, target.toString());
 }
 
+type GoogleOAuthTestFailure =
+  | "consent_denied"
+  | "google_rejected"
+  | "oauth_client_invalid"
+  | "authorization_code_rejected"
+  | "callback_uri_mismatch"
+  | "oauth_exchange_failed"
+  | "google_identity_unverified"
+  | "gmail_api_disabled"
+  | "gmail_policy_blocked"
+  | "gmail_scope_missing"
+  | "gmail_profile_unavailable"
+  | "mailbox_identity_mismatch"
+  | "grant_cleanup_failed"
+  | "settings_changed"
+  | "session_invalid"
+  | "unknown";
+
+type GoogleOAuthTestStage =
+  | "token_exchange"
+  | "google_identity"
+  | "gmail_profile"
+  | "mailbox_identity"
+  | "grant_cleanup"
+  | "save_verification";
+
+class GoogleOAuthTestFailureError extends Error {
+  constructor(
+    readonly reason: GoogleOAuthTestFailure,
+    readonly providerStatusCode?: number,
+  ) {
+    super(reason);
+    this.name = "GoogleOAuthTestFailureError";
+  }
+}
+
+const SAFE_GOOGLE_OAUTH_ERROR_CODES = new Set([
+  "access_denied",
+  "invalid_client",
+  "invalid_grant",
+  "invalid_scope",
+  "unauthorized_client",
+  "redirect_uri_mismatch",
+]);
+
+function safeGoogleOAuthErrorCode(value: unknown): string | undefined {
+  return typeof value === "string" && SAFE_GOOGLE_OAUTH_ERROR_CODES.has(value)
+    ? value
+    : undefined;
+}
+
+function failureFromGoogleOAuthErrorCode(
+  value: unknown,
+): GoogleOAuthTestFailure | null {
+  switch (safeGoogleOAuthErrorCode(value)) {
+    case "access_denied":
+      return "consent_denied";
+    case "invalid_client":
+    case "unauthorized_client":
+      return "oauth_client_invalid";
+    case "invalid_grant":
+      return "authorization_code_rejected";
+    case "redirect_uri_mismatch":
+      return "callback_uri_mismatch";
+    case "invalid_scope":
+      return "gmail_scope_missing";
+    default:
+      return null;
+  }
+}
+
+function failureFromTokenExchangeError(
+  error: unknown,
+): GoogleOAuthTestFailure {
+  if (error instanceof GmailApiError) {
+    return (
+      failureFromGoogleOAuthErrorCode(error.providerCode) ??
+      "oauth_exchange_failed"
+    );
+  }
+  return "oauth_exchange_failed";
+}
+
+async function failureFromGmailProfileResponse(
+  response: globalThis.Response,
+): Promise<GoogleOAuthTestFailure> {
+  let providerStatus: string | undefined;
+  let providerReasons: string[] = [];
+  try {
+    const body = (await response.json()) as {
+      error?: {
+        status?: unknown;
+        errors?: Array<{ reason?: unknown }>;
+        details?: Array<{ reason?: unknown }>;
+      };
+    };
+    providerStatus =
+      typeof body.error?.status === "string" ? body.error.status : undefined;
+    providerReasons = [
+      ...(Array.isArray(body.error?.errors)
+        ? body.error.errors.map((error) => error.reason)
+        : []),
+      ...(Array.isArray(body.error?.details)
+        ? body.error.details.map((detail) => detail.reason)
+        : []),
+    ].filter((reason): reason is string => typeof reason === "string");
+  } catch {
+    // Provider response bodies are intentionally not retained or logged.
+  }
+
+  if (
+    providerReasons.includes("accessNotConfigured") ||
+    providerStatus === "SERVICE_DISABLED"
+  ) {
+    return "gmail_api_disabled";
+  }
+  if (providerReasons.includes("domainPolicy")) {
+    return "gmail_policy_blocked";
+  }
+  if (providerReasons.includes("insufficientPermissions")) {
+    return "gmail_scope_missing";
+  }
+  return "gmail_profile_unavailable";
+}
+
+function failureForOAuthTestStage(
+  stage: GoogleOAuthTestStage,
+): GoogleOAuthTestFailure {
+  switch (stage) {
+    case "token_exchange":
+      return "oauth_exchange_failed";
+    case "google_identity":
+      return "google_identity_unverified";
+    case "gmail_profile":
+      return "gmail_profile_unavailable";
+    case "mailbox_identity":
+      return "mailbox_identity_mismatch";
+    case "grant_cleanup":
+      return "grant_cleanup_failed";
+    case "save_verification":
+      return "unknown";
+  }
+}
+
 function redirectToGoogleOAuthAdmin(
   req: Request,
   res: ExpressResponse,
   result: "verified" | "failed",
   callbackUri?: string | null,
+  failure?: GoogleOAuthTestFailure,
 ) {
   let callback: URL | null = null;
   try {
@@ -220,6 +365,7 @@ function redirectToGoogleOAuthAdmin(
     callback?.origin ?? `${req.protocol}://${req.get("host")}`,
   );
   target.searchParams.set("googleOauthTest", result);
+  if (failure) target.searchParams.set("googleOauthReason", failure);
   res.redirect(303, target.toString());
 }
 
@@ -354,19 +500,27 @@ export function createGmailMailboxRouter(): IRouter {
       path: OAUTH_COOKIE_PATH,
     });
     const isAdminTest = params?.purpose === "google_oauth_test";
-    const redirectFailure = () => {
+    const redirectFailure = (
+      failure: GoogleOAuthTestFailure = "unknown",
+    ) => {
       if (isAdminTest) {
-        redirectToGoogleOAuthAdmin(req, res, "failed", config?.redirectUri);
+        redirectToGoogleOAuthAdmin(
+          req,
+          res,
+          "failed",
+          config?.redirectUri,
+          failure,
+        );
       } else {
         redirectToSettings(req, res, "failed", config?.redirectUri);
       }
     };
     if (!config || !params || params.userId !== req.authUser!.id) {
-      redirectFailure();
+      redirectFailure("session_invalid");
       return;
     }
     if (!(await consumeOAuthNonce(params.nonce))) {
-      redirectFailure();
+      redirectFailure("session_invalid");
       return;
     }
 
@@ -376,19 +530,28 @@ export function createGmailMailboxRouter(): IRouter {
           !req.authUser!.mustChangeCredentials
         : req.authUser!.role === "USER" &&
           !req.authUser!.mustChangeCredentials;
-    if (
-      !correctRole ||
-      typeof req.query.code !== "string" ||
-      req.query.error ||
-      (params.configFingerprint &&
-        params.configFingerprint !==
-          googleOAuthConfigurationFingerprint(config))
-    ) {
-      redirectFailure();
+    if (!correctRole) {
+      redirectFailure("session_invalid");
+      return;
+    }
+    if (params.configFingerprint &&
+      params.configFingerprint !== googleOAuthConfigurationFingerprint(config)) {
+      redirectFailure("settings_changed");
+      return;
+    }
+    if (req.query.error) {
+      redirectFailure(
+        failureFromGoogleOAuthErrorCode(req.query.error) ?? "google_rejected",
+      );
+      return;
+    }
+    if (typeof req.query.code !== "string") {
+      redirectFailure("unknown");
       return;
     }
 
     if (isAdminTest) {
+      let stage: GoogleOAuthTestStage = "token_exchange";
       try {
         const tokenResponse = await postOAuthForm({
           code: req.query.code,
@@ -402,9 +565,10 @@ export function createGmailMailboxRouter(): IRouter {
             ? tokenResponse.access_token
             : null;
         if (!accessToken) {
-          throw new Error("OAuth response omitted its access token.");
+          throw new GoogleOAuthTestFailureError("oauth_exchange_failed");
         }
 
+        stage = "google_identity";
         const userInfoResponse = await fetch(
           "https://openidconnect.googleapis.com/v1/userinfo",
           {
@@ -413,16 +577,17 @@ export function createGmailMailboxRouter(): IRouter {
           },
         );
         if (!userInfoResponse.ok) {
-          throw new Error("Could not verify the Google account.");
+          throw new GoogleOAuthTestFailureError("google_identity_unverified");
         }
         const userInfo = (await userInfoResponse.json()) as {
           email?: string;
           email_verified?: boolean;
         };
         if (!userInfo.email || userInfo.email_verified !== true) {
-          throw new Error("Google did not verify the account email address.");
+          throw new GoogleOAuthTestFailureError("google_identity_unverified");
         }
 
+        stage = "gmail_profile";
         const profileResponse = await fetch(
           "https://gmail.googleapis.com/gmail/v1/users/me/profile",
           {
@@ -431,21 +596,26 @@ export function createGmailMailboxRouter(): IRouter {
           },
         );
         if (!profileResponse.ok) {
-          throw new Error("Could not read Gmail mailbox metadata.");
+          throw new GoogleOAuthTestFailureError(
+            await failureFromGmailProfileResponse(profileResponse),
+            profileResponse.status,
+          );
         }
         const profile = (await profileResponse.json()) as {
           emailAddress?: string;
           historyId?: string;
         };
+        stage = "mailbox_identity";
         if (
           !profile.emailAddress ||
           profile.emailAddress.trim().toLowerCase() !==
             userInfo.email.trim().toLowerCase() ||
           !profile.historyId
         ) {
-          throw new Error("Google account and Gmail mailbox identity did not match.");
+          throw new GoogleOAuthTestFailureError("mailbox_identity_mismatch");
         }
 
+        stage = "grant_cleanup";
         const refreshToken =
           typeof tokenResponse.refresh_token === "string"
             ? tokenResponse.refresh_token
@@ -462,28 +632,53 @@ export function createGmailMailboxRouter(): IRouter {
             )
             .limit(1);
           if (existingGrant || !(await revokeGoogleToken(refreshToken))) {
-            throw new Error(
-              "Google returned a persistent token that could not be safely cleaned up.",
-            );
+            throw new GoogleOAuthTestFailureError("grant_cleanup_failed");
           }
         }
 
+        stage = "save_verification";
         const verified = await markGoogleOAuthConfigurationVerified(
           params.configFingerprint ?? "",
         );
         if (!verified) {
-          throw new Error("Google OAuth settings changed during verification.");
+          throw new GoogleOAuthTestFailureError("settings_changed");
         }
         redirectToGoogleOAuthAdmin(req, res, "verified", config.redirectUri);
       } catch (error) {
+        const failure =
+          error instanceof GoogleOAuthTestFailureError
+            ? error.reason
+            : stage === "token_exchange"
+              ? failureFromTokenExchangeError(error)
+              : failureForOAuthTestStage(stage);
+        const providerCode =
+          error instanceof GmailApiError
+            ? safeGoogleOAuthErrorCode(error.providerCode)
+            : undefined;
         logger.warn(
           {
             userId: params.userId,
             errorName: error instanceof Error ? error.name : "UnknownError",
+            stage,
+            failure,
+            ...(error instanceof GmailApiError
+              ? { providerStatusCode: error.status }
+              : {}),
+            ...(error instanceof GoogleOAuthTestFailureError &&
+            error.providerStatusCode !== undefined
+              ? { providerStatusCode: error.providerStatusCode }
+              : {}),
+            ...(providerCode ? { providerCode } : {}),
           },
           "Google OAuth configuration verification failed",
         );
-        redirectToGoogleOAuthAdmin(req, res, "failed", config.redirectUri);
+        redirectToGoogleOAuthAdmin(
+          req,
+          res,
+          "failed",
+          config.redirectUri,
+          failure,
+        );
       }
       return;
     }

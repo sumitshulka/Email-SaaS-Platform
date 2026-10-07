@@ -5268,6 +5268,7 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
 
     const accessToken = "google-oauth-setup-test-access-token";
     const requests = [];
+    let gmailApiEnabled = true;
     await withGoogleFetch(async (url, init) => {
       requests.push({ url, init });
       if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
@@ -5299,6 +5300,17 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
           new Headers(init?.headers).get("authorization"),
           `Bearer ${accessToken}`,
         );
+        if (!gmailApiEnabled) {
+          return googleJson(
+            {
+              error: {
+                status: "SERVICE_DISABLED",
+                errors: [{ reason: "accessNotConfigured" }],
+              },
+            },
+            403,
+          );
+        }
         return googleJson({
           emailAddress: admin.user.email,
           historyId: "google-oauth-setup-history",
@@ -5346,19 +5358,35 @@ describe("superadmin Google OAuth setup", { concurrency: false }, () => {
         assert.equal(callback.response.status, 303);
         const returnUrl = new URL(callback.response.headers.get("location"));
         assert.ok(returnUrl.pathname.endsWith("/admin/google-oauth"));
-        return returnUrl.searchParams.get("googleOauthTest");
+        return {
+          result: returnUrl.searchParams.get("googleOauthTest"),
+          reason: returnUrl.searchParams.get("googleOauthReason"),
+        };
       };
 
       assert.equal(
-        await completeConsent("google-oauth-invalid-code"),
-        "failed",
+        JSON.stringify(await completeConsent("google-oauth-invalid-code")),
+        JSON.stringify({
+          result: "failed",
+          reason: "oauth_client_invalid",
+        }),
         "Google rejecting the client credentials must not verify setup",
       );
       const stillUnverified = await api(settingsPath, { cookie: admin.cookie });
       assert.equal(stillUnverified.body.verified, false);
+      gmailApiEnabled = false;
       assert.equal(
-        await completeConsent("google-oauth-setup-code"),
-        "verified",
+        JSON.stringify(await completeConsent("google-oauth-setup-code")),
+        JSON.stringify({
+          result: "failed",
+          reason: "gmail_api_disabled",
+        }),
+        "a disabled Gmail API should return a specific, safe diagnostic",
+      );
+      gmailApiEnabled = true;
+      assert.equal(
+        JSON.stringify(await completeConsent("google-oauth-setup-code")),
+        JSON.stringify({ result: "verified", reason: null }),
       );
     });
 

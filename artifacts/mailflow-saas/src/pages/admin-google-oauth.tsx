@@ -13,6 +13,25 @@ type Notice = { kind: 'success' | 'error'; text: string };
 
 const callbackPath = '/api/sending/gmail/oauth/callback';
 
+const googleOAuthFailureMessages: Record<string, string> = {
+  consent_denied: 'Google consent was canceled or denied. Retry the test and approve the requested access.',
+  google_rejected: 'Google did not complete the consent request. Start a new test and try again.',
+  oauth_client_invalid: 'Google rejected the OAuth client. Confirm the client ID and secret are from the same Web application client, then save and test again.',
+  authorization_code_rejected: 'Google rejected the one-time authorization code. Start a fresh test and complete it in the same browser session.',
+  callback_uri_mismatch: 'The callback URL used for the test does not match this OAuth client. Make the saved callback and Google’s authorized redirect URI identical.',
+  oauth_exchange_failed: 'Mailflow could not exchange Google’s authorization code. Check the saved client credentials and callback URL.',
+  google_identity_unverified: 'Google did not return a verified account identity. Retry with an account listed under OAuth test users.',
+  gmail_api_disabled: 'The Gmail API is disabled for the Google Cloud project. Enable it for the project that owns this OAuth client, then retry.',
+  gmail_policy_blocked: 'A Google Workspace policy blocked Gmail access for this OAuth app. Ask the Workspace administrator to allow the app and requested scope.',
+  gmail_scope_missing: 'The consent grant does not include Gmail read-only access. Add the Gmail read-only scope and grant consent again.',
+  gmail_profile_unavailable: 'Google sign-in worked, but Mailflow could not read Gmail mailbox metadata. Confirm the selected account has Gmail enabled and the Gmail API is active.',
+  mailbox_identity_mismatch: 'The Google sign-in identity did not match the Gmail mailbox returned by Google. Retry with the mailbox’s primary account, not an alias.',
+  grant_cleanup_failed: 'Mailflow could not safely clean up a temporary Google grant. Retry with a test mailbox that is not already connected to Mailflow.',
+  settings_changed: 'The saved OAuth settings changed during the test. Save the current settings and start a new test.',
+  session_invalid: 'The OAuth return did not match this test session. Start a new test from this page and complete it in the same browser.',
+  unknown: 'Google returned to Mailflow, but the verification did not complete. Start a new test; if it fails again, share the diagnostic message without sharing credentials.',
+};
+
 function errorMessage(
   error: unknown,
   fallback = 'Could not save the Google OAuth configuration. Please try again.',
@@ -44,6 +63,7 @@ export default function AdminGoogleOAuthPage() {
     const url = new URL(window.location.href);
     const result = url.searchParams.get('googleOauthTest');
     if (!result) return;
+    const failureReason = url.searchParams.get('googleOauthReason');
     if (result === 'verified') {
       setNotice({
         kind: 'success',
@@ -52,11 +72,14 @@ export default function AdminGoogleOAuthPage() {
     } else {
       setNotice({
         kind: 'error',
-        text: 'Google could not verify these credentials. Check the client ID, secret, callback URL, consent-screen access, and Gmail API setup.',
+        text:
+          googleOAuthFailureMessages[failureReason ?? ''] ??
+          googleOAuthFailureMessages.unknown,
       });
     }
     void settings.refetch();
     url.searchParams.delete('googleOauthTest');
+    url.searchParams.delete('googleOauthReason');
     window.history.replaceState(
       {},
       '',
