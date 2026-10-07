@@ -2974,6 +2974,8 @@ export interface SubscriptionPackage {
   contactLimit: number;
   /** @minimum 0 */
   emailAccountLimit: number;
+  /** Highlights this package in package selection screens. */
+  preferred: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -3025,6 +3027,7 @@ export interface SubscriptionPackageInput {
      * @maximum 100
      */
   emailAccountLimit?: number;
+  preferred?: boolean;
   active: boolean;
 }
 
@@ -3064,6 +3067,7 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 100
      */
   emailAccountLimit?: number;
+  preferred?: boolean;
   active?: boolean;
 }
 

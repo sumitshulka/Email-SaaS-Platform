@@ -43,6 +43,7 @@ export const subscriptionPackagesTable = pgTable(
     periodDays: integer("period_days").notNull(),
     contactLimit: integer("contact_limit").notNull().default(5000),
     emailAccountLimit: integer("email_account_limit").notNull().default(1),
+    preferred: boolean("preferred").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdBy: uuid("created_by").references(() => usersTable.id, {
       onDelete: "set null",
@@ -64,6 +65,9 @@ export const subscriptionPackagesTable = pgTable(
     uniqueIndex("subscription_packages_single_free_unique")
       .on(table.amountMinor)
       .where(sql`${table.amountMinor} = 0`),
+    uniqueIndex("subscription_packages_single_preferred_unique")
+      .on(table.preferred)
+      .where(sql`${table.preferred} = true`),
   ],
 );
 

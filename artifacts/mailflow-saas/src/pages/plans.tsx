@@ -94,6 +94,7 @@ function PackageCard({ item, featured, pending, disabled, onPurchase, sendingLim
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="mono text-[9px] uppercase tracking-[.17em] text-[#7e8c9a]">MAILFLOW ACCESS</span>
           {featured && <span data-testid={`badge-current-package-${item.id}`} className="mono inline-flex shrink-0 items-center rounded-full border border-[#c8d8e5] bg-white/90 px-2 py-1 text-[8px] font-semibold uppercase leading-none tracking-[.08em] text-[#365b7b]">Current package</span>}
+          {item.preferred && <span data-testid={`badge-preferred-plan-${item.id}`} className="mono inline-flex shrink-0 items-center rounded-full border border-[#d4e2ef] bg-[#eff5fa] px-2 py-1 text-[8px] font-semibold uppercase leading-none tracking-[.08em] text-[#315c82]">Preferred</span>}
         </div>
         <h2 className="display mt-2 break-words text-[22px] font-bold leading-tight text-[#1d2d40]">{item.name}</h2>
       </div>

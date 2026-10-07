@@ -30,11 +30,12 @@ type PackageDraft = {
   periodDays: string;
   contactLimit: string;
   emailAccountLimit: string;
+  preferred: boolean;
   active: boolean;
 };
 
 const blankDraft: PackageDraft = {
-  name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', active: true,
+  name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', preferred: false, active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -128,7 +129,7 @@ export default function AdminBillingPage() {
       amount: pkg.amountMinor === 0 ? '0' : (pkg.amountMinor / (10 ** (new Intl.NumberFormat(undefined, { style: 'currency', currency: pkg.currency }).resolvedOptions().maximumFractionDigits ?? 2))).toString(),
       free: pkg.amountMinor === 0,
       currency: pkg.currency, periodDays: String(pkg.periodDays),
-      contactLimit: String(pkg.contactLimit), emailAccountLimit: String(pkg.emailAccountLimit), active: pkg.active,
+      contactLimit: String(pkg.contactLimit), emailAccountLimit: String(pkg.emailAccountLimit), preferred: pkg.preferred, active: pkg.active,
     });
     setNotice(null);
   };
@@ -140,7 +141,7 @@ export default function AdminBillingPage() {
       name: draft.name.trim(), description: draft.description.trim(),
       amountMinor: draft.free ? 0 : inputMinor(draft.amount, currency), currency,
       periodDays: Number(draft.periodDays), contactLimit: Number(draft.contactLimit), emailAccountLimit: Number(draft.emailAccountLimit),
-      active: draft.active,
+      preferred: draft.preferred, active: draft.active,
     };
     const isFree = draft.free;
     if (editing) {
@@ -381,6 +382,13 @@ export default function AdminBillingPage() {
           </div>
           <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>Free package · 0 price, no Razorpay order</label>
           {hasOtherFreePackage && <p className="-mt-2 text-[11px] text-[#7b8793]">A free package already exists. Edit it or change its price before creating another.</p>}
+          <div className="space-y-1">
+            <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]">
+              <input data-testid="input-package-preferred" type="checkbox" checked={draft.preferred} onChange={event => setDraft(d => ({ ...d, preferred: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>
+              Preferred package
+            </label>
+            <p className="text-[11px] text-[#718192]">Only one package can be preferred. Selecting this automatically moves the badge from the current package.</p>
+          </div>
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Description</span><textarea data-testid="input-package-description" value={draft.description} onChange={event => setDraft(d => ({ ...d, description: event.target.value }))} rows={3} maxLength={2000} placeholder="What this package includes" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]"><input data-testid="input-package-active" type="checkbox" checked={draft.active} onChange={event => setDraft(d => ({ ...d, active: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>Available to customers</label>
           {(createPackage.isError || updatePackage.isError) && <p role="alert" data-testid="status-package-form-error" className="text-[12px] text-[#a84926]">{errorText(createPackage.error || updatePackage.error)}</p>}
@@ -396,7 +404,7 @@ export default function AdminBillingPage() {
           <div className="divide-y divide-[#edf0f2]">{packages.map(pkg => <article key={pkg.id} data-testid={`row-subscription-package-${pkg.id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] md:items-center md:gap-4">
             <div><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
              <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div>{sendingLimits && <div data-testid={`text-admin-package-send-limits-${pkg.id}`} className="mt-1 text-[10px] leading-4 text-[#597086]">{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}/hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()}/24h per SMTP mailbox</div>}</div>
-            <div><span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
+            <div className="flex flex-wrap items-center gap-1.5">{pkg.preferred && <span data-testid={`badge-preferred-admin-${pkg.id}`} className="inline-flex rounded-full border border-[#d4e2ef] bg-[#eff5fa] px-2.5 py-1 text-[10px] font-semibold text-[#315c82]">Preferred</span>}<span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
             <div className="text-[11px] text-[#788695] md:text-[10px]">{new Date(pkg.updatedAt).toLocaleDateString()}</div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
               <button data-testid={`button-edit-package-${pkg.id}`} onClick={() => openEdit(pkg)} className="inline-flex h-8 items-center gap-1.5 rounded border border-[#dce3e8] px-2.5 text-[10px] font-semibold text-[#415970] hover:bg-[#f7f9fa]"><PencilLine className="h-3.5 w-3.5"/>Edit</button>

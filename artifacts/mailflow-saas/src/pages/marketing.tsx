@@ -339,8 +339,8 @@ function PackageCard({ pkg, index, sendingLimits }: {
   const combinedHourly = sendingLimits.emailsPerHourPerSmtp * pkg.emailAccountLimit;
   const combinedDaily = sendingLimits.emailsPerDayPerSmtp * pkg.emailAccountLimit;
   return (
-    <article className={`mf-plan-card ${index === 1 ? 'plan-featured' : ''}`} data-testid={`card-package-${pkg.id}`}>
-      <div className="plan-card-top"><span className="plan-overline">{String(index + 1).padStart(2, '0')} / MAILFLOW PLAN</span>{index === 1 && <span className="plan-featured-tag">A LITTLE MORE ROOM</span>}</div>
+    <article className={`mf-plan-card ${pkg.preferred ? 'plan-featured' : ''}`} data-testid={`card-package-${pkg.id}`}>
+      <div className="plan-card-top"><span className="plan-overline">{String(index + 1).padStart(2, '0')} / MAILFLOW PLAN</span>{pkg.preferred && <span data-testid={`badge-preferred-public-${pkg.id}`} className="plan-featured-tag">PREFERRED</span>}</div>
       <h2>{pkg.name}</h2>
       <p className="plan-description">{pkg.description || 'A considered plan for your contacts and campaigns.'}</p>
       <div className="plan-price"><strong>{formatMoney(pkg)}</strong><span>{cadence}</span></div>
@@ -353,7 +353,7 @@ function PackageCard({ pkg, index, sendingLimits }: {
         <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
-      <Link href="/register" className={`mf-button plan-button ${index === 1 ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
+      <Link href="/register" className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
       <p
         className="plan-footnote"
         data-testid={`text-package-total-send-capacity-${pkg.id}`}

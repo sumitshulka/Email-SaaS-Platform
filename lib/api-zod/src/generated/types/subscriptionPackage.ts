@@ -21,6 +21,8 @@ export interface SubscriptionPackage {
   contactLimit: number;
   /** @minimum 0 */
   emailAccountLimit: number;
+  /** Highlights this package in package selection screens. */
+  preferred: boolean;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

@@ -447,6 +447,8 @@ type SubscriptionPackageRow = typeof subscriptionPackagesTable.$inferSelect;
 
 const SINGLE_FREE_PACKAGE_CONSTRAINT =
   "subscription_packages_single_free_unique";
+const SINGLE_PREFERRED_PACKAGE_CONSTRAINT =
+  "subscription_packages_single_preferred_unique";
 
 function isSingleFreePackageUniqueViolation(error: unknown): boolean {
   let candidate: unknown = error;
@@ -468,6 +470,26 @@ function isSingleFreePackageUniqueViolation(error: unknown): boolean {
   return false;
 }
 
+function isSinglePreferredPackageUniqueViolation(error: unknown): boolean {
+  let candidate: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== "object") return false;
+    const details = candidate as {
+      code?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+    if (
+      details.code === "23505" &&
+      details.constraint === SINGLE_PREFERRED_PACKAGE_CONSTRAINT
+    ) {
+      return true;
+    }
+    candidate = details.cause;
+  }
+  return false;
+}
+
 async function hasOtherFreePackage(exceptPackageId?: string): Promise<boolean> {
   const freePackages = await db
     .select({ id: subscriptionPackagesTable.id })
@@ -480,6 +502,14 @@ function respondFreePackageConflict(res: Response): void {
   res.status(409).json({
     error: "Only one zero-price package can exist. Edit the existing free package or change its price.",
     code: "FREE_PACKAGE_ALREADY_EXISTS",
+  });
+}
+
+function respondPreferredPackageConflict(res: Response): void {
+  res.status(409).json({
+    error:
+      "Only one package can be preferred at a time. Refresh the package list and try again.",
+    code: "PREFERRED_PACKAGE_ALREADY_EXISTS",
   });
 }
 
@@ -931,17 +961,34 @@ router.post(
     }
     let created: SubscriptionPackageRow | undefined;
     try {
-      [created] = await db
-        .insert(subscriptionPackagesTable)
-        .values({
-          ...parsed.data,
-          createdBy: req.authUser!.id,
-          updatedBy: req.authUser!.id,
-        })
-        .returning();
+      created = await db.transaction(async (tx) => {
+        if (parsed.data.preferred) {
+          await tx
+            .update(subscriptionPackagesTable)
+            .set({
+              preferred: false,
+              updatedBy: req.authUser!.id,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptionPackagesTable.preferred, true));
+        }
+        const [inserted] = await tx
+          .insert(subscriptionPackagesTable)
+          .values({
+            ...parsed.data,
+            createdBy: req.authUser!.id,
+            updatedBy: req.authUser!.id,
+          })
+          .returning();
+        return inserted;
+      });
     } catch (error) {
       if (isSingleFreePackageUniqueViolation(error)) {
         respondFreePackageConflict(res);
+        return;
+      }
+      if (isSinglePreferredPackageUniqueViolation(error)) {
+        respondPreferredPackageConflict(res);
         return;
       }
       throw error;
@@ -992,18 +1039,43 @@ router.patch(
     }
     let updated: SubscriptionPackageRow | undefined;
     try {
-      [updated] = await db
-        .update(subscriptionPackagesTable)
-        .set({
-          ...parsed.data,
-          updatedBy: req.authUser!.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(subscriptionPackagesTable.id, params.data.packageId))
-        .returning();
+      updated = await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({ id: subscriptionPackagesTable.id })
+          .from(subscriptionPackagesTable)
+          .where(eq(subscriptionPackagesTable.id, params.data.packageId))
+          .limit(1);
+        if (!existing) return undefined;
+
+        const now = new Date();
+        if (parsed.data.preferred) {
+          await tx
+            .update(subscriptionPackagesTable)
+            .set({
+              preferred: false,
+              updatedBy: req.authUser!.id,
+              updatedAt: now,
+            })
+            .where(eq(subscriptionPackagesTable.preferred, true));
+        }
+        const [saved] = await tx
+          .update(subscriptionPackagesTable)
+          .set({
+            ...parsed.data,
+            updatedBy: req.authUser!.id,
+            updatedAt: now,
+          })
+          .where(eq(subscriptionPackagesTable.id, params.data.packageId))
+          .returning();
+        return saved;
+      });
     } catch (error) {
       if (isSingleFreePackageUniqueViolation(error)) {
         respondFreePackageConflict(res);
+        return;
+      }
+      if (isSinglePreferredPackageUniqueViolation(error)) {
+        respondPreferredPackageConflict(res);
         return;
       }
       throw error;

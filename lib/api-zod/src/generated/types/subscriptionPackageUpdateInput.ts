@@ -37,5 +37,6 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 100
      */
   emailAccountLimit?: number;
+  preferred?: boolean;
   active?: boolean;
 }

@@ -22,6 +22,7 @@ export function serializePackage(pkg: PackageRow) {
     periodDays: pkg.periodDays,
     contactLimit: pkg.contactLimit,
     emailAccountLimit: pkg.emailAccountLimit,
+    preferred: pkg.preferred,
     active: pkg.active,
     createdAt: pkg.createdAt.toISOString(),
     updatedAt: pkg.updatedAt.toISOString(),

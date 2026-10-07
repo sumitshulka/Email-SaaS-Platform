@@ -4340,10 +4340,11 @@ components:
         periodDays: { type: integer }
         contactLimit: { type: integer, minimum: 0 }
         emailAccountLimit: { type: integer, minimum: 0 }
+        preferred: { type: boolean, description: Highlights this package in package selection screens. }
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, active, createdAt, updatedAt]
+      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, preferred, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -4374,6 +4375,7 @@ components:
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
+        preferred: { type: boolean }
         active: { type: boolean }
       required: [name, description, amountMinor, currency, periodDays, contactLimit, active]
     SubscriptionGiftInput:
@@ -4396,6 +4398,7 @@ components:
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
+        preferred: { type: boolean }
         active: { type: boolean }
     ContactQuota:
       type: object

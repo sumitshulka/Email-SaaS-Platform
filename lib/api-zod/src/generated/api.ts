@@ -4555,6 +4555,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4596,6 +4597,7 @@ export const CreateSubscriptionPackageBody = zod.object({
   "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
   "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
+  "preferred": zod.boolean().optional(),
   "active": zod.boolean()
 })
 
@@ -4617,6 +4619,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4657,6 +4660,7 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
+  "preferred": zod.boolean().optional(),
   "active": zod.boolean().optional()
 })
 
@@ -4678,6 +4682,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4715,6 +4720,7 @@ export const GiftAdminSubscriptionResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4747,6 +4753,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4785,6 +4792,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4825,6 +4833,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4898,6 +4907,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
