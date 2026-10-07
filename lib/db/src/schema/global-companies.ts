@@ -10,20 +10,11 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
-import { usersTable } from "./users";
-import { globalCompaniesTable } from "./global-companies";
 
-export const companiesTable = pgTable(
-  "companies",
+export const globalCompaniesTable = pgTable(
+  "global_companies",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => usersTable.id, { onDelete: "cascade" }),
-    globalCompanyId: uuid("global_company_id").references(
-      () => globalCompaniesTable.id,
-      { onDelete: "set null" },
-    ),
     companyName: varchar("company_name", { length: 200 }).notNull(),
     companyWebsiteUrl: varchar("company_website_url", { length: 2048 }),
     companyDomain: varchar("company_domain", { length: 255 }),
@@ -44,16 +35,10 @@ export const companiesTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex("companies_id_user_unique").on(table.id, table.userId),
-    uniqueIndex("companies_user_domain_unique")
-      .on(table.userId, table.companyDomainKey)
+    uniqueIndex("global_companies_domain_unique")
+      .on(table.companyDomainKey)
       .where(sql`${table.companyDomainKey} IS NOT NULL`),
-    uniqueIndex("companies_user_global_company_unique")
-      .on(table.userId, table.globalCompanyId)
-      .where(sql`${table.globalCompanyId} IS NOT NULL`),
-    index("companies_global_company_idx").on(table.globalCompanyId),
-    index("companies_user_created_idx").on(table.userId, table.createdAt),
-    index("companies_name_domain_trgm_idx").using(
+    index("global_companies_name_domain_trgm_idx").using(
       "gin",
       table.companyName.op("gin_trgm_ops"),
       table.companyDomain.op("gin_trgm_ops"),
@@ -61,13 +46,14 @@ export const companiesTable = pgTable(
   ],
 );
 
-export const insertCompanySchema = createInsertSchema(companiesTable).omit({
+export const insertGlobalCompanySchema = createInsertSchema(
+  globalCompaniesTable,
+).omit({
   id: true,
-  userId: true,
   companyDomainKey: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type InsertCompany = z.infer<typeof insertCompanySchema>;
-export type Company = typeof companiesTable.$inferSelect;
+export type InsertGlobalCompany = z.infer<typeof insertGlobalCompanySchema>;
+export type GlobalCompany = typeof globalCompaniesTable.$inferSelect;
