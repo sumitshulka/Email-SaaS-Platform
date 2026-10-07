@@ -599,7 +599,18 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.equal(await linkedinAction.getAttribute('href'), 'https://www.linkedin.com/in/casey-rivera');
       assert.equal(await linkedinAction.getAttribute('target'), '_blank');
       assert.ok((await linkedinAction.getAttribute('rel')).includes('noopener'));
-      assert.equal(await page.getByTestId('row-contact-browser-filter-customer-id').getByTestId('link-contact-linkedin-browser-filter-customer-id').count(), 0, 'contacts without a LinkedIn URL should not show the LinkedIn action');
+      const contactWithoutLinkedin = page.getByTestId('row-contact-browser-filter-customer-id');
+      assert.equal(await contactWithoutLinkedin.getByTestId('link-contact-linkedin-browser-filter-customer-id').count(), 0, 'contacts without a LinkedIn URL should not show the LinkedIn action');
+      for (const [action, testIdPrefix] of [
+        ['history', 'button-contact-history'],
+        ['edit', 'button-edit-contact'],
+        ['delete', 'button-delete-contact'],
+      ]) {
+        const linkedInContactAction = await nameRow.getByTestId(`${testIdPrefix}-${contactId}`).boundingBox();
+        const noLinkedinContactAction = await contactWithoutLinkedin.getByTestId(`${testIdPrefix}-browser-filter-customer-id`).boundingBox();
+        assert.ok(linkedInContactAction && noLinkedinContactAction, `${action} action should be visible in both rows`);
+        assert.equal(linkedInContactAction.x, noLinkedinContactAction.x, `${action} action should stay in a fixed position when the LinkedIn slot is empty`);
+      }
       const lastEmailCell = page.getByTestId(`cell-contact-last-email-${contactId}`);
       assert.equal(await page.getByTestId(`contact-last-email-campaign-${contactId}`).innerText(), 'October product update');
       assert.ok(await page.getByTestId(`contact-last-email-date-${contactId}`).innerText());

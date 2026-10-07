@@ -876,9 +876,11 @@ export function ContactsPage() {
               const linkedinHref = getLinkedInProfileHref(contact.linkedinUrl);
               const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email;
               return <>
+                <span className="inline-flex h-9 w-10 shrink-0 items-center justify-center">
+                  {linkedinHref && <a data-testid={`link-contact-linkedin-${contact.id}`} href={linkedinHref} target="_blank" rel="noopener noreferrer" aria-label={`Open LinkedIn profile for ${contactName}`} title="Open LinkedIn profile" className="inline-flex h-9 w-10 shrink-0 items-center justify-center rounded-md text-[#245b9b] transition hover:bg-[#edf4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe8f7]"><Linkedin aria-hidden="true" className="h-4 w-4"/></a>}
+                </span>
                 <Button variant="quiet" testId={`button-contact-history-${contact.id}`} ariaLabel={`Email history for ${contactName}`} title="Email history" onClick={() => setHistoryContact(contact)}><Clock3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-edit-contact-${contact.id}`} ariaLabel={`Edit ${contactName}`} title="Edit contact" onClick={() => openEdit(contact)}><Edit3 aria-hidden="true" className="h-4 w-4"/></Button>
-                {linkedinHref && <a data-testid={`link-contact-linkedin-${contact.id}`} href={linkedinHref} target="_blank" rel="noopener noreferrer" aria-label={`Open LinkedIn profile for ${contactName}`} title="Open LinkedIn profile" className="inline-flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded-md px-3 text-[#245b9b] transition hover:bg-[#edf4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe8f7]"><Linkedin aria-hidden="true" className="h-4 w-4"/></a>}
                 <Button variant="quiet" testId={`button-delete-contact-${contact.id}`} ariaLabel={`Delete ${contactName}`} title="Delete contact" disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 aria-hidden="true" className="h-4 w-4 text-[#b85b20]"/></Button>
               </>;
             })()}
