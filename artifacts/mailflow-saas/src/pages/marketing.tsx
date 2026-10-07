@@ -346,7 +346,7 @@ function PackageCard({ pkg, index, sendingLimits }: {
       <div className="plan-price"><strong>{formatMoney(pkg)}</strong><span>{cadence}</span></div>
       <div className="plan-rule"/>
       <div className="plan-includes">IN THIS PLAN</div>
-      <ul className="plan-limits">
+      <ul className="plan-limits" style={{ marginBottom: 12 }}>
         <li><span className="limit-icon"><ContactRound size={15}/></span><span>Up to <b>{pkg.contactLimit.toLocaleString()}</b> contacts</span></li>
         <li><span className="limit-icon"><Mail size={15}/></span><span><b>{pkg.emailAccountLimit.toLocaleString()}</b> SMTP sender {pkg.emailAccountLimit === 1 ? 'account' : 'accounts'}</span></li>
         <li data-testid={`text-package-hourly-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}</b> campaign attempts per rolling hour, per SMTP mailbox</span></li>
@@ -354,7 +354,11 @@ function PackageCard({ pkg, index, sendingLimits }: {
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
       <Link href="/register" className={`mf-button plan-button ${index === 1 ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
-      <p className="plan-footnote" data-testid={`text-package-total-send-capacity-${pkg.id}`}>
+      <p
+        className="plan-footnote"
+        data-testid={`text-package-total-send-capacity-${pkg.id}`}
+        style={{ color: '#52636d', fontSize: 10, lineHeight: 1.5 }}
+      >
         With all {pkg.emailAccountLimit} SMTP {pkg.emailAccountLimit === 1 ? 'mailbox' : 'mailboxes'} configured: up to {combinedHourly.toLocaleString()} campaign attempts per rolling hour and {combinedDaily.toLocaleString()} per rolling 24 hours. Retries count; your SMTP provider may impose lower limits.
       </p>
     </article>
