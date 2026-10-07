@@ -6411,6 +6411,208 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     }
   });
 
+  it("keeps each recipient's transient retry allowance independent within a campaign", async () => {
+    const owner = await loggedInUser({
+      username: "campaign-recipient-retry-owner",
+    });
+    const contacts = await db
+      .insert(dbModule.contactsTable)
+      .values([
+        {
+          userId: owner.user.id,
+          email: "first@recipient-retry.test",
+          firstName: "First",
+          subscribed: true,
+        },
+        {
+          userId: owner.user.id,
+          email: "second@recipient-retry.test",
+          firstName: "Second",
+          subscribed: true,
+        },
+      ])
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.recipient-retry.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("recipient-retry-user"),
+        passwordEncrypted: securityModule.encryptSecret("recipient-retry-password"),
+        fromName: "Recipient Retry Test",
+        fromEmail: "sender@recipient-retry.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Independent recipient retries",
+        subject: "Retry allowance test",
+        textBody: "Each recipient gets an independent retry allowance.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const [firstRecipient, secondRecipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values([
+        {
+          campaignId: campaign.id,
+          userId: owner.user.id,
+          contactId: contacts[0].id,
+          email: contacts[0].email,
+          firstName: contacts[0].firstName,
+          status: "queued",
+          attempts: 0,
+          nextAttemptAt: new Date(Date.now() - 1000),
+        },
+        {
+          campaignId: campaign.id,
+          userId: owner.user.id,
+          contactId: contacts[1].id,
+          email: contacts[1].email,
+          firstName: contacts[1].firstName,
+          status: "queued",
+          attempts: 0,
+          nextAttemptAt: new Date(Date.now() + 60_000),
+        },
+      ])
+      .returning();
+    const retryLimit = 1;
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        retryAttempts: retryLimit,
+        retryDelaySeconds: 60,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    const sendsByEmail = new Map();
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      const sendNumber = (sendsByEmail.get(message.to) ?? 0) + 1;
+      sendsByEmail.set(message.to, sendNumber);
+      if (message.to === firstRecipient.email || sendNumber === 1) {
+        throw Object.assign(new Error("temporary connection failure"), {
+          code: "ECONNECTION",
+          command: "CONN",
+        });
+      }
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+
+    const makeEligible = async (recipientId) => {
+      await db
+        .update(dbModule.emailCampaignRecipientsTable)
+        .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipientId));
+      await db
+        .update(dbModule.emailSendAttemptsTable)
+        .set({ attemptedAt: new Date(Date.now() - 60_000) });
+    };
+
+    try {
+      // Exhaust the first recipient's one retry before the second one is due.
+      for (let attemptNumber = 1; attemptNumber <= retryLimit + 1; attemptNumber += 1) {
+        assert.equal(
+          await campaignWorkerModule.processPendingCampaignDeliveries(1),
+          1,
+        );
+        const [savedRecipient] = await db
+          .select()
+          .from(dbModule.emailCampaignRecipientsTable)
+          .where(eq(dbModule.emailCampaignRecipientsTable.id, firstRecipient.id));
+        assert.equal(savedRecipient.attempts, attemptNumber);
+        assert.equal(
+          savedRecipient.status,
+          attemptNumber <= retryLimit ? "queued" : "bounced",
+        );
+        if (attemptNumber <= retryLimit) {
+          await makeEligible(firstRecipient.id);
+        } else {
+          await makeEligible(secondRecipient.id);
+        }
+      }
+
+      // The second recipient still gets its first attempt and its own retry.
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+      const [secondAfterFailure] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, secondRecipient.id));
+      assert.equal(secondAfterFailure.attempts, 1);
+      assert.equal(secondAfterFailure.status, "queued");
+
+      await makeEligible(secondRecipient.id);
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+
+      const [firstFinal, secondFinal] = await Promise.all([
+        db
+          .select()
+          .from(dbModule.emailCampaignRecipientsTable)
+          .where(eq(dbModule.emailCampaignRecipientsTable.id, firstRecipient.id)),
+        db
+          .select()
+          .from(dbModule.emailCampaignRecipientsTable)
+          .where(eq(dbModule.emailCampaignRecipientsTable.id, secondRecipient.id)),
+      ]).then(([firstRows, secondRows]) => [firstRows[0], secondRows[0]]);
+      assert.equal(firstFinal.status, "bounced");
+      assert.equal(firstFinal.attempts, retryLimit + 1);
+      assert.equal(secondFinal.status, "delivered");
+      assert.equal(secondFinal.attempts, retryLimit + 1);
+      assert.equal(sendsByEmail.get(firstRecipient.email), retryLimit + 1);
+      assert.equal(sendsByEmail.get(secondRecipient.email), retryLimit + 1);
+
+      const [firstHistory, secondHistory] = await Promise.all([
+        db
+          .select()
+          .from(dbModule.emailSendAttemptsTable)
+          .where(eq(dbModule.emailSendAttemptsTable.recipientId, firstRecipient.id)),
+        db
+          .select()
+          .from(dbModule.emailSendAttemptsTable)
+          .where(eq(dbModule.emailSendAttemptsTable.recipientId, secondRecipient.id)),
+      ]);
+      assert.equal(firstHistory.length, retryLimit + 1);
+      assert.ok(
+        firstHistory.every(
+          (attempt) => attempt.outcome === "send_failed" && attempt.completedAt,
+        ),
+      );
+      assert.equal(secondHistory.length, retryLimit + 1);
+      assert.deepEqual(
+        secondHistory.map((attempt) => attempt.outcome).sort(),
+        ["send_failed", "smtp_accepted"],
+      );
+      assert.ok(secondHistory.every((attempt) => attempt.completedAt));
+    } finally {
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("stops retrying transient campaign failures after the configured retry limit", async () => {
     const owner = await loggedInUser({
       username: "campaign-retry-limit-owner",
