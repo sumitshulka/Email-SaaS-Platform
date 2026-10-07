@@ -995,6 +995,27 @@ async function withGoogleFetch(handler, run) {
   }
 }
 
+async function withAIProviderFetch(handler, run) {
+  const providerHosts = new Set([
+    "api.openai.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com",
+  ]);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (providerHosts.has(url.hostname)) {
+      return handler(url, init);
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 async function withMicrosoft365Fetch(handler, run) {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
@@ -4572,6 +4593,116 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(deletedSession.revokedAt);
     const deletedAgain = await login(deletedUser.email);
     assert.equal(deletedAgain.response.status, 401);
+  });
+});
+
+describe("superadmin AI provider setup", { concurrency: false }, () => {
+  it("tests model access, encrypts the saved key, and never returns it", async () => {
+    const admin = await loggedInUser({
+      username: "ai-provider-superadmin",
+      role: "SUPERADMIN",
+    });
+    const user = await loggedInUser({ username: "ai-provider-regular-user" });
+    const settingsPath = "/admin/settings/ai-provider";
+    const apiKey = "sk-mailflow-provider-test-secret";
+
+    const deniedRead = await api(settingsPath, { cookie: user.cookie });
+    assert.equal(deniedRead.response.status, 403);
+
+    const initial = await api(settingsPath, { cookie: admin.cookie });
+    assert.equal(initial.response.status, 200);
+    assert.equal(initial.body.configured, false);
+    assert.equal(initial.body.apiKeyConfigured, false);
+    assert.equal(Object.hasOwn(initial.body, "apiKey"), false);
+
+    const providerHandler = async (url, init) => {
+      assert.equal(url.pathname, "/v1/models");
+      assert.equal(url.searchParams.has("key"), false);
+      assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${apiKey}`);
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "gpt-4.1-mini" }],
+          has_more: false,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+
+    await withAIProviderFetch(providerHandler, async () => {
+      const tested = await api(`${settingsPath}/test`, {
+        method: "POST",
+        cookie: admin.cookie,
+        body: { provider: "openai", apiKey },
+      });
+      assert.equal(tested.response.status, 200, JSON.stringify(tested.body));
+      assert.equal(tested.body.connected, true);
+      assert.deepEqual(tested.body.models, [
+        { id: "gpt-4.1-mini", name: "gpt-4.1-mini" },
+      ]);
+      assert.equal(JSON.stringify(tested.body).includes(apiKey), false);
+    });
+
+    const [notSavedByTest] = await db
+      .select()
+      .from(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, "ai_provider"));
+    assert.equal(
+      notSavedByTest,
+      undefined,
+      "testing a key must not save it before the admin chooses a model",
+    );
+
+    await withAIProviderFetch(providerHandler, async () => {
+      const saved = await api(settingsPath, {
+        method: "PUT",
+        cookie: admin.cookie,
+        body: {
+          provider: "openai",
+          apiKey,
+          selectedModel: "gpt-4.1-mini",
+        },
+      });
+      assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+      assert.equal(saved.body.configured, true);
+      assert.equal(saved.body.provider, "openai");
+      assert.equal(saved.body.selectedModel, "gpt-4.1-mini");
+      assert.equal(saved.body.apiKeyConfigured, true);
+      assert.equal(Object.hasOwn(saved.body, "apiKey"), false);
+      assert.equal(JSON.stringify(saved.body).includes(apiKey), false);
+    });
+
+    const [stored] = await db
+      .select()
+      .from(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, "ai_provider"));
+    assert.ok(stored);
+    assert.notEqual(stored.value.apiKeyEncrypted, apiKey);
+    assert.equal(JSON.stringify(stored.value).includes(apiKey), false);
+    assert.equal(
+      securityModule.decryptSecret(stored.value.apiKeyEncrypted),
+      apiKey,
+    );
+
+    await withAIProviderFetch(providerHandler, async () => {
+      const savedKeyTest = await api(`${settingsPath}/test`, {
+        method: "POST",
+        cookie: admin.cookie,
+        body: { provider: "openai" },
+      });
+      assert.equal(savedKeyTest.response.status, 200);
+      assert.equal(savedKeyTest.body.connected, true);
+    });
+
+    const deniedWrite = await api(settingsPath, {
+      method: "PUT",
+      cookie: user.cookie,
+      body: {
+        provider: "openai",
+        apiKey,
+        selectedModel: "gpt-4.1-mini",
+      },
+    });
+    assert.equal(deniedWrite.response.status, 403);
   });
 });
 

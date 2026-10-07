@@ -20,6 +20,9 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AIProviderSettings,
+  AIProviderSettingsInput,
+  AIProviderTestResult,
   ActivateFreeSubscriptionInput,
   AdminDashboard,
   AdminFinancePaymentPage,
@@ -143,6 +146,7 @@ import type {
   TenantSendingSettingsInput,
   TenantSendingTestInput,
   TenantSendingTestResponse,
+  TestAIProviderConnectionInput,
   TestEmailInput,
   TestRazorpayConnectionInput,
   UnlinkedCompanyProfileCollection,
@@ -8391,6 +8395,259 @@ export const useTestGoogleOAuthSettings = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getTestGoogleOAuthSettingsMutationOptions(options));
+    }
+
+export const getGetAIProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/ai-provider`
+}
+
+/**
+ * @summary Get the saved LLM provider configuration without its API key
+ */
+export const getAIProviderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<AIProviderSettings> => {
+
+  return customFetch<AIProviderSettings>(getGetAIProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAIProviderSettingsQueryKey = () => {
+    return [
+    `/api/admin/settings/ai-provider`
+    ] as const;
+    }
+
+
+export const getGetAIProviderSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAIProviderSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAIProviderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAIProviderSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAIProviderSettings>>> = ({ signal }) => getAIProviderSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAIProviderSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAIProviderSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAIProviderSettings>>>
+export type GetAIProviderSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the saved LLM provider configuration without its API key
+ */
+
+export function useGetAIProviderSettings<TData = Awaited<ReturnType<typeof getAIProviderSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAIProviderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAIProviderSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAIProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/ai-provider`
+}
+
+/**
+ * @summary Save a tested LLM provider and model
+ */
+export const updateAIProviderSettings = async (aIProviderSettingsInput: AIProviderSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<AIProviderSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AIProviderSettings>(getUpdateAIProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aIProviderSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAIProviderSettingsMutationKey = () => ['updateAIProviderSettings'] as const;
+
+export const getUpdateAIProviderSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAIProviderSettings>>, TError,UpdateAIProviderSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAIProviderSettings>>, TError,UpdateAIProviderSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAIProviderSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAIProviderSettings>>, UpdateAIProviderSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAIProviderSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAIProviderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAIProviderSettings>>>
+    export type UpdateAIProviderSettingsMutationBody = BodyType<AIProviderSettingsInput>
+    export type UpdateAIProviderSettingsMutationError = ErrorType<ApiError>
+    export type UpdateAIProviderSettingsMutationVariables = {data: BodyType<AIProviderSettingsInput>}
+
+    /**
+ * @summary Save a tested LLM provider and model
+ */
+export const useUpdateAIProviderSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAIProviderSettings>>, TError,UpdateAIProviderSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAIProviderSettings>>,
+        TError,
+        UpdateAIProviderSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAIProviderSettingsMutationOptions(options));
+    }
+
+export const getTestAIProviderConnectionUrl = () => {
+
+
+
+
+  return `/api/admin/settings/ai-provider/test`
+}
+
+/**
+ * @summary Test an LLM API key and list available text-generation models
+ */
+export const testAIProviderConnection = async (testAIProviderConnectionInput: TestAIProviderConnectionInput, options?: Parameters<typeof customFetch>[1]): Promise<AIProviderTestResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AIProviderTestResult>(getTestAIProviderConnectionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(testAIProviderConnectionInput)
+  }
+);}
+
+
+
+
+
+export const getTestAIProviderConnectionMutationKey = () => ['testAIProviderConnection'] as const;
+
+export const getTestAIProviderConnectionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testAIProviderConnection>>, TError,TestAIProviderConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testAIProviderConnection>>, TError,TestAIProviderConnectionMutationVariables, TContext> => {
+
+const mutationKey = getTestAIProviderConnectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testAIProviderConnection>>, TestAIProviderConnectionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  testAIProviderConnection(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestAIProviderConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testAIProviderConnection>>>
+    export type TestAIProviderConnectionMutationBody = BodyType<TestAIProviderConnectionInput>
+    export type TestAIProviderConnectionMutationError = ErrorType<ApiError>
+    export type TestAIProviderConnectionMutationVariables = {data: BodyType<TestAIProviderConnectionInput>}
+
+    /**
+ * @summary Test an LLM API key and list available text-generation models
+ */
+export const useTestAIProviderConnection = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testAIProviderConnection>>, TError,TestAIProviderConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testAIProviderConnection>>,
+        TError,
+        TestAIProviderConnectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getTestAIProviderConnectionMutationOptions(options));
     }
 
 export const getSendApplicationEmailTestUrl = () => {

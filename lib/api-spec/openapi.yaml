@@ -2402,6 +2402,89 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/settings/ai-provider:
+    get:
+      operationId: getAIProviderSettings
+      tags: [settings]
+      summary: Get the saved LLM provider configuration without its API key
+      responses:
+        "200":
+          description: Saved LLM provider status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIProviderSettings"
+    put:
+      operationId: updateAIProviderSettings
+      tags: [settings]
+      summary: Save a tested LLM provider and model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AIProviderSettingsInput"
+      responses:
+        "200":
+          description: Saved LLM provider status without its API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIProviderSettings"
+        "400":
+          description: Invalid or unavailable provider model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Provider connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "504":
+          description: Provider connection timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/settings/ai-provider/test:
+    post:
+      operationId: testAIProviderConnection
+      tags: [settings]
+      summary: Test an LLM API key and list available text-generation models
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestAIProviderConnectionInput"
+      responses:
+        "200":
+          description: Provider connection result and available models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIProviderTestResult"
+        "400":
+          description: Invalid provider or API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Provider connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "504":
+          description: Provider connection timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/email/test:
     post:
       operationId: sendApplicationEmailTest
@@ -4244,6 +4327,50 @@ components:
         clientSecret: { type: string, minLength: 1, maxLength: 512 }
         redirectUri: { type: string, format: uri, minLength: 1, maxLength: 2048 }
       required: [clientId, redirectUri]
+    AIProviderType:
+      type: string
+      enum: [openai, anthropic, gemini]
+    AIProviderModel:
+      type: object
+      properties:
+        id: { type: string, minLength: 1, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 300 }
+      required: [id, name]
+    AIProviderSettings:
+      type: object
+      properties:
+        configured: { type: boolean }
+        provider:
+          type: ["string", "null"]
+          enum: [openai, anthropic, gemini, null]
+        selectedModel: { type: ["string", "null"] }
+        apiKeyConfigured: { type: boolean }
+        lastTestedAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [configured, provider, selectedModel, apiKeyConfigured, lastTestedAt, updatedAt]
+    AIProviderSettingsInput:
+      type: object
+      properties:
+        provider: { $ref: "#/components/schemas/AIProviderType" }
+        apiKey: { type: string, minLength: 1, maxLength: 4096 }
+        selectedModel: { type: string, minLength: 1, maxLength: 200 }
+      required: [provider, selectedModel]
+    TestAIProviderConnectionInput:
+      type: object
+      properties:
+        provider: { $ref: "#/components/schemas/AIProviderType" }
+        apiKey: { type: string, minLength: 1, maxLength: 4096 }
+      required: [provider]
+    AIProviderTestResult:
+      type: object
+      properties:
+        provider: { $ref: "#/components/schemas/AIProviderType" }
+        connected: { type: boolean }
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/AIProviderModel" }
+        testedAt: { type: string, format: date-time }
+      required: [provider, connected, models, testedAt]
     TestEmailInput:
       type: object
       properties:

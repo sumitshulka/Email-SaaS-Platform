@@ -4420,6 +4420,73 @@ export const TestGoogleOAuthSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get the saved LLM provider configuration without its API key
+ */
+export const GetAIProviderSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
+  "selectedModel": zod.string().nullable(),
+  "apiKeyConfigured": zod.boolean(),
+  "lastTestedAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save a tested LLM provider and model
+ */
+export const updateAIProviderSettingsBodyApiKeyMax = 4096;
+
+export const updateAIProviderSettingsBodySelectedModelMax = 200;
+
+
+
+export const UpdateAIProviderSettingsBody = zod.object({
+  "provider": zod.enum(['openai', 'anthropic', 'gemini']),
+  "apiKey": zod.string().min(1).max(updateAIProviderSettingsBodyApiKeyMax).optional(),
+  "selectedModel": zod.string().min(1).max(updateAIProviderSettingsBodySelectedModelMax)
+})
+
+export const UpdateAIProviderSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
+  "selectedModel": zod.string().nullable(),
+  "apiKeyConfigured": zod.boolean(),
+  "lastTestedAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Test an LLM API key and list available text-generation models
+ */
+export const testAIProviderConnectionBodyApiKeyMax = 4096;
+
+
+
+export const TestAIProviderConnectionBody = zod.object({
+  "provider": zod.enum(['openai', 'anthropic', 'gemini']),
+  "apiKey": zod.string().min(1).max(testAIProviderConnectionBodyApiKeyMax).optional()
+})
+
+export const testAIProviderConnectionResponseModelsItemIdMax = 200;
+
+export const testAIProviderConnectionResponseModelsItemNameMax = 300;
+
+
+
+export const TestAIProviderConnectionResponse = zod.object({
+  "provider": zod.enum(['openai', 'anthropic', 'gemini']),
+  "connected": zod.boolean(),
+  "models": zod.array(zod.object({
+  "id": zod.string().min(1).max(testAIProviderConnectionResponseModelsItemIdMax),
+  "name": zod.string().min(1).max(testAIProviderConnectionResponseModelsItemNameMax)
+})),
+  "testedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Send a test message using the application SMTP account
  */
 export const SendApplicationEmailTestBody = zod.object({

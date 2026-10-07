@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { useForm } from 'react-hook-form';
 import {
-  Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, Check, Eye, EyeOff,
+  Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, BrainCircuit, Check, Eye, EyeOff,
   ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, CreditCard, Gauge, KeyRound, LoaderCircle,
   LockKeyhole, LogOut, Menu, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
   Trash2, UserRound, Users, Building2, LifeBuoy,
@@ -29,6 +29,7 @@ import { MailflowBrand } from '@/components/brand';
 import AdminBillingPage from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
+import AdminAIProviderPage from '@/pages/admin-ai-provider';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
@@ -266,6 +267,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/admin/finance', label: 'Finance', icon: ReceiptText },
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
       { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
+      { href: '/admin/ai-provider', label: 'AI integration', icon: BrainCircuit },
     ],
   },
 ];
@@ -1170,6 +1172,7 @@ function Routes() {
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>
     <Route path="/admin/settings">{() => <RouteGate admin>{() => <AdminSettingsPage/>}</RouteGate>}</Route>
     <Route path="/admin/google-oauth">{() => <RouteGate admin>{() => <AdminGoogleOAuthPage/>}</RouteGate>}</Route>
+    <Route path="/admin/ai-provider">{() => <RouteGate admin>{() => <AdminAIProviderPage/>}</RouteGate>}</Route>
     <Route path="/plans">{() => <RouteGate>{() => <PlansPage/>}</RouteGate>}</Route>
     <Route path="/profile">{() => <RouteGate>{u => <ProfilePage user={u}/>}</RouteGate>}</Route>
     <Route component={NotFound}/>

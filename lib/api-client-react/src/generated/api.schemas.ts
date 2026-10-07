@@ -2799,6 +2799,83 @@ export interface GoogleOAuthSettingsInput {
   redirectUri: string;
 }
 
+export type AIProviderType = typeof AIProviderType[keyof typeof AIProviderType];
+
+
+export const AIProviderType = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  gemini: 'gemini',
+} as const;
+
+export interface AIProviderModel {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+}
+
+/**
+ * @nullable
+ */
+export type AIProviderSettingsProvider = typeof AIProviderSettingsProvider[keyof typeof AIProviderSettingsProvider] | null;
+
+
+export const AIProviderSettingsProvider = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  gemini: 'gemini',
+} as const;
+
+export interface AIProviderSettings {
+  configured: boolean;
+  /** @nullable */
+  provider: AIProviderSettingsProvider;
+  /** @nullable */
+  selectedModel: string | null;
+  apiKeyConfigured: boolean;
+  /** @nullable */
+  lastTestedAt: string | null;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface AIProviderSettingsInput {
+  provider: AIProviderType;
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  apiKey?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  selectedModel: string;
+}
+
+export interface TestAIProviderConnectionInput {
+  provider: AIProviderType;
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  apiKey?: string;
+}
+
+export interface AIProviderTestResult {
+  provider: AIProviderType;
+  connected: boolean;
+  models: AIProviderModel[];
+  testedAt: string;
+}
+
 export interface TestEmailInput {
   toEmail: string;
 }
