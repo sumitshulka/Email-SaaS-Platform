@@ -638,7 +638,11 @@ async function claimDelivery(
     if (rateDelay) {
       await tx
         .update(emailCampaignRecipientsTable)
-        .set({ nextAttemptAt: rateDelay, updatedAt: now })
+        .set({
+          nextAttemptAt: rateDelay,
+          rateLimitDeferredAt: now,
+          updatedAt: now,
+        })
         .where(eq(emailCampaignRecipientsTable.id, recipient.id));
       return null;
     }
@@ -650,6 +654,7 @@ async function claimDelivery(
       .set({
         status: "sending",
         attempts: recipient.attempts + 1,
+        rateLimitDeferredAt: null,
         reportOutcome: "unconfirmed",
         reportSource: null,
         reportDiagnostic: null,

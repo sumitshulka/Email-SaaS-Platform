@@ -3821,6 +3821,8 @@ components:
         email: { type: string, format: email }
         status: { type: string, enum: [queued, sending, delivered, bounced, suppressed, unknown] }
         attempts: { type: integer, minimum: 0 }
+        rateLimitDeferred: { type: boolean, description: True when the queued recipient was deferred by its SMTP mailbox's shared sending limit. }
+        nextAttemptAt: { type: string, format: date-time, description: Stored time when the recipient becomes eligible for another send attempt. }
         smtpAcceptedAt: { type: ["string", "null"], format: date-time }
         lastError: { type: ["string", "null"] }
         reportOutcome: { type: string, enum: [unconfirmed, delivered, bounced, delayed, failed] }
@@ -3834,7 +3836,7 @@ components:
         latestSmtpCode: { type: ["integer", "null"] }
         dsnRequested: { type: boolean }
         evidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, microsoft365_authorized, null] }
-      required: [id, email, status, attempts, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
+      required: [id, email, status, attempts, rateLimitDeferred, nextAttemptAt, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
     CampaignTargetList:
       type: object
       properties:

@@ -350,6 +350,9 @@ export const emailCampaignRecipientsTable = pgTable(
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    rateLimitDeferredAt: timestamp("rate_limit_deferred_at", {
+      withTimezone: true,
+    }),
     lastError: text("last_error"),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     reportOutcome: varchar("report_outcome", { length: 24 })

@@ -17,6 +17,10 @@ export interface DeliveryRecipient {
   status: DeliveryRecipientStatus;
   /** @minimum 0 */
   attempts: number;
+  /** True when the queued recipient was deferred by its SMTP mailbox's shared sending limit. */
+  rateLimitDeferred: boolean;
+  /** Stored time when the recipient becomes eligible for another send attempt. */
+  nextAttemptAt: Date;
   /** @nullable */
   smtpAcceptedAt: Date | null;
   /** @nullable */

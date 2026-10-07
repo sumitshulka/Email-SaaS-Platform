@@ -3479,6 +3479,8 @@ export const GetCampaignDeliveryReportResponse = zod.object({
   "email": zod.string().email(),
   "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
   "attempts": zod.number().int().min(getCampaignDeliveryReportResponseRecipientsItemAttemptsMin),
+  "rateLimitDeferred": zod.boolean().describe('True when the queued recipient was deferred by its SMTP mailbox\'s shared sending limit.'),
+  "nextAttemptAt": zod.coerce.date().describe('Stored time when the recipient becomes eligible for another send attempt.'),
   "smtpAcceptedAt": zod.coerce.date().nullable(),
   "lastError": zod.string().nullable(),
   "reportOutcome": zod.enum(['unconfirmed', 'delivered', 'bounced', 'delayed', 'failed']),

@@ -139,6 +139,10 @@ router.get(
           email: recipient.email,
           status: recipient.status,
           attempts: recipient.attempts,
+          rateLimitDeferred:
+            recipient.status === "queued" &&
+            recipient.rateLimitDeferredAt !== null,
+          nextAttemptAt: recipient.nextAttemptAt,
           smtpAcceptedAt: recipient.deliveredAt,
           lastError: recipient.lastError,
           reportOutcome: recipient.reportOutcome,

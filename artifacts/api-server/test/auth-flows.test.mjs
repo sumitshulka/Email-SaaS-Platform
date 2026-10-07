@@ -413,6 +413,7 @@ memory.public.none(`
     status email_campaign_recipient_status NOT NULL DEFAULT 'queued',
     attempts integer NOT NULL DEFAULT 0,
     next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    rate_limit_deferred_at timestamptz,
     last_error text,
     delivered_at timestamptz,
     report_outcome varchar(24) NOT NULL DEFAULT 'unconfirmed',
@@ -5922,6 +5923,45 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           attempts[0].attemptedAt.getTime() + 23 * 60 * 60 * 1000,
         "the deferred time is based on the shared attempt ledger",
       );
+      assert.ok(deferredRecipient.rateLimitDeferredAt);
+
+      const deferredEvidence = await api(
+        `/campaigns/${campaign.id}/delivery-report?limit=100`,
+        { cookie: owner.cookie },
+      );
+      assert.equal(deferredEvidence.response.status, 200);
+      const deferredEvidenceRecipient = deferredEvidence.body.recipients.find(
+        (recipient) => recipient.id === deferredRecipient.id,
+      );
+      assert.ok(deferredEvidenceRecipient);
+      assert.equal(deferredEvidenceRecipient.status, "queued");
+      assert.equal(deferredEvidenceRecipient.rateLimitDeferred, true);
+      assert.equal(
+        deferredEvidenceRecipient.nextAttemptAt,
+        deferredRecipient.nextAttemptAt.toISOString(),
+      );
+      assert.equal(deferredEvidenceRecipient.smtpAcceptedAt, null);
+
+      const eligibleAt = new Date(Date.now() - 1000);
+      await db
+        .update(dbModule.emailCampaignRecipientsTable)
+        .set({ nextAttemptAt: eligibleAt })
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, deferredRecipient.id));
+      const eligibleEvidence = await api(
+        `/campaigns/${campaign.id}/delivery-report?limit=100`,
+        { cookie: owner.cookie },
+      );
+      const eligibleEvidenceRecipient = eligibleEvidence.body.recipients.find(
+        (recipient) => recipient.id === deferredRecipient.id,
+      );
+      assert.ok(eligibleEvidenceRecipient);
+      assert.equal(eligibleEvidenceRecipient.status, "queued");
+      assert.equal(eligibleEvidenceRecipient.rateLimitDeferred, true);
+      assert.equal(
+        eligibleEvidenceRecipient.nextAttemptAt,
+        eligibleAt.toISOString(),
+      );
+      assert.equal(eligibleEvidenceRecipient.smtpAcceptedAt, null);
 
       assert.equal(
         await campaignWorkerModule.processPendingCampaignDeliveries(2),
