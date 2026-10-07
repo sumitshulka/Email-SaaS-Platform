@@ -4767,6 +4767,8 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
   const activeLists = listCount?.value ?? 0;
   const campaigns = [...runningCampaigns, ...recentCampaigns];
   const campaignIds = campaigns.map((campaign) => campaign.id);
+  const attemptSenderAccountExpression =
+    sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId})`;
   const [campaignRecipientRows, campaignAttemptRows] =
     campaignIds.length > 0
       ? await Promise.all([
@@ -4789,7 +4791,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
             ),
           db
             .select({
-              senderAccountId: sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId}, ${sender?.id ?? null})`,
+              senderAccountId: attemptSenderAccountExpression,
               value: count(),
             })
             .from(emailSendAttemptsTable)
@@ -4813,9 +4815,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
                 gte(emailSendAttemptsTable.attemptedAt, hourStart),
               ),
             )
-            .groupBy(
-              sql`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId}, ${sender?.id ?? null})`,
-            ),
+            .groupBy(attemptSenderAccountExpression),
         ])
       : [[], []];
   const countsByCampaign = new Map<
@@ -4853,12 +4853,14 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     }
     countsByCampaign.set(row.campaignId, countsForCampaign);
   }
-  const attemptsBySender = new Map(
-    campaignAttemptRows.map((row) => [
-      row.senderAccountId ?? "",
-      Number(row.value),
-    ]),
-  );
+  const attemptsBySender = new Map<string, number>();
+  for (const row of campaignAttemptRows) {
+    const senderAccountId = row.senderAccountId ?? sender?.id ?? "";
+    attemptsBySender.set(
+      senderAccountId,
+      (attemptsBySender.get(senderAccountId) ?? 0) + Number(row.value),
+    );
+  }
   const dashboardCampaigns = campaigns.map((campaign) => {
     const countsForCampaign = countsByCampaign.get(campaign.id) ?? {
       recipients: 0,
