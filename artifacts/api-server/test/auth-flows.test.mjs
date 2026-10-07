@@ -6963,6 +6963,123 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     }
   });
 
+  it("bounces a recipient after one permanent SMTP rejection without queuing a retry", async () => {
+    const owner = await loggedInUser({
+      username: "campaign-permanent-smtp-rejection-owner",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "rejected@permanent-smtp.test",
+        firstName: "Rejected",
+        subscribed: true,
+      })
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.permanent-smtp.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("permanent-smtp-user"),
+        passwordEncrypted: securityModule.encryptSecret("permanent-smtp-password"),
+        fromName: "Permanent SMTP Test",
+        fromEmail: "sender@permanent-smtp.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Permanent SMTP rejection",
+        subject: "Permanent rejection test",
+        textBody: "This recipient must not be retried.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        retryAttempts: 3,
+        retryDelaySeconds: 60,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let sendCount = 0;
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      sendCount += 1;
+      throw Object.assign(new Error("550 5.1.1 recipient unavailable"), {
+        responseCode: 550,
+        response: "550 5.1.1 recipient unavailable",
+        command: "RCPT TO",
+      });
+    });
+
+    try {
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+      assert.equal(sendCount, 1);
+      const [bouncedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(bouncedRecipient.status, "bounced");
+      assert.equal(bouncedRecipient.attempts, 1);
+      assert.match(bouncedRecipient.lastError, /SMTP provider could not accept/i);
+
+      const attemptHistory = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(attemptHistory.length, 1);
+      assert.equal(attemptHistory[0].outcome, "smtp_rejected");
+      assert.equal(attemptHistory[0].smtpCode, 550);
+      assert.equal(
+        attemptHistory[0].smtpResponse,
+        "550 5.1.1 recipient unavailable",
+      );
+      assert.match(attemptHistory[0].errorMessage, /SMTP provider could not accept/i);
+      assert.ok(attemptHistory[0].completedAt);
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        0,
+      );
+      assert.equal(sendCount, 1);
+    } finally {
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("isolates tenant data, encrypts SMTP credentials, and enforces worker rate limits", async () => {
     const owner = await loggedInUser({ username: "sending-owner" });
     const other = await loggedInUser({ username: "sending-other" });
