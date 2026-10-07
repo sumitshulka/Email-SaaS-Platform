@@ -265,6 +265,18 @@ router.post(
       invalid: responseRows.filter((row) => row.status === "invalid").length,
       rows: responseRows,
     });
+    if (response.imported > 0) {
+      await writeAuditLog({
+        actorId: req.authUser!.id,
+        action: "global_company.bulk_imported",
+        entity: "global_company",
+        metadata: {
+          imported: response.imported,
+          duplicates: response.duplicates,
+          invalid: response.invalid,
+        },
+      });
+    }
     res.json(response);
   },
 );

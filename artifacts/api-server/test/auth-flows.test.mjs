@@ -3942,6 +3942,113 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
+  it("bulk imports global company profiles with duplicate reporting and superadmin access control", async () => {
+    const admin = await loggedInUser({
+      username: "global-company-import-admin",
+      role: "SUPERADMIN",
+    });
+    const owner = await loggedInUser({
+      username: "global-company-import-owner",
+      email: "global-company-import-owner@example.test",
+    });
+
+    const existing = await api("/admin/global-companies", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        companyName: "Existing Catalog Company",
+        companyDomain: "already-in-catalog.test",
+      },
+    });
+    assert.equal(existing.response.status, 201, JSON.stringify(existing.body));
+
+    const batch = {
+      rows: [
+        {
+          rowNumber: 2,
+          company: {
+            companyName: "New Bulk Company",
+            companyDomain: "new-bulk-company.test",
+            companyIndustry: "Technology",
+            companyLocation: "Pune",
+          },
+        },
+        {
+          rowNumber: 3,
+          company: {
+            companyName: "Same Domain Different URL",
+            companyDomain: "www.new-bulk-company.test",
+          },
+        },
+        {
+          rowNumber: 4,
+          company: {
+            companyName: "Existing Domain",
+            companyDomain: "already-in-catalog.test",
+          },
+        },
+        {
+          rowNumber: 5,
+          company: {
+            companyName: "Invalid Website",
+            companyWebsiteUrl: "http:// bad domain",
+          },
+        },
+      ],
+    };
+
+    const anonymous = await api("/admin/global-companies/bulk-import", {
+      method: "POST",
+      body: batch,
+    });
+    assert.equal(anonymous.response.status, 401);
+    const customer = await api("/admin/global-companies/bulk-import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: batch,
+    });
+    assert.equal(customer.response.status, 403);
+
+    const imported = await api("/admin/global-companies/bulk-import", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: batch,
+    });
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
+    assert.equal(imported.body.imported, 1);
+    assert.equal(imported.body.duplicates, 2);
+    assert.equal(imported.body.invalid, 1);
+    assert.deepEqual(
+      imported.body.rows.map(({ rowNumber, status }) => ({ rowNumber, status })),
+      [
+        { rowNumber: 2, status: "imported" },
+        { rowNumber: 3, status: "duplicate" },
+        { rowNumber: 4, status: "duplicate" },
+        { rowNumber: 5, status: "invalid" },
+      ],
+    );
+
+    const catalog = await api("/admin/global-companies?search=new-bulk-company", {
+      cookie: admin.cookie,
+    });
+    assert.equal(catalog.response.status, 200, JSON.stringify(catalog.body));
+    assert.equal(catalog.body.total, 1);
+    assert.equal(catalog.body.globalCompanies[0].companyName, "New Bulk Company");
+    assert.equal(catalog.body.globalCompanies[0].companyIndustry, "Technology");
+    assert.equal(catalog.body.globalCompanies[0].companyLocation, "Pune");
+    assert.equal("contacts" in catalog.body.globalCompanies[0], false);
+    assert.equal("contactCount" in catalog.body.globalCompanies[0], false);
+
+    const customerDirectory = await api(
+      "/companies/global/search?search=new-bulk-company",
+      { cookie: owner.cookie },
+    );
+    assert.equal(customerDirectory.response.status, 200, JSON.stringify(customerDirectory.body));
+    assert.equal(customerDirectory.body.total, 1);
+    assert.equal(customerDirectory.body.companies[0].companyName, "New Bulk Company");
+    assert.equal("contactCount" in customerDirectory.body.companies[0], false);
+  });
+
   it("adds a user company to the global catalog only after explicit sharing", async () => {
     const admin = await loggedInUser({
       username: "global-share-superadmin",
