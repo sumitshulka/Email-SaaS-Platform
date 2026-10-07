@@ -18,7 +18,7 @@
 - [Company write benchmarks](company-write-benchmarks.md) — compare index cost by changing only the target index; distinguish batch SQL timings from API latency.
 - [Google OAuth admin setup](google-oauth-admin-config.md) — keep Gmail OAuth credentials in superadmin-managed app settings, not Replit Secrets.
 - [Gmail mailbox replacement](gmail-mailbox-replacement.md) — an unverified replacement must not trigger revocation when a saved mailbox already exists.
-- [SMTP sender accounts](smtp-sender-account-quota.md) — campaigns select their own SMTP senders; package slots count SMTP only, not Gmail OAuth or bounce monitoring.
+- [SMTP sender accounts](smtp-sender-account-quota.md) — campaign sender slots stay mailbox-specific; ZeptoMail is restricted to transactional platform email.
 - [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
 - [Browser-test resource contention](browser-test-resource-contention.md) — concurrent Vite and Chromium startups can time out; reuse the running web server when available.

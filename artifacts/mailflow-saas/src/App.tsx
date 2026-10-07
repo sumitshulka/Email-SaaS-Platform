@@ -789,17 +789,19 @@ const settingGroups: Array<{ title: string; description?: string; fields: Array<
 function SettingsGroup({ title, description, fields, values, setValues }: { title: string; description?: string; fields: Array<[keyof PlatformSettingsInput, string, 'text'|'number'|'boolean'|'list'|'select', string[]?]>; values: Fields; setValues: (v: Fields) => void }) {
   return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2>{description && <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#687587]">{description}</p>}</div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
 }
-type SmtpProvider = 'google_workspace' | 'gmail' | 'microsoft_365' | 'other';
+type SmtpProvider = 'google_workspace' | 'gmail' | 'microsoft_365' | 'zeptomail' | 'other';
 const SMTP_PROVIDER_OPTIONS = [
   { value: 'google_workspace', label: 'Google Workspace' },
   { value: 'gmail', label: 'Gmail' },
   { value: 'microsoft_365', label: 'Microsoft 365' },
+  { value: 'zeptomail', label: 'ZeptoMail (transactional email only)' },
   { value: 'other', label: 'Other SMTP provider' },
 ];
 const SMTP_PROVIDER_PRESETS: Partial<Record<SmtpProvider, { host: string; port: string; encryption: 'tls' }>> = {
   google_workspace: { host: 'smtp.gmail.com', port: '587', encryption: 'tls' },
   gmail: { host: 'smtp.gmail.com', port: '587', encryption: 'tls' },
   microsoft_365: { host: 'smtp.office365.com', port: '587', encryption: 'tls' },
+  zeptomail: { host: 'smtp.zeptomail.com', port: '587', encryption: 'tls' },
 };
 
 function AdminSettingsPage() {
@@ -927,7 +929,9 @@ function AdminSettingsPage() {
       ? 'Uses smtp.gmail.com on port 587 with STARTTLS. Enter the full Gmail address and a Google app password; Google requires 2-Step Verification for app passwords.'
       : selectedProvider === 'microsoft_365'
         ? 'Uses smtp.office365.com on port 587 with STARTTLS. SMTP AUTH must be enabled for the mailbox. This password-based form does not support Microsoft OAuth-only tenants.'
-        : 'Enter the server, port, encryption, and SMTP credentials provided by your email service.';
+        : selectedProvider === 'zeptomail'
+          ? 'Uses smtp.zeptomail.com on port 587 with STARTTLS. Enter the SMTP username and token from your ZeptoMail Agent, and use a verified sender address. ZeptoMail permits transactional system email only; its terms prohibit marketing campaigns, newsletters, and mass email.'
+          : 'Enter the server, port, encryption, and SMTP credentials provided by your email service.';
 
   return (
     <>

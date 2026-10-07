@@ -69,6 +69,7 @@ const SMTP_PROVIDER_PRESETS = {
   google_workspace: { host: "smtp.gmail.com", port: 587, encryption: "tls" },
   gmail: { host: "smtp.gmail.com", port: 587, encryption: "tls" },
   microsoft_365: { host: "smtp.office365.com", port: 587, encryption: "tls" },
+  zeptomail: { host: "smtp.zeptomail.com", port: 587, encryption: "tls" },
 } as const;
 
 function toAdminUser(

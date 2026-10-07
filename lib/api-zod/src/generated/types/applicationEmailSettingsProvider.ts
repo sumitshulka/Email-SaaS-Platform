@@ -13,5 +13,6 @@ export const ApplicationEmailSettingsProvider = {
   google_workspace: 'google_workspace',
   gmail: 'gmail',
   microsoft_365: 'microsoft_365',
+  zeptomail: 'zeptomail',
   other: 'other',
 } as const;

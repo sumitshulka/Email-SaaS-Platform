@@ -4999,7 +4999,7 @@ components:
     ApplicationEmailSettings:
       type: object
       properties:
-        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
+        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, zeptomail, other] }
         host: { type: ["string", "null"] }
         port: { type: ["integer", "null"] }
         encryption: { type: ["string", "null"], enum: [none, ssl, tls, null] }
@@ -5013,7 +5013,7 @@ components:
     ApplicationEmailSettingsInput:
       type: object
       properties:
-        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
+        provider: { type: string, enum: [google_workspace, gmail, microsoft_365, zeptomail, other] }
         host: { type: string, minLength: 1, maxLength: 255 }
         port: { type: integer, minimum: 1, maximum: 65535 }
         encryption: { type: string, enum: [none, ssl, tls] }
