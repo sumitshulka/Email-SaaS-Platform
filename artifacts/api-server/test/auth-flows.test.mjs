@@ -5709,6 +5709,186 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     }
   });
 
+  it("enforces shared tenant rate limits when concurrent workers claim different recipients", async () => {
+    const owner = await loggedInUser({
+      username: "concurrent-tenant-rate-limit-owner",
+    });
+    const contacts = await db
+      .insert(dbModule.contactsTable)
+      .values([
+        {
+          userId: owner.user.id,
+          email: "first@concurrent-rate-limit.test",
+          firstName: "First",
+          subscribed: true,
+        },
+        {
+          userId: owner.user.id,
+          email: "second@concurrent-rate-limit.test",
+          firstName: "Second",
+          subscribed: true,
+        },
+      ])
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.concurrent-rate-limit.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("rate-limit-user"),
+        passwordEncrypted: securityModule.encryptSecret("rate-limit-password"),
+        fromName: "Rate Limit Test",
+        fromEmail: "sender@concurrent-rate-limit.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Concurrent tenant rate limit",
+        subject: "A campaign update",
+        textBody: "This message is subject to shared tenant limits.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const now = Date.now();
+    const [firstRecipient, secondRecipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values(
+        contacts.map((contact, index) => ({
+          campaignId: campaign.id,
+          userId: owner.user.id,
+          contactId: contact.id,
+          email: contact.email,
+          firstName: contact.firstName,
+          status: "queued",
+          attempts: 0,
+          nextAttemptAt: new Date(now - (2 - index) * 1000),
+        })),
+      )
+      .returning();
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 1,
+        maxEmailsPerDay: 1,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let markBothClaimsReady;
+    const bothClaimsReady = new Promise((resolve) => {
+      markBothClaimsReady = resolve;
+    });
+    let releaseClaims;
+    const claimsBarrier = new Promise((resolve) => {
+      releaseClaims = resolve;
+    });
+    let waitingClaims = 0;
+    campaignWorkerModule.setBeforeDeliveryClaimForTests(async () => {
+      waitingClaims += 1;
+      if (waitingClaims === 2) markBothClaimsReady();
+      await claimsBarrier;
+    });
+
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+
+    try {
+      // Let worker one select the first recipient, then temporarily make it
+      // ineligible so worker two selects the distinct second recipient.
+      const firstWorker = campaignWorkerModule.processPendingCampaignDeliveries(1);
+      while (waitingClaims < 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      await db
+        .update(dbModule.emailCampaignRecipientsTable)
+        .set({ nextAttemptAt: new Date(Date.now() + 60_000) })
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, firstRecipient.id));
+      const secondWorker = campaignWorkerModule.processPendingCampaignDeliveries(1);
+      await bothClaimsReady;
+      await db
+        .update(dbModule.emailCampaignRecipientsTable)
+        .set({ nextAttemptAt: new Date(Date.now() - 1000) })
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, firstRecipient.id));
+
+      releaseClaims();
+      assert.deepEqual(
+        (await Promise.all([firstWorker, secondWorker])).sort(
+          (left, right) => left - right,
+        ),
+        [0, 1],
+      );
+      campaignWorkerModule.setBeforeDeliveryClaimForTests(null);
+
+      assert.equal(deliveredTo.length, 1, "only one recipient may use the tenant's available send");
+      const [savedFirst, savedSecond] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(
+          eq(
+            dbModule.emailCampaignRecipientsTable.campaignId,
+            campaign.id,
+          ),
+        );
+      const deferredRecipient = [savedFirst, savedSecond].find(
+        (recipient) => recipient.status === "queued",
+      );
+      const deliveredRecipient = [savedFirst, savedSecond].find(
+        (recipient) => recipient.status === "delivered",
+      );
+      assert.ok(deliveredRecipient);
+      assert.ok(deferredRecipient);
+      assert.equal(deferredRecipient.attempts, 0);
+      assert.ok(
+        deferredRecipient.nextAttemptAt.getTime() >
+          Date.now() + 23 * 60 * 60 * 1000,
+        "the daily tenant cap defers the remaining recipient for nearly 24 hours",
+      );
+
+      const attempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+      assert.equal(attempts.length, 1);
+      assert.equal(attempts[0].recipientId, deliveredRecipient.id);
+      assert.ok(
+        deferredRecipient.nextAttemptAt.getTime() >=
+          attempts[0].attemptedAt.getTime() + 23 * 60 * 60 * 1000,
+        "the deferred time is based on the shared attempt ledger",
+      );
+
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(2),
+        0,
+        "a later worker tick must not send the deferred recipient early",
+      );
+      assert.equal(deliveredTo.length, 1);
+    } finally {
+      releaseClaims();
+      campaignWorkerModule.setBeforeDeliveryClaimForTests(null);
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("keeps interrupted sends unknown after maintenance and resumes other recipients", async () => {
     const owner = await loggedInUser({
       username: "maintenance-uncertain-send-owner",

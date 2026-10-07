@@ -46,6 +46,29 @@ import {
 const MAX_DELIVERIES_PER_TICK = 100;
 const STALE_DELIVERY_MINUTES = 10;
 let beforeDeliveryClaimForTests: (() => Promise<void>) | null = null;
+const tenantClaimQueues = new Map<string, Promise<void>>();
+
+async function withTenantClaimLock<T>(
+  userId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previousLock = tenantClaimQueues.get(userId) ?? Promise.resolve();
+  let releaseLock!: () => void;
+  const currentLock = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  tenantClaimQueues.set(userId, currentLock);
+  await previousLock;
+
+  try {
+    return await operation();
+  } finally {
+    releaseLock();
+    if (tenantClaimQueues.get(userId) === currentLock) {
+      tenantClaimQueues.delete(userId);
+    }
+  }
+}
 
 export function setBeforeDeliveryClaimForTests(
   callback: (() => Promise<void>) | null,
@@ -417,8 +440,9 @@ async function claimDelivery(
   queuePollingSeconds: number,
   dsnRequested: boolean,
 ): Promise<DeliveryClaim | null> {
-  const now = new Date();
-  return db.transaction(async (tx) => {
+  // Serialize claims in this process as well as across instances via the
+  // tenant-row lock below.
+  return withTenantClaimLock(userId, () => db.transaction(async (tx) => {
     // Ensure there is a row to lock, including on a fresh install where
     // getPlatformSettings() is still serving its defaults.
     await tx
@@ -452,6 +476,10 @@ async function claimDelivery(
       .from(usersTable)
       .where(eq(usersTable.id, userId))
       .for("update");
+
+    // Capture claim time after acquiring the tenant lock so a worker waiting
+    // behind another claim evaluates the shared attempt ledger at current time.
+    const now = new Date();
 
     const [recipient] = await tx
       .select()
@@ -671,7 +699,7 @@ async function claimDelivery(
       messageId,
       dsnRequested,
     };
-  });
+  }));
 }
 
 async function finishDelivery(
