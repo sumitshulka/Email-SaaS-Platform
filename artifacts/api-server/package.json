@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test": "node --import tsx --test test/*.test.mjs",
     "test:postgres-maintenance-race": "node --import tsx --test test/postgres-maintenance-race.test.mjs",
+    "migrate:company-intelligence": "node --import tsx scripts/apply-company-intelligence-migration.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -24,7 +25,8 @@
     "nodemailer": "^10.0.13",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
-    "sanitize-html": "^2.17.7"
+    "sanitize-html": "^2.17.7",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

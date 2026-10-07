@@ -89,6 +89,7 @@ export async function saveAIProviderConfiguration(input: {
   selectedModel: string;
   updatedBy: string;
 }): Promise<void> {
+  const previous = await readConfigurationRow();
   const value: StoredAIProviderConfiguration = {
     provider: input.provider,
     apiKeyEncrypted: encryptSecret(input.apiKey),
@@ -111,4 +112,14 @@ export async function saveAIProviderConfiguration(input: {
         updatedAt: new Date(),
       },
     });
+  if (parseStoredConfiguration(previous?.value)?.provider !== input.provider) {
+    const [research] = await db.select().from(systemConfigurationTable).where(eq(systemConfigurationTable.key, "company_intelligence")).limit(1);
+    if (research?.value && typeof research.value === "object" && !Array.isArray(research.value)) {
+      // A model from the former provider must never be sent to the new provider.
+      await db.update(systemConfigurationTable).set({
+        value: { ...research.value, preferredModel: null, backupModel: null, inputCostPerMillionUsd: null, outputCostPerMillionUsd: null, searchCostUsd: null },
+        updatedBy: input.updatedBy, updatedAt: new Date(),
+      }).where(eq(systemConfigurationTable.key, "company_intelligence"));
+    }
+  }
 }

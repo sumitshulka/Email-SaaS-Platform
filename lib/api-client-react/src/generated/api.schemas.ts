@@ -770,6 +770,37 @@ export interface Company {
   updatedAt: string;
 }
 
+export type CompanyResearchSummaryStatus = typeof CompanyResearchSummaryStatus[keyof typeof CompanyResearchSummaryStatus];
+
+
+export const CompanyResearchSummaryStatus = {
+  not_researched: 'not_researched',
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export type CompanyResearchSummaryFreshness = typeof CompanyResearchSummaryFreshness[keyof typeof CompanyResearchSummaryFreshness];
+
+
+export const CompanyResearchSummaryFreshness = {
+  not_researched: 'not_researched',
+  fresh: 'fresh',
+  aging: 'aging',
+  stale: 'stale',
+} as const;
+
+export interface CompanyResearchSummary {
+  status: CompanyResearchSummaryStatus;
+  freshness: CompanyResearchSummaryFreshness;
+  /** @nullable */
+  researchedAt: string | null;
+  /** @minimum 0 */
+  sourceCount: number;
+}
+
 export interface GlobalCompany {
   id: string;
   /** @maxLength 200 */
@@ -821,6 +852,391 @@ export interface GlobalCompany {
   companyLocation: string | null;
   createdAt: string;
   updatedAt: string;
+  researchSummary?: CompanyResearchSummary;
+}
+
+export interface CompanyResearchInput {
+  confirmed: true;
+  overrideFresh?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 3
+     */
+  depth?: number;
+}
+
+export type IntelligenceSourceType = typeof IntelligenceSourceType[keyof typeof IntelligenceSourceType];
+
+
+export const IntelligenceSourceType = {
+  company_website: 'company_website',
+  company_product_page: 'company_product_page',
+  company_newsroom: 'company_newsroom',
+  investor_relation: 'investor_relation',
+  regulatory_filing: 'regulatory_filing',
+  government: 'government',
+  reputable_news: 'reputable_news',
+  industry_source: 'industry_source',
+  other: 'other',
+} as const;
+
+export interface CompanyResearchSettings {
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  freshDays: number;
+  /**
+     * @minimum 2
+     * @maximum 730
+     */
+  agingDays: number;
+  /**
+     * @minimum 1
+     * @maximum 3
+     */
+  maxResearchDepth: number;
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  maxWebSearches: number;
+  /** @minItems 1 */
+  allowedSourceTypes: IntelligenceSourceType[];
+  /**
+     * @minimum 0
+     * @maximum 1000
+     */
+  researchCreditCost: number;
+  deepResearchEnabled: boolean;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  preferredModel: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  backupModel: string | null;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     * @nullable
+     */
+  inputCostPerMillionUsd: number | null;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     * @nullable
+     */
+  outputCostPerMillionUsd: number | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  searchCostUsd: number | null;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  usdToInr: number;
+}
+
+export type CompanyResearchJobStatusStatus = typeof CompanyResearchJobStatusStatus[keyof typeof CompanyResearchJobStatusStatus];
+
+
+export const CompanyResearchJobStatusStatus = {
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface CompanyResearchJobStatus {
+  id: string;
+  status: CompanyResearchJobStatusStatus;
+  stage: string;
+  createdAt: string;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  /** @nullable */
+  error: string | null;
+}
+
+export type IntelligenceSourceReliability = typeof IntelligenceSourceReliability[keyof typeof IntelligenceSourceReliability];
+
+
+export const IntelligenceSourceReliability = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface IntelligenceSource {
+  source_id: string;
+  source_type: IntelligenceSourceType;
+  title: string;
+  url: string;
+  publisher: string;
+  /** @nullable */
+  published_date: string | null;
+  accessed_at: string;
+  reliability: IntelligenceSourceReliability;
+}
+
+export interface IntelligenceFactSource {
+  path: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  /** @minItems 1 */
+  source_ids: string[];
+}
+
+export interface IntelligenceClaim {
+  statement: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  basis: string[];
+  /** @minItems 1 */
+  source_ids: string[];
+}
+
+export interface IntelligenceTechnologyItem {
+  name: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  /** @minItems 1 */
+  source_ids: string[];
+}
+
+export type IntelligenceSignalType = typeof IntelligenceSignalType[keyof typeof IntelligenceSignalType];
+
+
+export const IntelligenceSignalType = {
+  expansion: 'expansion',
+  acquisition: 'acquisition',
+  funding: 'funding',
+  partnership: 'partnership',
+  product_launch: 'product_launch',
+  technology_adoption: 'technology_adoption',
+  ai_initiative: 'ai_initiative',
+  digital_transformation: 'digital_transformation',
+  hiring: 'hiring',
+  facility_expansion: 'facility_expansion',
+  market_entry: 'market_entry',
+  contract: 'contract',
+  leadership_change: 'leadership_change',
+  cost_reduction: 'cost_reduction',
+  restructuring: 'restructuring',
+  sustainability: 'sustainability',
+  supply_chain: 'supply_chain',
+  procurement: 'procurement',
+  other: 'other',
+} as const;
+
+export type IntelligenceSignalImportance = typeof IntelligenceSignalImportance[keyof typeof IntelligenceSignalImportance];
+
+
+export const IntelligenceSignalImportance = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface IntelligenceSignal {
+  signal_id: string;
+  type: IntelligenceSignalType;
+  title: string;
+  description: string;
+  event_date: string;
+  /** @nullable */
+  source_published_date: string | null;
+  observed_at: string;
+  importance: IntelligenceSignalImportance;
+  sales_relevance: string[];
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  /** @minItems 1 */
+  source_ids: string[];
+}
+
+export type IntelligenceOpportunityType = typeof IntelligenceOpportunityType[keyof typeof IntelligenceOpportunityType];
+
+
+export const IntelligenceOpportunityType = {
+  potential_pain_point: 'potential_pain_point',
+  growth_opportunity: 'growth_opportunity',
+  technology_gap: 'technology_gap',
+  operational_complexity: 'operational_complexity',
+  digital_transformation: 'digital_transformation',
+  cost_optimization: 'cost_optimization',
+  compliance: 'compliance',
+  inventory_complexity: 'inventory_complexity',
+  workforce: 'workforce',
+  data_modernization: 'data_modernization',
+  ai_adoption: 'ai_adoption',
+} as const;
+
+export type IntelligenceOpportunity = IntelligenceClaim & {
+  opportunity_id: string;
+  type: IntelligenceOpportunityType;
+  generated_at: string;
+};
+
+export type IntelligenceCompetitorRelationship = typeof IntelligenceCompetitorRelationship[keyof typeof IntelligenceCompetitorRelationship];
+
+
+export const IntelligenceCompetitorRelationship = {
+  direct: 'direct',
+  indirect: 'indirect',
+  adjacent: 'adjacent',
+} as const;
+
+export interface IntelligenceCompetitor {
+  name: string;
+  category: string;
+  relationship: IntelligenceCompetitorRelationship;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+  /** @minItems 1 */
+  source_ids: string[];
+}
+
+export type CompanyIntelligenceProfileExecutiveSummary = {
+  one_liner: string;
+  business_summary: string;
+  key_observations: string[];
+};
+
+export type CompanyIntelligenceProfileCompanyProfile = {
+  industry: string;
+  sub_industry: string;
+  company_type: string;
+  /** @nullable */
+  founded_year: number | null;
+  headquarters: string;
+  operating_regions: string[];
+  employee_range: string;
+  revenue_range: string;
+  ownership: string;
+  parent_company: string;
+};
+
+export type CompanyIntelligenceProfileBusiness = {
+  business_model: string;
+  products_services: string[];
+  customer_segments: string[];
+  key_markets: string[];
+  business_units: string[];
+  competitive_position: string;
+};
+
+export type CompanyIntelligenceProfileTechnology = {[key: string]: IntelligenceTechnologyItem[]};
+
+export type CompanyIntelligenceProfileSalesIntelligence = {[key: string]: IntelligenceClaim[]};
+
+export interface CompanyIntelligenceProfile {
+  executive_summary: CompanyIntelligenceProfileExecutiveSummary;
+  company_profile: CompanyIntelligenceProfileCompanyProfile;
+  business: CompanyIntelligenceProfileBusiness;
+  technology: CompanyIntelligenceProfileTechnology;
+  current_signals: IntelligenceSignal[];
+  opportunity_signals: IntelligenceOpportunity[];
+  sales_intelligence: CompanyIntelligenceProfileSalesIntelligence;
+  competitors: IntelligenceCompetitor[];
+  fact_sources: IntelligenceFactSource[];
+  conflicts: IntelligenceClaim[];
+  sources: IntelligenceSource[];
+}
+
+export interface CompanyIntelligenceVersionSummary {
+  id: string;
+  version: string;
+  schemaVersion: string;
+  researchedAt: string;
+  validUntil: string;
+  provider: string;
+  model: string;
+  sourceCount: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
+}
+
+export type CompanyIntelligenceVersion = CompanyIntelligenceVersionSummary & {
+  profile: CompanyIntelligenceProfile;
+};
+
+export interface CompanyIntelligenceResult {
+  companyId: string;
+  companyName: string;
+  summary: CompanyResearchSummary;
+  current: CompanyIntelligenceVersion | null;
+  latestJob: CompanyResearchJobStatus | null;
+  history: CompanyIntelligenceVersionSummary[];
+  researchCreditCost: number;
+  maxResearchDepth: number;
+  deepResearchEnabled: boolean;
+  researchAvailable: boolean;
+}
+
+export type CompanyResearchUsageJob = CompanyResearchJobStatus & ({
+  companyId: string;
+  companyName: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  webSearchCount: number;
+  sourceCount: number;
+  /** @nullable */
+  durationMs: number | null;
+  creditCost: number;
+  /** @nullable */
+  estimatedCostUsd: number | null;
+  /** @nullable */
+  estimatedCostInr: number | null;
+});
+
+export interface CompanyResearchUsage {
+  totalCompanies: number;
+  researchedCompanies: number;
+  researchesThisMonth: number;
+  successfulResearches: number;
+  failedResearches: number;
+  /** @nullable */
+  averageCostUsd: number | null;
+  /** @nullable */
+  totalCostUsd: number | null;
+  costedJobs: number;
+  averageSearches: number;
+  averageTokens: number;
+  total: number;
+  page: number;
+  pageSize: number;
+  jobs: CompanyResearchUsageJob[];
 }
 
 export interface GlobalCompanyAdminCollection {
@@ -3634,6 +4050,18 @@ subscribed?: boolean;
  * @maxItems 100
  */
 listIds?: string[];
+};
+
+export type GetCompanyResearchUsageParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
 };
 
 export type ListAdminGlobalCompaniesParams = {

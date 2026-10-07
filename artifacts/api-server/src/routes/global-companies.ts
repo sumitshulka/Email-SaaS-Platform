@@ -25,6 +25,7 @@ import {
   companyProfileFrom,
 } from "../lib/company-profile";
 import { requireUserRole } from "../lib/session";
+import { getResearchSummaries } from "../lib/company-intelligence";
 
 const router: IRouter = Router();
 
@@ -115,9 +116,11 @@ router.get(
         globalCompanyId ? [globalCompanyId] : [],
       ),
     );
+    const researchSummaries = await getResearchSummaries(rowIds);
     res.json({
       companies: rows.map((company) => ({
         ...presentGlobalCompany(company),
+        researchSummary: researchSummaries.get(company.id),
         alreadyAdded: alreadyAdded.has(company.id),
       })),
       total: Number(countRow?.total ?? 0),

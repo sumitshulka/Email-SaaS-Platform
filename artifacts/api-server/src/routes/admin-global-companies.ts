@@ -30,6 +30,7 @@ import {
   type CompanyProfileValues,
 } from "../lib/company-profile";
 import { requireSuperadmin } from "../lib/session";
+import { getResearchSummaries } from "../lib/company-intelligence";
 
 const router: IRouter = Router();
 const linkedWorkspaceCompany = alias(companiesTable, "linked_workspace_company");
@@ -111,8 +112,9 @@ router.get(
       db.select({ total: count() }).from(globalCompaniesTable).where(where),
     ]);
 
+    const researchSummaries = await getResearchSummaries(rows.map(row => row.id));
     res.json({
-      globalCompanies: rows.map(presentGlobalCompany),
+      globalCompanies: rows.map(row => ({ ...presentGlobalCompany(row), researchSummary: researchSummaries.get(row.id) })),
       total: Number(countRow?.total ?? 0),
       page,
       pageSize,

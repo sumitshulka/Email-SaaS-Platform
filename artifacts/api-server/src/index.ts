@@ -5,6 +5,7 @@ import { requireSessionSecret } from "./lib/security";
 import { startCampaignWorker } from "./lib/campaign-worker";
 import { startGmailMailboxWorker } from "./lib/gmail-mailbox";
 import { startMicrosoft365TraceWorker } from "./lib/microsoft365-trace";
+import { startCompanyResearchWorker } from "./lib/company-intelligence";
 
 const rawPort = process.env["PORT"];
 
@@ -26,6 +27,7 @@ try {
   startCampaignWorker();
   startGmailMailboxWorker();
   startMicrosoft365TraceWorker();
+  startCompanyResearchWorker();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");

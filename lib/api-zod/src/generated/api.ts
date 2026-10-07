@@ -1656,6 +1656,583 @@ export const ExportCompaniesResponse = zod.unknown()
 
 
 /**
+ * @summary Read reusable global company intelligence without starting research
+ */
+export const GetCompanyIntelligenceParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const getCompanyIntelligenceResponseSummarySourceCountMin = 0;
+
+export const getCompanyIntelligenceResponseCurrentOneOneConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneOneConfidenceMax = 1;
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileTechnologyItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileTechnologyItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileCurrentSignalsItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileCurrentSignalsItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileOpportunitySignalsItemOneConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileOpportunitySignalsItemOneConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileSalesIntelligenceItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileSalesIntelligenceItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileCompetitorsItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileCompetitorsItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileFactSourcesItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileFactSourcesItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileConflictsItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseCurrentOneTwoProfileConflictsItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceResponseHistoryItemConfidenceMin = 0;
+export const getCompanyIntelligenceResponseHistoryItemConfidenceMax = 1;
+
+
+
+export const GetCompanyIntelligenceResponse = zod.object({
+  "companyId": zod.string().uuid(),
+  "companyName": zod.string(),
+  "summary": zod.object({
+  "status": zod.enum(['not_researched', 'queued', 'running', 'completed', 'failed', 'cancelled']),
+  "freshness": zod.enum(['not_researched', 'fresh', 'aging', 'stale']),
+  "researchedAt": zod.coerce.date().nullable(),
+  "sourceCount": zod.number().int().min(getCompanyIntelligenceResponseSummarySourceCountMin)
+}),
+  "current": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "version": zod.string(),
+  "schemaVersion": zod.string(),
+  "researchedAt": zod.coerce.date(),
+  "validUntil": zod.coerce.date(),
+  "provider": zod.string(),
+  "model": zod.string(),
+  "sourceCount": zod.number().int(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneOneConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneOneConfidenceMax)
+}).and(zod.object({
+  "profile": zod.object({
+  "executive_summary": zod.object({
+  "one_liner": zod.string(),
+  "business_summary": zod.string(),
+  "key_observations": zod.array(zod.string())
+}),
+  "company_profile": zod.object({
+  "industry": zod.string(),
+  "sub_industry": zod.string(),
+  "company_type": zod.string(),
+  "founded_year": zod.number().int().nullable(),
+  "headquarters": zod.string(),
+  "operating_regions": zod.array(zod.string()),
+  "employee_range": zod.string(),
+  "revenue_range": zod.string(),
+  "ownership": zod.string(),
+  "parent_company": zod.string()
+}),
+  "business": zod.object({
+  "business_model": zod.string(),
+  "products_services": zod.array(zod.string()),
+  "customer_segments": zod.array(zod.string()),
+  "key_markets": zod.array(zod.string()),
+  "business_units": zod.array(zod.string()),
+  "competitive_position": zod.string()
+}),
+  "technology": zod.record(zod.string(), zod.array(zod.object({
+  "name": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileTechnologyItemConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileTechnologyItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+}))),
+  "current_signals": zod.array(zod.object({
+  "signal_id": zod.string(),
+  "type": zod.enum(['expansion', 'acquisition', 'funding', 'partnership', 'product_launch', 'technology_adoption', 'ai_initiative', 'digital_transformation', 'hiring', 'facility_expansion', 'market_entry', 'contract', 'leadership_change', 'cost_reduction', 'restructuring', 'sustainability', 'supply_chain', 'procurement', 'other']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "event_date": zod.coerce.date(),
+  "source_published_date": zod.string().nullable(),
+  "observed_at": zod.coerce.date(),
+  "importance": zod.enum(['high', 'medium', 'low']),
+  "sales_relevance": zod.array(zod.string()),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileCurrentSignalsItemConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileCurrentSignalsItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "opportunity_signals": zod.array(zod.object({
+  "statement": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileOpportunitySignalsItemOneConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileOpportunitySignalsItemOneConfidenceMax),
+  "basis": zod.array(zod.string()),
+  "source_ids": zod.array(zod.string()).min(1)
+}).and(zod.object({
+  "opportunity_id": zod.string(),
+  "type": zod.enum(['potential_pain_point', 'growth_opportunity', 'technology_gap', 'operational_complexity', 'digital_transformation', 'cost_optimization', 'compliance', 'inventory_complexity', 'workforce', 'data_modernization', 'ai_adoption']),
+  "generated_at": zod.coerce.date()
+}))),
+  "sales_intelligence": zod.record(zod.string(), zod.array(zod.object({
+  "statement": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileSalesIntelligenceItemConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileSalesIntelligenceItemConfidenceMax),
+  "basis": zod.array(zod.string()),
+  "source_ids": zod.array(zod.string()).min(1)
+}))),
+  "competitors": zod.array(zod.object({
+  "name": zod.string(),
+  "category": zod.string(),
+  "relationship": zod.enum(['direct', 'indirect', 'adjacent']),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileCompetitorsItemConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileCompetitorsItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "fact_sources": zod.array(zod.object({
+  "path": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileFactSourcesItemConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileFactSourcesItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "conflicts": zod.array(zod.object({
+  "statement": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseCurrentOneTwoProfileConflictsItemConfidenceMin).max(getCompanyIntelligenceResponseCurrentOneTwoProfileConflictsItemConfidenceMax),
+  "basis": zod.array(zod.string()),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "sources": zod.array(zod.object({
+  "source_id": zod.string(),
+  "source_type": zod.enum(['company_website', 'company_product_page', 'company_newsroom', 'investor_relation', 'regulatory_filing', 'government', 'reputable_news', 'industry_source', 'other']),
+  "title": zod.string(),
+  "url": zod.string().url(),
+  "publisher": zod.string(),
+  "published_date": zod.string().nullable(),
+  "accessed_at": zod.coerce.date(),
+  "reliability": zod.enum(['high', 'medium', 'low'])
+}))
+})
+})),zod.null()]),
+  "latestJob": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "stage": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "error": zod.string().nullable()
+}),zod.null()]),
+  "history": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "version": zod.string(),
+  "schemaVersion": zod.string(),
+  "researchedAt": zod.coerce.date(),
+  "validUntil": zod.coerce.date(),
+  "provider": zod.string(),
+  "model": zod.string(),
+  "sourceCount": zod.number().int(),
+  "confidence": zod.number().min(getCompanyIntelligenceResponseHistoryItemConfidenceMin).max(getCompanyIntelligenceResponseHistoryItemConfidenceMax)
+})),
+  "researchCreditCost": zod.number().int(),
+  "maxResearchDepth": zod.number().int(),
+  "deepResearchEnabled": zod.boolean(),
+  "researchAvailable": zod.boolean()
+})
+
+
+/**
+ * @summary Explicitly request one company-level research job
+ */
+export const StartCompanyResearchParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const startCompanyResearchBodyOverrideFreshDefault = false;
+export const startCompanyResearchBodyDepthDefault = 1;
+export const startCompanyResearchBodyDepthMax = 3;
+
+
+
+export const StartCompanyResearchBody = zod.object({
+  "confirmed": zod.literal(true),
+  "overrideFresh": zod.boolean().default(startCompanyResearchBodyOverrideFreshDefault),
+  "depth": zod.number().int().min(1).max(startCompanyResearchBodyDepthMax).default(startCompanyResearchBodyDepthDefault)
+})
+
+export const StartCompanyResearchResponse = zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "stage": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "error": zod.string().nullable()
+})
+
+
+/**
+ * @summary Read a previous successful research profile without researching again
+ */
+export const GetCompanyIntelligenceVersionParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid(),
+  "versionId": zod.coerce.string().uuid()
+})
+
+export const getCompanyIntelligenceVersionResponseOneConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseOneConfidenceMax = 1;
+
+export const getCompanyIntelligenceVersionResponseTwoProfileTechnologyItemConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileTechnologyItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceVersionResponseTwoProfileCurrentSignalsItemConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileCurrentSignalsItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceVersionResponseTwoProfileOpportunitySignalsItemOneConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileOpportunitySignalsItemOneConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceVersionResponseTwoProfileSalesIntelligenceItemConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileSalesIntelligenceItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceVersionResponseTwoProfileCompetitorsItemConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileCompetitorsItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceVersionResponseTwoProfileFactSourcesItemConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileFactSourcesItemConfidenceMax = 1;
+
+
+export const getCompanyIntelligenceVersionResponseTwoProfileConflictsItemConfidenceMin = 0;
+export const getCompanyIntelligenceVersionResponseTwoProfileConflictsItemConfidenceMax = 1;
+
+
+
+
+export const GetCompanyIntelligenceVersionResponse = zod.object({
+  "id": zod.string().uuid(),
+  "version": zod.string(),
+  "schemaVersion": zod.string(),
+  "researchedAt": zod.coerce.date(),
+  "validUntil": zod.coerce.date(),
+  "provider": zod.string(),
+  "model": zod.string(),
+  "sourceCount": zod.number().int(),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseOneConfidenceMin).max(getCompanyIntelligenceVersionResponseOneConfidenceMax)
+}).and(zod.object({
+  "profile": zod.object({
+  "executive_summary": zod.object({
+  "one_liner": zod.string(),
+  "business_summary": zod.string(),
+  "key_observations": zod.array(zod.string())
+}),
+  "company_profile": zod.object({
+  "industry": zod.string(),
+  "sub_industry": zod.string(),
+  "company_type": zod.string(),
+  "founded_year": zod.number().int().nullable(),
+  "headquarters": zod.string(),
+  "operating_regions": zod.array(zod.string()),
+  "employee_range": zod.string(),
+  "revenue_range": zod.string(),
+  "ownership": zod.string(),
+  "parent_company": zod.string()
+}),
+  "business": zod.object({
+  "business_model": zod.string(),
+  "products_services": zod.array(zod.string()),
+  "customer_segments": zod.array(zod.string()),
+  "key_markets": zod.array(zod.string()),
+  "business_units": zod.array(zod.string()),
+  "competitive_position": zod.string()
+}),
+  "technology": zod.record(zod.string(), zod.array(zod.object({
+  "name": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileTechnologyItemConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileTechnologyItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+}))),
+  "current_signals": zod.array(zod.object({
+  "signal_id": zod.string(),
+  "type": zod.enum(['expansion', 'acquisition', 'funding', 'partnership', 'product_launch', 'technology_adoption', 'ai_initiative', 'digital_transformation', 'hiring', 'facility_expansion', 'market_entry', 'contract', 'leadership_change', 'cost_reduction', 'restructuring', 'sustainability', 'supply_chain', 'procurement', 'other']),
+  "title": zod.string(),
+  "description": zod.string(),
+  "event_date": zod.coerce.date(),
+  "source_published_date": zod.string().nullable(),
+  "observed_at": zod.coerce.date(),
+  "importance": zod.enum(['high', 'medium', 'low']),
+  "sales_relevance": zod.array(zod.string()),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileCurrentSignalsItemConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileCurrentSignalsItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "opportunity_signals": zod.array(zod.object({
+  "statement": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileOpportunitySignalsItemOneConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileOpportunitySignalsItemOneConfidenceMax),
+  "basis": zod.array(zod.string()),
+  "source_ids": zod.array(zod.string()).min(1)
+}).and(zod.object({
+  "opportunity_id": zod.string(),
+  "type": zod.enum(['potential_pain_point', 'growth_opportunity', 'technology_gap', 'operational_complexity', 'digital_transformation', 'cost_optimization', 'compliance', 'inventory_complexity', 'workforce', 'data_modernization', 'ai_adoption']),
+  "generated_at": zod.coerce.date()
+}))),
+  "sales_intelligence": zod.record(zod.string(), zod.array(zod.object({
+  "statement": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileSalesIntelligenceItemConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileSalesIntelligenceItemConfidenceMax),
+  "basis": zod.array(zod.string()),
+  "source_ids": zod.array(zod.string()).min(1)
+}))),
+  "competitors": zod.array(zod.object({
+  "name": zod.string(),
+  "category": zod.string(),
+  "relationship": zod.enum(['direct', 'indirect', 'adjacent']),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileCompetitorsItemConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileCompetitorsItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "fact_sources": zod.array(zod.object({
+  "path": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileFactSourcesItemConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileFactSourcesItemConfidenceMax),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "conflicts": zod.array(zod.object({
+  "statement": zod.string(),
+  "confidence": zod.number().min(getCompanyIntelligenceVersionResponseTwoProfileConflictsItemConfidenceMin).max(getCompanyIntelligenceVersionResponseTwoProfileConflictsItemConfidenceMax),
+  "basis": zod.array(zod.string()),
+  "source_ids": zod.array(zod.string()).min(1)
+})),
+  "sources": zod.array(zod.object({
+  "source_id": zod.string(),
+  "source_type": zod.enum(['company_website', 'company_product_page', 'company_newsroom', 'investor_relation', 'regulatory_filing', 'government', 'reputable_news', 'industry_source', 'other']),
+  "title": zod.string(),
+  "url": zod.string().url(),
+  "publisher": zod.string(),
+  "published_date": zod.string().nullable(),
+  "accessed_at": zod.coerce.date(),
+  "reliability": zod.enum(['high', 'medium', 'low'])
+}))
+})
+}))
+
+
+/**
+ * @summary Get company research controls and estimation rates
+ */
+export const getCompanyResearchSettingsResponseFreshDaysDefault = 30;
+export const getCompanyResearchSettingsResponseFreshDaysMax = 365;
+
+export const getCompanyResearchSettingsResponseAgingDaysDefault = 90;
+export const getCompanyResearchSettingsResponseAgingDaysMin = 2;
+export const getCompanyResearchSettingsResponseAgingDaysMax = 730;
+
+export const getCompanyResearchSettingsResponseMaxResearchDepthDefault = 2;
+export const getCompanyResearchSettingsResponseMaxResearchDepthMax = 3;
+
+export const getCompanyResearchSettingsResponseMaxWebSearchesDefault = 3;
+export const getCompanyResearchSettingsResponseMaxWebSearchesMax = 10;
+
+
+export const getCompanyResearchSettingsResponseResearchCreditCostDefault = 1;
+export const getCompanyResearchSettingsResponseResearchCreditCostMin = 0;
+export const getCompanyResearchSettingsResponseResearchCreditCostMax = 1000;
+
+export const getCompanyResearchSettingsResponseDeepResearchEnabledDefault = false;
+export const getCompanyResearchSettingsResponsePreferredModelMax = 200;
+
+export const getCompanyResearchSettingsResponseBackupModelMax = 200;
+
+export const getCompanyResearchSettingsResponseInputCostPerMillionUsdMin = 0;
+export const getCompanyResearchSettingsResponseInputCostPerMillionUsdMax = 10000;
+
+export const getCompanyResearchSettingsResponseOutputCostPerMillionUsdMin = 0;
+export const getCompanyResearchSettingsResponseOutputCostPerMillionUsdMax = 10000;
+
+export const getCompanyResearchSettingsResponseSearchCostUsdMin = 0;
+export const getCompanyResearchSettingsResponseSearchCostUsdMax = 100;
+
+export const getCompanyResearchSettingsResponseUsdToInrDefault = 85;
+export const getCompanyResearchSettingsResponseUsdToInrMax = 1000;
+
+
+
+export const GetCompanyResearchSettingsResponse = zod.object({
+  "freshDays": zod.number().int().min(1).max(getCompanyResearchSettingsResponseFreshDaysMax).default(getCompanyResearchSettingsResponseFreshDaysDefault),
+  "agingDays": zod.number().int().min(getCompanyResearchSettingsResponseAgingDaysMin).max(getCompanyResearchSettingsResponseAgingDaysMax).default(getCompanyResearchSettingsResponseAgingDaysDefault),
+  "maxResearchDepth": zod.number().int().min(1).max(getCompanyResearchSettingsResponseMaxResearchDepthMax).default(getCompanyResearchSettingsResponseMaxResearchDepthDefault),
+  "maxWebSearches": zod.number().int().min(1).max(getCompanyResearchSettingsResponseMaxWebSearchesMax).default(getCompanyResearchSettingsResponseMaxWebSearchesDefault),
+  "allowedSourceTypes": zod.array(zod.enum(['company_website', 'company_product_page', 'company_newsroom', 'investor_relation', 'regulatory_filing', 'government', 'reputable_news', 'industry_source', 'other'])).min(1),
+  "researchCreditCost": zod.number().int().min(getCompanyResearchSettingsResponseResearchCreditCostMin).max(getCompanyResearchSettingsResponseResearchCreditCostMax).default(getCompanyResearchSettingsResponseResearchCreditCostDefault),
+  "deepResearchEnabled": zod.boolean().default(getCompanyResearchSettingsResponseDeepResearchEnabledDefault),
+  "preferredModel": zod.string().max(getCompanyResearchSettingsResponsePreferredModelMax).nullable(),
+  "backupModel": zod.string().max(getCompanyResearchSettingsResponseBackupModelMax).nullable(),
+  "inputCostPerMillionUsd": zod.number().min(getCompanyResearchSettingsResponseInputCostPerMillionUsdMin).max(getCompanyResearchSettingsResponseInputCostPerMillionUsdMax).nullable(),
+  "outputCostPerMillionUsd": zod.number().min(getCompanyResearchSettingsResponseOutputCostPerMillionUsdMin).max(getCompanyResearchSettingsResponseOutputCostPerMillionUsdMax).nullable(),
+  "searchCostUsd": zod.number().min(getCompanyResearchSettingsResponseSearchCostUsdMin).max(getCompanyResearchSettingsResponseSearchCostUsdMax).nullable(),
+  "usdToInr": zod.number().min(1).max(getCompanyResearchSettingsResponseUsdToInrMax).default(getCompanyResearchSettingsResponseUsdToInrDefault)
+})
+
+
+/**
+ * @summary Configure research freshness, limits and models from the connected provider
+ */
+export const updateCompanyResearchSettingsBodyFreshDaysDefault = 30;
+export const updateCompanyResearchSettingsBodyFreshDaysMax = 365;
+
+export const updateCompanyResearchSettingsBodyAgingDaysDefault = 90;
+export const updateCompanyResearchSettingsBodyAgingDaysMin = 2;
+export const updateCompanyResearchSettingsBodyAgingDaysMax = 730;
+
+export const updateCompanyResearchSettingsBodyMaxResearchDepthDefault = 2;
+export const updateCompanyResearchSettingsBodyMaxResearchDepthMax = 3;
+
+export const updateCompanyResearchSettingsBodyMaxWebSearchesDefault = 3;
+export const updateCompanyResearchSettingsBodyMaxWebSearchesMax = 10;
+
+
+export const updateCompanyResearchSettingsBodyResearchCreditCostDefault = 1;
+export const updateCompanyResearchSettingsBodyResearchCreditCostMin = 0;
+export const updateCompanyResearchSettingsBodyResearchCreditCostMax = 1000;
+
+export const updateCompanyResearchSettingsBodyDeepResearchEnabledDefault = false;
+export const updateCompanyResearchSettingsBodyPreferredModelMax = 200;
+
+export const updateCompanyResearchSettingsBodyBackupModelMax = 200;
+
+export const updateCompanyResearchSettingsBodyInputCostPerMillionUsdMin = 0;
+export const updateCompanyResearchSettingsBodyInputCostPerMillionUsdMax = 10000;
+
+export const updateCompanyResearchSettingsBodyOutputCostPerMillionUsdMin = 0;
+export const updateCompanyResearchSettingsBodyOutputCostPerMillionUsdMax = 10000;
+
+export const updateCompanyResearchSettingsBodySearchCostUsdMin = 0;
+export const updateCompanyResearchSettingsBodySearchCostUsdMax = 100;
+
+export const updateCompanyResearchSettingsBodyUsdToInrDefault = 85;
+export const updateCompanyResearchSettingsBodyUsdToInrMax = 1000;
+
+
+
+export const UpdateCompanyResearchSettingsBody = zod.object({
+  "freshDays": zod.number().int().min(1).max(updateCompanyResearchSettingsBodyFreshDaysMax).default(updateCompanyResearchSettingsBodyFreshDaysDefault),
+  "agingDays": zod.number().int().min(updateCompanyResearchSettingsBodyAgingDaysMin).max(updateCompanyResearchSettingsBodyAgingDaysMax).default(updateCompanyResearchSettingsBodyAgingDaysDefault),
+  "maxResearchDepth": zod.number().int().min(1).max(updateCompanyResearchSettingsBodyMaxResearchDepthMax).default(updateCompanyResearchSettingsBodyMaxResearchDepthDefault),
+  "maxWebSearches": zod.number().int().min(1).max(updateCompanyResearchSettingsBodyMaxWebSearchesMax).default(updateCompanyResearchSettingsBodyMaxWebSearchesDefault),
+  "allowedSourceTypes": zod.array(zod.enum(['company_website', 'company_product_page', 'company_newsroom', 'investor_relation', 'regulatory_filing', 'government', 'reputable_news', 'industry_source', 'other'])).min(1),
+  "researchCreditCost": zod.number().int().min(updateCompanyResearchSettingsBodyResearchCreditCostMin).max(updateCompanyResearchSettingsBodyResearchCreditCostMax).default(updateCompanyResearchSettingsBodyResearchCreditCostDefault),
+  "deepResearchEnabled": zod.boolean().default(updateCompanyResearchSettingsBodyDeepResearchEnabledDefault),
+  "preferredModel": zod.string().max(updateCompanyResearchSettingsBodyPreferredModelMax).nullable(),
+  "backupModel": zod.string().max(updateCompanyResearchSettingsBodyBackupModelMax).nullable(),
+  "inputCostPerMillionUsd": zod.number().min(updateCompanyResearchSettingsBodyInputCostPerMillionUsdMin).max(updateCompanyResearchSettingsBodyInputCostPerMillionUsdMax).nullable(),
+  "outputCostPerMillionUsd": zod.number().min(updateCompanyResearchSettingsBodyOutputCostPerMillionUsdMin).max(updateCompanyResearchSettingsBodyOutputCostPerMillionUsdMax).nullable(),
+  "searchCostUsd": zod.number().min(updateCompanyResearchSettingsBodySearchCostUsdMin).max(updateCompanyResearchSettingsBodySearchCostUsdMax).nullable(),
+  "usdToInr": zod.number().min(1).max(updateCompanyResearchSettingsBodyUsdToInrMax).default(updateCompanyResearchSettingsBodyUsdToInrDefault)
+})
+
+export const updateCompanyResearchSettingsResponseFreshDaysDefault = 30;
+export const updateCompanyResearchSettingsResponseFreshDaysMax = 365;
+
+export const updateCompanyResearchSettingsResponseAgingDaysDefault = 90;
+export const updateCompanyResearchSettingsResponseAgingDaysMin = 2;
+export const updateCompanyResearchSettingsResponseAgingDaysMax = 730;
+
+export const updateCompanyResearchSettingsResponseMaxResearchDepthDefault = 2;
+export const updateCompanyResearchSettingsResponseMaxResearchDepthMax = 3;
+
+export const updateCompanyResearchSettingsResponseMaxWebSearchesDefault = 3;
+export const updateCompanyResearchSettingsResponseMaxWebSearchesMax = 10;
+
+
+export const updateCompanyResearchSettingsResponseResearchCreditCostDefault = 1;
+export const updateCompanyResearchSettingsResponseResearchCreditCostMin = 0;
+export const updateCompanyResearchSettingsResponseResearchCreditCostMax = 1000;
+
+export const updateCompanyResearchSettingsResponseDeepResearchEnabledDefault = false;
+export const updateCompanyResearchSettingsResponsePreferredModelMax = 200;
+
+export const updateCompanyResearchSettingsResponseBackupModelMax = 200;
+
+export const updateCompanyResearchSettingsResponseInputCostPerMillionUsdMin = 0;
+export const updateCompanyResearchSettingsResponseInputCostPerMillionUsdMax = 10000;
+
+export const updateCompanyResearchSettingsResponseOutputCostPerMillionUsdMin = 0;
+export const updateCompanyResearchSettingsResponseOutputCostPerMillionUsdMax = 10000;
+
+export const updateCompanyResearchSettingsResponseSearchCostUsdMin = 0;
+export const updateCompanyResearchSettingsResponseSearchCostUsdMax = 100;
+
+export const updateCompanyResearchSettingsResponseUsdToInrDefault = 85;
+export const updateCompanyResearchSettingsResponseUsdToInrMax = 1000;
+
+
+
+export const UpdateCompanyResearchSettingsResponse = zod.object({
+  "freshDays": zod.number().int().min(1).max(updateCompanyResearchSettingsResponseFreshDaysMax).default(updateCompanyResearchSettingsResponseFreshDaysDefault),
+  "agingDays": zod.number().int().min(updateCompanyResearchSettingsResponseAgingDaysMin).max(updateCompanyResearchSettingsResponseAgingDaysMax).default(updateCompanyResearchSettingsResponseAgingDaysDefault),
+  "maxResearchDepth": zod.number().int().min(1).max(updateCompanyResearchSettingsResponseMaxResearchDepthMax).default(updateCompanyResearchSettingsResponseMaxResearchDepthDefault),
+  "maxWebSearches": zod.number().int().min(1).max(updateCompanyResearchSettingsResponseMaxWebSearchesMax).default(updateCompanyResearchSettingsResponseMaxWebSearchesDefault),
+  "allowedSourceTypes": zod.array(zod.enum(['company_website', 'company_product_page', 'company_newsroom', 'investor_relation', 'regulatory_filing', 'government', 'reputable_news', 'industry_source', 'other'])).min(1),
+  "researchCreditCost": zod.number().int().min(updateCompanyResearchSettingsResponseResearchCreditCostMin).max(updateCompanyResearchSettingsResponseResearchCreditCostMax).default(updateCompanyResearchSettingsResponseResearchCreditCostDefault),
+  "deepResearchEnabled": zod.boolean().default(updateCompanyResearchSettingsResponseDeepResearchEnabledDefault),
+  "preferredModel": zod.string().max(updateCompanyResearchSettingsResponsePreferredModelMax).nullable(),
+  "backupModel": zod.string().max(updateCompanyResearchSettingsResponseBackupModelMax).nullable(),
+  "inputCostPerMillionUsd": zod.number().min(updateCompanyResearchSettingsResponseInputCostPerMillionUsdMin).max(updateCompanyResearchSettingsResponseInputCostPerMillionUsdMax).nullable(),
+  "outputCostPerMillionUsd": zod.number().min(updateCompanyResearchSettingsResponseOutputCostPerMillionUsdMin).max(updateCompanyResearchSettingsResponseOutputCostPerMillionUsdMax).nullable(),
+  "searchCostUsd": zod.number().min(updateCompanyResearchSettingsResponseSearchCostUsdMin).max(updateCompanyResearchSettingsResponseSearchCostUsdMax).nullable(),
+  "usdToInr": zod.number().min(1).max(updateCompanyResearchSettingsResponseUsdToInrMax).default(updateCompanyResearchSettingsResponseUsdToInrDefault)
+})
+
+
+/**
+ * @summary Monitor research jobs and internal token, search and cost usage
+ */
+export const getCompanyResearchUsageQueryPageDefault = 1;
+
+export const getCompanyResearchUsageQueryPageSizeDefault = 20;
+export const getCompanyResearchUsageQueryPageSizeMax = 100;
+
+
+
+export const GetCompanyResearchUsageQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(getCompanyResearchUsageQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(getCompanyResearchUsageQueryPageSizeMax).default(getCompanyResearchUsageQueryPageSizeDefault)
+})
+
+export const GetCompanyResearchUsageResponse = zod.object({
+  "totalCompanies": zod.number().int(),
+  "researchedCompanies": zod.number().int(),
+  "researchesThisMonth": zod.number().int(),
+  "successfulResearches": zod.number().int(),
+  "failedResearches": zod.number().int(),
+  "averageCostUsd": zod.number().nullable(),
+  "totalCostUsd": zod.number().nullable(),
+  "costedJobs": zod.number().int(),
+  "averageSearches": zod.number(),
+  "averageTokens": zod.number(),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "jobs": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "stage": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "error": zod.string().nullable()
+}).and(zod.object({
+  "companyId": zod.string(),
+  "companyName": zod.string(),
+  "provider": zod.string(),
+  "model": zod.string(),
+  "inputTokens": zod.number().int(),
+  "outputTokens": zod.number().int(),
+  "webSearchCount": zod.number().int(),
+  "sourceCount": zod.number().int(),
+  "durationMs": zod.number().int().nullable(),
+  "creditCost": zod.number().int(),
+  "estimatedCostUsd": zod.number().nullable(),
+  "estimatedCostInr": zod.number().nullable()
+})))
+})
+
+
+/**
  * @summary List and search the superadmin-managed global company catalog
  */
 export const listAdminGlobalCompaniesQuerySearchDefault = ``;
@@ -1695,6 +2272,8 @@ export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLinkedinU
 
 export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLocationMax = 200;
 
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemResearchSummarySourceCountMin = 0;
+
 export const listAdminGlobalCompaniesResponseTotalMin = 0;
 
 
@@ -1716,7 +2295,13 @@ export const ListAdminGlobalCompaniesResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyLocationMax).nullable(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date(),
+  "researchSummary": zod.object({
+  "status": zod.enum(['not_researched', 'queued', 'running', 'completed', 'failed', 'cancelled']),
+  "freshness": zod.enum(['not_researched', 'fresh', 'aging', 'stale']),
+  "researchedAt": zod.coerce.date().nullable(),
+  "sourceCount": zod.number().int().min(listAdminGlobalCompaniesResponseGlobalCompaniesItemResearchSummarySourceCountMin)
+}).optional()
 })),
   "total": zod.number().int().min(listAdminGlobalCompaniesResponseTotalMin),
   "page": zod.number().int().min(1),
@@ -1782,6 +2367,8 @@ export const createGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
 
 export const createGlobalCompanyResponseCompanyLocationMax = 200;
 
+export const createGlobalCompanyResponseResearchSummarySourceCountMin = 0;
+
 
 
 export const CreateGlobalCompanyResponse = zod.object({
@@ -1797,7 +2384,13 @@ export const CreateGlobalCompanyResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(createGlobalCompanyResponseCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(createGlobalCompanyResponseCompanyLocationMax).nullable(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date(),
+  "researchSummary": zod.object({
+  "status": zod.enum(['not_researched', 'queued', 'running', 'completed', 'failed', 'cancelled']),
+  "freshness": zod.enum(['not_researched', 'fresh', 'aging', 'stale']),
+  "researchedAt": zod.coerce.date().nullable(),
+  "sourceCount": zod.number().int().min(createGlobalCompanyResponseResearchSummarySourceCountMin)
+}).optional()
 })
 
 
@@ -1935,6 +2528,8 @@ export const updateGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
 
 export const updateGlobalCompanyResponseCompanyLocationMax = 200;
 
+export const updateGlobalCompanyResponseResearchSummarySourceCountMin = 0;
+
 
 
 export const UpdateGlobalCompanyResponse = zod.object({
@@ -1950,7 +2545,13 @@ export const UpdateGlobalCompanyResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(updateGlobalCompanyResponseCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(updateGlobalCompanyResponseCompanyLocationMax).nullable(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date(),
+  "researchSummary": zod.object({
+  "status": zod.enum(['not_researched', 'queued', 'running', 'completed', 'failed', 'cancelled']),
+  "freshness": zod.enum(['not_researched', 'fresh', 'aging', 'stale']),
+  "researchedAt": zod.coerce.date().nullable(),
+  "sourceCount": zod.number().int().min(updateGlobalCompanyResponseResearchSummarySourceCountMin)
+}).optional()
 })
 
 
@@ -2004,6 +2605,8 @@ export const searchGlobalCompaniesResponseCompaniesItemOneCompanyLinkedinUrlMax 
 
 export const searchGlobalCompaniesResponseCompaniesItemOneCompanyLocationMax = 200;
 
+export const searchGlobalCompaniesResponseCompaniesItemOneResearchSummarySourceCountMin = 0;
+
 export const searchGlobalCompaniesResponseTotalMin = 0;
 
 
@@ -2025,7 +2628,13 @@ export const SearchGlobalCompaniesResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyLocationMax).nullable(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date(),
+  "researchSummary": zod.object({
+  "status": zod.enum(['not_researched', 'queued', 'running', 'completed', 'failed', 'cancelled']),
+  "freshness": zod.enum(['not_researched', 'fresh', 'aging', 'stale']),
+  "researchedAt": zod.coerce.date().nullable(),
+  "sourceCount": zod.number().int().min(searchGlobalCompaniesResponseCompaniesItemOneResearchSummarySourceCountMin)
+}).optional()
 }).and(zod.object({
   "alreadyAdded": zod.boolean()
 }))),

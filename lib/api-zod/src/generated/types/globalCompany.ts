@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CompanyResearchSummary } from './companyResearchSummary';
 
 export interface GlobalCompany {
   id: string;
@@ -57,4 +58,5 @@ export interface GlobalCompany {
   companyLocation: string | null;
   createdAt: Date;
   updatedAt: Date;
+  researchSummary?: CompanyResearchSummary;
 }

@@ -967,6 +967,137 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /company-intelligence/{globalCompanyId}:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getCompanyIntelligence
+      tags: [companies]
+      summary: Read reusable global company intelligence without starting research
+      responses:
+        "200":
+          description: Current intelligence, status and research history without internal costs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyIntelligenceResult" }
+        "404":
+          description: Global company not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /company-intelligence/{globalCompanyId}/research:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: startCompanyResearch
+      tags: [companies]
+      summary: Explicitly request one company-level research job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyResearchInput" }
+      responses:
+        "202":
+          description: Research queued after explicit confirmation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchJobStatus" }
+        "400":
+          description: Invalid research request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Research is in progress or a recent-research override is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "503":
+          description: Configure an AI provider before research
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /company-intelligence/{globalCompanyId}/history/{versionId}:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: versionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getCompanyIntelligenceVersion
+      tags: [companies]
+      summary: Read a previous successful research profile without researching again
+      responses:
+        "200":
+          description: Stored research version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyIntelligenceVersion" }
+        "404":
+          description: Version not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /admin/company-intelligence/settings:
+    get:
+      operationId: getCompanyResearchSettings
+      tags: [admin]
+      summary: Get company research controls and estimation rates
+      responses:
+        "200":
+          description: Research settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchSettings" }
+    put:
+      operationId: updateCompanyResearchSettings
+      tags: [admin]
+      summary: Configure research freshness, limits and models from the connected provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyResearchSettings" }
+      responses:
+        "200":
+          description: Saved settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchSettings" }
+        "400":
+          description: Invalid research settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /admin/company-intelligence/usage:
+    get:
+      operationId: getCompanyResearchUsage
+      tags: [admin]
+      summary: Monitor research jobs and internal token, search and cost usage
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Monitoring metrics and a page of research executions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchUsage" }
   /admin/global-companies:
     get:
       operationId: listAdminGlobalCompanies
@@ -3500,7 +3631,275 @@ components:
         companyLocation: { type: ["string", "null"], maxLength: 200 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        researchSummary: { $ref: "#/components/schemas/CompanyResearchSummary" }
       required: [id, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+    CompanyResearchInput:
+      type: object
+      properties:
+        confirmed: { type: boolean, enum: [true] }
+        overrideFresh: { type: boolean, default: false }
+        depth: { type: integer, minimum: 1, maximum: 3, default: 1 }
+      required: [confirmed]
+    IntelligenceSourceType:
+      type: string
+      enum: [company_website, company_product_page, company_newsroom, investor_relation, regulatory_filing, government, reputable_news, industry_source, other]
+    CompanyResearchSettings:
+      type: object
+      properties:
+        freshDays: { type: integer, minimum: 1, maximum: 365, default: 30 }
+        agingDays: { type: integer, minimum: 2, maximum: 730, default: 90 }
+        maxResearchDepth: { type: integer, minimum: 1, maximum: 3, default: 2 }
+        maxWebSearches: { type: integer, minimum: 1, maximum: 10, default: 3 }
+        allowedSourceTypes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/IntelligenceSourceType" }
+        researchCreditCost: { type: integer, minimum: 0, maximum: 1000, default: 1 }
+        deepResearchEnabled: { type: boolean, default: false }
+        preferredModel: { type: ["string", "null"], maxLength: 200 }
+        backupModel: { type: ["string", "null"], maxLength: 200 }
+        inputCostPerMillionUsd: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+        outputCostPerMillionUsd: { type: ["number", "null"], minimum: 0, maximum: 10000 }
+        searchCostUsd: { type: ["number", "null"], minimum: 0, maximum: 100 }
+        usdToInr: { type: number, minimum: 1, maximum: 1000, default: 85 }
+      required: [freshDays, agingDays, maxResearchDepth, maxWebSearches, allowedSourceTypes, researchCreditCost, deepResearchEnabled, preferredModel, backupModel, inputCostPerMillionUsd, outputCostPerMillionUsd, searchCostUsd, usdToInr]
+    CompanyResearchSummary:
+      type: object
+      properties:
+        status: { type: string, enum: [not_researched, queued, running, completed, failed, cancelled] }
+        freshness: { type: string, enum: [not_researched, fresh, aging, stale] }
+        researchedAt: { type: ["string", "null"], format: date-time }
+        sourceCount: { type: integer, minimum: 0 }
+      required: [status, freshness, researchedAt, sourceCount]
+    CompanyResearchJobStatus:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, completed, failed, cancelled] }
+        stage: { type: string }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        error: { type: ["string", "null"] }
+      required: [id, status, stage, createdAt, startedAt, completedAt, error]
+    IntelligenceSource:
+      type: object
+      properties:
+        source_id: { type: string }
+        source_type: { $ref: "#/components/schemas/IntelligenceSourceType" }
+        title: { type: string }
+        url: { type: string, format: uri }
+        publisher: { type: string }
+        published_date: { type: ["string", "null"] }
+        accessed_at: { type: string, format: date-time }
+        reliability: { type: string, enum: [high, medium, low] }
+      required: [source_id, source_type, title, url, publisher, published_date, accessed_at, reliability]
+    IntelligenceFactSource:
+      type: object
+      properties:
+        path: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source_ids:
+          type: array
+          minItems: 1
+          items: { type: string }
+      required: [path, confidence, source_ids]
+    IntelligenceClaim:
+      type: object
+      properties:
+        statement: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        basis:
+          type: array
+          items: { type: string }
+        source_ids:
+          type: array
+          minItems: 1
+          items: { type: string }
+      required: [statement, confidence, basis, source_ids]
+    IntelligenceTechnologyItem:
+      type: object
+      properties:
+        name: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source_ids:
+          type: array
+          minItems: 1
+          items: { type: string }
+      required: [name, confidence, source_ids]
+    IntelligenceSignal:
+      type: object
+      properties:
+        signal_id: { type: string }
+        type: { type: string, enum: [expansion, acquisition, funding, partnership, product_launch, technology_adoption, ai_initiative, digital_transformation, hiring, facility_expansion, market_entry, contract, leadership_change, cost_reduction, restructuring, sustainability, supply_chain, procurement, other] }
+        title: { type: string }
+        description: { type: string }
+        event_date: { type: string, format: date }
+        source_published_date: { type: ["string", "null"] }
+        observed_at: { type: string, format: date-time }
+        importance: { type: string, enum: [high, medium, low] }
+        sales_relevance:
+          type: array
+          items: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source_ids:
+          type: array
+          minItems: 1
+          items: { type: string }
+      required: [signal_id, type, title, description, event_date, source_published_date, observed_at, importance, sales_relevance, confidence, source_ids]
+    IntelligenceOpportunity:
+      allOf:
+        - $ref: "#/components/schemas/IntelligenceClaim"
+        - type: object
+          properties:
+            opportunity_id: { type: string }
+            type: { type: string, enum: [potential_pain_point, growth_opportunity, technology_gap, operational_complexity, digital_transformation, cost_optimization, compliance, inventory_complexity, workforce, data_modernization, ai_adoption] }
+            generated_at: { type: string, format: date-time }
+          required: [opportunity_id, type, generated_at]
+    IntelligenceCompetitor:
+      type: object
+      properties:
+        name: { type: string }
+        category: { type: string }
+        relationship: { type: string, enum: [direct, indirect, adjacent] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source_ids:
+          type: array
+          minItems: 1
+          items: { type: string }
+      required: [name, category, relationship, confidence, source_ids]
+    CompanyIntelligenceProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        executive_summary:
+          type: object
+          properties:
+            one_liner: { type: string }
+            business_summary: { type: string }
+            key_observations:
+              type: array
+              items: { type: string }
+          required: [one_liner, business_summary, key_observations]
+        company_profile:
+          type: object
+          properties:
+            industry: { type: string }
+            sub_industry: { type: string }
+            company_type: { type: string }
+            founded_year: { type: ["integer", "null"] }
+            headquarters: { type: string }
+            operating_regions:
+              type: array
+              items: { type: string }
+            employee_range: { type: string }
+            revenue_range: { type: string }
+            ownership: { type: string }
+            parent_company: { type: string }
+          required: [industry, sub_industry, company_type, founded_year, headquarters, operating_regions, employee_range, revenue_range, ownership, parent_company]
+        business:
+          type: object
+          properties:
+            business_model: { type: string }
+            products_services: { type: array, items: { type: string } }
+            customer_segments: { type: array, items: { type: string } }
+            key_markets: { type: array, items: { type: string } }
+            business_units: { type: array, items: { type: string } }
+            competitive_position: { type: string }
+          required: [business_model, products_services, customer_segments, key_markets, business_units, competitive_position]
+        technology:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: "#/components/schemas/IntelligenceTechnologyItem" }
+        current_signals: { type: array, items: { $ref: "#/components/schemas/IntelligenceSignal" } }
+        opportunity_signals: { type: array, items: { $ref: "#/components/schemas/IntelligenceOpportunity" } }
+        sales_intelligence:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: "#/components/schemas/IntelligenceClaim" }
+        competitors: { type: array, items: { $ref: "#/components/schemas/IntelligenceCompetitor" } }
+        fact_sources: { type: array, items: { $ref: "#/components/schemas/IntelligenceFactSource" } }
+        conflicts: { type: array, items: { $ref: "#/components/schemas/IntelligenceClaim" } }
+        sources: { type: array, items: { $ref: "#/components/schemas/IntelligenceSource" } }
+      required: [executive_summary, company_profile, business, technology, current_signals, opportunity_signals, sales_intelligence, competitors, fact_sources, conflicts, sources]
+    CompanyIntelligenceVersionSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: string }
+        schemaVersion: { type: string }
+        researchedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }
+        provider: { type: string }
+        model: { type: string }
+        sourceCount: { type: integer }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+      required: [id, version, schemaVersion, researchedAt, validUntil, provider, model, sourceCount, confidence]
+    CompanyIntelligenceVersion:
+      allOf:
+        - $ref: "#/components/schemas/CompanyIntelligenceVersionSummary"
+        - type: object
+          properties:
+            profile: { $ref: "#/components/schemas/CompanyIntelligenceProfile" }
+          required: [profile]
+    CompanyIntelligenceResult:
+      type: object
+      properties:
+        companyId: { type: string, format: uuid }
+        companyName: { type: string }
+        summary: { $ref: "#/components/schemas/CompanyResearchSummary" }
+        current:
+          anyOf:
+            - $ref: "#/components/schemas/CompanyIntelligenceVersion"
+            - { type: "null" }
+        latestJob:
+          anyOf:
+            - $ref: "#/components/schemas/CompanyResearchJobStatus"
+            - { type: "null" }
+        history: { type: array, items: { $ref: "#/components/schemas/CompanyIntelligenceVersionSummary" } }
+        researchCreditCost: { type: integer }
+        maxResearchDepth: { type: integer }
+        deepResearchEnabled: { type: boolean }
+        researchAvailable: { type: boolean }
+      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable]
+    CompanyResearchUsageJob:
+      allOf:
+        - $ref: "#/components/schemas/CompanyResearchJobStatus"
+        - type: object
+          properties:
+            companyId: { type: string }
+            companyName: { type: string }
+            provider: { type: string }
+            model: { type: string }
+            inputTokens: { type: integer }
+            outputTokens: { type: integer }
+            webSearchCount: { type: integer }
+            sourceCount: { type: integer }
+            durationMs: { type: ["integer", "null"] }
+            creditCost: { type: integer }
+            estimatedCostUsd: { type: ["number", "null"] }
+            estimatedCostInr: { type: ["number", "null"] }
+          required: [companyId, companyName, provider, model, inputTokens, outputTokens, webSearchCount, sourceCount, durationMs, creditCost, estimatedCostUsd, estimatedCostInr]
+    CompanyResearchUsage:
+      type: object
+      properties:
+        totalCompanies: { type: integer }
+        researchedCompanies: { type: integer }
+        researchesThisMonth: { type: integer }
+        successfulResearches: { type: integer }
+        failedResearches: { type: integer }
+        averageCostUsd: { type: ["number", "null"] }
+        totalCostUsd: { type: ["number", "null"] }
+        costedJobs: { type: integer }
+        averageSearches: { type: number }
+        averageTokens: { type: number }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        jobs: { type: array, items: { $ref: "#/components/schemas/CompanyResearchUsageJob" } }
+      required: [totalCompanies, researchedCompanies, researchesThisMonth, successfulResearches, failedResearches, averageCostUsd, totalCostUsd, costedJobs, averageSearches, averageTokens, total, page, pageSize, jobs]
     GlobalCompanyAdminCollection:
       type: object
       properties:

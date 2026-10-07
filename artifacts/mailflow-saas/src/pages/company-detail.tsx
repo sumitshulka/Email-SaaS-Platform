@@ -13,6 +13,7 @@ import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
 import { LinkedGlobalProfileNotice } from '@/pages/global-company-directory';
 import { CompanyLinkConfirmation, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
+import { CompanyIntelligencePanel } from '@/components/company-intelligence-panel';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
@@ -51,7 +52,7 @@ const profileFields = [
 
 export function CompanyDetailPage() {
   const { companyId = '' } = useParams<{ companyId: string }>();
-  const query = useGetCompany(companyId, { query: { enabled: !!companyId, queryKey: getGetCompanyQueryKey(companyId) } });
+  const query = useGetCompany(companyId, { query: { enabled: !!companyId, retry: false, queryKey: getGetCompanyQueryKey(companyId) } });
   const updateContact = useUpdateContact();
   const deleteCompany = useDeleteCompany();
   const [, setLocation] = useLocation();
@@ -170,7 +171,7 @@ export function CompanyDetailPage() {
       onCancel={() => setReplacement(null)} onConfirm={target => linkContact(target, true)} />
     <Link href="/companies" data-testid="link-back-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Company directory</Link>
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] text-[#245b9b]"><Building2 className="h-5 w-5"/></span><div className="min-w-0"><div className="mono mb-1 text-[9px] uppercase tracking-[.16em] text-[#7d8794]">{company.globalCompanyId ? 'GLOBAL CATALOG LINK' : 'SHARED COMPANY'} / {company.id.slice(0, 8)}</div><h1 data-testid="text-company-name" className="display break-words text-[28px] font-bold leading-tight text-[#172334]">{company.companyName}</h1><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#758394]"><span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5"/>{company.companyDomain || 'Domain not provided'}</span>{company.companyLocation && <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{company.companyLocation}</span>}</div></div></div>
+      <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] text-[#245b9b]"><Building2 className="h-5 w-5"/></span><div className="min-w-0"><div className="mono mb-1 text-[9px] uppercase tracking-[.16em] text-[#7d8794]">{company.globalCompanyId ? 'GLOBAL CATALOG LINK' : 'PRIVATE COMPANY'} / {company.id.slice(0, 8)}</div><h1 data-testid="text-company-name" className="display break-words text-[28px] font-bold leading-tight text-[#172334]">{company.companyName}</h1><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#758394]"><span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5"/>{company.companyDomain || 'Domain not provided'}</span>{company.companyLocation && <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{company.companyLocation}</span>}</div></div></div>
       {!company.globalCompanyId && <button type="button" data-testid="button-edit-company" onClick={() => setEditorOpen(true)} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa]"><Pencil className="h-3.5 w-3.5"/>Edit profile</button>}
     </header>
     {notice && <div role={notice.type === 'error' ? 'alert' : 'status'} data-testid="status-company-detail" className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${notice.type === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{notice.text}</div>}
@@ -204,6 +205,7 @@ export function CompanyDetailPage() {
         </section>
       </div>
     </div>
+    {company.globalCompanyId ? <div className="mt-6" data-testid="section-company-intelligence"><CompanyIntelligencePanel globalCompanyId={company.globalCompanyId}/></div> : <p data-testid="text-private-no-research" className="mt-6 rounded-md border border-dashed border-[#dfe5eb] bg-[#fbfcfd] px-4 py-3 text-[11px] text-[#7f8b99]">Company intelligence is available for global catalog companies only. This private company is not shared or researched.</p>}
     {editorOpen && !company.globalCompanyId && <CompanyEditor company={company as Company} onClose={() => setEditorOpen(false)} onSaved={() => { setEditorOpen(false); setNotice({ type: 'success', text: 'Company profile saved.' }); void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) }); void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() }); }}/>}
   </div>;
 }
