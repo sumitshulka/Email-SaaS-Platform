@@ -48,9 +48,19 @@ function headerValue(message: GmailMessage, name: string): string {
 }
 
 function isDeliveryStatusContentType(value: string): boolean {
-  return /(?:multipart\/report[^;\r\n]*;[^;\r\n]*report-type\s*=\s*"?delivery-status"?|message\/delivery-status)/i.test(
-    value,
-  );
+  const [mediaType, ...parameters] = value.split(";");
+  const normalizedMediaType = mediaType?.trim().toLowerCase();
+  if (normalizedMediaType === "message/delivery-status") return true;
+  if (normalizedMediaType !== "multipart/report") return false;
+
+  return parameters.some((parameter) => {
+    const separator = parameter.indexOf("=");
+    if (separator < 0) return false;
+    const name = parameter.slice(0, separator).trim().toLowerCase();
+    const rawValue = parameter.slice(separator + 1).trim();
+    const parameterValue = rawValue.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+    return name === "report-type" && parameterValue.toLowerCase() === "delivery-status";
+  });
 }
 
 async function requestJson<T>(

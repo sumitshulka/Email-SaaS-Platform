@@ -9,7 +9,7 @@ import {
 const envelopeId = "a1234567-b123-4123-8123-a123456789ab";
 const dsn = [
   "From: Mail Delivery Subsystem <mailer@example.test>",
-  "Content-Type: multipart/report; report-type=delivery-status; boundary=dsn-boundary",
+  'Content-Type: multipart/report; boundary="dsn-boundary"; report-type="delivery-status"',
   "",
   "--dsn-boundary",
   "Content-Type: text/plain",
@@ -67,7 +67,7 @@ describe("Gmail history sync", () => {
                 name: "Content-Type",
                 value:
                   messageId === "dsn-one"
-                    ? "multipart/report; report-type=delivery-status; boundary=dsn-boundary"
+                    ? 'multipart/report; boundary="dsn-boundary"; report-type="delivery-status"'
                     : "text/plain",
               },
             ],
