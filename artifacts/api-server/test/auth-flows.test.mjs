@@ -5131,6 +5131,7 @@ describe("company research package access", { concurrency: false }, () => {
       userIntelligence.body.researchAvailabilityReason,
       "ai_package_required",
     );
+    assert.equal(userIntelligence.body.researchAllowance, null);
 
     const adminIntelligence = await api(
       `/company-intelligence/${created.body.id}`,
