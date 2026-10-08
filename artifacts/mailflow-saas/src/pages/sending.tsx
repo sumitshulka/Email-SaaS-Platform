@@ -33,7 +33,7 @@ import {
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
-  GmailRecentRescanResult,
+  GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -116,6 +116,19 @@ function useNotice() {
 }
 function mutationError(error: unknown) { return error instanceof Error ? error.message : 'Something went wrong. Please try again.'; }
 
+function gmailSyncOutcomeTitle(outcome: GmailSyncDiagnosticsOutcome) {
+  switch (outcome) {
+    case 'no_dsn_found': return 'No delivery-status notices found';
+    case 'already_recorded': return 'Notices were already recorded';
+    case 'parser_warning': return 'A notice was found but could not be fully read';
+    case 'unmatched_reports': return 'A report could not be matched to a campaign';
+    case 'gmail_api_error': return 'Gmail could not finish the sync';
+    case 'history_expired': return 'Gmail history expired';
+    case 'reauthorization_required': return 'Reconnect Gmail to resume syncing';
+    case 'sync_error': return 'The sync could not be completed';
+    default: return 'Gmail sync completed';
+  }
+}
 const blankSettings = {
   provider: 'other' as TenantSendingSettingsInput['provider'],
   host: '', port: '587', encryption: 'tls' as TenantSendingSettingsInput['encryption'],
@@ -134,6 +147,9 @@ export function SendingSettingsPage() {
     query: {
       queryKey: getGetGmailMailboxConnectionQueryKey(),
       refetchInterval: 30_000,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   });
   const startGmailConnection = useStartGmailMailboxConnection();
@@ -475,11 +491,30 @@ export function SendingSettingsPage() {
                   <span>Status: <strong className="text-[#26364a]">{gmailConnection.data.syncStatus.replace(/_/g, ' ')}</strong></span>
                   {gmailConnection.data.emailAddress && <span>Mailbox: <strong className="text-[#26364a]">{gmailConnection.data.emailAddress}</strong></span>}
                   <span>Polling: every {Math.round(gmailConnection.data.pollIntervalSeconds / 60)} min</span>
-                  <span>Last checked: <strong className="text-[#26364a]">{formatDate(gmailConnection.data.lastSyncAt)}</strong></span>
+                  <span>Last sync attempt: <strong className="text-[#26364a]">{formatDate(gmailConnection.data.lastSyncAt)}</strong></span>
                 </div>
                 {gmailConnection.data.lastSuccessAt && <p className="mt-2 text-[11px] text-[#718091]">Last successful sync: {formatDate(gmailConnection.data.lastSuccessAt)} · Next check: {formatDate(gmailConnection.data.nextSyncAt)}</p>}
                 {gmailConnection.data.lastError && <p data-testid="text-gmail-sync-error" role="status" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{gmailConnection.data.lastError}</p>}
                 {gmailConnection.data.syncStatus === 'history_expired' && <p className="mt-2 text-[11px] leading-5 text-[#99501e]">Reconnect to restart monitoring from a new checkpoint. Gmail cannot recover notices from the expired-history gap automatically.</p>}
+                {gmailConnection.data.lastSyncDiagnostics && <div data-testid="panel-gmail-sync-diagnostics" role="status" className="mt-3 rounded-md border border-[#dce4ee] bg-white p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 data-testid="text-gmail-sync-diagnostic-outcome" className="text-[11px] font-semibold text-[#26364a]">{gmailSyncOutcomeTitle(gmailConnection.data.lastSyncDiagnostics.outcome)}</h3>
+                    <span className="text-[10px] text-[#7a8795]">Attempted {formatDate(gmailConnection.data.lastSyncAt)}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-5 text-[#687484]">{gmailSyncOutcomeDetail(gmailConnection.data.lastSyncDiagnostics.outcome)}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                    {([
+                      ['Messages checked', gmailConnection.data.lastSyncDiagnostics.messagesChecked],
+                      ['DSN candidates', gmailConnection.data.lastSyncDiagnostics.dsnCandidates],
+                      ['Imported reports', gmailConnection.data.lastSyncDiagnostics.importedReports],
+                      ['Unmatched reports', gmailConnection.data.lastSyncDiagnostics.unmatchedReports],
+                      ['Warnings', gmailConnection.data.lastSyncDiagnostics.warnings],
+                    ] as const).map(([label, count]) => <div key={label} className="rounded border border-[#e4e8ed] bg-[#fafbfc] px-3 py-2">
+                      <div className="mono text-[9px] uppercase tracking-[.1em] text-[#84909d]">{label}</div>
+                      <div data-testid={`text-gmail-sync-count-${label.toLowerCase().replaceAll(' ', '-')}`} className="mt-1 text-[15px] font-semibold text-[#26364a]">{count === null ? '—' : count.toLocaleString()}</div>
+                    </div>)}
+                  </div>
+                </div>}
               </div>}
           {gmailConnection.data?.connected && <div className="mt-4 rounded-md border border-[#dce4ee] bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1945,4 +1980,27 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
       </>;
     })()}
   </QueryState>;
+}
+
+function gmailSyncOutcomeDetail(outcome: GmailSyncDiagnosticsOutcome) {
+  switch (outcome) {
+    case 'no_dsn_found':
+      return 'No new delivery-status notices were found in the messages checked. If you expected an older notice, use “Rescan last 14 days” below.';
+    case 'already_recorded':
+      return 'Gmail found notices, but they were already recorded. Check Delivery Evidence on the campaign to review existing reports.';
+    case 'parser_warning':
+      return 'Gmail found delivery-status notices that Mailflow could not fully read. Try the recent-message rescan below, or import the notice from Delivery Evidence.';
+    case 'unmatched_reports':
+      return 'Mailflow read one or more notices but could not match every report to a campaign. Confirm the connected mailbox receives the campaign’s delivery notices, then review Delivery Evidence.';
+    case 'gmail_api_error':
+      return 'Gmail access or history could not be read for this attempt. Mailflow will retry; reconnect the mailbox if the error continues.';
+    case 'history_expired':
+      return 'Gmail no longer has the saved history checkpoint. Reconnect to start a new checkpoint; notices from the gap cannot be recovered automatically.';
+    case 'reauthorization_required':
+      return 'Google authorization expired or was revoked. Reconnect the mailbox to resume monitoring.';
+    case 'sync_error':
+      return 'Mailflow could not complete this attempt. It will retry; use the recent-message rescan if the issue continues.';
+    default:
+      return 'No action is needed. Gmail bounce monitoring will continue on its regular schedule.';
+  }
 }

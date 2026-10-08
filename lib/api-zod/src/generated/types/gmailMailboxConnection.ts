@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GmailMailboxConnectionSyncStatus } from './gmailMailboxConnectionSyncStatus';
+import type { GmailSyncDiagnostics } from './gmailSyncDiagnostics';
 
 export interface GmailMailboxConnection {
   configured: boolean;
@@ -19,6 +20,7 @@ export interface GmailMailboxConnection {
   lastSyncAt: Date | null;
   /** @nullable */
   lastSuccessAt: Date | null;
+  lastSyncDiagnostics: GmailSyncDiagnostics | null;
   /** @nullable */
   nextSyncAt: Date | null;
   /** @nullable */

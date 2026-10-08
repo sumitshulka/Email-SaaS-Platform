@@ -548,6 +548,50 @@ export const GmailMailboxConnectionSyncStatus = {
   error: 'error',
 } as const;
 
+export type GmailSyncDiagnosticsOutcome = typeof GmailSyncDiagnosticsOutcome[keyof typeof GmailSyncDiagnosticsOutcome];
+
+
+export const GmailSyncDiagnosticsOutcome = {
+  completed: 'completed',
+  no_dsn_found: 'no_dsn_found',
+  already_recorded: 'already_recorded',
+  parser_warning: 'parser_warning',
+  unmatched_reports: 'unmatched_reports',
+  gmail_api_error: 'gmail_api_error',
+  history_expired: 'history_expired',
+  reauthorization_required: 'reauthorization_required',
+  sync_error: 'sync_error',
+} as const;
+
+export interface GmailSyncDiagnostics {
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  messagesChecked: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dsnCandidates: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  importedReports: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  unmatchedReports: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  warnings: number | null;
+  outcome: GmailSyncDiagnosticsOutcome;
+}
+
 export interface GmailMailboxConnection {
   configured: boolean;
   /** @nullable */
@@ -560,6 +604,7 @@ export interface GmailMailboxConnection {
   lastSyncAt: string | null;
   /** @nullable */
   lastSuccessAt: string | null;
+  lastSyncDiagnostics: GmailSyncDiagnostics | null;
   /** @nullable */
   nextSyncAt: string | null;
   /** @nullable */

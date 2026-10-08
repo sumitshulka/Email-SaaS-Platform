@@ -9,6 +9,10 @@ import {
   rescanRecentGmailMessages,
   syncGmailHistory,
 } from "../src/lib/gmail-api.ts";
+import {
+  gmailSyncDiagnosticsFromError,
+  gmailSyncDiagnosticsFromResult,
+} from "../src/lib/gmail-sync-diagnostics.ts";
 
 const envelopeId = "a1234567-b123-4123-8123-a123456789ab";
 const dsn = [
@@ -168,6 +172,121 @@ describe("Gmail history sync", () => {
       (error) => error instanceof GmailApiError && error.status === 500,
     );
     assert.equal(ingested, false);
+  });
+
+  it("counts a DSN candidate that cannot be parsed as a warning", async () => {
+    const fetcher = async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/history")) {
+        return jsonResponse({
+          historyId: "history-101",
+          history: [{ messagesAdded: [{ message: { id: "unparseable-dsn" } }] }],
+        });
+      }
+      if (url.searchParams.get("format") === "metadata") {
+        return jsonResponse({
+          payload: {
+            headers: [{
+              name: "Content-Type",
+              value: "message/delivery-status",
+            }],
+          },
+        });
+      }
+      if (url.searchParams.get("format") === "raw") {
+        return jsonResponse({
+          raw: Buffer.from("This is not a delivery status report.").toString("base64url"),
+        });
+      }
+      throw new Error(`Unexpected Gmail API call: ${url}`);
+    };
+
+    const result = await syncGmailHistory({
+      accessToken: "test-token",
+      startHistoryId: "history-100",
+      fetcher,
+      ingest: async () => ({
+        imported: 0,
+        duplicates: 0,
+        unmatched: 0,
+        ignored: 0,
+        warnings: [],
+      }),
+    });
+
+    assert.equal(result.messagesChecked, 1);
+    assert.equal(result.candidateMessages, 1);
+    assert.equal(result.imported, 0);
+    assert.ok(result.warningCount > 0);
+    assert.equal(gmailSyncDiagnosticsFromResult(result).outcome, "parser_warning");
+  });
+});
+
+describe("Gmail sync diagnostics", () => {
+  it("distinguishes no DSN, parser warnings, unmatched reports, and prior imports", () => {
+    const base = {
+      messagesChecked: 3,
+      candidateMessages: 0,
+      imported: 0,
+      duplicates: 0,
+      unmatched: 0,
+      warningCount: 0,
+    };
+    assert.equal(gmailSyncDiagnosticsFromResult(base).outcome, "no_dsn_found");
+    assert.equal(gmailSyncDiagnosticsFromResult({
+      ...base,
+      candidateMessages: 1,
+      warningCount: 1,
+    }).outcome, "parser_warning");
+    assert.equal(gmailSyncDiagnosticsFromResult({
+      ...base,
+      candidateMessages: 1,
+      unmatched: 1,
+    }).outcome, "unmatched_reports");
+    assert.equal(gmailSyncDiagnosticsFromResult({
+      ...base,
+      candidateMessages: 1,
+      duplicates: 1,
+    }).outcome, "already_recorded");
+  });
+
+  it("returns only safe categories and aggregate counts for failures", () => {
+    const sensitiveDetails = [
+      "recipient@example.test",
+      "private message body",
+      "Bearer secret-access-token",
+      "provider-response-body",
+    ];
+    const failures = [
+      gmailSyncDiagnosticsFromError(
+        new GmailApiError(sensitiveDetails[1], 503, sensitiveDetails[3]),
+      ),
+      gmailSyncDiagnosticsFromError(
+        new GmailApiError(sensitiveDetails[1], 401, "invalid_grant"),
+      ),
+      gmailSyncDiagnosticsFromError(new GmailHistoryExpiredError()),
+      gmailSyncDiagnosticsFromError(new Error(sensitiveDetails[0])),
+    ];
+    const serialized = JSON.stringify(failures);
+
+    assert.deepEqual(failures.map((diagnostics) => diagnostics.outcome), [
+      "gmail_api_error",
+      "reauthorization_required",
+      "history_expired",
+      "sync_error",
+    ]);
+    assert.ok(failures.every((diagnostics) =>
+      diagnostics.messagesChecked === null &&
+      diagnostics.dsnCandidates === null &&
+      diagnostics.importedReports === null &&
+      diagnostics.unmatchedReports === null &&
+      diagnostics.warnings === null
+    ));
+    assert.ok(failures.every((diagnostics) => Object.keys(diagnostics).sort().join(",") ===
+      "dsnCandidates,importedReports,messagesChecked,outcome,unmatchedReports,warnings"));
+    for (const detail of sensitiveDetails) {
+      assert.equal(serialized.includes(detail), false);
+    }
   });
 });
 

@@ -3572,10 +3572,26 @@ components:
           enum: [disconnected, connected, reauthorization_required, history_expired, error]
         lastSyncAt: { type: ["string", "null"], format: date-time }
         lastSuccessAt: { type: ["string", "null"], format: date-time }
+        lastSyncDiagnostics:
+          anyOf:
+            - $ref: "#/components/schemas/GmailSyncDiagnostics"
+            - { type: "null" }
         nextSyncAt: { type: ["string", "null"], format: date-time }
         lastError: { type: ["string", "null"] }
         pollIntervalSeconds: { type: integer, minimum: 30 }
-      required: [configured, redirectUri, connected, emailAddress, syncStatus, lastSyncAt, lastSuccessAt, nextSyncAt, lastError, pollIntervalSeconds]
+      required: [configured, redirectUri, connected, emailAddress, syncStatus, lastSyncAt, lastSuccessAt, lastSyncDiagnostics, nextSyncAt, lastError, pollIntervalSeconds]
+    GmailSyncDiagnostics:
+      type: object
+      properties:
+        messagesChecked: { type: ["integer", "null"], minimum: 0 }
+        dsnCandidates: { type: ["integer", "null"], minimum: 0 }
+        importedReports: { type: ["integer", "null"], minimum: 0 }
+        unmatchedReports: { type: ["integer", "null"], minimum: 0 }
+        warnings: { type: ["integer", "null"], minimum: 0 }
+        outcome:
+          type: string
+          enum: [completed, no_dsn_found, already_recorded, parser_warning, unmatched_reports, gmail_api_error, history_expired, reauthorization_required, sync_error]
+      required: [messagesChecked, dsnCandidates, importedReports, unmatchedReports, warnings, outcome]
     GmailOAuthStart:
       type: object
       properties:

@@ -94,7 +94,19 @@ async function stopWebServer() {
   }
 }
 
-async function openEmailSetupPage() {
+async function openEmailSetupPage(gmailConnection = {
+  configured: false,
+  redirectUri: null,
+  connected: false,
+  emailAddress: null,
+  syncStatus: 'disconnected',
+  lastSyncAt: null,
+  lastSuccessAt: null,
+  lastSyncDiagnostics: null,
+  nextSyncAt: null,
+  lastError: null,
+  pollIntervalSeconds: 120,
+}) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addCookies([{
     name: 'mailflow_session',
@@ -115,21 +127,7 @@ async function openEmailSetupPage() {
         json: { accounts: [], emailAccountLimit: 1, configuredCount: 0, overLimit: false, scheduledDowngrade: null },
       });
     } else if (pathname === '/api/sending/gmail/connection' && request.method() === 'GET') {
-      await route.fulfill({
-        status: 200,
-        json: {
-          configured: false,
-          redirectUri: null,
-          connected: false,
-          emailAddress: null,
-          syncStatus: 'idle',
-          lastSyncAt: null,
-          lastSuccessAt: null,
-          nextSyncAt: null,
-          lastError: null,
-          pollIntervalSeconds: 60,
-        },
-      });
+      await route.fulfill({ status: 200, json: gmailConnection });
     } else if (pathname === '/api/sending/microsoft-365/connection' && request.method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -171,6 +169,7 @@ async function openEmailSetupPage() {
   });
   const page = await context.newPage();
   await page.goto(`${baseUrl}/sending-settings`);
+  await page.getByTestId('tab-microsoft365-trace').click();
   await page.getByTestId('section-microsoft365-trace').waitFor();
   return { context, page };
 }
@@ -243,6 +242,50 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
       assert.match(errorText, /Application permission and tenant admin consent/);
       assert.match(errorText, /trace service principal exists/);
       assert.equal(errorText.includes(secretValue), false);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('shows aggregate Gmail sync counts and safe matching guidance', async () => {
+    const { context, page } = await openEmailSetupPage({
+      configured: true,
+      redirectUri: null,
+      connected: true,
+      emailAddress: 'bounce-monitor@example.test',
+      syncStatus: 'connected',
+      lastSyncAt: '2026-10-08T12:00:00.000Z',
+      lastSuccessAt: '2026-10-08T12:00:00.000Z',
+      lastSyncDiagnostics: {
+        messagesChecked: 4,
+        dsnCandidates: 2,
+        importedReports: 1,
+        unmatchedReports: 1,
+        warnings: 0,
+        outcome: 'unmatched_reports',
+      },
+      nextSyncAt: '2026-10-08T12:02:00.000Z',
+      lastError: null,
+      pollIntervalSeconds: 120,
+    });
+    try {
+      await page.getByTestId('tab-gmail-monitoring').click();
+      const diagnostics = page.getByTestId('panel-gmail-sync-diagnostics');
+      await diagnostics.waitFor();
+      assert.match(
+        await page.getByTestId('text-gmail-sync-diagnostic-outcome').innerText(),
+        /could not be matched to a campaign/i,
+      );
+      assert.match(await diagnostics.innerText(), /Messages checked\s+4/i);
+      assert.match(await diagnostics.innerText(), /DSN candidates\s+2/i);
+      assert.match(await diagnostics.innerText(), /Imported reports\s+1/i);
+      assert.match(await diagnostics.innerText(), /Unmatched reports\s+1/i);
+      assert.match(await diagnostics.innerText(), /Warnings\s+0/i);
+      const detail = await diagnostics.innerText();
+      assert.match(detail, /connected mailbox receives the campaign/i);
+      assert.equal(detail.includes('bounce-monitor@example.test'), false);
+      assert.equal(detail.includes('private message body'), false);
+      assert.equal(detail.includes('Bearer '), false);
     } finally {
       await context.close();
     }

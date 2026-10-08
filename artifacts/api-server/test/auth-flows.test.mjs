@@ -469,6 +469,7 @@ memory.public.none(`
     sync_status varchar(32) NOT NULL DEFAULT 'connected',
     last_sync_at timestamptz,
     last_success_at timestamptz,
+    last_sync_diagnostics jsonb,
     next_sync_at timestamptz NOT NULL DEFAULT now(),
     lease_expires_at timestamptz,
     last_error text,
@@ -6240,6 +6241,118 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
     });
   });
 
+  it("persists safe Gmail sync counts only for the connected tenant", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-diagnostics-owner" });
+      await db.insert(dbModule.gmailMailboxConnectionsTable).values({
+        userId: owner.user.id,
+        emailAddress: owner.user.email,
+        refreshTokenEncrypted: securityModule.encryptSecret("diagnostics-refresh-token"),
+        historyId: "gmail-diagnostics-history-before",
+        syncStatus: "connected",
+        nextSyncAt: new Date(Date.now() - 60_000),
+      });
+
+      await withGoogleFetch(async (url) => {
+        if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+          return googleJson({ access_token: "diagnostics-access-token" });
+        }
+        if (url.hostname === "gmail.googleapis.com" && url.pathname.endsWith("/history")) {
+          return googleJson({ historyId: "gmail-diagnostics-history-after", history: [] });
+        }
+        throw new Error(`Unexpected Google API request: ${url.hostname}${url.pathname}`);
+      }, async () => {
+        await gmailMailboxModule.syncDueGmailMailboxes();
+      });
+
+      const status = await api("/sending/gmail/connection", { cookie: owner.cookie });
+      assert.equal(status.response.status, 200);
+      assert.equal(status.body.connected, true);
+      assert.ok(status.body.lastSyncAt);
+      assert.deepEqual(status.body.lastSyncDiagnostics, {
+        messagesChecked: 0,
+        dsnCandidates: 0,
+        importedReports: 0,
+        unmatchedReports: 0,
+        warnings: 0,
+        outcome: "no_dsn_found",
+      });
+      assert.equal(JSON.stringify(status.body).includes("diagnostics-access-token"), false);
+      assert.equal(JSON.stringify(status.body).includes("diagnostics-refresh-token"), false);
+
+      const otherTenant = await loggedInUser({ username: "gmail-diagnostics-other-tenant" });
+      const otherStatus = await api("/sending/gmail/connection", {
+        cookie: otherTenant.cookie,
+      });
+      assert.equal(otherStatus.response.status, 200);
+      assert.equal(otherStatus.body.connected, false);
+      assert.equal(otherStatus.body.lastSyncDiagnostics, null);
+      assert.equal(otherStatus.body.emailAddress, null);
+    });
+  });
+
+  it("updates the latest safe diagnostics after a user-triggered recent scan", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-rescan-diagnostics-owner" });
+      await db.insert(dbModule.gmailMailboxConnectionsTable).values({
+        userId: owner.user.id,
+        emailAddress: owner.user.email,
+        refreshTokenEncrypted: securityModule.encryptSecret("rescan-diagnostics-refresh-token"),
+        historyId: "gmail-rescan-history",
+        syncStatus: "connected",
+        nextSyncAt: new Date(Date.now() + 60 * 60_000),
+      });
+
+      await withGoogleFetch(async (url) => {
+        if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+          return googleJson({ access_token: "rescan-diagnostics-access-token" });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/messages") &&
+          !url.pathname.includes("/messages/")
+        ) {
+          return googleJson({ messages: [{ id: "ordinary-message" }] });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/messages/ordinary-message") &&
+          url.searchParams.get("format") === "metadata"
+        ) {
+          return googleJson({
+            id: "ordinary-message",
+            payload: {
+              headers: [{ name: "Content-Type", value: "text/plain" }],
+            },
+          });
+        }
+        throw new Error(`Unexpected Google API request: ${url.hostname}${url.pathname}`);
+      }, async () => {
+        const rescan = await api("/sending/gmail/rescan", {
+          method: "POST",
+          cookie: owner.cookie,
+        });
+        assert.equal(rescan.response.status, 200, JSON.stringify(rescan.body));
+        assert.equal(rescan.body.messagesChecked, 1);
+      });
+
+      const status = await api("/sending/gmail/connection", { cookie: owner.cookie });
+      assert.equal(status.response.status, 200);
+      assert.ok(status.body.lastSyncAt);
+      assert.ok(status.body.lastSuccessAt);
+      assert.deepEqual(status.body.lastSyncDiagnostics, {
+        messagesChecked: 1,
+        dsnCandidates: 0,
+        importedReports: 0,
+        unmatchedReports: 0,
+        warnings: 0,
+        outcome: "no_dsn_found",
+      });
+      assert.equal(JSON.stringify(status.body).includes("rescan-diagnostics-access-token"), false);
+      assert.equal(JSON.stringify(status.body).includes("rescan-diagnostics-refresh-token"), false);
+    });
+  });
+
   it("requires reconnection after refresh failure without advancing the Gmail checkpoint", async () => {
     await withGmailOAuthConfig(async () => {
       const owner = await loggedInUser({ username: "gmail-refresh-owner" });
@@ -6276,12 +6389,21 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
       assert.equal(afterFailure.historyId, originalHistoryId);
       assert.match(afterFailure.lastError, /Reconnect the mailbox/i);
       assert.ok(afterFailure.nextSyncAt.getTime() > Date.now());
+      assert.deepEqual(afterFailure.lastSyncDiagnostics, {
+        messagesChecked: null,
+        dsnCandidates: null,
+        importedReports: null,
+        unmatchedReports: null,
+        warnings: null,
+        outcome: "reauthorization_required",
+      });
 
       const status = await api("/sending/gmail/connection", {
         cookie: owner.cookie,
       });
       assert.equal(status.response.status, 200);
       assert.equal(status.body.syncStatus, "reauthorization_required");
+      assert.deepEqual(status.body.lastSyncDiagnostics, afterFailure.lastSyncDiagnostics);
       assert.match(status.body.lastError, /Reconnect the mailbox/i);
       assert.equal(JSON.stringify(status.body).includes(refreshToken), false);
     });

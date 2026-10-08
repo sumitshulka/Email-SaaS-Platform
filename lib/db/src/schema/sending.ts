@@ -30,6 +30,26 @@ export type CampaignVariantAssignment = {
   signature: { index: number; tested: boolean };
 };
 
+export type GmailSyncDiagnosticOutcome =
+  | "completed"
+  | "no_dsn_found"
+  | "already_recorded"
+  | "parser_warning"
+  | "unmatched_reports"
+  | "gmail_api_error"
+  | "history_expired"
+  | "reauthorization_required"
+  | "sync_error";
+
+export type GmailSyncDiagnostics = {
+  messagesChecked: number | null;
+  dsnCandidates: number | null;
+  importedReports: number | null;
+  unmatchedReports: number | null;
+  warnings: number | null;
+  outcome: GmailSyncDiagnosticOutcome;
+};
+
 export const emailCampaignRecipientStatusEnum = pgEnum(
   "email_campaign_recipient_status",
   ["queued", "sending", "delivered", "bounced", "suppressed", "unknown"],
@@ -88,6 +108,8 @@ export const gmailMailboxConnectionsTable = pgTable(
       .default("connected"),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
     lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastSyncDiagnostics: jsonb("last_sync_diagnostics")
+      .$type<GmailSyncDiagnostics | null>(),
     nextSyncAt: timestamp("next_sync_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

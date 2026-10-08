@@ -36,6 +36,10 @@ import {
   rescanRecentGmailMessages,
   syncGmailHistory,
 } from "./gmail-api";
+import {
+  gmailSyncDiagnosticsFromError,
+  gmailSyncDiagnosticsFromResult,
+} from "./gmail-sync-diagnostics";
 import { ingestDeliveryReports } from "./delivery-report-ingestion";
 
 const POLL_INTERVAL_MS = 2 * 60_000;
@@ -396,6 +400,7 @@ export function createGmailMailboxRouter(): IRouter {
       syncStatus: connection?.syncStatus ?? "disconnected",
       lastSyncAt: connection?.lastSyncAt?.toISOString() ?? null,
       lastSuccessAt: connection?.lastSuccessAt?.toISOString() ?? null,
+      lastSyncDiagnostics: connection?.lastSyncDiagnostics ?? null,
       nextSyncAt: connection?.nextSyncAt?.toISOString() ?? null,
       lastError: connection?.lastError ?? null,
       pollIntervalSeconds: POLL_INTERVAL_MS / 1000,
@@ -459,6 +464,22 @@ export function createGmailMailboxRouter(): IRouter {
               gmailMailboxConnectionId: connection.id,
             }),
         });
+        const completedAt = new Date();
+        await db
+          .update(gmailMailboxConnectionsTable)
+          .set({
+            lastSyncAt: completedAt,
+            lastSuccessAt: completedAt,
+            lastSyncDiagnostics: gmailSyncDiagnosticsFromResult(result),
+            updatedAt: completedAt,
+          })
+          .where(
+            and(
+              eq(gmailMailboxConnectionsTable.id, connection.id),
+              eq(gmailMailboxConnectionsTable.userId, userId),
+              eq(gmailMailboxConnectionsTable.leaseExpiresAt, leaseExpiresAt),
+            ),
+          );
         res.json({
           windowDays: GMAIL_RECENT_SCAN_DAYS,
           maxMessages: GMAIL_RECENT_SCAN_MAX_MESSAGES,
@@ -469,6 +490,21 @@ export function createGmailMailboxRouter(): IRouter {
           error instanceof GmailApiError &&
           (error.status === 401 || error.providerCode === "invalid_grant")
         ) {
+          const failedAt = new Date();
+          await db
+            .update(gmailMailboxConnectionsTable)
+            .set({
+              lastSyncAt: failedAt,
+              lastSyncDiagnostics: gmailSyncDiagnosticsFromError(error),
+              updatedAt: failedAt,
+            })
+            .where(
+              and(
+                eq(gmailMailboxConnectionsTable.id, connection.id),
+                eq(gmailMailboxConnectionsTable.userId, userId),
+                eq(gmailMailboxConnectionsTable.leaseExpiresAt, leaseExpiresAt),
+              ),
+            );
           res.status(401).json({
             error: "Google authorization has expired. Reconnect the Gmail mailbox, then try again.",
             code: "GMAIL_REAUTHORIZATION_REQUIRED",
@@ -492,6 +528,23 @@ export function createGmailMailboxRouter(): IRouter {
             },
             "Gmail recent-message rescan failed",
           );
+          if (!(error instanceof GmailRecentScanLimitError)) {
+            const failedAt = new Date();
+            await db
+              .update(gmailMailboxConnectionsTable)
+              .set({
+                lastSyncAt: failedAt,
+                lastSyncDiagnostics: gmailSyncDiagnosticsFromError(error),
+                updatedAt: failedAt,
+              })
+              .where(
+                and(
+                  eq(gmailMailboxConnectionsTable.id, connection.id),
+                  eq(gmailMailboxConnectionsTable.userId, userId),
+                  eq(gmailMailboxConnectionsTable.leaseExpiresAt, leaseExpiresAt),
+                ),
+              );
+          }
           res.status(502).json({
             error: "The recent Gmail scan failed. Try again shortly; the regular Gmail sync checkpoint was not changed.",
             code: "GMAIL_RESCAN_FAILED",
@@ -1056,6 +1109,7 @@ export async function syncDueGmailMailboxes(): Promise<void> {
           syncStatus: "connected",
           lastSyncAt: completedAt,
           lastSuccessAt: completedAt,
+          lastSyncDiagnostics: gmailSyncDiagnosticsFromResult(result),
           nextSyncAt: new Date(completedAt.getTime() + POLL_INTERVAL_MS),
           leaseExpiresAt: null,
           lastError,
@@ -1070,6 +1124,7 @@ export async function syncDueGmailMailboxes(): Promise<void> {
         .set({
           syncStatus: failure.status,
           lastSyncAt: failedAt,
+          lastSyncDiagnostics: gmailSyncDiagnosticsFromError(error),
           nextSyncAt: new Date(failedAt.getTime() + failure.delay),
           leaseExpiresAt: null,
           lastError: failure.message,

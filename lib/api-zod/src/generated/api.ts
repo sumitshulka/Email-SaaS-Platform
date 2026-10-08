@@ -809,6 +809,16 @@ export const TestTenantSendingConnectionResponse = zod.object({
 /**
  * @summary Get Gmail bounce-monitoring connection and sync health
  */
+export const getGmailMailboxConnectionResponseLastSyncDiagnosticsOneMessagesCheckedMin = 0;
+
+export const getGmailMailboxConnectionResponseLastSyncDiagnosticsOneDsnCandidatesMin = 0;
+
+export const getGmailMailboxConnectionResponseLastSyncDiagnosticsOneImportedReportsMin = 0;
+
+export const getGmailMailboxConnectionResponseLastSyncDiagnosticsOneUnmatchedReportsMin = 0;
+
+export const getGmailMailboxConnectionResponseLastSyncDiagnosticsOneWarningsMin = 0;
+
 export const getGmailMailboxConnectionResponsePollIntervalSecondsMin = 30;
 
 
@@ -821,6 +831,14 @@ export const GetGmailMailboxConnectionResponse = zod.object({
   "syncStatus": zod.enum(['disconnected', 'connected', 'reauthorization_required', 'history_expired', 'error']),
   "lastSyncAt": zod.coerce.date().nullable(),
   "lastSuccessAt": zod.coerce.date().nullable(),
+  "lastSyncDiagnostics": zod.union([zod.object({
+  "messagesChecked": zod.number().int().min(getGmailMailboxConnectionResponseLastSyncDiagnosticsOneMessagesCheckedMin).nullable(),
+  "dsnCandidates": zod.number().int().min(getGmailMailboxConnectionResponseLastSyncDiagnosticsOneDsnCandidatesMin).nullable(),
+  "importedReports": zod.number().int().min(getGmailMailboxConnectionResponseLastSyncDiagnosticsOneImportedReportsMin).nullable(),
+  "unmatchedReports": zod.number().int().min(getGmailMailboxConnectionResponseLastSyncDiagnosticsOneUnmatchedReportsMin).nullable(),
+  "warnings": zod.number().int().min(getGmailMailboxConnectionResponseLastSyncDiagnosticsOneWarningsMin).nullable(),
+  "outcome": zod.enum(['completed', 'no_dsn_found', 'already_recorded', 'parser_warning', 'unmatched_reports', 'gmail_api_error', 'history_expired', 'reauthorization_required', 'sync_error'])
+}),zod.null()]),
   "nextSyncAt": zod.coerce.date().nullable(),
   "lastError": zod.string().nullable(),
   "pollIntervalSeconds": zod.number().int().min(getGmailMailboxConnectionResponsePollIntervalSecondsMin)
