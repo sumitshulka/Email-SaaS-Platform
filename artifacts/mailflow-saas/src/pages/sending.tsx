@@ -1580,7 +1580,13 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         setAiDraftPreview({ ...result.draft, remaining: result.usage.remaining });
         void qc.invalidateQueries({ queryKey: getGetSubscriptionAddOnsQueryKey() });
       },
-      onError: error => setAiDraftError(mutationError(error)),
+      onError: error => {
+        const apiError = error as { data?: { code?: string } };
+        if (apiError.data?.code === 'AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED') {
+          void qc.invalidateQueries({ queryKey: getGetSubscriptionAddOnsQueryKey() });
+        }
+        setAiDraftError(mutationError(error));
+      },
     });
   };
   const applyAiDraft = () => {

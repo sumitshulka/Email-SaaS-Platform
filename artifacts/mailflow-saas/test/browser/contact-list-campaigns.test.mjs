@@ -73,6 +73,9 @@ const campaignAudienceResponses = [];
 const campaignUpdates = [];
 const campaignQueues = [];
 let campaignAudienceSummaryOverride = null;
+let aiAssistBalanceReads = 0;
+let aiAssistCreditsRemaining = 1;
+let aiAssistDraftRequests = 0;
 
 let serverProcess;
 let serverOutput = '';
@@ -176,6 +179,17 @@ async function installApiFixtures(context) {
       await route.fulfill({ status: 200, json: lists });
       return;
     }
+    if (pathname === '/api/campaigns/variant-limits' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          subject: { minimum: 3, maximum: 7 },
+          greeting: { minimum: 3, maximum: 7 },
+          signature: { minimum: 3, maximum: 7 },
+        },
+      });
+      return;
+    }
     if (pathname === '/api/contacts/options' && method === 'GET') {
       const limit = Number(new URL(request.url()).searchParams.get('limit') ?? 30);
       await route.fulfill({ status: 200, json: { contacts: [], total: 0, limit } });
@@ -193,6 +207,48 @@ async function installApiFixtures(context) {
       };
       campaignAudienceResponses.push({ ...summary });
       await route.fulfill({ status: 200, json: summary });
+      return;
+    }
+    if (pathname === '/api/subscriptions/add-ons' && method === 'GET') {
+      aiAssistBalanceReads += 1;
+      await route.fulfill({
+        status: 200,
+        json: {
+          eligible: true,
+          eligibilityReason: null,
+          primaryEndsAt: null,
+          balances: {
+            research: { total: 0, used: 0, remaining: 0 },
+            emailAssist: {
+              total: 1,
+              used: 1 - aiAssistCreditsRemaining,
+              remaining: aiAssistCreditsRemaining,
+            },
+            mailboxes: {
+              baseLimit: 1,
+              additionalSlots: 0,
+              totalLimit: 1,
+              used: 0,
+              remaining: 1,
+              active: true,
+            },
+          },
+          packages: [],
+          claimedFreePackageIds: [],
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/campaigns/ai-assist' && method === 'POST') {
+      aiAssistDraftRequests += 1;
+      aiAssistCreditsRemaining = 0;
+      await route.fulfill({
+        status: 403,
+        json: {
+          error: 'No AI email assist credits remain. Add an AI Email Assist package to continue.',
+          code: 'AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED',
+        },
+      });
       return;
     }
     if (pathname === '/api/contacts' && method === 'GET') {
@@ -293,6 +349,11 @@ async function installApiFixtures(context) {
             remainingEmails: 0,
             estimatedDurationSeconds: 0,
             estimatedCompletionAt: null,
+          },
+          variantResults: {
+            subject: { testEnabled: false, variants: [] },
+            greeting: { testEnabled: false, variants: [] },
+            signature: { testEnabled: false, variants: [] },
           },
         },
       });
@@ -597,6 +658,42 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       editableCampaign.subject = 'Launch follow-up subject';
       editableCampaign.listId = listOneId;
       editableCampaign.listIds = [listOneId];
+    }
+  });
+
+  it('refreshes the AI credit balance after another tab exhausts it without retrying the draft', async () => {
+    aiAssistBalanceReads = 0;
+    aiAssistCreditsRemaining = 1;
+    aiAssistDraftRequests = 0;
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-create-campaign').click();
+      await page.getByTestId('panel-campaign-ai-assist').getByText('1 credits left', { exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('input-campaign-objective').fill('Introduce our new spring collection');
+
+      const draftResponse = page.waitForResponse(response =>
+        response.url().includes('/api/campaigns/ai-assist') && response.request().method() === 'POST',
+      );
+      const balanceRefresh = page.waitForResponse(response =>
+        response.url().includes('/api/subscriptions/add-ons') && response.request().method() === 'GET',
+      );
+      await page.getByTestId('button-generate-campaign-ai-draft').click();
+      assert.equal((await draftResponse).status(), 403);
+      assert.equal((await balanceRefresh).status(), 200);
+
+      await page.getByTestId('panel-campaign-ai-assist').getByText('0 credits left', { exact: true }).waitFor({ state: 'visible' });
+      const error = page.getByTestId('status-campaign-ai-assist-error');
+      await error.getByText('No AI email assist credits remain. Add an AI Email Assist package to continue.', { exact: false }).waitFor({ state: 'visible' });
+      assert.equal(aiAssistBalanceReads, 2, 'the add-on balance should be fetched once on open and once after exhaustion');
+      assert.equal(aiAssistDraftRequests, 1, 'an exhausted-credit rejection must not trigger another provider request');
+    } finally {
+      await context.close();
+      aiAssistCreditsRemaining = 1;
     }
   });
 
