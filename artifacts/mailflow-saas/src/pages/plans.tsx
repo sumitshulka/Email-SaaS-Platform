@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import {
-  getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getGetSubscriptionAddOnsQueryKey, getListAvailableSubscriptionPackagesQueryKey,
+  getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getGetSubscriptionAddOnsQueryKey, getListAvailableSubscriptionPackagesQueryKey, getListContactsQueryKey,
   getListTenantSendingAccountsQueryKey,
   useActivateFreeAddOn, useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCompanyResearchAllowance, useGetCurrentSubscription, useGetSubscriptionAddOns, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
-  useListTenantSendingAccounts, useVerifyRazorpayPayment,
+  useListContacts, useListTenantSendingAccounts, useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage, SubscriptionPackageList, TenantSendingAccount } from '@workspace/api-client-react';
 import {
@@ -161,6 +161,14 @@ export default function PlansPage() {
       refetchOnMount: 'always',
     },
   });
+  const contactUsageParams = { page: 1, pageSize: 1, includeHistory: false };
+  const contactsUsageQuery = useListContacts(contactUsageParams, {
+    query: {
+      queryKey: getListContactsQueryKey(contactUsageParams),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
   const paymentAvailabilityQuery = useGetSubscriptionPaymentAvailability();
   const senderAccountsQuery = useListTenantSendingAccounts();
   const createOrder = useCreateSubscriptionOrder();
@@ -185,6 +193,18 @@ export default function PlansPage() {
     senderAccountsQuery.data?.emailAccountLimit ??
     activeSubscription?.package.emailAccountLimit ??
     0;
+  const contactQuota = contactsUsageQuery.data?.quota;
+  const configuredSenderCount = senderAccountsQuery.data?.configuredCount ?? senderAccounts.length;
+  const primaryContactLimit = activeSubscription
+    ? (contactQuota?.limit ?? activeSubscription.package.contactLimit)
+    : 0;
+  const primaryContactUsed = activeSubscription ? (contactQuota?.used ?? 0) : 0;
+  const primaryContactRemaining = activeSubscription
+    ? Math.max(0, contactQuota?.remaining ?? (primaryContactLimit - primaryContactUsed))
+    : 0;
+  const primarySenderLimit = activeSubscription?.package.emailAccountLimit ?? 0;
+  const primarySenderUsed = Math.min(configuredSenderCount, primarySenderLimit);
+  const primarySenderRemaining = Math.max(0, primarySenderLimit - primarySenderUsed);
 
   const packageAccountLimit = (pkg: SubscriptionPackage) =>
     pkg.emailAccountLimit +
@@ -386,11 +406,11 @@ export default function PlansPage() {
     startPurchase(pkg, keepIds);
   };
 
-  if (packagesQuery.isLoading || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || senderAccountsQuery.isLoading) {
+  if (packagesQuery.isLoading || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || contactsUsageQuery.isLoading || contactsUsageQuery.isFetching || senderAccountsQuery.isLoading) {
     return <div className="space-y-5" aria-label="Loading subscription plans" data-testid="loading-plans"><div className="h-8 w-64 animate-pulse rounded bg-[#e9eef2]"/><div className="h-32 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/></div></div>;
   }
-  if (packagesQuery.isError || currentQuery.isError || addOnsQuery.isError || researchAllowanceQuery.isError || senderAccountsQuery.isError) {
-    return <section className="rounded-lg border border-[#e1e6eb] bg-white p-6" data-testid="error-plans"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 text-[#bd692d]"/><div><h1 className="text-[15px] font-semibold text-[#1d2d40]">Plans could not be loaded</h1><p className="mt-1 text-[12px] text-[#748292]">Your subscription has not changed.</p><button data-testid="button-retry-plans" onClick={() => { void packagesQuery.refetch(); void currentQuery.refetch(); void addOnsQuery.refetch(); void researchAllowanceQuery.refetch(); void senderAccountsQuery.refetch(); }} className="mt-4 rounded-md border border-[#d5dfe7] px-3 py-2 text-[11px] font-semibold text-[#315879]">Retry</button></div></div></section>;
+  if (packagesQuery.isError || currentQuery.isError || addOnsQuery.isError || researchAllowanceQuery.isError || contactsUsageQuery.isError || senderAccountsQuery.isError) {
+    return <section className="rounded-lg border border-[#e1e6eb] bg-white p-6" data-testid="error-plans"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 text-[#bd692d]"/><div><h1 className="text-[15px] font-semibold text-[#1d2d40]">Plans could not be loaded</h1><p className="mt-1 text-[12px] text-[#748292]">Your subscription has not changed.</p><button data-testid="button-retry-plans" onClick={() => { void packagesQuery.refetch(); void currentQuery.refetch(); void addOnsQuery.refetch(); void researchAllowanceQuery.refetch(); void contactsUsageQuery.refetch(); void senderAccountsQuery.refetch(); }} className="mt-4 rounded-md border border-[#d5dfe7] px-3 py-2 text-[11px] font-semibold text-[#315879]">Retry</button></div></div></section>;
   }
 
   return <div className="fade-in space-y-8">
@@ -431,21 +451,56 @@ export default function PlansPage() {
           {activeSubscription ? 'Term-based allowance' : 'No active primary plan'}
         </span>
       </div>
-      <article data-testid="primary-balance-research" className="mt-4 max-w-2xl rounded-md border border-[#e3e8ed] bg-white p-4">
-        <div className="flex items-center gap-2">
-          <Clock3 className="h-4 w-4 text-[#52799c]"/>
-          <div>
-            <h3 className="text-[11px] font-semibold text-[#42566b]">Company research</h3>
-            <p className="text-[10px] text-[#788796]">Included in the primary package; unused runs expire at term end.</p>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <div><strong data-testid="primary-research-total" className="block text-[17px] text-[#24394e]">{activeSubscription ? primaryResearchUsage?.limit ?? 0 : 0}</strong><span className="text-[9px] text-[#788796]">Total runs</span></div>
-          <div><strong data-testid="primary-research-used" className="block text-[17px] text-[#24394e]">{activeSubscription ? primaryResearchUsage?.used ?? 0 : 0}</strong><span className="text-[9px] text-[#788796]">Used</span></div>
-          <div><strong data-testid="primary-research-remaining" className="block text-[17px] text-[#24394e]">{activeSubscription ? primaryResearchUsage?.remaining ?? 0 : 0}</strong><span className="text-[9px] text-[#788796]">Remaining</span></div>
-        </div>
-        {!activeSubscription && <p className="mt-3 text-[10px] text-[#788796]">Choose a primary plan to receive term-based company research runs.</p>}
-      </article>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {[
+          {
+            key: 'research',
+            title: 'Company research',
+            detail: 'Runs included for this subscription term; queued retries count.',
+            total: activeSubscription ? primaryResearchUsage?.limit ?? 0 : 0,
+            used: activeSubscription ? primaryResearchUsage?.used ?? 0 : 0,
+            remaining: activeSubscription ? primaryResearchUsage?.remaining ?? 0 : 0,
+            unit: 'runs',
+          },
+          {
+            key: 'contacts',
+            title: 'Contacts',
+            detail: 'Contact records allowed in your workspace.',
+            total: primaryContactLimit,
+            used: primaryContactUsed,
+            remaining: primaryContactRemaining,
+            unit: 'contacts',
+          },
+          {
+            key: 'smtp-accounts',
+            title: 'SMTP sender accounts',
+            detail: 'Primary-plan slots only; additional mailbox slots are tracked under add-ons.',
+            total: primarySenderLimit,
+            used: primarySenderUsed,
+            remaining: primarySenderRemaining,
+            unit: 'accounts',
+          },
+        ].map(metric => (
+          <article key={metric.key} data-testid={`primary-balance-${metric.key}`} className="rounded-md border border-[#e3e8ed] bg-white p-4">
+            <h3 className="text-[11px] font-semibold text-[#42566b]">{metric.title}</h3>
+            <p className="mt-1 min-h-8 text-[10px] leading-4 text-[#788796]">{metric.detail}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div><strong data-testid={`primary-${metric.key}-total`} className="block text-[17px] text-[#24394e]">{metric.total.toLocaleString()}</strong><span className="text-[9px] text-[#788796]">Total {metric.unit}</span></div>
+              <div><strong data-testid={`primary-${metric.key}-used`} className="block text-[17px] text-[#24394e]">{metric.used.toLocaleString()}</strong><span className="text-[9px] text-[#788796]">Used</span></div>
+              <div><strong data-testid={`primary-${metric.key}-remaining`} className="block text-[17px] text-[#24394e]">{metric.remaining.toLocaleString()}</strong><span className="text-[9px] text-[#788796]">Remaining</span></div>
+            </div>
+            {metric.key === 'contacts' && primaryContactUsed > primaryContactLimit && (
+              <p className="mt-3 text-[10px] font-medium text-[#aa5d37]">Usage is {primaryContactUsed - primaryContactLimit} contacts above this plan’s limit.</p>
+            )}
+            {metric.key === 'smtp-accounts' && (
+              <p className="mt-3 text-[10px] text-[#788796]">
+                {configuredSenderCount} account{configuredSenderCount === 1 ? '' : 's'} configured; active add-on slots are shown separately.
+              </p>
+            )}
+            {!activeSubscription && <p className="mt-3 text-[10px] text-[#788796]">Choose a primary plan to activate this allowance.</p>}
+          </article>
+        ))}
+      </div>
     </section>
 
     <section data-testid="subscription-add-on-balances" className="rounded-lg border border-[#e0e6eb] bg-white p-5 md:p-6">
