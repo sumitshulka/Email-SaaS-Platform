@@ -416,7 +416,7 @@ describe('company research allowance explanations', { concurrency: false }, () =
     }
   });
 
-  it('shows a zero-run package allowance on the plans page', async () => {
+  it('shows a zero-run package allowance and exclusion on the plans page', async () => {
     const subscription = {
       id: 'browser-zero-research-active-term',
       status: 'active',
@@ -433,6 +433,12 @@ describe('company research allowance explanations', { concurrency: false }, () =
       assert.equal((await page.getByTestId('primary-research-total').innerText()).trim(), '0');
       assert.equal((await page.getByTestId('primary-research-used').innerText()).trim(), '0');
       assert.equal((await page.getByTestId('primary-research-remaining').innerText()).trim(), '0');
+      await page.getByTestId(`text-plan-research-allowance-${zeroAllowancePackage.id}`)
+        .getByText('Company research is not included in this package', { exact: false })
+        .waitFor();
+      await page.getByTestId('text-current-subscription-research-allowance')
+        .getByText('No company research runs are included this term', { exact: false })
+        .waitFor();
     } finally {
       await context.close();
     }
