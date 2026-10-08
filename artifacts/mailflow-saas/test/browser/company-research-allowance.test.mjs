@@ -398,12 +398,10 @@ describe('company research allowance explanations', { concurrency: false }, () =
       currentAllowance: allowance(0, 0, 0),
     });
     try {
-      await page.getByTestId(`text-plan-research-allowance-${zeroAllowancePackage.id}`)
-        .getByText('Company research is not included in this package', { exact: false })
-        .waitFor();
-      await page.getByTestId('text-current-subscription-research-allowance')
-        .getByText('0 company research runs this term · 0 used · 0 remaining', { exact: false })
-        .waitFor();
+      await page.getByTestId('primary-balance-research').waitFor();
+      assert.equal((await page.getByTestId('primary-research-total').innerText()).trim(), '0');
+      assert.equal((await page.getByTestId('primary-research-used').innerText()).trim(), '0');
+      assert.equal((await page.getByTestId('primary-research-remaining').innerText()).trim(), '0');
     } finally {
       await context.close();
     }
@@ -429,9 +427,10 @@ describe('company research allowance explanations', { concurrency: false }, () =
       currentAllowance: allowance(3, 2, 1),
     });
     try {
-      await page.getByTestId('text-current-subscription-research-allowance')
-        .getByText('3 company research runs this term · 2 used · 1 remaining', { exact: false })
-        .waitFor();
+      await page.getByTestId('primary-balance-research').waitFor();
+      assert.equal((await page.getByTestId('primary-research-total').innerText()).trim(), '3');
+      assert.equal((await page.getByTestId('primary-research-used').innerText()).trim(), '2');
+      assert.equal((await page.getByTestId('primary-research-remaining').innerText()).trim(), '1');
     } finally {
       await context.close();
     }

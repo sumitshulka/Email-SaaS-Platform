@@ -177,6 +177,7 @@ export default function PlansPage() {
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const onlinePaymentsEnabled = paymentAvailabilityQuery.data?.enabled === true;
   const activeSubscription = currentQuery.data?.subscription?.status === 'active' ? currentQuery.data.subscription : null;
+  const primaryResearchUsage = researchAllowanceQuery.data?.allowance;
   const addOnDashboard = addOnsQuery.data;
   const addOnPackages = addOnDashboard?.packages ?? [];
   const busy = createOrder.isPending || activateFree.isPending || activateFreeAddOn.isPending || verifyPayment.isPending;
@@ -401,10 +402,51 @@ export default function PlansPage() {
       <div aria-hidden="true" className="pointer-events-none absolute -right-5 -top-16 hidden h-64 w-64 rounded-full border border-[#d5e1e9] md:block"><div className="absolute inset-7 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-14 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-[84px] rounded-full border border-[#d5e1e9]"/></div>
     </header>
 
-    {activeSubscription ? <section data-testid="current-subscription" className="grid gap-4 rounded-lg border border-[#d7e6dd] bg-[#f4f9f5] p-5 md:grid-cols-[1fr_auto] md:items-center md:px-6">
-      <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div><h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2><p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p><p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p><p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {currentEmailAccountLimit} SMTP sender account{currentEmailAccountLimit === 1 ? '' : 's'} (including active mailbox add-ons)</p><p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{researchAllowanceQuery.data?.allowance ? `${researchAllowanceQuery.data.allowance.limit} company research run${researchAllowanceQuery.data.allowance.limit === 1 ? '' : 's'} this term · ${researchAllowanceQuery.data.allowance.used} used · ${researchAllowanceQuery.data.allowance.remaining} remaining` : 'No company research allowance is active for this term'}</p></div>
-      <span data-testid="status-current-subscription" className="flex items-center gap-2 rounded-md border border-[#dce9e0] bg-white px-3 py-2 text-[11px] font-semibold text-[#477154]"><Clock3 className="h-4 w-4"/>Active through {new Date(activeSubscription.endsAt).toLocaleDateString()}</span>
-    </section> : <section data-testid="current-subscription" className="flex items-center gap-3 rounded-lg border border-[#e0e6eb] bg-white p-4 md:px-5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#f1f4f6] text-[#738394]"><CalendarClock className="h-4 w-4"/></span><div><h2 className="text-[12px] font-semibold text-[#34485d]">No active subscription</h2><p className="mt-0.5 text-[11px] text-[#798796]">Your workspace access term will appear here after payment is confirmed.</p></div></section>}
+    {activeSubscription ? (
+      <section data-testid="current-subscription" className="grid gap-4 rounded-lg border border-[#d7e6dd] bg-[#f4f9f5] p-5 md:grid-cols-[1fr_auto] md:items-center md:px-6">
+        <div>
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div>
+          <h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2>
+          <p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p>
+          <p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p>
+          <p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {currentEmailAccountLimit} SMTP sender account{currentEmailAccountLimit === 1 ? '' : 's'} (including active mailbox add-ons)</p>
+        </div>
+        <span data-testid="status-current-subscription" className="flex items-center gap-2 rounded-md border border-[#dce9e0] bg-white px-3 py-2 text-[11px] font-semibold text-[#477154]"><Clock3 className="h-4 w-4"/>Active through {new Date(activeSubscription.endsAt).toLocaleDateString()}</span>
+      </section>
+    ) : (
+      <section data-testid="current-subscription" className="flex items-center gap-3 rounded-lg border border-[#e0e6eb] bg-white p-4 md:px-5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#f1f4f6] text-[#738394]"><CalendarClock className="h-4 w-4"/></span>
+        <div><h2 className="text-[12px] font-semibold text-[#34485d]">No active subscription</h2><p className="mt-0.5 text-[11px] text-[#798796]">Your workspace access term will appear here after payment is confirmed.</p></div>
+      </section>
+    )}
+
+    <section data-testid="subscription-primary-usage" className="rounded-lg border border-[#dce5ec] bg-[#f8fbfd] p-5 md:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">PRIMARY PACKAGE</div>
+          <h2 className="display mt-1 text-[19px] font-bold text-[#1d2d40]">Primary plan usage</h2>
+          <p className="mt-1 text-[11px] leading-5 text-[#718192]">Company research runs included with your primary package for the current term.</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${activeSubscription ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f2f4f6] text-[#6c7a88]'}`}>
+          {activeSubscription ? 'Term-based allowance' : 'No active primary plan'}
+        </span>
+      </div>
+      <article data-testid="primary-balance-research" className="mt-4 max-w-2xl rounded-md border border-[#e3e8ed] bg-white p-4">
+        <div className="flex items-center gap-2">
+          <Clock3 className="h-4 w-4 text-[#52799c]"/>
+          <div>
+            <h3 className="text-[11px] font-semibold text-[#42566b]">Company research</h3>
+            <p className="text-[10px] text-[#788796]">Included in the primary package; unused runs expire at term end.</p>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div><strong data-testid="primary-research-total" className="block text-[17px] text-[#24394e]">{activeSubscription ? primaryResearchUsage?.limit ?? 0 : 0}</strong><span className="text-[9px] text-[#788796]">Total runs</span></div>
+          <div><strong data-testid="primary-research-used" className="block text-[17px] text-[#24394e]">{activeSubscription ? primaryResearchUsage?.used ?? 0 : 0}</strong><span className="text-[9px] text-[#788796]">Used</span></div>
+          <div><strong data-testid="primary-research-remaining" className="block text-[17px] text-[#24394e]">{activeSubscription ? primaryResearchUsage?.remaining ?? 0 : 0}</strong><span className="text-[9px] text-[#788796]">Remaining</span></div>
+        </div>
+        {!activeSubscription && <p className="mt-3 text-[10px] text-[#788796]">Choose a primary plan to receive term-based company research runs.</p>}
+      </article>
+    </section>
 
     <section data-testid="subscription-add-on-balances" className="rounded-lg border border-[#e0e6eb] bg-white p-5 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
