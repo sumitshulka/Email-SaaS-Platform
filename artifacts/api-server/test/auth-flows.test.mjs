@@ -9057,6 +9057,13 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const attemptWholeSecond = new Date(
       Math.floor(new Date(originalAttemptTime).getTime() / 1000) * 1000,
     );
+    const summariesBeforeBounce = await api("/campaigns", {
+      cookie: owner.cookie,
+    });
+    const campaignBeforeBounce = summariesBeforeBounce.body.find(
+      (item) => item.id === campaign.body.id,
+    );
+    assert.equal(campaignBeforeBounce.bounced, 1);
     await db
       .update(dbModule.emailSendAttemptsTable)
       .set({ attemptedAt: new Date(attemptWholeSecond.getTime() + 450) })
@@ -9084,6 +9091,62 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(sameSecondCsvBounce.response.status, 200);
     assert.equal(sameSecondCsvBounce.body.imported, 0);
     assert.equal(sameSecondCsvBounce.body.ignored, 1);
+    const summariesAfterDuplicateBounce = await api("/campaigns", {
+      cookie: owner.cookie,
+    });
+    assert.equal(
+      summariesAfterDuplicateBounce.body.find(
+        (item) => item.id === campaign.body.id,
+      ).bounced,
+      1,
+    );
+    const currentDeliveryEvidence = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=100`,
+      { cookie: owner.cookie },
+    );
+    const currentDeliveredRecipient = currentDeliveryEvidence.body.recipients.find(
+      (item) => item.id === deliveredRecipient.id,
+    );
+    const latestBounceAt = new Date(
+      Math.max(
+        Date.now() + 1000,
+        new Date(currentDeliveredRecipient.reportAt).getTime() + 3000,
+      ),
+    );
+    const latestBounce = await importDsn(
+      makeDsn({
+        outcome: "bounced",
+        occurredAt: latestBounceAt.toUTCString(),
+      }),
+    );
+    assert.equal(latestBounce.body.imported, 1);
+    const bounceEvidence = await api(
+      `/campaigns/${campaign.body.id}/delivery-report?limit=100`,
+      { cookie: owner.cookie },
+    );
+    const deliveredRecipientAfterBounce = bounceEvidence.body.recipients.find(
+      (item) => item.id === deliveredRecipient.id,
+    );
+    assert.equal(
+      deliveredRecipientAfterBounce.reportOutcome,
+      "bounced",
+      JSON.stringify({ warnings: latestBounce.body.warnings, deliveredRecipientAfterBounce }),
+    );
+    const summariesAfterBounce = await api("/campaigns", {
+      cookie: owner.cookie,
+    });
+    const campaignAfterBounce = summariesAfterBounce.body.find(
+      (item) => item.id === campaign.body.id,
+    );
+    assert.equal(campaignAfterBounce.bounced, 2);
+    assert.equal(campaignAfterBounce.delivered, 1);
+    const dashboardAfterBounce = await api("/dashboard", {
+      cookie: owner.cookie,
+    });
+    const dashboardCampaignAfterBounce = dashboardAfterBounce.body.campaigns.find(
+      (item) => item.id === campaign.body.id,
+    );
+    assert.equal(dashboardCampaignAfterBounce.bounced, 2);
     const precedingSecondRfcBounce = await importDsn(
       makeDsn({
         outcome: "bounced",
@@ -9244,7 +9307,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(ownerCampaignSummary.status, "completed");
     assert.equal(ownerCampaignSummary.recipients, 3);
     assert.equal(ownerCampaignSummary.delivered, 1);
-    assert.equal(ownerCampaignSummary.bounced, 1);
+    assert.equal(ownerCampaignSummary.bounced, 2);
     assert.equal(ownerCampaignSummary.suppressed, 1);
     assert.equal(typeof ownerCampaignSummary.attemptsThisHour, "number");
     assert.equal(ownerCampaignSummary.remainingThisHour, 0);

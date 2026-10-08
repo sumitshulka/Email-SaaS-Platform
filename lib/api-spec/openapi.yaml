@@ -2826,6 +2826,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteAIProviderSettings
+      tags: [settings]
+      summary: Remove the saved LLM provider, encrypted key, and selected model
+      responses:
+        "200":
+          description: Unconfigured LLM provider status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIProviderSettings"
+        "403":
+          description: Superadmin access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/ai-provider/test:
     post:
       operationId: testAIProviderConnection

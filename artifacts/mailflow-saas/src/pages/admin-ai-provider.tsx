@@ -8,11 +8,15 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import {
+  getGetCompanyResearchSettingsQueryKey,
   getGetAIProviderSettingsQueryKey,
+  getListAdminGlobalCompaniesQueryKey,
+  useDeleteAIProviderSettings,
   useGetAIProviderSettings,
   useTestAIProviderConnection,
   useUpdateAIProviderSettings,
 } from "@workspace/api-client-react";
+import { ConfirmActionDialog } from "@/components/confirm-action-dialog";
 
 type Provider = "openai" | "anthropic" | "gemini";
 type ProviderModel = { id: string; name: string };
@@ -33,6 +37,7 @@ function errorMessage(error: unknown, fallback: string): string {
 export default function AdminAIProviderPage() {
   const queryClient = useQueryClient();
   const settings = useGetAIProviderSettings();
+  const removeSettings = useDeleteAIProviderSettings();
   const testConnection = useTestAIProviderConnection();
   const saveSettings = useUpdateAIProviderSettings();
 
@@ -42,6 +47,7 @@ export default function AdminAIProviderPage() {
   const [testedProvider, setTestedProvider] = useState<Provider | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!settings.data) return;
@@ -155,7 +161,44 @@ export default function AdminAIProviderPage() {
     }
   };
 
-  const busy = testConnection.isPending || saveSettings.isPending;
+  const handleDisconnect = async () => {
+    setNotice(null);
+    try {
+      const disconnected = await removeSettings.mutateAsync();
+      queryClient.setQueryData(getGetAIProviderSettingsQueryKey(), disconnected);
+      void queryClient.invalidateQueries({
+        queryKey: getGetCompanyResearchSettingsQueryKey(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: getListAdminGlobalCompaniesQueryKey(),
+      });
+      void queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).toLowerCase().includes("intelligence"),
+      });
+      setProvider("openai");
+      setApiKey("");
+      setAvailableModels([]);
+      setTestedProvider(null);
+      setSelectedModel("");
+      setDisconnectDialogOpen(false);
+      setNotice({
+        kind: "success",
+        text: "Provider disconnected. AI company research is unavailable until a provider is configured again.",
+      });
+    } catch (error) {
+      setDisconnectDialogOpen(false);
+      setNotice({
+        kind: "error",
+        text: errorMessage(error, "Could not remove the provider configuration."),
+      });
+    }
+  };
+
+  const busy =
+    testConnection.isPending ||
+    saveSettings.isPending ||
+    removeSettings.isPending;
 
   return (
     <main className="min-h-full bg-[#f4f7fb] px-4 py-6 sm:px-6 lg:px-8">

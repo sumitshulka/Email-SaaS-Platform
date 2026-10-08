@@ -15,6 +15,7 @@ import { writeAuditLog } from "../lib/audit";
 import {
   getAIProviderConfigurationStatus,
   getStoredAIProviderApiKey,
+  removeAIProviderConfiguration,
   saveAIProviderConfiguration,
 } from "../lib/ai-provider-configuration";
 import {
@@ -171,6 +172,32 @@ router.put(
 
     res.json(
       UpdateAIProviderSettingsResponse.parse(
+        await getAIProviderConfigurationStatus(),
+      ),
+    );
+  },
+);
+
+router.delete(
+  "/admin/settings/ai-provider",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const previous = await getAIProviderConfigurationStatus();
+    await removeAIProviderConfiguration(req.authUser!.id);
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "ai_provider_configuration.removed",
+      entity: "system_configuration",
+      entityId: "ai_provider",
+      ipAddress: req.ip,
+      metadata: {
+        provider: previous.provider,
+        selectedModel: previous.selectedModel,
+      },
+    });
+
+    res.json(
+      GetAIProviderSettingsResponse.parse(
         await getAIProviderConfigurationStatus(),
       ),
     );

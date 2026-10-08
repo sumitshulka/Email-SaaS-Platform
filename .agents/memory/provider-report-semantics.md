@@ -9,6 +9,12 @@ Validate native provider report semantics before equating a logged event or time
 
 **How to apply:** Before adding an automatic adapter or broadening CSV support, verify native samples against current official documentation. Never use Microsoft initial-receipt timestamps as final-outcome times or treat transmission as proof of mailbox delivery. Do not infer inbox placement or reading from Workspace ELS exports.
 
+Campaign summaries may count a matched, latest provider-reported `bounced` or `failed` outcome in Rejected / failed while retaining SMTP acceptance as a separate transport metric.
+
+**Why:** A provider bounce can arrive after SMTP accepted the message, so both facts remain true. Adding report outcomes to the summary must not erase transport history or make recipient progress exceed the audience size.
+
+**How to apply:** Count each recipient once in Rejected / failed when either SMTP status or the current report projection is terminally failed. Treat accepted and rejected/failed as potentially overlapping metrics; calculate progress from recipient lifecycle state, not by summing those counters.
+
 Official references checked on 2026-10-01:
 - https://learn.microsoft.com/en-us/exchange/monitoring/trace-an-email-message/message-trace-modern-eac
 - https://knowledge.workspace.google.com/admin/gmail/advanced/understand-email-log-search-results

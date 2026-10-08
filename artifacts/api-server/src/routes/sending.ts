@@ -707,6 +707,7 @@ async function campaignPayloads(userId: string) {
       .select({
         campaignId: emailCampaignRecipientsTable.campaignId,
         status: emailCampaignRecipientsTable.status,
+        reportOutcome: emailCampaignRecipientsTable.reportOutcome,
         nextAttemptAt: emailCampaignRecipientsTable.nextAttemptAt,
         createdAt: emailCampaignRecipientsTable.createdAt,
       })
@@ -835,13 +836,23 @@ async function campaignPayloads(userId: string) {
     total.recipients += 1;
     if (recipient.status === "queued" || recipient.status === "sending") {
       total.queued += 1;
-    } else if (recipient.status === "delivered") {
+    }
+    if (recipient.status === "delivered") {
       total.delivered += 1;
-    } else if (recipient.status === "bounced") {
+    }
+    // Provider-reported terminal failures supplement SMTP outcomes; one
+    // recipient is counted only once even when both sources report a failure.
+    if (
+      recipient.status === "bounced" ||
+      recipient.reportOutcome === "bounced" ||
+      recipient.reportOutcome === "failed"
+    ) {
       total.bounced += 1;
-    } else if (recipient.status === "suppressed") {
+    }
+    if (recipient.status === "suppressed") {
       total.suppressed += 1;
-    } else if (recipient.status === "unknown") {
+    }
+    if (recipient.status === "unknown") {
       total.unknown += 1;
     }
     counts.set(recipient.campaignId, total);
@@ -4776,6 +4787,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
             .select({
               campaignId: emailCampaignRecipientsTable.campaignId,
               status: emailCampaignRecipientsTable.status,
+              reportOutcome: emailCampaignRecipientsTable.reportOutcome,
               value: count(),
             })
             .from(emailCampaignRecipientsTable)
@@ -4788,6 +4800,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
             .groupBy(
               emailCampaignRecipientsTable.campaignId,
               emailCampaignRecipientsTable.status,
+              emailCampaignRecipientsTable.reportOutcome,
             ),
           db
             .select({
@@ -4842,13 +4855,21 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     countsForCampaign.recipients += value;
     if (row.status === "queued" || row.status === "sending") {
       countsForCampaign.queued += value;
-    } else if (row.status === "delivered") {
+    }
+    if (row.status === "delivered") {
       countsForCampaign.delivered += value;
-    } else if (row.status === "bounced") {
+    }
+    if (
+      row.status === "bounced" ||
+      row.reportOutcome === "bounced" ||
+      row.reportOutcome === "failed"
+    ) {
       countsForCampaign.bounced += value;
-    } else if (row.status === "suppressed") {
+    }
+    if (row.status === "suppressed") {
       countsForCampaign.suppressed += value;
-    } else if (row.status === "unknown") {
+    }
+    if (row.status === "unknown") {
       countsForCampaign.unknown += value;
     }
     countsByCampaign.set(row.campaignId, countsForCampaign);

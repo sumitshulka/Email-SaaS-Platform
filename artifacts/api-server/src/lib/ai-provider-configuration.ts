@@ -123,3 +123,40 @@ export async function saveAIProviderConfiguration(input: {
     }
   }
 }
+
+export async function removeAIProviderConfiguration(
+  updatedBy: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(systemConfigurationTable)
+      .where(eq(systemConfigurationTable.key, AI_PROVIDER_CONFIGURATION_KEY));
+
+    const [research] = await tx
+      .select({ value: systemConfigurationTable.value })
+      .from(systemConfigurationTable)
+      .where(eq(systemConfigurationTable.key, "company_intelligence"))
+      .limit(1);
+    if (
+      research?.value &&
+      typeof research.value === "object" &&
+      !Array.isArray(research.value)
+    ) {
+      await tx
+        .update(systemConfigurationTable)
+        .set({
+          value: {
+            ...research.value,
+            preferredModel: null,
+            backupModel: null,
+            inputCostPerMillionUsd: null,
+            outputCostPerMillionUsd: null,
+            searchCostUsd: null,
+          },
+          updatedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(systemConfigurationTable.key, "company_intelligence"));
+    }
+  });
+}
