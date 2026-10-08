@@ -11,15 +11,15 @@ import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/ap
 
 const homeMeta = {
   title: 'Mailflow — simple email campaigns from your own sender',
-  description: 'Organize contacts and companies, prepare simple campaigns, and send through the SMTP account you control. Add company research and AI-assisted drafts where your plan includes them.',
+  description: 'Organize contacts and companies, prepare simple campaigns, and send with your SMTP account. Add company research and AI drafts when included in your plan.',
 };
 const pricingMeta = {
   title: 'Mailflow pricing — plans for your next send',
   description: 'Explore Mailflow plans for organizing contacts and preparing email campaigns. See current plan limits and pricing, with no invented numbers.',
 };
 const featuresMeta = {
-  title: 'Your sender, simpler campaigns, useful AI | Mailflow Features',
-  description: 'Use your own SMTP account, keep contact records private, and run clear email campaigns with recipient-stable variants, one-click unsubscribe, on-demand company research and optional AI drafting.',
+  title: 'Mailflow Features: Your Sender, Simpler Campaigns & AI',
+  description: 'Use your own SMTP, keep contact records private, and manage campaigns with stable variants, one-click unsubscribe, company research and optional AI drafts.',
 };
 
 function usePageMeta(meta: typeof homeMeta) {
@@ -38,6 +38,8 @@ function usePageMeta(meta: typeof homeMeta) {
     setMeta('meta[name="description"]', 'content', meta.description);
     setMeta('meta[property="og:title"]', 'content', meta.title);
     setMeta('meta[property="og:description"]', 'content', meta.description);
+    setMeta('meta[name="twitter:title"]', 'content', meta.title);
+    setMeta('meta[name="twitter:description"]', 'content', meta.description);
   }, [meta]);
 }
 
@@ -69,7 +71,7 @@ function Footer() {
       <div className="mf-footer-main">
         <div>
           <Link href="/" className="mf-brand-link" data-testid="footer-brand"><MailflowBrand /></Link>
-          <p>Email marketing with a little more room to think.</p>
+          <p>Simple campaigns from the email account you control.</p>
         </div>
         <div className="mf-footer-links">
           <div><span className="mf-footer-label">Explore</span><Link href="/" data-testid="footer-home">Overview</Link><Link href="/features" data-testid="footer-features">Features</Link><Link href="/pricing" data-testid="footer-pricing">Pricing</Link><Link href="/terms-and-conditions" data-testid="footer-terms">Terms and Conditions</Link><Link href="/privacy-policy" data-testid="footer-privacy">Privacy Policy</Link><Link href="/shipping-refund" data-testid="footer-shipping-refund">Shipping &amp; Refund</Link></div>
@@ -225,9 +227,9 @@ export function PublicFeaturesPage() {
           <div className="ft-hero-copy">
             <SectionEyebrow>THE FEATURES / MADE PRACTICAL</SectionEyebrow>
             <p className="ft-hero-index">SMALL-TEAM EMAIL · YOUR SENDER, SIMPLIFIED</p>
-            <h1>Your email account.<br/><em>Campaigns without the maze.</em></h1>
+            <h1>Your sender.<br/><em>Simpler campaigns.</em></h1>
             <p className="ft-hero-lede">Keep the email address and SMTP mailbox your team controls. Mailflow brings contacts, company context, campaign planning and honest outcome records together—without moving your sending to a separate bulk-email platform.</p>
-            <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register">Make a little room <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
+            <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register">Start with Mailflow <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
             <div className="ft-hero-note"><ShieldCheck size={16}/> Your configured SMTP account does the sending.</div>
           </div>
           <div className="ft-hero-art" aria-label="Mailflow campaign prep, from audience to your own sender">
@@ -278,21 +280,44 @@ export function PublicFeaturesPage() {
 
       <section className="ft-sender-section">
         <div className="mf-section-wrap ft-sender-layout">
-          <div className="ft-sender-heading"><SectionEyebrow>03 / YOUR SENDER, YOUR CALL</SectionEyebrow><h2>Keep your email<br/><em>address where it belongs.</em></h2><p>Mailflow doesn’t ask you to move into a separate bulk-email transport provider. Configure the SMTP account you control, check the connection, and send yourself a test email.</p><Link href="/register" className="ft-underlined-cta" data-testid="features-sender-register">Set up your workspace <ArrowRight size={15}/></Link></div>
+          <div className="ft-sender-heading"><SectionEyebrow>03 / YOUR SENDER, YOUR CALL</SectionEyebrow><h2>Keep your email<br/><em>address where it belongs.</em></h2><p>Mailflow doesn’t replace your email provider. Configure the SMTP mailbox you control, check the connection and send a test email. When your package allows multiple mailboxes, choose a different sender for each campaign.</p><Link href="/register" className="ft-underlined-cta" data-testid="features-sender-register">Set up your workspace <ArrowRight size={15}/></Link></div>
           <div className="ft-sender-panel">
             <div className="ft-sender-panel-head"><span><ShieldCheck size={15}/> SENDING ACCOUNT</span><span className="ft-sender-status"><i/> CONNECTION CHECKED</span></div>
             <div className="ft-sender-identity"><div className="ft-sender-avatar"><Mail size={19}/></div><span><small>SENDER IDENTITY</small><b>hello@yourstudio.example</b><em>Your name · Reply-to set by you</em></span><Check size={16}/></div>
             <div className="ft-sender-fields"><div><small>SMTP HOST</small><b>smtp.your-provider.example</b></div><div><small>CONNECTION</small><b><span/> Ready to test</b></div></div>
             <div className="ft-sender-buttons"><span>Check connection</span><span>Send a test email <ArrowRight size={12}/></span></div>
-            <div className="ft-sender-multi"><span className="ft-multi-icon"><Layers3 size={15}/></span><span><b>More than one sender?</b><small>Set up multiple SMTP accounts within your subscription allowance, then pick a sender for each campaign.</small></span></div>
+            <div className="ft-sender-multi"><span className="ft-multi-icon"><Layers3 size={15}/></span><span><b>More than one sender?</b><small>Set up multiple SMTP accounts within your subscription allowance, pick one per campaign and use each mailbox’s own platform sending limits.</small></span></div>
           </div>
         </div>
         <div className="mf-section-wrap ft-sending-boundary"><span className="ft-boundary-icon"><ShieldCheck size={16}/></span><p><b>A clear sending boundary.</b> Mailflow manages the audience and campaign workflow; your configured SMTP account sends. Provider rules, quotas and deliverability limits still apply. An SMTP server accepting a message does not confirm inbox placement.</p></div>
       </section>
 
+      <section className="border-y border-[#d9e4e3] bg-[#eff4f3] py-16 sm:py-20" data-testid="features-ai-context">
+        <div className="mf-section-wrap grid gap-8 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
+          <div>
+            <SectionEyebrow>04 / CONTEXT &amp; DRAFTING</SectionEyebrow>
+            <h2 className="display mt-4 text-3xl font-semibold leading-tight tracking-tight text-[#172638] sm:text-4xl">AI for preparation.<br/><em className="text-[#1d695c]">You stay in control.</em></h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-[#4c5c68]">Request company research for supported Global Company DB profiles, or use AI Email Assist to turn a campaign objective into an editable first draft. These tools help with preparation; they do not send campaigns for you.</p>
+            <p className="mt-4 max-w-xl text-xs leading-6 text-[#53636e]">Availability depends on your plan or add-on credits and the platform’s AI setup. Company research is about company-level context, not your contact list.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <article className="rounded-xl border border-[#dce5e2] bg-white p-6 shadow-sm">
+              <span className="text-[10px] font-semibold tracking-[.16em] text-[#547268]">COMPANY INTELLIGENCE</span>
+              <h3 className="display mt-3 text-xl font-semibold text-[#172638]">Research on request.</h3>
+              <p className="mt-3 text-[13px] leading-6 text-[#4c5c68]">Add source-linked findings and dated signals to supported company profiles. Keep company context separate from private contact records.</p>
+            </article>
+            <article className="rounded-xl border border-[#dce5e2] bg-white p-6 shadow-sm">
+              <span className="text-[10px] font-semibold tracking-[.16em] text-[#547268]">AI EMAIL ASSIST</span>
+              <h3 className="display mt-3 text-xl font-semibold text-[#172638]">A first draft, not a send.</h3>
+              <p className="mt-3 text-[13px] leading-6 text-[#4c5c68]">Generate a subject, greeting, body and signature from your objective. Review and edit the result before you choose to use it in a campaign.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section className="ft-history-section">
         <div className="mf-section-wrap ft-history-layout">
-          <div><SectionEyebrow>04 / A RECORD TO RETURN TO</SectionEyebrow><h2>Know what the<br/><em>server told you.</em></h2><p>Campaign history keeps persisted outcomes with the work, so you can review what was queued and what your configured sending account reported.</p><div className="ft-honesty"><span><Check size={13}/></span><p>SMTP acceptance is not inbox confirmation. Mailflow keeps that distinction clear.</p></div></div>
+          <div><SectionEyebrow>05 / A RECORD TO RETURN TO</SectionEyebrow><h2>Know what the<br/><em>server told you.</em></h2><p>Campaign history keeps persisted outcomes with the work, so you can review what was queued and what your configured sending account reported.</p><div className="ft-honesty"><span><Check size={13}/></span><p>SMTP acceptance is not inbox confirmation. Mailflow keeps that distinction clear.</p></div></div>
           <div className="ft-history-card">
             <div className="ft-history-card-head"><span>CAMPAIGN HISTORY · EXAMPLE</span><span>APRIL 08 <ArrowDown size={11}/></span></div>
             <div className="ft-history-campaign"><span className="ft-history-campaign-icon"><Mail size={16}/></span><span><b>April studio notes</b><small>Spring clients · Sender: hello@yourstudio.example</small></span><span className="ft-history-done">COMPLETED</span></div>
@@ -308,10 +333,12 @@ export function PublicFeaturesPage() {
         <div className="mf-section-wrap ft-faq-layout"><div><SectionEyebrow>GOOD TO KNOW</SectionEyebrow><h2>Helpful clarity<br/>before you begin.</h2></div><div className="faq-items">
           <details><summary data-testid="feature-faq-transport">Does Mailflow provide bulk email sending? <ChevronDown size={17}/></summary><p>No. Mailflow manages contacts, the campaign workflow and its recorded outcomes. Delivery uses the SMTP account you configure, and provider quotas, rules and deliverability limits apply.</p></details>
           <details><summary data-testid="feature-faq-automation">Does Mailflow run automatic drip journeys? <ChevronDown size={17}/></summary><p>Mailflow offers a straightforward campaign process: select lists, set priority, preview the audience and template, then queue or schedule delivery. It is not an automatic behavioral journey builder.</p></details>
+          <details><summary data-testid="feature-faq-variants">How do message variants and unsubscribes work? <ChevronDown size={17}/></summary><p>Subject, greeting and signature variants are assigned consistently for each recipient during a campaign. Every campaign includes a one-click unsubscribe link that updates the contact’s subscription status for future sends in that workspace. Variant reports show assignments and recorded sending outcomes, not opens, clicks or inbox placement.</p></details>
+          <details><summary data-testid="feature-faq-ai">Does AI send messages automatically? <ChevronDown size={17}/></summary><p>No. AI Email Assist creates an editable draft for you to review. Company research is requested for supported company profiles, not run against your contacts. AI features require the relevant plan allowance or credits and platform setup.</p></details>
           <details><summary data-testid="feature-faq-reporting">Does an accepted SMTP response mean the email arrived? <ChevronDown size={17}/></summary><p>No. Acceptance is the sending server’s response, not confirmation that a message reached an inbox. Optional Gmail or Microsoft reporting also depends on provider and administrator configuration.</p></details>
         </div></div>
       </section>
-      <section className="ft-final-cta"><div className="ft-final-orbit" aria-hidden="true"><i/><i/><i/></div><div className="ft-final-inner"><SectionEyebrow>A CLEARER WAY TO GET READY</SectionEyebrow><h2>Keep the work close.<br/><em>Keep the sender yours.</em></h2><p>Start with your contacts, your plan and an SMTP account you control.</p><div><Link href="/register" className="mf-button mf-button-light" data-testid="features-final-register">Get started with Mailflow <ArrowRight size={16}/></Link><Link href="/pricing" className="ft-final-pricing" data-testid="features-final-pricing">See plans <ArrowUpRight size={14}/></Link></div><span className="ft-final-foot">YOUR PROVIDER'S RULES AND LIMITS STILL APPLY.</span></div><span className="ft-final-index">MAILFLOW / FEATURES</span></section>
+      <section className="ft-final-cta"><div className="ft-final-orbit" aria-hidden="true"><i/><i/><i/></div><div className="ft-final-inner"><SectionEyebrow>A CLEARER WAY TO GET READY</SectionEyebrow><h2>Keep the work close.<br/><em>Keep the sender yours.</em></h2><p>Start with your contacts, your plan and an SMTP account you control.</p><div><Link href="/register" className="mf-button mf-button-light" data-testid="features-final-register">Get started with Mailflow <ArrowRight size={16}/></Link><Link href="/pricing" className="ft-final-pricing" data-testid="features-final-pricing">See plans <ArrowUpRight size={14}/></Link></div><span className="ft-final-foot">SIMPLE CAMPAIGNS. YOUR SENDER. CLEAR BOUNDARIES.</span></div><span className="ft-final-index">MAILFLOW / FEATURES</span></section>
     </main>
   </MetaLayout>;
 }
