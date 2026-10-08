@@ -292,6 +292,37 @@ describe("parseDeliveryReports DSN", () => {
     assert.equal(result.reports[0].outcome, "delivered");
   });
 
+  it("extracts the original message ID from quoted-printable message/global-headers", () => {
+    const content = [
+      "From: mailer@example.test",
+      'Content-Type: multipart/report; boundary="gmail-boundary"; report-type=delivery-status',
+      "",
+      "--gmail-boundary",
+      "Content-Type: message/delivery-status",
+      "",
+      "Reporting-MTA: dns; gmail.example.test",
+      "",
+      "Final-Recipient: rfc822; bounced@example.test",
+      "Action: failed",
+      "Status: 5.1.1",
+      "--gmail-boundary",
+      "Content-Type: message/global-headers",
+      "Content-Transfer-Encoding: quoted-printable",
+      "",
+      "From: sender@example.test",
+      "Message-ID: <tracked-send@example.test>",
+      "Subject: =3D?UTF-8?Q?Campaign_update?=3D",
+      "--gmail-boundary--",
+      "",
+    ].join("\r\n");
+
+    const result = parseDeliveryReports("dsn", content);
+    assert.equal(result.reports.length, 1);
+    assert.equal(result.reports[0].messageId, "<tracked-send@example.test>");
+    assert.equal(result.reports[0].recipientEmail, "bounced@example.test");
+    assert.equal(result.reports[0].outcome, "bounced");
+  });
+
   it("parses DSN RFC date-times only when they have an explicit recognized timezone", () => {
     const report = (timestamp) =>
       [
@@ -314,6 +345,15 @@ describe("parseDeliveryReports DSN", () => {
       report("Fri, 21 Nov 1997 09:55:06 EST"),
     );
     assert.equal(named.reports[0].occurredAt.toISOString(), "1997-11-21T14:55:06.000Z");
+
+    const numericWithZoneComment = parseDeliveryReports(
+      "dsn",
+      report("Fri, 21 Nov 1997 09:55:06 -0600 (CST)"),
+    );
+    assert.equal(
+      numericWithZoneComment.reports[0].occurredAt.toISOString(),
+      "1997-11-21T15:55:06.000Z",
+    );
 
     const timezoneLess = parseDeliveryReports(
       "dsn",

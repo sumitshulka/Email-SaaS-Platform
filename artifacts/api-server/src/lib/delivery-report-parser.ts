@@ -166,7 +166,7 @@ function parseStrictIsoTimestamp(value: string): Date | null {
 
 function parseRfcDateTime(value: string): Date | null {
   const match =
-    /^(?:[A-Za-z]{3},[ \t]*)?(\d{1,2})[ \t]+([A-Za-z]{3})[ \t]+(\d{4})[ \t]+(\d{2}):(\d{2}):(\d{2})[ \t]+(Z|UT|UTC|GMT|EST|EDT|CST|CDT|MST|MDT|PST|PDT|[+-]\d{4})$/i.exec(
+    /^(?:[A-Za-z]{3},[ \t]*)?(\d{1,2})[ \t]+([A-Za-z]{3})[ \t]+(\d{4})[ \t]+(\d{2}):(\d{2}):(\d{2})[ \t]+(Z|UT|UTC|GMT|EST|EDT|CST|CDT|MST|MDT|PST|PDT|[+-]\d{4})(?:[ \t]+\([A-Za-z]{1,8}\))?$/i.exec(
       value,
     );
   if (!match) return null;
@@ -458,7 +458,10 @@ function collectMime(
   } else if (mediaType === "message/rfc822") {
     const messageId = parseOriginalMessageId(body, false);
     if (messageId) collection.attachedMessageIds.push(messageId);
-  } else if (mediaType === "text/rfc822-headers") {
+  } else if (
+    mediaType === "text/rfc822-headers" ||
+    mediaType === "message/global-headers"
+  ) {
     const messageId = parseOriginalMessageId(body, true);
     if (messageId) collection.attachedMessageIds.push(messageId);
   }
