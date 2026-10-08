@@ -159,6 +159,8 @@ async function installFixtures(context, {
   subscription,
   currentAllowance = null,
   packages = [zeroAllowancePackage],
+  contactQuota,
+  configuredSenderCount = 0,
 } = {}) {
   const intelligenceReads = [];
   const researchStarts = [];
@@ -188,6 +190,25 @@ async function installFixtures(context, {
     }
     if (pathname === '/api/contacts/options' && method === 'GET') {
       await route.fulfill({ status: 200, json: { contacts: [], total: 0, limit: 30 } });
+      return;
+    }
+    if (pathname === '/api/contacts' && method === 'GET') {
+      const contactLimit = contactQuota?.limit ?? subscription?.package?.contactLimit ?? 0;
+      const contactUsed = contactQuota?.used ?? 0;
+      await route.fulfill({
+        status: 200,
+        json: {
+          contacts: [],
+          quota: {
+            used: contactUsed,
+            limit: contactLimit,
+            remaining: contactQuota?.remaining ?? Math.max(0, contactLimit - contactUsed),
+            canAdd: contactQuota?.canAdd ?? contactUsed < contactLimit,
+            requiresSubscription: contactQuota?.requiresSubscription ?? contactLimit === 0,
+          },
+          uploadSettings: { maxFileSizeMb: 10, allowedFileTypes: ['csv'] },
+        },
+      });
       return;
     }
     if (pathname === `/api/company-intelligence/${globalCompanyId}` && method === 'GET') {
@@ -241,9 +262,16 @@ async function installFixtures(context, {
       return;
     }
     if (pathname === '/api/sending/accounts' && method === 'GET') {
+      const primaryLimit = subscription?.package?.emailAccountLimit ?? 0;
       await route.fulfill({
         status: 200,
-        json: { accounts: [], emailAccountLimit: 1, configuredCount: 0, overLimit: false, scheduledDowngrade: null },
+        json: {
+          accounts: [],
+          emailAccountLimit: primaryLimit,
+          configuredCount: configuredSenderCount,
+          overLimit: configuredSenderCount > primaryLimit,
+          scheduledDowngrade: null,
+        },
       });
       return;
     }
@@ -412,6 +440,8 @@ describe('company research allowance explanations', { concurrency: false }, () =
       ...zeroAllowancePackage,
       id: 'browser-current-research-package',
       name: 'Research Plus',
+      contactLimit: 500,
+      emailAccountLimit: 2,
       researchAllowance: 3,
     };
     const subscription = {
@@ -425,12 +455,26 @@ describe('company research allowance explanations', { concurrency: false }, () =
       subscription,
       packages: [packageWithAllowance],
       currentAllowance: allowance(3, 2, 1),
+      contactQuota: {
+        used: 44,
+        limit: 500,
+        remaining: 456,
+        canAdd: true,
+        requiresSubscription: false,
+      },
+      configuredSenderCount: 1,
     });
     try {
       await page.getByTestId('primary-balance-research').waitFor();
       assert.equal((await page.getByTestId('primary-research-total').innerText()).trim(), '3');
       assert.equal((await page.getByTestId('primary-research-used').innerText()).trim(), '2');
       assert.equal((await page.getByTestId('primary-research-remaining').innerText()).trim(), '1');
+      assert.equal((await page.getByTestId('primary-contacts-total').innerText()).trim(), '500');
+      assert.equal((await page.getByTestId('primary-contacts-used').innerText()).trim(), '44');
+      assert.equal((await page.getByTestId('primary-contacts-remaining').innerText()).trim(), '456');
+      assert.equal((await page.getByTestId('primary-smtp-accounts-total').innerText()).trim(), '2');
+      assert.equal((await page.getByTestId('primary-smtp-accounts-used').innerText()).trim(), '1');
+      assert.equal((await page.getByTestId('primary-smtp-accounts-remaining').innerText()).trim(), '1');
     } finally {
       await context.close();
     }
