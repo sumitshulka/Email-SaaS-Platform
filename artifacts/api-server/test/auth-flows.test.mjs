@@ -190,6 +190,7 @@ memory.public.none(`
     period_days integer NOT NULL,
     contact_limit integer NOT NULL DEFAULT 5000,
     email_account_limit integer NOT NULL DEFAULT 1,
+    research_allowance integer NOT NULL DEFAULT 0,
     active boolean NOT NULL DEFAULT true,
     preferred boolean NOT NULL DEFAULT false,
     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -5067,7 +5068,7 @@ describe("authentication and account recovery", { concurrency: false }, () => {
 });
 
 describe("company research package access", { concurrency: false }, () => {
-  it("disables user research without an AI package while preserving superadmin access", async () => {
+  it("enforces per-term package allowances for tenants while preserving superadmin policy access", async () => {
     const admin = await loggedInUser({
       username: "company-research-entitlement-admin",
       role: "SUPERADMIN",
@@ -5084,6 +5085,24 @@ describe("company research package access", { concurrency: false }, () => {
       },
     });
     assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    const secondCompany = await api("/admin/global-companies", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        companyName: "Second AI Entitlement Test Company",
+        companyDomain: "ai-entitlement-second-test.example",
+      },
+    });
+    assert.equal(secondCompany.response.status, 201, JSON.stringify(secondCompany.body));
+    const thirdCompany = await api("/admin/global-companies", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        companyName: "Third AI Entitlement Test Company",
+        companyDomain: "ai-entitlement-third-test.example",
+      },
+    });
+    assert.equal(thirdCompany.response.status, 201, JSON.stringify(thirdCompany.body));
 
     await db
       .insert(dbModule.systemConfigurationTable)
@@ -5131,6 +5150,159 @@ describe("company research package access", { concurrency: false }, () => {
     );
     assert.equal(blockedStart.response.status, 403);
     assert.equal(blockedStart.body.code, "AI_PACKAGE_REQUIRED");
+
+    const zeroAllowanceUser = await loggedInUser({
+      username: "company-research-zero-allowance-user",
+    });
+    const [zeroPackage] = await db.insert(dbModule.subscriptionPackagesTable).values({
+      name: "No Company Research Package",
+      description: "No company research runs in this test term.",
+      amountMinor: 50,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 100,
+      emailAccountLimit: 1,
+      researchAllowance: 0,
+      active: true,
+    }).returning();
+    const zeroTermStart = new Date(Date.now() - 60_000);
+    const zeroTermEnd = new Date(Date.now() + 30 * 86_400_000);
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: zeroAllowanceUser.user.id,
+      packageId: zeroPackage.id,
+      startsAt: zeroTermStart,
+      endsAt: zeroTermEnd,
+    });
+    const zeroAllowance = await api(`/company-intelligence/${created.body.id}`, {
+      cookie: zeroAllowanceUser.cookie,
+    });
+    assert.equal(zeroAllowance.response.status, 200, JSON.stringify(zeroAllowance.body));
+    assert.deepEqual(zeroAllowance.body.researchAllowance, {
+      limit: 0,
+      used: 0,
+      remaining: 0,
+      resetsAt: zeroTermEnd.toISOString(),
+    });
+    assert.equal(zeroAllowance.body.researchAvailable, false);
+    assert.equal(zeroAllowance.body.researchAvailabilityReason, "research_not_included");
+
+    const entitledUser = await loggedInUser({
+      username: "company-research-entitled-user",
+    });
+    const [pkg] = await db.insert(dbModule.subscriptionPackagesTable).values({
+      name: "Company Research Test Package",
+      description: "One research run in this test term.",
+      amountMinor: 100,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 100,
+      emailAccountLimit: 1,
+      researchAllowance: 1,
+      active: true,
+    }).returning();
+    const termStart = new Date(Date.now() - 60_000);
+    const termEnd = new Date(Date.now() + 30 * 86_400_000);
+    const [initialTerm] = await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: entitledUser.user.id,
+      packageId: pkg.id,
+      startsAt: termStart,
+      endsAt: termEnd,
+    }).returning();
+
+    const allowanceBefore = await api(`/company-intelligence/${created.body.id}`, {
+      cookie: entitledUser.cookie,
+    });
+    assert.equal(allowanceBefore.response.status, 200, JSON.stringify(allowanceBefore.body));
+    assert.deepEqual(allowanceBefore.body.researchAllowance, {
+      limit: 1,
+      used: 0,
+      remaining: 1,
+      resetsAt: termEnd.toISOString(),
+    });
+    assert.equal(allowanceBefore.body.researchAvailable, true);
+
+    const concurrentRuns = await Promise.all([
+      api(`/company-intelligence/${created.body.id}/research`, {
+        method: "POST",
+        cookie: entitledUser.cookie,
+        body: { confirmed: true },
+      }),
+      api(`/company-intelligence/${secondCompany.body.id}/research`, {
+        method: "POST",
+        cookie: entitledUser.cookie,
+        body: { confirmed: true },
+      }),
+    ]);
+    assert.deepEqual(concurrentRuns.map(run => run.response.status).sort(), [202, 403]);
+    const firstRun = concurrentRuns.find(run => run.response.status === 202);
+    const deniedRun = concurrentRuns.find(run => run.response.status === 403);
+    assert.ok(firstRun);
+    assert.equal(deniedRun.body.code, "RESEARCH_ALLOWANCE_EXHAUSTED");
+    const researchedCompanyId = firstRun === concurrentRuns[0] ? created.body.id : secondCompany.body.id;
+    const unusedCompanyId = researchedCompanyId === created.body.id ? secondCompany.body.id : created.body.id;
+
+    const allowanceAfter = await api(`/company-intelligence/${researchedCompanyId}`, {
+      cookie: entitledUser.cookie,
+    });
+    assert.deepEqual(allowanceAfter.body.researchAllowance, {
+      limit: 1,
+      used: 1,
+      remaining: 0,
+      resetsAt: termEnd.toISOString(),
+    });
+    assert.equal(allowanceAfter.body.researchAvailable, false);
+    assert.equal(allowanceAfter.body.researchAvailabilityReason, "research_allowance_exhausted");
+
+    const exhaustedRun = await api(`/company-intelligence/${unusedCompanyId}/research`, {
+      method: "POST",
+      cookie: entitledUser.cookie,
+      body: { confirmed: true },
+    });
+    assert.equal(exhaustedRun.response.status, 403);
+    assert.equal(exhaustedRun.body.code, "RESEARCH_ALLOWANCE_EXHAUSTED");
+
+    await db.update(dbModule.userSubscriptionsTable)
+      .set({ status: "superseded" })
+      .where(eq(dbModule.userSubscriptionsTable.id, initialTerm.id));
+    const nextTermStart = new Date(Math.max(
+      Date.now() - 1_000,
+      new Date(firstRun.body.createdAt).getTime() + 1,
+    ));
+    const nextTermEnd = new Date(nextTermStart.getTime() + 30 * 86_400_000);
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: entitledUser.user.id,
+      packageId: pkg.id,
+      startsAt: nextTermStart,
+      endsAt: nextTermEnd,
+    });
+    const renewedAllowance = await api(`/company-intelligence/${unusedCompanyId}`, {
+      cookie: entitledUser.cookie,
+    });
+    assert.deepEqual(renewedAllowance.body.researchAllowance, {
+      limit: 1,
+      used: 0,
+      remaining: 1,
+      resetsAt: nextTermEnd.toISOString(),
+    });
+    const nextTermRun = await api(`/company-intelligence/${unusedCompanyId}/research`, {
+      method: "POST",
+      cookie: entitledUser.cookie,
+      body: { confirmed: true },
+    });
+    assert.equal(nextTermRun.response.status, 202, JSON.stringify(nextTermRun.body));
+
+    const platformAllowance = await api(`/company-intelligence/${thirdCompany.body.id}`, {
+      cookie: admin.cookie,
+    });
+    assert.equal(platformAllowance.response.status, 200);
+    assert.equal(platformAllowance.body.researchAllowance, null);
+    assert.equal(platformAllowance.body.researchAvailable, true);
+    const adminRun = await api(`/company-intelligence/${thirdCompany.body.id}/research`, {
+      method: "POST",
+      cookie: admin.cookie,
+      body: { confirmed: true },
+    });
+    assert.equal(adminRun.response.status, 202, JSON.stringify(adminRun.body));
   });
 });
 

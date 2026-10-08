@@ -90,6 +90,7 @@ export * from './companyIntelligenceResultResearchAvailabilityReason';
 export * from './companyIntelligenceVersion';
 export * from './companyIntelligenceVersionSummary';
 export * from './companyListItem';
+export * from './companyResearchAllowance';
 export * from './companyResearchInput';
 export * from './companyResearchJobStatus';
 export * from './companyResearchJobStatusStatus';

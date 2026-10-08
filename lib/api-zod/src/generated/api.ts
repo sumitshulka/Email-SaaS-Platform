@@ -1754,6 +1754,12 @@ export const getCompanyIntelligenceResponseCurrentOneTwoProfileConflictsItemConf
 export const getCompanyIntelligenceResponseHistoryItemConfidenceMin = 0;
 export const getCompanyIntelligenceResponseHistoryItemConfidenceMax = 1;
 
+export const getCompanyIntelligenceResponseResearchAllowanceOneLimitMin = 0;
+
+export const getCompanyIntelligenceResponseResearchAllowanceOneUsedMin = 0;
+
+export const getCompanyIntelligenceResponseResearchAllowanceOneRemainingMin = 0;
+
 
 
 export const GetCompanyIntelligenceResponse = zod.object({
@@ -1890,7 +1896,13 @@ export const GetCompanyIntelligenceResponse = zod.object({
   "maxResearchDepth": zod.number().int(),
   "deepResearchEnabled": zod.boolean(),
   "researchAvailable": zod.boolean(),
-  "researchAvailabilityReason": zod.union([zod.literal('provider_not_configured'),zod.literal('ai_package_required'),zod.literal(null)]).nullable()
+  "researchAvailabilityReason": zod.union([zod.literal('provider_not_configured'),zod.literal('ai_package_required'),zod.literal('research_not_included'),zod.literal('research_allowance_exhausted'),zod.literal(null)]).nullable(),
+  "researchAllowance": zod.union([zod.object({
+  "limit": zod.number().int().min(getCompanyIntelligenceResponseResearchAllowanceOneLimitMin),
+  "used": zod.number().int().min(getCompanyIntelligenceResponseResearchAllowanceOneUsedMin),
+  "remaining": zod.number().int().min(getCompanyIntelligenceResponseResearchAllowanceOneRemainingMin),
+  "resetsAt": zod.coerce.date()
+}),zod.null()])
 })
 
 
@@ -5747,6 +5759,9 @@ export const listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin = 
 
 export const listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
 
+export const listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin = 0;
+export const listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax = 10000;
+
 
 
 
@@ -5761,6 +5776,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -5793,6 +5809,9 @@ export const createSubscriptionPackageBodyContactLimitMax = 10000000;
 export const createSubscriptionPackageBodyEmailAccountLimitMin = 0;
 export const createSubscriptionPackageBodyEmailAccountLimitMax = 100;
 
+export const createSubscriptionPackageBodyResearchAllowanceMin = 0;
+export const createSubscriptionPackageBodyResearchAllowanceMax = 10000;
+
 
 
 export const CreateSubscriptionPackageBody = zod.object({
@@ -5803,6 +5822,7 @@ export const CreateSubscriptionPackageBody = zod.object({
   "periodDays": zod.number().int().min(1).max(createSubscriptionPackageBodyPeriodDaysMax),
   "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
+  "researchAllowance": zod.number().int().min(createSubscriptionPackageBodyResearchAllowanceMin).max(createSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().optional(),
   "active": zod.boolean()
 })
@@ -5813,6 +5833,9 @@ export const createSubscriptionPackageResponseCurrencyMax = 3;
 export const createSubscriptionPackageResponseContactLimitMin = 0;
 
 export const createSubscriptionPackageResponseEmailAccountLimitMin = 0;
+
+export const createSubscriptionPackageResponseResearchAllowanceMin = 0;
+export const createSubscriptionPackageResponseResearchAllowanceMax = 10000;
 
 
 
@@ -5825,6 +5848,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(createSubscriptionPackageResponseResearchAllowanceMin).max(createSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -5856,6 +5880,9 @@ export const updateSubscriptionPackageBodyContactLimitMax = 10000000;
 export const updateSubscriptionPackageBodyEmailAccountLimitMin = 0;
 export const updateSubscriptionPackageBodyEmailAccountLimitMax = 100;
 
+export const updateSubscriptionPackageBodyResearchAllowanceMin = 0;
+export const updateSubscriptionPackageBodyResearchAllowanceMax = 10000;
+
 
 
 export const UpdateSubscriptionPackageBody = zod.object({
@@ -5866,6 +5893,7 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "periodDays": zod.number().int().min(1).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
+  "researchAllowance": zod.number().int().min(updateSubscriptionPackageBodyResearchAllowanceMin).max(updateSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().optional(),
   "active": zod.boolean().optional()
 })
@@ -5876,6 +5904,9 @@ export const updateSubscriptionPackageResponseCurrencyMax = 3;
 export const updateSubscriptionPackageResponseContactLimitMin = 0;
 
 export const updateSubscriptionPackageResponseEmailAccountLimitMin = 0;
+
+export const updateSubscriptionPackageResponseResearchAllowanceMin = 0;
+export const updateSubscriptionPackageResponseResearchAllowanceMax = 10000;
 
 
 
@@ -5888,6 +5919,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(updateSubscriptionPackageResponseResearchAllowanceMin).max(updateSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -5910,6 +5942,9 @@ export const giftAdminSubscriptionResponsePackageContactLimitMin = 0;
 
 export const giftAdminSubscriptionResponsePackageEmailAccountLimitMin = 0;
 
+export const giftAdminSubscriptionResponsePackageResearchAllowanceMin = 0;
+export const giftAdminSubscriptionResponsePackageResearchAllowanceMax = 10000;
+
 
 
 export const GiftAdminSubscriptionResponse = zod.object({
@@ -5926,6 +5961,7 @@ export const GiftAdminSubscriptionResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponsePackageResearchAllowanceMin).max(giftAdminSubscriptionResponsePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -5945,6 +5981,9 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMi
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
 
+export const listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin = 0;
+export const listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax = 10000;
+
 
 
 
@@ -5959,6 +5998,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -5991,6 +6031,9 @@ export const getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
+export const getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin = 0;
+export const getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax = 10000;
+
 
 
 export const GetCurrentSubscriptionResponse = zod.object({
@@ -6008,6 +6051,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -6032,6 +6076,9 @@ export const activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin 
 
 export const activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin = 0;
 
+export const activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin = 0;
+export const activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax = 10000;
+
 
 
 export const ActivateFreeSubscriptionResponse = zod.object({
@@ -6049,6 +6096,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -6104,6 +6152,9 @@ export const verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin 
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin = 0;
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax = 10000;
+
 
 
 export const VerifyRazorpayPaymentResponse = zod.object({
@@ -6123,6 +6174,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),

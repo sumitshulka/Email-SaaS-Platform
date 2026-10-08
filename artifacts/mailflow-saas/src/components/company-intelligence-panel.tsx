@@ -136,7 +136,7 @@ export function CompanyIntelligencePanel({ globalCompanyId }: { globalCompanyId:
     setStartError('');
     start.mutate({ globalCompanyId, data: { confirmed: true, overrideFresh: fresh && override, depth } }, {
       onSuccess: queued => { setConfirmOpen(false); setOverride(false); qc.setQueryData(key, { ...data, latestJob: queued, summary: { ...data.summary, status: queued.status } }); void qc.invalidateQueries({ queryKey: key }); },
-      onError: e => { setConfirmOpen(false); setStartError(errText(e)); },
+      onError: e => { setConfirmOpen(false); setStartError(errText(e)); void qc.invalidateQueries({ queryKey: key }); },
     });
   };
   return <section data-testid="panel-company-intelligence" className="space-y-4">
@@ -146,7 +146,15 @@ export function CompanyIntelligencePanel({ globalCompanyId }: { globalCompanyId:
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#758394]"><FreshnessBadge freshness={data.summary.freshness} status={data.summary.status} /><span data-testid="text-last-researched">Last researched {fmtDate(data.summary.researchedAt)}</span><span data-testid="text-source-count">{data.summary.sourceCount} sources</span></div></div>
         <button type="button" data-testid="button-research" aria-describedby={!data.researchAvailable ? 'status-research-unavailable' : undefined} disabled={active || start.isPending || !data.researchAvailable} onClick={() => { setStartError(''); setDepth(1); setOverride(false); setConfirmOpen(true); }} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[13px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55">{active ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{active ? (job?.status === 'queued' ? 'Queued' : 'Researching') : verb}</button>
       </div>
-      {!data.researchAvailable && <p id="status-research-unavailable" data-testid="status-research-unavailable" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[12px] text-[#99501e]">{data.researchAvailabilityReason === 'ai_package_required' ? 'No AI research package is active for this account, so research and re-research are disabled.' : 'Research is not available because no AI provider is configured. Ask a platform administrator to connect one.'}</p>}
+      {data.researchAllowance && <p data-testid="status-research-allowance" role="status" className={`mt-3 rounded-md px-3 py-2 text-[12px] ${data.researchAllowance.remaining > 0 ? 'bg-[#f2f7fb] text-[#365d7f]' : 'bg-[#fff8f1] text-[#99501e]'}`}>
+        {data.researchAllowance.limit === 0
+          ? 'This package includes no company research runs for the current term.'
+          : data.researchAllowance.remaining > 0
+            ? `${data.researchAllowance.remaining} of ${data.researchAllowance.limit} company research runs remain this term.`
+            : `No company research runs remain for this term.`}{' '}
+        A queued run, including a retry, uses one allowance. It resets when a new term starts; unused runs expire at term end ({fmtDate(data.researchAllowance.resetsAt)}).
+      </p>}
+      {!data.researchAvailable && <p id="status-research-unavailable" data-testid="status-research-unavailable" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[12px] text-[#99501e]">{data.researchAvailabilityReason === 'ai_package_required' ? 'No AI research package is active for this account, so research and re-research are disabled.' : data.researchAvailabilityReason === 'research_not_included' ? 'This package does not include company research for the current term.' : data.researchAvailabilityReason === 'research_allowance_exhausted' ? `The research allowance for this term is exhausted. It renews when a new package term starts (${fmtDate(data.researchAllowance?.resetsAt)}).` : 'Research is not available because no AI provider is configured. Ask a platform administrator to connect one.'}</p>}
       {active && <p data-testid="status-research-active" role="status" className="mt-3 rounded-md bg-[#edf4fc] px-3 py-2 text-[12px] text-[#245b9b]">Research is {job!.status}. Stage: {human(job!.stage)}. {pollingExpired ? <>Automatic checking has stopped because this run is taking longer than usual. <button type="button" data-testid="button-refresh-research" className="font-semibold underline" onClick={() => void query.refetch()}>Refresh status</button></> : 'This page updates automatically.'}</p>}
       {job?.status === 'failed' && <p data-testid="status-research-failed" role="alert" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[12px] text-[#99501e]">The last research attempt failed{job.error ? `: ${job.error}` : '.'} {current ? 'Your existing profile is unchanged. ' : ''}You can retry when ready.</p>}
       {startError && <p role="alert" data-testid="status-research-start-error" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[12px] text-[#99501e]">Research was not started. {startError}</p>}

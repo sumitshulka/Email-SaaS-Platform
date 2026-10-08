@@ -1069,7 +1069,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
         "403":
-          description: User account does not have an active AI research package
+          description: No active AI research allowance is available
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
@@ -3975,8 +3975,20 @@ components:
         researchAvailable: { type: boolean }
         researchAvailabilityReason:
           type: ["string", "null"]
-          enum: [provider_not_configured, ai_package_required, null]
-      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable, researchAvailabilityReason]
+          enum: [provider_not_configured, ai_package_required, research_not_included, research_allowance_exhausted, null]
+        researchAllowance:
+          anyOf:
+            - $ref: "#/components/schemas/CompanyResearchAllowance"
+            - type: "null"
+      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable, researchAvailabilityReason, researchAllowance]
+    CompanyResearchAllowance:
+      type: object
+      properties:
+        limit: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+        resetsAt: { type: string, format: date-time }
+      required: [limit, used, remaining, resetsAt]
     CompanyResearchUsageJob:
       allOf:
         - $ref: "#/components/schemas/CompanyResearchJobStatus"
@@ -5357,11 +5369,12 @@ components:
         periodDays: { type: integer }
         contactLimit: { type: integer, minimum: 0 }
         emailAccountLimit: { type: integer, minimum: 0 }
+        researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         preferred: { type: boolean, description: Highlights this package in package selection screens. }
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, preferred, active, createdAt, updatedAt]
+      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, researchAllowance, preferred, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -5392,6 +5405,7 @@ components:
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
+        researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         preferred: { type: boolean }
         active: { type: boolean }
       required: [name, description, amountMinor, currency, periodDays, contactLimit, active]
@@ -5415,6 +5429,7 @@ components:
         periodDays: { type: integer, minimum: 1, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
+        researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         preferred: { type: boolean }
         active: { type: boolean }
     ContactQuota:

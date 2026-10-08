@@ -15,4 +15,6 @@ export type CompanyIntelligenceResultResearchAvailabilityReason = typeof Company
 export const CompanyIntelligenceResultResearchAvailabilityReason = {
   provider_not_configured: 'provider_not_configured',
   ai_package_required: 'ai_package_required',
+  research_not_included: 'research_not_included',
+  research_allowance_exhausted: 'research_allowance_exhausted',
 } as const;

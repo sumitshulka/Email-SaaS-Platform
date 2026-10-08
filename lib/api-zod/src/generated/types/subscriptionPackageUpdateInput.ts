@@ -37,6 +37,12 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 100
      */
   emailAccountLimit?: number;
+  /**
+     * Number of company research runs in each subscription term. A run is consumed when queued
+     * @minimum 0
+     * @maximum 10000
+     */
+  researchAllowance?: number;
   preferred?: boolean;
   active?: boolean;
 }

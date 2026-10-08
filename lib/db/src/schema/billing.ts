@@ -43,6 +43,7 @@ export const subscriptionPackagesTable = pgTable(
     periodDays: integer("period_days").notNull(),
     contactLimit: integer("contact_limit").notNull().default(5000),
     emailAccountLimit: integer("email_account_limit").notNull().default(1),
+    researchAllowance: integer("research_allowance").notNull().default(0),
     preferred: boolean("preferred").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdBy: uuid("created_by").references(() => usersTable.id, {

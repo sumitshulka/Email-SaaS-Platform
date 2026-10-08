@@ -21,6 +21,12 @@ export interface SubscriptionPackage {
   contactLimit: number;
   /** @minimum 0 */
   emailAccountLimit: number;
+  /**
+     * Number of company research runs in each subscription term. A run is consumed when queued
+     * @minimum 0
+     * @maximum 10000
+     */
+  researchAllowance: number;
   /** Highlights this package in package selection screens. */
   preferred: boolean;
   active: boolean;

@@ -8,6 +8,7 @@
 import type { CompanyIntelligenceResultResearchAvailabilityReason } from './companyIntelligenceResultResearchAvailabilityReason';
 import type { CompanyIntelligenceVersion } from './companyIntelligenceVersion';
 import type { CompanyIntelligenceVersionSummary } from './companyIntelligenceVersionSummary';
+import type { CompanyResearchAllowance } from './companyResearchAllowance';
 import type { CompanyResearchJobStatus } from './companyResearchJobStatus';
 import type { CompanyResearchSummary } from './companyResearchSummary';
 
@@ -24,4 +25,5 @@ export interface CompanyIntelligenceResult {
   researchAvailable: boolean;
   /** @nullable */
   researchAvailabilityReason: CompanyIntelligenceResultResearchAvailabilityReason;
+  researchAllowance: CompanyResearchAllowance | null;
 }

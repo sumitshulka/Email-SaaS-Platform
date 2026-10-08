@@ -1278,7 +1278,19 @@ export type CompanyIntelligenceResultResearchAvailabilityReason = typeof Company
 export const CompanyIntelligenceResultResearchAvailabilityReason = {
   provider_not_configured: 'provider_not_configured',
   ai_package_required: 'ai_package_required',
+  research_not_included: 'research_not_included',
+  research_allowance_exhausted: 'research_allowance_exhausted',
 } as const;
+
+export interface CompanyResearchAllowance {
+  /** @minimum 0 */
+  limit: number;
+  /** @minimum 0 */
+  used: number;
+  /** @minimum 0 */
+  remaining: number;
+  resetsAt: string;
+}
 
 export interface CompanyIntelligenceResult {
   companyId: string;
@@ -1293,6 +1305,7 @@ export interface CompanyIntelligenceResult {
   researchAvailable: boolean;
   /** @nullable */
   researchAvailabilityReason: CompanyIntelligenceResultResearchAvailabilityReason;
+  researchAllowance: CompanyResearchAllowance | null;
 }
 
 export type CompanyResearchUsageJob = CompanyResearchJobStatus & ({
@@ -3796,6 +3809,12 @@ export interface SubscriptionPackage {
   contactLimit: number;
   /** @minimum 0 */
   emailAccountLimit: number;
+  /**
+     * Number of company research runs in each subscription term. A run is consumed when queued
+     * @minimum 0
+     * @maximum 10000
+     */
+  researchAllowance: number;
   /** Highlights this package in package selection screens. */
   preferred: boolean;
   active: boolean;
@@ -3849,6 +3868,12 @@ export interface SubscriptionPackageInput {
      * @maximum 100
      */
   emailAccountLimit?: number;
+  /**
+     * Number of company research runs in each subscription term. A run is consumed when queued
+     * @minimum 0
+     * @maximum 10000
+     */
+  researchAllowance?: number;
   preferred?: boolean;
   active: boolean;
 }
@@ -3889,6 +3914,12 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 100
      */
   emailAccountLimit?: number;
+  /**
+     * Number of company research runs in each subscription term. A run is consumed when queued
+     * @minimum 0
+     * @maximum 10000
+     */
+  researchAllowance?: number;
   preferred?: boolean;
   active?: boolean;
 }

@@ -11,7 +11,7 @@ import { requireSuperadmin, requireUserRole } from "../lib/session";
 import { getAIProviderConfigurationStatus, getStoredAIProviderApiKey } from "../lib/ai-provider-configuration";
 import { listAIProviderModels } from "../lib/ai-provider-client";
 import { getResearchSettings, researchSettingsKey } from "../lib/company-research-settings";
-import { enqueueCompanyResearch, presentIntelligenceVersion, presentResearchJob, readCompanyIntelligence, researchUsageMetrics } from "../lib/company-intelligence";
+import { enqueueCompanyResearch, getCompanyResearchAllowance, presentIntelligenceVersion, presentResearchJob, readCompanyIntelligence, researchUsageMetrics } from "../lib/company-intelligence";
 import { writeAuditLog } from "../lib/audit";
 
 const router: IRouter = Router();
@@ -23,15 +23,27 @@ router.get("/company-intelligence/:globalCompanyId", researchRole, async (req, r
   const result = await readCompanyIntelligence(params.data.globalCompanyId);
   if (!result) { res.status(404).json({ error: "Global company not found." }); return; }
   const superadmin = req.authUser?.role === "SUPERADMIN";
-  const researchAvailable = superadmin && result.researchAvailable;
+  const researchAllowance = superadmin ? null : await getCompanyResearchAllowance(req.authUser!.id);
+  const hasResearchAllowance = !!researchAllowance && researchAllowance.limit > 0;
+  const remainingResearchRuns = researchAllowance?.remaining ?? 0;
+  const researchAvailable = superadmin
+    ? result.researchAvailable
+    : result.researchAvailable && hasResearchAllowance && remainingResearchRuns > 0;
   res.json(GetCompanyIntelligenceResponse.parse({
     ...result,
+    researchAllowance,
     researchAvailable,
-    researchAvailabilityReason: !superadmin
-      ? "ai_package_required"
-      : researchAvailable
+    researchAvailabilityReason: !result.researchAvailable
+      ? "provider_not_configured"
+      : superadmin
         ? null
-        : "provider_not_configured",
+        : !researchAllowance
+          ? "ai_package_required"
+          : researchAllowance.limit === 0
+            ? "research_not_included"
+          : remainingResearchRuns === 0
+            ? "research_allowance_exhausted"
+            : null,
   }));
 });
 
@@ -47,25 +59,22 @@ router.post("/company-intelligence/:globalCompanyId/research", researchRole, asy
   const params = StartCompanyResearchParams.safeParse(req.params);
   const parsed = StartCompanyResearchBody.safeParse(req.body);
   if (!params.success || !parsed.success || parsed.data.confirmed !== true) { res.status(400).json({ error: "Explicitly confirm research for this global company." }); return; }
-  if (req.authUser?.role !== "SUPERADMIN") {
-    res.status(403).json({
-      error: "AI research requires an AI package. No AI package entitlement is active for this account.",
-      code: "AI_PACKAGE_REQUIRED",
-    });
-    return;
-  }
+  const superadmin = req.authUser?.role === "SUPERADMIN";
   const [settings, provider] = await Promise.all([getResearchSettings(), getAIProviderConfigurationStatus()]);
   if (!provider.provider || !provider.selectedModel || !await getStoredAIProviderApiKey(provider.provider)) { res.status(503).json({ error: "A superadmin must configure an AI provider and model before research is available.", code: "RESEARCH_UNAVAILABLE" }); return; }
   const depth = parsed.data.depth ?? 1;
   if (depth > settings.maxResearchDepth || (depth === 3 && !settings.deepResearchEnabled)) { res.status(400).json({ error: "That research depth is not enabled." }); return; }
   const result = await enqueueCompanyResearch({
     globalCompanyId: params.data.globalCompanyId, userId: req.authUser!.id,
+    ...(superadmin ? {} : { tenantUserId: req.authUser!.id }),
     settings, depth, provider: provider.provider, selectedModel: provider.selectedModel,
     overrideFresh: parsed.data.overrideFresh ?? false, ipAddress: req.ip,
   });
   if (result.kind === "missing") { res.status(404).json({ error: "Global company not found. Private companies are not researched or shared by this endpoint." }); return; }
   if (result.kind === "active") { res.status(409).json({ error: "Research is already in progress for this company.", code: "RESEARCH_IN_PROGRESS" }); return; }
   if (result.kind === "fresh") { res.status(409).json({ error: "This company was researched recently. Confirm a deliberate re-research to continue.", code: "RESEARCH_FRESH_OVERRIDE_REQUIRED" }); return; }
+  if (result.kind === "no_allowance") { res.status(403).json({ error: "An active package with company research allowance is required to research companies.", code: "AI_PACKAGE_REQUIRED" }); return; }
+  if (result.kind === "allowance_exhausted") { res.status(403).json({ error: "You have used all company research runs for this subscription term. Your allowance renews with a new package term.", code: "RESEARCH_ALLOWANCE_EXHAUSTED" }); return; }
   res.status(202).json(StartCompanyResearchResponse.parse(presentResearchJob(result.job)));
 });
 
