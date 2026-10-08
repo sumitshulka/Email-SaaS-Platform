@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { DataType, newDb } from "pg-mem";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -224,6 +224,18 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE razorpay_webhook_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id varchar(128) NOT NULL,
+    event_type varchar(100) NOT NULL,
+    razorpay_order_id varchar(80),
+    razorpay_payment_id varchar(80),
+    body_sha256 varchar(64) NOT NULL,
+    received_at timestamptz NOT NULL DEFAULT now(),
+    processed_at timestamptz
+  );
+  CREATE UNIQUE INDEX razorpay_webhook_event_id_unique
+    ON razorpay_webhook_events (event_id);
   CREATE TABLE user_subscriptions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -761,6 +773,7 @@ beforeEach(async () => {
   await db.delete(dbModule.contactsTable);
   await db.delete(dbModule.aiEmailAssistUsagesTable);
   await db.delete(dbModule.addOnEntitlementsTable);
+  await db.delete(dbModule.razorpayWebhookEventsTable);
   await db.delete(dbModule.userSubscriptionsTable);
   await db.delete(dbModule.paymentsTable);
   await db.delete(dbModule.subscriptionPackagesTable);
@@ -2851,6 +2864,272 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(resumed.body.balances.emailAssist.remaining, 2);
     assert.equal(resumed.body.balances.mailboxes.additionalSlots, 2);
     assert.equal(resumed.body.balances.mailboxes.active, true);
+  });
+
+  it("keeps paid add-on allowances accurate across capture retries, failures, refunds, and delayed callbacks", async () => {
+    const admin = await loggedInUser({
+      username: "paid-addon-webhook-admin",
+      role: "SUPERADMIN",
+    });
+    const customer = await loggedInUser({ username: "paid-addon-webhook-customer" });
+    const [paidPrimary] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Paid add-on webhook primary",
+        description: "Paid primary for add-on checkout tests",
+        amountMinor: 2000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+      })
+      .returning();
+    const paidAddon = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "addon",
+        name: "Paid add-on webhook pack",
+        description: "Research, assist, and mailbox allowances",
+        amountMinor: 1500,
+        currency: "INR",
+        periodDays: 0,
+        contactLimit: 0,
+        emailAccountLimit: 0,
+        researchAllowance: 4,
+        aiEmailAssistAllowance: 3,
+        additionalMailboxCount: 2,
+        preferred: false,
+        active: true,
+      },
+    });
+    assert.equal(paidAddon.response.status, 201, JSON.stringify(paidAddon.body));
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: customer.user.id,
+      packageId: paidPrimary.id,
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    const keySecret = "paid-addon-webhook-key-secret";
+    const webhookSecret = "paid-addon-webhook-signing-secret";
+    await db.insert(dbModule.razorpayConfigurationTable).values({
+      id: "platform",
+      keyId: "rzp_test_paid_addon",
+      keySecretEncrypted: securityModule.encryptSecret(keySecret),
+      webhookSecretEncrypted: securityModule.encryptSecret(webhookSecret),
+      activeEnvironment: "sandbox",
+    });
+
+    const originalFetch = globalThis.fetch;
+    let orderNumber = 0;
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === "https://api.razorpay.com/v1/orders") {
+        const orderRequest = JSON.parse(init.body);
+        orderNumber += 1;
+        return new Response(
+          JSON.stringify({
+            id: `order_paid_addon_${orderNumber}`,
+            amount: orderRequest.amount,
+            currency: orderRequest.currency,
+            status: "created",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return originalFetch(input, init);
+    };
+
+    const checkoutOrders = [];
+    try {
+      for (const _ of [1, 2, 3]) {
+        const created = await api("/subscriptions/orders", {
+          method: "POST",
+          cookie: customer.cookie,
+          body: { packageId: paidAddon.body.id },
+        });
+        assert.equal(created.response.status, 201, JSON.stringify(created.body));
+        checkoutOrders.push(created.body);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    const sendWebhook = async (event, entity, eventId, refund = null) => {
+      const body = {
+        event,
+        payload: {
+          payment: { entity },
+          ...(refund ? { refund: { entity: refund } } : {}),
+        },
+      };
+      const signature = createHmac("sha256", webhookSecret)
+        .update(JSON.stringify(body))
+        .digest("hex");
+      return api("/webhooks/razorpay", {
+        method: "POST",
+        body,
+        headers: {
+          "x-razorpay-event-id": eventId,
+          "x-razorpay-signature": signature,
+        },
+      });
+    };
+    const paymentEntity = (order, paymentId, status, captured) => ({
+      id: paymentId,
+      order_id: order.orderId,
+      amount: order.amountMinor,
+      currency: order.currency,
+      status,
+      captured,
+    });
+    const assertBalances = async (research, assist, mailboxes) => {
+      const dashboard = await api("/subscriptions/add-ons", {
+        cookie: customer.cookie,
+      });
+      assert.equal(dashboard.response.status, 200, JSON.stringify(dashboard.body));
+      assert.equal(dashboard.body.eligible, true);
+      assert.deepEqual(dashboard.body.balances.research, {
+        total: research,
+        used: 0,
+        remaining: research,
+      });
+      assert.deepEqual(dashboard.body.balances.emailAssist, {
+        total: assist,
+        used: 0,
+        remaining: assist,
+      });
+      assert.deepEqual(
+        {
+          baseLimit: dashboard.body.balances.mailboxes.baseLimit,
+          additionalSlots: dashboard.body.balances.mailboxes.additionalSlots,
+          totalLimit: dashboard.body.balances.mailboxes.totalLimit,
+          active: dashboard.body.balances.mailboxes.active,
+        },
+        {
+          baseLimit: 1,
+          additionalSlots: mailboxes,
+          totalLimit: 1 + mailboxes,
+          active: true,
+        },
+      );
+    };
+
+    await assertBalances(0, 0, 0);
+    const firstCapture = await sendWebhook(
+      "payment.captured",
+      paymentEntity(checkoutOrders[0], "pay_paid_addon_1", "captured", true),
+      "paid-addon-capture-first",
+    );
+    assert.equal(firstCapture.response.status, 200, JSON.stringify(firstCapture.body));
+    const sameEventRetry = await sendWebhook(
+      "payment.captured",
+      paymentEntity(checkoutOrders[0], "pay_paid_addon_1", "captured", true),
+      "paid-addon-capture-first",
+    );
+    assert.equal(sameEventRetry.response.status, 200);
+    const duplicateCaptureEvent = await sendWebhook(
+      "payment.captured",
+      paymentEntity(checkoutOrders[0], "pay_paid_addon_1", "captured", true),
+      "paid-addon-capture-duplicate",
+    );
+    assert.equal(duplicateCaptureEvent.response.status, 200);
+
+    const [firstPayment] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[0].paymentId));
+    const firstEntitlements = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.paymentId, firstPayment.id));
+    assert.equal(firstPayment.status, "captured");
+    assert.equal(firstEntitlements.length, 1);
+    await assertBalances(4, 3, 2);
+
+    const secondCapture = await sendWebhook(
+      "payment.captured",
+      paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+      "paid-addon-capture-before-refund",
+    );
+    assert.equal(secondCapture.response.status, 200);
+    await assertBalances(8, 6, 4);
+
+    const partialRefund = await sendWebhook(
+      "refund.processed",
+      {
+        ...paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+        amount_refunded: 700,
+        refund_status: "partial",
+      },
+      "paid-addon-partial-refund",
+      {
+        id: "rfnd_paid_addon_2_partial",
+        payment_id: "pay_paid_addon_2",
+        amount: 700,
+        currency: "INR",
+        status: "processed",
+      },
+    );
+    assert.equal(partialRefund.response.status, 200, JSON.stringify(partialRefund.body));
+    await assertBalances(8, 6, 4);
+
+    const refunded = await sendWebhook(
+      "refund.processed",
+      {
+        ...paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+        amount_refunded: 1500,
+        refund_status: "full",
+      },
+      "paid-addon-full-refund",
+      {
+        id: "rfnd_paid_addon_2_full",
+        payment_id: "pay_paid_addon_2",
+        amount: 800,
+        currency: "INR",
+        status: "processed",
+      },
+    );
+    assert.equal(refunded.response.status, 200, JSON.stringify(refunded.body));
+    const [refundedPayment] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
+    assert.equal(refundedPayment.status, "refunded");
+    await assertBalances(4, 3, 2);
+
+    const delayedCapture = await sendWebhook(
+      "payment.captured",
+      paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+      "paid-addon-delayed-capture-after-refund",
+    );
+    assert.equal(delayedCapture.response.status, 200, JSON.stringify(delayedCapture.body));
+    const refundedEntitlements = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.paymentId, refundedPayment.id));
+    assert.equal(refundedEntitlements.length, 1);
+    await assertBalances(4, 3, 2);
+
+    const failedAttempt = await sendWebhook(
+      "payment.failed",
+      paymentEntity(checkoutOrders[2], "pay_paid_addon_3", "failed", false),
+      "paid-addon-failed",
+    );
+    assert.equal(failedAttempt.response.status, 200);
+    const [failedPayment] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[2].paymentId));
+    assert.equal(failedPayment.status, "created");
+    const failedEntitlements = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.paymentId, failedPayment.id));
+    assert.equal(failedEntitlements.length, 0);
+    await assertBalances(4, 3, 2);
   });
 
   it("isolates contacts by tenant and enforces package limits on every create", async () => {

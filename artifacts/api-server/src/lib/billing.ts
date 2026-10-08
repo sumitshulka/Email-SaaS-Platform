@@ -336,6 +336,49 @@ export async function activateCapturedPayment(input: {
   });
 }
 
+export async function markRefundedPayment(input: {
+  paymentId: string;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  amountMinor: number;
+  currency: string;
+}): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [payment] = await tx
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, input.paymentId))
+      .limit(1)
+      .for("update");
+    if (
+      !payment ||
+      payment.razorpayOrderId !== input.razorpayOrderId ||
+      payment.amountMinor !== input.amountMinor ||
+      payment.currency !== input.currency ||
+      (payment.razorpayPaymentId !== null &&
+        payment.razorpayPaymentId !== input.razorpayPaymentId) ||
+      payment.status === "failed"
+    ) {
+      return false;
+    }
+    const [pkg] = await tx
+      .select({ packageType: subscriptionPackagesTable.packageType })
+      .from(subscriptionPackagesTable)
+      .where(eq(subscriptionPackagesTable.id, payment.packageId))
+      .limit(1);
+    if (pkg?.packageType !== "addon") return false;
+
+    await tx
+      .update(paymentsTable)
+      .set({
+        status: "refunded",
+        razorpayPaymentId: input.razorpayPaymentId,
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, payment.id));
+    return true;
+  });
+}
 export async function grantAdminGiftSubscription(input: {
   userId: string;
   packageId: string;

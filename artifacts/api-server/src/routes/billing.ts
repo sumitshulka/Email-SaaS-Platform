@@ -70,6 +70,7 @@ import {
   activateCapturedPayment,
   getCurrentSubscriptionForUser,
   grantAdminGiftSubscription,
+  markRefundedPayment,
   serializePackage,
 } from "../lib/billing";
 import { writeAuditLog } from "../lib/audit";
@@ -1925,18 +1926,28 @@ router.post(
     const payload = webhookEntity(body.payload) ?? {};
     const orderWrapper = webhookEntity(payload.order);
     const paymentWrapper = webhookEntity(payload.payment);
+    const refundWrapper = webhookEntity(payload.refund);
     const order = webhookEntity(orderWrapper?.entity);
     const providerPayment = webhookEntity(paymentWrapper?.entity);
+    const providerRefund = webhookEntity(refundWrapper?.entity);
     const providerOrderId =
       webhookText(order?.id) ?? webhookText(providerPayment?.order_id);
-    const providerPaymentId = webhookText(providerPayment?.id);
-    const [paymentForWebhook] = providerOrderId
-      ? await db
+    const providerPaymentId =
+      webhookText(providerPayment?.id) ?? webhookText(providerRefund?.payment_id);
+    const [paymentForWebhook] =
+      providerOrderId
+        ? await db
           .select()
           .from(paymentsTable)
           .where(eq(paymentsTable.razorpayOrderId, providerOrderId))
           .limit(1)
-      : [];
+        : providerPaymentId
+          ? await db
+              .select()
+              .from(paymentsTable)
+              .where(eq(paymentsTable.razorpayPaymentId, providerPaymentId))
+              .limit(1)
+          : [];
 
     let config;
     try {
@@ -2010,6 +2021,80 @@ router.post(
         res.json(ReceiveRazorpayWebhookResponse.parse({ message: "Already processed." }));
         return;
       }
+    }
+
+    if (eventType === "payment.refunded" || eventType === "refund.processed") {
+      const amount =
+        typeof providerPayment?.amount === "number"
+          ? providerPayment.amount
+          : null;
+      const currency = webhookText(providerPayment?.currency);
+      const refundCurrency = webhookText(providerRefund?.currency);
+      const isProcessedFullRefund =
+        eventType === "payment.refunded"
+          ? providerPayment?.status === "refunded"
+          : providerRefund?.status === "processed" &&
+            amount !== null &&
+            (typeof providerPayment?.amount_refunded === "number"
+              ? providerPayment.amount_refunded >= amount
+              : typeof providerRefund.amount === "number" &&
+                providerRefund.amount >= amount);
+      const refundOrderId =
+        providerOrderId ?? paymentForWebhook?.razorpayOrderId ?? null;
+      if (
+        !isProcessedFullRefund ||
+        (eventType === "refund.processed" &&
+          (!refundCurrency || refundCurrency !== currency)) ||
+        !refundOrderId ||
+        !providerPaymentId ||
+        amount === null ||
+        !currency ||
+        !paymentForWebhook ||
+        paymentForWebhook.amountMinor !== amount ||
+        paymentForWebhook.currency !== currency
+      ) {
+        await db
+          .update(razorpayWebhookEventsTable)
+          .set({ processedAt: new Date() })
+          .where(eq(razorpayWebhookEventsTable.eventId, eventId));
+        res.json(ReceiveRazorpayWebhookResponse.parse({ message: "Refund event acknowledged." }));
+        return;
+      }
+
+      try {
+        const marked = await markRefundedPayment({
+          paymentId: paymentForWebhook.id,
+          razorpayOrderId: refundOrderId,
+          razorpayPaymentId: providerPaymentId,
+          amountMinor: amount,
+          currency,
+        });
+        await db
+          .update(razorpayWebhookEventsTable)
+          .set({ processedAt: new Date() })
+          .where(eq(razorpayWebhookEventsTable.eventId, eventId));
+        res.json(
+          ReceiveRazorpayWebhookResponse.parse({
+            message: marked
+              ? "Payment refund recorded."
+              : "Refund event acknowledged.",
+          }),
+        );
+      } catch (error) {
+        req.log.error(
+          {
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            internalPaymentId: paymentForWebhook.id,
+            providerOrderId,
+          },
+          "Razorpay refund processing failed",
+        );
+        res.status(500).json({
+          error: "The refund event could not be processed yet.",
+          code: "WEBHOOK_PROCESSING_FAILED",
+        });
+      }
+      return;
     }
 
     if (
@@ -2092,6 +2177,26 @@ router.post(
         .where(eq(razorpayWebhookEventsTable.eventId, eventId));
       res.json(ReceiveRazorpayWebhookResponse.parse({ message: "Payment captured." }));
     } catch (error) {
+      const [latestPayment] = await db
+        .select({ status: paymentsTable.status })
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, payment.id))
+        .limit(1);
+      if (
+        latestPayment?.status === "refunded" ||
+        latestPayment?.status === "failed"
+      ) {
+        await db
+          .update(razorpayWebhookEventsTable)
+          .set({ processedAt: new Date() })
+          .where(eq(razorpayWebhookEventsTable.eventId, eventId));
+        res.json(
+          ReceiveRazorpayWebhookResponse.parse({
+            message: "A failed or refunded payment cannot activate an add-on.",
+          }),
+        );
+        return;
+      }
       req.log.error(
         {
           errorName: error instanceof Error ? error.name : "UnknownError",
