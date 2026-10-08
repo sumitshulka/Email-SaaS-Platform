@@ -238,7 +238,10 @@ async function installFixtures(context, {
       return;
     }
     if (pathname === '/api/subscriptions/current' && method === 'GET') {
-      await route.fulfill({ status: 200, json: { subscription: subscription ?? null } });
+      await route.fulfill({
+        status: 200,
+        json: { subscription: subscription ?? null, scheduledSubscription: null },
+      });
       return;
     }
     if (pathname === '/api/subscriptions/add-ons' && method === 'GET') {

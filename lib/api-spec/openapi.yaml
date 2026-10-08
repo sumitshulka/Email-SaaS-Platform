@@ -5707,7 +5707,11 @@ components:
           oneOf:
             - $ref: "#/components/schemas/SubscriptionSummary"
             - type: "null"
-      required: [subscription]
+        scheduledSubscription:
+          oneOf:
+            - $ref: "#/components/schemas/SubscriptionSummary"
+            - type: "null"
+      required: [subscription, scheduledSubscription]
     VerifyRazorpayPaymentInput:
       type: object
       properties:

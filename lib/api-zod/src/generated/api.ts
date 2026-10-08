@@ -6171,6 +6171,22 @@ export const getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAl
 export const getCurrentSubscriptionResponseSubscriptionOnePackageAdditionalMailboxCountMin = 0;
 export const getCurrentSubscriptionResponseSubscriptionOnePackageAdditionalMailboxCountMax = 100;
 
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMin = 3;
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMax = 3;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageContactLimitMin = 0;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin = 0;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin = 0;
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax = 10000;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin = 0;
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax = 10000;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMin = 0;
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMax = 100;
+
 
 
 export const GetCurrentSubscriptionResponse = zod.object({
@@ -6192,6 +6208,30 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
   "additionalMailboxCount": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAdditionalMailboxCountMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
+  "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+}),zod.null()]),
+  "scheduledSubscription": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
+  "startsAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "package": zod.object({
+  "id": zod.string().uuid(),
+  "packageType": zod.enum(['primary', 'addon']),
+  "name": zod.string(),
+  "description": zod.string(),
+  "amountMinor": zod.number().int(),
+  "currency": zod.string().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMax),
+  "periodDays": zod.number().int(),
+  "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
+  "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "additionalMailboxCount": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),

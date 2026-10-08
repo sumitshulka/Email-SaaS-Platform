@@ -9,4 +9,5 @@ import type { SubscriptionSummary } from './subscriptionSummary';
 
 export interface CurrentSubscription {
   subscription: SubscriptionSummary | null;
+  scheduledSubscription: SubscriptionSummary | null;
 }

@@ -1,4 +1,14 @@
-import { and, desc, eq, gt, inArray, isNull, lte, notInArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  notInArray,
+} from "drizzle-orm";
 import {
   addOnEntitlementsTable,
   db,
@@ -9,6 +19,15 @@ import {
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
+import {
+  calculateProratedUpgradeAmountMinor,
+  comparePrimaryPlanLimits,
+} from "./subscription-plan-changes";
+
+export {
+  calculateProratedUpgradeAmountMinor,
+  comparePrimaryPlanLimits,
+} from "./subscription-plan-changes";
 
 type PackageRow = typeof subscriptionPackagesTable.$inferSelect;
 type SubscriptionRow = typeof userSubscriptionsTable.$inferSelect;
@@ -61,6 +80,29 @@ function getSubscriptionTerm(
 export async function getCurrentSubscriptionForUser(userId: string) {
   await applyDueEmailAccountRetention(userId);
   const now = new Date();
+  const [scheduled] = await db
+    .select({
+      subscription: userSubscriptionsTable,
+      pkg: subscriptionPackagesTable,
+    })
+    .from(userSubscriptionsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+    )
+    .where(
+      and(
+        eq(userSubscriptionsTable.userId, userId),
+        eq(userSubscriptionsTable.status, "active"),
+        gt(userSubscriptionsTable.startsAt, now),
+        gt(userSubscriptionsTable.endsAt, now),
+      ),
+    )
+    .orderBy(asc(userSubscriptionsTable.startsAt))
+    .limit(1);
+  const scheduledSubscription = scheduled
+    ? serializeSubscription(scheduled.subscription, scheduled.pkg)
+    : null;
   const [current] = await db
     .select({
       subscription: userSubscriptionsTable,
@@ -84,6 +126,7 @@ export async function getCurrentSubscriptionForUser(userId: string) {
   if (current) {
     return {
       subscription: serializeSubscription(current.subscription, current.pkg),
+      scheduledSubscription,
     };
   }
 
@@ -100,8 +143,10 @@ export async function getCurrentSubscriptionForUser(userId: string) {
     .where(eq(userSubscriptionsTable.userId, userId))
     .orderBy(desc(userSubscriptionsTable.createdAt))
     .limit(1);
-  if (!latest) return { subscription: null };
-  if (latest.subscription.startsAt > now) return { subscription: null };
+  if (!latest) return { subscription: null, scheduledSubscription };
+  if (latest.subscription.startsAt > now) {
+    return { subscription: null, scheduledSubscription };
+  }
 
   const status =
     latest.subscription.status === "active" && latest.subscription.endsAt <= now
@@ -113,6 +158,7 @@ export async function getCurrentSubscriptionForUser(userId: string) {
       latest.pkg,
       status,
     ),
+    scheduledSubscription,
   };
 }
 
@@ -290,6 +336,86 @@ export async function activateCapturedPayment(input: {
     if (pkg.packageType !== "primary") {
       throw new Error("This package cannot be activated as a primary subscription.");
     }
+    if (payment.subscriptionChangeType === "upgrade") {
+      if (!payment.sourceSubscriptionId) {
+        throw new Error("The plan upgrade is missing its current subscription.");
+      }
+      const [source] = await tx
+        .select()
+        .from(userSubscriptionsTable)
+        .where(
+          and(
+            eq(userSubscriptionsTable.id, payment.sourceSubscriptionId),
+            eq(userSubscriptionsTable.userId, payment.userId),
+            eq(userSubscriptionsTable.status, "active"),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!source) {
+        throw new Error(
+          "The active plan changed while payment was processing. Contact the platform administrator before retrying.",
+        );
+      }
+      const [anotherCurrent] = await tx
+        .select({ id: userSubscriptionsTable.id })
+        .from(userSubscriptionsTable)
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, payment.userId),
+            eq(userSubscriptionsTable.status, "active"),
+            lte(userSubscriptionsTable.startsAt, now),
+            gt(userSubscriptionsTable.endsAt, now),
+          ),
+        )
+        .orderBy(desc(userSubscriptionsTable.endsAt))
+        .limit(1)
+        .for("update");
+      if (anotherCurrent && anotherCurrent.id !== source.id) {
+        throw new Error(
+          "The active plan changed while payment was processing. Contact the platform administrator before retrying.",
+        );
+      }
+
+      const plannedEndAt = payment.planChangeEffectiveAt ?? source.endsAt;
+      const remainingTermAtCheckout = Math.max(
+        1,
+        plannedEndAt.getTime() - payment.createdAt.getTime(),
+      );
+      const endsAt =
+        plannedEndAt > now
+          ? plannedEndAt
+          : new Date(now.getTime() + remainingTermAtCheckout);
+      await tx
+        .update(userSubscriptionsTable)
+        .set({ status: "superseded" })
+        .where(eq(userSubscriptionsTable.id, source.id));
+      const [upgradedSubscription] = await tx
+        .insert(userSubscriptionsTable)
+        .values({
+          userId: payment.userId,
+          packageId: pkg.id,
+          paymentId: payment.id,
+          status: "active",
+          startsAt: now,
+          endsAt,
+          senderAccountIdsToKeep: payment.senderAccountIdsToKeep,
+        })
+        .returning();
+      await tx
+        .update(paymentsTable)
+        .set({
+          status: "captured",
+          razorpayPaymentId: input.razorpayPaymentId,
+          updatedAt: now,
+        })
+        .where(eq(paymentsTable.id, payment.id));
+      return {
+        subscription: serializeSubscription(upgradedSubscription!, pkg),
+        addOnEntitlement: null,
+      };
+    }
+
     const [latestActive] = await tx
       .select()
       .from(userSubscriptionsTable)
@@ -440,10 +566,21 @@ export async function grantAdminGiftSubscription(input: {
   });
 }
 
-export async function activateFreePackageForUser(input: {
+export class PlanChangeError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = "PlanChangeError";
+  }
+}
+
+export async function activateNoCostPrimaryPlanChange(input: {
   userId: string;
   packageId: string;
   senderAccountIdsToKeep?: string[];
+  effectiveEmailAccountLimit?: number;
 }) {
   return db.transaction(async (tx) => {
     const [user] = await tx
@@ -467,7 +604,6 @@ export async function activateFreePackageForUser(input: {
         and(
           eq(subscriptionPackagesTable.id, input.packageId),
           eq(subscriptionPackagesTable.active, true),
-          eq(subscriptionPackagesTable.amountMinor, 0),
           eq(subscriptionPackagesTable.packageType, "primary"),
         ),
       )
@@ -475,11 +611,14 @@ export async function activateFreePackageForUser(input: {
       .for("update");
     if (!pkg) return null;
     const senderAccountIdsToKeep = input.senderAccountIdsToKeep;
+    const now = new Date();
     const ownedAccounts = await tx
       .select({ id: tenantSendingConfigurationTable.id })
       .from(tenantSendingConfigurationTable)
       .where(eq(tenantSendingConfigurationTable.userId, user.id));
-    const needsRetention = ownedAccounts.length > pkg.emailAccountLimit;
+    const accountLimit =
+      input.effectiveEmailAccountLimit ?? pkg.emailAccountLimit;
+    const needsRetention = ownedAccounts.length > accountLimit;
     if (needsRetention && senderAccountIdsToKeep === undefined) {
       throw new Error("Choose which SMTP sender accounts to retain for this package.");
     }
@@ -488,9 +627,9 @@ export async function activateFreePackageForUser(input: {
       if (
         new Set(senderAccountIdsToKeep).size !== senderAccountIdsToKeep.length ||
         senderAccountIdsToKeep.some((accountId) => !ownedIds.has(accountId)) ||
-        senderAccountIdsToKeep.length > pkg.emailAccountLimit ||
+        senderAccountIdsToKeep.length > accountLimit ||
         (needsRetention &&
-          senderAccountIdsToKeep.length !== pkg.emailAccountLimit)
+          senderAccountIdsToKeep.length !== accountLimit)
       ) {
         throw new Error("Choose the SMTP sender accounts allowed by this package.");
       }
@@ -517,7 +656,6 @@ export async function activateFreePackageForUser(input: {
       }
     }
 
-    const now = new Date();
     const [existing] = await tx
       .select()
       .from(userSubscriptionsTable)
@@ -534,6 +672,34 @@ export async function activateFreePackageForUser(input: {
       .for("update");
     if (existing) return serializeSubscription(existing, pkg);
 
+    const [scheduled] = await tx
+      .select({
+        subscription: userSubscriptionsTable,
+        pkg: subscriptionPackagesTable,
+      })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, user.id),
+          eq(userSubscriptionsTable.status, "active"),
+          gt(userSubscriptionsTable.startsAt, now),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(asc(userSubscriptionsTable.startsAt))
+      .limit(1)
+      .for("update");
+    if (scheduled) {
+      throw new PlanChangeError(
+        "A primary plan change is already scheduled. It must start before another change can be made.",
+        "PLAN_CHANGE_ALREADY_SCHEDULED",
+      );
+    }
+
     const [latestActive] = await tx
       .select()
       .from(userSubscriptionsTable)
@@ -547,11 +713,51 @@ export async function activateFreePackageForUser(input: {
       .orderBy(desc(userSubscriptionsTable.endsAt))
       .limit(1)
       .for("update");
-    const { startsAt, endsAt } = getSubscriptionTerm(
-      pkg.periodDays,
-      latestActive?.endsAt,
-      now,
-    );
+    let immediateUpgrade = false;
+    if (latestActive) {
+      const [currentPackage] = await tx
+        .select()
+        .from(subscriptionPackagesTable)
+        .where(eq(subscriptionPackagesTable.id, latestActive.packageId))
+        .limit(1);
+      if (!currentPackage) {
+        throw new Error("The current primary package could not be loaded.");
+      }
+      const changeKind = comparePrimaryPlanLimits(currentPackage, pkg);
+      immediateUpgrade = changeKind === "upgrade";
+      if (pkg.amountMinor > 0) {
+        const zeroCostAmount = calculateProratedUpgradeAmountMinor({
+          currentPackage,
+          targetPackage: pkg,
+          endsAt: latestActive.endsAt,
+          now,
+        });
+        if (
+          !immediateUpgrade ||
+          zeroCostAmount !== 0
+        ) {
+          throw new PlanChangeError(
+            "This plan change requires payment through checkout.",
+            "UPGRADE_REQUIRES_PAYMENT",
+          );
+        }
+      }
+    } else if (pkg.amountMinor > 0) {
+      throw new PlanChangeError(
+        "A paid plan requires checkout unless it is a no-cost upgrade to an active plan.",
+        "UPGRADE_REQUIRES_PAYMENT",
+      );
+    }
+
+    const { startsAt, endsAt } = immediateUpgrade && latestActive
+      ? { startsAt: now, endsAt: latestActive.endsAt }
+      : getSubscriptionTerm(pkg.periodDays, latestActive?.endsAt, now);
+    if (immediateUpgrade && latestActive) {
+      await tx
+        .update(userSubscriptionsTable)
+        .set({ status: "superseded" })
+        .where(eq(userSubscriptionsTable.id, latestActive.id));
+    }
     const [subscription] = await tx
       .insert(userSubscriptionsTable)
       .values({

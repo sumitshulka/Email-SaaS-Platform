@@ -21,7 +21,7 @@
 - [SMTP sender accounts](smtp-sender-account-quota.md) — campaign sender slots stay mailbox-specific; ZeptoMail is restricted to transactional platform email.
 - [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
-- [Browser-test resource contention](browser-test-resource-contention.md) — concurrent Vite and Chromium startups can time out; reuse the running web server when available.
+- [Browser test reliability](browser-test-resource-contention.md) — reuse managed Vite and stub shared app-shell APIs so missing fixtures do not look like blank-page regressions.
 - [Radix dropdown browser checks](radix-dropdown-browser-checks.md) — after list status updates, verify pointer and keyboard ways to reopen the menu separately.
 - [Preview session cookies](preview-session-cookies.md) — HTTPS embedded previews need iframe-compatible cookies; keep local HTTP and production policies distinct.
 - [Password-rotation redirects](password-rotation-redirects.md) — clear the cached credential-rotation flag before leaving the profile or route guards can send users back.

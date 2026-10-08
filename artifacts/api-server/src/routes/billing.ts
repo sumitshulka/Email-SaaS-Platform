@@ -66,11 +66,14 @@ import {
   usersTable,
 } from "@workspace/db";
 import {
-  activateFreePackageForUser,
+  activateNoCostPrimaryPlanChange,
   activateCapturedPayment,
+  calculateProratedUpgradeAmountMinor,
+  comparePrimaryPlanLimits,
   getCurrentSubscriptionForUser,
   grantAdminGiftSubscription,
   markRefundedPayment,
+  PlanChangeError,
   serializePackage,
 } from "../lib/billing";
 import { writeAuditLog } from "../lib/audit";
@@ -1544,7 +1547,6 @@ router.post(
         and(
           eq(subscriptionPackagesTable.id, parsed.data.packageId),
           eq(subscriptionPackagesTable.active, true),
-          eq(subscriptionPackagesTable.amountMinor, 0),
           eq(subscriptionPackagesTable.packageType, "primary"),
         ),
       )
@@ -1556,9 +1558,60 @@ router.post(
       });
       return;
     }
+    const currentState = await getCurrentSubscriptionForUser(req.authUser!.id);
+    const activeSubscription =
+      currentState.subscription?.status === "active"
+        ? currentState.subscription
+        : null;
+    if (
+      currentState.scheduledSubscription &&
+      currentState.scheduledSubscription.package.id !== selectedPackage.id
+    ) {
+      res.status(409).json({
+        error:
+          "A primary plan change is already scheduled. It must start before another change can be made.",
+        code: "PLAN_CHANGE_ALREADY_SCHEDULED",
+      });
+      return;
+    }
+    if (selectedPackage.amountMinor > 0) {
+      if (!activeSubscription) {
+        res.status(409).json({
+          error: "This paid package requires checkout.",
+          code: "UPGRADE_REQUIRES_PAYMENT",
+        });
+        return;
+      }
+      const changeKind = comparePrimaryPlanLimits(
+        activeSubscription.package,
+        selectedPackage,
+      );
+      const amountDue = calculateProratedUpgradeAmountMinor({
+        currentPackage: activeSubscription.package,
+        targetPackage: selectedPackage,
+        endsAt: new Date(activeSubscription.endsAt),
+        now: new Date(),
+      });
+      if (changeKind !== "upgrade" || amountDue !== 0) {
+        res.status(409).json({
+          error: "This plan change requires payment through checkout.",
+          code: "UPGRADE_REQUIRES_PAYMENT",
+        });
+        return;
+      }
+    }
+    const addOnDashboard =
+      selectedPackage.amountMinor > 0
+        ? await getSubscriptionAddOnsDashboard(req.authUser!.id)
+        : null;
+    const effectiveEmailAccountLimit =
+      selectedPackage.emailAccountLimit +
+      (selectedPackage.amountMinor > 0
+        ? addOnDashboard?.balances.mailboxes.additionalSlots ?? 0
+        : 0);
     const retention = await validateSenderAccountRetention(
       req.authUser!.id,
-      selectedPackage.emailAccountLimit,
+      effectiveEmailAccountLimit,
       parsed.data.senderAccountIdsToKeep,
     );
     if (!retention.ok) {
@@ -1570,9 +1623,10 @@ router.post(
     }
     let subscription;
     try {
-      subscription = await activateFreePackageForUser({
+      subscription = await activateNoCostPrimaryPlanChange({
         userId: req.authUser!.id,
         packageId: parsed.data.packageId,
+        effectiveEmailAccountLimit,
         ...(retention.accountIdsToKeep !== null
           ? { senderAccountIdsToKeep: retention.accountIdsToKeep }
           : {}),
@@ -1583,7 +1637,10 @@ router.post(
           error instanceof Error
             ? error.message
             : "Choose the SMTP sender accounts to retain for this package.",
-        code: "SENDER_ACCOUNT_RETENTION_REQUIRED",
+        code:
+          error instanceof PlanChangeError
+            ? error.code
+            : "SENDER_ACCOUNT_RETENTION_REQUIRED",
       });
       return;
     }
@@ -1634,14 +1691,14 @@ router.post(
       });
       return;
     }
-    if (pkg.amountMinor === 0) {
-      res.status(400).json({
-        error: "Free packages are activated directly and do not use Razorpay Checkout.",
-        code: "FREE_PACKAGE_REQUIRES_DIRECT_ACTIVATION",
-      });
-      return;
-    }
     if (pkg.packageType === "addon") {
+      if (pkg.amountMinor === 0) {
+        res.status(400).json({
+          error: "Free add-ons are activated directly without Razorpay Checkout.",
+          code: "FREE_ADDON_REQUIRES_DIRECT_ACTIVATION",
+        });
+        return;
+      }
       const { subscription } = await getCurrentSubscriptionForUser(
         req.authUser!.id,
       );
@@ -1660,7 +1717,71 @@ router.post(
     } else if (pkg.packageType !== "primary") {
       invalidInput(res, "This package cannot be purchased as a primary plan.");
       return;
+    } else if (pkg.amountMinor === 0) {
+      res.status(400).json({
+        error: "Free packages are activated directly and do not use Razorpay Checkout.",
+        code: "FREE_PACKAGE_REQUIRES_DIRECT_ACTIVATION",
+      });
+      return;
     }
+
+    let amountMinor = pkg.amountMinor;
+    let subscriptionChangeType: "upgrade" | "scheduled" | null = null;
+    let sourceSubscriptionId: string | null = null;
+    let planChangeEffectiveAt: Date | null = null;
+    if (pkg.packageType === "primary") {
+      const currentState = await getCurrentSubscriptionForUser(
+        req.authUser!.id,
+      );
+      if (currentState.scheduledSubscription) {
+        res.status(409).json({
+          error:
+            "A primary plan change is already scheduled. It must start before another change can be made.",
+          code: "PLAN_CHANGE_ALREADY_SCHEDULED",
+        });
+        return;
+      }
+      const current =
+        currentState.subscription?.status === "active"
+          ? currentState.subscription
+          : null;
+      if (current?.package.id === pkg.id) {
+        res.status(409).json({
+          error: "This package is already active on your workspace.",
+          code: "CURRENT_PLAN",
+        });
+        return;
+      }
+      if (current) {
+        sourceSubscriptionId = current.id;
+        planChangeEffectiveAt = new Date(current.endsAt);
+        const changeKind = comparePrimaryPlanLimits(current.package, pkg);
+        const proratedAmount =
+          changeKind === "upgrade"
+            ? calculateProratedUpgradeAmountMinor({
+                currentPackage: current.package,
+                targetPackage: pkg,
+                endsAt: planChangeEffectiveAt,
+                now: new Date(),
+              })
+            : null;
+        if (proratedAmount !== null) {
+          amountMinor = proratedAmount;
+          subscriptionChangeType = "upgrade";
+          if (amountMinor === 0) {
+            res.status(409).json({
+              error:
+                "No payment is due for this upgrade. Activate it directly from the plan page.",
+              code: "ZERO_COST_UPGRADE_REQUIRES_DIRECT_ACTIVATION",
+            });
+            return;
+          }
+        } else {
+          subscriptionChangeType = "scheduled";
+        }
+      }
+    }
+
     if (!(await loadOnlinePaymentSettings()).enabled) {
       res.status(503).json({
         error:
@@ -1705,9 +1826,12 @@ router.post(
         userId: req.authUser!.id,
         packageId: pkg.id,
         receipt: `mf_${randomUUID().replaceAll("-", "")}`,
-        amountMinor: pkg.amountMinor,
+        amountMinor,
         currency: pkg.currency,
         status: "created",
+        subscriptionChangeType,
+        sourceSubscriptionId,
+        planChangeEffectiveAt,
         razorpayEnvironment: config.environment,
         senderAccountIdsToKeep: retention.accountIdsToKeep,
       })
@@ -1733,7 +1857,8 @@ router.post(
           .set({ status: "failed", updatedAt: new Date() })
           .where(eq(paymentsTable.id, payment!.id));
         res.status(502).json({
-          error: "Razorpay returned an order that did not match the package price.",
+          error:
+            "Razorpay returned an order that did not match the server-calculated plan amount.",
           code: "RAZORPAY_ORDER_MISMATCH",
         });
         return;

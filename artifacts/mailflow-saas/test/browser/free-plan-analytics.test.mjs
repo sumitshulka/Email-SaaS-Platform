@@ -23,6 +23,7 @@ const user = {
 };
 const freePackage = {
   id: 'ef2e5c91-4e26-42dd-9630-2875680aab2a',
+  packageType: 'primary',
   name: 'Starter plan',
   description: 'A free package used to verify activation tracking.',
   amountMinor: 0,
@@ -30,6 +31,10 @@ const freePackage = {
   periodDays: 30,
   contactLimit: 100,
   emailAccountLimit: 1,
+  researchAllowance: 0,
+  aiEmailAssistAllowance: 0,
+  additionalMailboxCount: 0,
+  preferred: false,
   active: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -297,12 +302,72 @@ async function installFixtures(context, {
       await route.fulfill({ status: 200, json: user });
       return;
     }
+    if (pathname === '/api/maintenance/status' && request.method() === 'GET') {
+      await route.fulfill({ status: 200, json: { maintenanceMode: false } });
+      return;
+    }
+    if (pathname === '/api/notifications' && request.method() === 'GET') {
+      await route.fulfill({ status: 200, json: { unread: [], history: [] } });
+      return;
+    }
     if (pathname === '/api/subscriptions/packages') {
-      await route.fulfill({ status: 200, json: { packages } });
+      await route.fulfill({
+        status: 200,
+        json: {
+          packages,
+          sendingLimits: {
+            emailsPerHourPerSmtp: 100,
+            emailsPerDayPerSmtp: 1000,
+          },
+        },
+      });
       return;
     }
     if (pathname === '/api/subscriptions/current') {
-      await route.fulfill({ status: 200, json: { subscription: null } });
+      await route.fulfill({ status: 200, json: { subscription: null, scheduledSubscription: null } });
+      return;
+    }
+    if (pathname === '/api/subscriptions/add-ons' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          eligible: false,
+          eligibilityReason: 'paid_primary_required',
+          primaryEndsAt: null,
+          balances: {
+            research: { total: 0, used: 0, remaining: 0 },
+            emailAssist: { total: 0, used: 0, remaining: 0 },
+            mailboxes: { baseLimit: 0, additionalSlots: 0, totalLimit: 0, used: 0, remaining: 0, active: false },
+          },
+          packages: [],
+          claimedFreePackageIds: [],
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/company-intelligence/allowance' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: { allowance: { limit: 0, used: 0, remaining: 0 } },
+      });
+      return;
+    }
+    if (pathname === '/api/contacts' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          contacts: [],
+          quota: { used: 0, limit: 0, remaining: 0, canAdd: false, requiresSubscription: true },
+          uploadSettings: { maxFileSizeMb: 10, allowedFileTypes: ['csv'] },
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/subscriptions/payment-availability' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: { enabled: true, superadminEmail: null },
+      });
       return;
     }
     if (pathname === '/api/sending/accounts' && request.method() === 'GET') {
@@ -454,7 +519,13 @@ describe('subscription activation analytics', { concurrency: false }, () => {
   it('tracks only after successful activation and sends no user or package details', async () => {
     const { context, page } = await openPlansPage({ activationStatus: 200 });
     try {
-      await page.getByTestId(`button-purchase-plan-${freePackage.id}`).click();
+      const purchaseButton = page.getByTestId(`button-purchase-plan-${freePackage.id}`);
+      assert.equal(
+        await purchaseButton.count(),
+        1,
+        `Expected the plan action on /plans. Page text: ${await page.locator('body').innerText()}`,
+      );
+      await purchaseButton.click();
       await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
 
       const trackingCalls = await page.evaluate(() => window.__analyticsCalls);
@@ -529,6 +600,7 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         status: 'pending',
         message: 'Payment has not been captured yet.',
         subscription: null,
+        addOnEntitlement: null,
       },
     });
     try {

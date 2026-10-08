@@ -217,6 +217,9 @@ memory.public.none(`
     amount_minor integer NOT NULL,
     currency varchar(3) NOT NULL,
     status payment_status NOT NULL DEFAULT 'created',
+    subscription_change_type varchar(24),
+    source_subscription_id uuid,
+    plan_change_effective_at timestamptz,
     sender_account_ids_to_keep uuid[],
     razorpay_environment razorpay_environment,
     razorpay_order_id varchar(80),
@@ -2590,8 +2593,8 @@ describe("tenant contact management and package quotas", { concurrency: false },
       cookie: user.cookie,
       body: { packageId: paidPackage.body.id },
     });
-    assert.equal(invalidFreeActivation.response.status, 404);
-    assert.equal(invalidFreeActivation.body.code, "PACKAGE_NOT_AVAILABLE");
+    assert.equal(invalidFreeActivation.response.status, 409);
+    assert.equal(invalidFreeActivation.body.code, "UPGRADE_REQUIRES_PAYMENT");
 
     const payments = await db
       .select()
@@ -2644,6 +2647,138 @@ describe("tenant contact management and package quotas", { concurrency: false },
         })
         .returning(),
     );
+  });
+
+  it("applies zero-cost higher-limit upgrades immediately and exposes scheduled free downgrades", async () => {
+    const immediateUser = await loggedInUser({
+      username: "zero-cost-upgrade-user",
+    });
+    const downgradeUser = await loggedInUser({
+      username: "scheduled-free-downgrade-user",
+    });
+    const now = Date.now();
+    const insertPlan = async (values) => {
+      const [plan] = await db
+        .insert(dbModule.subscriptionPackagesTable)
+        .values(values)
+        .returning();
+      return plan;
+    };
+
+    const currentUpgradePlan = await insertPlan({
+      name: "Current paid plan for zero-cost upgrade",
+      description: "",
+      amountMinor: 100_000,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 500,
+      emailAccountLimit: 1,
+      researchAllowance: 5,
+      aiEmailAssistAllowance: 0,
+      active: true,
+    });
+    const higherLimitPlan = await insertPlan({
+      name: "Higher limits at same price",
+      description: "",
+      amountMinor: 100_000,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 1_000,
+      emailAccountLimit: 2,
+      researchAllowance: 10,
+      aiEmailAssistAllowance: 5,
+      active: true,
+    });
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: immediateUser.user.id,
+      packageId: currentUpgradePlan.id,
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(now - 60_000),
+      endsAt: new Date(now + 10 * 24 * 60 * 60 * 1000),
+    });
+
+    const zeroCostUpgrade = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: immediateUser.cookie,
+      body: { packageId: higherLimitPlan.id },
+    });
+    assert.equal(zeroCostUpgrade.response.status, 200, JSON.stringify(zeroCostUpgrade.body));
+    assert.equal(zeroCostUpgrade.body.subscription.package.id, higherLimitPlan.id);
+    assert.ok(new Date(zeroCostUpgrade.body.subscription.startsAt).getTime() <= Date.now());
+    const immediateCurrent = await api("/subscriptions/current", {
+      cookie: immediateUser.cookie,
+    });
+    assert.equal(immediateCurrent.body.subscription.package.id, higherLimitPlan.id);
+    assert.equal(immediateCurrent.body.scheduledSubscription, null);
+
+    const currentDowngradePlan = await insertPlan({
+      name: "Current plan before free downgrade",
+      description: "",
+      amountMinor: 50_000,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 2_000,
+      emailAccountLimit: 2,
+      researchAllowance: 12,
+      aiEmailAssistAllowance: 5,
+      active: true,
+    });
+    const freeDowngradePlan = await insertPlan({
+      name: "Free plan after term",
+      description: "",
+      amountMinor: 0,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 500,
+      emailAccountLimit: 1,
+      researchAllowance: 2,
+      aiEmailAssistAllowance: 0,
+      active: true,
+    });
+    const currentEnd = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000);
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: downgradeUser.user.id,
+      packageId: currentDowngradePlan.id,
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: currentEnd,
+    });
+
+    const scheduledDowngrade = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: downgradeUser.cookie,
+      body: { packageId: freeDowngradePlan.id },
+    });
+    assert.equal(scheduledDowngrade.response.status, 200, JSON.stringify(scheduledDowngrade.body));
+    assert.equal(
+      new Date(scheduledDowngrade.body.subscription.startsAt).toISOString(),
+      currentEnd.toISOString(),
+    );
+    const downgradeCurrent = await api("/subscriptions/current", {
+      cookie: downgradeUser.cookie,
+    });
+    assert.equal(downgradeCurrent.body.subscription.package.id, currentDowngradePlan.id);
+    assert.equal(
+      downgradeCurrent.body.scheduledSubscription.package.id,
+      freeDowngradePlan.id,
+    );
+    assert.equal(
+      new Date(downgradeCurrent.body.scheduledSubscription.startsAt).toISOString(),
+      currentEnd.toISOString(),
+    );
+
+    const immediatePayments = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.userId, immediateUser.user.id));
+    const downgradePayments = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.userId, downgradeUser.user.id));
+    assert.deepEqual(immediatePayments, []);
+    assert.deepEqual(downgradePayments, []);
   });
 
   it("offers free add-ons only to paid-primary users and resumes retained allowances", async () => {

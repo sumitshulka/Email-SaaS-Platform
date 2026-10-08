@@ -78,24 +78,114 @@ function durationLabel(days: number) {
   return `${days} days`;
 }
 
-function PackageCard({ item, featured, pending, disabled, onlinePaymentsEnabled, onPurchase, sendingLimits }: {
+const primaryLimitFields = [
+  'contactLimit',
+  'emailAccountLimit',
+  'researchAllowance',
+  'aiEmailAssistAllowance',
+] as const;
+
+type PlanAction = {
+  label: string;
+  mode: 'current' | 'scheduled' | 'blocked' | 'activate' | 'purchase' | 'upgrade' | 'no-cost-upgrade' | 'free-downgrade' | 'scheduled-change';
+  requiresPayment: boolean;
+  disabled: boolean;
+};
+
+type PlanSubscription = {
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  package: SubscriptionPackage;
+};
+
+function comparePrimaryPlans(current: SubscriptionPackage, target: SubscriptionPackage) {
+  const targetAtLeastAsHigh = primaryLimitFields.every(field => target[field] >= current[field]);
+  const targetAtMostAsHigh = primaryLimitFields.every(field => target[field] <= current[field]);
+  const exactlyEqual = primaryLimitFields.every(field => target[field] === current[field]);
+  if (exactlyEqual) return 'same' as const;
+  if (targetAtLeastAsHigh) return 'upgrade' as const;
+  if (targetAtMostAsHigh) return 'downgrade' as const;
+  return 'switch' as const;
+}
+
+function proratedUpgradeAmountMinor(current: SubscriptionPackage, target: SubscriptionPackage, endsAt: string) {
+  if (current.currency !== target.currency) return null;
+  const remainingMs = Math.max(0, new Date(endsAt).getTime() - Date.now());
+  const perDayDifference = target.amountMinor / target.periodDays - current.amountMinor / current.periodDays;
+  if (remainingMs === 0 || perDayDifference <= 0) return 0;
+  return Math.max(1, Math.round(perDayDifference * remainingMs / (24 * 60 * 60 * 1000)));
+}
+
+function getPlanAction(
+  item: SubscriptionPackage,
+  current: PlanSubscription | null | undefined,
+  scheduled: PlanSubscription | null | undefined,
+): PlanAction {
+  if (current?.status === 'active' && current.package.id === item.id) {
+    return { label: 'Current plan', mode: 'current', requiresPayment: false, disabled: true };
+  }
+  if (scheduled?.package.id === item.id) {
+    return { label: `Scheduled for ${new Date(scheduled.startsAt).toLocaleDateString()}`, mode: 'scheduled', requiresPayment: false, disabled: true };
+  }
+  if (scheduled) {
+    return { label: 'Another change is scheduled', mode: 'blocked', requiresPayment: false, disabled: true };
+  }
+  if (!current || current.status !== 'active') {
+    return {
+      label: item.amountMinor === 0 ? `Activate ${item.name}` : `Choose ${item.name}`,
+      mode: item.amountMinor === 0 ? 'activate' : 'purchase',
+      requiresPayment: item.amountMinor > 0,
+      disabled: false,
+    };
+  }
+
+  const changeKind = comparePrimaryPlans(current.package, item);
+  const proration = changeKind === 'upgrade'
+    ? proratedUpgradeAmountMinor(current.package, item, current.endsAt)
+    : null;
+  if (proration !== null) {
+    return {
+      label: proration > 0
+        ? `Upgrade · ${formatMinor(proration, item.currency)}`
+        : 'Upgrade · no extra charge',
+      mode: proration > 0 ? 'upgrade' : 'no-cost-upgrade',
+      requiresPayment: proration > 0,
+      disabled: false,
+    };
+  }
+  if (item.amountMinor === 0) {
+    return { label: 'Schedule free plan', mode: 'free-downgrade', requiresPayment: false, disabled: false };
+  }
+  return {
+    label: `Pay ${formatMinor(item.amountMinor, item.currency)} now · starts ${new Date(current.endsAt).toLocaleDateString()}`,
+    mode: 'scheduled-change',
+    requiresPayment: true,
+    disabled: false,
+  };
+}
+
+function PackageCard({ item, featured, scheduled, pending, disabled, action, onlinePaymentsEnabled, onPurchase, sendingLimits }: {
   item: SubscriptionPackage;
   featured: boolean;
+  scheduled: boolean;
   pending: boolean;
   disabled: boolean;
+  action: PlanAction;
   onlinePaymentsEnabled: boolean;
   onPurchase: () => void;
   sendingLimits: SubscriptionPackageList['sendingLimits'];
 }) {
   const combinedHourly = sendingLimits.emailsPerHourPerSmtp * item.emailAccountLimit;
   const combinedDaily = sendingLimits.emailsPerDayPerSmtp * item.emailAccountLimit;
-  const paidCheckoutUnavailable = item.amountMinor > 0 && !onlinePaymentsEnabled;
+  const paidCheckoutUnavailable = action.requiresPayment && !onlinePaymentsEnabled;
   return <article data-testid={`card-plan-${item.id}`} className={`flex min-h-[330px] flex-col rounded-lg border p-4 sm:p-5 md:p-6 ${featured ? 'border-[#224e78] bg-[#f1f6fa] shadow-[0_8px_26px_rgba(35,70,104,.09)]' : 'border-[#e0e6eb] bg-white'}`}>
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="mono text-[9px] uppercase tracking-[.17em] text-[#7e8c9a]">MAILFLOW ACCESS</span>
           {featured && <span data-testid={`badge-current-package-${item.id}`} className="mono inline-flex shrink-0 items-center rounded-full border border-[#c8d8e5] bg-white/90 px-2 py-1 text-[8px] font-semibold uppercase leading-none tracking-[.08em] text-[#365b7b]">Current package</span>}
+          {scheduled && <span data-testid={`badge-scheduled-package-${item.id}`} className="mono inline-flex shrink-0 items-center rounded-full border border-[#ead4b8] bg-[#fff8ef] px-2 py-1 text-[8px] font-semibold uppercase leading-none tracking-[.08em] text-[#865b2e]">Scheduled</span>}
           {item.preferred && <span data-testid={`badge-preferred-plan-${item.id}`} className="mono inline-flex shrink-0 items-center rounded-full border border-[#d4e2ef] bg-[#eff5fa] px-2 py-1 text-[8px] font-semibold uppercase leading-none tracking-[.08em] text-[#315c82]">Preferred</span>}
         </div>
         <h2 className="display mt-2 break-words text-[22px] font-bold leading-tight text-[#1d2d40]">{item.name}</h2>
@@ -143,8 +233,8 @@ function PackageCard({ item, featured, pending, disabled, onlinePaymentsEnabled,
       With all {item.emailAccountLimit} base mailbox{item.emailAccountLimit === 1 ? '' : 'es'} configured: up to {combinedHourly.toLocaleString()} campaign attempts/hour and {combinedDaily.toLocaleString()}/24 hours. Retries count; provider limits may be lower.
     </p>
 
-    <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled || paidCheckoutUnavailable} className={`mt-4 inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-center text-[12px] font-semibold leading-4 transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
-      {pending ? <><LoaderCircle className="h-4 w-4 shrink-0 animate-spin"/><span className="min-w-0 break-words">{item.amountMinor === 0 ? 'Activating free plan' : 'Starting secure checkout'}</span></> : paidCheckoutUnavailable ? <><span className="min-w-0 break-words">Online payments unavailable</span><CircleAlert className="h-4 w-4 shrink-0"/></> : <><span className="min-w-0 break-words">{item.amountMinor === 0 ? `Activate ${item.name}` : `Choose ${item.name}`}</span><ArrowRight className="h-4 w-4 shrink-0"/></>}
+    <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled || action.disabled || paidCheckoutUnavailable} className={`mt-4 inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-center text-[12px] font-semibold leading-4 transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
+      {pending ? <><LoaderCircle className="h-4 w-4 shrink-0 animate-spin"/><span className="min-w-0 break-words">{action.requiresPayment ? 'Starting secure checkout' : 'Applying plan change'}</span></> : paidCheckoutUnavailable ? <><span className="min-w-0 break-words">Online payments unavailable</span><CircleAlert className="h-4 w-4 shrink-0"/></> : <><span className="min-w-0 break-words">{action.label}</span>{!action.disabled && <ArrowRight className="h-4 w-4 shrink-0"/>}</>}
     </button>
   </article>;
 }
@@ -185,6 +275,7 @@ export default function PlansPage() {
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const onlinePaymentsEnabled = paymentAvailabilityQuery.data?.enabled === true;
   const activeSubscription = currentQuery.data?.subscription?.status === 'active' ? currentQuery.data.subscription : null;
+  const scheduledSubscription = currentQuery.data?.scheduledSubscription ?? null;
   const primaryResearchUsage = researchAllowanceQuery.data?.allowance;
   const addOnDashboard = addOnsQuery.data;
   const addOnPackages = addOnDashboard?.packages ?? [];
@@ -258,11 +349,14 @@ export default function PlansPage() {
     });
   };
 
-  const startPurchase = (pkg: SubscriptionPackage, accountIdsToKeep?: string[]) => {
+  const startPurchase = (
+    pkg: SubscriptionPackage,
+    accountIdsToKeep?: string[],
+    noCostPlanUpgrade = false,
+  ) => {
     setPaymentState(null);
     setStartingPackage(pkg.id);
-    if (pkg.amountMinor === 0) {
-      if (pkg.packageType === 'addon') {
+    if (pkg.amountMinor === 0 && pkg.packageType === 'addon') {
         activateFreeAddOn.mutate({ data: { packageId: pkg.id } }, {
           onSuccess: result => {
             trackEvent('free_addon_activated');
@@ -278,7 +372,8 @@ export default function PlansPage() {
           },
         });
         return;
-      }
+    }
+    if (pkg.amountMinor === 0 || noCostPlanUpgrade) {
       activateFree.mutate({ data: { packageId: pkg.id, ...(accountIdsToKeep !== undefined ? { senderAccountIdsToKeep: accountIdsToKeep } : {}) } }, {
         onSuccess: result => {
           if (accountIdsToKeep !== undefined) {
@@ -288,14 +383,17 @@ export default function PlansPage() {
               pkg.emailAccountLimit,
             );
           }
-          trackFreeActivationOutcome('activated');
+          if (pkg.amountMinor === 0) trackFreeActivationOutcome('activated');
           const startsAt = new Date(result.subscription.startsAt);
           const scheduled = startsAt.getTime() > Date.now();
           setPaymentState({
             kind: 'active',
+            label: scheduled ? 'Plan change scheduled' : noCostPlanUpgrade ? 'Plan upgrade active' : undefined,
             message: scheduled
-              ? `${pkg.name} is scheduled to start on ${startsAt.toLocaleDateString()}. No payment or Razorpay order was required.`
-              : `${pkg.name} is active now. No payment or Razorpay order was required.`,
+              ? `${pkg.name} is scheduled to start on ${startsAt.toLocaleDateString()}. No payment is due for this change.`
+              : noCostPlanUpgrade
+                ? `${pkg.name} is active now through your current term expiry. The prorated difference was zero, so no payment was due.`
+                : `${pkg.name} is active now. No payment or Razorpay order was required.`,
           });
           setStartingPackage(null);
           void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
@@ -305,7 +403,7 @@ export default function PlansPage() {
           void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
         },
         onError: error => {
-          trackFreeActivationOutcome('failed');
+          if (pkg.amountMinor === 0) trackFreeActivationOutcome('failed');
           setStartingPackage(null);
           setPaymentState({ kind: 'error', message: errorText(error) });
         },
@@ -368,6 +466,16 @@ export default function PlansPage() {
       startPurchase(pkg);
       return;
     }
+    const action = getPlanAction(pkg, activeSubscription, scheduledSubscription);
+    if (action.disabled) {
+      setPaymentState({
+        kind: 'error',
+        message: scheduledSubscription
+          ? 'A primary plan change is already scheduled. It must start before you can schedule another.'
+          : 'This is already the active package.',
+      });
+      return;
+    }
     if (!senderAccountsQuery.data) {
       setPaymentState({ kind: 'error', message: 'SMTP sender accounts could not be checked. Retry before changing packages.' });
       return;
@@ -389,7 +497,7 @@ export default function PlansPage() {
       setSenderAccountsToKeep(suggested);
       return;
     }
-    startPurchase(pkg);
+    startPurchase(pkg, undefined, action.mode === 'no-cost-upgrade');
   };
   const toggleSenderRetention = (account: TenantSendingAccount, checked: boolean) => {
     setSenderAccountsToKeep(current => {
@@ -403,7 +511,11 @@ export default function PlansPage() {
     const pkg = pendingPackage;
     const keepIds = [...senderAccountsToKeep];
     setPendingPackage(null);
-    startPurchase(pkg, keepIds);
+    startPurchase(
+      pkg,
+      keepIds,
+      getPlanAction(pkg, activeSubscription, scheduledSubscription).mode === 'no-cost-upgrade',
+    );
   };
 
   if (packagesQuery.isLoading || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || contactsUsageQuery.isLoading || contactsUsageQuery.isFetching || senderAccountsQuery.isLoading) {
@@ -416,8 +528,8 @@ export default function PlansPage() {
   return <div className="fade-in space-y-8">
     <header className="relative overflow-hidden rounded-lg border border-[#dce5ec] bg-[#eff5f9] px-5 py-7 md:px-8 md:py-8">
       <div className="relative z-[1] max-w-[700px]"><div className="mono mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[.19em] text-[#58748e]"><span className="h-px w-6 bg-[#d7823c]"/>WORKSPACE BILLING</div>
-        <h1 className="display text-[30px] font-bold leading-tight tracking-[-.05em] text-[#1a2e43] md:text-[37px]">Choose your Mailflow plan.</h1>
-        <p className="mt-3 max-w-[570px] text-[13px] leading-6 text-[#64778a]">Choose a subscription term for your workspace. Paid plans use Razorpay Checkout; free plans activate without a payment order.</p>
+        <h1 className="display text-[30px] font-bold leading-tight tracking-[-.05em] text-[#1a2e43] md:text-[37px]">Manage your Mailflow plan.</h1>
+        <p className="mt-3 max-w-[650px] text-[13px] leading-6 text-[#64778a]">Higher-limit upgrades start immediately and charge only the prorated price difference through your current expiry. Downgrades and other plan changes are paid once now and start after the current term. Plans do not auto-renew.</p>
       </div>
       <div aria-hidden="true" className="pointer-events-none absolute -right-5 -top-16 hidden h-64 w-64 rounded-full border border-[#d5e1e9] md:block"><div className="absolute inset-7 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-14 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-[84px] rounded-full border border-[#d5e1e9]"/></div>
     </header>
@@ -439,6 +551,21 @@ export default function PlansPage() {
         <div><h2 className="text-[12px] font-semibold text-[#34485d]">No active subscription</h2><p className="mt-0.5 text-[11px] text-[#798796]">Your workspace access term will appear here after payment is confirmed.</p></div>
       </section>
     )}
+
+    {scheduledSubscription && <section data-testid="scheduled-plan-change" className="grid gap-3 rounded-lg border border-[#ead8be] bg-[#fff9f1] p-4 sm:grid-cols-[auto_1fr] sm:items-start">
+      <span className="grid h-9 w-9 place-items-center rounded-md bg-white text-[#926332]"><CalendarClock className="h-4 w-4"/></span>
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-[.12em] text-[#895d31]">Next plan scheduled</div>
+        <h2 className="display mt-1 text-[17px] font-bold text-[#49351f]">{scheduledSubscription.package.name}</h2>
+        <p data-testid="text-scheduled-plan-date" className="mt-1 text-[11px] leading-5 text-[#735b3d]">
+          Starts {new Date(scheduledSubscription.startsAt).toLocaleDateString()} and runs for {durationLabel(scheduledSubscription.package.periodDays)}.
+          {scheduledSubscription.package.amountMinor === 0
+            ? ' No payment is due.'
+            : ' The one-time payment is already made; there will be no automatic renewal.'}
+          {' '}You can schedule another primary plan change after this one starts.
+        </p>
+      </div>
+    </section>}
 
     <section data-testid="subscription-primary-usage" className="rounded-lg border border-[#dce5ec] bg-[#f8fbfd] p-5 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -533,7 +660,7 @@ export default function PlansPage() {
     </section>
 
     <section data-testid="subscription-add-on-catalog">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[9px] uppercase tracking-[.18em] text-[#8290a0]">OPTIONAL CAPACITY</div><h2 className="display text-[23px] font-bold text-[#1d2d40]">Add-on packages</h2><p className="mt-1 text-[11px] text-[#718192]">Add credits or SMTP mailbox slots to a paid primary subscription.</p></div><Sparkles className="h-5 w-5 text-[#52799c]"/></div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[9px] uppercase tracking-[.18em] text-[#8290a0]">OPTIONAL CAPACITY</div><h2 className="display text-[23px] font-bold text-[#1d2d40]">Add-on packages</h2><p className="mt-1 text-[11px] text-[#718192]">Add credits or SMTP mailbox slots to a paid primary subscription. Add-ons are separate purchases; primary-plan upgrade and downgrade rules do not apply to them.</p></div><Sparkles className="h-5 w-5 text-[#52799c]"/></div>
       {!addOnDashboard?.eligible
         ? <div data-testid="notice-addon-eligibility" className="rounded-lg border border-[#dfe5ea] bg-[#f8fafb] p-4 text-[12px] leading-5 text-[#627487]">Add-ons are available only while an active paid primary plan is in effect. Existing balances are preserved and will resume on a future paid plan.</div>
         : addOnPackages.length === 0
@@ -581,9 +708,12 @@ export default function PlansPage() {
     </section>}
 
     <section>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[9px] uppercase tracking-[.18em] text-[#8290a0]">AVAILABLE TERMS</div><h2 className="display text-[23px] font-bold text-[#1d2d40]">Select a package</h2></div><div className="flex items-center gap-2 text-[10px] text-[#718193]"><ShieldCheck className="h-4 w-4 text-[#48769e]"/>Verified server-side before activation</div></div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[9px] uppercase tracking-[.18em] text-[#8290a0]">PRIMARY PLANS</div><h2 className="display text-[23px] font-bold text-[#1d2d40]">Choose a plan change</h2><p className="mt-1 max-w-2xl text-[11px] leading-5 text-[#718192]">Upgrade amounts are prorated to your current expiry. Downgrades and other switches are charged once when selected and begin at that expiry.</p></div><div className="flex items-center gap-2 text-[10px] text-[#718193]"><ShieldCheck className="h-4 w-4 text-[#48769e]"/>Verified server-side before activation</div></div>
       {packages.length === 0 ? <section data-testid="empty-plans" className="rounded-lg border border-dashed border-[#d8e1e8] bg-[#fbfcfd] px-6 py-12 text-center"><CreditCard className="mx-auto h-7 w-7 text-[#8798a8]"/><h3 className="mt-3 text-[14px] font-semibold text-[#2b3e51]">No plans are available right now</h3><p className="mt-1 text-[12px] text-[#778797]">Please check back later or contact your workspace administrator.</p></section> :
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{packages.map(pkg => <PackageCard key={pkg.id} item={pkg} featured={activeSubscription?.package.id === pkg.id} pending={startingPackage === pkg.id} disabled={busy || startingPackage !== null || checkoutOrder !== null || pendingPackage !== null} onlinePaymentsEnabled={onlinePaymentsEnabled} sendingLimits={packagesQuery.data!.sendingLimits} onPurchase={() => purchase(pkg)}/>)}</div>}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{packages.map(pkg => {
+          const action = getPlanAction(pkg, activeSubscription, scheduledSubscription);
+          return <PackageCard key={pkg.id} item={pkg} featured={activeSubscription?.package.id === pkg.id} scheduled={scheduledSubscription?.package.id === pkg.id} action={action} pending={startingPackage === pkg.id} disabled={busy || startingPackage !== null || checkoutOrder !== null || pendingPackage !== null} onlinePaymentsEnabled={onlinePaymentsEnabled} sendingLimits={packagesQuery.data!.sendingLimits} onPurchase={() => purchase(pkg)}/>;
+        })}</div>}
     </section>
 
     {pendingPackage && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#101d2a]/55 p-4" data-testid="dialog-sender-retention">
@@ -593,7 +723,13 @@ export default function PlansPage() {
           <button type="button" aria-label="Cancel package change" data-testid="button-cancel-sender-retention" onClick={() => setPendingPackage(null)} className="rounded px-2 py-1 text-[18px] text-[#667587] hover:bg-[#f1f4f6]">×</button>
         </div>
         <p className="mt-3 text-[12px] leading-5 text-[#637284]">
-          {pendingPackage.name} allows {pendingPackageAccountLimit} SMTP sender account{pendingPackageAccountLimit === 1 ? '' : 's'} including active paid add-on slots. Select exactly {pendingPackageAccountLimit} to retain. This change starts after your current term ends.
+          {pendingPackage.name} allows {pendingPackageAccountLimit} SMTP sender account{pendingPackageAccountLimit === 1 ? '' : 's'} including active paid add-on slots. Select exactly {pendingPackageAccountLimit} to retain.
+          {getPlanAction(pendingPackage, activeSubscription, scheduledSubscription).mode === 'upgrade' ||
+          getPlanAction(pendingPackage, activeSubscription, scheduledSubscription).mode === 'no-cost-upgrade'
+            ? ' This upgrade takes effect immediately after checkout.'
+            : activeSubscription
+              ? ` This change starts after your current term ends on ${new Date(activeSubscription.endsAt).toLocaleDateString()}.`
+              : ' This package starts when activation or payment is confirmed.'}
         </p>
         <p className="mt-2 rounded-md border border-[#efd9bd] bg-[#fff8ef] p-3 text-[11px] leading-5 text-[#895b2f]">
           On the start date, unselected SMTP accounts and their saved credentials will be permanently deleted. Accounts used by queued or sending campaigns must be kept until those campaigns finish.
@@ -615,13 +751,19 @@ export default function PlansPage() {
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#edf0f2] pt-4">
           <button type="button" data-testid="button-cancel-package-change" onClick={() => setPendingPackage(null)} className="min-h-10 rounded-md border border-[#d7dce3] px-4 text-[12px] font-semibold text-[#38485a] hover:bg-[#f7f9fb]">Cancel</button>
           <button type="button" data-testid="button-confirm-sender-retention" disabled={senderAccountsToKeep.length !== pendingPackageAccountLimit || busy} onClick={confirmPackageChange} className="min-h-10 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-            {pendingPackage.amountMinor === 0 ? 'Activate package' : 'Continue to checkout'}
+            {getPlanAction(pendingPackage, activeSubscription, scheduledSubscription).mode === 'no-cost-upgrade'
+              ? 'Apply upgrade'
+              : pendingPackage.amountMinor === 0
+                ? 'Schedule free plan'
+                : getPlanAction(pendingPackage, activeSubscription, scheduledSubscription).mode === 'upgrade'
+                  ? 'Continue to prorated checkout'
+                  : 'Continue to checkout'}
           </button>
         </div>
       </section>
     </div>}
 
-    <footer className="flex flex-col gap-3 border-t border-[#e5eaee] pt-5 text-[10px] leading-5 text-[#82909d] sm:flex-row sm:items-center sm:justify-between"><span>Paid terms start after payment is verified; free terms activate without checkout. A new term starts after any current term ends. Renewals are manual, not recurring charges.</span><span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5"/>Paid checkout by Razorpay</span></footer>
+    <footer className="flex flex-col gap-3 border-t border-[#e5eaee] pt-5 text-[10px] leading-5 text-[#82909d] sm:flex-row sm:items-center sm:justify-between"><span>Upgrades are prorated through the current expiry. Downgrades are paid once at selection and start at term end. Free plans need no checkout. No plan renews automatically.</span><span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5"/>Paid checkout by Razorpay</span></footer>
     {checkoutOrder && verifyPayment.isPending && <span className="sr-only" data-testid="text-checkout-order">Order {checkoutOrder.orderId} awaiting payment verification</span>}
   </div>;
 }

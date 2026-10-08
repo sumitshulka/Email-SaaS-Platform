@@ -4199,6 +4199,7 @@ export interface FreeSubscriptionActivation {
 
 export interface CurrentSubscription {
   subscription: SubscriptionSummary | null;
+  scheduledSubscription: SubscriptionSummary | null;
 }
 
 export interface VerifyRazorpayPaymentInput {

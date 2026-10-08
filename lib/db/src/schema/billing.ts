@@ -133,6 +133,11 @@ export const paymentsTable = pgTable(
     amountMinor: integer("amount_minor").notNull(),
     currency: varchar("currency", { length: 3 }).notNull(),
     status: paymentStatusEnum("status").notNull().default("created"),
+    subscriptionChangeType: varchar("subscription_change_type", { length: 24 }),
+    sourceSubscriptionId: uuid("source_subscription_id"),
+    planChangeEffectiveAt: timestamp("plan_change_effective_at", {
+      withTimezone: true,
+    }),
     razorpayEnvironment: razorpayEnvironmentEnum("razorpay_environment"),
     razorpayOrderId: varchar("razorpay_order_id", { length: 80 }),
     razorpayPaymentId: varchar("razorpay_payment_id", { length: 80 }),
