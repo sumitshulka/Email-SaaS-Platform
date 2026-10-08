@@ -6101,6 +6101,248 @@ describe("superadmin AI provider setup", { concurrency: false }, () => {
   });
 });
 
+describe("AI Email Assist credit usage", { concurrency: false }, () => {
+  const validDraft = {
+    subject: "A better way to plan",
+    greeting: "Hello {{firstName}},",
+    body: "Here is a simple way to make progress on your next goal.",
+    signature: "Best,\nThe Team",
+  };
+  const apiKey = "test-ai-email-assist-key";
+
+  async function configureProvider(admin) {
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "ai_provider",
+      value: {
+        provider: "openai",
+        apiKeyEncrypted: securityModule.encryptSecret(apiKey),
+        selectedModel: "gpt-4.1-mini",
+        lastTestedAt: new Date().toISOString(),
+      },
+      updatedBy: admin.user.id,
+    });
+  }
+
+  async function createAccount(
+    username,
+    { primaryAmountMinor = 2500, allowance = 1 } = {},
+  ) {
+    const account = await loggedInUser({ username });
+    let primaryPackage;
+    if (primaryAmountMinor !== null) {
+      [primaryPackage] = await db.insert(dbModule.subscriptionPackagesTable).values({
+        packageType: "primary",
+        name: `${username} primary`,
+        description: "Primary package for AI Email Assist tests",
+        amountMinor: primaryAmountMinor,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 100,
+        emailAccountLimit: 1,
+        active: true,
+      }).returning();
+      await db.insert(dbModule.userSubscriptionsTable).values({
+        userId: account.user.id,
+        packageId: primaryPackage.id,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 30 * 86_400_000),
+      });
+    }
+    const [addonPackage] = await db.insert(dbModule.subscriptionPackagesTable).values({
+      packageType: "addon",
+      name: `${username} AI Email Assist add-on`,
+      description: "AI Email Assist allowance for tests",
+      amountMinor: 0,
+      currency: "INR",
+      periodDays: 0,
+      contactLimit: 0,
+      emailAccountLimit: 0,
+      aiEmailAssistAllowance: allowance,
+      active: true,
+    }).returning();
+    await db.insert(dbModule.addOnEntitlementsTable).values({
+      userId: account.user.id,
+      packageId: addonPackage.id,
+      aiEmailAssistAllowance: allowance,
+    });
+    return account;
+  }
+
+  function providerResponse(text, status = 200) {
+    return new Response(
+      JSON.stringify({
+        output: [{ content: [{ type: "output_text", text }] }],
+        usage: { input_tokens: 10, output_tokens: 20 },
+      }),
+      { status, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  async function draftRequest(account) {
+    return api("/campaigns/ai-assist", {
+      method: "POST",
+      cookie: account.cookie,
+      body: { objective: "Help customers plan their next project" },
+    });
+  }
+
+  it("releases credits after provider or draft-validation failures and consumes one on success", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-credit-lifecycle-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-credit-lifecycle-user");
+    await configureProvider(admin);
+
+    const providerFailure = await withAIProviderFetch(
+      async () => providerResponse("", 503),
+      () => draftRequest(account),
+    );
+    assert.equal(providerFailure.response.status, 502);
+    assert.equal(providerFailure.body.code, "AI_DRAFT_FAILED");
+    let usages = await db.select().from(dbModule.aiEmailAssistUsagesTable);
+    assert.deepEqual(usages.map((usage) => usage.status), ["released"]);
+
+    const invalidDraft = await withAIProviderFetch(
+      async () => providerResponse(JSON.stringify({
+        subject: validDraft.subject,
+        greeting: validDraft.greeting,
+        body: "",
+        signature: validDraft.signature,
+      })),
+      () => draftRequest(account),
+    );
+    assert.equal(invalidDraft.response.status, 502);
+    assert.equal(invalidDraft.body.code, "AI_DRAFT_FAILED");
+    usages = await db.select().from(dbModule.aiEmailAssistUsagesTable);
+    assert.deepEqual(usages.map((usage) => usage.status), ["released", "released"]);
+
+    const success = await withAIProviderFetch(
+      async () => providerResponse(JSON.stringify(validDraft)),
+      () => draftRequest(account),
+    );
+    assert.equal(success.response.status, 200, JSON.stringify(success.body));
+    assert.deepEqual(success.body.draft, validDraft);
+    assert.deepEqual(success.body.usage, { total: 1, used: 1, remaining: 0 });
+    usages = await db.select().from(dbModule.aiEmailAssistUsagesTable);
+    assert.deepEqual(usages.map((usage) => usage.status), [
+      "released",
+      "released",
+      "consumed",
+    ]);
+    assert.ok(usages[2].completedAt);
+
+    const exhausted = await withAIProviderFetch(
+      async () => {
+        assert.fail("an exhausted allowance must be rejected before calling AI");
+      },
+      () => draftRequest(account),
+    );
+    assert.equal(exhausted.response.status, 403);
+    assert.equal(exhausted.body.code, "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED");
+  });
+
+  it("rejects accounts without an active paid primary or any remaining credits", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-credit-eligibility-admin",
+      role: "SUPERADMIN",
+    });
+    await configureProvider(admin);
+
+    const noPrimary = await createAccount("ai-assist-no-primary", {
+      primaryAmountMinor: null,
+      allowance: 1,
+    });
+    const freePrimary = await createAccount("ai-assist-free-primary", {
+      primaryAmountMinor: 0,
+      allowance: 1,
+    });
+    const exhausted = await createAccount("ai-assist-exhausted", {
+      allowance: 0,
+    });
+    let providerCalls = 0;
+    const handler = async () => {
+      providerCalls += 1;
+      return providerResponse(JSON.stringify(validDraft));
+    };
+
+    await withAIProviderFetch(handler, async () => {
+      const noPrimaryResult = await draftRequest(noPrimary);
+      assert.equal(noPrimaryResult.response.status, 403);
+      assert.equal(noPrimaryResult.body.code, "PAID_PRIMARY_REQUIRED");
+
+      const freePrimaryResult = await draftRequest(freePrimary);
+      assert.equal(freePrimaryResult.response.status, 403);
+      assert.equal(freePrimaryResult.body.code, "PAID_PRIMARY_REQUIRED");
+
+      const exhaustedResult = await draftRequest(exhausted);
+      assert.equal(exhaustedResult.response.status, 403);
+      assert.equal(
+        exhaustedResult.body.code,
+        "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED",
+      );
+    });
+    assert.equal(providerCalls, 0);
+    assert.deepEqual(
+      await db.select().from(dbModule.aiEmailAssistUsagesTable),
+      [],
+    );
+  });
+
+  it("does not let overlapping requests reserve more than the available allowance", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-credit-concurrency-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-credit-concurrency-user");
+    await configureProvider(admin);
+
+    let providerCalls = 0;
+    let signalProviderStarted;
+    let releaseFirstProviderCall;
+    const providerStarted = new Promise((resolve) => {
+      signalProviderStarted = resolve;
+    });
+    const firstProviderMayFinish = new Promise((resolve) => {
+      releaseFirstProviderCall = resolve;
+    });
+    const handler = async () => {
+      providerCalls += 1;
+      if (providerCalls === 1) {
+        signalProviderStarted();
+        await firstProviderMayFinish;
+      }
+      return providerResponse(JSON.stringify(validDraft));
+    };
+
+    await withAIProviderFetch(handler, async () => {
+      const firstRequest = draftRequest(account);
+      await providerStarted;
+
+      const overlappingRequest = await draftRequest(account);
+      assert.equal(overlappingRequest.response.status, 403);
+      assert.equal(
+        overlappingRequest.body.code,
+        "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED",
+      );
+
+      releaseFirstProviderCall();
+      const firstResult = await firstRequest;
+      assert.equal(firstResult.response.status, 200, JSON.stringify(firstResult.body));
+      assert.deepEqual(firstResult.body.usage, {
+        total: 1,
+        used: 1,
+        remaining: 0,
+      });
+    });
+
+    assert.equal(providerCalls, 1);
+    const usages = await db.select().from(dbModule.aiEmailAssistUsagesTable);
+    assert.equal(usages.length, 1);
+    assert.equal(usages[0].status, "consumed");
+  });
+});
+
 describe("superadmin Google OAuth setup", { concurrency: false }, () => {
   it("restricts setup to superadmins, encrypts credentials, and keeps mailbox connection disabled until verification", async () => {
     const admin = await loggedInUser({
