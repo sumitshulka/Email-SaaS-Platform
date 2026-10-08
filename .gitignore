@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Downloaded Google OAuth client credentials must not enter Git history.
+/attached_assets/client_secret_*.json
