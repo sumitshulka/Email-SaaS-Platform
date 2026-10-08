@@ -278,6 +278,42 @@ memory.public.none(`
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (company_domain_key)
   );
+  CREATE TABLE company_research_jobs (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    global_company_id uuid NOT NULL REFERENCES global_companies(id) ON DELETE CASCADE,
+    requested_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    status varchar(20) NOT NULL DEFAULT 'queued',
+    stage varchar(40) NOT NULL DEFAULT 'queued',
+    depth integer NOT NULL DEFAULT 1,
+    credit_cost integer NOT NULL DEFAULT 1,
+    settings jsonb NOT NULL,
+    provider varchar(20) NOT NULL,
+    model varchar(200) NOT NULL,
+    input_tokens integer NOT NULL DEFAULT 0,
+    output_tokens integer NOT NULL DEFAULT 0,
+    web_search_count integer NOT NULL DEFAULT 0,
+    source_count integer NOT NULL DEFAULT 0,
+    estimated_cost_usd numeric(16,8),
+    estimated_cost_inr numeric(16,8),
+    error text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
+    completed_at timestamptz
+  );
+  CREATE TABLE company_intelligence (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    global_company_id uuid NOT NULL REFERENCES global_companies(id) ON DELETE CASCADE,
+    job_id uuid NOT NULL REFERENCES company_research_jobs(id) ON DELETE CASCADE,
+    version integer NOT NULL,
+    schema_version varchar(20) NOT NULL DEFAULT '1.0',
+    profile jsonb NOT NULL,
+    provider varchar(20) NOT NULL,
+    model varchar(200) NOT NULL,
+    confidence numeric(5,4) NOT NULL,
+    source_count integer NOT NULL,
+    researched_at timestamptz NOT NULL DEFAULT now(),
+    valid_until timestamptz NOT NULL
+  );
   CREATE TABLE companies (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -674,6 +710,8 @@ beforeEach(async () => {
   await db.delete(dbModule.emailSendAttemptsTable);
   await db.delete(dbModule.emailCampaignRecipientsTable);
   await db.delete(dbModule.emailCampaignsTable);
+  await db.delete(dbModule.companyIntelligenceTable);
+  await db.delete(dbModule.companyResearchJobsTable);
   await db.delete(dbModule.contactListMembersTable);
   await db.delete(dbModule.contactSegmentsTable);
   await db.delete(dbModule.contactsTable);
@@ -5064,7 +5102,11 @@ describe("company research package access", { concurrency: false }, () => {
       `/company-intelligence/${created.body.id}`,
       { cookie: user.cookie },
     );
-    assert.equal(userIntelligence.response.status, 200);
+    assert.equal(
+      userIntelligence.response.status,
+      200,
+      JSON.stringify(userIntelligence.body),
+    );
     assert.equal(userIntelligence.body.researchAvailable, false);
     assert.equal(
       userIntelligence.body.researchAvailabilityReason,
