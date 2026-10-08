@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, BrainCircuit, Check, Eye, EyeOff,
   ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, CreditCard, Gauge, KeyRound, LoaderCircle,
-  LockKeyhole, LogOut, Menu, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
+  LockKeyhole, LogOut, Menu, Package, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
   Trash2, UserRound, Users, Building2, LifeBuoy,
 } from 'lucide-react';
 import {
@@ -26,7 +26,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
 import { MailflowBrand } from '@/components/brand';
-import AdminBillingPage from '@/pages/admin-billing';
+import AdminBillingPage, { AdminPackagesPage } from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminAIProviderPage from '@/pages/admin-ai-provider';
@@ -265,7 +265,8 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/admin/users', label: 'Accounts', icon: Users },
       { href: '/admin/notifications', label: 'Notifications', icon: Bell },
       { href: '/admin/support', label: 'Support inbox', icon: LifeBuoy },
-      { href: '/admin/billing', label: 'Billing', icon: CreditCard },
+      { href: '/admin/billing', label: 'Billing & PG setup', icon: CreditCard },
+      { href: '/admin/packages', label: 'Packages', icon: Package },
       { href: '/admin/finance', label: 'Finance', icon: ReceiptText },
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
       { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
@@ -590,7 +591,7 @@ function AdminDashboardPage() {
   const quickLinks = [
     { href: '/admin/users', label: 'Manage accounts', detail: 'Access, verification and status', icon: Users, testId: 'link-admin-overview-accounts' },
     { href: '/admin/finance', label: 'Review finance', detail: 'Payment ledger and refunds', icon: ReceiptText, testId: 'link-admin-overview-finance' },
-    { href: '/admin/billing', label: 'Billing & plans', detail: 'Gateway and package controls', icon: CreditCard, testId: 'link-admin-overview-billing' },
+    { href: '/admin/billing', label: 'Billing & PG setup', detail: 'Gateway and online-payment controls', icon: CreditCard, testId: 'link-admin-overview-billing' },
     { href: '/admin/settings', label: 'Platform settings', detail: 'Operations and application email', icon: Settings2, testId: 'link-admin-overview-settings' },
     { href: '/admin/google-oauth', label: 'Gmail setup', detail: 'OAuth configuration', icon: ShieldCheck, testId: 'link-admin-overview-google-oauth' },
   ];
@@ -674,7 +675,7 @@ function AdminDashboardPage() {
 
     <section aria-label="Subscription plans and currency ledger" className="grid gap-4 xl:grid-cols-[.82fr_1.18fr]">
       <Panel className="p-5">
-        <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">CURRENT ACCESS</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Plan distribution</h2></div><Link href="/admin/billing" data-testid="link-package-billing" className="text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Plans <ArrowRight className="ml-1 inline h-3.5 w-3.5"/></Link></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#87919b]">CURRENT ACCESS</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">Plan distribution</h2></div><Link href="/admin/packages" data-testid="link-package-billing" className="text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Manage packages <ArrowRight className="ml-1 inline h-3.5 w-3.5"/></Link></div>
         <p className="mt-1 text-[10px] leading-4 text-[#818c97]">Active subscription access by package; access may be gifted or comped.</p>
         {d.activeSubscriptionsByPackage.length ? <div className="mt-4 space-y-3">
           {d.activeSubscriptionsByPackage.map((item, index) => <div key={item.packageName} data-testid={`package-distribution-${index}`}>
@@ -711,7 +712,8 @@ function AdminDashboardPage() {
         </div>
         <p className="mt-2 border-t border-[#edf0f2] pt-3 text-[10px] leading-4 text-[#818c97]">SMTP status confirms saved settings only, not a successful connection or delivery. Email attempts: <span className="mono font-semibold text-[#566475]" data-testid="dashboard-value-email-attempts">{d.emailsSent.toLocaleString()}</span>; this is an attempt count, not confirmed inbox delivery.</p>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-          <Link href="/admin/billing" data-testid="link-configuration-billing" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Billing controls</Link>
+          <Link href="/admin/billing" data-testid="link-configuration-billing" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Billing &amp; PG setup</Link>
+          <Link href="/admin/packages" data-testid="link-configuration-packages" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Packages</Link>
           <Link href="/admin/settings" data-testid="link-configuration-platform" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Platform settings</Link>
           <Link href="/admin/google-oauth" data-testid="link-configuration-oauth" className="text-[10px] font-semibold text-[#245b9b] no-underline hover:underline">Gmail OAuth</Link>
         </div>
@@ -1177,6 +1179,7 @@ function Routes() {
     <Route path="/admin/support">{() => <RouteGate admin>{() => <AdminSupportTicketsPage/>}</RouteGate>}</Route>
     <Route path="/admin/users">{() => <RouteGate admin>{() => <AdminUsersPage/>}</RouteGate>}</Route>
     <Route path="/admin/billing">{() => <RouteGate admin>{() => <AdminBillingPage/>}</RouteGate>}</Route>
+    <Route path="/admin/packages">{() => <RouteGate admin>{() => <AdminPackagesPage/>}</RouteGate>}</Route>
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>
     <Route path="/admin/settings">{() => <RouteGate admin>{() => <AdminSettingsPage/>}</RouteGate>}</Route>
     <Route path="/admin/google-oauth">{() => <RouteGate admin>{() => <AdminGoogleOAuthPage/>}</RouteGate>}</Route>

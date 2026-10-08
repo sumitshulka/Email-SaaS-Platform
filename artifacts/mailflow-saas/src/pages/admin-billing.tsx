@@ -76,11 +76,22 @@ function inputMinor(amount: string, currency: string) {
   }
 }
 
-export default function AdminBillingPage() {
+export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing' | 'packages' } = {}) {
+  const isPackagesPage = page === 'packages';
+  const isBillingPage = !isPackagesPage;
   const queryClient = useQueryClient();
-  const onlinePaymentsQuery = useGetOnlinePaymentSettings();
-  const settingsQuery = useGetRazorpaySettings();
-  const packagesQuery = useListAdminSubscriptionPackages();
+  const onlinePaymentsQuery = useGetOnlinePaymentSettings({ query: {
+    enabled: isBillingPage,
+    queryKey: getGetOnlinePaymentSettingsQueryKey(),
+  } });
+  const settingsQuery = useGetRazorpaySettings({ query: {
+    enabled: isBillingPage,
+    queryKey: getGetRazorpaySettingsQueryKey(),
+  } });
+  const packagesQuery = useListAdminSubscriptionPackages({ query: {
+    enabled: isPackagesPage,
+    queryKey: getListAdminSubscriptionPackagesQueryKey(),
+  } });
   const updateOnlinePayments = useUpdateOnlinePaymentSettings();
   const saveSettings = useUpdateRazorpaySettings();
   const testConnection = useTestRazorpayConnection();
@@ -231,30 +242,33 @@ export default function AdminBillingPage() {
     });
   };
 
-  if (onlinePaymentsQuery.isLoading || settingsQuery.isLoading || packagesQuery.isLoading) {
-    return <div className="space-y-5" aria-label="Loading billing administration" data-testid="loading-admin-billing">
+  if ((isBillingPage && (onlinePaymentsQuery.isLoading || settingsQuery.isLoading)) || (isPackagesPage && packagesQuery.isLoading)) {
+    return <div className="space-y-5" aria-label={`Loading ${isPackagesPage ? 'package' : 'billing'} administration`} data-testid={isPackagesPage ? 'loading-admin-packages' : 'loading-admin-billing'}>
       <div className="h-8 w-60 animate-pulse rounded bg-[#e9eef2]"/>
       <div className="h-56 animate-pulse rounded-lg bg-[#edf1f4]"/>
       <div className="h-72 animate-pulse rounded-lg bg-[#edf1f4]"/>
     </div>;
   }
-  if (onlinePaymentsQuery.isError || settingsQuery.isError || packagesQuery.isError) {
-    return <Panel className="flex flex-wrap items-center justify-between gap-4 p-6" data-testid="error-admin-billing">
-      <div className="flex items-center gap-3"><CircleAlert className="h-5 w-5 text-[#bd692d]"/><div><h1 className="font-semibold text-[#1b2b3d]">Billing data is unavailable</h1><p className="mt-1 text-sm text-[#728092]">No changes were made. Retry loading the billing controls.</p></div></div>
-      <button data-testid="button-retry-admin-billing" onClick={() => { void onlinePaymentsQuery.refetch(); void settingsQuery.refetch(); void packagesQuery.refetch(); }} className="rounded-md border border-[#d6dfe7] px-4 py-2 text-sm font-semibold text-[#294d70]">Retry</button>
+  if ((isBillingPage && (onlinePaymentsQuery.isError || settingsQuery.isError)) || (isPackagesPage && packagesQuery.isError)) {
+    return <Panel className="flex flex-wrap items-center justify-between gap-4 p-6" testId={isPackagesPage ? 'error-admin-packages' : 'error-admin-billing'}>
+      <div className="flex items-center gap-3"><CircleAlert className="h-5 w-5 text-[#bd692d]"/><div><h1 className="font-semibold text-[#1b2b3d]">{isPackagesPage ? 'Package data is unavailable' : 'Billing data is unavailable'}</h1><p className="mt-1 text-sm text-[#728092]">No changes were made. Retry loading {isPackagesPage ? 'subscription packages' : 'billing controls'}.</p></div></div>
+      <button data-testid={isPackagesPage ? 'button-retry-admin-packages' : 'button-retry-admin-billing'} onClick={() => {
+        if (isPackagesPage) void packagesQuery.refetch();
+        else { void onlinePaymentsQuery.refetch(); void settingsQuery.refetch(); }
+      }} className="rounded-md border border-[#d6dfe7] px-4 py-2 text-sm font-semibold text-[#294d70]">Retry</button>
     </Panel>;
   }
 
   return <div className="fade-in space-y-8">
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div><div className="mono mb-2 text-[10px] uppercase tracking-[.18em] text-[#75869a]">PLATFORM / BILLING</div>
-        <h1 className="display text-[32px] font-bold leading-tight text-[#192a3d]">Billing controls</h1>
-        <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#6c7b8b]">Configure the Razorpay connection and keep customer subscription terms precise.</p>
+      <div><div className="mono mb-2 text-[10px] uppercase tracking-[.18em] text-[#75869a]">{isPackagesPage ? 'PLATFORM / PACKAGES' : 'PLATFORM / BILLING'}</div>
+        <h1 className="display text-[32px] font-bold leading-tight text-[#192a3d]">{isPackagesPage ? 'Subscription packages' : 'Billing & PG setup'}</h1>
+        <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#6c7b8b]">{isPackagesPage ? 'Create and manage the plans customers can purchase, and grant packages to user accounts.' : 'Configure Razorpay and control whether customers can start paid checkouts.'}</p>
       </div>
-      <div className="flex items-center gap-2 rounded-md border border-[#dfe7ed] bg-[#f6f9fb] px-3 py-2 text-[11px] text-[#53677b]"><ShieldCheck className="h-4 w-4 text-[#3374a9]"/>Secrets stay server-side</div>
+      {isBillingPage && <div className="flex items-center gap-2 rounded-md border border-[#dfe7ed] bg-[#f6f9fb] px-3 py-2 text-[11px] text-[#53677b]"><ShieldCheck className="h-4 w-4 text-[#3374a9]"/>Secrets stay server-side</div>}
     </header>
 
-    <Panel className="overflow-hidden" testId="gift-subscription-panel">
+    {isPackagesPage && <Panel className="overflow-hidden" testId="gift-subscription-panel">
       <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><Gift className="h-[17px] w-[17px]"/></span>
         <div>
@@ -329,8 +343,9 @@ export default function AdminBillingPage() {
           </button>
         </div>
       </form>
-    </Panel>
+    </Panel>}
 
+    {isBillingPage && <>
     <Panel className="overflow-hidden" testId="online-payment-settings-panel">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9edf1] px-5 py-4 md:px-6">
         <div className="flex items-center gap-3">
@@ -411,10 +426,11 @@ export default function AdminBillingPage() {
         <p>Enable <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">order.paid</code> and <code className="rounded bg-[#eef2f5] px-1.5 py-0.5 text-[#344c63]">payment.captured</code> for each mode, and save that mode's matching webhook secret here.</p>
       </div>
     </Panel>
+    </>}
 
-    {notice && <div data-testid="status-billing-notice" role="status" className={`rounded-md border px-4 py-3 text-[12px] ${notice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{notice.text}</div>}
+    {notice && <div data-testid={isPackagesPage ? 'status-package-notice' : 'status-billing-notice'} role="status" className={`rounded-md border px-4 py-3 text-[12px] ${notice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{notice.text}</div>}
 
-    <section>
+    {isPackagesPage && <section>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div><div className="mono mb-1 text-[10px] uppercase tracking-[.17em] text-[#8290a0]">SUBSCRIPTION CATALOG</div><h2 className="display text-[22px] font-bold text-[#1d2d40]">Packages</h2><p className="mt-1 text-[12px] text-[#748292]">Set the exact price and access term customers will see at checkout.</p></div>
         <button data-testid="button-new-subscription-package" onClick={() => { resetPackageForm(); setPackageFormOpen(true); setNotice(null); }} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>New package</button>
@@ -468,6 +484,10 @@ export default function AdminBillingPage() {
             </div>
           </article>)}</div>
         </Panel>}
-    </section>
+    </section>}
   </div>;
+}
+
+export function AdminPackagesPage() {
+  return <AdminBillingPage page="packages"/>;
 }
