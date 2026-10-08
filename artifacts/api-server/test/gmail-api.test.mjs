@@ -291,6 +291,29 @@ describe("Gmail sync diagnostics", () => {
 });
 
 describe("bounded recent Gmail rescan", () => {
+  it("applies every supported recovery window to the capped message listing", async () => {
+    for (const windowDays of [1, 3, 7, 14]) {
+      const fetcher = async (input) => {
+        const url = new URL(String(input));
+        assert.ok(url.pathname.endsWith("/users/me/messages"));
+        assert.equal(url.searchParams.get("q"), `newer_than:${windowDays}d`);
+        assert.equal(url.searchParams.get("maxResults"), "100");
+        return jsonResponse({ messages: [] });
+      };
+
+      const result = await rescanRecentGmailMessages({
+        accessToken: "test-token",
+        windowDays,
+        fetcher,
+        ingest: async () => {
+          throw new Error("An empty recovery window must not ingest reports.");
+        },
+      });
+
+      assert.equal(result.messagesChecked, 0);
+    }
+  });
+
   it("paginates the 14-day search, skips ordinary bodies, and counts replays as duplicates", async () => {
     const calls = [];
     const seenReports = new Set();
@@ -336,6 +359,7 @@ describe("bounded recent Gmail rescan", () => {
 
     const scan = () => rescanRecentGmailMessages({
       accessToken: "test-token",
+      windowDays: GMAIL_RECENT_SCAN_DAYS,
       fetcher,
       ingest: async (reports) => {
         let imported = 0;
@@ -402,6 +426,7 @@ describe("bounded recent Gmail rescan", () => {
     await assert.rejects(
       rescanRecentGmailMessages({
         accessToken: "test-token",
+        windowDays: GMAIL_RECENT_SCAN_DAYS,
         fetcher,
         ingest: async () => {
           ingestCalls += 1;

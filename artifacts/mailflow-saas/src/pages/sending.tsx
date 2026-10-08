@@ -33,7 +33,7 @@ import {
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
-  GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
+  GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -159,6 +159,7 @@ export function SendingSettingsPage() {
   const { notice, setNotice, dismiss } = useNotice();
   const [recentRescanResult, setRecentRescanResult] = useState<GmailRecentRescanResult | null>(null);
   const [recentRescanError, setRecentRescanError] = useState<string | null>(null);
+  const [recentRescanWindowDays, setRecentRescanWindowDays] = useState<GmailRecentRescanInput['windowDays']>(14);
   const [form, setForm] = useState(blankSettings);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [initialized, setInitialized] = useState(false);
@@ -215,7 +216,7 @@ export function SendingSettingsPage() {
   const rescanRecentGmail = () => {
     setRecentRescanResult(null);
     setRecentRescanError(null);
-    recentGmailRescan.mutate(undefined, {
+    recentGmailRescan.mutate({ data: { windowDays: recentRescanWindowDays } }, {
       onSuccess: result => setRecentRescanResult(result),
       onError: error => setRecentRescanError(mutationError(error)),
     });
@@ -520,16 +521,34 @@ export function SendingSettingsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-[12px] font-semibold text-[#26364a]">Recover recent bounce notices</h3>
-                <p className="mt-1 max-w-2xl text-[11px] leading-5 text-[#687484]">Rescan message headers from the last 14 days (up to 500 messages). Message content is fetched only for Gmail delivery-status reports. This does not change the regular sync checkpoint.</p>
+                <p className="mt-1 max-w-2xl text-[11px] leading-5 text-[#687484]">Scan message headers from the selected window (up to 500 messages). If Gmail has more, choose a shorter window and try again. Message content is fetched only for delivery-status reports; the regular sync checkpoint is unchanged.</p>
               </div>
-              <Button
-                variant="outline"
-                testId="button-rescan-recent-gmail"
-                disabled={recentGmailRescan.isPending}
-                onClick={rescanRecentGmail}
-              >
-                {recentGmailRescan.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Scanning recent messages…</> : 'Rescan last 14 days'}
-              </Button>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="min-w-32">
+                  <span className={labelClass}>Recovery window</span>
+                  <select
+                    data-testid="select-gmail-rescan-window"
+                    aria-label="Gmail recovery window"
+                    className={inputClass}
+                    value={recentRescanWindowDays}
+                    disabled={recentGmailRescan.isPending}
+                    onChange={event => setRecentRescanWindowDays(Number(event.target.value) as GmailRecentRescanInput['windowDays'])}
+                  >
+                    <option value={1}>1 day</option>
+                    <option value={3}>3 days</option>
+                    <option value={7}>7 days</option>
+                    <option value={14}>14 days</option>
+                  </select>
+                </label>
+                <Button
+                  variant="outline"
+                  testId="button-rescan-recent-gmail"
+                  disabled={recentGmailRescan.isPending}
+                  onClick={rescanRecentGmail}
+                >
+                  {recentGmailRescan.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Scanning recent messages…</> : `Rescan last ${recentRescanWindowDays} days`}
+                </Button>
+              </div>
             </div>
             {recentRescanError && <p data-testid="text-gmail-rescan-error" role="alert" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{recentRescanError}</p>}
             {recentRescanResult && <div data-testid="panel-gmail-rescan-result" role="status" className="mt-3 rounded-md bg-[#f7f9fb] p-3">
@@ -1985,7 +2004,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
 function gmailSyncOutcomeDetail(outcome: GmailSyncDiagnosticsOutcome) {
   switch (outcome) {
     case 'no_dsn_found':
-      return 'No new delivery-status notices were found in the messages checked. If you expected an older notice, use “Rescan last 14 days” below.';
+      return 'No new delivery-status notices were found in the messages checked. If you expected an older notice, use the recent-message rescan below and choose a wider window.';
     case 'already_recorded':
       return 'Gmail found notices, but they were already recorded. Check Delivery Evidence on the campaign to review existing reports.';
     case 'parser_warning':

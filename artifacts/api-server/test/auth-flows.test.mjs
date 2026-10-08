@@ -6436,6 +6436,7 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
       }, async () => {
         const rescan = await api("/sending/gmail/rescan", {
           method: "POST",
+          body: { windowDays: 14 },
           cookie: owner.cookie,
         });
         assert.equal(rescan.response.status, 200, JSON.stringify(rescan.body));
@@ -9214,7 +9215,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
             url.hostname === "gmail.googleapis.com" &&
             url.pathname.endsWith("/users/me/messages")
           ) {
-            assert.equal(url.searchParams.get("q"), "newer_than:14d");
+            assert.equal(url.searchParams.get("q"), "newer_than:7d");
             return googleJson({ messages: [{ id: "recent-bounce" }] });
           }
           if (
@@ -9242,12 +9243,22 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           }
           throw new Error(`Unexpected recent Gmail rescan request: ${url}`);
         }, async () => {
+          const invalidWindowRescan = await api("/sending/gmail/rescan", {
+            method: "POST",
+            body: { windowDays: 2 },
+            cookie: owner.cookie,
+          });
+          assert.equal(invalidWindowRescan.response.status, 400);
+          assert.equal(invalidWindowRescan.body.code, "INVALID_INPUT");
+          assert.equal(gmailRescanProviderCalls, 0);
+
           const firstRescan = await api("/sending/gmail/rescan", {
             method: "POST",
+            body: { windowDays: 7 },
             cookie: owner.cookie,
           });
           assert.equal(firstRescan.response.status, 200, JSON.stringify(firstRescan.body));
-          assert.equal(firstRescan.body.windowDays, 14);
+          assert.equal(firstRescan.body.windowDays, 7);
           assert.equal(firstRescan.body.maxMessages, 500);
           assert.equal(firstRescan.body.messagesChecked, 1);
           assert.equal(firstRescan.body.candidateMessages, 1);
@@ -9256,14 +9267,17 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
 
           const replayedRescan = await api("/sending/gmail/rescan", {
             method: "POST",
+            body: { windowDays: 7 },
             cookie: owner.cookie,
           });
           assert.equal(replayedRescan.response.status, 200);
+          assert.equal(replayedRescan.body.windowDays, 7);
           assert.equal(replayedRescan.body.imported, 0);
           assert.equal(replayedRescan.body.duplicates, 1);
 
           const otherTenantRescan = await api("/sending/gmail/rescan", {
             method: "POST",
+            body: { windowDays: 7 },
             cookie: other.cookie,
           });
           assert.equal(otherTenantRescan.response.status, 404);
@@ -9277,6 +9291,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .where(eq(dbModule.gmailMailboxConnectionsTable.id, gmailConnection.id));
     const overlappingRescan = await api("/sending/gmail/rescan", {
       method: "POST",
+      body: { windowDays: 7 },
       cookie: owner.cookie,
     });
     assert.equal(overlappingRescan.response.status, 409);

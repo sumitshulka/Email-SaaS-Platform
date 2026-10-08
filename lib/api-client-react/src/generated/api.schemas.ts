@@ -638,6 +638,20 @@ export interface GmailRecentRescanResult {
   warningCount: number;
 }
 
+export type GmailRecentRescanInputWindowDays = typeof GmailRecentRescanInputWindowDays[keyof typeof GmailRecentRescanInputWindowDays];
+
+
+export const GmailRecentRescanInputWindowDays = {
+  NUMBER_1: 1,
+  NUMBER_3: 3,
+  NUMBER_7: 7,
+  NUMBER_14: 14,
+} as const;
+
+export interface GmailRecentRescanInput {
+  windowDays: GmailRecentRescanInputWindowDays;
+}
+
 /**
  * Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.
  */

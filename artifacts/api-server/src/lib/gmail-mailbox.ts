@@ -31,11 +31,11 @@ import {
   GmailApiError,
   GmailHistoryExpiredError,
   GmailRecentScanLimitError,
-  GMAIL_RECENT_SCAN_DAYS,
   GMAIL_RECENT_SCAN_MAX_MESSAGES,
   rescanRecentGmailMessages,
   syncGmailHistory,
 } from "./gmail-api";
+import { RescanRecentGmailMessagesBody } from "@workspace/api-zod";
 import {
   gmailSyncDiagnosticsFromError,
   gmailSyncDiagnosticsFromResult,
@@ -412,6 +412,15 @@ export function createGmailMailboxRouter(): IRouter {
     "/sending/gmail/rescan",
     requireUserRole,
     async (req, res): Promise<void> => {
+      const parsed = RescanRecentGmailMessagesBody.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: "Choose a supported Gmail recovery window of 1, 3, 7, or 14 days.",
+          code: "INVALID_INPUT",
+        });
+        return;
+      }
+      const { windowDays } = parsed.data;
       const userId = req.authUser!.id;
       const [connection] = await db
         .select()
@@ -456,6 +465,7 @@ export function createGmailMailboxRouter(): IRouter {
         );
         const result = await rescanRecentGmailMessages({
           accessToken,
+          windowDays,
           ingest: (reports) =>
             ingestDeliveryReports({
               userId,
@@ -481,7 +491,7 @@ export function createGmailMailboxRouter(): IRouter {
             ),
           );
         res.json({
-          windowDays: GMAIL_RECENT_SCAN_DAYS,
+          windowDays,
           maxMessages: GMAIL_RECENT_SCAN_MAX_MESSAGES,
           ...result,
         });

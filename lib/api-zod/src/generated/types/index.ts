@@ -180,6 +180,8 @@ export * from './globalCompanyUpdate';
 export * from './gmailMailboxConnection';
 export * from './gmailMailboxConnectionSyncStatus';
 export * from './gmailOAuthStart';
+export * from './gmailRecentRescanInput';
+export * from './gmailRecentRescanInputWindowDays';
 export * from './gmailRecentRescanResult';
 export * from './gmailSyncDiagnostics';
 export * from './gmailSyncDiagnosticsOutcome';

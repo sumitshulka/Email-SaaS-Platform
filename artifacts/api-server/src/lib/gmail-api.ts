@@ -5,6 +5,14 @@ const GMAIL_API = "https://gmail.googleapis.com/gmail/v1";
 const MAX_MESSAGES_PER_SYNC = 500;
 
 export const GMAIL_RECENT_SCAN_DAYS = 14;
+export const GMAIL_RECENT_SCAN_WINDOWS_DAYS = [
+  1,
+  3,
+  7,
+  GMAIL_RECENT_SCAN_DAYS,
+] as const;
+export type GmailRecentScanWindowDays =
+  (typeof GMAIL_RECENT_SCAN_WINDOWS_DAYS)[number];
 const MAX_RAW_MESSAGE_BYTES = 1024 * 1024;
 
 type GmailHeader = { name?: string; value?: string };
@@ -195,6 +203,7 @@ async function loadRaw(
 
 async function loadRecentMessageIds(
   accessToken: string,
+  windowDays: GmailRecentScanWindowDays,
   fetcher: typeof fetch,
 ): Promise<string[]> {
   const messageIds = new Set<string>();
@@ -203,7 +212,7 @@ async function loadRecentMessageIds(
 
   do {
     const url = new URL(`${GMAIL_API}/users/me/messages`);
-    url.searchParams.set("q", `newer_than:${GMAIL_RECENT_SCAN_DAYS}d`);
+    url.searchParams.set("q", `newer_than:${windowDays}d`);
     url.searchParams.set("maxResults", String(GMAIL_RECENT_SCAN_PAGE_SIZE));
     if (pageToken) url.searchParams.set("pageToken", pageToken);
     const result = await requestJson<MessageListResponse>(
@@ -272,6 +281,7 @@ export async function syncGmailHistory(options: {
 
 export async function rescanRecentGmailMessages(options: {
   accessToken: string;
+  windowDays: GmailRecentScanWindowDays;
   fetcher?: typeof fetch;
   ingest: (reports: ParsedDeliveryReport[]) => Promise<{
     imported: number;
@@ -282,7 +292,11 @@ export async function rescanRecentGmailMessages(options: {
   }>;
 }): Promise<GmailScanCounts> {
   const fetcher = options.fetcher ?? fetch;
-  const messageIds = await loadRecentMessageIds(options.accessToken, fetcher);
+  const messageIds = await loadRecentMessageIds(
+    options.accessToken,
+    options.windowDays,
+    fetcher,
+  );
   return scanMessageIds({
     accessToken: options.accessToken,
     messageIds,

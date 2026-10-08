@@ -107,6 +107,7 @@ import type {
   GlobalCompanyUpdate,
   GmailMailboxConnection,
   GmailOAuthStart,
+  GmailRecentRescanInput,
   GmailRecentRescanResult,
   GoogleOAuthSettings,
   GoogleOAuthSettingsInput,
@@ -2666,14 +2667,28 @@ export const getRescanRecentGmailMessagesUrl = () => {
 /**
  * @summary Rescan a bounded recent Gmail window for delivery-status reports
  */
-export const rescanRecentGmailMessages = async ( options?: Parameters<typeof customFetch>[1]): Promise<GmailRecentRescanResult> => {
+export const rescanRecentGmailMessages = async (gmailRecentRescanInput: GmailRecentRescanInput, options?: Parameters<typeof customFetch>[1]): Promise<GmailRecentRescanResult> => {
 
-  return customFetch<GmailRecentRescanResult>(getRescanRecentGmailMessagesUrl(),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GmailRecentRescanResult>(getRescanRecentGmailMessagesUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(gmailRecentRescanInput)
   }
 );}
 
@@ -2684,8 +2699,8 @@ export const rescanRecentGmailMessages = async ( options?: Parameters<typeof cus
 export const getRescanRecentGmailMessagesMutationKey = () => ['rescanRecentGmailMessages'] as const;
 
 export const getRescanRecentGmailMessagesMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,RescanRecentGmailMessagesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,RescanRecentGmailMessagesMutationVariables, TContext> => {
 
 const mutationKey = getRescanRecentGmailMessagesMutationKey();
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -2697,10 +2712,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, RescanRecentGmailMessagesMutationVariables> = (props) => {
+          const {data} = props ?? {};
 
-
-          return  rescanRecentGmailMessages(requestOptions)
+          return  rescanRecentGmailMessages(data,requestOptions)
         }
 
 
@@ -2711,19 +2726,19 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type RescanRecentGmailMessagesMutationResult = NonNullable<Awaited<ReturnType<typeof rescanRecentGmailMessages>>>
-
+    export type RescanRecentGmailMessagesMutationBody = BodyType<GmailRecentRescanInput>
     export type RescanRecentGmailMessagesMutationError = ErrorType<ApiError>
-
+    export type RescanRecentGmailMessagesMutationVariables = {data: BodyType<GmailRecentRescanInput>}
 
     /**
  * @summary Rescan a bounded recent Gmail window for delivery-status reports
  */
 export const useRescanRecentGmailMessages = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,RescanRecentGmailMessagesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof rescanRecentGmailMessages>>,
         TError,
-        void,
+        RescanRecentGmailMessagesMutationVariables,
         TContext
       > => {
       return useMutation(getRescanRecentGmailMessagesMutationOptions(options));

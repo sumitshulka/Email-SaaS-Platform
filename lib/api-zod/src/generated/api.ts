@@ -854,6 +854,10 @@ export const DisconnectGmailMailboxResponse = zod.void()
 /**
  * @summary Rescan a bounded recent Gmail window for delivery-status reports
  */
+export const RescanRecentGmailMessagesBody = zod.object({
+  "windowDays": zod.union([zod.literal(1),zod.literal(3),zod.literal(7),zod.literal(14)])
+})
+
 
 
 export const rescanRecentGmailMessagesResponseMessagesCheckedMin = 0;
