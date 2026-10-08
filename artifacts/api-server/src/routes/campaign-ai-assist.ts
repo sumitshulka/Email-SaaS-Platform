@@ -130,7 +130,7 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
     try {
       await finishAiEmailAssistCredit(req.authUser!.id, reservation.id, false);
     } catch {
-      // A stale reservation is released by the dashboard and reservation paths.
+      // Background cleanup and later dashboard/reservation checks release stale rows.
     }
     res.status(502).json({
       error:

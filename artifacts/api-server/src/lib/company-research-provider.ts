@@ -4,6 +4,7 @@ import type { ResearchEvidence, SourceCandidate } from "./company-research-sourc
 
 type RecordValue = Record<string, unknown>;
 export type ResearchUsage = { inputTokens: number; outputTokens: number; webSearchCount: number };
+export const RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS = 120_000;
 const record = (value: unknown): RecordValue => value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {};
 const integer = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 export class ResearchProviderError extends Error {
@@ -43,7 +44,7 @@ export async function researchProviderRequest(input: {
   }
   let response: Response;
   try {
-    response = await fetcher(url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(120_000) });
+    response = await fetcher(url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS) });
   } catch {
     throw new ResearchProviderError("The AI provider could not be reached or timed out. Existing intelligence has been retained.");
   }

@@ -6647,6 +6647,106 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     assert.equal(usages.length, 1);
     assert.equal(usages[0].status, "consumed");
   });
+
+  it("releases only stale reservations in the background sweep and keeps successful usage consumed", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-cleanup-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-cleanup-user", {
+      allowance: 3,
+    });
+    await configureProvider(admin);
+
+    const [entitlement] = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.userId, account.user.id));
+    const now = new Date();
+    const [consumed] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "consumed",
+        createdAt: new Date(now.getTime() - 20 * 60_000),
+        completedAt: new Date(now.getTime() - 20 * 60_000),
+      })
+      .returning();
+    const [stale] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "reserved",
+        createdAt: new Date(now.getTime() - 16 * 60_000),
+      })
+      .returning();
+    const [active] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "reserved",
+        createdAt: new Date(now.getTime() - 30_000),
+      })
+      .returning();
+
+    const { releaseStaleAiEmailAssistReservations } = await import(
+      "../src/lib/add-on-entitlements.ts"
+    );
+    assert.equal(await releaseStaleAiEmailAssistReservations(now), 1);
+
+    let usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.deepEqual(
+      Object.fromEntries(usages.map((usage) => [usage.id, usage.status])),
+      {
+        [consumed.id]: "consumed",
+        [stale.id]: "released",
+        [active.id]: "reserved",
+      },
+    );
+
+    const { getSubscriptionAddOnsDashboard, reserveAiEmailAssistCredit, finishAiEmailAssistCredit } =
+      await import("../src/lib/add-on-entitlements.ts");
+    let dashboard = await getSubscriptionAddOnsDashboard(account.user.id, now);
+    assert.deepEqual(dashboard.balances.emailAssist, {
+      total: 3,
+      used: 2,
+      remaining: 1,
+    });
+
+    const recoveredReservation = await reserveAiEmailAssistCredit(account.user.id);
+    assert.ok(recoveredReservation, "the released allowance should be reservable again");
+    await finishAiEmailAssistCredit(
+      account.user.id,
+      recoveredReservation.id,
+      true,
+    );
+    await finishAiEmailAssistCredit(account.user.id, active.id, true);
+
+    dashboard = await getSubscriptionAddOnsDashboard(account.user.id, now);
+    assert.deepEqual(dashboard.balances.emailAssist, {
+      total: 3,
+      used: 3,
+      remaining: 0,
+    });
+    usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.equal(
+      usages.filter((usage) => usage.status === "consumed").length,
+      3,
+    );
+    assert.equal(
+      usages.filter((usage) => usage.status === "released").length,
+      1,
+    );
+  });
 });
 
 describe("superadmin Google OAuth setup", { concurrency: false }, () => {

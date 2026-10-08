@@ -22,6 +22,13 @@ import {
   userSubscriptionsTable,
   usersTable,
 } from "@workspace/db";
+import { logger } from "./logger";
+import { RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS } from "./company-research-provider";
+
+const AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS = 15 * 60 * 1000;
+const PROVIDER_SETTLE_GRACE_MS = 60 * 1000;
+const RESERVATION_CLEANUP_INTERVAL_MS = 60 * 1000;
+let reservationCleanupWorkerStarted = false;
 
 const paidEntitlementCondition = or(
   isNull(addOnEntitlementsTable.paymentId),
@@ -72,6 +79,61 @@ function serializePackage(pkg: typeof subscriptionPackagesTable.$inferSelect) {
     createdAt: pkg.createdAt.toISOString(),
     updatedAt: pkg.updatedAt.toISOString(),
   };
+}
+
+function staleAiEmailAssistReservationCondition(now: Date, userId?: string) {
+  // The existing 15-minute stale timeout remains the minimum. Keep it longer
+  // than the provider's hard request timeout so cleanup cannot release a
+  // reservation while its provider request is still active.
+  const staleAfterMs = Math.max(
+    AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS,
+    RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS + PROVIDER_SETTLE_GRACE_MS,
+  );
+  return and(
+    eq(aiEmailAssistUsagesTable.status, "reserved"),
+    lt(
+      aiEmailAssistUsagesTable.createdAt,
+      new Date(now.getTime() - staleAfterMs),
+    ),
+    ...(userId ? [eq(aiEmailAssistUsagesTable.userId, userId)] : []),
+  );
+}
+
+export async function releaseStaleAiEmailAssistReservations(
+  now = new Date(),
+  userId?: string,
+) {
+  const released = await db
+    .update(aiEmailAssistUsagesTable)
+    .set({ status: "released" })
+    .where(staleAiEmailAssistReservationCondition(now, userId))
+    .returning({ id: aiEmailAssistUsagesTable.id });
+  return released.length;
+}
+
+export function startAiEmailAssistReservationCleanupWorker(): void {
+  if (reservationCleanupWorkerStarted) return;
+  reservationCleanupWorkerStarted = true;
+
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await releaseStaleAiEmailAssistReservations();
+    } catch (error) {
+      logger.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "AI Email Assist reservation cleanup failed",
+      );
+    } finally {
+      busy = false;
+    }
+  };
+
+  const timer = setInterval(() => void tick(), RESERVATION_CLEANUP_INTERVAL_MS);
+  timer.unref();
+  void tick();
 }
 
 export async function getSubscriptionAddOnsDashboard(
@@ -157,19 +219,7 @@ export async function getSubscriptionAddOnsDashboard(
     0,
   );
 
-  await db
-    .update(aiEmailAssistUsagesTable)
-    .set({ status: "released" })
-    .where(
-      and(
-        eq(aiEmailAssistUsagesTable.userId, userId),
-        eq(aiEmailAssistUsagesTable.status, "reserved"),
-        lt(
-          aiEmailAssistUsagesTable.createdAt,
-          new Date(now.getTime() - 15 * 60 * 1000),
-        ),
-      ),
-    );
+  await releaseStaleAiEmailAssistReservations(now, userId);
 
   const [assistUsage] = await db
     .select({ used: count() })
@@ -288,16 +338,7 @@ export async function reserveAiEmailAssistCredit(userId: string) {
     await tx
       .update(aiEmailAssistUsagesTable)
       .set({ status: "released" })
-      .where(
-        and(
-          eq(aiEmailAssistUsagesTable.userId, userId),
-          eq(aiEmailAssistUsagesTable.status, "reserved"),
-          lt(
-            aiEmailAssistUsagesTable.createdAt,
-            new Date(now.getTime() - 15 * 60 * 1000),
-          ),
-        ),
-      );
+      .where(staleAiEmailAssistReservationCondition(now, userId));
 
     const entitlementRows = await tx
       .select()

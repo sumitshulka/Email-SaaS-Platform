@@ -6,6 +6,7 @@ import { startCampaignWorker } from "./lib/campaign-worker";
 import { startGmailMailboxWorker } from "./lib/gmail-mailbox";
 import { startMicrosoft365TraceWorker } from "./lib/microsoft365-trace";
 import { startCompanyResearchWorker } from "./lib/company-intelligence";
+import { startAiEmailAssistReservationCleanupWorker } from "./lib/add-on-entitlements";
 
 const rawPort = process.env["PORT"];
 
@@ -28,6 +29,7 @@ try {
   startGmailMailboxWorker();
   startMicrosoft365TraceWorker();
   startCompanyResearchWorker();
+  startAiEmailAssistReservationCleanupWorker();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
