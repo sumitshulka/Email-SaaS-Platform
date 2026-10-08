@@ -468,6 +468,8 @@ export async function markRefundedPayment(input: {
   razorpayPaymentId: string;
   amountMinor: number;
   currency: string;
+  refundAmountMinor: number;
+  totalRefundedAmountMinor: number | null;
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [payment] = await tx
@@ -483,7 +485,14 @@ export async function markRefundedPayment(input: {
       payment.currency !== input.currency ||
       (payment.razorpayPaymentId !== null &&
         payment.razorpayPaymentId !== input.razorpayPaymentId) ||
-      payment.status === "failed"
+      payment.status === "failed" ||
+      !Number.isInteger(input.refundAmountMinor) ||
+      input.refundAmountMinor <= 0 ||
+      input.refundAmountMinor > payment.amountMinor ||
+      (input.totalRefundedAmountMinor !== null &&
+        (!Number.isInteger(input.totalRefundedAmountMinor) ||
+          input.totalRefundedAmountMinor < input.refundAmountMinor ||
+          input.totalRefundedAmountMinor > payment.amountMinor))
     ) {
       return false;
     }
@@ -494,10 +503,23 @@ export async function markRefundedPayment(input: {
       .limit(1);
     if (pkg?.packageType !== "addon") return false;
 
+    const previouslyRefunded = payment.refundedAmountMinor ?? 0;
+    const refundTotal = Math.min(
+      payment.amountMinor,
+      Math.max(
+        previouslyRefunded,
+        input.totalRefundedAmountMinor ??
+          previouslyRefunded + input.refundAmountMinor,
+      ),
+    );
     await tx
       .update(paymentsTable)
       .set({
-        status: "refunded",
+        refundedAmountMinor: refundTotal,
+        status:
+          refundTotal >= payment.amountMinor || payment.status === "refunded"
+            ? "refunded"
+            : payment.status,
         razorpayPaymentId: input.razorpayPaymentId,
         updatedAt: new Date(),
       })

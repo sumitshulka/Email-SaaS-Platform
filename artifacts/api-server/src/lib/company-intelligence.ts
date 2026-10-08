@@ -7,6 +7,7 @@ import { estimateResearchCost, getResearchSettings, parseResearchSettings, type 
 import { collectCompanyEvidence } from "./company-research-sources";
 import { analysisPrompt, discoveryPrompt, researchProviderRequest, ResearchProviderError, type ResearchUsage } from "./company-research-provider";
 import { logger } from "./logger";
+import { prorateAddOnAllowance } from "./add-on-entitlements";
 
 export function presentResearchJob(job: CompanyResearchJob) {
   return { id: job.id, status: job.status, stage: job.stage, createdAt: job.createdAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null, completedAt: job.completedAt?.toISOString() ?? null, error: job.error };
@@ -46,9 +47,12 @@ export async function getCompanyResearchAllowance(userId: string, now = new Date
     gte(companyResearchJobsTable.createdAt, active.startsAt),
     lt(companyResearchJobsTable.createdAt, active.endsAt),
   ));
-  const [addOn] = await db.select({
-    limit: sql<number>`coalesce(sum(${addOnEntitlementsTable.researchAllowance}), 0)::int`,
-    used: sql<number>`coalesce(sum(${addOnEntitlementsTable.researchUsed}), 0)::int`,
+  const addOnRows = await db.select({
+    paymentId: addOnEntitlementsTable.paymentId,
+    allowance: addOnEntitlementsTable.researchAllowance,
+    used: addOnEntitlementsTable.researchUsed,
+    paymentAmountMinor: paymentsTable.amountMinor,
+    refundedAmountMinor: paymentsTable.refundedAmountMinor,
   }).from(addOnEntitlementsTable).leftJoin(
     paymentsTable,
     eq(addOnEntitlementsTable.paymentId, paymentsTable.id),
@@ -59,13 +63,24 @@ export async function getCompanyResearchAllowance(userId: string, now = new Date
       eq(paymentsTable.status, "captured"),
     ),
   ));
+  const addOnLimit = addOnRows.reduce(
+    (limit, row) =>
+      limit +
+      prorateAddOnAllowance(
+        row.allowance,
+        row.paymentId === null ? null : row.paymentAmountMinor,
+        row.paymentId === null ? null : row.refundedAmountMinor,
+      ),
+    0,
+  );
+  const addOnUsed = addOnRows.reduce((used, row) => used + row.used, 0);
   const baseUsed = Math.min(Number(usage?.used ?? 0), active.baseLimit);
   const isPaidPrimary =
     active.packageType === "primary" && active.amountMinor > 0;
-  const addOnLimit = isPaidPrimary ? Number(addOn?.limit ?? 0) : 0;
-  const addOnUsed = isPaidPrimary ? Number(addOn?.used ?? 0) : 0;
-  const limit = active.baseLimit + addOnLimit;
-  const used = baseUsed + addOnUsed;
+  const eligibleAddOnLimit = isPaidPrimary ? addOnLimit : 0;
+  const eligibleAddOnUsed = isPaidPrimary ? addOnUsed : 0;
+  const limit = active.baseLimit + eligibleAddOnLimit;
+  const used = baseUsed + eligibleAddOnUsed;
   return {
     limit,
     used,
@@ -171,18 +186,31 @@ export async function enqueueCompanyResearch(input: {
           .orderBy(asc(addOnEntitlementsTable.createdAt))
           .for("update");
         const paymentIds = entitlementRows
-          .map(row => row.paymentId)
+          .map((row) => row.paymentId)
           .filter((id): id is string => id !== null);
-        const capturedPayments = paymentIds.length
-          ? await tx.select({ id: paymentsTable.id }).from(paymentsTable).where(and(
-              inArray(paymentsTable.id, paymentIds),
-              eq(paymentsTable.status, "captured"),
-            ))
+        const paymentRows = paymentIds.length
+          ? await tx.select({
+              id: paymentsTable.id,
+              status: paymentsTable.status,
+              amountMinor: paymentsTable.amountMinor,
+              refundedAmountMinor: paymentsTable.refundedAmountMinor,
+            }).from(paymentsTable).where(inArray(paymentsTable.id, paymentIds))
           : [];
-        const capturedIds = new Set(capturedPayments.map(row => row.id));
-        const available = entitlementRows.find(row =>
-          row.paymentId === null || capturedIds.has(row.paymentId),
-        );
+        const paymentById = new Map(paymentRows.map((row) => [row.id, row]));
+        const available = entitlementRows.find(row => {
+          const payment = row.paymentId === null
+            ? null
+            : paymentById.get(row.paymentId);
+          if (row.paymentId !== null && payment?.status !== "captured") {
+            return false;
+          }
+          const allowance = prorateAddOnAllowance(
+            row.researchAllowance,
+            payment?.amountMinor ?? null,
+            payment?.refundedAmountMinor ?? null,
+          );
+          return allowance > row.researchUsed;
+        });
         if (!available) return { kind: "allowance_exhausted" as const };
         await tx.update(addOnEntitlementsTable).set({
           researchUsed: sql`${addOnEntitlementsTable.researchUsed} + 1`,

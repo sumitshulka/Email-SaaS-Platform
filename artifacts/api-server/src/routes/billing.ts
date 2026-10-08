@@ -2153,21 +2153,35 @@ router.post(
         typeof providerPayment?.amount === "number"
           ? providerPayment.amount
           : null;
+      const refundAmount =
+        eventType === "payment.refunded"
+          ? amount
+          : typeof providerRefund?.amount === "number"
+            ? providerRefund.amount
+            : null;
+      const reportedRefundTotal =
+        typeof providerPayment?.amount_refunded === "number"
+          ? providerPayment.amount_refunded
+          : null;
       const currency = webhookText(providerPayment?.currency);
       const refundCurrency = webhookText(providerRefund?.currency);
-      const isProcessedFullRefund =
+      const isProcessedRefund =
         eventType === "payment.refunded"
           ? providerPayment?.status === "refunded"
           : providerRefund?.status === "processed" &&
+            refundAmount !== null &&
+            Number.isInteger(refundAmount) &&
+            refundAmount > 0 &&
             amount !== null &&
-            (typeof providerPayment?.amount_refunded === "number"
-              ? providerPayment.amount_refunded >= amount
-              : typeof providerRefund.amount === "number" &&
-                providerRefund.amount >= amount);
+            refundAmount <= amount &&
+            (reportedRefundTotal === null ||
+              (Number.isInteger(reportedRefundTotal) &&
+                reportedRefundTotal >= 0 &&
+                reportedRefundTotal <= amount));
       const refundOrderId =
         providerOrderId ?? paymentForWebhook?.razorpayOrderId ?? null;
       if (
-        !isProcessedFullRefund ||
+        !isProcessedRefund ||
         (eventType === "refund.processed" &&
           (!refundCurrency || refundCurrency !== currency)) ||
         !refundOrderId ||
@@ -2193,6 +2207,13 @@ router.post(
           razorpayPaymentId: providerPaymentId,
           amountMinor: amount,
           currency,
+          refundAmountMinor: refundAmount!,
+          totalRefundedAmountMinor:
+            reportedRefundTotal !== null &&
+            reportedRefundTotal >= refundAmount! &&
+            reportedRefundTotal <= amount
+              ? reportedRefundTotal
+              : null,
         });
         await db
           .update(razorpayWebhookEventsTable)

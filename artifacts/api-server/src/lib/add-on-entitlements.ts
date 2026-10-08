@@ -28,6 +28,31 @@ const paidEntitlementCondition = or(
   eq(paymentsTable.status, "captured"),
 )!;
 
+export function prorateAddOnAllowance(
+  allowance: number,
+  amountMinor: number | null,
+  refundedAmountMinor: number | null,
+) {
+  if (
+    amountMinor === null ||
+    amountMinor <= 0 ||
+    refundedAmountMinor === null ||
+    refundedAmountMinor <= 0
+  ) {
+    return Math.max(0, allowance);
+  }
+  // Paid add-ons retain the same share of each whole-unit allowance as the
+  // payment retains; consumed units remain historical usage, not clawbacks.
+  const retainedAmount = Math.max(
+    0,
+    amountMinor - Math.min(amountMinor, refundedAmountMinor),
+  );
+  return Number(
+    (BigInt(Math.max(0, allowance)) * BigInt(retainedAmount)) /
+      BigInt(amountMinor),
+  );
+}
+
 function serializePackage(pkg: typeof subscriptionPackagesTable.$inferSelect) {
   return {
     id: pkg.id,
@@ -76,12 +101,15 @@ export async function getSubscriptionAddOnsDashboard(
 
   const eligible =
     active?.pkg.packageType === "primary" && active.pkg.amountMinor > 0;
-  const [entitlementTotals] = await db
+  const entitlementRows = await db
     .select({
-      researchTotal: sql<number>`coalesce(sum(${addOnEntitlementsTable.researchAllowance}), 0)::int`,
-      researchUsed: sql<number>`coalesce(sum(${addOnEntitlementsTable.researchUsed}), 0)::int`,
-      assistTotal: sql<number>`coalesce(sum(${addOnEntitlementsTable.aiEmailAssistAllowance}), 0)::int`,
-      mailboxTotal: sql<number>`coalesce(sum(${addOnEntitlementsTable.additionalMailboxCount}), 0)::int`,
+      paymentId: addOnEntitlementsTable.paymentId,
+      researchAllowance: addOnEntitlementsTable.researchAllowance,
+      researchUsed: addOnEntitlementsTable.researchUsed,
+      aiEmailAssistAllowance: addOnEntitlementsTable.aiEmailAssistAllowance,
+      additionalMailboxCount: addOnEntitlementsTable.additionalMailboxCount,
+      paymentAmountMinor: paymentsTable.amountMinor,
+      refundedAmountMinor: paymentsTable.refundedAmountMinor,
     })
     .from(addOnEntitlementsTable)
     .leftJoin(
@@ -94,6 +122,40 @@ export async function getSubscriptionAddOnsDashboard(
         paidEntitlementCondition,
       ),
     );
+  const researchTotal = entitlementRows.reduce(
+    (total, row) =>
+      total +
+      prorateAddOnAllowance(
+        row.researchAllowance,
+        row.paymentId === null ? null : row.paymentAmountMinor,
+        row.paymentId === null ? null : row.refundedAmountMinor,
+      ),
+    0,
+  );
+  const researchUsed = entitlementRows.reduce(
+    (total, row) => total + row.researchUsed,
+    0,
+  );
+  const assistTotal = entitlementRows.reduce(
+    (total, row) =>
+      total +
+      prorateAddOnAllowance(
+        row.aiEmailAssistAllowance,
+        row.paymentId === null ? null : row.paymentAmountMinor,
+        row.paymentId === null ? null : row.refundedAmountMinor,
+      ),
+    0,
+  );
+  const additionalSlots = entitlementRows.reduce(
+    (total, row) =>
+      total +
+      prorateAddOnAllowance(
+        row.additionalMailboxCount,
+        row.paymentId === null ? null : row.paymentAmountMinor,
+        row.paymentId === null ? null : row.refundedAmountMinor,
+      ),
+    0,
+  );
 
   await db
     .update(aiEmailAssistUsagesTable)
@@ -133,14 +195,10 @@ export async function getSubscriptionAddOnsDashboard(
     .from(tenantSendingConfigurationTable)
     .where(eq(tenantSendingConfigurationTable.userId, userId));
 
-  const additionalSlots = Number(entitlementTotals?.mailboxTotal ?? 0);
   const baseLimit = active?.pkg.packageType === "primary"
     ? active.pkg.emailAccountLimit
     : 0;
   const totalMailboxLimit = baseLimit + (eligible ? additionalSlots : 0);
-  const researchTotal = Number(entitlementTotals?.researchTotal ?? 0);
-  const researchUsed = Number(entitlementTotals?.researchUsed ?? 0);
-  const assistTotal = Number(entitlementTotals?.assistTotal ?? 0);
   const assistUsed = Number(assistUsage?.used ?? 0);
   const packages = eligible
     ? await db
@@ -257,21 +315,32 @@ export async function reserveAiEmailAssistCredit(userId: string) {
       .filter((id): id is string => id !== null);
     const paidPayments = paidIds.length
       ? await tx
-          .select({ id: paymentsTable.id })
+          .select({
+            id: paymentsTable.id,
+            status: paymentsTable.status,
+            amountMinor: paymentsTable.amountMinor,
+            refundedAmountMinor: paymentsTable.refundedAmountMinor,
+          })
           .from(paymentsTable)
-          .where(
-            and(
-              inArray(paymentsTable.id, paidIds),
-              eq(paymentsTable.status, "captured"),
-            ),
-          )
+          .where(inArray(paymentsTable.id, paidIds))
       : [];
-    const validPaymentIds = new Set(paidPayments.map((row) => row.id));
-    const entitlements = entitlementRows.filter(
-      (entitlement) =>
-        entitlement.paymentId === null ||
-        validPaymentIds.has(entitlement.paymentId),
-    );
+    const paymentById = new Map(paidPayments.map((row) => [row.id, row]));
+    const entitlements = entitlementRows.flatMap((entitlement) => {
+      if (entitlement.paymentId === null) {
+        return [{ ...entitlement, usableAllowance: entitlement.aiEmailAssistAllowance }];
+      }
+      const payment = paymentById.get(entitlement.paymentId);
+      return !payment || payment.status !== "captured"
+        ? []
+        : [{
+            ...entitlement,
+            usableAllowance: prorateAddOnAllowance(
+              entitlement.aiEmailAssistAllowance,
+              payment.amountMinor,
+              payment.refundedAmountMinor,
+            ),
+          }];
+    });
     if (entitlements.length === 0) return null;
 
     const usageRows = await tx
@@ -296,7 +365,7 @@ export async function reserveAiEmailAssistCredit(userId: string) {
     );
     const available = entitlements.find(
       (entitlement) =>
-        entitlement.aiEmailAssistAllowance -
+        entitlement.usableAllowance -
           (usedByEntitlement.get(entitlement.id) ?? 0) >
         0,
     );

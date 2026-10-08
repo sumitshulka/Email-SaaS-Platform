@@ -131,6 +131,7 @@ export const paymentsTable = pgTable(
       .references(() => subscriptionPackagesTable.id, { onDelete: "restrict" }),
     receipt: varchar("receipt", { length: 40 }).notNull(),
     amountMinor: integer("amount_minor").notNull(),
+    refundedAmountMinor: integer("refunded_amount_minor").notNull().default(0),
     currency: varchar("currency", { length: 3 }).notNull(),
     status: paymentStatusEnum("status").notNull().default("created"),
     subscriptionChangeType: varchar("subscription_change_type", { length: 24 }),

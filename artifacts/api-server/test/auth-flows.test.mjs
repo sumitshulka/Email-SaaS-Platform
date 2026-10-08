@@ -215,6 +215,7 @@ memory.public.none(`
     package_id uuid NOT NULL REFERENCES subscription_packages(id) ON DELETE RESTRICT,
     receipt varchar(40) NOT NULL,
     amount_minor integer NOT NULL,
+    refunded_amount_minor integer NOT NULL DEFAULT 0,
     currency varchar(3) NOT NULL,
     status payment_status NOT NULL DEFAULT 'created',
     subscription_change_type varchar(24),
@@ -3120,7 +3121,14 @@ describe("tenant contact management and package quotas", { concurrency: false },
       status,
       captured,
     });
-    const assertBalances = async (research, assist, mailboxes) => {
+    const assertBalances = async (
+      research,
+      assist,
+      mailboxes,
+      researchUsed = 0,
+      assistUsed = 0,
+      configuredMailboxes = 0,
+    ) => {
       const dashboard = await api("/subscriptions/add-ons", {
         cookie: customer.cookie,
       });
@@ -3128,25 +3136,29 @@ describe("tenant contact management and package quotas", { concurrency: false },
       assert.equal(dashboard.body.eligible, true);
       assert.deepEqual(dashboard.body.balances.research, {
         total: research,
-        used: 0,
-        remaining: research,
+        used: researchUsed,
+        remaining: Math.max(0, research - researchUsed),
       });
       assert.deepEqual(dashboard.body.balances.emailAssist, {
         total: assist,
-        used: 0,
-        remaining: assist,
+        used: assistUsed,
+        remaining: Math.max(0, assist - assistUsed),
       });
       assert.deepEqual(
         {
           baseLimit: dashboard.body.balances.mailboxes.baseLimit,
           additionalSlots: dashboard.body.balances.mailboxes.additionalSlots,
           totalLimit: dashboard.body.balances.mailboxes.totalLimit,
+          used: dashboard.body.balances.mailboxes.used,
+          remaining: dashboard.body.balances.mailboxes.remaining,
           active: dashboard.body.balances.mailboxes.active,
         },
         {
           baseLimit: 1,
           additionalSlots: mailboxes,
           totalLimit: 1 + mailboxes,
+          used: configuredMailboxes,
+          remaining: Math.max(0, 1 + mailboxes - configuredMailboxes),
           active: true,
         },
       );
@@ -3209,7 +3221,165 @@ describe("tenant contact management and package quotas", { concurrency: false },
       },
     );
     assert.equal(partialRefund.response.status, 200, JSON.stringify(partialRefund.body));
-    await assertBalances(8, 6, 4);
+    const [partiallyRefundedPayment] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
+    assert.equal(partiallyRefundedPayment.status, "captured");
+    assert.equal(partiallyRefundedPayment.refundedAmountMinor, 700);
+    await assertBalances(6, 4, 3);
+
+    const researchModule = await import("../src/lib/company-intelligence.ts");
+    const [researchCompany] = await db
+      .insert(dbModule.globalCompaniesTable)
+      .values({ companyName: "Partial refund allowance test" })
+      .returning();
+    const researchInput = {
+      globalCompanyId: researchCompany.id,
+      userId: customer.user.id,
+      tenantUserId: customer.user.id,
+      provider: "openai",
+      selectedModel: "test-model",
+      settings: { researchCreditCost: 1, preferredModel: "test-model" },
+      depth: 1,
+      overrideFresh: true,
+    };
+    for (let run = 0; run < 6; run += 1) {
+      const result = await researchModule.enqueueCompanyResearch(researchInput);
+      assert.equal(result.kind, "created", `research run ${run + 1}`);
+      await db
+        .update(dbModule.companyResearchJobsTable)
+        .set({ status: "failed", stage: "failed" })
+        .where(eq(dbModule.companyResearchJobsTable.id, result.job.id));
+    }
+    const exhaustedResearch = await researchModule.enqueueCompanyResearch(
+      researchInput,
+    );
+    assert.equal(exhaustedResearch.kind, "allowance_exhausted");
+    const researchAllowance = await researchModule.getCompanyResearchAllowance(
+      customer.user.id,
+    );
+    assert.deepEqual(
+      {
+        limit: researchAllowance.limit,
+        used: researchAllowance.used,
+        remaining: researchAllowance.remaining,
+      },
+      { limit: 6, used: 6, remaining: 0 },
+    );
+
+    const {
+      reserveAiEmailAssistCredit,
+      finishAiEmailAssistCredit,
+    } = await import("../src/lib/add-on-entitlements.ts");
+    for (let credit = 0; credit < 4; credit += 1) {
+      const reservation = await reserveAiEmailAssistCredit(customer.user.id);
+      assert.ok(reservation, `AI assist credit ${credit + 1} should remain`);
+      await finishAiEmailAssistCredit(
+        customer.user.id,
+        reservation.id,
+        true,
+      );
+    }
+    assert.equal(await reserveAiEmailAssistCredit(customer.user.id), null);
+    await assertBalances(6, 4, 3, 6, 4);
+
+    for (let accountNumber = 1; accountNumber <= 4; accountNumber += 1) {
+      const sender = await api("/sending/accounts", {
+        method: "POST",
+        cookie: customer.cookie,
+        body: {
+          provider: "other",
+          host: `smtp.refund-${accountNumber}.test`,
+          port: 587,
+          encryption: "tls",
+          username: `refund-sender-${accountNumber}`,
+          password: `refund-sender-secret-${accountNumber}`,
+          fromName: `Refund sender ${accountNumber}`,
+          fromEmail: `refund-sender-${accountNumber}@test.example`,
+        },
+      });
+      assert.equal(sender.response.status, 201, JSON.stringify(sender.body));
+    }
+    const senderLimitBeforeAdditionalRefund = await api("/sending/accounts", {
+      cookie: customer.cookie,
+    });
+    assert.equal(senderLimitBeforeAdditionalRefund.body.emailAccountLimit, 4);
+    assert.equal(senderLimitBeforeAdditionalRefund.body.overLimit, false);
+
+    const additionalPartialRefund = await sendWebhook(
+      "refund.processed",
+      {
+        ...paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+        amount_refunded: 1100,
+        refund_status: "partial",
+      },
+      "paid-addon-additional-partial-refund",
+      {
+        id: "rfnd_paid_addon_2_additional",
+        payment_id: "pay_paid_addon_2",
+        amount: 400,
+        currency: "INR",
+        status: "processed",
+      },
+    );
+    assert.equal(
+      additionalPartialRefund.response.status,
+      200,
+      JSON.stringify(additionalPartialRefund.body),
+    );
+    await assertBalances(5, 3, 2, 6, 4, 4);
+    const senderLimitAfterAdditionalRefund = await api("/sending/accounts", {
+      cookie: customer.cookie,
+    });
+    assert.equal(senderLimitAfterAdditionalRefund.body.emailAccountLimit, 3);
+    assert.equal(senderLimitAfterAdditionalRefund.body.configuredCount, 4);
+    assert.equal(senderLimitAfterAdditionalRefund.body.overLimit, true);
+    const blockedSender = await api("/sending/accounts", {
+      method: "POST",
+      cookie: customer.cookie,
+      body: {
+        provider: "other",
+        host: "smtp.refund-blocked.test",
+        port: 587,
+        encryption: "tls",
+        username: "refund-sender-blocked",
+        password: "refund-sender-blocked-secret",
+        fromName: "Refund sender blocked",
+        fromEmail: "refund-sender-blocked@test.example",
+      },
+    });
+    assert.equal(blockedSender.response.status, 409);
+    assert.equal(blockedSender.body.code, "SENDER_ACCOUNT_LIMIT_REACHED");
+    const [additionalRefundPayment] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
+    assert.equal(additionalRefundPayment.refundedAmountMinor, 1100);
+
+    const stalePartialRefund = await sendWebhook(
+      "refund.processed",
+      {
+        ...paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+        amount_refunded: 700,
+        refund_status: "partial",
+      },
+      "paid-addon-stale-partial-refund",
+      {
+        id: "rfnd_paid_addon_2_partial",
+        payment_id: "pay_paid_addon_2",
+        amount: 700,
+        currency: "INR",
+        status: "processed",
+      },
+    );
+    assert.equal(stalePartialRefund.response.status, 200);
+    const [monotonicRefundPayment] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
+    assert.equal(monotonicRefundPayment.refundedAmountMinor, 1100);
+    await assertBalances(5, 3, 2, 6, 4, 4);
 
     const refunded = await sendWebhook(
       "refund.processed",
@@ -3222,7 +3392,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
       {
         id: "rfnd_paid_addon_2_full",
         payment_id: "pay_paid_addon_2",
-        amount: 800,
+        amount: 400,
         currency: "INR",
         status: "processed",
       },
@@ -3233,7 +3403,8 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .from(dbModule.paymentsTable)
       .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
     assert.equal(refundedPayment.status, "refunded");
-    await assertBalances(4, 3, 2);
+    assert.equal(refundedPayment.refundedAmountMinor, 1500);
+    await assertBalances(4, 3, 2, 4, 3, 4);
 
     const delayedCapture = await sendWebhook(
       "payment.captured",
@@ -3246,7 +3417,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .from(dbModule.addOnEntitlementsTable)
       .where(eq(dbModule.addOnEntitlementsTable.paymentId, refundedPayment.id));
     assert.equal(refundedEntitlements.length, 1);
-    await assertBalances(4, 3, 2);
+    await assertBalances(4, 3, 2, 4, 3, 4);
 
     const failedAttempt = await sendWebhook(
       "payment.failed",
@@ -3264,7 +3435,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .from(dbModule.addOnEntitlementsTable)
       .where(eq(dbModule.addOnEntitlementsTable.paymentId, failedPayment.id));
     assert.equal(failedEntitlements.length, 0);
-    await assertBalances(4, 3, 2);
+    await assertBalances(4, 3, 2, 4, 3, 4);
   });
 
   it("isolates contacts by tenant and enforces package limits on every create", async () => {
