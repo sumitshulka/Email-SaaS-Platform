@@ -5132,6 +5132,11 @@ describe("company research package access", { concurrency: false }, () => {
       "ai_package_required",
     );
     assert.equal(userIntelligence.body.researchAllowance, null);
+    const noActiveAllowance = await api("/company-intelligence/allowance", {
+      cookie: user.cookie,
+    });
+    assert.equal(noActiveAllowance.response.status, 200);
+    assert.deepEqual(noActiveAllowance.body, { allowance: null });
 
     const adminIntelligence = await api(
       `/company-intelligence/${created.body.id}`,
@@ -5186,6 +5191,17 @@ describe("company research package access", { concurrency: false }, () => {
     });
     assert.equal(zeroAllowance.body.researchAvailable, false);
     assert.equal(zeroAllowance.body.researchAvailabilityReason, "research_not_included");
+    const zeroAllowanceSummary = await api("/company-intelligence/allowance", {
+      cookie: zeroAllowanceUser.cookie,
+    });
+    assert.deepEqual(zeroAllowanceSummary.body, {
+      allowance: {
+        limit: 0,
+        used: 0,
+        remaining: 0,
+        resetsAt: zeroTermEnd.toISOString(),
+      },
+    });
 
     const entitledUser = await loggedInUser({
       username: "company-research-entitled-user",
@@ -5209,6 +5225,15 @@ describe("company research package access", { concurrency: false }, () => {
       startsAt: termStart,
       endsAt: termEnd,
     }).returning();
+    await dbModule.db.insert(dbModule.companyResearchJobsTable).values({
+      globalCompanyId: thirdCompany.body.id,
+      requestedBy: user.user.id,
+      status: "failed",
+      stage: "failed",
+      settings: {},
+      provider: "openai",
+      model: "test-model",
+    });
 
     const allowanceBefore = await api(`/company-intelligence/${created.body.id}`, {
       cookie: entitledUser.cookie,
@@ -5221,6 +5246,17 @@ describe("company research package access", { concurrency: false }, () => {
       resetsAt: termEnd.toISOString(),
     });
     assert.equal(allowanceBefore.body.researchAvailable, true);
+    const tenantAllowanceBefore = await api("/company-intelligence/allowance", {
+      cookie: entitledUser.cookie,
+    });
+    assert.deepEqual(tenantAllowanceBefore.body, {
+      allowance: {
+        limit: 1,
+        used: 0,
+        remaining: 1,
+        resetsAt: termEnd.toISOString(),
+      },
+    });
 
     const concurrentRuns = await Promise.all([
       api(`/company-intelligence/${created.body.id}/research`, {
@@ -5250,6 +5286,17 @@ describe("company research package access", { concurrency: false }, () => {
       used: 1,
       remaining: 0,
       resetsAt: termEnd.toISOString(),
+    });
+    const tenantAllowanceAfter = await api("/company-intelligence/allowance", {
+      cookie: entitledUser.cookie,
+    });
+    assert.deepEqual(tenantAllowanceAfter.body, {
+      allowance: {
+        limit: 1,
+        used: 1,
+        remaining: 0,
+        resetsAt: termEnd.toISOString(),
+      },
     });
     assert.equal(allowanceAfter.body.researchAvailable, false);
     assert.equal(allowanceAfter.body.researchAvailabilityReason, "research_allowance_exhausted");
@@ -5284,6 +5331,17 @@ describe("company research package access", { concurrency: false }, () => {
       used: 0,
       remaining: 1,
       resetsAt: nextTermEnd.toISOString(),
+    });
+    const tenantRenewedAllowance = await api("/company-intelligence/allowance", {
+      cookie: entitledUser.cookie,
+    });
+    assert.deepEqual(tenantRenewedAllowance.body, {
+      allowance: {
+        limit: 1,
+        used: 0,
+        remaining: 1,
+        resetsAt: nextTermEnd.toISOString(),
+      },
     });
     const nextTermRun = await api(`/company-intelligence/${unusedCompanyId}/research`, {
       method: "POST",

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Users } from 'lucide-react';
 import {
-  getGetCurrentSubscriptionQueryKey, getListAvailableSubscriptionPackagesQueryKey,
+  getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getListAvailableSubscriptionPackagesQueryKey,
   getListTenantSendingAccountsQueryKey,
-  useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCurrentSubscription, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
+  useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCompanyResearchAllowance, useGetCurrentSubscription, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
   useListTenantSendingAccounts, useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage, SubscriptionPackageList, TenantSendingAccount } from '@workspace/api-client-react';
@@ -153,6 +153,13 @@ export default function PlansPage() {
   const queryClient = useQueryClient();
   const packagesQuery = useListAvailableSubscriptionPackages();
   const currentQuery = useGetCurrentSubscription();
+  const researchAllowanceQuery = useGetCompanyResearchAllowance({
+    query: {
+      queryKey: getGetCompanyResearchAllowanceQueryKey(),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
   const paymentAvailabilityQuery = useGetSubscriptionPaymentAvailability();
   const senderAccountsQuery = useListTenantSendingAccounts();
   const createOrder = useCreateSubscriptionOrder();
@@ -197,6 +204,7 @@ export default function PlansPage() {
         setPaymentState({ kind: result.status, message: result.message });
         setCheckoutOrder(null);
         void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetCompanyResearchAllowanceQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
       },
@@ -231,6 +239,7 @@ export default function PlansPage() {
           });
           setStartingPackage(null);
           void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getGetCompanyResearchAllowanceQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
         },
@@ -330,11 +339,11 @@ export default function PlansPage() {
     startPurchase(pkg, keepIds);
   };
 
-  if (packagesQuery.isLoading || currentQuery.isLoading || senderAccountsQuery.isLoading) {
+  if (packagesQuery.isLoading || currentQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || senderAccountsQuery.isLoading) {
     return <div className="space-y-5" aria-label="Loading subscription plans" data-testid="loading-plans"><div className="h-8 w-64 animate-pulse rounded bg-[#e9eef2]"/><div className="h-32 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/></div></div>;
   }
-  if (packagesQuery.isError || currentQuery.isError || senderAccountsQuery.isError) {
-    return <section className="rounded-lg border border-[#e1e6eb] bg-white p-6" data-testid="error-plans"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 text-[#bd692d]"/><div><h1 className="text-[15px] font-semibold text-[#1d2d40]">Plans could not be loaded</h1><p className="mt-1 text-[12px] text-[#748292]">Your subscription has not changed.</p><button data-testid="button-retry-plans" onClick={() => { void packagesQuery.refetch(); void currentQuery.refetch(); void senderAccountsQuery.refetch(); }} className="mt-4 rounded-md border border-[#d5dfe7] px-3 py-2 text-[11px] font-semibold text-[#315879]">Retry</button></div></div></section>;
+  if (packagesQuery.isError || currentQuery.isError || researchAllowanceQuery.isError || senderAccountsQuery.isError) {
+    return <section className="rounded-lg border border-[#e1e6eb] bg-white p-6" data-testid="error-plans"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 text-[#bd692d]"/><div><h1 className="text-[15px] font-semibold text-[#1d2d40]">Plans could not be loaded</h1><p className="mt-1 text-[12px] text-[#748292]">Your subscription has not changed.</p><button data-testid="button-retry-plans" onClick={() => { void packagesQuery.refetch(); void currentQuery.refetch(); void researchAllowanceQuery.refetch(); void senderAccountsQuery.refetch(); }} className="mt-4 rounded-md border border-[#d5dfe7] px-3 py-2 text-[11px] font-semibold text-[#315879]">Retry</button></div></div></section>;
   }
 
   return <div className="fade-in space-y-8">
@@ -347,7 +356,7 @@ export default function PlansPage() {
     </header>
 
     {activeSubscription ? <section data-testid="current-subscription" className="grid gap-4 rounded-lg border border-[#d7e6dd] bg-[#f4f9f5] p-5 md:grid-cols-[1fr_auto] md:items-center md:px-6">
-      <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div><h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2><p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p><p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p><p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {activeSubscription.package.emailAccountLimit} SMTP sender account{activeSubscription.package.emailAccountLimit === 1 ? '' : 's'}</p><p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{activeSubscription.package.researchAllowance === 0 ? 'No company research runs are included this term' : `Up to ${activeSubscription.package.researchAllowance} company research run${activeSubscription.package.researchAllowance === 1 ? '' : 's'} this term; unused runs expire at term end`}</p></div>
+      <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div><h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2><p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p><p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p><p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {activeSubscription.package.emailAccountLimit} SMTP sender account{activeSubscription.package.emailAccountLimit === 1 ? '' : 's'}</p><p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{researchAllowanceQuery.data?.allowance ? `${researchAllowanceQuery.data.allowance.limit} company research run${researchAllowanceQuery.data.allowance.limit === 1 ? '' : 's'} this term · ${researchAllowanceQuery.data.allowance.used} used · ${researchAllowanceQuery.data.allowance.remaining} remaining` : 'No company research allowance is active for this term'}</p></div>
       <span data-testid="status-current-subscription" className="flex items-center gap-2 rounded-md border border-[#dce9e0] bg-white px-3 py-2 text-[11px] font-semibold text-[#477154]"><Clock3 className="h-4 w-4"/>Active through {new Date(activeSubscription.endsAt).toLocaleDateString()}</span>
     </section> : <section data-testid="current-subscription" className="flex items-center gap-3 rounded-lg border border-[#e0e6eb] bg-white p-4 md:px-5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#f1f4f6] text-[#738394]"><CalendarClock className="h-4 w-4"/></span><div><h2 className="text-[12px] font-semibold text-[#34485d]">No active subscription</h2><p className="mt-0.5 text-[11px] text-[#798796]">Your workspace access term will appear here after payment is confirmed.</p></div></section>}
 

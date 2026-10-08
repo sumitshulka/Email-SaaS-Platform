@@ -1712,6 +1712,27 @@ export const ExportCompaniesResponse = zod.unknown()
 
 
 /**
+ * @summary Get the authenticated customer's company research allowance for the active term
+ */
+export const getCompanyResearchAllowanceResponseAllowanceOneLimitMin = 0;
+
+export const getCompanyResearchAllowanceResponseAllowanceOneUsedMin = 0;
+
+export const getCompanyResearchAllowanceResponseAllowanceOneRemainingMin = 0;
+
+
+
+export const GetCompanyResearchAllowanceResponse = zod.object({
+  "allowance": zod.union([zod.object({
+  "limit": zod.number().int().min(getCompanyResearchAllowanceResponseAllowanceOneLimitMin),
+  "used": zod.number().int().min(getCompanyResearchAllowanceResponseAllowanceOneUsedMin),
+  "remaining": zod.number().int().min(getCompanyResearchAllowanceResponseAllowanceOneRemainingMin),
+  "resetsAt": zod.coerce.date()
+}),zod.null()])
+})
+
+
+/**
  * @summary Read reusable global company intelligence without starting research
  */
 export const GetCompanyIntelligenceParams = zod.object({

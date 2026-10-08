@@ -1021,6 +1021,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /company-intelligence/allowance:
+    get:
+      operationId: getCompanyResearchAllowance
+      tags: [companies]
+      summary: Get the authenticated customer's company research allowance for the active term
+      responses:
+        "200":
+          description: Current term allowance and usage, or null when there is no active term
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchAllowanceResponse" }
   /company-intelligence/{globalCompanyId}:
     parameters:
       - name: globalCompanyId
@@ -3989,6 +4000,14 @@ components:
         remaining: { type: integer, minimum: 0 }
         resetsAt: { type: string, format: date-time }
       required: [limit, used, remaining, resetsAt]
+    CompanyResearchAllowanceResponse:
+      type: object
+      properties:
+        allowance:
+          anyOf:
+            - $ref: "#/components/schemas/CompanyResearchAllowance"
+            - type: "null"
+      required: [allowance]
     CompanyResearchUsageJob:
       allOf:
         - $ref: "#/components/schemas/CompanyResearchJobStatus"

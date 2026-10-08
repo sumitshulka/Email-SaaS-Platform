@@ -1308,6 +1308,10 @@ export interface CompanyIntelligenceResult {
   researchAllowance: CompanyResearchAllowance | null;
 }
 
+export interface CompanyResearchAllowanceResponse {
+  allowance: CompanyResearchAllowance | null;
+}
+
 export type CompanyResearchUsageJob = CompanyResearchJobStatus & ({
   companyId: string;
   companyName: string;

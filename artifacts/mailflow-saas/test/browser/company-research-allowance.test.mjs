@@ -157,6 +157,7 @@ async function installFixtures(context, {
   intelligenceResponses = [intelligence()],
   researchStartStatus = 403,
   subscription,
+  currentAllowance = null,
   packages = [zeroAllowancePackage],
 } = {}) {
   const intelligenceReads = [];
@@ -194,6 +195,10 @@ async function installFixtures(context, {
       const response = intelligenceResponses[Math.min(intelligenceResponseIndex, intelligenceResponses.length - 1)];
       intelligenceResponseIndex += 1;
       await route.fulfill({ status: 200, json: response });
+      return;
+    }
+    if (pathname === '/api/company-intelligence/allowance' && method === 'GET') {
+      await route.fulfill({ status: 200, json: { allowance: currentAllowance } });
       return;
     }
     if (pathname === `/api/company-intelligence/${globalCompanyId}/research` && method === 'POST') {
@@ -360,7 +365,7 @@ describe('company research allowance explanations', { concurrency: false }, () =
     }
   });
 
-  it('shows a zero-run package as excluded on the plans page', async () => {
+  it('shows a zero-run package allowance on the plans page', async () => {
     const subscription = {
       id: 'browser-zero-research-active-term',
       status: 'active',
@@ -368,13 +373,44 @@ describe('company research allowance explanations', { concurrency: false }, () =
       endsAt: '2026-10-31T00:00:00.000Z',
       package: zeroAllowancePackage,
     };
-    const { context, page } = await openPage('/plans', { subscription });
+    const { context, page } = await openPage('/plans', {
+      subscription,
+      currentAllowance: allowance(0, 0, 0),
+    });
     try {
       await page.getByTestId(`text-plan-research-allowance-${zeroAllowancePackage.id}`)
         .getByText('Company research is not included in this package', { exact: false })
         .waitFor();
       await page.getByTestId('text-current-subscription-research-allowance')
-        .getByText('No company research runs are included this term', { exact: false })
+        .getByText('0 company research runs this term · 0 used · 0 remaining', { exact: false })
+        .waitFor();
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('shows the server-reported usage and remaining runs for the active term', async () => {
+    const packageWithAllowance = {
+      ...zeroAllowancePackage,
+      id: 'browser-current-research-package',
+      name: 'Research Plus',
+      researchAllowance: 3,
+    };
+    const subscription = {
+      id: 'browser-current-research-term',
+      status: 'active',
+      startsAt: '2026-10-01T00:00:00.000Z',
+      endsAt: resetAt,
+      package: packageWithAllowance,
+    };
+    const { context, page } = await openPage('/plans', {
+      subscription,
+      packages: [packageWithAllowance],
+      currentAllowance: allowance(3, 2, 1),
+    });
+    try {
+      await page.getByTestId('text-current-subscription-research-allowance')
+        .getByText('3 company research runs this term · 2 used · 1 remaining', { exact: false })
         .waitFor();
     } finally {
       await context.close();

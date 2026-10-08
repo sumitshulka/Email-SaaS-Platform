@@ -91,6 +91,7 @@ export * from './companyIntelligenceVersion';
 export * from './companyIntelligenceVersionSummary';
 export * from './companyListItem';
 export * from './companyResearchAllowance';
+export * from './companyResearchAllowanceResponse';
 export * from './companyResearchInput';
 export * from './companyResearchJobStatus';
 export * from './companyResearchJobStatusStatus';

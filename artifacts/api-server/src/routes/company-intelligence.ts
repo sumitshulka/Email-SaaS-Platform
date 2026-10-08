@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { companyIntelligenceTable, companyResearchJobsTable, db, globalCompaniesTable, systemConfigurationTable } from "@workspace/db";
 import {
   GetCompanyIntelligenceParams, GetCompanyIntelligenceResponse, GetCompanyIntelligenceVersionParams, GetCompanyIntelligenceVersionResponse,
-  GetCompanyResearchSettingsResponse, GetCompanyResearchUsageQueryParams, GetCompanyResearchUsageResponse,
+  GetCompanyResearchAllowanceResponse, GetCompanyResearchSettingsResponse, GetCompanyResearchUsageQueryParams, GetCompanyResearchUsageResponse,
   StartCompanyResearchBody, StartCompanyResearchParams, StartCompanyResearchResponse,
   UpdateCompanyResearchSettingsBody, UpdateCompanyResearchSettingsResponse,
 } from "@workspace/api-zod";
@@ -16,6 +16,11 @@ import { writeAuditLog } from "../lib/audit";
 
 const router: IRouter = Router();
 const researchRole: RequestHandler = (req, res, next) => req.authUser?.role === "SUPERADMIN" ? requireSuperadmin(req, res, next) : requireUserRole(req, res, next);
+
+router.get("/company-intelligence/allowance", requireUserRole, async (req, res): Promise<void> => {
+  const allowance = await getCompanyResearchAllowance(req.authUser!.id);
+  res.json(GetCompanyResearchAllowanceResponse.parse({ allowance }));
+});
 
 router.get("/company-intelligence/:globalCompanyId", researchRole, async (req, res): Promise<void> => {
   const params = GetCompanyIntelligenceParams.safeParse(req.params);

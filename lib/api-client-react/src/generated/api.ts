@@ -60,6 +60,7 @@ import type {
   CompanyInput,
   CompanyIntelligenceResult,
   CompanyIntelligenceVersion,
+  CompanyResearchAllowanceResponse,
   CompanyResearchInput,
   CompanyResearchJobStatus,
   CompanyResearchSettings,
@@ -3821,6 +3822,83 @@ export const useExportCompanies = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getExportCompaniesMutationOptions(options));
     }
+
+export const getGetCompanyResearchAllowanceUrl = () => {
+
+
+
+
+  return `/api/company-intelligence/allowance`
+}
+
+/**
+ * @summary Get the authenticated customer's company research allowance for the active term
+ */
+export const getCompanyResearchAllowance = async ( options?: Parameters<typeof customFetch>[1]): Promise<CompanyResearchAllowanceResponse> => {
+
+  return customFetch<CompanyResearchAllowanceResponse>(getGetCompanyResearchAllowanceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanyResearchAllowanceQueryKey = () => {
+    return [
+    `/api/company-intelligence/allowance`
+    ] as const;
+    }
+
+
+export const getGetCompanyResearchAllowanceQueryOptions = <TData = Awaited<ReturnType<typeof getCompanyResearchAllowance>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanyResearchAllowance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanyResearchAllowanceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanyResearchAllowance>>> = ({ signal }) => getCompanyResearchAllowance({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanyResearchAllowance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanyResearchAllowanceQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanyResearchAllowance>>>
+export type GetCompanyResearchAllowanceQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the authenticated customer's company research allowance for the active term
+ */
+
+export function useGetCompanyResearchAllowance<TData = Awaited<ReturnType<typeof getCompanyResearchAllowance>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanyResearchAllowance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanyResearchAllowanceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetCompanyIntelligenceUrl = (globalCompanyId: string,) => {
 
