@@ -30,6 +30,10 @@ import { requireAuth, requireSuperadmin, requireUserRole } from "./session";
 import {
   GmailApiError,
   GmailHistoryExpiredError,
+  GmailRecentScanLimitError,
+  GMAIL_RECENT_SCAN_DAYS,
+  GMAIL_RECENT_SCAN_MAX_MESSAGES,
+  rescanRecentGmailMessages,
   syncGmailHistory,
 } from "./gmail-api";
 import { ingestDeliveryReports } from "./delivery-report-ingestion";
@@ -398,6 +402,114 @@ export function createGmailMailboxRouter(): IRouter {
     });
   },
 );
+
+  router.post(
+    "/sending/gmail/rescan",
+    requireUserRole,
+    async (req, res): Promise<void> => {
+      const userId = req.authUser!.id;
+      const [connection] = await db
+        .select()
+        .from(gmailMailboxConnectionsTable)
+        .where(eq(gmailMailboxConnectionsTable.userId, userId))
+        .limit(1);
+      if (!connection) {
+        res.status(404).json({
+          error: "Connect a Gmail mailbox before rescanning recent messages.",
+          code: "GMAIL_NOT_CONNECTED",
+        });
+        return;
+      }
+
+      const now = new Date();
+      const leaseExpiresAt = new Date(now.getTime() + 10 * 60_000);
+      const claimed = await db
+        .update(gmailMailboxConnectionsTable)
+        .set({ leaseExpiresAt, updatedAt: now })
+        .where(
+          and(
+            eq(gmailMailboxConnectionsTable.id, connection.id),
+            eq(gmailMailboxConnectionsTable.userId, userId),
+            or(
+              isNull(gmailMailboxConnectionsTable.leaseExpiresAt),
+              lte(gmailMailboxConnectionsTable.leaseExpiresAt, now),
+            ),
+          ),
+        )
+        .returning({ id: gmailMailboxConnectionsTable.id });
+      if (!claimed.length) {
+        res.status(409).json({
+          error: "Gmail is already syncing. Wait for the current sync to finish, then try again.",
+          code: "GMAIL_SYNC_IN_PROGRESS",
+        });
+        return;
+      }
+
+      try {
+        const accessToken = await getAccessToken(
+          decryptSecret(connection.refreshTokenEncrypted),
+        );
+        const result = await rescanRecentGmailMessages({
+          accessToken,
+          ingest: (reports) =>
+            ingestDeliveryReports({
+              userId,
+              reports,
+              verification: "gmail_authorized",
+              gmailMailboxConnectionId: connection.id,
+            }),
+        });
+        res.json({
+          windowDays: GMAIL_RECENT_SCAN_DAYS,
+          maxMessages: GMAIL_RECENT_SCAN_MAX_MESSAGES,
+          ...result,
+        });
+      } catch (error) {
+        if (
+          error instanceof GmailApiError &&
+          (error.status === 401 || error.providerCode === "invalid_grant")
+        ) {
+          res.status(401).json({
+            error: "Google authorization has expired. Reconnect the Gmail mailbox, then try again.",
+            code: "GMAIL_REAUTHORIZATION_REQUIRED",
+          });
+        } else if (error instanceof GmailRecentScanLimitError) {
+          res.status(413).json({
+            error: error.message,
+            code: "GMAIL_RESCAN_LIMIT",
+          });
+        } else {
+          const providerStatus =
+            error instanceof GmailApiError && error.status > 0
+              ? error.status
+              : undefined;
+          req.log.warn(
+            {
+              userId,
+              connectionId: connection.id,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+              ...(providerStatus ? { providerStatusCode: providerStatus } : {}),
+            },
+            "Gmail recent-message rescan failed",
+          );
+          res.status(502).json({
+            error: "The recent Gmail scan failed. Try again shortly; the regular Gmail sync checkpoint was not changed.",
+            code: "GMAIL_RESCAN_FAILED",
+          });
+        }
+      } finally {
+        await db
+          .update(gmailMailboxConnectionsTable)
+          .set({ leaseExpiresAt: null, updatedAt: new Date() })
+          .where(
+            and(
+              eq(gmailMailboxConnectionsTable.id, connection.id),
+              eq(gmailMailboxConnectionsTable.leaseExpiresAt, leaseExpiresAt),
+            ),
+          );
+      }
+    },
+  );
 
   router.post(
   "/sending/gmail/connect",

@@ -107,6 +107,7 @@ import type {
   GlobalCompanyUpdate,
   GmailMailboxConnection,
   GmailOAuthStart,
+  GmailRecentRescanResult,
   GoogleOAuthSettings,
   GoogleOAuthSettingsInput,
   HealthStatus,
@@ -2652,6 +2653,80 @@ export const useDisconnectGmailMailbox = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDisconnectGmailMailboxMutationOptions(options));
+    }
+
+export const getRescanRecentGmailMessagesUrl = () => {
+
+
+
+
+  return `/api/sending/gmail/rescan`
+}
+
+/**
+ * @summary Rescan a bounded recent Gmail window for delivery-status reports
+ */
+export const rescanRecentGmailMessages = async ( options?: Parameters<typeof customFetch>[1]): Promise<GmailRecentRescanResult> => {
+
+  return customFetch<GmailRecentRescanResult>(getRescanRecentGmailMessagesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRescanRecentGmailMessagesMutationKey = () => ['rescanRecentGmailMessages'] as const;
+
+export const getRescanRecentGmailMessagesMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,void, TContext> => {
+
+const mutationKey = getRescanRecentGmailMessagesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, void> = () => {
+
+
+          return  rescanRecentGmailMessages(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RescanRecentGmailMessagesMutationResult = NonNullable<Awaited<ReturnType<typeof rescanRecentGmailMessages>>>
+
+    export type RescanRecentGmailMessagesMutationError = ErrorType<ApiError>
+
+
+    /**
+ * @summary Rescan a bounded recent Gmail window for delivery-status reports
+ */
+export const useRescanRecentGmailMessages = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescanRecentGmailMessages>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rescanRecentGmailMessages>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRescanRecentGmailMessagesMutationOptions(options));
     }
 
 export const getStartGmailMailboxConnectionUrl = () => {

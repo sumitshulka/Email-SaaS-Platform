@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 import {
   GmailApiError,
   GmailHistoryExpiredError,
+  GmailRecentScanLimitError,
+  GMAIL_RECENT_SCAN_DAYS,
+  GMAIL_RECENT_SCAN_MAX_MESSAGES,
+  rescanRecentGmailMessages,
   syncGmailHistory,
 } from "../src/lib/gmail-api.ts";
 
@@ -164,5 +168,141 @@ describe("Gmail history sync", () => {
       (error) => error instanceof GmailApiError && error.status === 500,
     );
     assert.equal(ingested, false);
+  });
+});
+
+describe("bounded recent Gmail rescan", () => {
+  it("paginates the 14-day search, skips ordinary bodies, and counts replays as duplicates", async () => {
+    const calls = [];
+    const seenReports = new Set();
+    const encodedDsn = Buffer.from(dsn).toString("base64url");
+    const fetcher = async (input) => {
+      const url = new URL(String(input));
+      calls.push(url);
+      if (url.pathname.endsWith("/messages") && !url.pathname.includes("/messages/")) {
+        assert.equal(url.searchParams.get("q"), `newer_than:${GMAIL_RECENT_SCAN_DAYS}d`);
+        assert.equal(url.searchParams.get("maxResults"), "100");
+        if (!url.searchParams.has("pageToken")) {
+          return jsonResponse({
+            messages: [{ id: "ordinary" }, { id: "bounce-one" }],
+            nextPageToken: "next-page",
+          });
+        }
+        assert.equal(url.searchParams.get("pageToken"), "next-page");
+        return jsonResponse({ messages: [{ id: "bounce-two" }] });
+      }
+
+      const messageId = url.pathname.split("/").pop();
+      if (url.searchParams.get("format") === "metadata") {
+        return jsonResponse({
+          id: messageId,
+          payload: {
+            headers: [{
+              name: "Content-Type",
+              value: messageId === "ordinary"
+                ? "text/plain"
+                : messageId === "bounce-two"
+                  ? 'multipart/report; report-type="delivery-status"; boundary="dsn-boundary"'
+                  : 'multipart/report; boundary="dsn-boundary"; report-type="delivery-status"',
+            }],
+          },
+        });
+      }
+      if (url.searchParams.get("format") === "raw") {
+        assert.notEqual(messageId, "ordinary");
+        return jsonResponse({ id: messageId, raw: encodedDsn });
+      }
+      throw new Error(`Unexpected Gmail API call: ${url}`);
+    };
+
+    const scan = () => rescanRecentGmailMessages({
+      accessToken: "test-token",
+      fetcher,
+      ingest: async (reports) => {
+        let imported = 0;
+        let duplicates = 0;
+        for (const report of reports) {
+          const key = `${report.recipientEmail}:${report.envelopeId}`;
+          if (seenReports.has(key)) duplicates += 1;
+          else {
+            seenReports.add(key);
+            imported += 1;
+          }
+        }
+        return {
+          imported,
+          duplicates,
+          unmatched: 0,
+          ignored: 0,
+          warnings: [],
+        };
+      },
+    });
+
+    const first = await scan();
+    assert.equal(first.messagesChecked, 3);
+    assert.equal(first.candidateMessages, 2);
+    assert.equal(first.imported, 1);
+    assert.equal(first.duplicates, 1);
+    assert.equal(first.ignored, 1);
+
+    const second = await scan();
+    assert.equal(second.messagesChecked, 3);
+    assert.equal(second.imported, 0);
+    assert.equal(second.duplicates, 2);
+    assert.deepEqual(
+      calls
+        .filter((url) => url.searchParams.get("format") === "raw")
+        .map((url) => url.pathname.split("/").pop()),
+      ["bounce-one", "bounce-two", "bounce-one", "bounce-two"],
+    );
+  });
+
+  it("stops at the 500-message cap before fetching metadata or ingesting a partial scan", async () => {
+    let listCalls = 0;
+    let metadataCalls = 0;
+    let ingestCalls = 0;
+    const fetcher = async (input) => {
+      const url = new URL(String(input));
+      if (!url.pathname.endsWith("/messages") || url.pathname.includes("/messages/")) {
+        metadataCalls += 1;
+        throw new Error("Metadata must not be loaded until list pagination finishes.");
+      }
+      listCalls += 1;
+      const pageNumber = url.searchParams.has("pageToken")
+        ? Number(url.searchParams.get("pageToken").replace("page-", ""))
+        : 1;
+      return jsonResponse({
+        messages: Array.from({ length: 100 }, (_, index) => ({
+          id: `message-${pageNumber}-${index}`,
+        })),
+        nextPageToken: `page-${pageNumber + 1}`,
+      });
+    };
+
+    await assert.rejects(
+      rescanRecentGmailMessages({
+        accessToken: "test-token",
+        fetcher,
+        ingest: async () => {
+          ingestCalls += 1;
+          return {
+            imported: 0,
+            duplicates: 0,
+            unmatched: 0,
+            ignored: 0,
+            warnings: [],
+          };
+        },
+      }),
+      (error) =>
+        error instanceof GmailRecentScanLimitError &&
+        error instanceof GmailApiError &&
+        error.status === 413 &&
+        error.message.includes(String(GMAIL_RECENT_SCAN_MAX_MESSAGES)),
+    );
+    assert.equal(listCalls, 5);
+    assert.equal(metadataCalls, 0);
+    assert.equal(ingestCalls, 0);
   });
 });

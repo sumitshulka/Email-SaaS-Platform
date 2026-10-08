@@ -3,6 +3,8 @@ import type { ParsedDeliveryReport } from "./delivery-report-parser";
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1";
 const MAX_MESSAGES_PER_SYNC = 500;
+
+export const GMAIL_RECENT_SCAN_DAYS = 14;
 const MAX_RAW_MESSAGE_BYTES = 1024 * 1024;
 
 type GmailHeader = { name?: string; value?: string };
@@ -21,6 +23,10 @@ type HistoryResponse = {
   nextPageToken?: string;
 };
 
+type MessageListResponse = {
+  messages?: Array<{ id?: string }>;
+  nextPageToken?: string;
+};
 export class GmailApiError extends Error {
   constructor(
     message: string,
@@ -39,6 +45,15 @@ export class GmailHistoryExpiredError extends Error {
   }
 }
 
+export class GmailRecentScanLimitError extends GmailApiError {
+  constructor() {
+    super(
+      `The recent Gmail scan reached its ${GMAIL_RECENT_SCAN_MAX_MESSAGES}-message limit. Reduce recent mailbox volume and try again.`,
+      413,
+    );
+    this.name = "GmailRecentScanLimitError";
+  }
+}
 function headerValue(message: GmailMessage, name: string): string {
   return (
     message.payload?.headers?.find(
@@ -178,6 +193,42 @@ async function loadRaw(
   return decoded.toString("utf8");
 }
 
+async function loadRecentMessageIds(
+  accessToken: string,
+  fetcher: typeof fetch,
+): Promise<string[]> {
+  const messageIds = new Set<string>();
+  let pageToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const url = new URL(`${GMAIL_API}/users/me/messages`);
+    url.searchParams.set("q", `newer_than:${GMAIL_RECENT_SCAN_DAYS}d`);
+    url.searchParams.set("maxResults", String(GMAIL_RECENT_SCAN_PAGE_SIZE));
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const result = await requestJson<MessageListResponse>(
+      url.toString(),
+      accessToken,
+      fetcher,
+    );
+    for (const message of result.messages ?? []) {
+      if (message.id) messageIds.add(message.id);
+    }
+
+    pageToken = result.nextPageToken;
+    pages += 1;
+    if (
+      messageIds.size > GMAIL_RECENT_SCAN_MAX_MESSAGES ||
+      (pageToken &&
+        (messageIds.size >= GMAIL_RECENT_SCAN_MAX_MESSAGES ||
+          pages >= GMAIL_RECENT_SCAN_MAX_PAGES))
+    ) {
+      throw new GmailRecentScanLimitError();
+    }
+  } while (pageToken);
+
+  return [...messageIds];
+}
 export async function syncGmailHistory(options: {
   accessToken: string;
   startHistoryId: string;
@@ -205,50 +256,116 @@ export async function syncGmailHistory(options: {
     options.startHistoryId,
     fetcher,
   );
+  const counts = await scanMessageIds({
+    accessToken: options.accessToken,
+    messageIds: history.messageIds,
+    fetcher,
+    countIgnoredMessages: false,
+    ingest: options.ingest,
+  });
+
+  return {
+    historyId: history.historyId,
+    ...counts,
+  };
+}
+
+export async function rescanRecentGmailMessages(options: {
+  accessToken: string;
+  fetcher?: typeof fetch;
+  ingest: (reports: ParsedDeliveryReport[]) => Promise<{
+    imported: number;
+    duplicates: number;
+    unmatched: number;
+    ignored: number;
+    warnings: string[];
+  }>;
+}): Promise<GmailScanCounts> {
+  const fetcher = options.fetcher ?? fetch;
+  const messageIds = await loadRecentMessageIds(options.accessToken, fetcher);
+  return scanMessageIds({
+    accessToken: options.accessToken,
+    messageIds,
+    fetcher,
+    countIgnoredMessages: true,
+    ingest: options.ingest,
+  });
+}
+
+export const GMAIL_RECENT_SCAN_MAX_MESSAGES = 500;
+
+const GMAIL_RECENT_SCAN_PAGE_SIZE = 100;
+
+async function scanMessageIds(options: {
+  accessToken: string;
+  messageIds: string[];
+  fetcher: typeof fetch;
+  countIgnoredMessages: boolean;
+  ingest: (reports: ParsedDeliveryReport[]) => Promise<{
+    imported: number;
+    duplicates: number;
+    unmatched: number;
+    ignored: number;
+    warnings: string[];
+  }>;
+}): Promise<GmailScanCounts> {
   let candidateMessages = 0;
+  let ignoredMessages = 0;
   let imported = 0;
   let duplicates = 0;
   let unmatched = 0;
-  let ignored = 0;
+  let ignoredReports = 0;
   let warningCount = 0;
-
   const parsedByMessage: Array<ParsedDeliveryReport[]> = [];
-  for (let start = 0; start < history.messageIds.length; start += 8) {
-    const batch = history.messageIds.slice(start, start + 8);
+
+  for (let start = 0; start < options.messageIds.length; start += 8) {
+    const batch = options.messageIds.slice(start, start + 8);
     const reports = await Promise.all(
       batch.map(async (messageId) => {
         let metadata: GmailMessage;
         try {
-          metadata = await loadMetadata(options.accessToken, messageId, fetcher);
+          metadata = await loadMetadata(options.accessToken, messageId, options.fetcher);
         } catch (error) {
-          if (error instanceof GmailApiError && error.status === 404) return [];
+          if (error instanceof GmailApiError && error.status === 404) {
+            if (options.countIgnoredMessages) ignoredMessages += 1;
+            return [];
+          }
           throw error;
         }
         const contentType = headerValue(metadata, "Content-Type");
-        if (!isDeliveryStatusContentType(contentType)) return [];
+        if (!isDeliveryStatusContentType(contentType)) {
+          if (options.countIgnoredMessages) ignoredMessages += 1;
+          return [];
+        }
 
         candidateMessages += 1;
         let raw: string | null;
         try {
-          raw = await loadRaw(options.accessToken, messageId, fetcher);
+          raw = await loadRaw(options.accessToken, messageId, options.fetcher);
         } catch (error) {
           if (error instanceof GmailApiError && error.status === 404) {
             warningCount += 1;
+            if (options.countIgnoredMessages) ignoredMessages += 1;
             return [];
           }
           throw error;
         }
         if (!raw) {
           warningCount += 1;
+          if (options.countIgnoredMessages) ignoredMessages += 1;
           return [];
         }
         try {
           const parsed = parseDeliveryReports("dsn", raw);
           warningCount += parsed.warnings.length;
-          if (parsed.reports.length === 0) warningCount += 1;
+          if (parsed.reports.length === 0) {
+            warningCount += 1;
+            if (options.countIgnoredMessages) ignoredMessages += 1;
+          }
           return parsed.reports;
         } catch {
           warningCount += 1;
+          if (options.countIgnoredMessages) ignoredMessages += 1;
           return [];
         }
       }),
@@ -262,18 +379,30 @@ export async function syncGmailHistory(options: {
     imported += result.imported;
     duplicates += result.duplicates;
     unmatched += result.unmatched;
-    ignored += result.ignored;
+    ignoredReports += result.ignored;
     warningCount += result.warnings.length;
   }
 
   return {
-    historyId: history.historyId,
-    messagesChecked: history.messageIds.length,
+    messagesChecked: options.messageIds.length,
     candidateMessages,
     imported,
     duplicates,
     unmatched,
-    ignored,
+    ignored: ignoredReports + ignoredMessages,
     warningCount,
   };
 }
+
+const GMAIL_RECENT_SCAN_MAX_PAGES =
+  GMAIL_RECENT_SCAN_MAX_MESSAGES / GMAIL_RECENT_SCAN_PAGE_SIZE;
+
+type GmailScanCounts = {
+  messagesChecked: number;
+  candidateMessages: number;
+  imported: number;
+  duplicates: number;
+  unmatched: number;
+  ignored: number;
+  warningCount: number;
+};

@@ -8871,6 +8871,109 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       });
     assert.equal(crossTenantGmailIngestion.imported, 0);
     assert.equal(crossTenantGmailIngestion.unmatched, 1);
+    const gmailHistoryBeforeRescan = gmailConnection.historyId;
+    await db
+      .update(dbModule.gmailMailboxConnectionsTable)
+      .set({
+        refreshTokenEncrypted: securityModule.encryptSecret(
+          "recent-rescan-refresh-token",
+        ),
+      })
+      .where(eq(dbModule.gmailMailboxConnectionsTable.id, gmailConnection.id));
+    let gmailRescanProviderCalls = 0;
+    await withGmailOAuthConfig(
+      () =>
+        withGoogleFetch(async (url, init) => {
+          gmailRescanProviderCalls += 1;
+          if (
+            url.hostname === "oauth2.googleapis.com" &&
+            url.pathname === "/token"
+          ) {
+            const fields = new URLSearchParams(init?.body);
+            assert.equal(fields.get("refresh_token"), "recent-rescan-refresh-token");
+            return googleJson({ access_token: "recent-rescan-access-token" });
+          }
+          if (
+            url.hostname === "gmail.googleapis.com" &&
+            url.pathname.endsWith("/users/me/messages")
+          ) {
+            assert.equal(url.searchParams.get("q"), "newer_than:14d");
+            return googleJson({ messages: [{ id: "recent-bounce" }] });
+          }
+          if (
+            url.hostname === "gmail.googleapis.com" &&
+            url.pathname.endsWith("/messages/recent-bounce") &&
+            url.searchParams.get("format") === "metadata"
+          ) {
+            return googleJson({
+              payload: {
+                headers: [{
+                  name: "Content-Type",
+                  value: 'multipart/report; boundary="dsn"; report-type="delivery-status"',
+                }],
+              },
+            });
+          }
+          if (
+            url.hostname === "gmail.googleapis.com" &&
+            url.pathname.endsWith("/messages/recent-bounce") &&
+            url.searchParams.get("format") === "raw"
+          ) {
+            return googleJson({
+              raw: Buffer.from(dsnReport).toString("base64url"),
+            });
+          }
+          throw new Error(`Unexpected recent Gmail rescan request: ${url}`);
+        }, async () => {
+          const firstRescan = await api("/sending/gmail/rescan", {
+            method: "POST",
+            cookie: owner.cookie,
+          });
+          assert.equal(firstRescan.response.status, 200, JSON.stringify(firstRescan.body));
+          assert.equal(firstRescan.body.windowDays, 14);
+          assert.equal(firstRescan.body.maxMessages, 500);
+          assert.equal(firstRescan.body.messagesChecked, 1);
+          assert.equal(firstRescan.body.candidateMessages, 1);
+          assert.equal(firstRescan.body.imported, 0);
+          assert.equal(firstRescan.body.duplicates, 1);
+
+          const replayedRescan = await api("/sending/gmail/rescan", {
+            method: "POST",
+            cookie: owner.cookie,
+          });
+          assert.equal(replayedRescan.response.status, 200);
+          assert.equal(replayedRescan.body.imported, 0);
+          assert.equal(replayedRescan.body.duplicates, 1);
+
+          const otherTenantRescan = await api("/sending/gmail/rescan", {
+            method: "POST",
+            cookie: other.cookie,
+          });
+          assert.equal(otherTenantRescan.response.status, 404);
+          assert.equal(otherTenantRescan.body.code, "GMAIL_NOT_CONNECTED");
+        }),
+    );
+    const providerCallsBeforeLeaseConflict = gmailRescanProviderCalls;
+    await db
+      .update(dbModule.gmailMailboxConnectionsTable)
+      .set({ leaseExpiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(dbModule.gmailMailboxConnectionsTable.id, gmailConnection.id));
+    const overlappingRescan = await api("/sending/gmail/rescan", {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(overlappingRescan.response.status, 409);
+    assert.equal(gmailRescanProviderCalls, providerCallsBeforeLeaseConflict);
+    await db
+      .update(dbModule.gmailMailboxConnectionsTable)
+      .set({ leaseExpiresAt: null })
+      .where(eq(dbModule.gmailMailboxConnectionsTable.id, gmailConnection.id));
+    const [connectionAfterRescan] = await db
+      .select()
+      .from(dbModule.gmailMailboxConnectionsTable)
+      .where(eq(dbModule.gmailMailboxConnectionsTable.id, gmailConnection.id));
+    assert.equal(connectionAfterRescan.historyId, gmailHistoryBeforeRescan);
+    assert.equal(connectionAfterRescan.leaseExpiresAt, null);
     const authorizedDeliveryPage = await api(
       `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=0`,
       { cookie: owner.cookie },

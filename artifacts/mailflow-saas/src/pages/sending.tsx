@@ -22,7 +22,7 @@ import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
-  useGetGmailMailboxConnection, useStartGmailMailboxConnection,
+  useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
@@ -33,6 +33,7 @@ import {
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
+  GmailRecentRescanResult,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -137,8 +138,11 @@ export function SendingSettingsPage() {
   });
   const startGmailConnection = useStartGmailMailboxConnection();
   const disconnectGmailConnection = useDisconnectGmailMailbox();
+  const recentGmailRescan = useRescanRecentGmailMessages();
   const qc = useQueryClient();
   const { notice, setNotice, dismiss } = useNotice();
+  const [recentRescanResult, setRecentRescanResult] = useState<GmailRecentRescanResult | null>(null);
+  const [recentRescanError, setRecentRescanError] = useState<string | null>(null);
   const [form, setForm] = useState(blankSettings);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [initialized, setInitialized] = useState(false);
@@ -186,10 +190,20 @@ export function SendingSettingsPage() {
   const disconnectGmail = () => disconnectGmailConnection.mutate(undefined, {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: getGetGmailMailboxConnectionQueryKey() });
+      setRecentRescanResult(null);
+      setRecentRescanError(null);
       setNotice({ kind: 'success', text: 'Gmail mailbox disconnected and saved access removed.' });
     },
     onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
   });
+  const rescanRecentGmail = () => {
+    setRecentRescanResult(null);
+    setRecentRescanError(null);
+    recentGmailRescan.mutate(undefined, {
+      onSuccess: result => setRecentRescanResult(result),
+      onError: error => setRecentRescanError(mutationError(error)),
+    });
+  };
   const change = (key: keyof typeof form, value: string) => setForm(current => ({ ...current, [key]: value }));
   const refreshSenderAccounts = () => {
     void qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
@@ -467,6 +481,38 @@ export function SendingSettingsPage() {
                 {gmailConnection.data.lastError && <p data-testid="text-gmail-sync-error" role="status" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{gmailConnection.data.lastError}</p>}
                 {gmailConnection.data.syncStatus === 'history_expired' && <p className="mt-2 text-[11px] leading-5 text-[#99501e]">Reconnect to restart monitoring from a new checkpoint. Gmail cannot recover notices from the expired-history gap automatically.</p>}
               </div>}
+          {gmailConnection.data?.connected && <div className="mt-4 rounded-md border border-[#dce4ee] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[12px] font-semibold text-[#26364a]">Recover recent bounce notices</h3>
+                <p className="mt-1 max-w-2xl text-[11px] leading-5 text-[#687484]">Rescan message headers from the last 14 days (up to 500 messages). Message content is fetched only for Gmail delivery-status reports. This does not change the regular sync checkpoint.</p>
+              </div>
+              <Button
+                variant="outline"
+                testId="button-rescan-recent-gmail"
+                disabled={recentGmailRescan.isPending}
+                onClick={rescanRecentGmail}
+              >
+                {recentGmailRescan.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Scanning recent messages…</> : 'Rescan last 14 days'}
+              </Button>
+            </div>
+            {recentRescanError && <p data-testid="text-gmail-rescan-error" role="alert" className="mt-3 rounded border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{recentRescanError}</p>}
+            {recentRescanResult && <div data-testid="panel-gmail-rescan-result" role="status" className="mt-3 rounded-md bg-[#f7f9fb] p-3">
+              <p className="text-[11px] leading-5 text-[#596777]">Checked {recentRescanResult.messagesChecked.toLocaleString()} messages from the last {recentRescanResult.windowDays} days ({recentRescanResult.maxMessages.toLocaleString()} message limit); {recentRescanResult.candidateMessages.toLocaleString()} delivery-status reports found.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {([
+                  ['Imported', recentRescanResult.imported],
+                  ['Duplicates', recentRescanResult.duplicates],
+                  ['Unmatched', recentRescanResult.unmatched],
+                  ['Ignored', recentRescanResult.ignored],
+                ] as const).map(([label, count]) => <div key={label} className="rounded border border-[#e4e8ed] bg-white px-3 py-2">
+                  <div className="mono text-[9px] uppercase tracking-[.12em] text-[#84909d]">{label}</div>
+                  <div className="mt-1 text-[16px] font-semibold text-[#26364a]">{count.toLocaleString()}</div>
+                </div>)}
+              </div>
+              {recentRescanResult.warningCount > 0 && <p className="mt-2 text-[10px] leading-4 text-[#895b2f]">{recentRescanResult.warningCount.toLocaleString()} message or report warning(s) occurred during the scan.</p>}
+            </div>}
+          </div>}
           <p className="mt-3 text-[11px] leading-5 text-[#788392]">Only matched DSNs become bounce evidence. No bounce is not proof of delivery, inbox placement, or reading. Disconnecting removes Mailflow’s refresh token and asks Google to revoke it.</p>
         </section>
       </TabsContent>

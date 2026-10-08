@@ -572,6 +572,27 @@ export interface GmailOAuthStart {
   authorizationUrl: string;
 }
 
+export interface GmailRecentRescanResult {
+  /** @minimum 1 */
+  windowDays: number;
+  /** @minimum 1 */
+  maxMessages: number;
+  /** @minimum 0 */
+  messagesChecked: number;
+  /** @minimum 0 */
+  candidateMessages: number;
+  /** @minimum 0 */
+  imported: number;
+  /** @minimum 0 */
+  duplicates: number;
+  /** @minimum 0 */
+  unmatched: number;
+  /** @minimum 0 */
+  ignored: number;
+  /** @minimum 0 */
+  warningCount: number;
+}
+
 /**
  * Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.
  */

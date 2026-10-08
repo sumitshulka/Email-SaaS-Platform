@@ -834,6 +834,40 @@ export const DisconnectGmailMailboxResponse = zod.void()
 
 
 /**
+ * @summary Rescan a bounded recent Gmail window for delivery-status reports
+ */
+
+
+export const rescanRecentGmailMessagesResponseMessagesCheckedMin = 0;
+
+export const rescanRecentGmailMessagesResponseCandidateMessagesMin = 0;
+
+export const rescanRecentGmailMessagesResponseImportedMin = 0;
+
+export const rescanRecentGmailMessagesResponseDuplicatesMin = 0;
+
+export const rescanRecentGmailMessagesResponseUnmatchedMin = 0;
+
+export const rescanRecentGmailMessagesResponseIgnoredMin = 0;
+
+export const rescanRecentGmailMessagesResponseWarningCountMin = 0;
+
+
+
+export const RescanRecentGmailMessagesResponse = zod.object({
+  "windowDays": zod.number().int().min(1),
+  "maxMessages": zod.number().int().min(1),
+  "messagesChecked": zod.number().int().min(rescanRecentGmailMessagesResponseMessagesCheckedMin),
+  "candidateMessages": zod.number().int().min(rescanRecentGmailMessagesResponseCandidateMessagesMin),
+  "imported": zod.number().int().min(rescanRecentGmailMessagesResponseImportedMin),
+  "duplicates": zod.number().int().min(rescanRecentGmailMessagesResponseDuplicatesMin),
+  "unmatched": zod.number().int().min(rescanRecentGmailMessagesResponseUnmatchedMin),
+  "ignored": zod.number().int().min(rescanRecentGmailMessagesResponseIgnoredMin),
+  "warningCount": zod.number().int().min(rescanRecentGmailMessagesResponseWarningCountMin)
+})
+
+
+/**
  * @summary Start least-privilege Gmail OAuth consent for the tenant mailbox
  */
 export const StartGmailMailboxConnectionResponse = zod.object({

@@ -621,6 +621,48 @@ paths:
       responses:
         "204":
           description: Mailbox disconnected and stored refresh token removed
+  /sending/gmail/rescan:
+    post:
+      operationId: rescanRecentGmailMessages
+      tags: [sending]
+      summary: Rescan a bounded recent Gmail window for delivery-status reports
+      responses:
+        "200":
+          description: Scan counts for the bounded recent-message window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailRecentRescanResult"
+        "401":
+          description: Gmail authorization expired and must be renewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No Gmail mailbox is connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A regular sync or another recent scan is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: The recent-message scan exceeded its safety limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Gmail could not complete the recent-message scan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /sending/gmail/connect:
     post:
       operationId: startGmailMailboxConnection
@@ -3522,6 +3564,19 @@ components:
       properties:
         authorizationUrl: { type: string, format: uri }
       required: [authorizationUrl]
+    GmailRecentRescanResult:
+      type: object
+      properties:
+        windowDays: { type: integer, minimum: 1 }
+        maxMessages: { type: integer, minimum: 1 }
+        messagesChecked: { type: integer, minimum: 0 }
+        candidateMessages: { type: integer, minimum: 0 }
+        imported: { type: integer, minimum: 0 }
+        duplicates: { type: integer, minimum: 0 }
+        unmatched: { type: integer, minimum: 0 }
+        ignored: { type: integer, minimum: 0 }
+        warningCount: { type: integer, minimum: 0 }
+      required: [windowDays, maxMessages, messagesChecked, candidateMessages, imported, duplicates, unmatched, ignored, warningCount]
     Microsoft365TraceConnectInput:
       type: object
       description: Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.
