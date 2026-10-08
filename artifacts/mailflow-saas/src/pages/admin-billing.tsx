@@ -22,6 +22,7 @@ const gatewayLabels: Record<GatewayEnvironment, string> = {
 };
 
 type PackageDraft = {
+  packageType: 'primary' | 'addon';
   name: string;
   description: string;
   amount: string;
@@ -31,12 +32,14 @@ type PackageDraft = {
   contactLimit: string;
   emailAccountLimit: string;
   researchAllowance: string;
+  aiEmailAssistAllowance: string;
+  additionalMailboxCount: string;
   preferred: boolean;
   active: boolean;
 };
 
 const blankDraft: PackageDraft = {
-  name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', preferred: false, active: true,
+  packageType: 'primary', name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', aiEmailAssistAllowance: '0', additionalMailboxCount: '0', preferred: false, active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -74,6 +77,11 @@ function inputMinor(amount: string, currency: string) {
   } catch {
     return 0;
   }
+}
+
+function isIntegerWithin(value: string, min: number, max: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max;
 }
 
 export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing' | 'packages' } = {}) {
@@ -129,8 +137,22 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
   const [editing, setEditing] = useState<SubscriptionPackage | null>(null);
   const [packageFormOpen, setPackageFormOpen] = useState(false);
   const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null);
-  const hasOtherFreePackage = packages.some(pkg => pkg.amountMinor === 0 && pkg.id !== editing?.id);
+  const hasOtherFreePackage = draft.packageType === 'primary' && packages.some(pkg => pkg.packageType === 'primary' && pkg.amountMinor === 0 && pkg.id !== editing?.id);
   const busy = createPackage.isPending || updatePackage.isPending;
+  const packageFormValid =
+    draft.name.trim().length >= 2 &&
+    /^[A-Z]{3}$/.test(draft.currency) &&
+    (draft.free || inputMinor(draft.amount, draft.currency) >= 1) &&
+    isIntegerWithin(draft.researchAllowance, 0, 10000) &&
+    (draft.packageType === 'primary'
+      ? isIntegerWithin(draft.periodDays, 1, 3660) &&
+        isIntegerWithin(draft.contactLimit, 0, 10000000) &&
+        isIntegerWithin(draft.emailAccountLimit, 0, 100)
+      : isIntegerWithin(draft.aiEmailAssistAllowance, 0, 10000) &&
+        isIntegerWithin(draft.additionalMailboxCount, 0, 100) &&
+        (Number(draft.researchAllowance) > 0 ||
+          Number(draft.aiEmailAssistAllowance) > 0 ||
+          Number(draft.additionalMailboxCount) > 0));
 
   const announce = (text: string) => setNotice({ text });
   const refreshPackages = () => {
@@ -141,12 +163,16 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     setEditing(pkg);
     setPackageFormOpen(true);
     setDraft({
+      packageType: pkg.packageType,
       name: pkg.name, description: pkg.description,
       amount: pkg.amountMinor === 0 ? '0' : (pkg.amountMinor / (10 ** (new Intl.NumberFormat(undefined, { style: 'currency', currency: pkg.currency }).resolvedOptions().maximumFractionDigits ?? 2))).toString(),
       free: pkg.amountMinor === 0,
       currency: pkg.currency, periodDays: String(pkg.periodDays),
       contactLimit: String(pkg.contactLimit), emailAccountLimit: String(pkg.emailAccountLimit),
-      researchAllowance: String(pkg.researchAllowance), preferred: pkg.preferred, active: pkg.active,
+      researchAllowance: String(pkg.researchAllowance),
+      aiEmailAssistAllowance: String(pkg.aiEmailAssistAllowance),
+      additionalMailboxCount: String(pkg.additionalMailboxCount),
+      preferred: pkg.preferred, active: pkg.active,
     });
     setNotice(null);
   };
@@ -154,16 +180,23 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
   const submitPackage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const currency = draft.currency.trim().toUpperCase();
+    const isAddon = draft.packageType === 'addon';
     const payload: SubscriptionPackageInput = {
+      packageType: draft.packageType,
       name: draft.name.trim(), description: draft.description.trim(),
       amountMinor: draft.free ? 0 : inputMinor(draft.amount, currency), currency,
-      periodDays: Number(draft.periodDays), contactLimit: Number(draft.contactLimit), emailAccountLimit: Number(draft.emailAccountLimit),
+      periodDays: isAddon ? 0 : Number(draft.periodDays),
+      contactLimit: isAddon ? 0 : Number(draft.contactLimit),
+      emailAccountLimit: isAddon ? 0 : Number(draft.emailAccountLimit),
       researchAllowance: Number(draft.researchAllowance),
-      preferred: draft.preferred, active: draft.active,
+      aiEmailAssistAllowance: isAddon ? Number(draft.aiEmailAssistAllowance) : 0,
+      additionalMailboxCount: isAddon ? Number(draft.additionalMailboxCount) : 0,
+      preferred: !isAddon && draft.preferred, active: draft.active,
     };
     const isFree = draft.free;
     if (editing) {
-      updatePackage.mutate({ packageId: editing.id, data: payload }, {
+      const { packageType: _immutablePackageType, ...updatePayload } = payload;
+      updatePackage.mutate({ packageId: editing.id, data: updatePayload }, {
         onSuccess: () => { void refreshPackages(); announce(isFree ? 'Free package saved. It will not use Razorpay Checkout.' : 'Package changes saved.'); resetPackageForm(); },
       });
     } else {
@@ -323,7 +356,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
               className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"
             >
               <option value="">Choose a package</option>
-              {packages.map(pkg => <option key={pkg.id} value={pkg.id}>
+              {packages.filter(pkg => pkg.packageType === 'primary').map(pkg => <option key={pkg.id} value={pkg.id}>
                 {pkg.name} · {pkg.periodDays} days · {formatMinor(pkg.amountMinor, pkg.currency)}{pkg.active ? '' : ' · hidden'}
               </option>)}
             </select>
@@ -444,27 +477,50 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
             Platform settings apply the same independent allowance to each SMTP mailbox for every package: {sendingLimits.emailsPerHourPerSmtp.toLocaleString()} campaign attempts per rolling hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per rolling 24 hours. Package SMTP slots determine how many mailboxes customers can configure; retries count toward the limits.
           </div>}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <label className="block min-w-0 space-y-1.5">
+              <span className="text-[12px] font-semibold text-[#35445a]">Package type</span>
+              <select data-testid="select-package-type" disabled={Boolean(editing)} value={draft.packageType} onChange={event => {
+                const packageType = event.target.value as PackageDraft['packageType'];
+                setDraft(d => ({
+                  ...d,
+                  packageType,
+                  periodDays: packageType === 'addon' ? '0' : d.periodDays === '0' ? '30' : d.periodDays,
+                  contactLimit: packageType === 'addon' ? '0' : d.contactLimit === '0' ? '5000' : d.contactLimit,
+                  emailAccountLimit: packageType === 'addon' ? '0' : d.emailAccountLimit === '0' ? '1' : d.emailAccountLimit,
+                  preferred: packageType === 'primary' && d.preferred,
+                }));
+              }} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] disabled:bg-[#f1f4f6]">
+                <option value="primary">Primary plan</option><option value="addon">Add-on</option>
+              </select>
+            </label>
             <Field label="Package name" value={draft.name} onChange={name => setDraft(d => ({ ...d, name }))} testId="input-package-name" placeholder="e.g. Team monthly"/>
              <Field label="Price" value={draft.amount} onChange={amount => setDraft(d => ({ ...d, amount }))} testId="input-package-amount" type="number" step="any" min={0} placeholder="0.00" disabled={draft.free} hint={draft.free ? 'Free packages activate without Razorpay Checkout.' : undefined}/>
             <Field label="Currency code" value={draft.currency} onChange={currency => setDraft(d => ({ ...d, currency: currency.toUpperCase() }))} testId="input-package-currency" placeholder="INR" hint="Three-letter ISO 4217 code."/>
-             <Field label="Term length (days)" value={draft.periodDays} onChange={periodDays => setDraft(d => ({ ...d, periodDays }))} testId="input-package-period-days" type="number" step="1" placeholder="30"/>
-            <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
-            <Field label="SMTP sender accounts" value={draft.emailAccountLimit} onChange={emailAccountLimit => setDraft(d => ({ ...d, emailAccountLimit }))} testId="input-package-email-account-limit" type="number" step="1" min={0} max={100} hint="Maximum SMTP accounts users can set up for campaign sending."/>
-            <Field label="Company research runs per term" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Each queued run, including retries, is used. Resets in a new term; unused runs expire at term end."/>
+            {draft.packageType === 'primary' && <>
+              <Field label="Term length (days)" value={draft.periodDays} onChange={periodDays => setDraft(d => ({ ...d, periodDays }))} testId="input-package-period-days" type="number" step="1" min={1} placeholder="30"/>
+              <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
+              <Field label="SMTP sender accounts" value={draft.emailAccountLimit} onChange={emailAccountLimit => setDraft(d => ({ ...d, emailAccountLimit }))} testId="input-package-email-account-limit" type="number" step="1" min={0} max={100} hint="Maximum base SMTP senders; eligible add-ons add mailbox slots."/>
+              <Field label="Company research runs per term" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Each queued run, including retries, is used. Resets in a new term; unused runs expire at term end."/>
+            </>}
+            {draft.packageType === 'addon' && <>
+              <Field label="Company research credits" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Unused credits pause when the primary plan ends and resume on a later paid plan."/>
+              <Field label="AI Email Assist credits" value={draft.aiEmailAssistAllowance} onChange={aiEmailAssistAllowance => setDraft(d => ({ ...d, aiEmailAssistAllowance }))} testId="input-package-ai-email-assist-allowance" type="number" step="1" min={0} max={10000} hint="One credit is used for each successfully generated or revised draft."/>
+              <Field label="Additional SMTP mailboxes" value={draft.additionalMailboxCount} onChange={additionalMailboxCount => setDraft(d => ({ ...d, additionalMailboxCount }))} testId="input-package-additional-mailboxes" type="number" step="1" min={0} max={100} hint="Adds sender slots while a paid primary plan is active; configured accounts are not removed when the plan expires."/>
+            </>}
           </div>
-          <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>Free package · 0 price, no Razorpay order</label>
-          {hasOtherFreePackage && <p className="-mt-2 text-[11px] text-[#7b8793]">A free package already exists. Edit it or change its price before creating another.</p>}
-          <div className="space-y-1">
+          <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount }))} className="h-4 w-4 accent-[#174f99]"/>{draft.packageType === 'addon' ? 'Free add-on · available to paid-primary customers' : 'Free package · 0 price, no Razorpay order'}</label>
+          {hasOtherFreePackage && <p className="-mt-2 text-[11px] text-[#7b8793]">A free primary package already exists. Edit it or change its price before creating another.</p>}
+          {draft.packageType === 'primary' && <div className="space-y-1">
             <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]">
               <input data-testid="input-package-preferred" type="checkbox" checked={draft.preferred} onChange={event => setDraft(d => ({ ...d, preferred: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>
               Preferred package
             </label>
             <p className="text-[11px] text-[#718192]">Only one package can be preferred. Selecting this automatically moves the badge from the current package.</p>
-          </div>
+          </div>}
           <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#35445a]">Description</span><textarea data-testid="input-package-description" value={draft.description} onChange={event => setDraft(d => ({ ...d, description: event.target.value }))} rows={3} maxLength={2000} placeholder="What this package includes" className="w-full resize-y rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 py-2.5 text-[13px] outline-none focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"/></label>
           <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]"><input data-testid="input-package-active" type="checkbox" checked={draft.active} onChange={event => setDraft(d => ({ ...d, active: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>Available to customers</label>
           {(createPackage.isError || updatePackage.isError) && <p role="alert" data-testid="status-package-form-error" className="text-[12px] text-[#a84926]">{errorText(createPackage.error || updatePackage.error)}</p>}
-            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || draft.name.trim().length < 2 || !draft.currency.match(/^[A-Z]{3}$/) || (!draft.free && inputMinor(draft.amount, draft.currency) < 1) || !Number.isInteger(Number(draft.periodDays)) || Number(draft.periodDays) < 1 || !Number.isInteger(Number(draft.contactLimit)) || Number(draft.contactLimit) < 0 || Number(draft.contactLimit) > 10000000 || !Number.isInteger(Number(draft.emailAccountLimit)) || Number(draft.emailAccountLimit) < 0 || Number(draft.emailAccountLimit) > 100 || !Number.isInteger(Number(draft.researchAllowance)) || Number(draft.researchAllowance) < 0 || Number(draft.researchAllowance) > 10000} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
+            <button data-testid="button-submit-subscription-package" type="submit" disabled={busy || !packageFormValid} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-50">
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}{busy ? 'Saving package' : editing ? 'Save changes' : 'Create package'}
           </button>
         </form>
@@ -474,9 +530,21 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         <Panel className="overflow-hidden">
           <div className="hidden grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] gap-4 border-b border-[#e7ecf0] bg-[#f7f9fa] px-5 py-3 mono text-[9px] uppercase tracking-[.15em] text-[#83909d] md:grid"><span>Package</span><span>Rate & term</span><span>Visibility</span><span>Last updated</span><span className="text-right">Actions</span></div>
           <div className="divide-y divide-[#edf0f2]">{packages.map(pkg => <article key={pkg.id} data-testid={`row-subscription-package-${pkg.id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(180px,1.4fr)_minmax(170px,1.2fr)_110px_100px_115px] md:items-center md:gap-4">
-            <div><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
-             <div data-testid={`text-package-price-${pkg.id}`}><div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div><div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div><div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div><div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research run{pkg.researchAllowance === 1 ? '' : 's'} per term</div>{sendingLimits && <div data-testid={`text-admin-package-send-limits-${pkg.id}`} className="mt-1 text-[10px] leading-4 text-[#597086]">{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}/hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()}/24h per SMTP mailbox</div>}</div>
-            <div className="flex flex-wrap items-center gap-1.5">{pkg.preferred && <span data-testid={`badge-preferred-admin-${pkg.id}`} className="inline-flex rounded-full border border-[#d4e2ef] bg-[#eff5fa] px-2.5 py-1 text-[10px] font-semibold text-[#315c82]">Preferred</span>}<span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
+            <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-[13px] font-semibold text-[#26374a]">{pkg.name}</h3><span className="rounded-full bg-[#f0f4f8] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#536a80]">{pkg.packageType === 'primary' ? 'Primary' : 'Add-on'}</span></div><p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#758394]">{pkg.description || 'No description provided.'}</p></div>
+            <div data-testid={`text-package-price-${pkg.id}`}>
+              <div className="text-[14px] font-bold text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</div>
+              <div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.packageType === 'addon' ? (pkg.amountMinor === 0 ? 'Free add-on' : `One-time · ${pkg.currency}`) : pkg.amountMinor === 0 ? `Free access · ${pkg.periodDays} days` : `per ${pkg.periodDays} days · ${pkg.currency}`}</div>
+              {pkg.packageType === 'primary' ? <>
+                <div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} base SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div>
+                <div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research run{pkg.researchAllowance === 1 ? '' : 's'} per term</div>
+                {sendingLimits && <div data-testid={`text-admin-package-send-limits-${pkg.id}`} className="mt-1 text-[10px] leading-4 text-[#597086]">{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}/hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()}/24h per SMTP mailbox</div>}
+              </> : <>
+                <div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research credit{pkg.researchAllowance === 1 ? '' : 's'}</div>
+                <div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.aiEmailAssistAllowance} AI Email Assist credit{pkg.aiEmailAssistAllowance === 1 ? '' : 's'}</div>
+                <div className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.additionalMailboxCount} additional SMTP mailbox slot{pkg.additionalMailboxCount === 1 ? '' : 's'}</div>
+              </>}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">{pkg.packageType === 'primary' && pkg.preferred && <span data-testid={`badge-preferred-admin-${pkg.id}`} className="inline-flex rounded-full border border-[#d4e2ef] bg-[#eff5fa] px-2.5 py-1 text-[10px] font-semibold text-[#315c82]">Preferred</span>}<span data-testid={`status-package-${pkg.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${pkg.active ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f0f2f4] text-[#717e8a]'}`}>{pkg.active ? 'Available' : 'Hidden'}</span></div>
             <div className="text-[11px] text-[#788695] md:text-[10px]">{new Date(pkg.updatedAt).toLocaleDateString()}</div>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
               <button data-testid={`button-edit-package-${pkg.id}`} onClick={() => openEdit(pkg)} className="inline-flex h-8 items-center gap-1.5 rounded border border-[#dce3e8] px-2.5 text-[10px] font-semibold text-[#415970] hover:bg-[#f7f9fa]"><PencilLine className="h-3.5 w-3.5"/>Edit</button>

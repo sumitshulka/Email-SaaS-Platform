@@ -23,7 +23,7 @@ export interface SubscriptionPackageUpdateInput {
   /** @pattern ^[A-Z]{3}$ */
   currency?: string;
   /**
-     * @minimum 1
+     * @minimum 0
      * @maximum 3660
      */
   periodDays?: number;
@@ -43,6 +43,16 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 10000
      */
   researchAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  aiEmailAssistAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  additionalMailboxCount?: number;
   preferred?: boolean;
   active?: boolean;
 }

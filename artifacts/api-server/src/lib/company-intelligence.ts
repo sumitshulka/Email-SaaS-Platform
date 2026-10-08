@@ -1,5 +1,5 @@
-import { and, desc, eq, gt, gte, inArray, lt, lte, sql } from "drizzle-orm";
-import { auditLogsTable, companyIntelligenceTable, companyResearchJobsTable, db, globalCompaniesTable, subscriptionPackagesTable, userSubscriptionsTable, type CompanyIntelligence, type CompanyResearchJob } from "@workspace/db";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { addOnEntitlementsTable, auditLogsTable, companyIntelligenceTable, companyResearchJobsTable, db, globalCompaniesTable, paymentsTable, subscriptionPackagesTable, userSubscriptionsTable, usersTable, type CompanyIntelligence, type CompanyResearchJob } from "@workspace/db";
 import { getAIProviderConfigurationStatus, getStoredAIProviderApiKey } from "./ai-provider-configuration";
 import type { AIProviderId } from "./ai-provider-client";
 import { intelligenceProfileSchema, researchFreshness, validateIntelligence } from "./company-intelligence-schema";
@@ -24,7 +24,9 @@ export function presentIntelligenceVersion(row: VersionMetadata, full = true) {
 
 export async function getCompanyResearchAllowance(userId: string, now = new Date()) {
   const [active] = await db.select({
-    limit: subscriptionPackagesTable.researchAllowance,
+    packageType: subscriptionPackagesTable.packageType,
+    amountMinor: subscriptionPackagesTable.amountMinor,
+    baseLimit: subscriptionPackagesTable.researchAllowance,
     startsAt: userSubscriptionsTable.startsAt,
     endsAt: userSubscriptionsTable.endsAt,
   }).from(userSubscriptionsTable).innerJoin(
@@ -44,11 +46,30 @@ export async function getCompanyResearchAllowance(userId: string, now = new Date
     gte(companyResearchJobsTable.createdAt, active.startsAt),
     lt(companyResearchJobsTable.createdAt, active.endsAt),
   ));
-  const used = Number(usage?.used ?? 0);
+  const [addOn] = await db.select({
+    limit: sql<number>`coalesce(sum(${addOnEntitlementsTable.researchAllowance}), 0)::int`,
+    used: sql<number>`coalesce(sum(${addOnEntitlementsTable.researchUsed}), 0)::int`,
+  }).from(addOnEntitlementsTable).leftJoin(
+    paymentsTable,
+    eq(addOnEntitlementsTable.paymentId, paymentsTable.id),
+  ).where(and(
+    eq(addOnEntitlementsTable.userId, userId),
+    or(
+      isNull(addOnEntitlementsTable.paymentId),
+      eq(paymentsTable.status, "captured"),
+    ),
+  ));
+  const baseUsed = Math.min(Number(usage?.used ?? 0), active.baseLimit);
+  const isPaidPrimary =
+    active.packageType === "primary" && active.amountMinor > 0;
+  const addOnLimit = isPaidPrimary ? Number(addOn?.limit ?? 0) : 0;
+  const addOnUsed = isPaidPrimary ? Number(addOn?.used ?? 0) : 0;
+  const limit = active.baseLimit + addOnLimit;
+  const used = baseUsed + addOnUsed;
   return {
-    limit: active.limit,
+    limit,
     used,
-    remaining: Math.max(0, active.limit - used),
+    remaining: Math.max(0, limit - used),
     resetsAt: active.endsAt.toISOString(),
   };
 }
@@ -109,29 +130,64 @@ export async function enqueueCompanyResearch(input: {
     if (latest && researchFreshness(latest.researchedAt, input.settings.freshDays, input.settings.agingDays) === "fresh" && !input.overrideFresh) return { kind: "fresh" as const };
     if (input.tenantUserId) {
       const now = new Date();
+      const [lockedUser] = await tx.select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, input.tenantUserId))
+        .limit(1)
+        .for("update");
+      if (!lockedUser) return { kind: "no_allowance" as const };
       const [subscription] = await tx.select({
-        id: userSubscriptionsTable.id,
-        packageId: userSubscriptionsTable.packageId,
-        startsAt: userSubscriptionsTable.startsAt,
-        endsAt: userSubscriptionsTable.endsAt,
-      }).from(userSubscriptionsTable).where(and(
+        subscription: userSubscriptionsTable,
+        pkg: subscriptionPackagesTable,
+      }).from(userSubscriptionsTable).innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      ).where(and(
         eq(userSubscriptionsTable.userId, input.tenantUserId),
         eq(userSubscriptionsTable.status, "active"),
         lte(userSubscriptionsTable.startsAt, now),
         gt(userSubscriptionsTable.endsAt, now),
       )).orderBy(desc(userSubscriptionsTable.endsAt)).limit(1).for("update");
       if (!subscription) return { kind: "no_allowance" as const };
-      const [pkg] = await tx.select({ researchAllowance: subscriptionPackagesTable.researchAllowance })
-        .from(subscriptionPackagesTable).where(eq(subscriptionPackagesTable.id, subscription.packageId)).limit(1);
-      if (!pkg || pkg.researchAllowance <= 0) return { kind: "no_allowance" as const };
       const [usage] = await tx.select({
         used: sql<number>`count(*)::int`,
       }).from(companyResearchJobsTable).where(and(
         eq(companyResearchJobsTable.requestedBy, input.tenantUserId),
-        gte(companyResearchJobsTable.createdAt, subscription.startsAt),
-        lt(companyResearchJobsTable.createdAt, subscription.endsAt),
+        gte(companyResearchJobsTable.createdAt, subscription.subscription.startsAt),
+        lt(companyResearchJobsTable.createdAt, subscription.subscription.endsAt),
       ));
-      if (Number(usage?.used ?? 0) >= pkg.researchAllowance) return { kind: "allowance_exhausted" as const };
+      if (Number(usage?.used ?? 0) >= subscription.pkg.researchAllowance) {
+        if (
+          subscription.pkg.packageType !== "primary" ||
+          subscription.pkg.amountMinor <= 0
+        ) {
+          return { kind: "allowance_exhausted" as const };
+        }
+        const entitlementRows = await tx.select().from(addOnEntitlementsTable)
+          .where(and(
+            eq(addOnEntitlementsTable.userId, input.tenantUserId),
+            gt(addOnEntitlementsTable.researchAllowance, addOnEntitlementsTable.researchUsed),
+          ))
+          .orderBy(asc(addOnEntitlementsTable.createdAt))
+          .for("update");
+        const paymentIds = entitlementRows
+          .map(row => row.paymentId)
+          .filter((id): id is string => id !== null);
+        const capturedPayments = paymentIds.length
+          ? await tx.select({ id: paymentsTable.id }).from(paymentsTable).where(and(
+              inArray(paymentsTable.id, paymentIds),
+              eq(paymentsTable.status, "captured"),
+            ))
+          : [];
+        const capturedIds = new Set(capturedPayments.map(row => row.id));
+        const available = entitlementRows.find(row =>
+          row.paymentId === null || capturedIds.has(row.paymentId),
+        );
+        if (!available) return { kind: "allowance_exhausted" as const };
+        await tx.update(addOnEntitlementsTable).set({
+          researchUsed: sql`${addOnEntitlementsTable.researchUsed} + 1`,
+        }).where(eq(addOnEntitlementsTable.id, available.id));
+      }
     }
     const [job] = await tx.insert(companyResearchJobsTable).values({
       globalCompanyId: company.id, requestedBy: input.userId, status: "queued", stage: "queued", depth: input.depth,

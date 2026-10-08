@@ -220,6 +220,26 @@ async function installFixtures(context, {
       await route.fulfill({ status: 200, json: { subscription: subscription ?? null } });
       return;
     }
+    if (pathname === '/api/subscriptions/add-ons' && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          eligible: Boolean(subscription?.status === 'active' && subscription.package?.amountMinor > 0),
+          eligibilityReason: subscription?.status === 'active' && subscription.package?.amountMinor > 0
+            ? null
+            : 'paid_primary_required',
+          primaryEndsAt: subscription?.endsAt ?? null,
+          balances: {
+            research: { total: 0, used: 0, remaining: 0 },
+            emailAssist: { total: 0, used: 0, remaining: 0 },
+            mailboxes: { baseLimit: 1, additionalSlots: 0, totalLimit: 1, used: 0, remaining: 1, active: Boolean(subscription?.status === 'active' && subscription.package?.amountMinor > 0) },
+          },
+          packages: [],
+          claimedFreePackageIds: [],
+        },
+      });
+      return;
+    }
     if (pathname === '/api/sending/accounts' && method === 'GET') {
       await route.fulfill({
         status: 200,

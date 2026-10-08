@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './activateFreeAddOnInput';
 export * from './activateFreeSubscriptionInput';
+export * from './addOnEntitlementReference';
 export * from './adminDashboard';
 export * from './adminDashboardCurrencyRevenue';
 export * from './adminDashboardPackageActivity';
@@ -53,6 +55,9 @@ export * from './campaignAudienceSummary';
 export * from './campaignDashboard';
 export * from './campaignDeliveryReport';
 export * from './campaignDeliveryReportSummary';
+export * from './campaignEmailAssistDraft';
+export * from './campaignEmailAssistInput';
+export * from './campaignEmailAssistResponse';
 export * from './campaignInput';
 export * from './campaignPacing';
 export * from './campaignPreviewInput';
@@ -164,6 +169,7 @@ export * from './deliveryReportImportResult';
 export * from './deliveryReportInput';
 export * from './deliveryReportInputFormat';
 export * from './forgotPasswordInput';
+export * from './freeAddOnActivation';
 export * from './freeSubscriptionActivation';
 export * from './getCampaignDeliveryReportParams';
 export * from './getCampaignRecipientSummaryParams';
@@ -257,11 +263,18 @@ export * from './searchCompaniesParams';
 export * from './searchGlobalCompaniesParams';
 export * from './setActiveRazorpayEnvironmentInput';
 export * from './smtpSendingLimits';
+export * from './subscriptionAddOnBalances';
+export * from './subscriptionAddOnMailboxMetric';
+export * from './subscriptionAddOnMetric';
+export * from './subscriptionAddOnsDashboard';
+export * from './subscriptionAddOnsDashboardEligibilityReason';
 export * from './subscriptionGiftInput';
 export * from './subscriptionOrderCreated';
 export * from './subscriptionPackage';
 export * from './subscriptionPackageInput';
+export * from './subscriptionPackageInputPackageType';
 export * from './subscriptionPackageList';
+export * from './subscriptionPackagePackageType';
 export * from './subscriptionPackageUpdateInput';
 export * from './subscriptionPaymentAvailability';
 export * from './subscriptionSummary';

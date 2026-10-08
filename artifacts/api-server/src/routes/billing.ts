@@ -6,6 +6,7 @@ import {
   desc,
   eq,
   gte,
+  gt,
   ilike,
   inArray,
   isNotNull,
@@ -20,6 +21,8 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import {
   ActivateFreeSubscriptionBody,
   ActivateFreeSubscriptionResponse,
+  ActivateFreeAddOnBody,
+  ActivateFreeAddOnResponse,
   CreateSubscriptionOrderBody,
   CreateSubscriptionPackageBody,
   CreateSubscriptionPackageResponse,
@@ -28,6 +31,7 @@ import {
   GetCurrentSubscriptionResponse,
   GetOnlinePaymentSettingsResponse,
   GetRazorpaySettingsResponse,
+  GetSubscriptionAddOnsResponse,
   GetSubscriptionPaymentAvailabilityResponse,
   ListAdminSubscriptionPackagesResponse,
   ListAvailableSubscriptionPackagesResponse,
@@ -49,6 +53,7 @@ import {
   VerifyRazorpayPaymentResponse,
 } from "@workspace/api-zod";
 import {
+  addOnEntitlementsTable,
   db,
   emailCampaignsTable,
   paymentsTable,
@@ -68,6 +73,7 @@ import {
   serializePackage,
 } from "../lib/billing";
 import { writeAuditLog } from "../lib/audit";
+import { getSubscriptionAddOnsDashboard } from "../lib/add-on-entitlements";
 import { encryptSecret } from "../lib/security";
 import {
   createRazorpayOrder,
@@ -530,13 +536,53 @@ async function hasOtherFreePackage(exceptPackageId?: string): Promise<boolean> {
   const freePackages = await db
     .select({ id: subscriptionPackagesTable.id })
     .from(subscriptionPackagesTable)
-    .where(eq(subscriptionPackagesTable.amountMinor, 0));
+    .where(
+      and(
+        eq(subscriptionPackagesTable.amountMinor, 0),
+        eq(subscriptionPackagesTable.packageType, "primary"),
+      ),
+    );
   return freePackages.some(({ id }) => id !== exceptPackageId);
+}
+
+function packageConfigurationError(input: {
+  packageType: "primary" | "addon";
+  periodDays: number;
+  contactLimit: number;
+  emailAccountLimit: number;
+  researchAllowance: number;
+  aiEmailAssistAllowance: number;
+  additionalMailboxCount: number;
+  preferred: boolean;
+}): string | null {
+  if (input.packageType === "primary") {
+    if (input.periodDays < 1) return "A primary package must have a term of at least one day.";
+    if (input.aiEmailAssistAllowance > 0 || input.additionalMailboxCount > 0) {
+      return "AI email assist and additional mailbox allowances belong to add-on packages.";
+    }
+    return null;
+  }
+  if (
+    input.periodDays !== 0 ||
+    input.contactLimit !== 0 ||
+    input.emailAccountLimit !== 0 ||
+    input.preferred
+  ) {
+    return "Add-on packages do not set a term, contact limit, primary SMTP limit, or preferred badge.";
+  }
+  if (
+    input.researchAllowance === 0 &&
+    input.aiEmailAssistAllowance === 0 &&
+    input.additionalMailboxCount === 0
+  ) {
+    return "An add-on package must include at least one allowance.";
+  }
+  return null;
 }
 
 function respondFreePackageConflict(res: Response): void {
   res.status(409).json({
-    error: "Only one zero-price package can exist. Edit the existing free package or change its price.",
+    error: "Only one zero-price primary package can exist. Edit the existing free primary package or change its price.",
     code: "FREE_PACKAGE_ALREADY_EXISTS",
   });
 }
@@ -1043,8 +1089,27 @@ router.post(
       invalidInput(res, "Enter a valid package name, price, currency, and term.");
       return;
     }
+    const packageType = parsed.data.packageType ?? "primary";
+    const normalized = {
+      ...parsed.data,
+      packageType,
+      periodDays: packageType === "addon" ? 0 : parsed.data.periodDays,
+      contactLimit: packageType === "addon" ? 0 : parsed.data.contactLimit,
+      emailAccountLimit:
+        packageType === "addon" ? 0 : (parsed.data.emailAccountLimit ?? 0),
+      researchAllowance: parsed.data.researchAllowance ?? 0,
+      aiEmailAssistAllowance: parsed.data.aiEmailAssistAllowance ?? 0,
+      additionalMailboxCount: parsed.data.additionalMailboxCount ?? 0,
+      preferred: packageType === "primary" && (parsed.data.preferred ?? false),
+    };
+    const configurationError = packageConfigurationError(normalized);
+    if (configurationError) {
+      invalidInput(res, configurationError);
+      return;
+    }
     if (
-      parsed.data.amountMinor === 0 &&
+      packageType === "primary" &&
+      normalized.amountMinor === 0 &&
       (await hasOtherFreePackage())
     ) {
       respondFreePackageConflict(res);
@@ -1053,7 +1118,7 @@ router.post(
     let created: SubscriptionPackageRow | undefined;
     try {
       created = await db.transaction(async (tx) => {
-        if (parsed.data.preferred) {
+        if (normalized.preferred) {
           await tx
             .update(subscriptionPackagesTable)
             .set({
@@ -1061,12 +1126,17 @@ router.post(
               updatedBy: req.authUser!.id,
               updatedAt: new Date(),
             })
-            .where(eq(subscriptionPackagesTable.preferred, true));
+            .where(
+              and(
+                eq(subscriptionPackagesTable.preferred, true),
+                eq(subscriptionPackagesTable.packageType, "primary"),
+              ),
+            );
         }
         const [inserted] = await tx
           .insert(subscriptionPackagesTable)
           .values({
-            ...parsed.data,
+            ...normalized,
             createdBy: req.authUser!.id,
             updatedBy: req.authUser!.id,
           })
@@ -1093,6 +1163,7 @@ router.post(
       ipAddress: req.ip,
       metadata: {
         name: created!.name,
+        packageType: created!.packageType,
         amountMinor: created!.amountMinor,
         currency: created!.currency,
         periodDays: created!.periodDays,
@@ -1121,8 +1192,35 @@ router.patch(
       invalidInput(res, "Enter at least one valid package value to update.");
       return;
     }
+    const [currentPackage] = await db
+      .select()
+      .from(subscriptionPackagesTable)
+      .where(eq(subscriptionPackagesTable.id, params.data.packageId))
+      .limit(1);
+    if (!currentPackage) {
+      res.status(404).json({ error: "Subscription package not found.", code: "NOT_FOUND" });
+      return;
+    }
+    const effectivePackage = {
+      ...currentPackage,
+      ...parsed.data,
+      aiEmailAssistAllowance:
+        parsed.data.aiEmailAssistAllowance ??
+        currentPackage.aiEmailAssistAllowance,
+      additionalMailboxCount:
+        parsed.data.additionalMailboxCount ??
+        currentPackage.additionalMailboxCount,
+      researchAllowance:
+        parsed.data.researchAllowance ?? currentPackage.researchAllowance,
+    };
+    const configurationError = packageConfigurationError(effectivePackage);
+    if (configurationError) {
+      invalidInput(res, configurationError);
+      return;
+    }
     if (
-      parsed.data.amountMinor === 0 &&
+      currentPackage.packageType === "primary" &&
+      effectivePackage.amountMinor === 0 &&
       (await hasOtherFreePackage(params.data.packageId))
     ) {
       respondFreePackageConflict(res);
@@ -1132,14 +1230,14 @@ router.patch(
     try {
       updated = await db.transaction(async (tx) => {
         const [existing] = await tx
-          .select({ id: subscriptionPackagesTable.id })
+          .select({ id: subscriptionPackagesTable.id, packageType: subscriptionPackagesTable.packageType })
           .from(subscriptionPackagesTable)
           .where(eq(subscriptionPackagesTable.id, params.data.packageId))
           .limit(1);
         if (!existing) return undefined;
 
         const now = new Date();
-        if (parsed.data.preferred) {
+        if (parsed.data.preferred && existing.packageType === "primary") {
           await tx
             .update(subscriptionPackagesTable)
             .set({
@@ -1147,7 +1245,12 @@ router.patch(
               updatedBy: req.authUser!.id,
               updatedAt: now,
             })
-            .where(eq(subscriptionPackagesTable.preferred, true));
+            .where(
+              and(
+                eq(subscriptionPackagesTable.preferred, true),
+                eq(subscriptionPackagesTable.packageType, "primary"),
+              ),
+            );
         }
         const [saved] = await tx
           .update(subscriptionPackagesTable)
@@ -1199,7 +1302,12 @@ router.get(
         : await db
             .select()
             .from(subscriptionPackagesTable)
-            .where(eq(subscriptionPackagesTable.active, true))
+            .where(
+              and(
+                eq(subscriptionPackagesTable.active, true),
+                eq(subscriptionPackagesTable.packageType, "primary"),
+              ),
+            )
             .orderBy(asc(subscriptionPackagesTable.amountMinor), asc(subscriptionPackagesTable.name));
     res.json(
       ListAvailableSubscriptionPackagesResponse.parse({
@@ -1219,6 +1327,160 @@ router.get(
   async (req, res): Promise<void> => {
     const current = await getCurrentSubscriptionForUser(req.authUser!.id);
     res.json(GetCurrentSubscriptionResponse.parse(current));
+  },
+);
+
+router.get(
+  "/subscriptions/add-ons",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const dashboard = await getSubscriptionAddOnsDashboard(req.authUser!.id);
+    res.json(GetSubscriptionAddOnsResponse.parse(dashboard));
+  },
+);
+
+router.post(
+  "/subscriptions/add-ons/free",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = ActivateFreeAddOnBody.safeParse(req.body);
+    if (!parsed.success) {
+      invalidInput(res, "Choose a valid free add-on package.");
+      return;
+    }
+    if (!req.authUser!.emailVerified) {
+      res.status(403).json({
+        error: "Verify your email before activating an add-on.",
+        code: "EMAIL_VERIFICATION_REQUIRED",
+      });
+      return;
+    }
+
+    try {
+      const entitlement = await db.transaction(async (tx) => {
+        const [user] = await tx
+          .select({ id: usersTable.id })
+          .from(usersTable)
+          .where(eq(usersTable.id, req.authUser!.id))
+          .limit(1)
+          .for("update");
+        if (!user) return { error: "ACCOUNT_NOT_FOUND" as const };
+
+        const now = new Date();
+        const [active] = await tx
+          .select({ pkg: subscriptionPackagesTable })
+          .from(userSubscriptionsTable)
+          .innerJoin(
+            subscriptionPackagesTable,
+            eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+          )
+          .where(
+            and(
+              eq(userSubscriptionsTable.userId, user.id),
+              eq(userSubscriptionsTable.status, "active"),
+              lte(userSubscriptionsTable.startsAt, now),
+              gt(userSubscriptionsTable.endsAt, now),
+            ),
+          )
+          .orderBy(desc(userSubscriptionsTable.endsAt))
+          .limit(1)
+          .for("update");
+        if (
+          !active ||
+          active.pkg.packageType !== "primary" ||
+          active.pkg.amountMinor <= 0
+        ) {
+          return { error: "PAID_PRIMARY_REQUIRED" as const };
+        }
+
+        const [pkg] = await tx
+          .select()
+          .from(subscriptionPackagesTable)
+          .where(
+            and(
+              eq(subscriptionPackagesTable.id, parsed.data.packageId),
+              eq(subscriptionPackagesTable.packageType, "addon"),
+              eq(subscriptionPackagesTable.active, true),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!pkg || pkg.amountMinor !== 0) {
+          return { error: "PACKAGE_NOT_AVAILABLE" as const };
+        }
+
+        const [claimed] = await tx
+          .select({ id: addOnEntitlementsTable.id })
+          .from(addOnEntitlementsTable)
+          .where(
+            and(
+              eq(addOnEntitlementsTable.userId, user.id),
+              eq(addOnEntitlementsTable.packageId, pkg.id),
+              isNull(addOnEntitlementsTable.paymentId),
+            ),
+          )
+          .limit(1);
+        if (claimed) return { error: "ALREADY_CLAIMED" as const };
+
+        const [created] = await tx
+          .insert(addOnEntitlementsTable)
+          .values({
+            userId: user.id,
+            packageId: pkg.id,
+            paymentId: null,
+            researchAllowance: pkg.researchAllowance,
+            aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+            additionalMailboxCount: pkg.additionalMailboxCount,
+          })
+          .returning({ id: addOnEntitlementsTable.id });
+        return created
+          ? { entitlementId: created.id, package: pkg }
+          : { error: "PACKAGE_NOT_AVAILABLE" as const };
+      });
+
+      if ("error" in entitlement) {
+        const status = entitlement.error === "PACKAGE_NOT_AVAILABLE" ? 404 :
+          entitlement.error === "PAID_PRIMARY_REQUIRED" ? 403 :
+            entitlement.error === "ACCOUNT_NOT_FOUND" ? 404 : 409;
+        res.status(status).json({
+          error:
+            entitlement.error === "PAID_PRIMARY_REQUIRED"
+              ? "An active paid primary package is required to activate add-ons."
+              : entitlement.error === "ALREADY_CLAIMED"
+                ? "This free add-on has already been claimed."
+                : "That free add-on is not available.",
+          code: entitlement.error,
+        });
+        return;
+      }
+      await writeAuditLog({
+        actorId: req.authUser!.id,
+        action: "subscription_addon.activated_free",
+        entity: "add_on_entitlement",
+        entityId: entitlement.entitlementId,
+        ipAddress: req.ip,
+        metadata: { packageId: entitlement.package.id },
+      });
+      res.status(201).json(
+        ActivateFreeAddOnResponse.parse({
+          entitlementId: entitlement.entitlementId,
+          message: "Free add-on activated.",
+        }),
+      );
+    } catch (error) {
+      const details = error as { code?: unknown; constraint?: unknown };
+      if (
+        details.code === "23505" &&
+        details.constraint === "add_on_entitlements_free_claim_unique"
+      ) {
+        res.status(409).json({
+          error: "This free add-on has already been claimed.",
+          code: "ALREADY_CLAIMED",
+        });
+        return;
+      }
+      throw error;
+    }
   },
 );
 
@@ -1282,6 +1544,7 @@ router.post(
           eq(subscriptionPackagesTable.id, parsed.data.packageId),
           eq(subscriptionPackagesTable.active, true),
           eq(subscriptionPackagesTable.amountMinor, 0),
+          eq(subscriptionPackagesTable.packageType, "primary"),
         ),
       )
       .limit(1);
@@ -1377,6 +1640,26 @@ router.post(
       });
       return;
     }
+    if (pkg.packageType === "addon") {
+      const { subscription } = await getCurrentSubscriptionForUser(
+        req.authUser!.id,
+      );
+      if (
+        !subscription ||
+        subscription.status !== "active" ||
+        subscription.package.packageType !== "primary" ||
+        subscription.package.amountMinor <= 0
+      ) {
+        res.status(403).json({
+          error: "An active paid primary package is required to purchase add-ons.",
+          code: "PAID_PRIMARY_REQUIRED",
+        });
+        return;
+      }
+    } else if (pkg.packageType !== "primary") {
+      invalidInput(res, "This package cannot be purchased as a primary plan.");
+      return;
+    }
     if (!(await loadOnlinePaymentSettings()).enabled) {
       res.status(503).json({
         error:
@@ -1385,11 +1668,19 @@ router.post(
       });
       return;
     }
-    const retention = await validateSenderAccountRetention(
-      req.authUser!.id,
-      pkg.emailAccountLimit,
-      parsed.data.senderAccountIdsToKeep,
-    );
+    const addOnDashboard = pkg.packageType === "primary" && pkg.amountMinor > 0
+      ? await getSubscriptionAddOnsDashboard(req.authUser!.id)
+      : null;
+    const retention = pkg.packageType === "addon"
+      ? { ok: true as const, accountIdsToKeep: null }
+      : await validateSenderAccountRetention(
+          req.authUser!.id,
+          pkg.emailAccountLimit +
+            (pkg.amountMinor > 0
+              ? addOnDashboard?.balances.mailboxes.additionalSlots ?? 0
+              : 0),
+          parsed.data.senderAccountIdsToKeep,
+        );
     if (!retention.ok) {
       res.status(409).json({
         error: retention.message,
@@ -1554,21 +1845,27 @@ router.post(
         return;
       }
       if (providerPayment.status === "captured" || providerPayment.captured) {
-        const subscription = await activateCapturedPayment({
+        const activation = await activateCapturedPayment({
           paymentId: payment.id,
           razorpayOrderId: payment.razorpayOrderId!,
           razorpayPaymentId: providerPayment.id,
           amountMinor: providerPayment.amount,
           currency: providerPayment.currency,
         });
-        const startsInFuture = new Date(subscription.startsAt) > new Date();
+        const subscription = activation.subscription;
+        const startsInFuture = subscription
+          ? new Date(subscription.startsAt) > new Date()
+          : false;
         res.json(
           VerifyRazorpayPaymentResponse.parse({
             status: "active",
-            message: startsInFuture
-              ? `Payment verified. ${subscription.package.name} starts on ${new Date(subscription.startsAt).toLocaleDateString()} after your current term ends.`
-              : "Payment verified. Your subscription is active.",
+            message: activation.addOnEntitlement
+              ? "Payment verified. Your add-on allowances are available."
+              : startsInFuture
+                ? `Payment verified. ${subscription!.package.name} starts on ${new Date(subscription!.startsAt).toLocaleDateString()} after your current term ends.`
+                : "Payment verified. Your subscription is active.",
             subscription,
+            addOnEntitlement: activation.addOnEntitlement,
           }),
         );
         return;
@@ -1590,6 +1887,7 @@ router.post(
               ? "This payment attempt failed and no subscription was activated. You can try checkout again with another payment method."
               : "Razorpay has not confirmed a captured payment yet. Your package will activate after capture is confirmed.",
           subscription: null,
+          addOnEntitlement: null,
         }),
       );
     } catch (error) {

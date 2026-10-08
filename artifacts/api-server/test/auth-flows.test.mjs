@@ -54,6 +54,8 @@ memory.public.none(`
   CREATE TYPE payment_status AS ENUM ('created', 'authorized', 'captured', 'failed', 'refunded');
   CREATE TYPE razorpay_environment AS ENUM ('sandbox', 'production');
   CREATE TYPE subscription_status AS ENUM ('active', 'superseded', 'cancelled');
+  CREATE TYPE subscription_package_type AS ENUM ('primary', 'addon');
+  CREATE TYPE ai_email_assist_usage_status AS ENUM ('reserved', 'consumed', 'released');
   CREATE TYPE platform_notification_audience AS ENUM ('broadcast', 'focused');
   CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -183,6 +185,7 @@ memory.public.none(`
   );
   CREATE TABLE subscription_packages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    package_type subscription_package_type NOT NULL DEFAULT 'primary',
     name varchar(120) NOT NULL,
     description text NOT NULL DEFAULT '',
     amount_minor integer NOT NULL,
@@ -191,6 +194,8 @@ memory.public.none(`
     contact_limit integer NOT NULL DEFAULT 5000,
     email_account_limit integer NOT NULL DEFAULT 1,
     research_allowance integer NOT NULL DEFAULT 0,
+    ai_email_assist_allowance integer NOT NULL DEFAULT 0,
+    additional_mailbox_count integer NOT NULL DEFAULT 0,
     active boolean NOT NULL DEFAULT true,
     preferred boolean NOT NULL DEFAULT false,
     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -200,10 +205,10 @@ memory.public.none(`
   );
   CREATE UNIQUE INDEX subscription_packages_single_free_unique
     ON subscription_packages (amount_minor)
-    WHERE amount_minor = 0;
+    WHERE amount_minor = 0 AND package_type = 'primary';
   CREATE UNIQUE INDEX subscription_packages_single_preferred_unique
     ON subscription_packages (preferred)
-    WHERE preferred = true;
+    WHERE preferred = true AND package_type = 'primary';
   CREATE TABLE payments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -230,6 +235,37 @@ memory.public.none(`
     sender_account_ids_to_keep uuid[],
     created_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE add_on_entitlements (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    package_id uuid NOT NULL REFERENCES subscription_packages(id) ON DELETE RESTRICT,
+    payment_id uuid REFERENCES payments(id) ON DELETE RESTRICT,
+    research_allowance integer NOT NULL DEFAULT 0,
+    research_used integer NOT NULL DEFAULT 0,
+    ai_email_assist_allowance integer NOT NULL DEFAULT 0,
+    additional_mailbox_count integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX add_on_entitlements_payment_unique
+    ON add_on_entitlements (payment_id)
+    WHERE payment_id IS NOT NULL;
+  CREATE UNIQUE INDEX add_on_entitlements_free_claim_unique
+    ON add_on_entitlements (user_id, package_id)
+    WHERE payment_id IS NULL;
+  CREATE INDEX add_on_entitlements_owner_created_idx
+    ON add_on_entitlements (user_id, created_at);
+  CREATE TABLE ai_email_assist_usages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entitlement_id uuid NOT NULL REFERENCES add_on_entitlements(id) ON DELETE RESTRICT,
+    status ai_email_assist_usage_status NOT NULL DEFAULT 'reserved',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    completed_at timestamptz
+  );
+  CREATE INDEX ai_email_assist_usage_owner_status_created_idx
+    ON ai_email_assist_usages (user_id, status, created_at);
+  CREATE INDEX ai_email_assist_usage_entitlement_idx
+    ON ai_email_assist_usages (entitlement_id);
   CREATE TABLE audit_logs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -723,6 +759,8 @@ beforeEach(async () => {
   await db.delete(dbModule.tenantSendingConfigurationTable);
   await db.delete(dbModule.auditLogsTable);
   await db.delete(dbModule.contactsTable);
+  await db.delete(dbModule.aiEmailAssistUsagesTable);
+  await db.delete(dbModule.addOnEntitlementsTable);
   await db.delete(dbModule.userSubscriptionsTable);
   await db.delete(dbModule.paymentsTable);
   await db.delete(dbModule.subscriptionPackagesTable);
@@ -2593,6 +2631,226 @@ describe("tenant contact management and package quotas", { concurrency: false },
         })
         .returning(),
     );
+  });
+
+  it("offers free add-ons only to paid-primary users and resumes retained allowances", async () => {
+    const admin = await loggedInUser({
+      username: "addon-lifecycle-admin",
+      role: "SUPERADMIN",
+    });
+    const paidUser = await loggedInUser({ username: "addon-lifecycle-paid-user" });
+    const freeUser = await loggedInUser({ username: "addon-lifecycle-free-user" });
+    const noPlanUser = await loggedInUser({ username: "addon-lifecycle-no-plan" });
+
+    const paidPackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "Add-on lifecycle primary",
+        description: "Paid primary package for add-on tests",
+        amountMinor: 2500,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        active: true,
+      },
+    });
+    assert.equal(paidPackage.response.status, 201, JSON.stringify(paidPackage.body));
+
+    const freeAddon = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "addon",
+        name: "Add-on lifecycle free pack",
+        description: "Free add-on test",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 0,
+        contactLimit: 0,
+        emailAccountLimit: 0,
+        researchAllowance: 3,
+        aiEmailAssistAllowance: 2,
+        additionalMailboxCount: 2,
+        preferred: false,
+        active: true,
+      },
+    });
+    assert.equal(freeAddon.response.status, 201, JSON.stringify(freeAddon.body));
+    const [savedFreeAddon] = await db
+      .select()
+      .from(dbModule.subscriptionPackagesTable)
+      .where(eq(dbModule.subscriptionPackagesTable.id, freeAddon.body.id));
+    assert.equal(savedFreeAddon.packageType, "addon");
+    assert.equal(savedFreeAddon.amountMinor, 0);
+    assert.equal(savedFreeAddon.active, true);
+
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: paidUser.user.id,
+      packageId: paidPackage.body.id,
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+
+    const paidDashboard = await api("/subscriptions/add-ons", {
+      cookie: paidUser.cookie,
+    });
+    assert.equal(paidDashboard.response.status, 200, JSON.stringify(paidDashboard.body));
+    assert.equal(paidDashboard.body.eligible, true);
+    assert.ok(paidDashboard.body.packages.some((pkg) => pkg.id === freeAddon.body.id));
+    assert.deepEqual(paidDashboard.body.balances.research, {
+      total: 0,
+      used: 0,
+      remaining: 0,
+    });
+
+    const publicPackages = await api("/subscriptions/packages");
+    assert.equal(publicPackages.response.status, 200);
+    assert.ok(publicPackages.body.packages.every((pkg) => pkg.packageType === "primary"));
+    assert.ok(!publicPackages.body.packages.some((pkg) => pkg.id === freeAddon.body.id));
+
+    const noPlanDashboard = await api("/subscriptions/add-ons", {
+      cookie: noPlanUser.cookie,
+    });
+    assert.equal(noPlanDashboard.body.eligible, false);
+    assert.deepEqual(noPlanDashboard.body.packages, []);
+    const noPlanActivation = await api("/subscriptions/add-ons/free", {
+      method: "POST",
+      cookie: noPlanUser.cookie,
+      body: { packageId: freeAddon.body.id },
+    });
+    assert.equal(noPlanActivation.response.status, 403);
+    assert.equal(noPlanActivation.body.code, "PAID_PRIMARY_REQUIRED");
+
+    const [freePrimary] = await db
+      .select()
+      .from(dbModule.subscriptionPackagesTable)
+      .where(
+        and(
+          eq(dbModule.subscriptionPackagesTable.packageType, "primary"),
+          eq(dbModule.subscriptionPackagesTable.amountMinor, 0),
+        ),
+      )
+      .limit(1);
+    let freePrimaryId = freePrimary?.id;
+    if (!freePrimaryId) {
+      const createdFree = await api("/admin/billing/packages", {
+        method: "POST",
+        cookie: admin.cookie,
+        body: {
+          packageType: "primary",
+          name: "Add-on lifecycle free primary",
+          description: "Free primary used to test add-on suspension",
+          amountMinor: 0,
+          currency: "INR",
+          periodDays: 30,
+          contactLimit: 500,
+          emailAccountLimit: 1,
+          active: true,
+        },
+      });
+      assert.equal(createdFree.response.status, 201, JSON.stringify(createdFree.body));
+      freePrimaryId = createdFree.body.id;
+    }
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: freeUser.user.id,
+      packageId: freePrimaryId,
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+    const freeDashboard = await api("/subscriptions/add-ons", {
+      cookie: freeUser.cookie,
+    });
+    assert.equal(freeDashboard.body.eligible, false);
+    const freeActivation = await api("/subscriptions/add-ons/free", {
+      method: "POST",
+      cookie: freeUser.cookie,
+      body: { packageId: freeAddon.body.id },
+    });
+    assert.equal(freeActivation.response.status, 403);
+    assert.equal(freeActivation.body.code, "PAID_PRIMARY_REQUIRED");
+
+    const [availableFreeAddon] = await db
+      .select()
+      .from(dbModule.subscriptionPackagesTable)
+      .where(
+        and(
+          eq(dbModule.subscriptionPackagesTable.id, freeAddon.body.id),
+          eq(dbModule.subscriptionPackagesTable.packageType, "addon"),
+          eq(dbModule.subscriptionPackagesTable.active, true),
+        ),
+      )
+      .limit(1);
+    assert.equal(availableFreeAddon?.id, freeAddon.body.id);
+    assert.equal(availableFreeAddon.amountMinor, 0);
+
+    const activation = await api("/subscriptions/add-ons/free", {
+      method: "POST",
+      cookie: paidUser.cookie,
+      body: { packageId: freeAddon.body.id },
+    });
+    assert.equal(activation.response.status, 201, JSON.stringify(activation.body));
+    const repeated = await api("/subscriptions/add-ons/free", {
+      method: "POST",
+      cookie: paidUser.cookie,
+      body: { packageId: freeAddon.body.id },
+    });
+    assert.equal(repeated.response.status, 409);
+    assert.equal(repeated.body.code, "ALREADY_CLAIMED");
+
+    const [paymentForFreeAddon] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.packageId, freeAddon.body.id));
+    assert.equal(paymentForFreeAddon, undefined);
+
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({ status: "cancelled" })
+      .where(eq(dbModule.userSubscriptionsTable.userId, paidUser.user.id));
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: paidUser.user.id,
+      packageId: freePrimaryId,
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    });
+    const paused = await api("/subscriptions/add-ons", {
+      cookie: paidUser.cookie,
+    });
+    assert.equal(paused.body.eligible, false);
+    assert.equal(paused.body.balances.research.total, 3);
+    assert.equal(paused.body.balances.emailAssist.total, 2);
+    assert.equal(paused.body.balances.mailboxes.additionalSlots, 2);
+    assert.equal(paused.body.balances.mailboxes.active, false);
+
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({
+        status: "active",
+        endsAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      })
+      .where(
+        and(
+          eq(dbModule.userSubscriptionsTable.userId, paidUser.user.id),
+          eq(dbModule.userSubscriptionsTable.packageId, paidPackage.body.id),
+        ),
+      );
+    const resumed = await api("/subscriptions/add-ons", {
+      cookie: paidUser.cookie,
+    });
+    assert.equal(resumed.body.eligible, true);
+    assert.equal(resumed.body.balances.research.remaining, 3);
+    assert.equal(resumed.body.balances.emailAssist.remaining, 2);
+    assert.equal(resumed.body.balances.mailboxes.additionalSlots, 2);
+    assert.equal(resumed.body.balances.mailboxes.active, true);
   });
 
   it("isolates contacts by tenant and enforces package limits on every create", async () => {

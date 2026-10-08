@@ -27,6 +27,17 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "cancelled",
 ]);
 
+export const subscriptionPackageTypeEnum = pgEnum("subscription_package_type", [
+  "primary",
+  "addon",
+]);
+
+export const aiEmailAssistUsageStatusEnum = pgEnum("ai_email_assist_usage_status", [
+  "reserved",
+  "consumed",
+  "released",
+]);
+
 export const razorpayEnvironmentEnum = pgEnum("razorpay_environment", [
   "sandbox",
   "production",
@@ -36,6 +47,9 @@ export const subscriptionPackagesTable = pgTable(
   "subscription_packages",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    packageType: subscriptionPackageTypeEnum("package_type")
+      .notNull()
+      .default("primary"),
     name: varchar("name", { length: 120 }).notNull(),
     description: text("description").notNull().default(""),
     amountMinor: integer("amount_minor").notNull(),
@@ -44,6 +58,12 @@ export const subscriptionPackagesTable = pgTable(
     contactLimit: integer("contact_limit").notNull().default(5000),
     emailAccountLimit: integer("email_account_limit").notNull().default(1),
     researchAllowance: integer("research_allowance").notNull().default(0),
+    aiEmailAssistAllowance: integer("ai_email_assist_allowance")
+      .notNull()
+      .default(0),
+    additionalMailboxCount: integer("additional_mailbox_count")
+      .notNull()
+      .default(0),
     preferred: boolean("preferred").notNull().default(false),
     active: boolean("active").notNull().default(true),
     createdBy: uuid("created_by").references(() => usersTable.id, {
@@ -65,10 +85,14 @@ export const subscriptionPackagesTable = pgTable(
     index("subscription_packages_created_at_idx").on(table.createdAt),
     uniqueIndex("subscription_packages_single_free_unique")
       .on(table.amountMinor)
-      .where(sql`${table.amountMinor} = 0`),
+      .where(
+        sql`${table.packageType} = 'primary' AND ${table.amountMinor} = 0`,
+      ),
     uniqueIndex("subscription_packages_single_preferred_unique")
       .on(table.preferred)
-      .where(sql`${table.preferred} = true`),
+      .where(
+        sql`${table.packageType} = 'primary' AND ${table.preferred} = true`,
+      ),
   ],
 );
 
@@ -131,6 +155,73 @@ export const paymentsTable = pgTable(
       .where(sql`${table.razorpayPaymentId} IS NOT NULL`),
     index("payments_user_created_idx").on(table.userId, table.createdAt),
     index("payments_status_created_idx").on(table.status, table.createdAt),
+  ],
+);
+
+export const addOnEntitlementsTable = pgTable(
+  "add_on_entitlements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    packageId: uuid("package_id")
+      .notNull()
+      .references(() => subscriptionPackagesTable.id, { onDelete: "restrict" }),
+    paymentId: uuid("payment_id").references(() => paymentsTable.id, {
+      onDelete: "restrict",
+    }),
+    researchAllowance: integer("research_allowance").notNull().default(0),
+    researchUsed: integer("research_used").notNull().default(0),
+    aiEmailAssistAllowance: integer("ai_email_assist_allowance")
+      .notNull()
+      .default(0),
+    additionalMailboxCount: integer("additional_mailbox_count")
+      .notNull()
+      .default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("add_on_entitlements_payment_unique")
+      .on(table.paymentId)
+      .where(sql`${table.paymentId} IS NOT NULL`),
+    uniqueIndex("add_on_entitlements_free_claim_unique")
+      .on(table.userId, table.packageId)
+      .where(sql`${table.paymentId} IS NULL`),
+    index("add_on_entitlements_owner_created_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const aiEmailAssistUsagesTable = pgTable(
+  "ai_email_assist_usages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    entitlementId: uuid("entitlement_id")
+      .notNull()
+      .references(() => addOnEntitlementsTable.id, { onDelete: "restrict" }),
+    status: aiEmailAssistUsageStatusEnum("status")
+      .notNull()
+      .default("reserved"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("ai_email_assist_usage_owner_status_created_idx").on(
+      table.userId,
+      table.status,
+      table.createdAt,
+    ),
+    index("ai_email_assist_usage_entitlement_idx").on(table.entitlementId),
   ],
 );
 

@@ -3798,8 +3798,17 @@ export interface RazorpayTestResponse {
   message: string;
 }
 
+export type SubscriptionPackagePackageType = typeof SubscriptionPackagePackageType[keyof typeof SubscriptionPackagePackageType];
+
+
+export const SubscriptionPackagePackageType = {
+  primary: 'primary',
+  addon: 'addon',
+} as const;
+
 export interface SubscriptionPackage {
   id: string;
+  packageType: SubscriptionPackagePackageType;
   name: string;
   description: string;
   amountMinor: number;
@@ -3819,6 +3828,18 @@ export interface SubscriptionPackage {
      * @maximum 10000
      */
   researchAllowance: number;
+  /**
+     * Number of successful AI campaign draft or revision results included in this add-on.
+     * @minimum 0
+     * @maximum 10000
+     */
+  aiEmailAssistAllowance: number;
+  /**
+     * Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.
+     * @minimum 0
+     * @maximum 100
+     */
+  additionalMailboxCount: number;
   /** Highlights this package in package selection screens. */
   preferred: boolean;
   active: boolean;
@@ -3841,7 +3862,16 @@ export interface SubscriptionPackageList {
   sendingLimits: SmtpSendingLimits;
 }
 
+export type SubscriptionPackageInputPackageType = typeof SubscriptionPackageInputPackageType[keyof typeof SubscriptionPackageInputPackageType];
+
+
+export const SubscriptionPackageInputPackageType = {
+  primary: 'primary',
+  addon: 'addon',
+} as const;
+
 export interface SubscriptionPackageInput {
+  packageType?: SubscriptionPackageInputPackageType;
   /**
      * @minLength 2
      * @maxLength 120
@@ -3858,7 +3888,7 @@ export interface SubscriptionPackageInput {
   /** @pattern ^[A-Z]{3}$ */
   currency: string;
   /**
-     * @minimum 1
+     * @minimum 0
      * @maximum 3660
      */
   periodDays: number;
@@ -3878,6 +3908,16 @@ export interface SubscriptionPackageInput {
      * @maximum 10000
      */
   researchAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  aiEmailAssistAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  additionalMailboxCount?: number;
   preferred?: boolean;
   active: boolean;
 }
@@ -3904,7 +3944,7 @@ export interface SubscriptionPackageUpdateInput {
   /** @pattern ^[A-Z]{3}$ */
   currency?: string;
   /**
-     * @minimum 1
+     * @minimum 0
      * @maximum 3660
      */
   periodDays?: number;
@@ -3924,8 +3964,115 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 10000
      */
   researchAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  aiEmailAssistAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  additionalMailboxCount?: number;
   preferred?: boolean;
   active?: boolean;
+}
+
+export interface SubscriptionAddOnMetric {
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  used: number;
+  /** @minimum 0 */
+  remaining: number;
+}
+
+export interface SubscriptionAddOnMailboxMetric {
+  /** @minimum 0 */
+  baseLimit: number;
+  /** @minimum 0 */
+  additionalSlots: number;
+  /** @minimum 0 */
+  totalLimit: number;
+  /** @minimum 0 */
+  used: number;
+  /** @minimum 0 */
+  remaining: number;
+  active: boolean;
+}
+
+export interface SubscriptionAddOnBalances {
+  research: SubscriptionAddOnMetric;
+  emailAssist: SubscriptionAddOnMetric;
+  mailboxes: SubscriptionAddOnMailboxMetric;
+}
+
+/**
+ * @nullable
+ */
+export type SubscriptionAddOnsDashboardEligibilityReason = typeof SubscriptionAddOnsDashboardEligibilityReason[keyof typeof SubscriptionAddOnsDashboardEligibilityReason] | null;
+
+
+export const SubscriptionAddOnsDashboardEligibilityReason = {
+  paid_primary_required: 'paid_primary_required',
+} as const;
+
+export interface SubscriptionAddOnsDashboard {
+  eligible: boolean;
+  /** @nullable */
+  eligibilityReason: SubscriptionAddOnsDashboardEligibilityReason;
+  /** @nullable */
+  primaryEndsAt: string | null;
+  balances: SubscriptionAddOnBalances;
+  packages: SubscriptionPackage[];
+  claimedFreePackageIds: string[];
+}
+
+export interface ActivateFreeAddOnInput {
+  packageId: string;
+}
+
+export interface FreeAddOnActivation {
+  entitlementId: string;
+  message: string;
+}
+
+export interface CampaignEmailAssistInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  objective: string;
+  /** @maxLength 10000 */
+  currentBody?: string;
+}
+
+export interface CampaignEmailAssistDraft {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  greeting: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  body: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  signature: string;
+}
+
+export interface CampaignEmailAssistResponse {
+  draft: CampaignEmailAssistDraft;
+  usage: SubscriptionAddOnMetric;
 }
 
 export interface ContactUploadSettings {
@@ -4081,10 +4228,15 @@ export const PaymentVerificationResultStatus = {
   active: 'active',
 } as const;
 
+export interface AddOnEntitlementReference {
+  entitlementId: string;
+}
+
 export interface PaymentVerificationResult {
   status: PaymentVerificationResultStatus;
   message: string;
   subscription: SubscriptionSummary | null;
+  addOnEntitlement: AddOnEntitlementReference | null;
 }
 
 export interface RazorpayWebhookPayload { [key: string]: unknown }

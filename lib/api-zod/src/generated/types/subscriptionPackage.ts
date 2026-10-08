@@ -5,9 +5,11 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionPackagePackageType } from './subscriptionPackagePackageType';
 
 export interface SubscriptionPackage {
   id: string;
+  packageType: SubscriptionPackagePackageType;
   name: string;
   description: string;
   amountMinor: number;
@@ -27,6 +29,18 @@ export interface SubscriptionPackage {
      * @maximum 10000
      */
   researchAllowance: number;
+  /**
+     * Number of successful AI campaign draft or revision results included in this add-on.
+     * @minimum 0
+     * @maximum 10000
+     */
+  aiEmailAssistAllowance: number;
+  /**
+     * Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.
+     * @minimum 0
+     * @maximum 100
+     */
+  additionalMailboxCount: number;
   /** Highlights this package in package selection screens. */
   preferred: boolean;
   active: boolean;

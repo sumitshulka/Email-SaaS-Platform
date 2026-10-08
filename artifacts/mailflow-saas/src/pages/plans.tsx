@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Users } from 'lucide-react';
+import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import {
-  getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getListAvailableSubscriptionPackagesQueryKey,
+  getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getGetSubscriptionAddOnsQueryKey, getListAvailableSubscriptionPackagesQueryKey,
   getListTenantSendingAccountsQueryKey,
-  useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCompanyResearchAllowance, useGetCurrentSubscription, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
+  useActivateFreeAddOn, useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCompanyResearchAllowance, useGetCurrentSubscription, useGetSubscriptionAddOns, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
   useListTenantSendingAccounts, useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage, SubscriptionPackageList, TenantSendingAccount } from '@workspace/api-client-react';
@@ -123,7 +123,7 @@ function PackageCard({ item, featured, pending, disabled, onlinePaymentsEnabled,
         </div>
         <div data-testid={`text-plan-sender-account-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
           <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
-          <span className="min-w-0 break-words">Up to {item.emailAccountLimit} SMTP sender account{item.emailAccountLimit === 1 ? '' : 's'}</span>
+          <span className="min-w-0 break-words">Up to {item.emailAccountLimit} base SMTP sender account{item.emailAccountLimit === 1 ? '' : 's'}; mailbox add-ons add slots</span>
         </div>
         <div data-testid={`text-plan-research-allowance-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
           <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
@@ -140,7 +140,7 @@ function PackageCard({ item, featured, pending, disabled, onlinePaymentsEnabled,
       </div>
     </div>
     <p data-testid={`text-plan-total-send-capacity-${item.id}`} className="mt-2 text-[10px] leading-4 text-[#718192]">
-      With all {item.emailAccountLimit} mailbox{item.emailAccountLimit === 1 ? '' : 'es'} configured: up to {combinedHourly.toLocaleString()} campaign attempts/hour and {combinedDaily.toLocaleString()}/24 hours. Retries count; provider limits may be lower.
+      With all {item.emailAccountLimit} base mailbox{item.emailAccountLimit === 1 ? '' : 'es'} configured: up to {combinedHourly.toLocaleString()} campaign attempts/hour and {combinedDaily.toLocaleString()}/24 hours. Retries count; provider limits may be lower.
     </p>
 
     <button data-testid={`button-purchase-plan-${item.id}`} onClick={onPurchase} disabled={disabled || paidCheckoutUnavailable} className={`mt-4 inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-center text-[12px] font-semibold leading-4 transition disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-[#174f99] text-white hover:bg-[#103f7e]' : 'border border-[#d5dfe7] bg-white text-[#315879] hover:bg-[#f4f8fb]'}`}>
@@ -153,6 +153,7 @@ export default function PlansPage() {
   const queryClient = useQueryClient();
   const packagesQuery = useListAvailableSubscriptionPackages();
   const currentQuery = useGetCurrentSubscription();
+  const addOnsQuery = useGetSubscriptionAddOns();
   const researchAllowanceQuery = useGetCompanyResearchAllowance({
     query: {
       queryKey: getGetCompanyResearchAllowanceQueryKey(),
@@ -164,17 +165,31 @@ export default function PlansPage() {
   const senderAccountsQuery = useListTenantSendingAccounts();
   const createOrder = useCreateSubscriptionOrder();
   const activateFree = useActivateFreeSubscription();
+  const activateFreeAddOn = useActivateFreeAddOn();
   const verifyPayment = useVerifyRazorpayPayment();
   const [checkoutOrder, setCheckoutOrder] = useState<SubscriptionOrderCreated | null>(null);
-  const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'error' | 'dismissed'; message: string } | null>(null);
+  const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'error' | 'dismissed'; message: string; label?: string } | null>(null);
   const [startingPackage, setStartingPackage] = useState<string | null>(null);
   const [pendingPackage, setPendingPackage] = useState<SubscriptionPackage | null>(null);
+  const [pendingPackageAccountLimit, setPendingPackageAccountLimit] = useState(1);
   const [senderAccountsToKeep, setSenderAccountsToKeep] = useState<string[]>([]);
   const packages = packagesQuery.data?.packages ?? [];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const onlinePaymentsEnabled = paymentAvailabilityQuery.data?.enabled === true;
   const activeSubscription = currentQuery.data?.subscription?.status === 'active' ? currentQuery.data.subscription : null;
-  const busy = createOrder.isPending || activateFree.isPending || verifyPayment.isPending;
+  const addOnDashboard = addOnsQuery.data;
+  const addOnPackages = addOnDashboard?.packages ?? [];
+  const busy = createOrder.isPending || activateFree.isPending || activateFreeAddOn.isPending || verifyPayment.isPending;
+  const currentEmailAccountLimit =
+    senderAccountsQuery.data?.emailAccountLimit ??
+    activeSubscription?.package.emailAccountLimit ??
+    0;
+
+  const packageAccountLimit = (pkg: SubscriptionPackage) =>
+    pkg.emailAccountLimit +
+    (pkg.packageType === 'primary' && pkg.amountMinor > 0
+      ? addOnDashboard?.balances.mailboxes.additionalSlots ?? 0
+      : 0);
 
   const runVerification = (
     order: SubscriptionOrderCreated,
@@ -198,12 +213,19 @@ export default function PlansPage() {
               retentionAnalytics.accountLimit,
             );
           }
+        } else if (result.status === 'active' && result.addOnEntitlement) {
+          trackEvent('paid_addon_activated');
         } else if (result.status === 'pending') {
           trackPaidVerificationOutcome('pending');
         }
-        setPaymentState({ kind: result.status, message: result.message });
+        setPaymentState({
+          kind: result.status,
+          message: result.message,
+          label: result.addOnEntitlement ? 'Add-on activated' : undefined,
+        });
         setCheckoutOrder(null);
         void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetSubscriptionAddOnsQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getGetCompanyResearchAllowanceQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
@@ -219,6 +241,23 @@ export default function PlansPage() {
     setPaymentState(null);
     setStartingPackage(pkg.id);
     if (pkg.amountMinor === 0) {
+      if (pkg.packageType === 'addon') {
+        activateFreeAddOn.mutate({ data: { packageId: pkg.id } }, {
+          onSuccess: result => {
+            trackEvent('free_addon_activated');
+            setPaymentState({ kind: 'active', label: 'Add-on activated', message: result.message });
+            setStartingPackage(null);
+            void queryClient.invalidateQueries({ queryKey: getGetSubscriptionAddOnsQueryKey() });
+            void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
+            void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
+          },
+          onError: error => {
+            setStartingPackage(null);
+            setPaymentState({ kind: 'error', message: errorText(error) });
+          },
+        });
+        return;
+      }
       activateFree.mutate({ data: { packageId: pkg.id, ...(accountIdsToKeep !== undefined ? { senderAccountIdsToKeep: accountIdsToKeep } : {}) } }, {
         onSuccess: result => {
           if (accountIdsToKeep !== undefined) {
@@ -239,6 +278,7 @@ export default function PlansPage() {
           });
           setStartingPackage(null);
           void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getGetSubscriptionAddOnsQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getGetCompanyResearchAllowanceQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
           void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
@@ -262,7 +302,7 @@ export default function PlansPage() {
             amount: order.amountMinor,
             currency: order.currency,
             name: 'Mailflow',
-            description: `${order.packageName} subscription`,
+            description: `${order.packageName} ${pkg.packageType === 'addon' ? 'add-on' : 'subscription'}`,
             order_id: order.orderId,
             prefill: { name: order.customerName, email: order.customerEmail },
             theme: { color: '#174f99' },
@@ -273,7 +313,7 @@ export default function PlansPage() {
                 ? {
                     accountCount: senderAccounts.length,
                     retainedCount: accountIdsToKeep.length,
-                    accountLimit: pkg.emailAccountLimit,
+                     accountLimit: packageAccountLimit(pkg),
                   }
                 : undefined,
             ),
@@ -303,13 +343,18 @@ export default function PlansPage() {
 
   const purchase = (pkg: SubscriptionPackage) => {
     setPaymentState(null);
+    if (pkg.packageType === 'addon') {
+      startPurchase(pkg);
+      return;
+    }
     if (!senderAccountsQuery.data) {
       setPaymentState({ kind: 'error', message: 'SMTP sender accounts could not be checked. Retry before changing packages.' });
       return;
     }
-    if (senderAccounts.length > pkg.emailAccountLimit) {
+    const targetAccountLimit = packageAccountLimit(pkg);
+    if (senderAccounts.length > targetAccountLimit) {
       const requiredIds = senderAccounts.filter(account => account.activeCampaignCount > 0).map(account => account.id);
-      if (requiredIds.length > pkg.emailAccountLimit) {
+      if (requiredIds.length > targetAccountLimit) {
         setPaymentState({ kind: 'error', message: 'This package allows fewer sender accounts than are currently used by queued or sending campaigns. Let those campaigns finish before changing packages.' });
         return;
       }
@@ -317,8 +362,9 @@ export default function PlansPage() {
         if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
         return new Date(right.lastUsedAt ?? 0).getTime() - new Date(left.lastUsedAt ?? 0).getTime();
       });
-      const suggested = [...new Set([...requiredIds, ...ranked.map(account => account.id)])].slice(0, pkg.emailAccountLimit);
+      const suggested = [...new Set([...requiredIds, ...ranked.map(account => account.id)])].slice(0, targetAccountLimit);
       setPendingPackage(pkg);
+      setPendingPackageAccountLimit(targetAccountLimit);
       setSenderAccountsToKeep(suggested);
       return;
     }
@@ -332,18 +378,18 @@ export default function PlansPage() {
     });
   };
   const confirmPackageChange = () => {
-    if (!pendingPackage || senderAccountsToKeep.length !== pendingPackage.emailAccountLimit) return;
+    if (!pendingPackage || senderAccountsToKeep.length !== pendingPackageAccountLimit) return;
     const pkg = pendingPackage;
     const keepIds = [...senderAccountsToKeep];
     setPendingPackage(null);
     startPurchase(pkg, keepIds);
   };
 
-  if (packagesQuery.isLoading || currentQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || senderAccountsQuery.isLoading) {
+  if (packagesQuery.isLoading || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || senderAccountsQuery.isLoading) {
     return <div className="space-y-5" aria-label="Loading subscription plans" data-testid="loading-plans"><div className="h-8 w-64 animate-pulse rounded bg-[#e9eef2]"/><div className="h-32 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/></div></div>;
   }
-  if (packagesQuery.isError || currentQuery.isError || researchAllowanceQuery.isError || senderAccountsQuery.isError) {
-    return <section className="rounded-lg border border-[#e1e6eb] bg-white p-6" data-testid="error-plans"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 text-[#bd692d]"/><div><h1 className="text-[15px] font-semibold text-[#1d2d40]">Plans could not be loaded</h1><p className="mt-1 text-[12px] text-[#748292]">Your subscription has not changed.</p><button data-testid="button-retry-plans" onClick={() => { void packagesQuery.refetch(); void currentQuery.refetch(); void researchAllowanceQuery.refetch(); void senderAccountsQuery.refetch(); }} className="mt-4 rounded-md border border-[#d5dfe7] px-3 py-2 text-[11px] font-semibold text-[#315879]">Retry</button></div></div></section>;
+  if (packagesQuery.isError || currentQuery.isError || addOnsQuery.isError || researchAllowanceQuery.isError || senderAccountsQuery.isError) {
+    return <section className="rounded-lg border border-[#e1e6eb] bg-white p-6" data-testid="error-plans"><div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 text-[#bd692d]"/><div><h1 className="text-[15px] font-semibold text-[#1d2d40]">Plans could not be loaded</h1><p className="mt-1 text-[12px] text-[#748292]">Your subscription has not changed.</p><button data-testid="button-retry-plans" onClick={() => { void packagesQuery.refetch(); void currentQuery.refetch(); void addOnsQuery.refetch(); void researchAllowanceQuery.refetch(); void senderAccountsQuery.refetch(); }} className="mt-4 rounded-md border border-[#d5dfe7] px-3 py-2 text-[11px] font-semibold text-[#315879]">Retry</button></div></div></section>;
   }
 
   return <div className="fade-in space-y-8">
@@ -356,13 +402,70 @@ export default function PlansPage() {
     </header>
 
     {activeSubscription ? <section data-testid="current-subscription" className="grid gap-4 rounded-lg border border-[#d7e6dd] bg-[#f4f9f5] p-5 md:grid-cols-[1fr_auto] md:items-center md:px-6">
-      <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div><h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2><p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p><p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p><p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {activeSubscription.package.emailAccountLimit} SMTP sender account{activeSubscription.package.emailAccountLimit === 1 ? '' : 's'}</p><p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{researchAllowanceQuery.data?.allowance ? `${researchAllowanceQuery.data.allowance.limit} company research run${researchAllowanceQuery.data.allowance.limit === 1 ? '' : 's'} this term · ${researchAllowanceQuery.data.allowance.used} used · ${researchAllowanceQuery.data.allowance.remaining} remaining` : 'No company research allowance is active for this term'}</p></div>
+      <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div><h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2><p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p><p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p><p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {currentEmailAccountLimit} SMTP sender account{currentEmailAccountLimit === 1 ? '' : 's'} (including active mailbox add-ons)</p><p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{researchAllowanceQuery.data?.allowance ? `${researchAllowanceQuery.data.allowance.limit} company research run${researchAllowanceQuery.data.allowance.limit === 1 ? '' : 's'} this term · ${researchAllowanceQuery.data.allowance.used} used · ${researchAllowanceQuery.data.allowance.remaining} remaining` : 'No company research allowance is active for this term'}</p></div>
       <span data-testid="status-current-subscription" className="flex items-center gap-2 rounded-md border border-[#dce9e0] bg-white px-3 py-2 text-[11px] font-semibold text-[#477154]"><Clock3 className="h-4 w-4"/>Active through {new Date(activeSubscription.endsAt).toLocaleDateString()}</span>
     </section> : <section data-testid="current-subscription" className="flex items-center gap-3 rounded-lg border border-[#e0e6eb] bg-white p-4 md:px-5"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#f1f4f6] text-[#738394]"><CalendarClock className="h-4 w-4"/></span><div><h2 className="text-[12px] font-semibold text-[#34485d]">No active subscription</h2><p className="mt-0.5 text-[11px] text-[#798796]">Your workspace access term will appear here after payment is confirmed.</p></div></section>}
 
+    <section data-testid="subscription-add-on-balances" className="rounded-lg border border-[#e0e6eb] bg-white p-5 md:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">PURCHASED ADD-ONS</div><h2 className="display mt-1 text-[19px] font-bold text-[#1d2d40]">Add-on balances</h2><p className="mt-1 max-w-2xl text-[11px] leading-5 text-[#718192]">Unused credits and mailbox slots stay on your workspace. They pause when a paid primary plan ends and resume when you start another paid plan.</p></div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${addOnDashboard?.eligible ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f2f4f6] text-[#6c7a88]'}`}>{addOnDashboard?.eligible ? 'Available on paid plan' : 'Paused until paid plan'}</span>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        {[
+          { key: 'research', title: 'Company research', value: addOnDashboard?.balances.research, unit: 'credits' },
+          { key: 'emailAssist', title: 'AI Email Assist', value: addOnDashboard?.balances.emailAssist, unit: 'drafts' },
+        ].map(metric => <article key={metric.key} data-testid={`addon-balance-${metric.key}`} className="rounded-md border border-[#e3e8ed] bg-[#f8fafb] p-3.5">
+          <h3 className="text-[11px] font-semibold text-[#42566b]">{metric.title}</h3>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+            <div><strong className="block text-[15px] text-[#24394e]">{metric.value?.total ?? 0}</strong><span className="text-[9px] text-[#788796]">Total {metric.unit}</span></div>
+            <div><strong className="block text-[15px] text-[#24394e]">{metric.value?.used ?? 0}</strong><span className="text-[9px] text-[#788796]">Used</span></div>
+            <div><strong className="block text-[15px] text-[#24394e]">{metric.value?.remaining ?? 0}</strong><span className="text-[9px] text-[#788796]">Remaining</span></div>
+          </div>
+        </article>)}
+        <article data-testid="addon-balance-mailboxes" className="rounded-md border border-[#e3e8ed] bg-[#f8fafb] p-3.5">
+          <h3 className="text-[11px] font-semibold text-[#42566b]">Additional SMTP slots</h3>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+            <div><strong className="block text-[15px] text-[#24394e]">{addOnDashboard?.balances.mailboxes.additionalSlots ?? 0}</strong><span className="text-[9px] text-[#788796]">Total</span></div>
+            <div><strong className="block text-[15px] text-[#24394e]">{Math.min(addOnDashboard?.balances.mailboxes.additionalSlots ?? 0, Math.max(0, (addOnDashboard?.balances.mailboxes.used ?? 0) - (addOnDashboard?.balances.mailboxes.baseLimit ?? 0)))}</strong><span className="text-[9px] text-[#788796]">Used</span></div>
+            <div><strong className="block text-[15px] text-[#24394e]">{Math.max(0, (addOnDashboard?.balances.mailboxes.additionalSlots ?? 0) - Math.max(0, (addOnDashboard?.balances.mailboxes.used ?? 0) - (addOnDashboard?.balances.mailboxes.baseLimit ?? 0)))}</strong><span className="text-[9px] text-[#788796]">Remaining</span></div>
+          </div>
+          <p className="mt-2 text-[9px] leading-4 text-[#778596]">Current usable limit: {addOnDashboard?.balances.mailboxes.totalLimit ?? 0} total ({addOnDashboard?.balances.mailboxes.baseLimit ?? 0} base + add-on slots). {addOnDashboard?.balances.mailboxes.active ? 'Add-on slots are active.' : 'Add-on slots are paused until a paid primary plan is active.'}</p>
+        </article>
+      </div>
+    </section>
+
+    <section data-testid="subscription-add-on-catalog">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="mono mb-1 text-[9px] uppercase tracking-[.18em] text-[#8290a0]">OPTIONAL CAPACITY</div><h2 className="display text-[23px] font-bold text-[#1d2d40]">Add-on packages</h2><p className="mt-1 text-[11px] text-[#718192]">Add credits or SMTP mailbox slots to a paid primary subscription.</p></div><Sparkles className="h-5 w-5 text-[#52799c]"/></div>
+      {!addOnDashboard?.eligible
+        ? <div data-testid="notice-addon-eligibility" className="rounded-lg border border-[#dfe5ea] bg-[#f8fafb] p-4 text-[12px] leading-5 text-[#627487]">Add-ons are available only while an active paid primary plan is in effect. Existing balances are preserved and will resume on a future paid plan.</div>
+        : addOnPackages.length === 0
+          ? <div data-testid="empty-addon-packages" className="rounded-lg border border-dashed border-[#d8e1e8] bg-[#fbfcfd] px-6 py-8 text-center text-[12px] text-[#778797]">No add-on packages are available right now.</div>
+          : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{addOnPackages.map(pkg => {
+            const alreadyClaimed = pkg.amountMinor === 0 && addOnDashboard.claimedFreePackageIds.includes(pkg.id);
+            const paymentBlocked = pkg.amountMinor > 0 && !onlinePaymentsEnabled;
+            return <article key={pkg.id} data-testid={`card-addon-${pkg.id}`} className="flex min-h-[245px] flex-col rounded-lg border border-[#dfe6ec] bg-white p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3"><div><span className="mono text-[9px] uppercase tracking-[.16em] text-[#7c8b9a]">MAILFLOW ADD-ON</span><h3 className="display mt-2 text-[19px] font-bold text-[#1d2d40]">{pkg.name}</h3></div><Sparkles className="mt-1 h-4 w-4 shrink-0 text-[#52799c]"/></div>
+              <p className="mt-2 min-h-9 text-[11px] leading-5 text-[#718192]">{pkg.description || 'Additional capacity for your Mailflow workspace.'}</p>
+              <div className="mt-3 space-y-1 text-[11px] font-medium text-[#49627a]">
+                {pkg.researchAllowance > 0 && <p>{pkg.researchAllowance} company research credits</p>}
+                {pkg.aiEmailAssistAllowance > 0 && <p>{pkg.aiEmailAssistAllowance} AI Email Assist credits</p>}
+                {pkg.additionalMailboxCount > 0 && <p>{pkg.additionalMailboxCount} additional SMTP mailbox slots</p>}
+              </div>
+              <div className="mt-auto flex items-end justify-between gap-2 border-t border-[#e6ebef] pt-3">
+                <strong className="text-[17px] text-[#20354a]">{pkg.amountMinor === 0 ? 'Free' : formatMinor(pkg.amountMinor, pkg.currency)}</strong>
+                <button data-testid={`button-purchase-addon-${pkg.id}`} type="button" disabled={busy || startingPackage !== null || checkoutOrder !== null || alreadyClaimed || paymentBlocked} onClick={() => purchase(pkg)} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-[#174f99] px-3 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-55">
+                  {startingPackage === pkg.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : null}
+                  {alreadyClaimed ? 'Already activated' : paymentBlocked ? 'Payments unavailable' : pkg.amountMinor === 0 ? 'Activate free add-on' : 'Buy add-on'}
+                </button>
+              </div>
+            </article>;
+          })}</div>}
+    </section>
+
     {paymentState && <div role="status" data-testid="status-payment" className={`flex items-start gap-3 rounded-md border p-4 text-[12px] leading-5 ${paymentState.kind === 'active' ? 'border-[#d4e8dc] bg-[#f1f8f3] text-[#3c6d4f]' : paymentState.kind === 'pending' ? 'border-[#d6e3ef] bg-[#f3f7fb] text-[#385c7e]' : paymentState.kind === 'error' ? 'border-[#eed9ca] bg-[#fff8f2] text-[#965323]' : 'border-[#e2e6ea] bg-[#f7f8f9] text-[#647281]'}`}>
       {paymentState.kind === 'active' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'error' ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'pending' ? <LoaderCircle className="mt-0.5 h-4 w-4 shrink-0 animate-spin"/> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0"/>}
-      <div><div className="font-semibold">{paymentState.kind === 'active' ? 'Subscription active' : paymentState.kind === 'pending' ? 'Payment verification pending' : paymentState.kind === 'error' ? 'Payment needs attention' : 'Checkout closed'}</div><p>{paymentState.message}</p></div>
+      <div><div className="font-semibold">{paymentState.label ?? (paymentState.kind === 'active' ? 'Subscription active' : paymentState.kind === 'pending' ? 'Payment verification pending' : paymentState.kind === 'error' ? 'Payment needs attention' : 'Checkout closed')}</div><p>{paymentState.message}</p></div>
     </div>}
     {(createOrder.isError || verifyPayment.isError) && !paymentState && <p role="alert" data-testid="status-payment-error" className="rounded-md border border-[#eed9ca] bg-[#fff8f2] p-3 text-[12px] text-[#965323]">{errorText(createOrder.error || verifyPayment.error)}</p>}
     {paymentAvailabilityQuery.data?.enabled === false && <section data-testid="notice-online-payments-disabled" role="status" className="rounded-md border border-[#ead9c5] bg-[#fff8ef] p-4 text-[12px] leading-5 text-[#76552f]">
@@ -393,13 +496,13 @@ export default function PlansPage() {
           <button type="button" aria-label="Cancel package change" data-testid="button-cancel-sender-retention" onClick={() => setPendingPackage(null)} className="rounded px-2 py-1 text-[18px] text-[#667587] hover:bg-[#f1f4f6]">×</button>
         </div>
         <p className="mt-3 text-[12px] leading-5 text-[#637284]">
-          {pendingPackage.name} allows {pendingPackage.emailAccountLimit} SMTP sender account{pendingPackage.emailAccountLimit === 1 ? '' : 's'}. Select exactly {pendingPackage.emailAccountLimit} to retain. This change starts after your current term ends.
+          {pendingPackage.name} allows {pendingPackageAccountLimit} SMTP sender account{pendingPackageAccountLimit === 1 ? '' : 's'} including active paid add-on slots. Select exactly {pendingPackageAccountLimit} to retain. This change starts after your current term ends.
         </p>
         <p className="mt-2 rounded-md border border-[#efd9bd] bg-[#fff8ef] p-3 text-[11px] leading-5 text-[#895b2f]">
           On the start date, unselected SMTP accounts and their saved credentials will be permanently deleted. Accounts used by queued or sending campaigns must be kept until those campaigns finish.
         </p>
         <div className="mt-4 flex items-center justify-between text-[11px] font-semibold text-[#405469]">
-          <span>Keep {senderAccountsToKeep.length} of {pendingPackage.emailAccountLimit}</span>
+          <span>Keep {senderAccountsToKeep.length} of {pendingPackageAccountLimit}</span>
           <span>{senderAccounts.length} currently configured</span>
         </div>
         <div className="mt-2 max-h-64 space-y-2 overflow-y-auto pr-1">
@@ -414,7 +517,7 @@ export default function PlansPage() {
         </div>
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#edf0f2] pt-4">
           <button type="button" data-testid="button-cancel-package-change" onClick={() => setPendingPackage(null)} className="min-h-10 rounded-md border border-[#d7dce3] px-4 text-[12px] font-semibold text-[#38485a] hover:bg-[#f7f9fb]">Cancel</button>
-          <button type="button" data-testid="button-confirm-sender-retention" disabled={senderAccountsToKeep.length !== pendingPackage.emailAccountLimit || busy} onClick={confirmPackageChange} className="min-h-10 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" data-testid="button-confirm-sender-retention" disabled={senderAccountsToKeep.length !== pendingPackageAccountLimit || busy} onClick={confirmPackageChange} className="min-h-10 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
             {pendingPackage.amountMinor === 0 ? 'Activate package' : 'Continue to checkout'}
           </button>
         </div>

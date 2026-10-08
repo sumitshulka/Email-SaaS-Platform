@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { AddOnEntitlementReference } from './addOnEntitlementReference';
 import type { PaymentVerificationResultStatus } from './paymentVerificationResultStatus';
 import type { SubscriptionSummary } from './subscriptionSummary';
 
@@ -12,4 +13,5 @@ export interface PaymentVerificationResult {
   status: PaymentVerificationResultStatus;
   message: string;
   subscription: SubscriptionSummary | null;
+  addOnEntitlement: AddOnEntitlementReference | null;
 }

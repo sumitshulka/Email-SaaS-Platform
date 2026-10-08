@@ -1,5 +1,6 @@
 import { and, desc, eq, gt, inArray, isNull, lte, notInArray } from "drizzle-orm";
 import {
+  addOnEntitlementsTable,
   db,
   emailCampaignsTable,
   paymentsTable,
@@ -15,6 +16,7 @@ type SubscriptionRow = typeof userSubscriptionsTable.$inferSelect;
 export function serializePackage(pkg: PackageRow) {
   return {
     id: pkg.id,
+    packageType: pkg.packageType,
     name: pkg.name,
     description: pkg.description,
     amountMinor: pkg.amountMinor,
@@ -23,6 +25,8 @@ export function serializePackage(pkg: PackageRow) {
     contactLimit: pkg.contactLimit,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
+    aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+    additionalMailboxCount: pkg.additionalMailboxCount,
     preferred: pkg.preferred,
     active: pkg.active,
     createdAt: pkg.createdAt.toISOString(),
@@ -213,6 +217,17 @@ export async function activateCapturedPayment(input: {
       if (payment.razorpayPaymentId !== input.razorpayPaymentId) {
         throw new Error("A different payment is already recorded for this order.");
       }
+      const [existingEntitlement] = await tx
+        .select({ id: addOnEntitlementsTable.id })
+        .from(addOnEntitlementsTable)
+        .where(eq(addOnEntitlementsTable.paymentId, payment.id))
+        .limit(1);
+      if (existingEntitlement) {
+        return {
+          subscription: null,
+          addOnEntitlement: { entitlementId: existingEntitlement.id },
+        };
+      }
       const [existingSubscription] = await tx
         .select({
           subscription: userSubscriptionsTable,
@@ -228,10 +243,13 @@ export async function activateCapturedPayment(input: {
       if (!existingSubscription) {
         throw new Error("The captured payment has no subscription record.");
       }
-      return serializeSubscription(
-        existingSubscription.subscription,
-        existingSubscription.pkg,
-      );
+      return {
+        subscription: serializeSubscription(
+          existingSubscription.subscription,
+          existingSubscription.pkg,
+        ),
+        addOnEntitlement: null,
+      };
     }
     if (payment.status !== "created" && payment.status !== "authorized") {
       throw new Error("This payment is not eligible for subscription activation.");
@@ -244,6 +262,34 @@ export async function activateCapturedPayment(input: {
     if (!pkg) throw new Error("The purchased package is no longer available.");
 
     const now = new Date();
+    if (pkg.packageType === "addon") {
+      const [entitlement] = await tx
+        .insert(addOnEntitlementsTable)
+        .values({
+          userId: payment.userId,
+          packageId: pkg.id,
+          paymentId: payment.id,
+          researchAllowance: pkg.researchAllowance,
+          aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+          additionalMailboxCount: pkg.additionalMailboxCount,
+        })
+        .returning({ id: addOnEntitlementsTable.id });
+      await tx
+        .update(paymentsTable)
+        .set({
+          status: "captured",
+          razorpayPaymentId: input.razorpayPaymentId,
+          updatedAt: now,
+        })
+        .where(eq(paymentsTable.id, payment.id));
+      return {
+        subscription: null,
+        addOnEntitlement: { entitlementId: entitlement!.id },
+      };
+    }
+    if (pkg.packageType !== "primary") {
+      throw new Error("This package cannot be activated as a primary subscription.");
+    }
     const [latestActive] = await tx
       .select()
       .from(userSubscriptionsTable)
@@ -283,7 +329,10 @@ export async function activateCapturedPayment(input: {
         updatedAt: now,
       })
       .where(eq(paymentsTable.id, payment.id));
-    return serializeSubscription(subscription!, pkg);
+    return {
+      subscription: serializeSubscription(subscription!, pkg),
+      addOnEntitlement: null,
+    };
   });
 }
 
@@ -311,7 +360,7 @@ export async function grantAdminGiftSubscription(input: {
       .from(subscriptionPackagesTable)
       .where(eq(subscriptionPackagesTable.id, input.packageId))
       .limit(1);
-    if (!pkg) return null;
+    if (!pkg || pkg.packageType !== "primary") return null;
 
     const now = new Date();
     const [latestActive] = await tx
@@ -376,6 +425,7 @@ export async function activateFreePackageForUser(input: {
           eq(subscriptionPackagesTable.id, input.packageId),
           eq(subscriptionPackagesTable.active, true),
           eq(subscriptionPackagesTable.amountMinor, 0),
+          eq(subscriptionPackagesTable.packageType, "primary"),
         ),
       )
       .limit(1)

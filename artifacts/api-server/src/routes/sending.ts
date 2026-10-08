@@ -148,6 +148,7 @@ import {
   normalizePublicAppOrigin,
 } from "../lib/campaign-unsubscribe";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
+import { getSubscriptionAddOnsDashboard } from "../lib/add-on-entitlements";
 import { requireUserRole } from "../lib/session";
 import {
   companyDomainKey,
@@ -424,9 +425,13 @@ function sendingAccountResponse(
 
 async function tenantEmailAccountLimit(userId: string): Promise<number> {
   const { subscription } = await getCurrentSubscriptionForUser(userId);
-  return subscription?.status === "active"
-    ? subscription.package.emailAccountLimit
-    : 1;
+  if (subscription?.status !== "active") return 1;
+  const addOns = subscription.package.packageType === "primary" &&
+    subscription.package.amountMinor > 0
+    ? await getSubscriptionAddOnsDashboard(userId)
+    : null;
+  return subscription.package.emailAccountLimit +
+    (addOns?.balances.mailboxes.additionalSlots ?? 0);
 }
 
 async function getContactQuota(userId: string) {
@@ -1016,9 +1021,16 @@ router.get("/sending/settings", requireUserRole, async (req, res): Promise<void>
 router.get("/sending/accounts", requireUserRole, async (req, res): Promise<void> => {
   const userId = req.authUser!.id;
   const { subscription } = await getCurrentSubscriptionForUser(userId);
+  const addOnDashboard =
+    subscription?.status === "active" &&
+    subscription.package.packageType === "primary" &&
+    subscription.package.amountMinor > 0
+      ? await getSubscriptionAddOnsDashboard(userId)
+      : null;
   const emailAccountLimit =
     subscription?.status === "active"
-      ? subscription.package.emailAccountLimit
+      ? subscription.package.emailAccountLimit +
+        (addOnDashboard?.balances.mailboxes.additionalSlots ?? 0)
       : 1;
   const accounts = await db
     .select()
@@ -1049,6 +1061,8 @@ router.get("/sending/accounts", requireUserRole, async (req, res): Promise<void>
       startsAt: userSubscriptionsTable.startsAt,
       packageName: subscriptionPackagesTable.name,
       emailAccountLimit: subscriptionPackagesTable.emailAccountLimit,
+      packageType: subscriptionPackagesTable.packageType,
+      amountMinor: subscriptionPackagesTable.amountMinor,
       accountIdsToKeep: userSubscriptionsTable.senderAccountIdsToKeep,
     })
     .from(userSubscriptionsTable)
@@ -1070,7 +1084,11 @@ router.get("/sending/accounts", requireUserRole, async (req, res): Promise<void>
       ? {
           startsAt: scheduled.startsAt.toISOString(),
           packageName: scheduled.packageName,
-          emailAccountLimit: scheduled.emailAccountLimit,
+          emailAccountLimit:
+            scheduled.emailAccountLimit +
+            (scheduled.packageType === "primary" && scheduled.amountMinor > 0
+              ? addOnDashboard?.balances.mailboxes.additionalSlots ?? 0
+              : 0),
           accountIdsToKeep: scheduled.accountIdsToKeep,
         }
       : null;

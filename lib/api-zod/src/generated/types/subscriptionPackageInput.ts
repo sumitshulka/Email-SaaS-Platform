@@ -5,8 +5,10 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionPackageInputPackageType } from './subscriptionPackageInputPackageType';
 
 export interface SubscriptionPackageInput {
+  packageType?: SubscriptionPackageInputPackageType;
   /**
      * @minLength 2
      * @maxLength 120
@@ -23,7 +25,7 @@ export interface SubscriptionPackageInput {
   /** @pattern ^[A-Z]{3}$ */
   currency: string;
   /**
-     * @minimum 1
+     * @minimum 0
      * @maximum 3660
      */
   periodDays: number;
@@ -43,6 +45,16 @@ export interface SubscriptionPackageInput {
      * @maximum 10000
      */
   researchAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  aiEmailAssistAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  additionalMailboxCount?: number;
   preferred?: boolean;
   active: boolean;
 }

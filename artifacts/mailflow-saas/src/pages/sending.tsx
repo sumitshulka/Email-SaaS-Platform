@@ -4,7 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
   Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
-  ShieldCheck, Trash2, Users, X, BookmarkPlus,
+  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
@@ -20,11 +20,11 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
+  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
@@ -1326,13 +1326,23 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const variantLimitsQuery = useGetCampaignVariantLimits();
   const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
   const previewCampaign = usePreviewCampaign();
+  const aiAssist = useGenerateCampaignEmailDraft();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const addOnCreditsQuery = useGetSubscriptionAddOns({
+    query: {
+      queryKey: getGetSubscriptionAddOnsQueryKey(),
+      enabled: editing !== undefined,
+      staleTime: 0,
+    },
+  });
   const [audienceActionPending, setAudienceActionPending] = useState(false);
   const audienceActionInProgress = useRef(false);
   const [campaignListSearch, setCampaignListSearch] = useState('');
   const [showSelectedCampaignLists, setShowSelectedCampaignLists] = useState(false);
   const [sampleContactId, setSampleContactId] = useState('');
+  const [aiDraftPreview, setAiDraftPreview] = useState<{ subject: string; greeting: string; body: string; signature: string; remaining: number } | null>(null);
+  const [aiDraftError, setAiDraftError] = useState<string | null>(null);
   const [placeholderTarget, setPlaceholderTarget] = useState<{ field: CampaignVariantField; index: number }>({ field: 'subjectVariants', index: 0 });
   const [previewState, setPreviewState] = useState<{ key: string; rendered: CampaignTemplatePreview } | null>(null);
   const [previewError, setPreviewError] = useState<{ key: string; message: string } | null>(null);
@@ -1343,6 +1353,12 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
+  const aiAssistBalance = addOnCreditsQuery.data?.balances.emailAssist;
+  const aiAssistAvailable = Boolean(
+    addOnCreditsQuery.data?.eligible &&
+    aiAssistBalance &&
+    aiAssistBalance.remaining > 0,
+  );
   const variantLimits = variantLimitsQuery.data ?? {
     subject: { minimum: 3, maximum: 7 },
     greeting: { minimum: 3, maximum: 7 },
@@ -1468,8 +1484,8 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); };
+  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
+  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -1547,6 +1563,41 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   };
   const insertSubjectPlaceholder = (token: string) =>
     insertPlaceholder('subjectVariants', 0, token);
+  const requestAiDraft = () => {
+    if (!form.objective.trim()) {
+      setAiDraftError('Enter a campaign objective before asking AI Email Assist to draft this email.');
+      return;
+    }
+    setAiDraftError(null);
+    setAiDraftPreview(null);
+    aiAssist.mutate({
+      data: {
+        objective: form.objective.trim(),
+        ...(form.textBody.trim() ? { currentBody: form.textBody.trim() } : {}),
+      },
+    }, {
+      onSuccess: result => {
+        setAiDraftPreview({ ...result.draft, remaining: result.usage.remaining });
+        void qc.invalidateQueries({ queryKey: getGetSubscriptionAddOnsQueryKey() });
+      },
+      onError: error => setAiDraftError(mutationError(error)),
+    });
+  };
+  const applyAiDraft = () => {
+    if (!aiDraftPreview) return;
+    setForm(current => ({
+      ...current,
+      subjectVariants: [aiDraftPreview.subject, ...current.subjectVariants.slice(1)],
+      greetingVariants: [aiDraftPreview.greeting, ...current.greetingVariants.slice(1)],
+      signatureVariants: [aiDraftPreview.signature, ...current.signatureVariants.slice(1)],
+      textBody: aiDraftPreview.body,
+      htmlBody: plainTextToHtml(aiDraftPreview.body),
+    }));
+    setAiDraftPreview(null);
+    setAiDraftError(null);
+    setPreviewState(null);
+    setPreviewError(null);
+  };
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.listIds.length || !audienceCheckReady || audienceActionInProgress.current) return;
@@ -1665,6 +1716,32 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
               <textarea data-testid="input-campaign-objective" rows={3} maxLength={500} value={form.objective} onChange={event => setForm(current => ({ ...current, objective: event.target.value }))} placeholder="What should this campaign achieve?" className="w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none placeholder:text-[#a0a8b3] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/>
               <span className="mt-1 block text-[10px] leading-4 text-[#808a97]">Internal note only; it won’t be included in the email. {form.objective.length}/500</span>
             </label>
+            <section data-testid="panel-campaign-ai-assist" className="rounded-md border border-[#dce5ed] bg-[#f5f9fc] p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div><h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[#344b62]"><Sparkles className="h-3.5 w-3.5 text-[#4276a2]"/>AI Email Assist</h3><p className="mt-1 text-[10px] leading-4 text-[#65788a]">Create a suggested subject, greeting, body, and signature from your campaign objective. This will not send the campaign.</p></div>
+                {aiAssistBalance && <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[9px] font-semibold text-[#536a80]">{aiAssistBalance.remaining} credits left</span>}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button testId="button-generate-campaign-ai-draft" onClick={requestAiDraft} disabled={aiAssist.isPending || addOnCreditsQuery.isLoading || !form.objective.trim() || !aiAssistAvailable}>
+                  {aiAssist.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Sparkles className="h-3.5 w-3.5"/>}
+                  {aiAssist.isPending ? 'Drafting…' : 'Draft with AI'}
+                </Button>
+                {!aiAssistAvailable && !addOnCreditsQuery.isLoading && <Button variant="outline" testId="button-campaign-ai-addons" onClick={() => setLocation('/plans')}>View add-on packages</Button>}
+                {addOnCreditsQuery.isError && <Button variant="outline" testId="button-retry-campaign-ai-credits" onClick={() => void addOnCreditsQuery.refetch()}>Retry credit check</Button>}
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-[#6f8090]">
+                {addOnCreditsQuery.isLoading ? 'Checking your AI Email Assist balance…' : !addOnCreditsQuery.data?.eligible ? 'An active paid primary plan and an AI Email Assist add-on are required.' : !aiAssistAvailable ? 'No AI Email Assist credits remain. Choose an add-on package to add more.' : 'One credit is used only when a complete draft is successfully generated.'}
+              </p>
+              {aiDraftError && <p role="alert" data-testid="status-campaign-ai-assist-error" className="mt-2 rounded border border-[#efd7c3] bg-[#fff8f1] px-2.5 py-2 text-[10px] leading-4 text-[#925023]">{aiDraftError}</p>}
+              {aiDraftPreview && <div data-testid="panel-campaign-ai-draft-preview" className="mt-3 space-y-2 rounded-md border border-[#dce5ed] bg-white p-3">
+                <p className="text-[10px] font-semibold text-[#3c5c78]">Draft ready · {aiDraftPreview.remaining} credit{aiDraftPreview.remaining === 1 ? '' : 's'} remaining</p>
+                <div><span className="text-[9px] font-semibold uppercase tracking-wide text-[#7b8793]">Subject</span><p className="mt-0.5 break-words text-[11px] font-semibold text-[#26384a]">{aiDraftPreview.subject}</p></div>
+                <div><span className="text-[9px] font-semibold uppercase tracking-wide text-[#7b8793]">Greeting</span><p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] text-[#405366]">{aiDraftPreview.greeting}</p></div>
+                <div><span className="text-[9px] font-semibold uppercase tracking-wide text-[#7b8793]">Message</span><p className="mt-0.5 max-h-28 overflow-y-auto whitespace-pre-wrap break-words text-[11px] leading-5 text-[#405366]">{aiDraftPreview.body}</p></div>
+                <div><span className="text-[9px] font-semibold uppercase tracking-wide text-[#7b8793]">Signature</span><p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] text-[#405366]">{aiDraftPreview.signature}</p></div>
+                <Button testId="button-use-campaign-ai-draft" onClick={applyAiDraft}>Use this draft</Button>
+              </div>}
+            </section>
           </div>
           <fieldset className="min-w-0">
             <legend className={labelClass}>Target lists</legend>

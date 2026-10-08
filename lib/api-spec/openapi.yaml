@@ -2055,6 +2055,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/ai-assist:
+    post:
+      operationId: generateCampaignEmailDraft
+      tags: [sending]
+      summary: Generate or revise a campaign email draft using an add-on credit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignEmailAssistInput"
+      responses:
+        "200":
+          description: Validated email draft and remaining assist allowance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignEmailAssistResponse"
+        "400":
+          description: Invalid draft request or unavailable model configuration
+        "403":
+          description: An active paid primary package and an available AI email assist credit are required
+        "502":
+          description: The configured AI provider did not return a usable draft
   /campaigns/recipient-summary:
     get:
       operationId: getCampaignRecipientSummary
@@ -3161,6 +3185,42 @@ paths:
           description: Email verification is required
         "404":
           description: Free package is not available
+  /subscriptions/add-ons:
+    get:
+      operationId: getSubscriptionAddOns
+      tags: [billing]
+      summary: Get add-on eligibility, available packages, and persistent entitlement balances
+      responses:
+        "200":
+          description: Add-on catalogue for eligible paid subscribers and current entitlement balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionAddOnsDashboard"
+  /subscriptions/add-ons/free:
+    post:
+      operationId: activateFreeAddOn
+      tags: [billing]
+      summary: Activate an eligible free add-on without creating a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivateFreeAddOnInput"
+      responses:
+        "201":
+          description: Free add-on entitlement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreeAddOnActivation"
+        "400":
+          description: Invalid or already claimed free add-on
+        "403":
+          description: An active paid primary package is required
+        "404":
+          description: Free add-on package is unavailable
   /subscriptions/orders:
     post:
       operationId: createSubscriptionOrder
@@ -5381,6 +5441,7 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
+        packageType: { type: string, enum: [primary, addon] }
         name: { type: string }
         description: { type: string }
         amountMinor: { type: integer }
@@ -5389,11 +5450,13 @@ components:
         contactLimit: { type: integer, minimum: 0 }
         emailAccountLimit: { type: integer, minimum: 0 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
+        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign draft or revision results included in this add-on. }
+        additionalMailboxCount: { type: integer, minimum: 0, maximum: 100, description: Additional SMTP campaign sender accounts allowed while a paid primary subscription is active. }
         preferred: { type: boolean, description: Highlights this package in package selection screens. }
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, researchAllowance, preferred, active, createdAt, updatedAt]
+      required: [id, packageType, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount, preferred, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -5413,6 +5476,7 @@ components:
     SubscriptionPackageInput:
       type: object
       properties:
+        packageType: { type: string, enum: [primary, addon], default: primary }
         name: { type: string, minLength: 2, maxLength: 120 }
         description: { type: string, maxLength: 2000 }
         amountMinor:
@@ -5421,10 +5485,12 @@ components:
           maximum: 100000000
           description: Price in currency minor units; zero creates a free package.
         currency: { type: string, pattern: "^[A-Z]{3}$" }
-        periodDays: { type: integer, minimum: 1, maximum: 3660 }
+        periodDays: { type: integer, minimum: 0, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
+        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
+        additionalMailboxCount: { type: integer, minimum: 0, maximum: 100 }
         preferred: { type: boolean }
         active: { type: boolean }
       required: [name, description, amountMinor, currency, periodDays, contactLimit, active]
@@ -5445,12 +5511,83 @@ components:
           maximum: 100000000
           description: Price in currency minor units; zero makes the package free.
         currency: { type: string, pattern: "^[A-Z]{3}$" }
-        periodDays: { type: integer, minimum: 1, maximum: 3660 }
+        periodDays: { type: integer, minimum: 0, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
+        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
+        additionalMailboxCount: { type: integer, minimum: 0, maximum: 100 }
         preferred: { type: boolean }
         active: { type: boolean }
+    SubscriptionAddOnMetric:
+      type: object
+      properties:
+        total: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+      required: [total, used, remaining]
+    SubscriptionAddOnMailboxMetric:
+      type: object
+      properties:
+        baseLimit: { type: integer, minimum: 0 }
+        additionalSlots: { type: integer, minimum: 0 }
+        totalLimit: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+        active: { type: boolean }
+      required: [baseLimit, additionalSlots, totalLimit, used, remaining, active]
+    SubscriptionAddOnBalances:
+      type: object
+      properties:
+        research: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
+        emailAssist: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
+        mailboxes: { $ref: "#/components/schemas/SubscriptionAddOnMailboxMetric" }
+      required: [research, emailAssist, mailboxes]
+    SubscriptionAddOnsDashboard:
+      type: object
+      properties:
+        eligible: { type: boolean }
+        eligibilityReason: { type: ["string", "null"], enum: [paid_primary_required, null] }
+        primaryEndsAt: { type: ["string", "null"], format: date-time }
+        balances: { $ref: "#/components/schemas/SubscriptionAddOnBalances" }
+        packages:
+          type: array
+          items: { $ref: "#/components/schemas/SubscriptionPackage" }
+        claimedFreePackageIds:
+          type: array
+          items: { type: string, format: uuid }
+      required: [eligible, eligibilityReason, primaryEndsAt, balances, packages, claimedFreePackageIds]
+    ActivateFreeAddOnInput:
+      type: object
+      properties:
+        packageId: { type: string, format: uuid }
+      required: [packageId]
+    FreeAddOnActivation:
+      type: object
+      properties:
+        entitlementId: { type: string, format: uuid }
+        message: { type: string }
+      required: [entitlementId, message]
+    CampaignEmailAssistInput:
+      type: object
+      properties:
+        objective: { type: string, minLength: 1, maxLength: 500 }
+        currentBody: { type: string, maxLength: 10000 }
+      required: [objective]
+    CampaignEmailAssistDraft:
+      type: object
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        greeting: { type: string, minLength: 1, maxLength: 500 }
+        body: { type: string, minLength: 1, maxLength: 10000 }
+        signature: { type: string, minLength: 1, maxLength: 1000 }
+      required: [subject, greeting, body, signature]
+    CampaignEmailAssistResponse:
+      type: object
+      properties:
+        draft: { $ref: "#/components/schemas/CampaignEmailAssistDraft" }
+        usage: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
+      required: [draft, usage]
     ContactQuota:
       type: object
       properties:
@@ -5588,7 +5725,16 @@ components:
           oneOf:
             - $ref: "#/components/schemas/SubscriptionSummary"
             - type: "null"
-      required: [status, message, subscription]
+        addOnEntitlement:
+          anyOf:
+            - $ref: "#/components/schemas/AddOnEntitlementReference"
+            - type: "null"
+      required: [status, message, subscription, addOnEntitlement]
+    AddOnEntitlementReference:
+      type: object
+      properties:
+        entitlementId: { type: string, format: uuid }
+      required: [entitlementId]
     RazorpayWebhookPayload:
       type: object
       additionalProperties: true

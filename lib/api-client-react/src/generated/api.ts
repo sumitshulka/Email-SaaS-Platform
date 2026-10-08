@@ -23,6 +23,7 @@ import type {
   AIProviderSettings,
   AIProviderSettingsInput,
   AIProviderTestResult,
+  ActivateFreeAddOnInput,
   ActivateFreeSubscriptionInput,
   AdminDashboard,
   AdminFinancePaymentPage,
@@ -43,6 +44,8 @@ import type {
   CampaignAudienceSummary,
   CampaignDashboard,
   CampaignDeliveryReport,
+  CampaignEmailAssistInput,
+  CampaignEmailAssistResponse,
   CampaignInput,
   CampaignPreviewInput,
   CampaignQueueInput,
@@ -95,6 +98,7 @@ import type {
   DeliveryReportImportResult,
   DeliveryReportInput,
   ForgotPasswordInput,
+  FreeAddOnActivation,
   FreeSubscriptionActivation,
   GetCampaignDeliveryReportParams,
   GetCampaignRecipientSummaryParams,
@@ -143,6 +147,7 @@ import type {
   SearchCompaniesParams,
   SearchGlobalCompaniesParams,
   SetActiveRazorpayEnvironmentInput,
+  SubscriptionAddOnsDashboard,
   SubscriptionGiftInput,
   SubscriptionOrderCreated,
   SubscriptionPackage,
@@ -7251,6 +7256,94 @@ export const usePreviewCampaign = <TError = ErrorType<ApiError>,
       return useMutation(getPreviewCampaignMutationOptions(options));
     }
 
+export const getGenerateCampaignEmailDraftUrl = () => {
+
+
+
+
+  return `/api/campaigns/ai-assist`
+}
+
+/**
+ * @summary Generate or revise a campaign email draft using an add-on credit
+ */
+export const generateCampaignEmailDraft = async (campaignEmailAssistInput: CampaignEmailAssistInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignEmailAssistResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignEmailAssistResponse>(getGenerateCampaignEmailDraftUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignEmailAssistInput)
+  }
+);}
+
+
+
+
+
+export const getGenerateCampaignEmailDraftMutationKey = () => ['generateCampaignEmailDraft'] as const;
+
+export const getGenerateCampaignEmailDraftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCampaignEmailDraft>>, TError,GenerateCampaignEmailDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateCampaignEmailDraft>>, TError,GenerateCampaignEmailDraftMutationVariables, TContext> => {
+
+const mutationKey = getGenerateCampaignEmailDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateCampaignEmailDraft>>, GenerateCampaignEmailDraftMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateCampaignEmailDraft(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateCampaignEmailDraftMutationResult = NonNullable<Awaited<ReturnType<typeof generateCampaignEmailDraft>>>
+    export type GenerateCampaignEmailDraftMutationBody = BodyType<CampaignEmailAssistInput>
+    export type GenerateCampaignEmailDraftMutationError = ErrorType<void>
+    export type GenerateCampaignEmailDraftMutationVariables = {data: BodyType<CampaignEmailAssistInput>}
+
+    /**
+ * @summary Generate or revise a campaign email draft using an add-on credit
+ */
+export const useGenerateCampaignEmailDraft = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCampaignEmailDraft>>, TError,GenerateCampaignEmailDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateCampaignEmailDraft>>,
+        TError,
+        GenerateCampaignEmailDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getGenerateCampaignEmailDraftMutationOptions(options));
+    }
+
 export const getGetCampaignRecipientSummaryUrl = (params: GetCampaignRecipientSummaryParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -11241,6 +11334,171 @@ export const useActivateFreeSubscription = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getActivateFreeSubscriptionMutationOptions(options));
+    }
+
+export const getGetSubscriptionAddOnsUrl = () => {
+
+
+
+
+  return `/api/subscriptions/add-ons`
+}
+
+/**
+ * @summary Get add-on eligibility, available packages, and persistent entitlement balances
+ */
+export const getSubscriptionAddOns = async ( options?: Parameters<typeof customFetch>[1]): Promise<SubscriptionAddOnsDashboard> => {
+
+  return customFetch<SubscriptionAddOnsDashboard>(getGetSubscriptionAddOnsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSubscriptionAddOnsQueryKey = () => {
+    return [
+    `/api/subscriptions/add-ons`
+    ] as const;
+    }
+
+
+export const getGetSubscriptionAddOnsQueryOptions = <TData = Awaited<ReturnType<typeof getSubscriptionAddOns>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionAddOns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSubscriptionAddOnsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSubscriptionAddOns>>> = ({ signal }) => getSubscriptionAddOns({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionAddOns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSubscriptionAddOnsQueryResult = NonNullable<Awaited<ReturnType<typeof getSubscriptionAddOns>>>
+export type GetSubscriptionAddOnsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get add-on eligibility, available packages, and persistent entitlement balances
+ */
+
+export function useGetSubscriptionAddOns<TData = Awaited<ReturnType<typeof getSubscriptionAddOns>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSubscriptionAddOns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSubscriptionAddOnsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getActivateFreeAddOnUrl = () => {
+
+
+
+
+  return `/api/subscriptions/add-ons/free`
+}
+
+/**
+ * @summary Activate an eligible free add-on without creating a payment
+ */
+export const activateFreeAddOn = async (activateFreeAddOnInput: ActivateFreeAddOnInput, options?: Parameters<typeof customFetch>[1]): Promise<FreeAddOnActivation> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FreeAddOnActivation>(getActivateFreeAddOnUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(activateFreeAddOnInput)
+  }
+);}
+
+
+
+
+
+export const getActivateFreeAddOnMutationKey = () => ['activateFreeAddOn'] as const;
+
+export const getActivateFreeAddOnMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateFreeAddOn>>, TError,ActivateFreeAddOnMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activateFreeAddOn>>, TError,ActivateFreeAddOnMutationVariables, TContext> => {
+
+const mutationKey = getActivateFreeAddOnMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activateFreeAddOn>>, ActivateFreeAddOnMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  activateFreeAddOn(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivateFreeAddOnMutationResult = NonNullable<Awaited<ReturnType<typeof activateFreeAddOn>>>
+    export type ActivateFreeAddOnMutationBody = BodyType<ActivateFreeAddOnInput>
+    export type ActivateFreeAddOnMutationError = ErrorType<void>
+    export type ActivateFreeAddOnMutationVariables = {data: BodyType<ActivateFreeAddOnInput>}
+
+    /**
+ * @summary Activate an eligible free add-on without creating a payment
+ */
+export const useActivateFreeAddOn = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateFreeAddOn>>, TError,ActivateFreeAddOnMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof activateFreeAddOn>>,
+        TError,
+        ActivateFreeAddOnMutationVariables,
+        TContext
+      > => {
+      return useMutation(getActivateFreeAddOnMutationOptions(options));
     }
 
 export const getCreateSubscriptionOrderUrl = () => {
