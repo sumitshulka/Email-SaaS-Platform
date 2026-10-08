@@ -10,16 +10,16 @@ import { MailflowBrand } from '@/components/brand';
 import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
 
 const homeMeta = {
-  title: 'Mailflow — thoughtful email marketing, in your hands',
-  description: 'Bring contacts, companies, lists and campaigns into one clear workspace. Send through your own SMTP accounts and review campaign history with Mailflow.',
+  title: 'Mailflow — simple email campaigns from your own sender',
+  description: 'Organize contacts and companies, prepare simple campaigns, and send through the SMTP account you control. Add company research and AI-assisted drafts where your plan includes them.',
 };
 const pricingMeta = {
   title: 'Mailflow pricing — plans for your next send',
   description: 'Explore Mailflow plans for organizing contacts and preparing email campaigns. See current plan limits and pricing, with no invented numbers.',
 };
 const featuresMeta = {
-  title: 'Email marketing features for small teams | Mailflow',
-  description: 'Organize contacts, plan campaigns and send through the SMTP account you control. See how Mailflow keeps email marketing clear and straightforward.',
+  title: 'Your sender, simpler campaigns, useful AI | Mailflow Features',
+  description: 'Use your own SMTP account, keep contact records private, and run clear email campaigns with recipient-stable variants, one-click unsubscribe, on-demand company research and optional AI drafting.',
 };
 
 function usePageMeta(meta: typeof homeMeta) {
@@ -134,11 +134,11 @@ export function MarketingHomePage() {
         <section className="mf-hero">
           <div className="mf-hero-grid">
             <div className="mf-hero-copy">
-              <SectionEyebrow>Email marketing, thoughtfully arranged</SectionEyebrow>
-              <h1>Make every<br/><em>send</em> feel considered.</h1>
-              <p className="mf-hero-lede">The calm, capable workspace for your contacts, companies, lists and campaigns. You bring the audience and your SMTP account. Mailflow brings it all together.</p>
-              <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="hero-get-started">Make room to grow <ArrowRight size={17}/></Link><Link href="/pricing" className="mf-text-link" data-testid="hero-view-pricing">See plans <ArrowUpRight size={16}/></Link></div>
-              <div className="mf-hero-footnote"><span className="mf-check-ring"><Check size={12}/></span> Your sending account stays yours <span className="mf-foot-divider"/> SMTP outcomes, clearly explained</div>
+              <SectionEyebrow>Email campaigns without the platform switch</SectionEyebrow>
+              <h1>Keep your email.<br/><em>Simplify the campaign.</em></h1>
+              <p className="mf-hero-lede">Mailflow is the campaign workspace for the SMTP account you control. Organize contacts and companies, prepare a message, choose a sender, then queue or schedule—without moving your sending to a separate bulk-email platform.</p>
+              <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="hero-get-started">Start with Mailflow <ArrowRight size={17}/></Link><Link href="/pricing" className="mf-text-link" data-testid="hero-view-pricing">See plans <ArrowUpRight size={16}/></Link></div>
+              <div className="mf-hero-footnote"><span className="mf-check-ring"><Check size={12}/></span> Your sending account stays yours <span className="mf-foot-divider"/> A clear route from list to send</div>
             </div>
             <HeroIllustration />
           </div>
@@ -146,28 +146,28 @@ export function MarketingHomePage() {
         </section>
 
         <section className="mf-intro mf-section-wrap" id="how-it-works">
-          <div className="mf-intro-aside"><SectionEyebrow>One clear place</SectionEyebrow><span className="mf-index">01 / THE WORKSPACE</span></div>
-          <div className="mf-intro-copy"><h2>Less tab-juggling.<br/><span>More good work.</span></h2><p>Marketing shouldn’t mean rebuilding the same context in five places. Keep the people, the plan and the send close together—so the work feels easier to pick up and easier to follow through.</p><Link href="/register" className="mf-underlined-link" data-testid="intro-create-account">Set up your workspace <ArrowRight size={15}/></Link></div>
+          <div className="mf-intro-aside"><SectionEyebrow>Simple by design</SectionEyebrow><span className="mf-index">01 / THE WORKSPACE</span></div>
+          <div className="mf-intro-copy"><h2>A campaign workspace,<br/><span>not another maze.</span></h2><p>Keep contact and company context, audience selection, message preparation and campaign history together. Do the useful steps in order—without building complicated journeys just to send a considered email.</p><Link href="/register" className="mf-underlined-link" data-testid="intro-create-account">Set up your workspace <ArrowRight size={15}/></Link></div>
           <div className="mf-route-graphic" aria-hidden="true"><div className="route-label">A BETTER ROUTE THROUGH EMAIL</div><div className="route-line"><i/><i/><i/><span><ArrowRight size={20}/></span></div><div className="route-steps"><span>Know your people</span><span>Shape your message</span><span>Understand the outcome</span></div></div>
         </section>
 
         <section className="mf-feature-section">
           <div className="mf-section-wrap">
-            <div className="mf-section-heading"><div><SectionEyebrow>Everything in its right place</SectionEyebrow><h2>A steady rhythm<br/>from list to send.</h2></div><p>Useful structure for the whole campaign process, without turning your day into a project plan.</p></div>
+            <div className="mf-section-heading"><div><SectionEyebrow>One clear route</SectionEyebrow><h2>From a real audience<br/>to a real send.</h2></div><p>Keep the decisions that matter—audience, message, sender and timing—together in one straightforward campaign flow.</p></div>
             <div className="mf-feature-grid">
               <article className="mf-feature feature-wide">
                 <span className="mf-feature-number">01</span><div className="mf-feature-icon"><ContactRound size={21}/></div>
-                <h3>Know the people behind the email.</h3><p>Keep contacts, company details and the context your team needs in one organized place. Bring in existing contacts and shape useful lists for the next conversation.</p>
+                <h3>Keep people and company context together.</h3><p>Search and organize contacts, custom fields, lead history and company profiles in one workspace. Contact records stay private; only company profiles you choose to share can enter the Global Company DB.</p>
                 <div className="mf-contact-preview"><div className="mf-preview-head"><span>CONTACTS · EXAMPLE</span><span>COMPANY + LIST</span></div><div className="mf-contact-line"><span className="mf-initials">AM</span><span><b>Alex Morgan</b><small>Northstar Studio</small></span><span className="mf-tag">Customer</span></div><div className="mf-contact-line"><span className="mf-initials warm">JL</span><span><b>Jamie Lee</b><small>Fieldwork Co.</small></span><span className="mf-tag tag-warm">Prospect</span></div><div className="mf-contact-line"><span className="mf-initials lilac">RC</span><span><b>Riley Chen</b><small>Independent</small></span><span className="mf-tag">Subscriber</span></div></div>
               </article>
               <article className="mf-feature">
                 <span className="mf-feature-number">02</span><div className="mf-feature-icon icon-coral"><Layers3 size={21}/></div>
-                <h3>Make the next send a little easier.</h3><p>Build campaigns around a clear audience. Draft the message, choose a list and keep your progress visible before anything leaves your workspace.</p>
+                <h3>Build campaigns without an operations maze.</h3><p>Set an objective, choose prioritized lists, preview a deduplicated audience, select your SMTP sender, then queue or schedule. No complex journey builder required.</p>
                 <div className="mf-composer"><div className="composer-top"><span className="composer-dot"/><span className="composer-dot"/><span className="composer-dot"/><span>NEW CAMPAIGN</span></div><div className="composer-field">To <b>Spring clients <span>128 contacts</span></b></div><div className="composer-field">Subject <b>A note for the new season</b></div><div className="composer-body"><i/><i/><i/></div><div className="composer-action">Save draft <ArrowRight size={12}/></div></div>
               </article>
               <article className="mf-feature">
                 <span className="mf-feature-number">03</span><div className="mf-feature-icon icon-cream"><Gauge size={21}/></div>
-                <h3>See what happened, clearly.</h3><p>Review campaign history and the SMTP outcomes Mailflow can observe. Keep your records useful and your expectations grounded.</p>
+                <h3>Your sender and the campaign record stay connected.</h3><p>Choose the SMTP mailbox for each campaign and review its recorded responses. Every campaign includes an unsubscribe link; SMTP acceptance still isn’t inbox confirmation.</p>
                 <div className="mf-outcome"><div className="outcome-title"><span>EXAMPLE · APRIL STUDIO NOTES</span><span className="mf-status">COMPLETED</span></div><div className="outcome-stats"><div><b>Audience</b><small>Selected list</small></div><div><b>Accepted</b><small>SMTP response</small></div><div><b>Review</b><small>Campaign record</small></div></div><div className="outcome-foot"><span><Check size={12}/> SMTP server accepted</span><span>Not an inbox receipt</span></div></div>
               </article>
             </div>
@@ -176,16 +176,17 @@ export function MarketingHomePage() {
 
         <section className="mf-principles">
           <div className="mf-section-wrap principles-layout">
-            <div className="principles-intro"><SectionEyebrow>Confidence, without the fog</SectionEyebrow><h2>Built around the way your email actually works.</h2><p>Mailflow helps you prepare and manage campaigns. Your configured SMTP account handles sending; its responses tell you what the server accepted or rejected.</p></div>
+            <div className="principles-intro"><SectionEyebrow>What makes Mailflow different</SectionEyebrow><h2>Use the email setup you know. Skip the machinery you don’t need.</h2><p>Your mailbox remains the sender. Mailflow keeps audience work, simple campaign automation and useful context together—then reports only what the connected systems can actually confirm.</p></div>
             <div className="principle-list">
-              <article><span className="principle-index">A</span><div><h3>Your SMTP. Your setup.</h3><p>Connect the sending account you configure and keep sender details in your own hands.</p></div><ArrowUpRight size={18}/></article>
-              <article><span className="principle-index">B</span><div><h3>A record you can return to.</h3><p>Campaign history makes previous work and recorded sending outcomes easier to review.</p></div><ArrowUpRight size={18}/></article>
-              <article><span className="principle-index">C</span><div><h3>Honest about the last mile.</h3><p>SMTP acceptance is a server response, not confirmation that a message reached an inbox.</p></div><ArrowUpRight size={18}/></article>
+              <article><span className="principle-index">A</span><div><h3>Keep your existing sender.</h3><p>Configure SMTP accounts you control and choose a sender mailbox for each campaign. Your provider’s own rules and limits still apply.</p></div><ArrowUpRight size={18}/></article>
+              <article><span className="principle-index">B</span><div><h3>Use company context when it helps.</h3><p>Request source-linked company research or use AI Email Assist for an editable first draft when your account has the required setup and credits.</p></div><ArrowUpRight size={18}/></article>
+              <article><span className="principle-index">C</span><div><h3>Automate the steps, not the maze.</h3><p>Choose lists, review the audience and message, then queue or schedule. Mailflow is built for straightforward campaigns, not complex behavioral journeys.</p></div><ArrowUpRight size={18}/></article>
+              <article><span className="principle-index">D</span><div><h3>Keep testing consistent and opt-outs clear.</h3><p>Recipients keep their assigned message variant, every campaign includes an unsubscribe link, and reports distinguish SMTP responses from confirmed inbox delivery.</p></div><ArrowUpRight size={18}/></article>
             </div>
           </div>
         </section>
 
-        <section className="mf-final-cta"><div className="cta-route" aria-hidden="true"><span/><span/><span/></div><div className="mf-final-inner"><SectionEyebrow>A good place to start</SectionEyebrow><h2>Bring your next<br/>campaign into focus.</h2><p>Set up your workspace, connect a sending account and get your audience in order.</p><Link href="/register" className="mf-button mf-button-light" data-testid="final-register">Start with Mailflow <ArrowRight size={17}/></Link><span className="cta-note">No invented promises. Just a clearer way to work.</span></div><div className="cta-side-note">MAILFLOW / 02<br/><span>THE ROUTE IS YOURS</span></div></section>
+        <section className="mf-final-cta"><div className="cta-route" aria-hidden="true"><span/><span/><span/></div><div className="mf-final-inner"><SectionEyebrow>A good place to start</SectionEyebrow><h2>Keep your sender.<br/>Bring the next campaign into focus.</h2><p>Start with your audience, the email account you control and a campaign flow your team can follow.</p><Link href="/register" className="mf-button mf-button-light" data-testid="final-register">Start with Mailflow <ArrowRight size={17}/></Link><span className="cta-note">Your SMTP provider still controls delivery and its own limits.</span></div><div className="cta-side-note">MAILFLOW / 02<br/><span>THE ROUTE IS YOURS</span></div></section>
       </main>
     </MetaLayout>
   );
@@ -208,8 +209,10 @@ function FeatureCampaignPreview() {
     <div className="ft-campaign-window-head"><span><span className="ft-campaign-mark"><Mail size={13}/></span> New campaign</span><span className="ft-draft-badge">DRAFT</span></div>
     <div className="ft-campaign-field"><small>CAMPAIGN OBJECTIVE</small><b>Share the new season collection</b><span>Give this send a clear purpose.</span></div>
     <div className="ft-campaign-field ft-audience-field"><small>CONTACT LISTS <span>2 selected</span></small><div><span className="ft-list-check"><Check size={10}/></span><b>Spring clients</b><span>Priority 1</span></div><div><span className="ft-list-check"><Check size={10}/></span><b>Studio subscribers</b><span>Priority 2</span></div></div>
+    <div className="ft-campaign-field"><small>SENDING ACCOUNT</small><b>hello@yourstudio.example</b><span>Selected for this campaign</span></div>
     <div className="ft-audience-count"><span>Audience preview</span><b>One clear audience</b><small>Duplicate email addresses across selected lists receive one email.</small></div>
     <div className="ft-preview-actions"><span>Preview audience &amp; template <ArrowUpRight size={12}/></span><span>Queue or schedule <ArrowRight size={12}/></span></div>
+    <div className="mt-3 flex flex-wrap gap-2 pb-3 text-[8px] font-semibold text-[#60757d]"><span className="rounded-full bg-[#edf2ef] px-2 py-1">One-click unsubscribe included</span><span className="rounded-full bg-[#edf2ef] px-2 py-1">Recipient-stable variants</span></div>
   </div>;
 }
 
@@ -221,9 +224,9 @@ export function PublicFeaturesPage() {
         <div className="ft-hero-wrap">
           <div className="ft-hero-copy">
             <SectionEyebrow>THE FEATURES / MADE PRACTICAL</SectionEyebrow>
-            <p className="ft-hero-index">A SMALL-TEAM WORKSPACE · 01—06</p>
-            <h1>Email marketing<br/>that stays <em>in your hands.</em></h1>
-            <p className="ft-hero-lede">Keep your people, campaign plan and sending account in one clear place. Mailflow gives a small team a steadier way to get a send ready—without moving into a separate bulk-mail provider.</p>
+            <p className="ft-hero-index">SMALL-TEAM EMAIL · YOUR SENDER, SIMPLIFIED</p>
+            <h1>Your email account.<br/><em>Campaigns without the maze.</em></h1>
+            <p className="ft-hero-lede">Keep the email address and SMTP mailbox your team controls. Mailflow brings contacts, company context, campaign planning and honest outcome records together—without moving your sending to a separate bulk-email platform.</p>
             <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register">Make a little room <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
             <div className="ft-hero-note"><ShieldCheck size={16}/> Your configured SMTP account does the sending.</div>
           </div>
@@ -244,16 +247,16 @@ export function PublicFeaturesPage() {
       </section>
 
       <section className="ft-thesis" data-testid="features-thesis">
-        <div className="mf-section-wrap ft-thesis-inner"><span className="ft-thesis-kicker">A DIFFERENT KIND OF EMAIL WORKSPACE</span><p>Bring the email address and SMTP account you already control. <em>Keep the campaign work simple.</em></p><span className="ft-thesis-end">NO PROVIDER MOVE-IN<br/>NO OPERATIONS MAZE</span></div>
+        <div className="mf-section-wrap ft-thesis-inner"><span className="ft-thesis-kicker">THE MAILFLOW DIFFERENCE</span><p>Your configured SMTP account sends. <em>Mailflow keeps the audience, company context and campaign work simple.</em></p><span className="ft-thesis-end">YOUR SENDER<br/>YOUR WORKFLOW</span></div>
       </section>
 
       <section className="ft-audience-section" id="features-audience">
         <div className="mf-section-wrap ft-audience-layout">
           <div className="ft-section-copy">
-            <SectionEyebrow>01 / KNOW YOUR PEOPLE</SectionEyebrow><h2>Useful context,<br/><em>not another spreadsheet.</em></h2>
-            <p>Keep contacts connected to company profiles, add custom contact fields, and use search, filters and contact lists to find the right people.</p>
-            <ul className="ft-check-list"><li><Check size={14}/> Search and filter contact and company records.</li><li><Check size={14}/> Export contact or company data for your records.</li><li><Check size={14}/> Keep lead-status changes with reason, actor and date.</li></ul>
-            <div className="ft-audience-foot"><span className="ft-field-chip">CUSTOM FIELDS</span><span className="ft-field-chip">LEAD HISTORY</span><span className="ft-field-chip">CONTACT &amp; COMPANY EXPORTS</span></div>
+            <SectionEyebrow>01 / YOUR AUDIENCE, IN CONTEXT</SectionEyebrow><h2>Know the people.<br/><em>Keep relationships private.</em></h2>
+            <p>Organize contacts, custom fields, lead history and company profiles. Search, filter and export the records your team needs—without exposing your contact list to the global company catalog.</p>
+            <ul className="ft-check-list"><li><Check size={14}/> Contacts and list membership stay private to your workspace.</li><li><Check size={14}/> Keep companies private, or explicitly share a company profile with the Global Company DB.</li><li><Check size={14}/> Record lead-status changes with the reason, who changed it and when.</li></ul>
+            <div className="ft-audience-foot"><span className="ft-field-chip">CUSTOM FIELDS</span><span className="ft-field-chip">LEAD HISTORY</span><span className="ft-field-chip">PRIVATE CONTACTS</span></div>
           </div>
           <div className="ft-preview-stage"><div className="ft-preview-label"><span>WORKSPACE PREVIEW</span><span>CONTACTS / EXAMPLE</span></div><FeatureAudiencePreview/><div className="ft-history-note"><span className="ft-history-pin"><Clock3 size={13}/></span><span><b>Lead status updated</b><small>Reason, who changed it, and when are kept with the history.</small></span><ArrowUpRight size={13}/></div></div>
         </div>
@@ -261,11 +264,12 @@ export function PublicFeaturesPage() {
 
       <section className="ft-campaign-section" id="features-workflow">
         <div className="mf-section-wrap">
-          <div className="ft-campaign-intro"><div><SectionEyebrow>02 / PLAN THE SEND</SectionEyebrow><h2>One campaign.<br/><em>A few clear decisions.</em></h2></div><p>Build around an objective, choose the audience and sender, then check the details before you queue or schedule.</p></div>
+          <div className="ft-campaign-intro"><div><SectionEyebrow>02 / PLAN THE SEND</SectionEyebrow><h2>One campaign.<br/><em>A few clear decisions.</em></h2></div><p>Set an objective, choose prioritized lists and the SMTP sender, then review the audience and message before you queue or schedule.</p></div>
           <div className="ft-campaign-layout"><FeatureCampaignPreview/><div className="ft-campaign-steps">
             <article><span>01</span><div><h3>Give it a purpose.</h3><p>Write down the campaign objective so your team knows what this send is for.</p></div></article>
-            <article><span>02</span><div><h3>Choose lists, in order.</h3><p>Select one or more contact lists and set their processing priority. Duplicate addresses across those lists receive one email.</p></div></article>
-            <article><span>03</span><div><h3>Review, then decide when.</h3><p>Preview the audience and template, then queue delivery or schedule it for later.</p></div></article>
+            <article><span>02</span><div><h3>Choose your audience and sender.</h3><p>Prioritize one or more contact lists, preview the deduplicated audience and pick the SMTP mailbox for this campaign.</p></div></article>
+            <article><span>03</span><div><h3>Keep message variants consistent.</h3><p>Use subject, greeting and signature variants for recipient-level A/B testing. Each recipient keeps the same assigned version for the campaign.</p></div></article>
+            <article><span>04</span><div><h3>Review, opt out, then send.</h3><p>Every campaign includes an unsubscribe link. Preview the message and audience, then queue delivery or schedule it for later.</p></div></article>
             <div className="ft-no-journeys"><span className="ft-no-journeys-dot"/><span><b>Straightforward by design</b><small>A clear campaign workflow—not a behavioral or drip-journey builder.</small></span></div>
           </div></div>
           <div className="ft-campaign-bottom"><span>MAKE THE DECISIONS THAT MATTER.</span><span>LEAVE THE REST OUT OF THE WAY.</span></div>
