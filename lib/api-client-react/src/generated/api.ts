@@ -9731,6 +9731,80 @@ export const useUpdateAIProviderSettings = <TError = ErrorType<ApiError>,
       return useMutation(getUpdateAIProviderSettingsMutationOptions(options));
     }
 
+export const getDeleteAIProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/ai-provider`
+}
+
+/**
+ * @summary Remove the saved LLM provider, encrypted key, and selected model
+ */
+export const deleteAIProviderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<AIProviderSettings> => {
+
+  return customFetch<AIProviderSettings>(getDeleteAIProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAIProviderSettingsMutationKey = () => ['deleteAIProviderSettings'] as const;
+
+export const getDeleteAIProviderSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAIProviderSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAIProviderSettings>>, TError,void, TContext> => {
+
+const mutationKey = getDeleteAIProviderSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAIProviderSettings>>, void> = () => {
+
+
+          return  deleteAIProviderSettings(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAIProviderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAIProviderSettings>>>
+
+    export type DeleteAIProviderSettingsMutationError = ErrorType<ApiError>
+
+
+    /**
+ * @summary Remove the saved LLM provider, encrypted key, and selected model
+ */
+export const useDeleteAIProviderSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAIProviderSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAIProviderSettings>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteAIProviderSettingsMutationOptions(options));
+    }
+
 export const getTestAIProviderConnectionUrl = () => {
 
 

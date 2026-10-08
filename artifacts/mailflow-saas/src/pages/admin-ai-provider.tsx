@@ -6,6 +6,7 @@ import {
   CircleAlert,
   LoaderCircle,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import {
   getGetCompanyResearchSettingsQueryKey,
@@ -236,10 +237,22 @@ export default function AdminAIProviderPage() {
                 </p>
               </div>
             </div>
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#c7e1d1] bg-white px-3 py-1.5 text-[12px] font-medium text-[#326d4c]">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              API key encrypted
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#c7e1d1] bg-white px-3 py-1.5 text-[12px] font-medium text-[#326d4c]">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                API key encrypted
+              </span>
+              <button
+                type="button"
+                data-testid="button-disconnect-ai-provider"
+                onClick={() => setDisconnectDialogOpen(true)}
+                disabled={busy}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#e2c7c3] bg-white px-3 text-[12px] font-semibold text-[#9b3f32] transition hover:bg-[#fff7f5] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Disconnect
+              </button>
+            </div>
           </section>
         ) : null}
 
@@ -328,10 +341,12 @@ export default function AdminAIProviderPage() {
                     ) : (
                       <ShieldCheck className="h-4 w-4" />
                     )}
-                    Test connection
+                    Test connection &amp; load models
                   </button>
                   <span className="text-[12px] leading-5 text-[#4d5d70]">
-                    Model discovery uses the provider’s model-list API.
+                    {savedKeyCanBeReused && !apiKey.trim()
+                      ? "Uses the saved key and reloads current models so you can change the selection."
+                      : "Model discovery uses the provider’s model-list API."}
                   </span>
                 </div>
 
@@ -364,6 +379,15 @@ export default function AdminAIProviderPage() {
                       </span>
                     ) : null}
                   </label>
+                ) : savedKeyCanBeReused ? (
+                  <div className="rounded-lg border border-[#dbe5ef] bg-[#f5f8fc] p-3 text-[12px] leading-5 text-[#4d5d70]">
+                    <span className="font-semibold text-[#344154]">
+                      Saved model: {settings.data?.selectedModel}
+                    </span>
+                    <p className="mt-1">
+                      To edit it, leave the API key blank and test the saved connection to load the provider’s current model choices.
+                    </p>
+                  </div>
                 ) : null}
 
                 <div className="flex flex-col-reverse gap-3 border-t border-[#e8edf2] pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -436,6 +460,16 @@ export default function AdminAIProviderPage() {
           </div>
         )}
       </div>
+      <ConfirmActionDialog
+        open={disconnectDialogOpen}
+        onOpenChange={setDisconnectDialogOpen}
+        onConfirm={() => void handleDisconnect()}
+        title="Disconnect the AI provider?"
+        description="This removes the encrypted API key and selected model, and clears the research model and cost estimates. Existing company data and research history remain, but new AI research will be unavailable until a provider is configured again."
+        confirmLabel="Disconnect provider"
+        pending={removeSettings.isPending}
+        testId="dialog-disconnect-ai-provider"
+      />
     </main>
   );
 }

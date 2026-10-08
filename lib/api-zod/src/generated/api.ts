@@ -5537,6 +5537,19 @@ export const UpdateAIProviderSettingsResponse = zod.object({
 
 
 /**
+ * @summary Remove the saved LLM provider, encrypted key, and selected model
+ */
+export const DeleteAIProviderSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
+  "selectedModel": zod.string().nullable(),
+  "apiKeyConfigured": zod.boolean(),
+  "lastTestedAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Test an LLM API key and list available text-generation models
  */
 export const testAIProviderConnectionBodyApiKeyMax = 4096;

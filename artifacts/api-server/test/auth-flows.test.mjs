@@ -5124,6 +5124,40 @@ describe("superadmin AI provider setup", { concurrency: false }, () => {
       assert.equal(savedKeyTest.body.connected, true);
     });
 
+    const replacementModelsHandler = async (_url, init) => {
+      assert.equal(
+        new Headers(init?.headers).get("authorization"),
+        `Bearer ${apiKey}`,
+      );
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "gpt-4.1-mini" }, { id: "gpt-4.1" }],
+          has_more: false,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    await withAIProviderFetch(replacementModelsHandler, async () => {
+      const models = await api(`${settingsPath}/test`, {
+        method: "POST",
+        cookie: admin.cookie,
+        body: { provider: "openai" },
+      });
+      assert.equal(models.response.status, 200, JSON.stringify(models.body));
+      assert.deepEqual(
+        models.body.models.map((model) => model.id),
+        ["gpt-4.1", "gpt-4.1-mini"],
+      );
+
+      const replaced = await api(settingsPath, {
+        method: "PUT",
+        cookie: admin.cookie,
+        body: { provider: "openai", selectedModel: "gpt-4.1" },
+      });
+      assert.equal(replaced.response.status, 200, JSON.stringify(replaced.body));
+      assert.equal(replaced.body.selectedModel, "gpt-4.1");
+    });
+
     const deniedWrite = await api(settingsPath, {
       method: "PUT",
       cookie: user.cookie,
@@ -5134,6 +5168,61 @@ describe("superadmin AI provider setup", { concurrency: false }, () => {
       },
     });
     assert.equal(deniedWrite.response.status, 403);
+
+    const researchSettings = {
+      freshDays: 30,
+      preferredModel: "gpt-4.1-mini",
+      backupModel: "gpt-4o-mini",
+      inputCostPerMillionUsd: 1.25,
+      outputCostPerMillionUsd: 5,
+      searchCostUsd: 0.02,
+    };
+    await db
+      .insert(dbModule.systemConfigurationTable)
+      .values({
+        key: "company_intelligence",
+        value: researchSettings,
+        updatedBy: admin.user.id,
+      })
+      .onConflictDoUpdate({
+        target: dbModule.systemConfigurationTable.key,
+        set: {
+          value: researchSettings,
+          updatedBy: admin.user.id,
+        },
+      });
+
+    const deniedDelete = await api(settingsPath, {
+      method: "DELETE",
+      cookie: user.cookie,
+    });
+    assert.equal(deniedDelete.response.status, 403);
+
+    const disconnected = await api(settingsPath, {
+      method: "DELETE",
+      cookie: admin.cookie,
+    });
+    assert.equal(disconnected.response.status, 200, JSON.stringify(disconnected.body));
+    assert.equal(disconnected.body.configured, false);
+    assert.equal(disconnected.body.apiKeyConfigured, false);
+    assert.equal(disconnected.body.provider, null);
+    assert.equal(disconnected.body.selectedModel, null);
+
+    const [removed] = await db
+      .select()
+      .from(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, "ai_provider"));
+    assert.equal(removed, undefined);
+    const [researchAfterDisconnect] = await db
+      .select()
+      .from(dbModule.systemConfigurationTable)
+      .where(eq(dbModule.systemConfigurationTable.key, "company_intelligence"));
+    assert.equal(researchAfterDisconnect.value.preferredModel, null);
+    assert.equal(researchAfterDisconnect.value.backupModel, null);
+    assert.equal(researchAfterDisconnect.value.inputCostPerMillionUsd, null);
+    assert.equal(researchAfterDisconnect.value.outputCostPerMillionUsd, null);
+    assert.equal(researchAfterDisconnect.value.searchCostUsd, null);
+    assert.equal(researchAfterDisconnect.value.freshDays, 30);
   });
 });
 
