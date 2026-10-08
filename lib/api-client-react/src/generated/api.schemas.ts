@@ -1255,6 +1255,17 @@ export type CompanyIntelligenceVersion = CompanyIntelligenceVersionSummary & {
   profile: CompanyIntelligenceProfile;
 };
 
+/**
+ * @nullable
+ */
+export type CompanyIntelligenceResultResearchAvailabilityReason = typeof CompanyIntelligenceResultResearchAvailabilityReason[keyof typeof CompanyIntelligenceResultResearchAvailabilityReason] | null;
+
+
+export const CompanyIntelligenceResultResearchAvailabilityReason = {
+  provider_not_configured: 'provider_not_configured',
+  ai_package_required: 'ai_package_required',
+} as const;
+
 export interface CompanyIntelligenceResult {
   companyId: string;
   companyName: string;
@@ -1266,6 +1277,8 @@ export interface CompanyIntelligenceResult {
   maxResearchDepth: number;
   deepResearchEnabled: boolean;
   researchAvailable: boolean;
+  /** @nullable */
+  researchAvailabilityReason: CompanyIntelligenceResultResearchAvailabilityReason;
 }
 
 export type CompanyResearchUsageJob = CompanyResearchJobStatus & ({

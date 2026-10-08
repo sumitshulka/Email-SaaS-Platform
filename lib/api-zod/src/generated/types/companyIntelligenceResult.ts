@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CompanyIntelligenceResultResearchAvailabilityReason } from './companyIntelligenceResultResearchAvailabilityReason';
 import type { CompanyIntelligenceVersion } from './companyIntelligenceVersion';
 import type { CompanyIntelligenceVersionSummary } from './companyIntelligenceVersionSummary';
 import type { CompanyResearchJobStatus } from './companyResearchJobStatus';
@@ -21,4 +22,6 @@ export interface CompanyIntelligenceResult {
   maxResearchDepth: number;
   deepResearchEnabled: boolean;
   researchAvailable: boolean;
+  /** @nullable */
+  researchAvailabilityReason: CompanyIntelligenceResultResearchAvailabilityReason;
 }

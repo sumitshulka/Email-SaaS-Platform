@@ -86,6 +86,7 @@ export * from './companyIntelligenceProfileExecutiveSummary';
 export * from './companyIntelligenceProfileSalesIntelligence';
 export * from './companyIntelligenceProfileTechnology';
 export * from './companyIntelligenceResult';
+export * from './companyIntelligenceResultResearchAvailabilityReason';
 export * from './companyIntelligenceVersion';
 export * from './companyIntelligenceVersionSummary';
 export * from './companyListItem';

@@ -5028,6 +5028,70 @@ describe("authentication and account recovery", { concurrency: false }, () => {
   });
 });
 
+describe("company research package access", { concurrency: false }, () => {
+  it("disables user research without an AI package while preserving superadmin access", async () => {
+    const admin = await loggedInUser({
+      username: "company-research-entitlement-admin",
+      role: "SUPERADMIN",
+    });
+    const user = await loggedInUser({
+      username: "company-research-entitlement-user",
+    });
+    const created = await api("/admin/global-companies", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        companyName: "AI Entitlement Test Company",
+        companyDomain: "ai-entitlement-test.example",
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+
+    await db
+      .insert(dbModule.systemConfigurationTable)
+      .values({
+        key: "ai_provider",
+        value: {
+          provider: "openai",
+          apiKeyEncrypted: securityModule.encryptSecret("test-ai-provider-key"),
+          selectedModel: "gpt-4.1-mini",
+          lastTestedAt: new Date().toISOString(),
+        },
+        updatedBy: admin.user.id,
+      });
+
+    const userIntelligence = await api(
+      `/company-intelligence/${created.body.id}`,
+      { cookie: user.cookie },
+    );
+    assert.equal(userIntelligence.response.status, 200);
+    assert.equal(userIntelligence.body.researchAvailable, false);
+    assert.equal(
+      userIntelligence.body.researchAvailabilityReason,
+      "ai_package_required",
+    );
+
+    const adminIntelligence = await api(
+      `/company-intelligence/${created.body.id}`,
+      { cookie: admin.cookie },
+    );
+    assert.equal(adminIntelligence.response.status, 200);
+    assert.equal(adminIntelligence.body.researchAvailable, true);
+    assert.equal(adminIntelligence.body.researchAvailabilityReason, null);
+
+    const blockedStart = await api(
+      `/company-intelligence/${created.body.id}/research`,
+      {
+        method: "POST",
+        cookie: user.cookie,
+        body: { confirmed: true },
+      },
+    );
+    assert.equal(blockedStart.response.status, 403);
+    assert.equal(blockedStart.body.code, "AI_PACKAGE_REQUIRED");
+  });
+});
+
 describe("superadmin AI provider setup", { concurrency: false }, () => {
   it("tests model access, encrypts the saved key, and never returns it", async () => {
     const admin = await loggedInUser({

@@ -1056,6 +1056,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+        "403":
+          description: User account does not have an active AI research package
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
         "409":
           description: Research is in progress or a recent-research override is required
           content:
@@ -3951,7 +3956,10 @@ components:
         maxResearchDepth: { type: integer }
         deepResearchEnabled: { type: boolean }
         researchAvailable: { type: boolean }
-      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable]
+        researchAvailabilityReason:
+          type: ["string", "null"]
+          enum: [provider_not_configured, ai_package_required, null]
+      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable, researchAvailabilityReason]
     CompanyResearchUsageJob:
       allOf:
         - $ref: "#/components/schemas/CompanyResearchJobStatus"

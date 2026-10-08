@@ -1885,7 +1885,8 @@ export const GetCompanyIntelligenceResponse = zod.object({
   "researchCreditCost": zod.number().int(),
   "maxResearchDepth": zod.number().int(),
   "deepResearchEnabled": zod.boolean(),
-  "researchAvailable": zod.boolean()
+  "researchAvailable": zod.boolean(),
+  "researchAvailabilityReason": zod.union([zod.literal('provider_not_configured'),zod.literal('ai_package_required'),zod.literal(null)]).nullable()
 })
 
 
