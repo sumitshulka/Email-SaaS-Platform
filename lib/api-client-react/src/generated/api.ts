@@ -3299,6 +3299,94 @@ export function useListContacts<TData = Awaited<ReturnType<typeof listContacts>>
 
 
 
+export const getCreateContactUrl = () => {
+
+
+
+
+  return `/api/contacts`
+}
+
+/**
+ * @summary Add a contact to the authenticated tenant
+ */
+export const createContact = async (contactInput: ContactInput, options?: Parameters<typeof customFetch>[1]): Promise<Contact> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Contact>(getCreateContactUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactMutationKey = () => ['createContact'] as const;
+
+export const getCreateContactMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContact>>, CreateContactMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContact(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactMutationResult = NonNullable<Awaited<ReturnType<typeof createContact>>>
+    export type CreateContactMutationBody = BodyType<ContactInput>
+    export type CreateContactMutationError = ErrorType<ApiError>
+    export type CreateContactMutationVariables = {data: BodyType<ContactInput>}
+
+    /**
+ * @summary Add a contact to the authenticated tenant
+ */
+export const useCreateContact = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContact>>,
+        TError,
+        CreateContactMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactMutationOptions(options));
+    }
+
 export const getExportContactsUrl = () => {
 
 
@@ -3555,94 +3643,6 @@ export function useGetContactFilterOptions<TData = Awaited<ReturnType<typeof get
 
 
 
-
-export const getCreateContactUrl = () => {
-
-
-
-
-  return `/api/contacts/filter-options`
-}
-
-/**
- * @summary Add a contact to the authenticated tenant
- */
-export const createContact = async (contactInput: ContactInput, options?: Parameters<typeof customFetch>[1]): Promise<Contact> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return customFetch<Contact>(getCreateContactUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(contactInput)
-  }
-);}
-
-
-
-
-
-export const getCreateContactMutationKey = () => ['createContact'] as const;
-
-export const getCreateContactMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext> => {
-
-const mutationKey = getCreateContactMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContact>>, CreateContactMutationVariables> = (props) => {
-          const {data} = props ?? {};
-
-          return  createContact(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateContactMutationResult = NonNullable<Awaited<ReturnType<typeof createContact>>>
-    export type CreateContactMutationBody = BodyType<ContactInput>
-    export type CreateContactMutationError = ErrorType<ApiError>
-    export type CreateContactMutationVariables = {data: BodyType<ContactInput>}
-
-    /**
- * @summary Add a contact to the authenticated tenant
- */
-export const useCreateContact = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,CreateContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof createContact>>,
-        TError,
-        CreateContactMutationVariables,
-        TContext
-      > => {
-      return useMutation(getCreateContactMutationOptions(options));
-    }
 
 export const getExportCompaniesUrl = () => {
 

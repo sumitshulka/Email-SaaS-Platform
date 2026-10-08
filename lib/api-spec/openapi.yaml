@@ -829,6 +829,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ContactCollection"
+    post:
+      operationId: createContact
+      tags: [sending]
+      summary: Add a contact to the authenticated tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contact"
+        "400":
+          description: Invalid contact or list membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: An active subscription is required to add contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The contact already exists or the contact quota is full
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/export:
     post:
       operationId: exportContacts
@@ -909,41 +944,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ContactFilterOptions"
-    post:
-      operationId: createContact
-      tags: [sending]
-      summary: Add a contact to the authenticated tenant
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ContactInput"
-      responses:
-        "201":
-          description: Contact created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Contact"
-        "400":
-          description: Invalid contact or list membership
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "403":
-          description: An active subscription is required to add contacts
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The contact already exists or the contact quota is full
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /companies/export:
     post:
       operationId: exportCompanies
