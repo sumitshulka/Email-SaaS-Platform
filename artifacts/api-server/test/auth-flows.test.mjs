@@ -6155,6 +6155,39 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(loginResult.cookie);
   });
 
+  it("rejects a verified superadmin email from package checkout without creating a registration proof", async () => {
+    const email = "checkout.superadmin@example.test";
+    await createUser({
+      username: "checkout-superadmin",
+      email,
+      role: "SUPERADMIN",
+    });
+
+    const requested = await api("/auth/package-checkout/request-code", {
+      method: "POST",
+      body: { email },
+    });
+    assert.equal(requested.response.status, 200);
+    const code = await getEmailCode();
+    const verified = await api("/auth/package-checkout/verify-code", {
+      method: "POST",
+      body: { email, code },
+    });
+
+    assert.equal(verified.response.status, 403);
+    assert.equal(verified.body.code, "SUPERADMIN_PACKAGE_PURCHASE_FORBIDDEN");
+    assert.match(verified.body.error, /superadmin account/i);
+    const challenges = await db
+      .select()
+      .from(otpVerificationsTable)
+      .where(eq(otpVerificationsTable.email, email));
+    assert.ok(challenges.find(item => item.purpose === "package_checkout")?.consumedAt);
+    assert.equal(
+      challenges.filter(item => item.purpose === "package_checkout_proof").length,
+      0,
+    );
+  });
+
   it("verifies an email change before restoring the account's verified state", async () => {
     const { cookie } = await loggedInUser();
     const changed = await api("/profile", {

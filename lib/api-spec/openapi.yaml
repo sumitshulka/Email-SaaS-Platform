@@ -187,6 +187,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Superadmin accounts cannot purchase customer plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "429":
           description: Package checkout verification is temporarily rate limited
           content:

@@ -712,6 +712,9 @@ router.post("/auth/package-checkout/verify-code", async (req, res): Promise<void
       .where(and(eq(usersTable.email, email), isNull(usersTable.deletedAt)))
       .limit(1);
     if (user) {
+      if (user.role === "SUPERADMIN") {
+        return { kind: "superadmin" as const };
+      }
       if (!user.emailVerified) {
         await tx
           .update(usersTable)
@@ -742,6 +745,13 @@ router.post("/auth/package-checkout/verify-code", async (req, res): Promise<void
   }
   if (result.kind === "wrong") {
     res.status(400).json({ error: "The verification code is incorrect.", code: "OTP_INVALID" });
+    return;
+  }
+  if (result.kind === "superadmin") {
+    res.status(403).json({
+      error: "This email belongs to a superadmin account and cannot be used to purchase customer plans. Sign in to the superadmin workspace or use a customer email address.",
+      code: "SUPERADMIN_PACKAGE_PURCHASE_FORBIDDEN",
+    });
     return;
   }
   res.json(

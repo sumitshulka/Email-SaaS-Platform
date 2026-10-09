@@ -28,6 +28,17 @@ const pricingMeta = PUBLIC_PAGE_METADATA.pricing;
 const checkoutMeta = PUBLIC_PAGE_METADATA.checkout;
 const featuresMeta = PUBLIC_PAGE_METADATA.features;
 
+function getApiErrorDetails(error: unknown): { message?: string; code?: string } {
+  if (!error || typeof error !== 'object' || !('data' in error)) return {};
+  const data = (error as { data?: unknown }).data;
+  if (!data || typeof data !== 'object') return {};
+  const record = data as Record<string, unknown>;
+  return {
+    message: typeof record.error === 'string' ? record.error : undefined,
+    code: typeof record.code === 'string' ? record.code : undefined,
+  };
+}
+
 function usePageMeta(meta: PublicPageMetadata) {
   useEffect(() => {
     document.title = meta.title;
@@ -493,6 +504,7 @@ export function PackageCheckoutPage() {
     if (step === 'email') {
       requestCode.mutate({ data: { email: normalizedEmail } }, {
         onSuccess: () => {
+          verifyCode.reset();
           setEmail(normalizedEmail);
           setStep('code');
         },
@@ -509,6 +521,12 @@ export function PackageCheckoutPage() {
           if (!packageId || !result.registrationProofToken) return;
           saveVerifiedPackageCheckout(packageId, normalizedEmail, result.registrationProofToken);
           setLocation(`/register?packageId=${encodeURIComponent(packageId)}`);
+        },
+        onError: error => {
+          if (getApiErrorDetails(error).code === 'SUPERADMIN_PACKAGE_PURCHASE_FORBIDDEN') {
+            setCode('');
+            setStep('email');
+          }
         },
       });
       return;
@@ -549,6 +567,10 @@ export function PackageCheckoutPage() {
       : login.isError
         ? login.error
         : undefined;
+  const mutationErrorDetails = getApiErrorDetails(mutationError);
+  const isSuperadminPurchaseBlocked = mutationErrorDetails.code === 'SUPERADMIN_PACKAGE_PURCHASE_FORBIDDEN';
+  const mutationErrorMessage = mutationErrorDetails.message
+    ?? (mutationError instanceof Error ? mutationError.message : 'Something went wrong. Please try again.');
 
   return <MetaLayout active="pricing">
     <main className="mx-auto min-h-[65vh] max-w-[1120px] px-5 py-10 md:px-8 md:py-16">
@@ -590,7 +612,7 @@ export function PackageCheckoutPage() {
             {step === 'code' && <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Six-digit verification code</span><input data-testid="input-package-checkout-code" type="text" required inputMode="numeric" autoComplete="one-time-code" minLength={6} maxLength={6} pattern="[0-9]{6}" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[14px] tracking-[.2em] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label>}
             {step === 'login' && <><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Email address</span><input value={email} readOnly className="h-11 w-full rounded-md border border-[#d8dde4] bg-[#f3f5f7] px-3 text-[13px] text-[#536174]"/></label><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Password</span><input data-testid="input-package-checkout-password" name="password" type="password" required autoComplete="current-password" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label><div className="text-right"><Link href="/forgot-password" className="text-[11px] font-semibold text-[#245b9b] underline">Forgot password?</Link></div></>}
             {requestCode.isSuccess && step === 'code' && <p role="status" className="rounded-md border border-[#d5e7db] bg-[#f2f8f4] px-3 py-2 text-[11px] leading-5 text-[#41674e]">{requestCode.data.message}</p>}
-            {mutationError && <p role="alert" data-testid="status-package-checkout-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">{mutationError instanceof Error ? mutationError.message : 'Something went wrong. Please try again.'}</p>}
+            {mutationError && <div role="alert" data-testid="status-package-checkout-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]"><p>{mutationErrorMessage}</p>{isSuperadminPurchaseBlocked && <Link href="/login" className="mt-2 inline-block font-semibold text-[#245b9b] underline">Sign in to the superadmin workspace</Link>}</div>}
             <button type="submit" data-testid="button-package-checkout-continue" disabled={submitting || (step === 'email' && !email.trim())} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#174f99] px-4 text-[13px] font-semibold text-white transition hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55">
               {submitting ? 'Please wait…' : step === 'email' ? 'Send verification code' : step === 'code' ? 'Verify email' : 'Sign in and continue'}
               {submitting ? null : <ArrowRight size={16}/>}
