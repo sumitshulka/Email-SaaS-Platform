@@ -7264,6 +7264,76 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
       1,
     );
   });
+
+  it("recovers persisted stale reservations when the cleanup worker starts", async () => {
+    const account = await createAccount("ai-assist-startup-recovery-user", {
+      allowance: 2,
+    });
+    const [entitlement] = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.userId, account.user.id));
+    const now = new Date();
+    const [stale] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "reserved",
+        createdAt: new Date(now.getTime() - 16 * 60_000),
+      })
+      .returning();
+    const [recent] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "reserved",
+        createdAt: new Date(now.getTime() - 30_000),
+      })
+      .returning();
+
+    const {
+      getSubscriptionAddOnsDashboard,
+      reserveAiEmailAssistCredit,
+      startAiEmailAssistReservationCleanupWorker,
+    } = await import("../src/lib/add-on-entitlements.ts");
+    await startAiEmailAssistReservationCleanupWorker();
+
+    let usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.deepEqual(
+      Object.fromEntries(usages.map((usage) => [usage.id, usage.status])),
+      {
+        [stale.id]: "released",
+        [recent.id]: "reserved",
+      },
+      "startup recovery should release only the reservation older than the timeout",
+    );
+    const dashboard = await getSubscriptionAddOnsDashboard(account.user.id, now);
+    assert.deepEqual(dashboard.balances.emailAssist, {
+      total: 2,
+      used: 1,
+      remaining: 1,
+    });
+
+    const recoveredReservation = await reserveAiEmailAssistCredit(account.user.id);
+    assert.ok(
+      recoveredReservation,
+      "the allowance from the stale reservation should be available again",
+    );
+    usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.equal(
+      usages.find((usage) => usage.id === recent.id)?.status,
+      "reserved",
+      "a recent reservation must remain reserved after startup recovery",
+    );
+  });
 });
 
 describe("superadmin Google OAuth setup", { concurrency: false }, () => {

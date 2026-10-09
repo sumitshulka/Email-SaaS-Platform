@@ -111,7 +111,7 @@ export async function releaseStaleAiEmailAssistReservations(
   return released.length;
 }
 
-export function startAiEmailAssistReservationCleanupWorker(): void {
+export async function startAiEmailAssistReservationCleanupWorker(): Promise<void> {
   if (reservationCleanupWorkerStarted) return;
   reservationCleanupWorkerStarted = true;
 
@@ -133,7 +133,7 @@ export function startAiEmailAssistReservationCleanupWorker(): void {
 
   const timer = setInterval(() => void tick(), RESERVATION_CLEANUP_INTERVAL_MS);
   timer.unref();
-  void tick();
+  await tick();
 }
 
 export async function getSubscriptionAddOnsDashboard(

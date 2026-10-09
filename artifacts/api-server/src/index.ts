@@ -29,7 +29,7 @@ try {
   startGmailMailboxWorker();
   startMicrosoft365TraceWorker();
   startCompanyResearchWorker();
-  startAiEmailAssistReservationCleanupWorker();
+  await startAiEmailAssistReservationCleanupWorker();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
