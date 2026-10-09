@@ -1,4 +1,7 @@
 export const SITE_ORIGIN = 'https://email-saas-platform.replit.app';
+export const SOCIAL_IMAGE_URL = `${SITE_ORIGIN}/mailflow-social-share.png`;
+export const SOCIAL_IMAGE_ALT =
+  'Mailflow — simple email campaigns from your own sender';
 
 export const PUBLIC_PAGE_METADATA = {
   home: {

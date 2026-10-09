@@ -6,6 +6,8 @@ import { defineConfig, type Plugin } from 'vite';
 import {
   canonicalUrl,
   PUBLIC_PAGE_METADATA,
+  SOCIAL_IMAGE_ALT,
+  SOCIAL_IMAGE_URL,
   type PublicPageMetadata,
 } from './src/lib/public-page-meta';
 
@@ -75,9 +77,13 @@ function withPageMetadata(html: string, page: PublicPageMetadata) {
   html = replaceMeta('property', 'og:title', title);
   html = replaceMeta('property', 'og:description', description);
   html = replaceMeta('property', 'og:url', canonical);
+  html = replaceMeta('property', 'og:image', SOCIAL_IMAGE_URL);
+  html = replaceMeta('property', 'og:image:alt', SOCIAL_IMAGE_ALT);
   html = replaceMeta('name', 'twitter:title', title);
   html = replaceMeta('name', 'twitter:description', description);
   html = replaceMeta('name', 'twitter:url', canonical);
+  html = replaceMeta('name', 'twitter:image', SOCIAL_IMAGE_URL);
+  html = replaceMeta('name', 'twitter:image:alt', SOCIAL_IMAGE_ALT);
   return replaceRequired(
     html,
     /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
