@@ -718,8 +718,7 @@ export async function grantAdminGiftSubscription(input: {
       .select()
       .from(subscriptionPackagesTable)
       .where(eq(subscriptionPackagesTable.id, input.packageId))
-      .limit(1)
-      .for("update");
+      .limit(1);
     if (!pkg) return null;
 
     const now = new Date();

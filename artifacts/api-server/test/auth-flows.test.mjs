@@ -280,7 +280,7 @@ memory.public.none(`
     WHERE payment_id IS NOT NULL;
   CREATE UNIQUE INDEX add_on_entitlements_free_claim_unique
     ON add_on_entitlements (user_id, package_id)
-    WHERE grant_source = 'free_claim';
+    WHERE payment_id IS NULL AND grant_source <> 'admin_gift';
   CREATE INDEX add_on_entitlements_owner_created_idx
     ON add_on_entitlements (user_id, created_at);
   CREATE TABLE ai_email_assist_usages (
@@ -3732,6 +3732,165 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     }
   });
 });
+
+  it("lets superadmin gift add-on allowances only to active paid-priced primary subscribers", async () => {
+    const admin = await loggedInUser({
+      username: "addon-gift-admin",
+      role: "SUPERADMIN",
+    });
+    const paidUser = await loggedInUser({ username: "addon-gift-paid-user" });
+    const giftedPrimaryUser = await loggedInUser({
+      username: "addon-gift-gifted-primary-user",
+    });
+    const freeUser = await loggedInUser({ username: "addon-gift-free-user" });
+    const noPlanUser = await loggedInUser({ username: "addon-gift-no-plan-user" });
+
+    const paidPrimary = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "Add-on gift paid primary",
+        description: "Paid-priced primary for admin add-on gift tests",
+        amountMinor: 2500,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        active: true,
+      },
+    });
+    assert.equal(paidPrimary.response.status, 201, JSON.stringify(paidPrimary.body));
+    const freePrimary = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "Add-on gift free primary",
+        description: "Free primary that must not qualify for addon gifts",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        active: true,
+      },
+    });
+    assert.equal(freePrimary.response.status, 201, JSON.stringify(freePrimary.body));
+    const addonPackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "addon",
+        name: "Add-on gift allowance pack",
+        description: "Add-on package for superadmin gift tests",
+        amountMinor: 900,
+        currency: "INR",
+        periodDays: 0,
+        contactLimit: 0,
+        emailAccountLimit: 0,
+        researchAllowance: 5,
+        aiEmailAssistAllowance: 3,
+        additionalMailboxCount: 2,
+        preferred: false,
+        active: true,
+      },
+    });
+    assert.equal(addonPackage.response.status, 201, JSON.stringify(addonPackage.body));
+
+    const activeTerm = {
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    };
+    await db.insert(dbModule.userSubscriptionsTable).values([
+      {
+        userId: paidUser.user.id,
+        packageId: paidPrimary.body.id,
+        paymentId: null,
+        ...activeTerm,
+      },
+      {
+        userId: freeUser.user.id,
+        packageId: freePrimary.body.id,
+        paymentId: null,
+        ...activeTerm,
+      },
+    ]);
+
+    const primaryGift = await api("/admin/billing/subscriptions/gift", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        userId: giftedPrimaryUser.user.id,
+        packageId: paidPrimary.body.id,
+      },
+    });
+    assert.equal(primaryGift.response.status, 201, JSON.stringify(primaryGift.body));
+    assert.equal(primaryGift.body.kind, "primary");
+
+    for (const recipient of [paidUser, giftedPrimaryUser]) {
+      const gift = await api("/admin/billing/subscriptions/gift", {
+        method: "POST",
+        cookie: admin.cookie,
+        body: { userId: recipient.user.id, packageId: addonPackage.body.id },
+      });
+      assert.equal(gift.response.status, 201, JSON.stringify(gift.body));
+      assert.equal(gift.body.kind, "addon");
+      assert.equal(gift.body.packageName, addonPackage.body.name);
+      assert.equal(gift.body.researchAllowance, 5);
+      assert.equal(gift.body.aiEmailAssistAllowance, 3);
+      assert.equal(gift.body.additionalMailboxCount, 2);
+    }
+
+    const repeatedGift = await api("/admin/billing/subscriptions/gift", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: { userId: paidUser.user.id, packageId: addonPackage.body.id },
+    });
+    assert.equal(repeatedGift.response.status, 201, JSON.stringify(repeatedGift.body));
+    assert.notEqual(repeatedGift.body.entitlementId, undefined);
+    const paidUserAddOnBalance = await api("/subscriptions/add-ons", {
+      cookie: paidUser.cookie,
+    });
+    assert.equal(paidUserAddOnBalance.response.status, 200);
+    assert.equal(paidUserAddOnBalance.body.balances.research.total, 10);
+    assert.equal(paidUserAddOnBalance.body.balances.emailAssist.total, 6);
+    assert.equal(paidUserAddOnBalance.body.balances.mailboxes.additionalSlots, 4);
+    const giftedPrimaryAddOnBalance = await api("/subscriptions/add-ons", {
+      cookie: giftedPrimaryUser.cookie,
+    });
+    assert.equal(giftedPrimaryAddOnBalance.response.status, 200);
+    assert.equal(giftedPrimaryAddOnBalance.body.eligible, true);
+    assert.equal(giftedPrimaryAddOnBalance.body.balances.research.total, 5);
+    const paidUserEntitlements = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.userId, paidUser.user.id));
+    assert.equal(paidUserEntitlements.length, 2);
+    assert.ok(paidUserEntitlements.every((item) => item.grantSource === "admin_gift"));
+
+    for (const recipient of [freeUser, noPlanUser]) {
+      const rejected = await api("/admin/billing/subscriptions/gift", {
+        method: "POST",
+        cookie: admin.cookie,
+        body: { userId: recipient.user.id, packageId: addonPackage.body.id },
+      });
+      assert.equal(rejected.response.status, 403, JSON.stringify(rejected.body));
+      assert.equal(rejected.body.code, "PAID_PRIMARY_REQUIRED");
+      const entitlements = await db
+        .select()
+        .from(dbModule.addOnEntitlementsTable)
+        .where(eq(dbModule.addOnEntitlementsTable.userId, recipient.user.id));
+      assert.equal(entitlements.length, 0);
+    }
+
+    const giftPayments = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.userId, giftedPrimaryUser.user.id));
+    assert.equal(giftPayments.length, 0);
+  });
 
   it("offers free add-ons only to paid-primary users and resumes retained allowances", async () => {
     const admin = await loggedInUser({

@@ -6087,32 +6087,40 @@ export const UpdateSubscriptionPackageResponse = zod.object({
 
 
 /**
- * @summary Grant a subscription term to a tenant account without collecting payment
+ * @summary Gift a primary subscription term or add-on allowances without collecting payment
  */
 export const GiftAdminSubscriptionBody = zod.object({
   "userId": zod.string().uuid(),
   "packageId": zod.string().uuid()
 })
 
-export const giftAdminSubscriptionResponsePackageCurrencyMin = 3;
-export const giftAdminSubscriptionResponsePackageCurrencyMax = 3;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMin = 3;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMax = 3;
 
-export const giftAdminSubscriptionResponsePackageContactLimitMin = 0;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageContactLimitMin = 0;
 
-export const giftAdminSubscriptionResponsePackageEmailAccountLimitMin = 0;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin = 0;
 
-export const giftAdminSubscriptionResponsePackageResearchAllowanceMin = 0;
-export const giftAdminSubscriptionResponsePackageResearchAllowanceMax = 10000;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin = 0;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax = 10000;
 
-export const giftAdminSubscriptionResponsePackageAiEmailAssistAllowanceMin = 0;
-export const giftAdminSubscriptionResponsePackageAiEmailAssistAllowanceMax = 10000;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin = 0;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax = 10000;
 
-export const giftAdminSubscriptionResponsePackageAdditionalMailboxCountMin = 0;
-export const giftAdminSubscriptionResponsePackageAdditionalMailboxCountMax = 100;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageAdditionalMailboxCountMin = 0;
+export const giftAdminSubscriptionResponseOneSubscriptionPackageAdditionalMailboxCountMax = 100;
+
+export const giftAdminSubscriptionResponseTwoResearchAllowanceMin = 0;
+
+export const giftAdminSubscriptionResponseTwoAiEmailAssistAllowanceMin = 0;
+
+export const giftAdminSubscriptionResponseTwoAdditionalMailboxCountMin = 0;
 
 
 
-export const GiftAdminSubscriptionResponse = zod.object({
+export const GiftAdminSubscriptionResponse = zod.union([zod.object({
+  "kind": zod.enum(['primary']),
+  "subscription": zod.object({
   "id": zod.string().uuid(),
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
   "startsAt": zod.coerce.date(),
@@ -6123,19 +6131,28 @@ export const GiftAdminSubscriptionResponse = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "amountMinor": zod.number().int(),
-  "currency": zod.string().min(giftAdminSubscriptionResponsePackageCurrencyMin).max(giftAdminSubscriptionResponsePackageCurrencyMax),
+  "currency": zod.string().min(giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMax),
   "periodDays": zod.number().int(),
-  "contactLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageContactLimitMin),
-  "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponsePackageEmailAccountLimitMin),
-  "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponsePackageResearchAllowanceMin).max(giftAdminSubscriptionResponsePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponsePackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponsePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
-  "additionalMailboxCount": zod.number().int().min(giftAdminSubscriptionResponsePackageAdditionalMailboxCountMin).max(giftAdminSubscriptionResponsePackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
+  "contactLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageContactLimitMin),
+  "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin),
+  "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
+  "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "additionalMailboxCount": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAdditionalMailboxCountMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
 })
+}),zod.object({
+  "kind": zod.enum(['addon']),
+  "entitlementId": zod.string().uuid(),
+  "packageId": zod.string().uuid(),
+  "packageName": zod.string(),
+  "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseTwoResearchAllowanceMin),
+  "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseTwoAiEmailAssistAllowanceMin),
+  "additionalMailboxCount": zod.number().int().min(giftAdminSubscriptionResponseTwoAdditionalMailboxCountMin)
+})])
 
 
 /**
@@ -6561,4 +6578,5 @@ export const ReceiveRazorpayWebhookBody = zod.record(zod.string(), zod.unknown()
 export const ReceiveRazorpayWebhookResponse = zod.object({
   "message": zod.string()
 })
+
 

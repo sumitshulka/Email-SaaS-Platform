@@ -15,6 +15,12 @@ AI Email Assist credits are consumed only after a successful, validated draft. R
 
 **How to apply:** gate add-on purchase and use on an active paid primary, preserve entitlement snapshots and usage across terms, and resume only unused balances when paid access returns.
 
+Superadmin may gift add-on allowances only when the recipient has an active paid-priced primary package. The primary may have been purchased or gifted by an administrator; a free primary does not qualify. Gifts add allowance records without creating payment or revenue records.
+
+**Why:** the product owner explicitly confirmed that admin-gifted paid plans count for add-on gifts, while free plans remain ineligible.
+
+**How to apply:** check the active primary package and its configured price at gift time; keep admin-gifted add-on balances additive and under the same pause/resume lifecycle as other add-on entitlements.
+
 Partial refunds to paid add-ons reduce each allowance in proportion to the amount retained, rounding down each whole-unit allowance independently. Persist cumulative refunds monotonically so later refunds recalculate against the original charge. Keep consumed usage as history; remaining balances cannot go below zero. Free add-ons are unaffected.
 
 **Why:** paid add-on value and usable units should change together, including across multiple partial refunds, without trying to reverse usage that already happened.

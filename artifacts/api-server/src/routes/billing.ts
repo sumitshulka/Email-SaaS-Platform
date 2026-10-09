@@ -1057,31 +1057,48 @@ router.post(
       invalidInput(res, "Choose a tenant account and subscription package.");
       return;
     }
-    const subscription = await grantAdminGiftSubscription(parsed.data);
-    if (!subscription) {
+    const grant = await grantAdminGiftSubscription(parsed.data);
+    if (grant?.kind === "primary-required") {
+      res.status(403).json({
+        error:
+          "An active paid-priced primary package is required to gift an add-on. A previously gifted paid package qualifies.",
+        code: "PAID_PRIMARY_REQUIRED",
+      });
+      return;
+    }
+    if (!grant) {
       res.status(404).json({
         error: "Tenant account or subscription package not found.",
         code: "NOT_FOUND",
       });
       return;
     }
+    const isAddon = grant.kind === "addon";
     await writeAuditLog({
       actorId: req.authUser!.id,
-      action: "subscription.gifted",
-      entity: "user_subscription",
-      entityId: subscription.id,
+      action: isAddon ? "subscription.add_on_gifted" : "subscription.gifted",
+      entity: isAddon ? "add_on_entitlement" : "user_subscription",
+      entityId: isAddon ? grant.entitlementId : grant.subscription.id,
       ipAddress: req.ip,
       metadata: {
         userId: parsed.data.userId,
-        packageId: subscription.package.id,
-        packageName: subscription.package.name,
-        startsAt: subscription.startsAt,
-        endsAt: subscription.endsAt,
+        packageId: isAddon ? grant.packageId : grant.subscription.package.id,
+        packageName: isAddon
+          ? grant.packageName
+          : grant.subscription.package.name,
+        ...(isAddon
+          ? {
+              researchAllowance: grant.researchAllowance,
+              aiEmailAssistAllowance: grant.aiEmailAssistAllowance,
+              additionalMailboxCount: grant.additionalMailboxCount,
+            }
+          : {
+              startsAt: grant.subscription.startsAt,
+              endsAt: grant.subscription.endsAt,
+            }),
       },
     });
-    res
-      .status(201)
-      .json(GiftAdminSubscriptionResponse.parse(subscription));
+    res.status(201).json(GiftAdminSubscriptionResponse.parse(grant));
   },
 );
 
@@ -1433,6 +1450,7 @@ router.post(
             userId: user.id,
             packageId: pkg.id,
             paymentId: null,
+            grantSource: "free_claim",
             researchAllowance: pkg.researchAllowance,
             aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
             additionalMailboxCount: pkg.additionalMailboxCount,

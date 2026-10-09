@@ -3960,6 +3960,58 @@ export interface SubscriptionGiftInput {
   packageId: string;
 }
 
+export type AdminPrimarySubscriptionGiftResultKind = typeof AdminPrimarySubscriptionGiftResultKind[keyof typeof AdminPrimarySubscriptionGiftResultKind];
+
+
+export const AdminPrimarySubscriptionGiftResultKind = {
+  primary: 'primary',
+} as const;
+
+export type SubscriptionSummaryStatus = typeof SubscriptionSummaryStatus[keyof typeof SubscriptionSummaryStatus];
+
+
+export const SubscriptionSummaryStatus = {
+  active: 'active',
+  superseded: 'superseded',
+  cancelled: 'cancelled',
+  expired: 'expired',
+} as const;
+
+export interface SubscriptionSummary {
+  id: string;
+  status: SubscriptionSummaryStatus;
+  startsAt: string;
+  endsAt: string;
+  package: SubscriptionPackage;
+}
+
+export interface AdminPrimarySubscriptionGiftResult {
+  kind: AdminPrimarySubscriptionGiftResultKind;
+  subscription: SubscriptionSummary;
+}
+
+export type AdminAddOnGiftResultKind = typeof AdminAddOnGiftResultKind[keyof typeof AdminAddOnGiftResultKind];
+
+
+export const AdminAddOnGiftResultKind = {
+  addon: 'addon',
+} as const;
+
+export interface AdminAddOnGiftResult {
+  kind: AdminAddOnGiftResultKind;
+  entitlementId: string;
+  packageId: string;
+  packageName: string;
+  /** @minimum 0 */
+  researchAllowance: number;
+  /** @minimum 0 */
+  aiEmailAssistAllowance: number;
+  /** @minimum 0 */
+  additionalMailboxCount: number;
+}
+
+export type AdminSubscriptionGiftResult = AdminPrimarySubscriptionGiftResult | AdminAddOnGiftResult;
+
 export interface SubscriptionPackageUpdateInput {
   /**
      * @minLength 2
@@ -4225,24 +4277,6 @@ export interface SubscriptionOrderCreated {
   packageName: string;
   customerName: string;
   customerEmail: string;
-}
-
-export type SubscriptionSummaryStatus = typeof SubscriptionSummaryStatus[keyof typeof SubscriptionSummaryStatus];
-
-
-export const SubscriptionSummaryStatus = {
-  active: 'active',
-  superseded: 'superseded',
-  cancelled: 'cancelled',
-  expired: 'expired',
-} as const;
-
-export interface SubscriptionSummary {
-  id: string;
-  status: SubscriptionSummaryStatus;
-  startsAt: string;
-  endsAt: string;
-  package: SubscriptionPackage;
 }
 
 export interface FreeSubscriptionActivation {
@@ -4638,3 +4672,4 @@ export const ListAdminUsersStatus = {
   inactive: 'inactive',
   pending: 'pending',
 } as const;
+

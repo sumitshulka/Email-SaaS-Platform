@@ -31,6 +31,7 @@ import type {
   AdminNotificationInput,
   AdminNotificationStatusInput,
   AdminNotificationsResponse,
+  AdminSubscriptionGiftResult,
   AdminSupportTicketCollection,
   AdminSupportTicketDetail,
   AdminUser,
@@ -159,7 +160,6 @@ import type {
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
   SubscriptionPaymentAvailability,
-  SubscriptionSummary,
   SupportTicketCollection,
   SupportTicketDetail,
   SupportTicketInput,
@@ -11116,9 +11116,9 @@ export const getGiftAdminSubscriptionUrl = () => {
 }
 
 /**
- * @summary Grant a subscription term to a tenant account without collecting payment
+ * @summary Gift a primary subscription term or add-on allowances without collecting payment
  */
-export const giftAdminSubscription = async (subscriptionGiftInput: SubscriptionGiftInput, options?: Parameters<typeof customFetch>[1]): Promise<SubscriptionSummary> => {
+export const giftAdminSubscription = async (subscriptionGiftInput: SubscriptionGiftInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminSubscriptionGiftResult> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -11134,7 +11134,7 @@ export const giftAdminSubscription = async (subscriptionGiftInput: SubscriptionG
     }
     return headers;
   };
-return customFetch<SubscriptionSummary>(getGiftAdminSubscriptionUrl(),
+return customFetch<AdminSubscriptionGiftResult>(getGiftAdminSubscriptionUrl(),
   {
     ...options,
     method: 'POST',
@@ -11182,7 +11182,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type GiftAdminSubscriptionMutationVariables = {data: BodyType<SubscriptionGiftInput>}
 
     /**
- * @summary Grant a subscription term to a tenant account without collecting payment
+ * @summary Gift a primary subscription term or add-on allowances without collecting payment
  */
 export const useGiftAdminSubscription = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof giftAdminSubscription>>, TError,GiftAdminSubscriptionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

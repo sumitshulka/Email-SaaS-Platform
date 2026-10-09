@@ -234,7 +234,9 @@ export const addOnEntitlementsTable = pgTable(
       .where(sql`${table.paymentId} IS NOT NULL`),
     uniqueIndex("add_on_entitlements_free_claim_unique")
       .on(table.userId, table.packageId)
-      .where(sql`${table.grantSource} = 'free_claim'`),
+      .where(
+        sql`${table.paymentId} IS NULL AND ${table.grantSource} <> 'admin_gift'`,
+      ),
     index("add_on_entitlements_owner_created_idx").on(
       table.userId,
       table.createdAt,

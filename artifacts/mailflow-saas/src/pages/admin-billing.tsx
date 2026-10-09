@@ -115,6 +115,8 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
   const [giftSearch, setGiftSearch] = useState('');
   const [giftRecipient, setGiftRecipient] = useState<AdminUser | null>(null);
   const [giftPackageId, setGiftPackageId] = useState('');
+  const selectedGiftPackage = packages.find(pkg => pkg.id === giftPackageId);
+  const giftIsAddon = selectedGiftPackage?.packageType === 'addon';
   const [giftConfirmed, setGiftConfirmed] = useState(false);
   const [giftNotice, setGiftNotice] = useState<{ text: string; bad?: boolean } | null>(null);
   const giftUserSearchParams = {
@@ -215,11 +217,22 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     }, {
       onSuccess: result => {
         void queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
-        const startsOn = new Date(result.startsAt).toLocaleDateString();
-        const endsOn = new Date(result.endsAt).toLocaleDateString();
-        setGiftNotice({
-          text: `Subscription granted to ${recipient.email}. Term: ${startsOn}–${endsOn}.`,
-        });
+        if (result.kind === 'primary') {
+          const startsOn = new Date(result.subscription.startsAt).toLocaleDateString();
+          const endsOn = new Date(result.subscription.endsAt).toLocaleDateString();
+          setGiftNotice({
+            text: `Primary subscription granted to ${recipient.email}. Term: ${startsOn}–${endsOn}.`,
+          });
+        } else {
+          const allowances = [
+            result.researchAllowance > 0 ? `${result.researchAllowance} company research runs` : null,
+            result.aiEmailAssistAllowance > 0 ? `${result.aiEmailAssistAllowance} AI email drafts` : null,
+            result.additionalMailboxCount > 0 ? `${result.additionalMailboxCount} SMTP mailbox slots` : null,
+          ].filter(Boolean);
+          setGiftNotice({
+            text: `Add-on ${result.packageName} granted to ${recipient.email}${allowances.length ? `: ${allowances.join(', ')}.` : '.'}`,
+          });
+        }
         setGiftRecipient(null);
         setGiftSearch('');
         setGiftPackageId('');
@@ -305,8 +318,8 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6">
         <span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><Gift className="h-[17px] w-[17px]"/></span>
         <div>
-          <h2 className="text-[15px] font-bold text-[#1d2d40]">Gift a subscription</h2>
-          <p className="mt-0.5 text-[11px] text-[#788696]">Grant a package term to any tenant account without collecting or recording a payment.</p>
+          <h2 className="text-[15px] font-bold text-[#1d2d40]">Gift a subscription or add-on</h2>
+          <p className="mt-0.5 text-[11px] text-[#788696]">Grant a primary package term or add-on allowances without collecting or recording a payment.</p>
         </div>
       </div>
       <form onSubmit={submitGift} className="space-y-4 p-5 md:p-6">
@@ -356,20 +369,28 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
               className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"
             >
               <option value="">Choose a package</option>
-              {packages.filter(pkg => pkg.packageType === 'primary').map(pkg => <option key={pkg.id} value={pkg.id}>
-                {pkg.name} · {pkg.periodDays} days · {formatMinor(pkg.amountMinor, pkg.currency)}{pkg.active ? '' : ' · hidden'}
+              {packages.map(pkg => <option key={pkg.id} value={pkg.id}>
+                {pkg.packageType === 'addon' ? 'Add-on' : 'Primary'} · {pkg.name} · {pkg.packageType === 'addon' ? 'allowances' : `${pkg.periodDays} days`} · {formatMinor(pkg.amountMinor, pkg.currency)}{pkg.active ? '' : ' · hidden'}
               </option>)}
             </select>
-            <span className="block text-[10px] text-[#85909c]">Hidden packages can also be gifted. The configured package term and contact limit apply.</span>
+            <span className="block text-[10px] leading-4 text-[#85909c]">
+              {giftIsAddon
+                ? 'Add-on gifts require an active paid-priced Primary plan. A previously gifted paid plan qualifies; free Primary plans do not.'
+                : 'Hidden Primary packages can also be gifted. The configured term and contact limit apply; a new term starts after any current active term.'}
+            </span>
           </label>
         </div>
         {giftRecipient && giftPackageId && <label className="flex cursor-pointer items-start gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] p-3 text-[11px] leading-5 text-[#53677b]">
           <input data-testid="checkbox-confirm-gift" type="checkbox" checked={giftConfirmed} onChange={event => setGiftConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#174f99]"/>
-          <span>I confirm granting this package to {giftRecipient.email}. Any current subscription term will finish first.</span>
+          <span>
+            {giftIsAddon
+              ? `I confirm adding this add-on's allowances to ${giftRecipient.email}. They pause if paid-Primary access ends and resume when paid access returns.`
+              : `I confirm granting this package to ${giftRecipient.email}. Any current subscription term will finish first.`}
+          </span>
         </label>}
         {giftNotice && <p data-testid="status-gift-subscription" role={giftNotice.bad ? 'alert' : 'status'} className={`rounded-md border px-3 py-2.5 text-[11px] ${giftNotice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{giftNotice.text}</p>}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-4">
-          <p className="max-w-xl text-[10px] leading-5 text-[#788696]">The recipient gets the same subscription access and account experience as a paid subscriber. Gifts do not create a payment or revenue entry.</p>
+          <p className="max-w-xl text-[10px] leading-5 text-[#788696]">Primary gifts grant a package term; add-on gifts add the package's allowances to the user's balance. Gifts do not create a payment or revenue entry.</p>
           <button data-testid="button-grant-gift-subscription" type="submit" disabled={!giftRecipient || !giftPackageId || !giftConfirmed || giftSubscription.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
             {giftSubscription.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Gift className="h-4 w-4"/>}
             {giftSubscription.isPending ? 'Granting subscription…' : 'Grant subscription'}
