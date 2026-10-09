@@ -23,6 +23,7 @@ test(
       import("../src/lib/add-on-entitlements.ts"),
     ]);
     const { db, pool } = dbModule;
+    const { getAiEmailAssistReservationTimeoutMs } = entitlementModule;
     const {
       addOnEntitlementsTable,
       aiEmailAssistUsagesTable,
@@ -185,15 +186,33 @@ test(
           userId,
           entitlementId,
           status: "reserved",
-          createdAt: staleCreatedAt,
+          createdAt: new Date(
+            cleanupNow.getTime() -
+              getAiEmailAssistReservationTimeoutMs() +
+              1,
+          ),
         })
         .returning({ id: aiEmailAssistUsagesTable.id });
-      await Promise.all([
+      const successfulReservationCutoff = new Date(
+        cleanupNow.getTime() + 1,
+      );
+      const [nearCutoffCleanupCount] = await Promise.all([
+        entitlementModule.releaseStaleAiEmailAssistReservations(
+          successfulReservationCutoff,
+          userId,
+        ),
         entitlementModule.finishAiEmailAssistCredit(
           userId,
           successfulReservation.id,
           true,
         ),
+      ]);
+      assert.equal(
+        nearCutoffCleanupCount,
+        0,
+        "cleanup at the exact provider-timeout-plus-grace boundary must not release the pending draft",
+      );
+      await Promise.all([
         entitlementModule.finishAiEmailAssistCredit(
           userId,
           successfulReservation.id,
@@ -207,6 +226,38 @@ test(
         .where(eq(aiEmailAssistUsagesTable.id, successfulReservation.id));
       assert.equal(completedReservation.status, "consumed");
       assert.ok(completedReservation.completedAt);
+
+      const timeoutMs = getAiEmailAssistReservationTimeoutMs();
+      const [expiredReservation] = await db
+        .insert(aiEmailAssistUsagesTable)
+        .values({
+          userId,
+          entitlementId,
+          status: "reserved",
+          createdAt: new Date(cleanupNow.getTime() - timeoutMs),
+        })
+        .returning({ id: aiEmailAssistUsagesTable.id });
+      assert.equal(
+        await entitlementModule.releaseStaleAiEmailAssistReservations(
+          cleanupNow,
+          userId,
+        ),
+        0,
+        "recovery must retain an expired request at the exact timeout boundary",
+      );
+      assert.equal(
+        await entitlementModule.releaseStaleAiEmailAssistReservations(
+          new Date(cleanupNow.getTime() + 1),
+          userId,
+        ),
+        1,
+        "recovery releases an expired request only after timeout plus settle grace",
+      );
+      const [releasedExpiredReservation] = await db
+        .select({ status: aiEmailAssistUsagesTable.status })
+        .from(aiEmailAssistUsagesTable)
+        .where(eq(aiEmailAssistUsagesTable.id, expiredReservation.id));
+      assert.equal(releasedExpiredReservation.status, "released");
 
       const completionCleanupResults = await Promise.all([
         entitlementModule.releaseStaleAiEmailAssistReservations(

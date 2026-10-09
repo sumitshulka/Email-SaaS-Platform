@@ -8286,6 +8286,126 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
       { total: 2, used: 2, remaining: 0 },
     );
   });
+
+  it("keeps a pending draft reserved at the recovery cutoff and releases expired reservations only afterward", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-cutoff-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-cutoff-user", {
+      allowance: 2,
+    });
+    await configureProvider(admin);
+
+    const {
+      getAiEmailAssistReservationTimeoutMs,
+      releaseStaleAiEmailAssistReservations,
+      reserveAiEmailAssistCredit,
+    } = await import("../src/lib/add-on-entitlements.ts");
+    const effectiveTimeoutMs = getAiEmailAssistReservationTimeoutMs();
+
+    let signalProviderStarted;
+    let allowProviderToFinish;
+    const providerStarted = new Promise((resolve) => {
+      signalProviderStarted = resolve;
+    });
+    const providerMayFinish = new Promise((resolve) => {
+      allowProviderToFinish = resolve;
+    });
+
+    await withAIProviderFetch(
+      async () => {
+        signalProviderStarted();
+        await providerMayFinish;
+        return providerResponse(JSON.stringify(validDraft));
+      },
+      async () => {
+        const request = draftRequest(account);
+        await providerStarted;
+
+        const [pendingReservation] = await db
+          .select()
+          .from(dbModule.aiEmailAssistUsagesTable)
+          .where(
+            and(
+              eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id),
+              eq(dbModule.aiEmailAssistUsagesTable.status, "reserved"),
+            ),
+          );
+        assert.ok(pendingReservation, "the provider request must hold a credit");
+
+        const cutoff = new Date(
+          pendingReservation.createdAt.getTime() + effectiveTimeoutMs,
+        );
+
+        assert.equal(
+          await releaseStaleAiEmailAssistReservations(
+            new Date(cutoff.getTime() - 1),
+            account.user.id,
+          ),
+          0,
+          "recovery must not release the pending draft before the provider timeout and grace",
+        );
+        const cleanupAtCutoff = releaseStaleAiEmailAssistReservations(
+          cutoff,
+          account.user.id,
+        );
+        allowProviderToFinish();
+        const [cleanupCount, result] = await Promise.all([
+          cleanupAtCutoff,
+          request,
+        ]);
+        assert.equal(
+          cleanupCount,
+          0,
+          "a reservation is not expired at the exact timeout boundary",
+        );
+        assert.equal(result.response.status, 200, JSON.stringify(result.body));
+
+        const [completed] = await db
+          .select()
+          .from(dbModule.aiEmailAssistUsagesTable)
+          .where(eq(dbModule.aiEmailAssistUsagesTable.id, pendingReservation.id));
+        assert.equal(completed.status, "consumed");
+        assert.ok(completed.completedAt);
+      },
+    );
+
+    const expiredReservation = await reserveAiEmailAssistCredit(
+      account.user.id,
+    );
+    assert.ok(expiredReservation, "the second allowance should be reservable");
+    const expiredCreatedAt = new Date(Date.now() - effectiveTimeoutMs);
+    await db
+      .update(dbModule.aiEmailAssistUsagesTable)
+      .set({ createdAt: expiredCreatedAt })
+      .where(eq(dbModule.aiEmailAssistUsagesTable.id, expiredReservation.id));
+    const exactExpiry = new Date(
+      expiredCreatedAt.getTime() + effectiveTimeoutMs,
+    );
+
+    assert.equal(
+      await releaseStaleAiEmailAssistReservations(
+        exactExpiry,
+        account.user.id,
+      ),
+      0,
+      "an expired reservation must remain charged at the exact timeout boundary",
+    );
+    assert.equal(
+      await releaseStaleAiEmailAssistReservations(
+        new Date(exactExpiry.getTime() + 1),
+        account.user.id,
+      ),
+      1,
+      "recovery releases the failed or abandoned reservation only after timeout plus grace",
+    );
+    const [released] = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.id, expiredReservation.id));
+    assert.equal(released.status, "released");
+  });
 });
 
 describe("superadmin Google OAuth setup", { concurrency: false }, () => {
