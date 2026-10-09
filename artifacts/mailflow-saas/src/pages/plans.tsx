@@ -267,7 +267,7 @@ export default function PlansPage() {
   const activateFreeAddOn = useActivateFreeAddOn();
   const verifyPayment = useVerifyRazorpayPayment();
   const [checkoutOrder, setCheckoutOrder] = useState<SubscriptionOrderCreated | null>(null);
-  const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'error' | 'dismissed'; message: string; label?: string; nextStepHref?: string } | null>(null);
+  const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'reconciliation_required' | 'error' | 'dismissed'; message: string; label?: string; nextStepHref?: string; paymentReference?: string | null } | null>(null);
   const checkoutAutoStartRef = useRef<string | null>(null);
   const [startingPackage, setStartingPackage] = useState<string | null>(null);
   const [pendingPackage, setPendingPackage] = useState<SubscriptionPackage | null>(null);
@@ -336,6 +336,7 @@ export default function PlansPage() {
           kind: result.status,
           message: result.message,
           label: result.addOnEntitlement ? 'Add-on activated' : undefined,
+          paymentReference: result.paymentReference,
         });
         setCheckoutOrder(null);
         void queryClient.invalidateQueries({ queryKey: getGetCurrentSubscriptionQueryKey() });
@@ -752,9 +753,17 @@ export default function PlansPage() {
           })}</div>}
     </section>
 
-    {paymentState && <div role="status" data-testid="status-payment" className={`flex items-start gap-3 rounded-md border p-4 text-[12px] leading-5 ${paymentState.kind === 'active' ? 'border-[#d4e8dc] bg-[#f1f8f3] text-[#3c6d4f]' : paymentState.kind === 'pending' ? 'border-[#d6e3ef] bg-[#f3f7fb] text-[#385c7e]' : paymentState.kind === 'error' ? 'border-[#eed9ca] bg-[#fff8f2] text-[#965323]' : 'border-[#e2e6ea] bg-[#f7f8f9] text-[#647281]'}`}>
-      {paymentState.kind === 'active' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'error' ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'pending' ? <LoaderCircle className="mt-0.5 h-4 w-4 shrink-0 animate-spin"/> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0"/>}
-      <div><div className="font-semibold">{paymentState.label ?? (paymentState.kind === 'active' ? 'Subscription active' : paymentState.kind === 'pending' ? 'Payment verification pending' : paymentState.kind === 'error' ? 'Payment needs attention' : 'Checkout closed')}</div><p>{paymentState.message}</p>{paymentState.nextStepHref && <Link href={paymentState.nextStepHref} data-testid="link-free-plan-smtp-setup" className="mt-2 inline-flex items-center gap-1 font-semibold text-[#245b9b] underline underline-offset-2">Set up your SMTP sending account <ArrowRight className="h-3.5 w-3.5"/></Link>}</div>
+    {paymentState && <div role="status" data-testid="status-payment" className={`flex items-start gap-3 rounded-md border p-4 text-[12px] leading-5 ${paymentState.kind === 'active' ? 'border-[#d4e8dc] bg-[#f1f8f3] text-[#3c6d4f]' : paymentState.kind === 'pending' ? 'border-[#d6e3ef] bg-[#f3f7fb] text-[#385c7e]' : paymentState.kind === 'error' || paymentState.kind === 'reconciliation_required' ? 'border-[#eed9ca] bg-[#fff8f2] text-[#965323]' : 'border-[#e2e6ea] bg-[#f7f8f9] text-[#647281]'}`}>
+      {paymentState.kind === 'active' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'error' || paymentState.kind === 'reconciliation_required' ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'pending' ? <LoaderCircle className="mt-0.5 h-4 w-4 shrink-0 animate-spin"/> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0"/>}
+      <div>
+        <div className="font-semibold">{paymentState.label ?? (paymentState.kind === 'active' ? 'Subscription active' : paymentState.kind === 'pending' ? 'Payment verification pending' : paymentState.kind === 'reconciliation_required' ? 'Payment captured—not activated' : paymentState.kind === 'error' ? 'Payment needs attention' : 'Checkout closed')}</div>
+        <p>{paymentState.message}</p>
+        {paymentState.nextStepHref && <Link href={paymentState.nextStepHref} data-testid="link-free-plan-smtp-setup" className="mt-2 inline-flex items-center gap-1 font-semibold text-[#245b9b] underline underline-offset-2">Set up your SMTP sending account <ArrowRight className="h-3.5 w-3.5"/></Link>}
+        {paymentState.kind === 'reconciliation_required' && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {paymentState.paymentReference && <span data-testid="text-payment-reference" className="font-medium">Razorpay payment reference: {paymentState.paymentReference}</span>}
+          <Link data-testid="link-payment-reconciliation-support" href="/support" className="font-semibold underline underline-offset-2">Open a support ticket</Link>
+        </div>}
+      </div>
     </div>}
     {(createOrder.isError || verifyPayment.isError) && !paymentState && <p role="alert" data-testid="status-payment-error" className="rounded-md border border-[#eed9ca] bg-[#fff8f2] p-3 text-[12px] text-[#965323]">{errorText(createOrder.error || verifyPayment.error)}</p>}
     {paymentAvailabilityQuery.data?.enabled === false && <section data-testid="notice-online-payments-disabled" role="status" className="rounded-md border border-[#ead9c5] bg-[#fff8ef] p-4 text-[12px] leading-5 text-[#76552f]">

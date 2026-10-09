@@ -2948,6 +2948,35 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
   }
 
+  async function sendCaptureWebhook(order, gateway, eventId) {
+    const body = {
+      event: "payment.captured",
+      payload: {
+        payment: {
+          entity: {
+            id: gateway.paymentId,
+            order_id: order.orderId,
+            amount: order.amountMinor,
+            currency: order.currency,
+            status: "captured",
+            captured: true,
+          },
+        },
+      },
+    };
+    const signature = createHmac("sha256", webhookSecret)
+      .update(JSON.stringify(body))
+      .digest("hex");
+    return api("/webhooks/razorpay", {
+      method: "POST",
+      body,
+      headers: {
+        "x-razorpay-event-id": eventId,
+        "x-razorpay-signature": signature,
+      },
+    });
+  }
+
   it("orders only the unused-term difference and activates the higher plan through verified capture", async () => {
     const fixture = await makePlanPair({
       username: "paid-upgrade-capture-user",
@@ -3043,7 +3072,11 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     }
   });
 
-  it("does not activate an upgrade if its source expires before capture", async () => {
+  it("records a confirmed capture for reconciliation when the source expires, and keeps retries inactive", async () => {
+    const admin = await loggedInUser({
+      username: "paid-upgrade-reconciliation-admin",
+      role: "SUPERADMIN",
+    });
     const fixture = await makePlanPair({
       username: "paid-upgrade-stale-capture-user",
       currentEndsAt: new Date(Date.now() + 12 * dayMs),
@@ -3063,8 +3096,17 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         .where(eq(dbModule.userSubscriptionsTable.id, fixture.sourceSubscription.id));
 
       const verified = await verifyCapture(fixture.user, order.body, gateway);
-      assert.equal(verified.response.status, 502);
-      assert.equal(verified.body.code, "RAZORPAY_CONFIRMATION_PENDING");
+      assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+      assert.equal(verified.body.status, "reconciliation_required");
+      assert.equal(verified.body.paymentReference, gateway.paymentId);
+      assert.match(verified.body.message, /Razorpay confirmed this payment/i);
+      assert.match(verified.body.message, /don't pay again/i);
+      assert.match(verified.body.message, /contact support/i);
+
+      const retried = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(retried.response.status, 200, JSON.stringify(retried.body));
+      assert.equal(retried.body.status, "reconciliation_required");
+      assert.equal(retried.body.paymentReference, gateway.paymentId);
 
       const subscriptions = await db
         .select()
@@ -3076,7 +3118,167 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         .select()
         .from(dbModule.paymentsTable)
         .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
-      assert.equal(payment.status, "created");
+      assert.equal(payment.status, "captured");
+      assert.equal(payment.razorpayPaymentId, gateway.paymentId);
+
+      const ledger = await api("/admin/finance/payments", {
+        cookie: admin.cookie,
+      });
+      assert.equal(ledger.response.status, 200, JSON.stringify(ledger.body));
+      assert.equal(ledger.body.total, 1);
+      assert.equal(ledger.body.rows[0].status, "captured");
+      assert.equal(ledger.body.rows[0].razorpayPaymentId, gateway.paymentId);
+      assert.equal(ledger.body.rows[0].subscription, null);
+
+      const webhook = await sendCaptureWebhook(
+        order.body,
+        gateway,
+        "paid-upgrade-expired-capture-webhook",
+      );
+      assert.equal(webhook.response.status, 200, JSON.stringify(webhook.body));
+      assert.match(webhook.body.message, /support review/i);
+      const duplicateWebhook = await sendCaptureWebhook(
+        order.body,
+        gateway,
+        "paid-upgrade-expired-capture-webhook-duplicate",
+      );
+      assert.equal(
+        duplicateWebhook.response.status,
+        200,
+        JSON.stringify(duplicateWebhook.body),
+      );
+      const finalSubscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(finalSubscriptions.length, 1);
+      assert.equal(finalSubscriptions[0].packageId, fixture.currentPlan.id);
+      assert.equal(finalSubscriptions[0].status, "active");
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("does not apply a captured upgrade when the source expiry changes but remains active", async () => {
+    const fixture = await makePlanPair({
+      username: "paid-upgrade-changed-expiry-user",
+      currentEndsAt: new Date(Date.now() + 12 * dayMs),
+    });
+    const gateway = stubGateway({
+      orderId: "order_changed_upgrade_expiry",
+      paymentId: "pay_changed_upgrade_expiry",
+    });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      await db
+        .update(dbModule.userSubscriptionsTable)
+        .set({ endsAt: new Date(fixture.sourceSubscription.endsAt.getTime() + dayMs) })
+        .where(eq(dbModule.userSubscriptionsTable.id, fixture.sourceSubscription.id));
+
+      const verified = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+      assert.equal(verified.body.status, "reconciliation_required");
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 1);
+      assert.equal(subscriptions[0].id, fixture.sourceSubscription.id);
+      assert.equal(subscriptions[0].packageId, fixture.currentPlan.id);
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.status, "captured");
+      assert.equal(payment.razorpayPaymentId, gateway.paymentId);
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("records a stale upgrade capture delivered first by a webhook without activating on duplicates", async () => {
+    const fixture = await makePlanPair({
+      username: "paid-upgrade-stale-webhook-user",
+      currentEndsAt: new Date(Date.now() + 12 * dayMs),
+    });
+    const gateway = stubGateway({
+      orderId: "order_stale_upgrade_webhook",
+      paymentId: "pay_stale_upgrade_webhook",
+    });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      await db
+        .update(dbModule.userSubscriptionsTable)
+        .set({ status: "superseded" })
+        .where(eq(dbModule.userSubscriptionsTable.id, fixture.sourceSubscription.id));
+      const [replacement] = await db
+        .insert(dbModule.userSubscriptionsTable)
+        .values({
+          userId: fixture.user.user.id,
+          packageId: fixture.currentPlan.id,
+          paymentId: null,
+          status: "active",
+          startsAt: new Date(Date.now() - 60_000),
+          endsAt: new Date(Date.now() + 20 * dayMs),
+        })
+        .returning();
+
+      const webhook = await sendCaptureWebhook(
+        order.body,
+        gateway,
+        "paid-upgrade-stale-webhook-first",
+      );
+      assert.equal(webhook.response.status, 200, JSON.stringify(webhook.body));
+      assert.match(webhook.body.message, /support review/i);
+
+      const repeatedWebhook = await sendCaptureWebhook(
+        order.body,
+        gateway,
+        "paid-upgrade-stale-webhook-second",
+      );
+      assert.equal(
+        repeatedWebhook.response.status,
+        200,
+        JSON.stringify(repeatedWebhook.body),
+      );
+      const verified = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+      assert.equal(verified.body.status, "reconciliation_required");
+      assert.equal(verified.body.paymentReference, gateway.paymentId);
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 2);
+      assert.equal(
+        subscriptions.filter((subscription) => subscription.packageId === fixture.targetPlan.id)
+          .length,
+        0,
+      );
+      assert.equal(
+        subscriptions.find((subscription) => subscription.id === replacement.id).status,
+        "active",
+      );
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.status, "captured");
+      assert.equal(payment.razorpayPaymentId, gateway.paymentId);
     } finally {
       gateway.restore();
     }

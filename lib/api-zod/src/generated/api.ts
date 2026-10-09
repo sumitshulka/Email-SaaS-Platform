@@ -34,7 +34,6 @@ export const loginBodyIdentifierMax = 254;
 export const loginBodyPasswordMax = 256;
 
 
-
 export const LoginBody = zod.object({
   "identifier": zod.string().min(1).max(loginBodyIdentifierMax),
   "password": zod.string().min(1).max(loginBodyPasswordMax)
@@ -73,7 +72,6 @@ export const registerBodyEmailVerificationProofMin = 32;
 export const registerBodyEmailVerificationProofMax = 128;
 
 
-
 export const RegisterBody = zod.object({
   "firstName": zod.string().min(1).max(registerBodyFirstNameMax),
   "lastName": zod.string().min(1).max(registerBodyLastNameMax),
@@ -92,7 +90,6 @@ export const RegisterResponse = zod.object({
  */
 export const verifyRegistrationEmailBodyCodeMin = 6;
 export const verifyRegistrationEmailBodyCodeMax = 6;
-
 
 
 export const VerifyRegistrationEmailBody = zod.object({
@@ -123,7 +120,6 @@ export const VerifyRegistrationEmailResponse = zod.object({
 export const requestPackageCheckoutCodeBodyEmailMax = 254;
 
 
-
 export const RequestPackageCheckoutCodeBody = zod.object({
   "email": zod.string().email().max(requestPackageCheckoutCodeBodyEmailMax)
 })
@@ -142,7 +138,6 @@ export const verifyPackageCheckoutCodeBodyCodeMin = 6;
 export const verifyPackageCheckoutCodeBodyCodeMax = 6;
 
 
-
 export const VerifyPackageCheckoutCodeBody = zod.object({
   "email": zod.string().email().max(verifyPackageCheckoutCodeBodyEmailMax),
   "code": zod.string().min(verifyPackageCheckoutCodeBodyCodeMin).max(verifyPackageCheckoutCodeBodyCodeMax)
@@ -150,7 +145,6 @@ export const VerifyPackageCheckoutCodeBody = zod.object({
 
 export const verifyPackageCheckoutCodeResponseRegistrationProofTokenMin = 32;
 export const verifyPackageCheckoutCodeResponseRegistrationProofTokenMax = 128;
-
 
 
 export const VerifyPackageCheckoutCodeResponse = zod.object({
@@ -179,7 +173,6 @@ export const resetPasswordBodyTokenMax = 256;
 
 export const resetPasswordBodyPasswordMin = 8;
 export const resetPasswordBodyPasswordMax = 256;
-
 
 
 export const ResetPasswordBody = zod.object({
@@ -217,7 +210,6 @@ export const getPasswordPolicyResponsePasswordMinimumLengthMin = 8;
 export const getPasswordPolicyResponsePasswordMinimumLengthMax = 128;
 
 
-
 export const GetPasswordPolicyResponse = zod.object({
   "passwordMinimumLength": zod.number().int().min(getPasswordPolicyResponsePasswordMinimumLengthMin).max(getPasswordPolicyResponsePasswordMinimumLengthMax)
 })
@@ -236,7 +228,6 @@ export const changePasswordBodyCurrentPasswordMax = 256;
 
 export const changePasswordBodyNewPasswordMin = 8;
 export const changePasswordBodyNewPasswordMax = 256;
-
 
 
 export const ChangePasswordBody = zod.object({
@@ -262,7 +253,6 @@ export const updateProfileBodyLastNameMax = 80;
 export const updateProfileBodyEmailMax = 254;
 
 export const updateProfileBodyTimezoneMax = 80;
-
 
 
 export const UpdateProfileBody = zod.object({
@@ -315,8 +305,6 @@ export const getUserDashboardResponseCampaignsItemUnknownMin = 0;
 export const getUserDashboardResponseCampaignsItemAttemptsThisHourMin = 0;
 
 export const getUserDashboardResponseCampaignsItemRemainingThisHourMin = 0;
-
-
 
 
 export const GetUserDashboardResponse = zod.object({
@@ -418,7 +406,6 @@ export const createSupportTicketBodySubjectMax = 160;
 export const createSupportTicketBodyMessageMax = 10000;
 
 
-
 export const CreateSupportTicketBody = zod.object({
   "subject": zod.string().min(1).max(createSupportTicketBodySubjectMax),
   "message": zod.string().min(1).max(createSupportTicketBodyMessageMax)
@@ -479,7 +466,6 @@ export const ReplyToSupportTicketParams = zod.object({
 export const replyToSupportTicketBodyMessageMax = 10000;
 
 
-
 export const ReplyToSupportTicketBody = zod.object({
   "message": zod.string().min(1).max(replyToSupportTicketBodyMessageMax)
 })
@@ -538,7 +524,6 @@ export const updateTenantSendingSettingsBodyPasswordMax = 512;
 export const updateTenantSendingSettingsBodyFromNameMax = 120;
 
 
-
 export const UpdateTenantSendingSettingsBody = zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().min(1).max(updateTenantSendingSettingsBodyHostMax),
@@ -579,7 +564,6 @@ export const listTenantSendingAccountsResponseEmailAccountLimitMin = 0;
 export const listTenantSendingAccountsResponseConfiguredCountMin = 0;
 
 export const listTenantSendingAccountsResponseScheduledDowngradeOneEmailAccountLimitMin = 0;
-
 
 
 export const ListTenantSendingAccountsResponse = zod.object({
@@ -630,7 +614,6 @@ export const createTenantSendingAccountBodyPasswordMax = 512;
 export const createTenantSendingAccountBodyFromNameMax = 120;
 
 
-
 export const CreateTenantSendingAccountBody = zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().min(1).max(createTenantSendingAccountBodyHostMax),
@@ -644,7 +627,6 @@ export const CreateTenantSendingAccountBody = zod.object({
 })
 
 export const createTenantSendingAccountResponseAccountTwoActiveCampaignCountMin = 0;
-
 
 
 export const CreateTenantSendingAccountResponse = zod.object({
@@ -690,7 +672,6 @@ export const updateTenantSendingAccountBodyPasswordMax = 512;
 export const updateTenantSendingAccountBodyFromNameMax = 120;
 
 
-
 export const UpdateTenantSendingAccountBody = zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().min(1).max(updateTenantSendingAccountBodyHostMax),
@@ -704,7 +685,6 @@ export const UpdateTenantSendingAccountBody = zod.object({
 })
 
 export const updateTenantSendingAccountResponseAccountTwoActiveCampaignCountMin = 0;
-
 
 
 export const UpdateTenantSendingAccountResponse = zod.object({
@@ -752,7 +732,6 @@ export const SetPrimaryTenantSendingAccountParams = zod.object({
 export const setPrimaryTenantSendingAccountResponseAccountTwoActiveCampaignCountMin = 0;
 
 
-
 export const SetPrimaryTenantSendingAccountResponse = zod.object({
   "account": zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
@@ -792,7 +771,6 @@ export const testTenantSendingSettingsBodySettingsPasswordMax = 512;
 export const testTenantSendingSettingsBodySettingsFromNameMax = 120;
 
 
-
 export const TestTenantSendingSettingsBody = zod.object({
   "toEmail": zod.string().email(),
   "accountId": zod.string().uuid().optional(),
@@ -827,7 +805,6 @@ export const testTenantSendingConnectionBodySettingsUsernameMax = 254;
 export const testTenantSendingConnectionBodySettingsPasswordMax = 512;
 
 export const testTenantSendingConnectionBodySettingsFromNameMax = 120;
-
 
 
 export const TestTenantSendingConnectionBody = zod.object({
@@ -868,7 +845,6 @@ export const getGmailMailboxConnectionResponseLastSyncDiagnosticsOneWarningsMin 
 export const getGmailMailboxConnectionResponsePollIntervalSecondsMin = 30;
 
 
-
 export const GetGmailMailboxConnectionResponse = zod.object({
   "configured": zod.boolean(),
   "redirectUri": zod.string().nullable(),
@@ -905,7 +881,6 @@ export const RescanRecentGmailMessagesBody = zod.object({
 })
 
 
-
 export const rescanRecentGmailMessagesResponseMessagesCheckedMin = 0;
 
 export const rescanRecentGmailMessagesResponseCandidateMessagesMin = 0;
@@ -919,7 +894,6 @@ export const rescanRecentGmailMessagesResponseUnmatchedMin = 0;
 export const rescanRecentGmailMessagesResponseIgnoredMin = 0;
 
 export const rescanRecentGmailMessagesResponseWarningCountMin = 0;
-
 
 
 export const RescanRecentGmailMessagesResponse = zod.object({
@@ -961,7 +935,6 @@ export const CompleteGmailMailboxConnectionResponse = zod.void()
 export const getMicrosoft365TraceConnectionResponsePollIntervalSecondsMin = 30;
 
 
-
 export const GetMicrosoft365TraceConnectionResponse = zod.object({
   "configured": zod.boolean(),
   "connected": zod.boolean(),
@@ -1001,7 +974,6 @@ export const connectMicrosoft365TraceBodyClientSecretMin = 8;
 export const connectMicrosoft365TraceBodyClientSecretMax = 4096;
 
 
-
 export const ConnectMicrosoft365TraceBody = zod.object({
   "tenantId": zod.string().uuid(),
   "clientId": zod.string().uuid(),
@@ -1010,7 +982,6 @@ export const ConnectMicrosoft365TraceBody = zod.object({
 }).describe('Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.')
 
 export const connectMicrosoft365TraceResponsePollIntervalSecondsMin = 30;
-
 
 
 export const ConnectMicrosoft365TraceResponse = zod.object({
@@ -1042,7 +1013,6 @@ export const ConnectMicrosoft365TraceResponse = zod.object({
  * @summary Schedule an immediate Microsoft 365 trace sync
  */
 export const triggerMicrosoft365TraceSyncResponsePollIntervalSecondsMin = 30;
-
 
 
 export const TriggerMicrosoft365TraceSyncResponse = zod.object({
@@ -1078,13 +1048,11 @@ export const backfillMicrosoft365TracesBodyDaysDefault = 90;
 export const backfillMicrosoft365TracesBodyDaysMax = 90;
 
 
-
 export const BackfillMicrosoft365TracesBody = zod.object({
   "days": zod.number().int().min(1).max(backfillMicrosoft365TracesBodyDaysMax).default(backfillMicrosoft365TracesBodyDaysDefault)
 })
 
 export const backfillMicrosoft365TracesResponsePollIntervalSecondsMin = 30;
-
 
 
 export const BackfillMicrosoft365TracesResponse = zod.object({
@@ -1241,7 +1209,6 @@ export const listContactsResponseQuotaLimitMin = 0;
 export const listContactsResponseQuotaRemainingMin = 0;
 
 
-
 export const listContactsResponsePageSizeMax = 100;
 
 export const listContactsResponseTotalMin = 0;
@@ -1251,7 +1218,6 @@ export const listContactsResponsePageCountMin = 0;
 export const listContactsResponseWorkspaceTotalMin = 0;
 
 export const listContactsResponseWorkspaceSubscribedMin = 0;
-
 
 
 export const ListContactsResponse = zod.object({
@@ -1429,7 +1395,6 @@ export const createContactBodyCompanyLocationMax = 200;
 export const createContactBodyListIdsMax = 100;
 
 
-
 export const CreateContactBody = zod.object({
   "email": zod.string().email().max(createContactBodyEmailMax),
   "name": zod.string().min(1).max(createContactBodyNameMax).optional(),
@@ -1553,7 +1518,6 @@ export const createContactResponseCompanyLinkedinUrlMax = 2048;
 export const createContactResponseCompanyLocationMax = 200;
 
 
-
 export const CreateContactResponse = zod.object({
   "id": zod.string().uuid(),
   "email": zod.string().email(),
@@ -1670,7 +1634,6 @@ export const listContactOptionsQueryCompanyIdMax = 64;
 export const listContactOptionsQueryListIdsMax = 100;
 
 
-
 export const ListContactOptionsQueryParams = zod.object({
   "search": zod.coerce.string().max(listContactOptionsQuerySearchMax).optional(),
   "limit": zod.coerce.number().int().min(1).max(listContactOptionsQueryLimitMax).default(listContactOptionsQueryLimitDefault),
@@ -1684,7 +1647,6 @@ export const ListContactOptionsQueryParams = zod.object({
 export const listContactOptionsResponseTotalMin = 0;
 
 export const listContactOptionsResponseLimitMax = 100;
-
 
 
 export const ListContactOptionsResponse = zod.object({
@@ -1741,7 +1703,6 @@ export const exportCompaniesBodyFiltersRevenueRangeMax = 80;
 export const exportCompaniesBodyFiltersLocationMax = 200;
 
 
-
 export const ExportCompaniesBody = zod.object({
   "scope": zod.enum(['filtered', 'all']),
   "columns": zod.array(zod.enum(['id', 'companyName', 'companyDomain', 'companyWebsiteUrl', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyDescription', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyLocation', 'contactCount', 'createdAt', 'updatedAt'])).min(1).max(exportCompaniesBodyColumnsMax),
@@ -1765,7 +1726,6 @@ export const getCompanyResearchAllowanceResponseAllowanceOneLimitMin = 0;
 export const getCompanyResearchAllowanceResponseAllowanceOneUsedMin = 0;
 
 export const getCompanyResearchAllowanceResponseAllowanceOneRemainingMin = 0;
-
 
 
 export const GetCompanyResearchAllowanceResponse = zod.object({
@@ -1826,7 +1786,6 @@ export const getCompanyIntelligenceResponseResearchAllowanceOneLimitMin = 0;
 export const getCompanyIntelligenceResponseResearchAllowanceOneUsedMin = 0;
 
 export const getCompanyIntelligenceResponseResearchAllowanceOneRemainingMin = 0;
-
 
 
 export const GetCompanyIntelligenceResponse = zod.object({
@@ -1985,7 +1944,6 @@ export const startCompanyResearchBodyDepthDefault = 1;
 export const startCompanyResearchBodyDepthMax = 3;
 
 
-
 export const StartCompanyResearchBody = zod.object({
   "confirmed": zod.literal(true),
   "overrideFresh": zod.boolean().default(startCompanyResearchBodyOverrideFreshDefault),
@@ -2040,8 +1998,6 @@ export const getCompanyIntelligenceVersionResponseTwoProfileFactSourcesItemConfi
 
 export const getCompanyIntelligenceVersionResponseTwoProfileConflictsItemConfidenceMin = 0;
 export const getCompanyIntelligenceVersionResponseTwoProfileConflictsItemConfidenceMax = 1;
-
-
 
 
 export const GetCompanyIntelligenceVersionResponse = zod.object({
@@ -2186,7 +2142,6 @@ export const getCompanyResearchSettingsResponseUsdToInrDefault = 85;
 export const getCompanyResearchSettingsResponseUsdToInrMax = 1000;
 
 
-
 export const GetCompanyResearchSettingsResponse = zod.object({
   "freshDays": zod.number().int().min(1).max(getCompanyResearchSettingsResponseFreshDaysMax).default(getCompanyResearchSettingsResponseFreshDaysDefault),
   "agingDays": zod.number().int().min(getCompanyResearchSettingsResponseAgingDaysMin).max(getCompanyResearchSettingsResponseAgingDaysMax).default(getCompanyResearchSettingsResponseAgingDaysDefault),
@@ -2243,7 +2198,6 @@ export const updateCompanyResearchSettingsBodyUsdToInrDefault = 85;
 export const updateCompanyResearchSettingsBodyUsdToInrMax = 1000;
 
 
-
 export const UpdateCompanyResearchSettingsBody = zod.object({
   "freshDays": zod.number().int().min(1).max(updateCompanyResearchSettingsBodyFreshDaysMax).default(updateCompanyResearchSettingsBodyFreshDaysDefault),
   "agingDays": zod.number().int().min(updateCompanyResearchSettingsBodyAgingDaysMin).max(updateCompanyResearchSettingsBodyAgingDaysMax).default(updateCompanyResearchSettingsBodyAgingDaysDefault),
@@ -2296,7 +2250,6 @@ export const updateCompanyResearchSettingsResponseUsdToInrDefault = 85;
 export const updateCompanyResearchSettingsResponseUsdToInrMax = 1000;
 
 
-
 export const UpdateCompanyResearchSettingsResponse = zod.object({
   "freshDays": zod.number().int().min(1).max(updateCompanyResearchSettingsResponseFreshDaysMax).default(updateCompanyResearchSettingsResponseFreshDaysDefault),
   "agingDays": zod.number().int().min(updateCompanyResearchSettingsResponseAgingDaysMin).max(updateCompanyResearchSettingsResponseAgingDaysMax).default(updateCompanyResearchSettingsResponseAgingDaysDefault),
@@ -2321,7 +2274,6 @@ export const getCompanyResearchUsageQueryPageDefault = 1;
 
 export const getCompanyResearchUsageQueryPageSizeDefault = 20;
 export const getCompanyResearchUsageQueryPageSizeMax = 100;
-
 
 
 export const GetCompanyResearchUsageQueryParams = zod.object({
@@ -2381,7 +2333,6 @@ export const listAdminGlobalCompaniesQueryPageSizeDefault = 25;
 export const listAdminGlobalCompaniesQueryPageSizeMax = 100;
 
 
-
 export const ListAdminGlobalCompaniesQueryParams = zod.object({
   "search": zod.coerce.string().max(listAdminGlobalCompaniesQuerySearchMax).default(listAdminGlobalCompaniesQuerySearchDefault),
   "page": zod.coerce.number().int().min(1).max(listAdminGlobalCompaniesQueryPageMax).default(listAdminGlobalCompaniesQueryPageDefault),
@@ -2414,7 +2365,6 @@ export const listAdminGlobalCompaniesResponseTotalMin = 0;
 
 
 export const listAdminGlobalCompaniesResponsePageSizeMax = 100;
-
 
 
 export const ListAdminGlobalCompaniesResponse = zod.object({
@@ -2469,7 +2419,6 @@ export const createGlobalCompanyBodyCompanyLinkedinUrlMax = 2048;
 export const createGlobalCompanyBodyCompanyLocationMax = 200;
 
 
-
 export const CreateGlobalCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(createGlobalCompanyBodyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createGlobalCompanyBodyCompanyWebsiteUrlMax).optional(),
@@ -2504,7 +2453,6 @@ export const createGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
 export const createGlobalCompanyResponseCompanyLocationMax = 200;
 
 export const createGlobalCompanyResponseResearchSummarySourceCountMin = 0;
-
 
 
 export const CreateGlobalCompanyResponse = zod.object({
@@ -2559,7 +2507,6 @@ export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLocationMax = 20
 export const bulkImportGlobalCompaniesBodyRowsMax = 25;
 
 
-
 export const BulkImportGlobalCompaniesBody = zod.object({
   "rows": zod.array(zod.object({
   "rowNumber": zod.number().int().min(bulkImportGlobalCompaniesBodyRowsItemRowNumberMin).max(bulkImportGlobalCompaniesBodyRowsItemRowNumberMax),
@@ -2586,7 +2533,6 @@ export const bulkImportGlobalCompaniesResponseInvalidMin = 0;
 
 export const bulkImportGlobalCompaniesResponseRowsItemRowNumberMin = 2;
 export const bulkImportGlobalCompaniesResponseRowsItemRowNumberMax = 10001;
-
 
 
 export const BulkImportGlobalCompaniesResponse = zod.object({
@@ -2630,7 +2576,6 @@ export const updateGlobalCompanyBodyCompanyLinkedinUrlMax = 2048;
 export const updateGlobalCompanyBodyCompanyLocationMax = 200;
 
 
-
 export const UpdateGlobalCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(updateGlobalCompanyBodyCompanyNameMax).optional(),
   "companyWebsiteUrl": zod.string().max(updateGlobalCompanyBodyCompanyWebsiteUrlMax).nullish(),
@@ -2665,7 +2610,6 @@ export const updateGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
 export const updateGlobalCompanyResponseCompanyLocationMax = 200;
 
 export const updateGlobalCompanyResponseResearchSummarySourceCountMin = 0;
-
 
 
 export const UpdateGlobalCompanyResponse = zod.object({
@@ -2714,7 +2658,6 @@ export const searchGlobalCompaniesQueryPageSizeDefault = 25;
 export const searchGlobalCompaniesQueryPageSizeMax = 100;
 
 
-
 export const SearchGlobalCompaniesQueryParams = zod.object({
   "search": zod.coerce.string().max(searchGlobalCompaniesQuerySearchMax).default(searchGlobalCompaniesQuerySearchDefault),
   "page": zod.coerce.number().int().min(1).max(searchGlobalCompaniesQueryPageMax).default(searchGlobalCompaniesQueryPageDefault),
@@ -2747,7 +2690,6 @@ export const searchGlobalCompaniesResponseTotalMin = 0;
 
 
 export const searchGlobalCompaniesResponsePageSizeMax = 100;
-
 
 
 export const SearchGlobalCompaniesResponse = zod.object({
@@ -2808,7 +2750,6 @@ export const addGlobalCompanyToWorkspaceResponseCompanyLinkedinUrlMax = 2048;
 export const addGlobalCompanyToWorkspaceResponseCompanyLocationMax = 200;
 
 
-
 export const AddGlobalCompanyToWorkspaceResponse = zod.object({
   "id": zod.string().uuid(),
   "globalCompanyId": zod.string().uuid().nullable(),
@@ -2851,7 +2792,6 @@ export const listCompaniesResponseCompaniesItemOneCompanyLinkedinUrlMax = 2048;
 export const listCompaniesResponseCompaniesItemOneCompanyLocationMax = 200;
 
 export const listCompaniesResponseCompaniesItemTwoContactCountMin = 0;
-
 
 
 export const ListCompaniesResponse = zod.object({
@@ -2900,7 +2840,6 @@ export const createCompanyBodyCompanyLinkedinUrlMax = 2048;
 export const createCompanyBodyCompanyLocationMax = 200;
 
 
-
 export const CreateCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(createCompanyBodyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createCompanyBodyCompanyWebsiteUrlMax).optional(),
@@ -2936,7 +2875,6 @@ export const createCompanyResponseCompanyLinkedinUrlMax = 2048;
 export const createCompanyResponseCompanyLocationMax = 200;
 
 
-
 export const CreateCompanyResponse = zod.object({
   "id": zod.string().uuid(),
   "globalCompanyId": zod.string().uuid().nullable(),
@@ -2968,7 +2906,6 @@ export const searchCompaniesQueryPageSizeDefault = 40;
 export const searchCompaniesQueryPageSizeMax = 100;
 
 
-
 export const SearchCompaniesQueryParams = zod.object({
   "search": zod.coerce.string().max(searchCompaniesQuerySearchMax).default(searchCompaniesQuerySearchDefault),
   "page": zod.coerce.number().int().min(1).max(searchCompaniesQueryPageMax).default(searchCompaniesQueryPageDefault),
@@ -2983,7 +2920,6 @@ export const searchCompaniesResponseTotalMin = 0;
 
 
 export const searchCompaniesResponsePageSizeMax = 100;
-
 
 
 export const SearchCompaniesResponse = zod.object({
@@ -3006,7 +2942,6 @@ export const backfillCompanyProfilesResponseLinkedContactsMin = 0;
 export const backfillCompanyProfilesResponseCreatedCompaniesMin = 0;
 
 export const backfillCompanyProfilesResponseSkippedContactsMin = 0;
-
 
 
 export const BackfillCompanyProfilesResponse = zod.object({
@@ -3038,7 +2973,6 @@ export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyPhoneNumberMa
 export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyLinkedinUrlMax = 2048;
 
 export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyLocationMax = 200;
-
 
 
 export const ListUnlinkedCompanyProfilesResponse = zod.object({
@@ -3087,7 +3021,6 @@ export const getCompanyResponseCompanyCompanyPhoneNumberMax = 40;
 export const getCompanyResponseCompanyCompanyLinkedinUrlMax = 2048;
 
 export const getCompanyResponseCompanyCompanyLocationMax = 200;
-
 
 
 export const GetCompanyResponse = zod.object({
@@ -3144,7 +3077,6 @@ export const updateCompanyBodyCompanyLinkedinUrlMax = 2048;
 export const updateCompanyBodyCompanyLocationMax = 200;
 
 
-
 export const UpdateCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(updateCompanyBodyCompanyNameMax).optional(),
   "companyWebsiteUrl": zod.string().max(updateCompanyBodyCompanyWebsiteUrlMax).nullish(),
@@ -3177,7 +3109,6 @@ export const updateCompanyResponseCompanyPhoneNumberMax = 40;
 export const updateCompanyResponseCompanyLinkedinUrlMax = 2048;
 
 export const updateCompanyResponseCompanyLocationMax = 200;
-
 
 
 export const UpdateCompanyResponse = zod.object({
@@ -3215,7 +3146,6 @@ export const DeleteCompanyResponse = zod.void()
 export const importContactsQueryListIdsMax = 100;
 
 
-
 export const ImportContactsQueryParams = zod.object({
   "listIds": zod.array(zod.coerce.string().uuid()).max(importContactsQueryListIdsMax).optional().describe('Assign imported CSV contacts to these contact lists owned by the authenticated tenant. Repeat the parameter once per list.'),
   "listId": zod.coerce.string().uuid().optional().describe('Legacy single-list selection. Use listIds to assign contacts to multiple lists.')
@@ -3224,7 +3154,6 @@ export const ImportContactsQueryParams = zod.object({
 export const importContactsBodyContactsItemRowNumberMin = 2;
 
 export const importContactsBodyContactsMax = 200;
-
 
 
 export const ImportContactsBody = zod.object({
@@ -3297,7 +3226,6 @@ export const importContactsResponseTwoQuotaLimitMin = 0;
 export const importContactsResponseTwoQuotaRemainingMin = 0;
 
 
-
 export const ImportContactsResponse = zod.union([zod.object({
   "imported": zod.number().int().min(importContactsResponseOneImportedMin),
   "duplicate": zod.number().int().min(importContactsResponseOneDuplicateMin),
@@ -3338,7 +3266,6 @@ export const ImportContactsResponse = zod.union([zod.object({
 export const getContactFieldOptionsResponseOptionsItemValueMax = 200;
 
 
-
 export const GetContactFieldOptionsResponse = zod.object({
   "options": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -3355,14 +3282,12 @@ export const GetContactFieldOptionsResponse = zod.object({
 export const createContactFieldOptionBodyValueMax = 200;
 
 
-
 export const CreateContactFieldOptionBody = zod.object({
   "field": zod.enum(['jobTitle', 'preferredLanguage', 'lifecycleStage', 'leadStatus', 'leadSource']),
   "value": zod.string().min(1).max(createContactFieldOptionBodyValueMax)
 })
 
 export const createContactFieldOptionResponseOptionValueMax = 200;
-
 
 
 export const CreateContactFieldOptionResponse = zod.object({
@@ -3473,7 +3398,6 @@ export const getContactResponseCompanyPhoneNumberMax = 40;
 export const getContactResponseCompanyLinkedinUrlMax = 2048;
 
 export const getContactResponseCompanyLocationMax = 200;
-
 
 
 export const GetContactResponse = zod.object({
@@ -3619,7 +3543,6 @@ export const updateContactBodyCompanyLocationMax = 200;
 export const updateContactBodyListIdsMax = 100;
 
 
-
 export const UpdateContactBody = zod.object({
   "email": zod.string().email().max(updateContactBodyEmailMax).optional(),
   "name": zod.string().min(1).max(updateContactBodyNameMax).optional(),
@@ -3746,7 +3669,6 @@ export const updateContactResponseCompanyLinkedinUrlMax = 2048;
 export const updateContactResponseCompanyLocationMax = 200;
 
 
-
 export const UpdateContactResponse = zod.object({
   "id": zod.string().uuid(),
   "email": zod.string().email(),
@@ -3828,7 +3750,6 @@ export const GetContactEmailHistoryParams = zod.object({
 export const getContactEmailHistoryResponseAttemptsMin = 0;
 
 
-
 export const GetContactEmailHistoryResponseItem = zod.object({
   "id": zod.string().uuid(),
   "campaignId": zod.string().uuid(),
@@ -3866,7 +3787,6 @@ export const listContactLeadStatusUpdatesResponseReasonMax = 1000;
 export const listContactLeadStatusUpdatesResponseChangedByNameMax = 161;
 
 
-
 export const ListContactLeadStatusUpdatesResponseItem = zod.object({
   "id": zod.string().uuid(),
   "previousStatus": zod.string().max(listContactLeadStatusUpdatesResponsePreviousStatusMax).nullable(),
@@ -3898,7 +3818,6 @@ export const ListContactListsResponse = zod.array(ListContactListsResponseItem)
 export const createContactListBodyNameMax = 120;
 
 
-
 export const CreateContactListBody = zod.object({
   "name": zod.string().min(1).max(createContactListBodyNameMax)
 })
@@ -3921,7 +3840,6 @@ export const UpdateContactListParams = zod.object({
 })
 
 export const updateContactListBodyNameMax = 120;
-
 
 
 export const UpdateContactListBody = zod.object({
@@ -3967,7 +3885,6 @@ export const listContactSegmentsResponseFiltersLeadStatusMax = 80;
 export const listContactSegmentsResponseFiltersLeadSourceMax = 120;
 
 
-
 export const ListContactSegmentsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(listContactSegmentsResponseNameMax),
@@ -4005,7 +3922,6 @@ export const createContactSegmentBodyFiltersLeadStatusMax = 80;
 export const createContactSegmentBodyFiltersLeadSourceMax = 120;
 
 
-
 export const CreateContactSegmentBody = zod.object({
   "name": zod.string().min(1).max(createContactSegmentBodyNameMax),
   "filters": zod.object({
@@ -4033,7 +3949,6 @@ export const createContactSegmentResponseFiltersLifecycleStageMax = 80;
 export const createContactSegmentResponseFiltersLeadStatusMax = 80;
 
 export const createContactSegmentResponseFiltersLeadSourceMax = 120;
-
 
 
 export const CreateContactSegmentResponse = zod.object({
@@ -4064,7 +3979,6 @@ export const UpdateContactSegmentParams = zod.object({
 export const updateContactSegmentBodyNameMax = 100;
 
 
-
 export const UpdateContactSegmentBody = zod.object({
   "name": zod.string().min(1).max(updateContactSegmentBodyNameMax)
 })
@@ -4082,7 +3996,6 @@ export const updateContactSegmentResponseFiltersLifecycleStageMax = 80;
 export const updateContactSegmentResponseFiltersLeadStatusMax = 80;
 
 export const updateContactSegmentResponseFiltersLeadSourceMax = 120;
-
 
 
 export const UpdateContactSegmentResponse = zod.object({
@@ -4123,7 +4036,6 @@ export const listCampaignsResponseSubjectVariantsItemMax = 200;
 export const listCampaignsResponseGreetingVariantsItemMax = 500;
 
 export const listCampaignsResponseSignatureVariantsItemMax = 4000;
-
 
 
 export const ListCampaignsResponseItem = zod.object({
@@ -4183,7 +4095,6 @@ export const createCampaignBodyTextBodyMax = 100000;
 export const createCampaignBodyHtmlBodyMax = 100000;
 
 
-
 export const CreateCampaignBody = zod.object({
   "senderAccountId": zod.string().uuid().nullish(),
   "name": zod.string().min(1).max(createCampaignBodyNameMax),
@@ -4205,7 +4116,6 @@ export const createCampaignResponseSubjectVariantsItemMax = 200;
 export const createCampaignResponseGreetingVariantsItemMax = 500;
 
 export const createCampaignResponseSignatureVariantsItemMax = 4000;
-
 
 
 export const CreateCampaignResponse = zod.object({
@@ -4260,7 +4170,6 @@ export const previewCampaignBodyTextBodyMax = 100000;
 export const previewCampaignBodyHtmlBodyMax = 100000;
 
 
-
 export const PreviewCampaignBody = zod.object({
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists; contactId must be an eligible member of at least one.'),
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.'),
@@ -4288,7 +4197,6 @@ export const generateCampaignEmailDraftBodyObjectiveMax = 500;
 export const generateCampaignEmailDraftBodyCurrentBodyMax = 10000;
 
 
-
 export const GenerateCampaignEmailDraftBody = zod.object({
   "objective": zod.string().min(1).max(generateCampaignEmailDraftBodyObjectiveMax),
   "currentBody": zod.string().max(generateCampaignEmailDraftBodyCurrentBodyMax).optional()
@@ -4307,7 +4215,6 @@ export const generateCampaignEmailDraftResponseUsageTotalMin = 0;
 export const generateCampaignEmailDraftResponseUsageUsedMin = 0;
 
 export const generateCampaignEmailDraftResponseUsageRemainingMin = 0;
-
 
 
 export const GenerateCampaignEmailDraftResponse = zod.object({
@@ -4330,7 +4237,6 @@ export const GenerateCampaignEmailDraftResponse = zod.object({
  */
 
 
-
 export const GetCampaignRecipientSummaryQueryParams = zod.object({
   "listIds": zod.array(zod.coerce.string().uuid()).min(1).describe('Tenant-owned contact list IDs in campaign processing order. Repeat the parameter once per list.')
 })
@@ -4338,7 +4244,6 @@ export const GetCampaignRecipientSummaryQueryParams = zod.object({
 export const getCampaignRecipientSummaryResponseUniqueRecipientsMin = 0;
 
 export const getCampaignRecipientSummaryResponseOverlappingRecipientsMin = 0;
-
 
 
 export const GetCampaignRecipientSummaryResponse = zod.object({
@@ -4366,7 +4271,6 @@ export const getCampaignVariantLimitsResponseSignatureMinimumMax = 20;
 export const getCampaignVariantLimitsResponseSignatureMaximumMax = 20;
 
 
-
 export const GetCampaignVariantLimitsResponse = zod.object({
   "subject": zod.object({
   "minimum": zod.number().int().min(getCampaignVariantLimitsResponseSubjectMinimumMin).max(getCampaignVariantLimitsResponseSubjectMinimumMax),
@@ -4389,7 +4293,6 @@ export const GetCampaignVariantLimitsResponse = zod.object({
  */
 export const applyCampaignUnsubscribeQueryTokenMin = 20;
 export const applyCampaignUnsubscribeQueryTokenMax = 1024;
-
 
 
 export const ApplyCampaignUnsubscribeQueryParams = zod.object({
@@ -4451,7 +4354,6 @@ export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemFail
 export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemSuppressedMin = 0;
 
 export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemUnknownMin = 0;
-
 
 
 export const GetCampaignDashboardResponse = zod.object({
@@ -4579,7 +4481,6 @@ export const updateCampaignBodyTextBodyMax = 100000;
 export const updateCampaignBodyHtmlBodyMax = 100000;
 
 
-
 export const UpdateCampaignBody = zod.object({
   "senderAccountId": zod.string().uuid().nullish(),
   "name": zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
@@ -4601,7 +4502,6 @@ export const updateCampaignResponseSubjectVariantsItemMax = 200;
 export const updateCampaignResponseGreetingVariantsItemMax = 500;
 
 export const updateCampaignResponseSignatureVariantsItemMax = 4000;
-
 
 
 export const UpdateCampaignResponse = zod.object({
@@ -4659,7 +4559,6 @@ export const getCampaignDeliveryReportQueryOffsetDefault = 0;
 export const getCampaignDeliveryReportQueryOffsetMin = 0;
 
 
-
 export const GetCampaignDeliveryReportQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(1).max(getCampaignDeliveryReportQueryLimitMax).default(getCampaignDeliveryReportQueryLimitDefault),
   "offset": zod.coerce.number().int().min(getCampaignDeliveryReportQueryOffsetMin).default(getCampaignDeliveryReportQueryOffsetDefault)
@@ -4686,7 +4585,6 @@ export const getCampaignDeliveryReportResponseTotalMin = 0;
 export const getCampaignDeliveryReportResponseLimitMax = 100;
 
 export const getCampaignDeliveryReportResponseOffsetMin = 0;
-
 
 
 export const GetCampaignDeliveryReportResponse = zod.object({
@@ -4734,7 +4632,6 @@ export const GetCampaignDeliveryReportResponse = zod.object({
 export const importDeliveryReportBodyContentMax = 1000000;
 
 
-
 export const ImportDeliveryReportBody = zod.object({
   "format": zod.enum(['dsn', 'microsoft_365_csv', 'google_workspace_csv', 'generic_csv']),
   "content": zod.string().min(1).max(importDeliveryReportBodyContentMax),
@@ -4748,7 +4645,6 @@ export const importDeliveryReportResponseDuplicatesMin = 0;
 export const importDeliveryReportResponseUnmatchedMin = 0;
 
 export const importDeliveryReportResponseIgnoredMin = 0;
-
 
 
 export const ImportDeliveryReportResponse = zod.object({
@@ -4779,7 +4675,6 @@ export const sendCampaignResponseSubjectVariantsItemMax = 200;
 export const sendCampaignResponseGreetingVariantsItemMax = 500;
 
 export const sendCampaignResponseSignatureVariantsItemMax = 4000;
-
 
 
 export const SendCampaignResponse = zod.object({
@@ -4834,7 +4729,6 @@ export const getAdminDashboardResponseRegistrationsByMonthItemRegistrationsMin =
 
 export const getAdminDashboardResponseRevenueTrendItemMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
 export const getAdminDashboardResponseActiveSubscriptionsByPackageItemActiveSubscriptionsMin = 0;
-
 
 
 export const GetAdminDashboardResponse = zod.object({
@@ -4901,7 +4795,6 @@ export const GetAdminDashboardResponse = zod.object({
 export const listAdminNotificationsQuerySearchMax = 160;
 
 
-
 export const ListAdminNotificationsQueryParams = zod.object({
   "search": zod.coerce.string().max(listAdminNotificationsQuerySearchMax).optional()
 })
@@ -4909,7 +4802,6 @@ export const ListAdminNotificationsQueryParams = zod.object({
 export const listAdminNotificationsResponseItemsItemRecipientCountMin = 0;
 
 export const listAdminNotificationsResponseItemsItemReadCountMin = 0;
-
 
 
 export const ListAdminNotificationsResponse = zod.object({
@@ -4939,7 +4831,6 @@ export const createAdminNotificationBodyMessageMax = 5000;
 export const createAdminNotificationBodyRecipientUserIdsMax = 1000;
 
 
-
 export const CreateAdminNotificationBody = zod.object({
   "title": zod.string().min(1).max(createAdminNotificationBodyTitleMax),
   "message": zod.string().min(1).max(createAdminNotificationBodyMessageMax),
@@ -4952,7 +4843,6 @@ export const CreateAdminNotificationBody = zod.object({
 export const createAdminNotificationResponseRecipientCountMin = 0;
 
 export const createAdminNotificationResponseReadCountMin = 0;
-
 
 
 export const CreateAdminNotificationResponse = zod.object({
@@ -5035,7 +4925,6 @@ export const ReplyToAdminSupportTicketParams = zod.object({
 })
 
 export const replyToAdminSupportTicketBodyMessageMax = 10000;
-
 
 
 export const ReplyToAdminSupportTicketBody = zod.object({
@@ -5125,7 +5014,6 @@ export const updateAdminNotificationStatusResponseRecipientCountMin = 0;
 export const updateAdminNotificationStatusResponseReadCountMin = 0;
 
 
-
 export const UpdateAdminNotificationStatusResponse = zod.object({
   "id": zod.string().uuid(),
   "title": zod.string(),
@@ -5164,7 +5052,6 @@ export const listAdminFinancePaymentsQueryPageMax = 100000;
 
 export const listAdminFinancePaymentsQueryPageSizeDefault = 25;
 export const listAdminFinancePaymentsQueryPageSizeMax = 100;
-
 
 
 export const ListAdminFinancePaymentsQueryParams = zod.object({
@@ -5268,7 +5155,6 @@ export const listAdminUsersQueryPageSizeDefault = 25;
 export const listAdminUsersQueryPageSizeMax = 100;
 
 
-
 export const ListAdminUsersQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "status": zod.enum(['all', 'active', 'inactive', 'pending']).default(listAdminUsersQueryStatusDefault),
@@ -5349,7 +5235,6 @@ export const getAdminSettingsResponseSignatureVariantMinimumMax = 20;
 export const getAdminSettingsResponseSignatureVariantMaximumMax = 20;
 
 
-
 export const GetAdminSettingsResponse = zod.object({
   "applicationName": zod.string(),
   "defaultCurrency": zod.string(),
@@ -5403,7 +5288,6 @@ export const updateAdminSettingsBodyDateFormatMax = 40;
 export const updateAdminSettingsBodySupportPhoneMax = 40;
 
 
-
 export const updateAdminSettingsBodyPasswordMinimumLengthMin = 8;
 export const updateAdminSettingsBodyPasswordMinimumLengthMax = 128;
 
@@ -5417,14 +5301,10 @@ export const updateAdminSettingsBodyLoginAttemptThresholdMax = 20;
 export const updateAdminSettingsBodySessionDurationHoursMax = 720;
 
 
-
-
 export const updateAdminSettingsBodyMaxConcurrentCampaignsMax = 1;
 
 export const updateAdminSettingsBodyRetryAttemptsMin = 0;
 export const updateAdminSettingsBodyRetryAttemptsMax = 10;
-
-
 
 
 export const updateAdminSettingsBodySubjectVariantMinimumMin = 2;
@@ -5443,7 +5323,6 @@ export const updateAdminSettingsBodySignatureVariantMinimumMax = 20;
 export const updateAdminSettingsBodySignatureVariantMaximumMax = 20;
 
 export const updateAdminSettingsBodyGracePeriodDaysMin = 0;
-
 
 
 export const UpdateAdminSettingsBody = zod.object({
@@ -5496,7 +5375,6 @@ export const updateAdminSettingsResponseSignatureVariantMinimumMin = 2;
 export const updateAdminSettingsResponseSignatureVariantMinimumMax = 20;
 
 export const updateAdminSettingsResponseSignatureVariantMaximumMax = 20;
-
 
 
 export const UpdateAdminSettingsResponse = zod.object({
@@ -5568,7 +5446,6 @@ export const updateApplicationEmailSettingsBodyPasswordMax = 512;
 export const updateApplicationEmailSettingsBodyFromNameMax = 120;
 
 
-
 export const UpdateApplicationEmailSettingsBody = zod.object({
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'zeptomail', 'other']),
   "host": zod.string().min(1).max(updateApplicationEmailSettingsBodyHostMax),
@@ -5619,7 +5496,6 @@ export const updateGoogleOAuthSettingsBodyClientSecretMax = 512;
 export const updateGoogleOAuthSettingsBodyRedirectUriMax = 2048;
 
 
-
 export const UpdateGoogleOAuthSettingsBody = zod.object({
   "clientId": zod.string().min(1).max(updateGoogleOAuthSettingsBodyClientIdMax),
   "clientSecret": zod.string().min(1).max(updateGoogleOAuthSettingsBodyClientSecretMax).optional(),
@@ -5666,7 +5542,6 @@ export const updateAIProviderSettingsBodyApiKeyMax = 4096;
 export const updateAIProviderSettingsBodySelectedModelMax = 200;
 
 
-
 export const UpdateAIProviderSettingsBody = zod.object({
   "provider": zod.enum(['openai', 'anthropic', 'gemini']),
   "apiKey": zod.string().min(1).max(updateAIProviderSettingsBodyApiKeyMax).optional(),
@@ -5702,7 +5577,6 @@ export const DeleteAIProviderSettingsResponse = zod.object({
 export const testAIProviderConnectionBodyApiKeyMax = 4096;
 
 
-
 export const TestAIProviderConnectionBody = zod.object({
   "provider": zod.enum(['openai', 'anthropic', 'gemini']),
   "apiKey": zod.string().min(1).max(testAIProviderConnectionBodyApiKeyMax).optional()
@@ -5711,7 +5585,6 @@ export const TestAIProviderConnectionBody = zod.object({
 export const testAIProviderConnectionResponseModelsItemIdMax = 200;
 
 export const testAIProviderConnectionResponseModelsItemNameMax = 300;
-
 
 
 export const TestAIProviderConnectionResponse = zod.object({
@@ -5769,7 +5642,6 @@ export const updateRazorpaySettingsBodyKeyIdMax = 255;
 export const updateRazorpaySettingsBodyKeySecretMax = 512;
 
 export const updateRazorpaySettingsBodyWebhookSecretMax = 512;
-
 
 
 export const UpdateRazorpaySettingsBody = zod.object({
@@ -5881,9 +5753,6 @@ export const listAdminSubscriptionPackagesResponsePackagesItemAdditionalMailboxC
 export const listAdminSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMax = 100;
 
 
-
-
-
 export const ListAdminSubscriptionPackagesResponse = zod.object({
   "packages": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -5942,7 +5811,6 @@ export const createSubscriptionPackageBodyAdditionalMailboxCountMin = 0;
 export const createSubscriptionPackageBodyAdditionalMailboxCountMax = 100;
 
 
-
 export const CreateSubscriptionPackageBody = zod.object({
   "packageType": zod.enum(['primary', 'addon']).default(createSubscriptionPackageBodyPackageTypeDefault),
   "name": zod.string().min(createSubscriptionPackageBodyNameMin).max(createSubscriptionPackageBodyNameMax),
@@ -5974,7 +5842,6 @@ export const createSubscriptionPackageResponseAiEmailAssistAllowanceMax = 10000;
 
 export const createSubscriptionPackageResponseAdditionalMailboxCountMin = 0;
 export const createSubscriptionPackageResponseAdditionalMailboxCountMax = 100;
-
 
 
 export const CreateSubscriptionPackageResponse = zod.object({
@@ -6032,7 +5899,6 @@ export const updateSubscriptionPackageBodyAdditionalMailboxCountMin = 0;
 export const updateSubscriptionPackageBodyAdditionalMailboxCountMax = 100;
 
 
-
 export const UpdateSubscriptionPackageBody = zod.object({
   "name": zod.string().min(updateSubscriptionPackageBodyNameMin).max(updateSubscriptionPackageBodyNameMax).optional(),
   "description": zod.string().max(updateSubscriptionPackageBodyDescriptionMax).optional(),
@@ -6063,7 +5929,6 @@ export const updateSubscriptionPackageResponseAiEmailAssistAllowanceMax = 10000;
 
 export const updateSubscriptionPackageResponseAdditionalMailboxCountMin = 0;
 export const updateSubscriptionPackageResponseAdditionalMailboxCountMax = 100;
-
 
 
 export const UpdateSubscriptionPackageResponse = zod.object({
@@ -6111,7 +5976,6 @@ export const giftAdminSubscriptionResponsePackageAdditionalMailboxCountMin = 0;
 export const giftAdminSubscriptionResponsePackageAdditionalMailboxCountMax = 100;
 
 
-
 export const GiftAdminSubscriptionResponse = zod.object({
   "id": zod.string().uuid(),
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
@@ -6157,9 +6021,6 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistA
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMin = 0;
 export const listAvailableSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMax = 100;
-
-
-
 
 
 export const ListAvailableSubscriptionPackagesResponse = zod.object({
@@ -6232,7 +6093,6 @@ export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmai
 
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMin = 0;
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMax = 100;
-
 
 
 export const GetCurrentSubscriptionResponse = zod.object({
@@ -6312,7 +6172,6 @@ export const activateFreeSubscriptionResponseSubscriptionPackageAdditionalMailbo
 export const activateFreeSubscriptionResponseSubscriptionPackageAdditionalMailboxCountMax = 100;
 
 
-
 export const ActivateFreeSubscriptionResponse = zod.object({
   "subscription": zod.object({
   "id": zod.string().uuid(),
@@ -6381,7 +6240,6 @@ export const getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax 
 
 export const getSubscriptionAddOnsResponsePackagesItemAdditionalMailboxCountMin = 0;
 export const getSubscriptionAddOnsResponsePackagesItemAdditionalMailboxCountMax = 100;
-
 
 
 export const GetSubscriptionAddOnsResponse = zod.object({
@@ -6474,7 +6332,6 @@ export const verifyRazorpayPaymentBodyRazorpaySignatureMin = 64;
 export const verifyRazorpayPaymentBodyRazorpaySignatureMax = 64;
 
 
-
 export const VerifyRazorpayPaymentBody = zod.object({
   "paymentId": zod.string().uuid(),
   "razorpayOrderId": zod.string().min(1).max(verifyRazorpayPaymentBodyRazorpayOrderIdMax),
@@ -6499,10 +6356,10 @@ export const verifyRazorpayPaymentResponseSubscriptionOnePackageAdditionalMailbo
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageAdditionalMailboxCountMax = 100;
 
 
-
 export const VerifyRazorpayPaymentResponse = zod.object({
-  "status": zod.enum(['pending', 'active']),
+  "status": zod.enum(['pending', 'active', 'reconciliation_required']),
   "message": zod.string(),
+  "paymentReference": zod.string().nullable(),
   "subscription": zod.union([zod.object({
   "id": zod.string().uuid(),
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
@@ -6541,5 +6398,4 @@ export const ReceiveRazorpayWebhookBody = zod.record(zod.string(), zod.unknown()
 export const ReceiveRazorpayWebhookResponse = zod.object({
   "message": zod.string()
 })
-
 

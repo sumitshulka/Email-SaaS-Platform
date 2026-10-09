@@ -259,6 +259,24 @@ export async function activateCapturedPayment(input: {
       .where(eq(usersTable.id, payment.userId))
       .for("update");
 
+    const now = new Date();
+    const markCapturedForReconciliation = async () => {
+      await tx
+        .update(paymentsTable)
+        .set({
+          status: "captured",
+          razorpayPaymentId: input.razorpayPaymentId,
+          updatedAt: now,
+        })
+        .where(eq(paymentsTable.id, payment.id));
+      return {
+        subscription: null,
+        addOnEntitlement: null,
+        reconciliationRequired: true as const,
+        paymentReference: input.razorpayPaymentId,
+      };
+    };
+
     if (payment.status === "captured") {
       if (payment.razorpayPaymentId !== input.razorpayPaymentId) {
         throw new Error("A different payment is already recorded for this order.");
@@ -287,7 +305,12 @@ export async function activateCapturedPayment(input: {
         .where(eq(userSubscriptionsTable.paymentId, payment.id))
         .limit(1);
       if (!existingSubscription) {
-        throw new Error("The captured payment has no subscription record.");
+        return {
+          subscription: null,
+          addOnEntitlement: null,
+          reconciliationRequired: true as const,
+          paymentReference: input.razorpayPaymentId,
+        };
       }
       return {
         subscription: serializeSubscription(
@@ -307,7 +330,6 @@ export async function activateCapturedPayment(input: {
       .limit(1);
     if (!pkg) throw new Error("The purchased package is no longer available.");
 
-    const now = new Date();
     if (pkg.packageType === "addon") {
       const [entitlement] = await tx
         .insert(addOnEntitlementsTable)
@@ -411,8 +433,8 @@ export async function activateCapturedPayment(input: {
       };
     }
     if (payment.subscriptionChangeType === "upgrade") {
-      if (!payment.sourceSubscriptionId) {
-        throw new Error("The plan upgrade is missing its current subscription.");
+      if (!payment.sourceSubscriptionId || !payment.planChangeEffectiveAt) {
+        return markCapturedForReconciliation();
       }
       const [source] = await tx
         .select()
@@ -427,9 +449,7 @@ export async function activateCapturedPayment(input: {
         .limit(1)
         .for("update");
       if (!source) {
-        throw new Error(
-          "The active plan changed while payment was processing. Contact the platform administrator before retrying.",
-        );
+        return markCapturedForReconciliation();
       }
       const [anotherCurrent] = await tx
         .select({ id: userSubscriptionsTable.id })
@@ -446,19 +466,15 @@ export async function activateCapturedPayment(input: {
         .limit(1)
         .for("update");
       if (anotherCurrent && anotherCurrent.id !== source.id) {
-        throw new Error(
-          "The active plan changed while payment was processing. Contact the platform administrator before retrying.",
-        );
+        return markCapturedForReconciliation();
       }
 
-      const plannedEndAt = payment.planChangeEffectiveAt ?? source.endsAt;
+      const plannedEndAt = payment.planChangeEffectiveAt;
       if (
         source.endsAt.getTime() !== plannedEndAt.getTime() ||
         plannedEndAt <= now
       ) {
-        throw new Error(
-          "The active plan expired or changed while payment was processing. Contact the platform administrator before retrying.",
-        );
+        return markCapturedForReconciliation();
       }
       await tx
         .update(userSubscriptionsTable)

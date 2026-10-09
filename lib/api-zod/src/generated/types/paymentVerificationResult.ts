@@ -12,6 +12,8 @@ import type { SubscriptionSummary } from './subscriptionSummary';
 export interface PaymentVerificationResult {
   status: PaymentVerificationResultStatus;
   message: string;
+  /** @nullable */
+  paymentReference: string | null;
   subscription: SubscriptionSummary | null;
   addOnEntitlement: AddOnEntitlementReference | null;
 }

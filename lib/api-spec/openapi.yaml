@@ -5818,8 +5818,9 @@ components:
     PaymentVerificationResult:
       type: object
       properties:
-        status: { type: string, enum: [pending, active] }
+        status: { type: string, enum: [pending, active, reconciliation_required] }
         message: { type: string }
+        paymentReference: { type: ["string", "null"] }
         subscription:
           oneOf:
             - $ref: "#/components/schemas/SubscriptionSummary"
@@ -5828,7 +5829,7 @@ components:
           anyOf:
             - $ref: "#/components/schemas/AddOnEntitlementReference"
             - type: "null"
-      required: [status, message, subscription, addOnEntitlement]
+      required: [status, message, paymentReference, subscription, addOnEntitlement]
     AddOnEntitlementReference:
       type: object
       properties:

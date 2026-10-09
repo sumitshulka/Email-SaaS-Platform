@@ -1978,6 +1978,22 @@ router.post(
           amountMinor: providerPayment.amount,
           currency: providerPayment.currency,
         });
+        if (
+          "reconciliationRequired" in activation &&
+          activation.reconciliationRequired
+        ) {
+          res.json(
+            VerifyRazorpayPaymentResponse.parse({
+              status: "reconciliation_required",
+              message:
+                "Razorpay confirmed this payment, but we couldn't apply the upgrade because your previous plan expired or changed during checkout. No new plan was activated. Don't pay again. Contact support to review a refund or other resolution.",
+              paymentReference: activation.paymentReference,
+              subscription: null,
+              addOnEntitlement: null,
+            }),
+          );
+          return;
+        }
         const subscription = activation.subscription;
         const startsInFuture = subscription
           ? new Date(subscription.startsAt) > new Date()
@@ -1990,6 +2006,7 @@ router.post(
               : startsInFuture
                 ? `Payment verified. ${subscription!.package.name} starts on ${new Date(subscription!.startsAt).toLocaleDateString()} after your current term ends.`
                 : "Payment verified. Your subscription is active.",
+            paymentReference: null,
             subscription,
             addOnEntitlement: activation.addOnEntitlement,
           }),
@@ -2012,6 +2029,7 @@ router.post(
             providerPayment.status === "failed"
               ? "This payment attempt failed and no subscription was activated. You can try checkout again with another payment method."
               : "Razorpay has not confirmed a captured payment yet. Your package will activate after capture is confirmed.",
+          paymentReference: null,
           subscription: null,
           addOnEntitlement: null,
         }),
@@ -2310,7 +2328,7 @@ router.post(
     }
 
     try {
-      await activateCapturedPayment({
+      const activation = await activateCapturedPayment({
         paymentId: payment.id,
         razorpayOrderId: providerOrderId,
         razorpayPaymentId: providerPaymentId,
@@ -2321,7 +2339,13 @@ router.post(
         .update(razorpayWebhookEventsTable)
         .set({ processedAt: new Date() })
         .where(eq(razorpayWebhookEventsTable.eventId, eventId));
-      res.json(ReceiveRazorpayWebhookResponse.parse({ message: "Payment captured." }));
+      res.json(
+        ReceiveRazorpayWebhookResponse.parse({
+          message: activation.reconciliationRequired
+            ? "Payment captured; subscription activation requires support review."
+            : "Payment captured.",
+        }),
+      );
     } catch (error) {
       const [latestPayment] = await db
         .select({ status: paymentsTable.status })

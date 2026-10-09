@@ -12,4 +12,5 @@ export type PaymentVerificationResultStatus = typeof PaymentVerificationResultSt
 export const PaymentVerificationResultStatus = {
   pending: 'pending',
   active: 'active',
+  reconciliation_required: 'reconciliation_required',
 } as const;

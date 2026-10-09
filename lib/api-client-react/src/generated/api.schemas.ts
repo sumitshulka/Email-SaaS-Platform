@@ -4260,6 +4260,7 @@ export type PaymentVerificationResultStatus = typeof PaymentVerificationResultSt
 export const PaymentVerificationResultStatus = {
   pending: 'pending',
   active: 'active',
+  reconciliation_required: 'reconciliation_required',
 } as const;
 
 export interface AddOnEntitlementReference {
@@ -4269,6 +4270,8 @@ export interface AddOnEntitlementReference {
 export interface PaymentVerificationResult {
   status: PaymentVerificationResultStatus;
   message: string;
+  /** @nullable */
+  paymentReference: string | null;
   subscription: SubscriptionSummary | null;
   addOnEntitlement: AddOnEntitlementReference | null;
 }
@@ -4616,4 +4619,3 @@ export const ListAdminUsersStatus = {
   inactive: 'inactive',
   pending: 'pending',
 } as const;
-
