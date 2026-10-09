@@ -19,7 +19,7 @@
 - [Company write benchmarks](company-write-benchmarks.md) — compare index cost by changing only the target index; distinguish batch SQL timings from API latency.
 - [Google OAuth admin setup](google-oauth-admin-config.md) — keep Gmail OAuth credentials in superadmin-managed app settings, not Replit Secrets.
 - [Gmail mailbox replacement](gmail-mailbox-replacement.md) — an unverified replacement must not trigger revocation when a saved mailbox already exists.
-- [SMTP sender accounts](smtp-sender-account-quota.md) — campaign sender slots stay mailbox-specific; ZeptoMail is restricted to transactional platform email.
+- [SMTP sender accounts](smtp-sender-account-quota.md) — sender slots/caps are mailbox-specific; M365 MFA mailboxes may need app passwords; ZeptoMail is transactional-only.
 - [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
 - [Browser test reliability](browser-test-resource-contention.md) — reuse managed Vite and stub shared app-shell APIs so missing fixtures do not look like blank-page regressions.
