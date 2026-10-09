@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -42,6 +43,18 @@ export const razorpayEnvironmentEnum = pgEnum("razorpay_environment", [
   "sandbox",
   "production",
 ]);
+
+export type PackageCheckoutSnapshot = {
+  packageType: "primary" | "addon";
+  amountMinor: number;
+  currency: string;
+  periodDays: number;
+  contactLimit: number;
+  emailAccountLimit: number;
+  researchAllowance: number;
+  aiEmailAssistAllowance: number;
+  additionalMailboxCount: number;
+};
 
 export const subscriptionPackagesTable = pgTable(
   "subscription_packages",
@@ -133,6 +146,7 @@ export const paymentsTable = pgTable(
     amountMinor: integer("amount_minor").notNull(),
     refundedAmountMinor: integer("refunded_amount_minor").notNull().default(0),
     currency: varchar("currency", { length: 3 }).notNull(),
+    packageSnapshot: jsonb("package_snapshot").$type<PackageCheckoutSnapshot>(),
     status: paymentStatusEnum("status").notNull().default("created"),
     subscriptionChangeType: varchar("subscription_change_type", { length: 24 }),
     sourceSubscriptionId: uuid("source_subscription_id"),

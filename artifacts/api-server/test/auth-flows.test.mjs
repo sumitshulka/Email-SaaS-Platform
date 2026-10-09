@@ -217,6 +217,7 @@ memory.public.none(`
     amount_minor integer NOT NULL,
     refunded_amount_minor integer NOT NULL DEFAULT 0,
     currency varchar(3) NOT NULL,
+    package_snapshot jsonb,
     status payment_status NOT NULL DEFAULT 'created',
     subscription_change_type varchar(24),
     source_subscription_id uuid,
@@ -3039,6 +3040,93 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
       assert.equal(capturedPayment.status, "captured");
       assert.equal(capturedPayment.amountMinor, 3_050);
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("does not activate a package edited after checkout and records confirmed payment for reconciliation", async () => {
+    const user = await loggedInUser({
+      username: "paid-package-edit-during-checkout-user",
+    });
+    const targetPlan = await insertPlan({
+      name: "Package edited during checkout",
+      amountMinor: 12_000,
+      currency: "INR",
+      contactLimit: 1_000,
+    });
+    await configureGateway();
+    const gateway = stubGateway({
+      orderId: "order_package_edited_during_checkout",
+      paymentId: "pay_package_edited_during_checkout",
+    });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: user.cookie,
+        body: { packageId: targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+
+      const [savedPayment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.deepEqual(savedPayment.packageSnapshot, {
+        packageType: "primary",
+        amountMinor: 12_000,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 1_000,
+        emailAccountLimit: 2,
+        researchAllowance: 10,
+        aiEmailAssistAllowance: 5,
+        additionalMailboxCount: 0,
+      });
+
+      await db
+        .update(dbModule.subscriptionPackagesTable)
+        .set({
+          amountMinor: 24_000,
+          currency: "USD",
+          periodDays: 90,
+          contactLimit: 5_000,
+          emailAccountLimit: 5,
+          researchAllowance: 50,
+          aiEmailAssistAllowance: 30,
+          additionalMailboxCount: 4,
+        })
+        .where(eq(dbModule.subscriptionPackagesTable.id, targetPlan.id));
+
+      const webhook = await sendCaptureWebhook(
+        order.body,
+        gateway,
+        "paid-package-edit-during-checkout-capture",
+      );
+      assert.equal(webhook.response.status, 200, JSON.stringify(webhook.body));
+      assert.match(webhook.body.message, /support review/i);
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, user.user.id));
+      assert.deepEqual(subscriptions, []);
+
+      const [capturedPayment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(capturedPayment.status, "captured");
+      assert.equal(capturedPayment.razorpayPaymentId, gateway.paymentId);
+      assert.equal(capturedPayment.amountMinor, 12_000);
+      assert.equal(capturedPayment.currency, "INR");
+
+      const verified = await verifyCapture(user, order.body, gateway);
+      assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+      assert.equal(verified.body.status, "reconciliation_required");
+      assert.match(verified.body.message, /package changed while checkout was open/i);
+      assert.equal(verified.body.subscription, null);
     } finally {
       gateway.restore();
     }

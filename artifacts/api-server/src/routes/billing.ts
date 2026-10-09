@@ -70,6 +70,7 @@ import {
   activateCapturedPayment,
   calculateProratedUpgradeAmountMinor,
   comparePrimaryPlanLimits,
+  createPackageCheckoutSnapshot,
   getCurrentSubscriptionForUser,
   grantAdminGiftSubscription,
   markRefundedPayment,
@@ -1825,6 +1826,7 @@ router.post(
       .values({
         userId: req.authUser!.id,
         packageId: pkg.id,
+        packageSnapshot: createPackageCheckoutSnapshot(pkg),
         receipt: `mf_${randomUUID().replaceAll("-", "")}`,
         amountMinor,
         currency: pkg.currency,
@@ -1986,7 +1988,9 @@ router.post(
             VerifyRazorpayPaymentResponse.parse({
               status: "reconciliation_required",
               message:
-                "Razorpay confirmed this payment, but we couldn't apply the upgrade because your previous plan expired or changed during checkout. No new plan was activated. Don't pay again. Contact support to review a refund or other resolution.",
+                activation.reconciliationReason === "package_changed"
+                  ? "Razorpay confirmed this payment, but the package changed while checkout was open. No subscription or add-on benefits were activated. Don't pay again. Contact support to review a refund or other resolution."
+                  : "Razorpay confirmed this payment, but we couldn't apply the upgrade because your previous plan expired or changed during checkout. No new plan was activated. Don't pay again. Contact support to review a refund or other resolution.",
               paymentReference: activation.paymentReference,
               subscription: null,
               addOnEntitlement: null,

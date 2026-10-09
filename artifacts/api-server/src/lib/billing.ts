@@ -31,6 +31,43 @@ export {
 
 type PackageRow = typeof subscriptionPackagesTable.$inferSelect;
 type SubscriptionRow = typeof userSubscriptionsTable.$inferSelect;
+type PackageSnapshot = NonNullable<
+  (typeof paymentsTable.$inferSelect)["packageSnapshot"]
+>;
+
+export function createPackageCheckoutSnapshot(
+  pkg: PackageRow,
+): PackageSnapshot {
+  return {
+    packageType: pkg.packageType,
+    amountMinor: pkg.amountMinor,
+    currency: pkg.currency,
+    periodDays: pkg.periodDays,
+    contactLimit: pkg.contactLimit,
+    emailAccountLimit: pkg.emailAccountLimit,
+    researchAllowance: pkg.researchAllowance,
+    aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+    additionalMailboxCount: pkg.additionalMailboxCount,
+  };
+}
+
+function packageMatchesCheckoutSnapshot(
+  pkg: PackageRow,
+  snapshot: PackageSnapshot | null,
+): boolean {
+  return (
+    snapshot !== null &&
+    snapshot.packageType === pkg.packageType &&
+    snapshot.amountMinor === pkg.amountMinor &&
+    snapshot.currency === pkg.currency &&
+    snapshot.periodDays === pkg.periodDays &&
+    snapshot.contactLimit === pkg.contactLimit &&
+    snapshot.emailAccountLimit === pkg.emailAccountLimit &&
+    snapshot.researchAllowance === pkg.researchAllowance &&
+    snapshot.aiEmailAssistAllowance === pkg.aiEmailAssistAllowance &&
+    snapshot.additionalMailboxCount === pkg.additionalMailboxCount
+  );
+}
 
 export function serializePackage(pkg: PackageRow) {
   return {
@@ -260,7 +297,10 @@ export async function activateCapturedPayment(input: {
       .for("update");
 
     const now = new Date();
-    const markCapturedForReconciliation = async () => {
+    const markCapturedForReconciliation = async (
+      reconciliationReason: "package_changed" | "source_plan_changed" =
+        "source_plan_changed",
+    ) => {
       await tx
         .update(paymentsTable)
         .set({
@@ -273,6 +313,7 @@ export async function activateCapturedPayment(input: {
         subscription: null,
         addOnEntitlement: null,
         reconciliationRequired: true as const,
+        reconciliationReason,
         paymentReference: input.razorpayPaymentId,
       };
     };
@@ -305,10 +346,23 @@ export async function activateCapturedPayment(input: {
         .where(eq(userSubscriptionsTable.paymentId, payment.id))
         .limit(1);
       if (!existingSubscription) {
+        const [currentPackage] = await tx
+          .select()
+          .from(subscriptionPackagesTable)
+          .where(eq(subscriptionPackagesTable.id, payment.packageId))
+          .limit(1);
         return {
           subscription: null,
           addOnEntitlement: null,
           reconciliationRequired: true as const,
+          reconciliationReason:
+            currentPackage &&
+            packageMatchesCheckoutSnapshot(
+              currentPackage,
+              payment.packageSnapshot,
+            )
+              ? ("source_plan_changed" as const)
+              : ("package_changed" as const),
           paymentReference: input.razorpayPaymentId,
         };
       }
@@ -327,8 +381,11 @@ export async function activateCapturedPayment(input: {
       .select()
       .from(subscriptionPackagesTable)
       .where(eq(subscriptionPackagesTable.id, payment.packageId))
-      .limit(1);
-    if (!pkg) throw new Error("The purchased package is no longer available.");
+      .limit(1)
+      .for("update");
+    if (!pkg || !packageMatchesCheckoutSnapshot(pkg, payment.packageSnapshot)) {
+      return markCapturedForReconciliation("package_changed");
+    }
 
     if (pkg.packageType === "addon") {
       const [entitlement] = await tx
