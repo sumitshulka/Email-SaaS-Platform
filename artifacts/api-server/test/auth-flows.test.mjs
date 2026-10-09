@@ -2782,6 +2782,307 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.deepEqual(downgradePayments, []);
   });
 
+describe("paid primary plan upgrades", { concurrency: false }, () => {
+  const keySecret = "paid-plan-upgrade-key-secret";
+  const webhookSecret = "paid-plan-upgrade-webhook-secret";
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  async function insertPlan({
+    name,
+    amountMinor,
+    currency = "INR",
+    contactLimit,
+  }) {
+    const [plan] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name,
+        description: "",
+        amountMinor,
+        currency,
+        periodDays: 30,
+        contactLimit,
+        emailAccountLimit: contactLimit > 500 ? 2 : 1,
+        researchAllowance: contactLimit > 500 ? 10 : 5,
+        aiEmailAssistAllowance: contactLimit > 500 ? 5 : 0,
+        active: true,
+      })
+      .returning();
+    return plan;
+  }
+
+  async function configureGateway() {
+    await db.insert(dbModule.razorpayConfigurationTable).values({
+      id: "platform",
+      keyId: "rzp_test_paid_plan_upgrade",
+      keySecretEncrypted: securityModule.encryptSecret(keySecret),
+      webhookSecretEncrypted: securityModule.encryptSecret(webhookSecret),
+      activeEnvironment: "sandbox",
+    });
+  }
+
+  function stubGateway({ orderId = "order_paid_plan_upgrade", paymentId = "pay_paid_plan_upgrade" } = {}) {
+    const originalFetch = globalThis.fetch;
+    let orderRequest;
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url === "https://api.razorpay.com/v1/orders") {
+        orderRequest = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            id: orderId,
+            amount: orderRequest.amount,
+            currency: orderRequest.currency,
+            status: "created",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url === `https://api.razorpay.com/v1/payments/${paymentId}`) {
+        return new Response(
+          JSON.stringify({
+            id: paymentId,
+            order_id: orderId,
+            amount: orderRequest.amount,
+            currency: orderRequest.currency,
+            status: "captured",
+            captured: true,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return originalFetch(input, init);
+    };
+    return {
+      orderRequest: () => orderRequest,
+      restore: () => {
+        globalThis.fetch = originalFetch;
+      },
+      orderId,
+      paymentId,
+    };
+  }
+
+  async function makePlanPair({
+    username,
+    currentCurrency = "INR",
+    targetCurrency = currentCurrency,
+    currentEndsAt,
+  }) {
+    const user = await loggedInUser({ username });
+    const currentPlan = await insertPlan({
+      name: `${username} current plan`,
+      amountMinor: 6_000,
+      currency: currentCurrency,
+      contactLimit: 500,
+    });
+    const targetPlan = await insertPlan({
+      name: `${username} higher plan`,
+      amountMinor: 12_000,
+      currency: targetCurrency,
+      contactLimit: 1_000,
+    });
+    const now = Date.now();
+    const [sourceSubscription] = await db
+      .insert(dbModule.userSubscriptionsTable)
+      .values({
+        userId: user.user.id,
+        packageId: currentPlan.id,
+        paymentId: null,
+        status: "active",
+        startsAt: new Date(now - 15 * dayMs),
+        endsAt: currentEndsAt ?? new Date(now + 15.25 * dayMs),
+      })
+      .returning();
+    await configureGateway();
+    return { user, currentPlan, targetPlan, sourceSubscription };
+  }
+
+  async function verifyCapture(user, order, gateway) {
+    const signature = createHmac("sha256", keySecret)
+      .update(`${order.orderId}|${gateway.paymentId}`)
+      .digest("hex");
+    return api("/subscriptions/verify", {
+      method: "POST",
+      cookie: user.cookie,
+      body: {
+        paymentId: order.paymentId,
+        razorpayOrderId: order.orderId,
+        razorpayPaymentId: gateway.paymentId,
+        razorpaySignature: signature,
+      },
+    });
+  }
+
+  it("orders only the unused-term difference and activates the higher plan through verified capture", async () => {
+    const fixture = await makePlanPair({
+      username: "paid-upgrade-capture-user",
+    });
+    const gateway = stubGateway();
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      assert.equal(order.body.amountMinor, 3_050);
+      assert.notEqual(order.body.amountMinor, fixture.targetPlan.amountMinor);
+      assert.equal(gateway.orderRequest().amount, 3_050);
+      assert.equal(gateway.orderRequest().currency, "INR");
+
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.subscriptionChangeType, "upgrade");
+      assert.equal(payment.sourceSubscriptionId, fixture.sourceSubscription.id);
+      assert.equal(
+        payment.planChangeEffectiveAt.toISOString(),
+        fixture.sourceSubscription.endsAt.toISOString(),
+      );
+
+      const verified = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+      assert.equal(verified.body.status, "active");
+      assert.equal(verified.body.subscription.package.id, fixture.targetPlan.id);
+      assert.equal(
+        verified.body.subscription.endsAt,
+        fixture.sourceSubscription.endsAt.toISOString(),
+      );
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 2);
+      assert.equal(
+        subscriptions.find((subscription) => subscription.id === fixture.sourceSubscription.id).status,
+        "superseded",
+      );
+      const upgraded = subscriptions.find(
+        (subscription) => subscription.paymentId === order.body.paymentId,
+      );
+      assert.equal(upgraded.packageId, fixture.targetPlan.id);
+      assert.equal(upgraded.status, "active");
+      assert.equal(
+        upgraded.endsAt.toISOString(),
+        fixture.sourceSubscription.endsAt.toISOString(),
+      );
+      const [capturedPayment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(capturedPayment.status, "captured");
+      assert.equal(capturedPayment.amountMinor, 3_050);
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("charges the full target price rather than prorating from an expired source subscription", async () => {
+    const fixture = await makePlanPair({
+      username: "paid-upgrade-expired-source-user",
+      currentEndsAt: new Date(Date.now() - dayMs),
+    });
+    const gateway = stubGateway({ orderId: "order_expired_source" });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      assert.equal(order.body.amountMinor, fixture.targetPlan.amountMinor);
+      assert.equal(order.body.currency, fixture.targetPlan.currency);
+      assert.equal(gateway.orderRequest().amount, fixture.targetPlan.amountMinor);
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.subscriptionChangeType, null);
+      assert.equal(payment.sourceSubscriptionId, null);
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("does not activate an upgrade if its source expires before capture", async () => {
+    const fixture = await makePlanPair({
+      username: "paid-upgrade-stale-capture-user",
+      currentEndsAt: new Date(Date.now() + 12 * dayMs),
+    });
+    const gateway = stubGateway({ orderId: "order_stale_capture" });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      await db
+        .update(dbModule.userSubscriptionsTable)
+        .set({ endsAt: new Date(Date.now() - 1) })
+        .where(eq(dbModule.userSubscriptionsTable.id, fixture.sourceSubscription.id));
+
+      const verified = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(verified.response.status, 502);
+      assert.equal(verified.body.code, "RAZORPAY_CONFIRMATION_PENDING");
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 1);
+      assert.equal(subscriptions[0].status, "active");
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.status, "created");
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("uses a full-price scheduled order instead of cross-currency proration", async () => {
+    const fixture = await makePlanPair({
+      username: "paid-upgrade-currency-mismatch-user",
+      currentCurrency: "INR",
+      targetCurrency: "USD",
+    });
+    const gateway = stubGateway({ orderId: "order_currency_mismatch" });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      assert.equal(order.body.amountMinor, fixture.targetPlan.amountMinor);
+      assert.equal(order.body.currency, "USD");
+      assert.equal(gateway.orderRequest().amount, fixture.targetPlan.amountMinor);
+      assert.equal(gateway.orderRequest().currency, "USD");
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.subscriptionChangeType, "scheduled");
+      assert.equal(payment.sourceSubscriptionId, fixture.sourceSubscription.id);
+      assert.equal(
+        payment.planChangeEffectiveAt.toISOString(),
+        fixture.sourceSubscription.endsAt.toISOString(),
+      );
+    } finally {
+      gateway.restore();
+    }
+  });
+});
+
   it("offers free add-ons only to paid-primary users and resumes retained allowances", async () => {
     const admin = await loggedInUser({
       username: "addon-lifecycle-admin",

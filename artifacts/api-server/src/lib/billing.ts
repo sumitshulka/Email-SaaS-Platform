@@ -378,14 +378,14 @@ export async function activateCapturedPayment(input: {
       }
 
       const plannedEndAt = payment.planChangeEffectiveAt ?? source.endsAt;
-      const remainingTermAtCheckout = Math.max(
-        1,
-        plannedEndAt.getTime() - payment.createdAt.getTime(),
-      );
-      const endsAt =
-        plannedEndAt > now
-          ? plannedEndAt
-          : new Date(now.getTime() + remainingTermAtCheckout);
+      if (
+        source.endsAt.getTime() !== plannedEndAt.getTime() ||
+        plannedEndAt <= now
+      ) {
+        throw new Error(
+          "The active plan expired or changed while payment was processing. Contact the platform administrator before retrying.",
+        );
+      }
       await tx
         .update(userSubscriptionsTable)
         .set({ status: "superseded" })
@@ -398,7 +398,7 @@ export async function activateCapturedPayment(input: {
           paymentId: payment.id,
           status: "active",
           startsAt: now,
-          endsAt,
+          endsAt: plannedEndAt,
           senderAccountIdsToKeep: payment.senderAccountIdsToKeep,
         })
         .returning();
