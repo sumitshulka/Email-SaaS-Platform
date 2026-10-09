@@ -39,7 +39,7 @@ import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
-import { trackRegistrationSucceeded } from '@/lib/analytics';
+import { trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
 import { clearPackageCheckoutSession, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
@@ -188,7 +188,7 @@ function RegisterPage() {
     register.mutate(
       { data: { ...values, ...(verifiedCheckout ? { emailVerificationProof: verifiedCheckout.proof } : {}) } },
       { onSuccess: () => {
-        trackRegistrationSucceeded();
+        trackRegistrationSucceeded(!verifiedCheckout);
         if (verifiedCheckout && checkoutPackageId) {
           clearPackageCheckoutSession();
           setLocation(`/plans?checkout=${encodeURIComponent(checkoutPackageId)}`);
@@ -229,7 +229,7 @@ function VerifyPage() {
   const verify = useVerifyRegistrationEmail(); const [, setLocation] = useLocation();
   const [email, setEmail] = useState(sessionStorage.getItem('mailflow-verification-email') || '');
   const [code, setCode] = useState('');
-  const submit = (e: FormEvent) => { e.preventDefault(); verify.mutate({ data: { email, code } }, { onSuccess: res => { client.setQueryData(getGetCurrentUserQueryKey(), res.user); setLocation(res.user.mustChangeCredentials ? '/profile?rotate=1' : res.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'); } }); };
+  const submit = (e: FormEvent) => { e.preventDefault(); verify.mutate({ data: { email, code } }, { onSuccess: res => { trackVerifiedSignupSucceeded(); client.setQueryData(getGetCurrentUserQueryKey(), res.user); setLocation(res.user.mustChangeCredentials ? '/profile?rotate=1' : res.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'); } }); };
   return <AuthFrame label="A small check. Then you're in."><AuthTitle overline="Email verification" title="Check your inbox." sub="Enter the six-character verification code sent to your email address."/><form onSubmit={submit} className="space-y-4"><Field label="Email address" value={email} onChange={setEmail} testId="input-verify-email" type="email" required/><Field label="Verification code" value={code} onChange={setCode} testId="input-verification-code" placeholder="000000" required/><FormError message={verify.isError ? getError(verify.error) : undefined}/><Button type="submit" testId="button-verify-email" disabled={verify.isPending} className="w-full">{verify.isPending ? 'Verifying…' : 'Verify email'}<ArrowRight className="h-4 w-4"/></Button></form><div className="mt-6 text-center text-[12px] text-[#737e8b]">Wrong email? <Link href="/register" data-testid="link-back-register" className="ml-1 font-semibold text-[#245b9b] no-underline">Start over</Link></div></AuthFrame>;
 }
 function ForgotPage() {

@@ -89,8 +89,9 @@ async function stopWebServer() {
   }
 }
 
-async function installFixtures(context, { registrationStatus = 201 } = {}) {
+async function installFixtures(context, { registrationStatus = 201, verificationStatus = 200 } = {}) {
   const registrationBodies = [];
+  const verificationBodies = [];
   await context.addInitScript(() => {
     window.__analyticsCalls = [];
     window.umami = {
@@ -124,9 +125,33 @@ async function installFixtures(context, { registrationStatus = 201 } = {}) {
       });
       return;
     }
+    if (pathname === '/api/auth/verify-email' && request.method() === 'POST') {
+      verificationBodies.push(request.postDataJSON());
+      await route.fulfill({
+        status: verificationStatus,
+        json: verificationStatus === 200
+          ? {
+            user: {
+              id: 'user-1',
+              username: 'samplevisitor',
+              firstName: 'Sample',
+              lastName: 'Visitor',
+              email: 'signup-test@example.test',
+              role: 'USER',
+              timezone: 'UTC',
+              active: true,
+              emailVerified: true,
+              mustChangeCredentials: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          }
+          : { error: 'The verification code is incorrect.' },
+      });
+      return;
+    }
     await route.fulfill({ status: 404, json: { error: `Unexpected API request: ${pathname}` } });
   });
-  return { registrationBodies };
+  return { registrationBodies, verificationBodies };
 }
 
 describe('marketing signup analytics', { concurrency: false }, () => {
@@ -163,10 +188,10 @@ describe('marketing signup analytics', { concurrency: false }, () => {
     }
   });
 
-  it('attaches CTA attribution to successful registration without sending form values to analytics', async () => {
+  it('attaches CTA attribution to registration and verified signup without sending form values to analytics', async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     try {
-      const { registrationBodies } = await installFixtures(context);
+      const { registrationBodies, verificationBodies } = await installFixtures(context);
       const page = await context.newPage();
       await page.goto(`${baseUrl}/`);
       await page.getByTestId('hero-get-started').click();
@@ -181,12 +206,22 @@ describe('marketing signup analytics', { concurrency: false }, () => {
         { name: 'marketing_signup_cta_clicked', data: { page: 'home', placement: 'hero' } },
         { name: 'registration_succeeded', data: { page: 'home', placement: 'hero' } },
       ]);
+      await page.getByTestId('input-verification-code').fill('123456');
+      await page.getByTestId('button-verify-email').click();
+      await page.waitForURL(url => url.pathname === '/dashboard');
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        { name: 'marketing_signup_cta_clicked', data: { page: 'home', placement: 'hero' } },
+        { name: 'registration_succeeded', data: { page: 'home', placement: 'hero' } },
+        { name: 'verified_signup_succeeded', data: { page: 'home', placement: 'hero' } },
+      ]);
       const analyticsPayload = JSON.stringify(await page.evaluate(() => window.__analyticsCalls));
-      for (const privateValue of ['Sample', 'Visitor', 'signup-test@example.test', 'registration-test-password']) {
+      for (const privateValue of ['Sample', 'Visitor', 'signup-test@example.test', 'registration-test-password', '123456']) {
         assert.equal(analyticsPayload.includes(privateValue), false, `Analytics must not include ${privateValue}`);
       }
       assert.equal(registrationBodies.length, 1);
       assert.equal(registrationBodies[0].email, 'signup-test@example.test');
+      assert.deepEqual(verificationBodies, [{ email: 'signup-test@example.test', code: '123456' }]);
     } finally {
       await context.close();
     }
@@ -210,6 +245,51 @@ describe('marketing signup analytics', { concurrency: false }, () => {
         name: 'marketing_signup_cta_clicked',
         data: { page: 'features', placement: 'sender' },
       }]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not count a failed email verification as a verified signup', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    try {
+      await installFixtures(context, { verificationStatus: 400 });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/features`);
+      await page.getByTestId('features-sender-register').click();
+      await page.getByTestId('input-first-name').fill('Sample');
+      await page.getByTestId('input-last-name').fill('Visitor');
+      await page.getByTestId('input-register-email').fill('signup-test@example.test');
+      await page.getByTestId('input-register-password').fill('registration-test-password');
+      await page.getByTestId('button-create-account').click();
+      await page.waitForURL(url => url.pathname === '/verify-email');
+      await page.getByTestId('input-verification-code').fill('000000');
+      await page.getByTestId('button-verify-email').click();
+      await page.getByTestId('status-form-error').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        { name: 'marketing_signup_cta_clicked', data: { page: 'features', placement: 'sender' } },
+        { name: 'registration_succeeded', data: { page: 'features', placement: 'sender' } },
+      ]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('does not classify a successful verification as a signup without a pending registration', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    try {
+      await installFixtures(context);
+      await context.addInitScript(() => {
+        window.sessionStorage.setItem('mailflow-verification-email', 'email-change@example.test');
+      });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/verify-email`);
+      await page.getByTestId('input-verification-code').fill('123456');
+      await page.getByTestId('button-verify-email').click();
+      await page.waitForURL(url => url.pathname === '/dashboard');
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), []);
     } finally {
       await context.close();
     }

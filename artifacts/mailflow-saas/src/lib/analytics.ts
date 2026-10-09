@@ -5,6 +5,7 @@ type SignupPlacement = 'header' | 'footer' | 'hero' | 'intro' | 'sender' | 'fina
 type SignupAttribution = { page: MarketingPage; placement: SignupPlacement };
 
 const SIGNUP_ATTRIBUTION_KEY = 'mailflow-marketing-signup-attribution';
+const PENDING_VERIFIED_SIGNUP_KEY = 'mailflow-pending-verified-signup';
 
 declare global {
   interface Window {
@@ -48,20 +49,59 @@ export function trackMarketingSignupCta(page: MarketingPage, placement: SignupPl
   }
 }
 
-export function trackRegistrationSucceeded(): void {
-  let attribution: SignupAttribution | undefined;
+function takeSignupAttribution(key: string): SignupAttribution | undefined {
+  if (typeof window === 'undefined') return undefined;
+
+  try {
+    const stored = window.sessionStorage.getItem(key);
+    window.sessionStorage.removeItem(key);
+    const parsed: unknown = stored ? JSON.parse(stored) : undefined;
+    return isSignupAttribution(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function trackRegistrationSucceeded(awaitingEmailVerification = true): void {
+  const attribution = takeSignupAttribution(SIGNUP_ATTRIBUTION_KEY);
   if (typeof window !== 'undefined') {
     try {
-      const stored = window.sessionStorage.getItem(SIGNUP_ATTRIBUTION_KEY);
-      window.sessionStorage.removeItem(SIGNUP_ATTRIBUTION_KEY);
-      const parsed: unknown = stored ? JSON.parse(stored) : undefined;
-      if (isSignupAttribution(parsed)) attribution = parsed;
+      window.sessionStorage.removeItem(PENDING_VERIFIED_SIGNUP_KEY);
+      if (awaitingEmailVerification) {
+        window.sessionStorage.setItem(
+          PENDING_VERIFIED_SIGNUP_KEY,
+          JSON.stringify(attribution ?? {}),
+        );
+      }
     } catch {
-      // Registration tracking must never affect account creation.
+      // Verified-signup attribution must never affect account creation.
     }
   }
 
   trackEvent('registration_succeeded', attribution);
+}
+
+export function trackVerifiedSignupSucceeded(): void {
+  if (typeof window === 'undefined') return;
+
+  let stored: string | null;
+  try {
+    stored = window.sessionStorage.getItem(PENDING_VERIFIED_SIGNUP_KEY);
+    window.sessionStorage.removeItem(PENDING_VERIFIED_SIGNUP_KEY);
+  } catch {
+    return;
+  }
+  if (stored === null) return;
+
+  let attribution: SignupAttribution | undefined;
+  try {
+    const parsed: unknown = JSON.parse(stored);
+    if (isSignupAttribution(parsed)) attribution = parsed;
+  } catch {
+    // Malformed attribution does not prevent counting a verified signup.
+  }
+
+  trackEvent('verified_signup_succeeded', attribution);
 }
 
 export function trackPaidVerificationOutcome(outcome: 'pending' | 'failed'): void {
