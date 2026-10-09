@@ -1,7 +1,7 @@
 type AnalyticsData = Record<string, string | number | boolean>;
 
-type MarketingPage = 'home' | 'features';
-type SignupPlacement = 'header' | 'footer' | 'hero' | 'intro' | 'sender' | 'final_cta';
+type MarketingPage = 'home' | 'features' | 'pricing';
+type SignupPlacement = 'header' | 'footer' | 'hero' | 'intro' | 'sender' | 'final_cta' | 'plan' | 'bottom_cta';
 type SignupAttribution = { page: MarketingPage; placement: SignupPlacement };
 
 const SIGNUP_ATTRIBUTION_KEY = 'mailflow-marketing-signup-attribution';
@@ -23,6 +23,9 @@ function isSignupAttribution(value: unknown): value is SignupAttribution {
   }
   if (candidate.page === 'features') {
     return ['header', 'footer', 'hero', 'sender', 'final_cta'].includes(String(candidate.placement));
+  }
+  if (candidate.page === 'pricing') {
+    return ['header', 'footer', 'plan', 'bottom_cta'].includes(String(candidate.placement));
   }
   return false;
 }

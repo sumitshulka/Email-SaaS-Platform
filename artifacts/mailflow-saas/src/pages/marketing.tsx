@@ -71,7 +71,7 @@ function usePageMeta(meta: PublicPageMetadata) {
 
 function Header({ active }: { active: 'home' | 'pricing' | 'features' | 'legal' }) {
   const [open, setOpen] = useState(false);
-  const marketingPage = active === 'home' || active === 'features' ? active : undefined;
+  const marketingPage = active === 'home' || active === 'features' || active === 'pricing' ? active : undefined;
   return (
     <header className="mf-header">
       <div className="mf-nav-wrap">
@@ -92,7 +92,7 @@ function Header({ active }: { active: 'home' | 'pricing' | 'features' | 'legal' 
   );
 }
 
-function Footer({ marketingPage }: { marketingPage?: 'home' | 'features' }) {
+function Footer({ marketingPage }: { marketingPage?: 'home' | 'features' | 'pricing' }) {
   return (
     <footer className="mf-footer">
       <div className="mf-footer-main">
@@ -115,7 +115,7 @@ export function PublicMarketingLayout({ children }: { children: ReactNode }) {
 }
 
 function MetaLayout({ children, active }: { children: ReactNode; active: 'home' | 'pricing' | 'features' }) {
-  const marketingPage = active === 'home' || active === 'features' ? active : undefined;
+  const marketingPage = active;
   return <div className="mf-site" id="top"><Header active={active}/>{children}<Footer marketingPage={marketingPage}/><Styles/></div>;
 }
 
@@ -413,7 +413,7 @@ function PackageCard({ pkg, index, sendingLimits, checkoutHref }: {
         <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
-      <Link href={checkoutHref} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
+      <Link href={checkoutHref} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`} onClick={() => trackMarketingSignupCta('pricing', 'plan')}>Get started <ArrowRight size={16}/></Link>
       <p
         className="plan-footnote"
         data-testid={`text-package-total-send-capacity-${pkg.id}`}
@@ -448,7 +448,7 @@ function PricingContent() {
           <div className="mf-pricing-note" data-testid="text-pricing-refund-guarantee"><ShieldCheck size={17}/><p style={{ color: '#465c52', fontSize: 12, lineHeight: 1.7 }}>All subscriptions come with a Refund guarantee of 7 Days if no campaign is initiated. For details, please check <Link href="/shipping-refund" data-testid="link-pricing-refund-policy" style={{ color: '#1d4f8b', textDecoration: 'underline', textUnderlineOffset: '3px', fontWeight: 700 }}>Shipping and Refund Policy</Link>.</p></div>
         </div>
       </section>
-      <section className="mf-pricing-bottom"><div><span className="mf-small-label">STILL FINDING YOUR FEET?</span><h2>Start with the people<br/>you already know.</h2><p>Build your workspace around real contacts, companies and campaign plans.</p></div><Link href="/register" className="mf-button" data-testid="pricing-bottom-register">Create your account <ArrowRight size={16}/></Link></section>
+      <section className="mf-pricing-bottom"><div><span className="mf-small-label">STILL FINDING YOUR FEET?</span><h2>Start with the people<br/>you already know.</h2><p>Build your workspace around real contacts, companies and campaign plans.</p></div><Link href="/register" className="mf-button" data-testid="pricing-bottom-register" onClick={() => trackMarketingSignupCta('pricing', 'bottom_cta')}>Create your account <ArrowRight size={16}/></Link></section>
       <section className="mf-pricing-faq"><div className="mf-section-wrap faq-layout"><div><SectionEyebrow>Good to know</SectionEyebrow><h2>A few useful<br/>clarifications.</h2></div><div className="faq-items"><details><summary data-testid="faq-sending-service">Does Mailflow include a sending service?<ChevronDown size={17}/></summary><p>Mailflow campaigns are sent using your configured SMTP account. You choose and set up the sending provider.</p></details><details><summary data-testid="faq-sending-limits">How do SMTP sending limits work?<ChevronDown size={17}/></summary><p>Each configured SMTP mailbox gets the same platform-set hourly and daily campaign-attempt limits, independent of package. Each mailbox has its own rolling allowance, shared by campaigns using that mailbox. Automatic retries count, and your SMTP provider may impose lower limits.</p></details><details><summary data-testid="faq-campaign-outcome">What does a campaign outcome tell me?<ChevronDown size={17}/></summary><p>Mailflow can show recorded SMTP outcomes, such as accepted or rejected responses. SMTP acceptance does not confirm that a message reached a recipient’s inbox.</p></details><details><summary data-testid="faq-plan-limits">Where do the listed plan limits come from?<ChevronDown size={17}/></summary><p>The plans shown above are loaded from the current public plan list. The Mailflow team manages which plans are available.</p></details></div></div></section>
     </main>
   );

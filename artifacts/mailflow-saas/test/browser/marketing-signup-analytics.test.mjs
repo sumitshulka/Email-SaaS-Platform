@@ -19,6 +19,9 @@ const ctas = [
   { path: '/features', testId: 'features-hero-register', page: 'features', placement: 'hero' },
   { path: '/features', testId: 'features-sender-register', page: 'features', placement: 'sender' },
   { path: '/features', testId: 'features-final-register', page: 'features', placement: 'final_cta' },
+  { path: '/pricing', testId: 'nav-register', page: 'pricing', placement: 'header' },
+  { path: '/pricing', testId: 'footer-register', page: 'pricing', placement: 'footer' },
+  { path: '/pricing', testId: 'pricing-bottom-register', page: 'pricing', placement: 'bottom_cta' },
 ];
 
 let serverProcess;
@@ -89,7 +92,7 @@ async function stopWebServer() {
   }
 }
 
-async function installFixtures(context, { registrationStatus = 201, verificationStatus = 200 } = {}) {
+async function installFixtures(context, { registrationStatus = 201, verificationStatus = 200, packages = [] } = {}) {
   const registrationBodies = [];
   const verificationBodies = [];
   await context.addInitScript(() => {
@@ -113,6 +116,13 @@ async function installFixtures(context, { registrationStatus = 201, verification
     }
     if (pathname === '/api/auth/password-policy') {
       await route.fulfill({ status: 200, json: { passwordMinimumLength: 12 } });
+      return;
+    }
+    if (pathname === '/api/subscriptions/packages' && request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        json: { packages, sendingLimits: { emailsPerHourPerSmtp: 100, emailsPerDayPerSmtp: 1000 } },
+      });
       return;
     }
     if (pathname === '/api/auth/register' && request.method() === 'POST') {
@@ -168,7 +178,7 @@ describe('marketing signup analytics', { concurrency: false }, () => {
     await stopWebServer();
   });
 
-  it('tracks each Home and Features signup CTA with only fixed page and placement values', async () => {
+  it('tracks public signup CTAs with only fixed page and placement values', async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     try {
       await installFixtures(context);
@@ -182,6 +192,59 @@ describe('marketing signup analytics', { concurrency: false }, () => {
           data: { page: cta.page, placement: cta.placement },
         }];
         assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), expected, `${cta.path} ${cta.testId}`);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks pricing plan actions and attributes a later registration without sending package or form data', async () => {
+    const pkg = {
+      id: '9cf2f2ae-61bb-4523-a582-dcb843f48a30',
+      packageType: 'primary',
+      name: 'Growth plan',
+      description: 'A paid package used to verify pricing attribution.',
+      amountMinor: 2499,
+      currency: 'USD',
+      periodDays: 30,
+      contactLimit: 100,
+      emailAccountLimit: 1,
+      researchAllowance: 0,
+      aiEmailAssistAllowance: 0,
+      additionalMailboxCount: 0,
+      preferred: false,
+      active: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    try {
+      await installFixtures(context, { packages: [pkg] });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/pricing`);
+      await page.getByTestId(`package-cta-${pkg.id}`).click();
+      await page.waitForURL(url => url.pathname.startsWith('/package-checkout/'));
+      const clickAnalytics = await page.evaluate(() => window.__analyticsCalls);
+      assert.deepEqual(clickAnalytics, [
+        { name: 'marketing_signup_cta_clicked', data: { page: 'pricing', placement: 'plan' } },
+      ]);
+      await page.goto(`${baseUrl}/register`);
+      await page.getByTestId('input-first-name').fill('Sample');
+      await page.getByTestId('input-last-name').fill('Visitor');
+      await page.getByTestId('input-register-email').fill('signup-test@example.test');
+      await page.getByTestId('input-register-password').fill('registration-test-password');
+      await page.getByTestId('button-create-account').click();
+      await page.waitForURL(url => url.pathname === '/verify-email');
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        { name: 'registration_succeeded', data: { page: 'pricing', placement: 'plan' } },
+      ]);
+      const analyticsPayload = JSON.stringify([
+        ...clickAnalytics,
+        ...await page.evaluate(() => window.__analyticsCalls),
+      ]);
+      for (const privateValue of [pkg.id, pkg.name, 'Sample', 'Visitor', 'signup-test@example.test', 'registration-test-password']) {
+        assert.equal(analyticsPayload.includes(privateValue), false, `Analytics must not include ${privateValue}`);
       }
     } finally {
       await context.close();
