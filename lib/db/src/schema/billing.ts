@@ -212,6 +212,10 @@ export const addOnEntitlementsTable = pgTable(
     paymentId: uuid("payment_id").references(() => paymentsTable.id, {
       onDelete: "restrict",
     }),
+    grantSource: text("grant_source")
+      .$type<"purchase" | "free_claim" | "admin_gift">()
+      .notNull()
+      .default("purchase"),
     researchAllowance: integer("research_allowance").notNull().default(0),
     researchUsed: integer("research_used").notNull().default(0),
     aiEmailAssistAllowance: integer("ai_email_assist_allowance")
@@ -230,7 +234,7 @@ export const addOnEntitlementsTable = pgTable(
       .where(sql`${table.paymentId} IS NOT NULL`),
     uniqueIndex("add_on_entitlements_free_claim_unique")
       .on(table.userId, table.packageId)
-      .where(sql`${table.paymentId} IS NULL`),
+      .where(sql`${table.grantSource} = 'free_claim'`),
     index("add_on_entitlements_owner_created_idx").on(
       table.userId,
       table.createdAt,

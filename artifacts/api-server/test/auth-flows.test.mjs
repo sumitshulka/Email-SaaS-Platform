@@ -268,6 +268,7 @@ memory.public.none(`
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     package_id uuid NOT NULL REFERENCES subscription_packages(id) ON DELETE RESTRICT,
     payment_id uuid REFERENCES payments(id) ON DELETE RESTRICT,
+    grant_source text NOT NULL DEFAULT 'purchase',
     research_allowance integer NOT NULL DEFAULT 0,
     research_used integer NOT NULL DEFAULT 0,
     ai_email_assist_allowance integer NOT NULL DEFAULT 0,
@@ -279,7 +280,7 @@ memory.public.none(`
     WHERE payment_id IS NOT NULL;
   CREATE UNIQUE INDEX add_on_entitlements_free_claim_unique
     ON add_on_entitlements (user_id, package_id)
-    WHERE payment_id IS NULL;
+    WHERE grant_source = 'free_claim';
   CREATE INDEX add_on_entitlements_owner_created_idx
     ON add_on_entitlements (user_id, created_at);
   CREATE TABLE ai_email_assist_usages (

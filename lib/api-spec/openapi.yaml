@@ -3177,7 +3177,7 @@ paths:
     post:
       operationId: giftAdminSubscription
       tags: [billing]
-      summary: Grant a subscription term to a tenant account without collecting payment
+      summary: Gift a primary subscription term or add-on allowances without collecting payment
       requestBody:
         required: true
         content:
@@ -3186,13 +3186,15 @@ paths:
               $ref: "#/components/schemas/SubscriptionGiftInput"
       responses:
         "201":
-          description: Granted subscription term
+          description: Granted primary subscription term or add-on allowances
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SubscriptionSummary"
+                $ref: "#/components/schemas/AdminSubscriptionGiftResult"
         "400":
           description: Invalid gift request
+        "403":
+          description: An active paid-priced primary package is required to gift an add-on
         "404":
           description: Tenant account or subscription package not found
   /subscriptions/packages:
@@ -5595,6 +5597,32 @@ components:
         userId: { type: string, format: uuid }
         packageId: { type: string, format: uuid }
       required: [userId, packageId]
+    AdminSubscriptionGiftResult:
+      oneOf:
+        - $ref: "#/components/schemas/AdminPrimarySubscriptionGiftResult"
+        - $ref: "#/components/schemas/AdminAddOnGiftResult"
+      discriminator:
+        propertyName: kind
+        mapping:
+          primary: "#/components/schemas/AdminPrimarySubscriptionGiftResult"
+          addon: "#/components/schemas/AdminAddOnGiftResult"
+    AdminPrimarySubscriptionGiftResult:
+      type: object
+      properties:
+        kind: { type: string, enum: [primary] }
+        subscription: { $ref: "#/components/schemas/SubscriptionSummary" }
+      required: [kind, subscription]
+    AdminAddOnGiftResult:
+      type: object
+      properties:
+        kind: { type: string, enum: [addon] }
+        entitlementId: { type: string, format: uuid }
+        packageId: { type: string, format: uuid }
+        packageName: { type: string }
+        researchAllowance: { type: integer, minimum: 0 }
+        aiEmailAssistAllowance: { type: integer, minimum: 0 }
+        additionalMailboxCount: { type: integer, minimum: 0 }
+      required: [kind, entitlementId, packageId, packageName, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount]
     SubscriptionPackageUpdateInput:
       type: object
       properties:

@@ -718,10 +718,59 @@ export async function grantAdminGiftSubscription(input: {
       .select()
       .from(subscriptionPackagesTable)
       .where(eq(subscriptionPackagesTable.id, input.packageId))
-      .limit(1);
-    if (!pkg || pkg.packageType !== "primary") return null;
+      .limit(1)
+      .for("update");
+    if (!pkg) return null;
 
     const now = new Date();
+    if (pkg.packageType === "addon") {
+      const [activePaidPrimary] = await tx
+        .select({ id: userSubscriptionsTable.id })
+        .from(userSubscriptionsTable)
+        .innerJoin(
+          subscriptionPackagesTable,
+          eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+        )
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, user.id),
+            eq(userSubscriptionsTable.status, "active"),
+            lte(userSubscriptionsTable.startsAt, now),
+            gt(userSubscriptionsTable.endsAt, now),
+            eq(subscriptionPackagesTable.packageType, "primary"),
+            gt(subscriptionPackagesTable.amountMinor, 0),
+          ),
+        )
+        .orderBy(desc(userSubscriptionsTable.endsAt))
+        .limit(1)
+        .for("update");
+      if (!activePaidPrimary) return { kind: "primary-required" as const };
+
+      const [entitlement] = await tx
+        .insert(addOnEntitlementsTable)
+        .values({
+          userId: user.id,
+          packageId: pkg.id,
+          paymentId: null,
+          grantSource: "admin_gift",
+          researchAllowance: pkg.researchAllowance,
+          aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+          additionalMailboxCount: pkg.additionalMailboxCount,
+        })
+        .returning({ id: addOnEntitlementsTable.id });
+      if (!entitlement) return null;
+      return {
+        kind: "addon" as const,
+        entitlementId: entitlement.id,
+        packageId: pkg.id,
+        packageName: pkg.name,
+        researchAllowance: pkg.researchAllowance,
+        aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+        additionalMailboxCount: pkg.additionalMailboxCount,
+      };
+    }
+    if (pkg.packageType !== "primary") return null;
+
     const [latestActive] = await tx
       .select()
       .from(userSubscriptionsTable)
@@ -752,7 +801,10 @@ export async function grantAdminGiftSubscription(input: {
         endsAt,
       })
       .returning();
-    return serializeSubscription(subscription!, pkg);
+    return {
+      kind: "primary" as const,
+      subscription: serializeSubscription(subscription!, pkg),
+    };
   });
 }
 
