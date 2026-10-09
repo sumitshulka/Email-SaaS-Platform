@@ -216,7 +216,36 @@ function VerifyPage() {
 function ForgotPage() {
   const reset = useRequestPasswordReset(); const [email, setEmail] = useState(''); const [done, setDone] = useState(false);
   const submit = (e: FormEvent) => { e.preventDefault(); reset.mutate({ data: { email } }, { onSuccess: () => setDone(true) }); };
-  return <AuthFrame label="Access should never be a guessing game."><AuthTitle overline="Account recovery" title={done ? 'Request received.' : 'Reset your password.'} sub={done ? 'If that address belongs to an account, a reset link is on its way.' : 'Enter the email associated with your account and we’ll send a secure reset link.'}/>{!done && <form onSubmit={submit} className="space-y-4"><Field label="Email address" value={email} onChange={setEmail} testId="input-reset-email" type="email" required/><FormError message={reset.isError ? getError(reset.error) : undefined}/><Button type="submit" testId="button-request-reset" disabled={reset.isPending} className="w-full">{reset.isPending ? 'Sending…' : 'Send reset link'}<ArrowRight className="h-4 w-4"/></Button></form>}<Link href="/login" data-testid="link-return-login" className="mt-6 flex items-center justify-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline"><ChevronLeft className="h-4 w-4"/>Back to sign in</Link></AuthFrame>;
+  return (
+    <AuthFrame className="auth-branded-frame" label="Access should never be a guessing game.">
+      <AuthTitle
+        className="auth-form-title"
+        overline="Account recovery"
+        title={done ? 'Request received.' : 'Reset your password.'}
+        sub={done ? 'If that address belongs to an account, a reset link is on its way.' : 'Enter the email associated with your account and we’ll send a secure reset link.'}
+      />
+      {!done && (
+        <form onSubmit={submit} className="auth-form space-y-4">
+          <Field label="Email address" value={email} onChange={setEmail} testId="input-reset-email" type="email" required autoComplete="email" />
+          <FormError message={reset.isError ? getError(reset.error) : undefined} />
+          <Button type="submit" testId="button-request-reset" disabled={reset.isPending} className="auth-submit w-full">
+            {reset.isPending ? 'Sending…' : 'Send reset link'}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </form>
+      )}
+      <div className="auth-footer mt-7 border-t pt-5 text-center text-[12px]">
+        <Link href="/login" data-testid="link-return-login" className="inline-flex items-center justify-center gap-2 font-semibold no-underline hover:underline">
+          <ChevronLeft className="h-4 w-4" />
+          Back to sign in
+        </Link>
+      </div>
+      <div className="auth-protection mt-8 flex items-center justify-center gap-2 text-[10px]">
+        <ShieldCheck className="h-3.5 w-3.5" />
+        Protected account access
+      </div>
+    </AuthFrame>
+  );
 }
 function ResetPage() {
   const reset = useResetPassword(); const [, setLocation] = useLocation();
