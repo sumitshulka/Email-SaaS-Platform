@@ -2187,6 +2187,10 @@ router.post(
           : null;
       const currency = webhookText(providerPayment?.currency);
       const refundCurrency = webhookText(providerRefund?.currency);
+      const providerRefundId =
+        eventType === "refund.processed"
+          ? webhookText(providerRefund?.id)
+          : null;
       const isProcessedRefund =
         eventType === "payment.refunded"
           ? providerPayment?.status === "refunded"
@@ -2194,6 +2198,8 @@ router.post(
             refundAmount !== null &&
             Number.isInteger(refundAmount) &&
             refundAmount > 0 &&
+            providerRefundId !== null &&
+            providerRefundId.length <= 80 &&
             amount !== null &&
             refundAmount <= amount &&
             (reportedRefundTotal === null ||
@@ -2227,6 +2233,7 @@ router.post(
           paymentId: paymentForWebhook.id,
           razorpayOrderId: refundOrderId,
           razorpayPaymentId: providerPaymentId,
+          razorpayRefundId: providerRefundId,
           amountMinor: amount,
           currency,
           refundAmountMinor: refundAmount!,

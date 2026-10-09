@@ -14,6 +14,7 @@ import {
   db,
   emailCampaignsTable,
   paymentsTable,
+  razorpayRefundsTable,
   subscriptionPackagesTable,
   tenantSendingConfigurationTable,
   userSubscriptionsTable,
@@ -609,6 +610,7 @@ export async function markRefundedPayment(input: {
   paymentId: string;
   razorpayOrderId: string;
   razorpayPaymentId: string;
+  razorpayRefundId: string | null;
   amountMinor: number;
   currency: string;
   refundAmountMinor: number;
@@ -629,6 +631,9 @@ export async function markRefundedPayment(input: {
       (payment.razorpayPaymentId !== null &&
         payment.razorpayPaymentId !== input.razorpayPaymentId) ||
       payment.status === "failed" ||
+      (input.razorpayRefundId !== null &&
+        (input.razorpayRefundId.length === 0 ||
+          input.razorpayRefundId.length > 80)) ||
       !Number.isInteger(input.refundAmountMinor) ||
       input.refundAmountMinor <= 0 ||
       input.refundAmountMinor > payment.amountMinor ||
@@ -645,6 +650,26 @@ export async function markRefundedPayment(input: {
       .where(eq(subscriptionPackagesTable.id, payment.packageId))
       .limit(1);
     if (pkg?.packageType !== "addon") return false;
+
+    if (input.razorpayRefundId !== null) {
+      const [newRefund] = await tx
+        .insert(razorpayRefundsTable)
+        .values({
+          paymentId: payment.id,
+          razorpayRefundId: input.razorpayRefundId,
+          amountMinor: input.refundAmountMinor,
+        })
+        .onConflictDoNothing()
+        .returning({ id: razorpayRefundsTable.id });
+      if (!newRefund) return false;
+    } else if (
+      input.totalRefundedAmountMinor === null &&
+      input.refundAmountMinor < payment.amountMinor
+    ) {
+      // A partial refund without either a provider identity or cumulative
+      // total cannot be safely distinguished from a repeated notification.
+      return false;
+    }
 
     const previouslyRefunded = payment.refundedAmountMinor ?? 0;
     const refundTotal = Math.min(

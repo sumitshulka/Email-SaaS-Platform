@@ -34,6 +34,7 @@ test(
       addOnEntitlementsTable,
       paymentsTable,
       razorpayConfigurationTable,
+      razorpayRefundsTable,
       razorpayWebhookEventsTable,
       subscriptionPackagesTable,
       userSubscriptionsTable,
@@ -56,10 +57,15 @@ test(
       `addon-refund-race-${testId}-first`,
       `addon-refund-race-${testId}-second`,
     ];
+    const duplicateRefundEventIds = [
+      `addon-refund-duplicate-${testId}-first`,
+      `addon-refund-duplicate-${testId}-second`,
+    ];
     const acknowledgementRetryEventId = `addon-capture-ack-retry-${testId}`;
     const eventIds = [
       ...captureEventIds,
       ...refundEventIds,
+      ...duplicateRefundEventIds,
       acknowledgementRetryEventId,
     ];
     const amountMinor = 1500;
@@ -343,7 +349,11 @@ test(
       );
 
       const refundAmounts = [300, 400];
-      const sendRefund = (eventId, refundAmountMinor) => {
+      const sendRefund = (
+        eventId,
+        refundAmountMinor,
+        providerRefundId = eventId,
+      ) => {
         const body = JSON.stringify({
           event: "refund.processed",
           payload: {
@@ -359,7 +369,7 @@ test(
             },
             refund: {
               entity: {
-                id: `rfnd_${testId}_${eventId}`,
+                id: `rfnd_${testId}_${providerRefundId}`,
                 payment_id: providerPaymentId,
                 amount: refundAmountMinor,
                 currency: "INR",
@@ -483,6 +493,100 @@ test(
         .where(inArray(razorpayWebhookEventsTable.eventId, refundEventIds));
       assert.equal(processedRefundEvents.length, 2);
       assert.ok(processedRefundEvents.every((event) => event.processedAt));
+
+      // Distinct webhook event IDs may still report the same provider refund.
+      // Hold the payment row so both deliveries are in flight together, then
+      // confirm only the first transaction records and applies the refund.
+      const duplicateRefundAmount = 200;
+      const duplicateProviderRefundId = "same-provider-refund";
+      await lockClient.query("BEGIN");
+      transactionLockHeld = true;
+      const { rows: lockedDuplicateRefundPayments } = await lockClient.query(
+        "SELECT id FROM payments WHERE id = $1 FOR UPDATE",
+        [paymentId],
+      );
+      assert.equal(lockedDuplicateRefundPayments.length, 1);
+      callbackPromises = duplicateRefundEventIds.map((eventId) =>
+        sendRefund(
+          eventId,
+          duplicateRefundAmount,
+          duplicateProviderRefundId,
+        ),
+      );
+      await waitForBlockedCallbacks(
+        lockClient,
+        callbackPromises,
+        pool,
+        duplicateRefundEventIds,
+        "duplicate refund",
+      );
+      const pendingDuplicateRefundEvents = await db
+        .select({
+          eventId: razorpayWebhookEventsTable.eventId,
+          processedAt: razorpayWebhookEventsTable.processedAt,
+        })
+        .from(razorpayWebhookEventsTable)
+        .where(inArray(razorpayWebhookEventsTable.eventId, duplicateRefundEventIds));
+      assert.ok(
+        pendingDuplicateRefundEvents.every((event) => event.processedAt === null),
+        "both duplicate refund callbacks must wait on the payment row",
+      );
+      await lockClient.query("COMMIT");
+      transactionLockHeld = false;
+      const duplicateRefundResponses = await Promise.all(callbackPromises);
+      const duplicateRefundResponseBodies = await Promise.all(
+        duplicateRefundResponses.map((response) => response.json()),
+      );
+      assert.deepEqual(
+        duplicateRefundResponses.map((response) => response.status),
+        [200, 200],
+        JSON.stringify(duplicateRefundResponseBodies),
+      );
+
+      const [paymentAfterDuplicateRefund] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId));
+      assert.equal(
+        paymentAfterDuplicateRefund.refundedAmountMinor,
+        refundAmounts.reduce((total, amount) => total + amount, 0) +
+          duplicateRefundAmount,
+        "the repeated provider refund must contribute to the total only once",
+      );
+      const recordedRefunds = await db
+        .select()
+        .from(razorpayRefundsTable)
+        .where(eq(razorpayRefundsTable.paymentId, paymentId));
+      assert.equal(recordedRefunds.length, 3);
+      assert.equal(
+        recordedRefunds.filter(
+          (refund) =>
+            refund.razorpayRefundId ===
+            `rfnd_${testId}_${duplicateProviderRefundId}`,
+        ).length,
+        1,
+        "the provider refund identity must be recorded only once",
+      );
+      const duplicateRefundDashboard =
+        await entitlementModule.getSubscriptionAddOnsDashboard(userId);
+      assert.deepEqual(duplicateRefundDashboard.balances.research, {
+        total: 4,
+        used: 0,
+        remaining: 4,
+      });
+      assert.deepEqual(duplicateRefundDashboard.balances.emailAssist, {
+        total: 2,
+        used: 0,
+        remaining: 2,
+      });
+      assert.deepEqual(duplicateRefundDashboard.balances.mailboxes, {
+        baseLimit: 1,
+        additionalSlots: 1,
+        totalLimit: 2,
+        used: 0,
+        remaining: 2,
+        active: true,
+      });
 
       const acknowledgementRetryOrderId = `order_addon_ack_${testId}`;
       const acknowledgementRetryProviderPaymentId = `pay_addon_ack_${testId}`;

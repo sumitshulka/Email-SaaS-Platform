@@ -229,6 +229,17 @@ memory.public.none(`
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );
+  CREATE TABLE razorpay_refunds (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id uuid NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+    razorpay_refund_id varchar(80) NOT NULL,
+    amount_minor integer NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX razorpay_refund_provider_id_unique
+    ON razorpay_refunds (razorpay_refund_id);
+  CREATE INDEX razorpay_refund_payment_idx
+    ON razorpay_refunds (payment_id);
   CREATE TABLE razorpay_webhook_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id varchar(128) NOT NULL,
@@ -4166,6 +4177,34 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
     assert.equal(partiallyRefundedPayment.status, "captured");
     assert.equal(partiallyRefundedPayment.refundedAmountMinor, 700);
+    await assertBalances(6, 4, 3);
+
+    const duplicatePartialRefundWithoutTotal = await sendWebhook(
+      "refund.processed",
+      paymentEntity(checkoutOrders[1], "pay_paid_addon_2", "captured", true),
+      "paid-addon-partial-refund-duplicate-event",
+      {
+        id: "rfnd_paid_addon_2_partial",
+        payment_id: "pay_paid_addon_2",
+        amount: 700,
+        currency: "INR",
+        status: "processed",
+      },
+    );
+    assert.equal(
+      duplicatePartialRefundWithoutTotal.response.status,
+      200,
+      JSON.stringify(duplicatePartialRefundWithoutTotal.body),
+    );
+    const [paymentAfterDuplicatePartialRefund] = await db
+      .select()
+      .from(dbModule.paymentsTable)
+      .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
+    assert.equal(
+      paymentAfterDuplicatePartialRefund.refundedAmountMinor,
+      700,
+      "a repeated provider refund must not increase the cumulative total",
+    );
     await assertBalances(6, 4, 3);
 
     const researchModule = await import("../src/lib/company-intelligence.ts");

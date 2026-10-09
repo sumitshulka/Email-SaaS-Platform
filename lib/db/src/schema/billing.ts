@@ -178,6 +178,27 @@ export const paymentsTable = pgTable(
   ],
 );
 
+export const razorpayRefundsTable = pgTable(
+  "razorpay_refunds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => paymentsTable.id, { onDelete: "cascade" }),
+    razorpayRefundId: varchar("razorpay_refund_id", { length: 80 }).notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("razorpay_refund_provider_id_unique").on(
+      table.razorpayRefundId,
+    ),
+    index("razorpay_refund_payment_idx").on(table.paymentId),
+  ],
+);
+
 export const addOnEntitlementsTable = pgTable(
   "add_on_entitlements",
   {
