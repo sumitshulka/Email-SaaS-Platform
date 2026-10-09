@@ -166,14 +166,21 @@ export async function getSubscriptionAddOnsDashboard(
   const entitlementRows = await db
     .select({
       paymentId: addOnEntitlementsTable.paymentId,
+      packageName: subscriptionPackagesTable.name,
       researchAllowance: addOnEntitlementsTable.researchAllowance,
       researchUsed: addOnEntitlementsTable.researchUsed,
       aiEmailAssistAllowance: addOnEntitlementsTable.aiEmailAssistAllowance,
       additionalMailboxCount: addOnEntitlementsTable.additionalMailboxCount,
       paymentAmountMinor: paymentsTable.amountMinor,
       refundedAmountMinor: paymentsTable.refundedAmountMinor,
+      paymentCurrency: paymentsTable.currency,
+      purchasedAt: paymentsTable.createdAt,
     })
     .from(addOnEntitlementsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(addOnEntitlementsTable.packageId, subscriptionPackagesTable.id),
+    )
     .leftJoin(
       paymentsTable,
       eq(addOnEntitlementsTable.paymentId, paymentsTable.id),
@@ -181,6 +188,10 @@ export async function getSubscriptionAddOnsDashboard(
     .where(
       and(
         eq(addOnEntitlementsTable.userId, userId),
+        or(
+          isNull(addOnEntitlementsTable.paymentId),
+          eq(paymentsTable.userId, userId),
+        ),
         paidEntitlementCondition,
       ),
     );
@@ -218,6 +229,39 @@ export async function getSubscriptionAddOnsDashboard(
       ),
     0,
   );
+  const refundAdjustments = entitlementRows.flatMap((row) => {
+    if (
+      row.paymentId === null ||
+      row.paymentAmountMinor === null ||
+      row.refundedAmountMinor === null ||
+      row.refundedAmountMinor <= 0 ||
+      row.paymentCurrency === null ||
+      row.purchasedAt === null
+    ) {
+      return [];
+    }
+    return [{
+      packageName: row.packageName,
+      purchasedAt: row.purchasedAt.toISOString(),
+      refundedAmountMinor: row.refundedAmountMinor,
+      currency: row.paymentCurrency,
+      researchCredits: prorateAddOnAllowance(
+        row.researchAllowance,
+        row.paymentAmountMinor,
+        row.refundedAmountMinor,
+      ),
+      emailAssistDrafts: prorateAddOnAllowance(
+        row.aiEmailAssistAllowance,
+        row.paymentAmountMinor,
+        row.refundedAmountMinor,
+      ),
+      additionalMailboxSlots: prorateAddOnAllowance(
+        row.additionalMailboxCount,
+        row.paymentAmountMinor,
+        row.refundedAmountMinor,
+      ),
+    }];
+  });
 
   await releaseStaleAiEmailAssistReservations(now, userId);
 
@@ -298,6 +342,7 @@ export async function getSubscriptionAddOnsDashboard(
         active: eligible,
       },
     },
+    refundAdjustments,
     packages: packages.map(serializePackage),
     claimedFreePackageIds,
   };

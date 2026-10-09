@@ -4040,6 +4040,24 @@ export interface SubscriptionAddOnBalances {
   mailboxes: SubscriptionAddOnMailboxMetric;
 }
 
+export interface SubscriptionAddOnRefundAdjustment {
+  packageName: string;
+  purchasedAt: string;
+  /** @minimum 1 */
+  refundedAmountMinor: number;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     */
+  currency: string;
+  /** @minimum 0 */
+  researchCredits: number;
+  /** @minimum 0 */
+  emailAssistDrafts: number;
+  /** @minimum 0 */
+  additionalMailboxSlots: number;
+}
+
 /**
  * @nullable
  */
@@ -4057,6 +4075,7 @@ export interface SubscriptionAddOnsDashboard {
   /** @nullable */
   primaryEndsAt: string | null;
   balances: SubscriptionAddOnBalances;
+  refundAdjustments: SubscriptionAddOnRefundAdjustment[];
   packages: SubscriptionPackage[];
   claimedFreePackageIds: string[];
 }

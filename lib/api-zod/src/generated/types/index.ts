@@ -270,6 +270,7 @@ export * from './smtpSendingLimits';
 export * from './subscriptionAddOnBalances';
 export * from './subscriptionAddOnMailboxMetric';
 export * from './subscriptionAddOnMetric';
+export * from './subscriptionAddOnRefundAdjustment';
 export * from './subscriptionAddOnsDashboard';
 export * from './subscriptionAddOnsDashboardEligibilityReason';
 export * from './subscriptionGiftInput';

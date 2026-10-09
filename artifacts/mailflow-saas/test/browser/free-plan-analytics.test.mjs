@@ -188,6 +188,7 @@ async function installFixtures(context, {
   senderAccounts: initialSenderAccounts = [],
   senderAccountLimit = 1,
   analyticsThrows = false,
+  addOnRefundAdjustments = [],
   deleteSenderAccountStatus = 204,
   createSenderAccountStatus = 201,
   setPrimarySenderAccountStatus = 200,
@@ -339,6 +340,7 @@ async function installFixtures(context, {
             emailAssist: { total: 0, used: 0, remaining: 0 },
             mailboxes: { baseLimit: 0, additionalSlots: 0, totalLimit: 0, used: 0, remaining: 0, active: false },
           },
+          refundAdjustments: addOnRefundAdjustments,
           packages: [],
           claimedFreePackageIds: [],
         },
@@ -514,6 +516,30 @@ describe('subscription activation analytics', { concurrency: false }, () => {
   after(async () => {
     await browser?.close();
     await stopWebServer();
+  });
+
+  it('explains the refunded amount and prorated allowances for an add-on purchase', async () => {
+    const { context, page } = await openPlansPage({
+      addOnRefundAdjustments: [{
+        packageName: 'Research and Assist Pack',
+        purchasedAt: '2026-10-01T00:00:00.000Z',
+        refundedAmountMinor: 700,
+        currency: 'INR',
+        researchCredits: 2,
+        emailAssistDrafts: 1,
+        additionalMailboxSlots: 1,
+      }],
+    });
+    try {
+      const adjustments = page.getByTestId('addon-refund-adjustments');
+      await adjustments.waitFor();
+      const text = await adjustments.innerText();
+      assert.match(text, /Research and Assist Pack/);
+      assert.match(text, /Refunded .*7/);
+      assert.match(text, /2 research credits, 1 AI Email Assist draft, 1 additional mailbox slot/);
+    } finally {
+      await context.close();
+    }
   });
 
   it('tracks only after successful activation and sends no user or package details', async () => {

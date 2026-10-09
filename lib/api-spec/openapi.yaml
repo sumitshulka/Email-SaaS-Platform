@@ -5638,6 +5638,17 @@ components:
         emailAssist: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
         mailboxes: { $ref: "#/components/schemas/SubscriptionAddOnMailboxMetric" }
       required: [research, emailAssist, mailboxes]
+    SubscriptionAddOnRefundAdjustment:
+      type: object
+      properties:
+        packageName: { type: string }
+        purchasedAt: { type: string, format: date-time }
+        refundedAmountMinor: { type: integer, minimum: 1 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        researchCredits: { type: integer, minimum: 0 }
+        emailAssistDrafts: { type: integer, minimum: 0 }
+        additionalMailboxSlots: { type: integer, minimum: 0 }
+      required: [packageName, purchasedAt, refundedAmountMinor, currency, researchCredits, emailAssistDrafts, additionalMailboxSlots]
     SubscriptionAddOnsDashboard:
       type: object
       properties:
@@ -5645,13 +5656,16 @@ components:
         eligibilityReason: { type: ["string", "null"], enum: [paid_primary_required, null] }
         primaryEndsAt: { type: ["string", "null"], format: date-time }
         balances: { $ref: "#/components/schemas/SubscriptionAddOnBalances" }
+        refundAdjustments:
+          type: array
+          items: { $ref: "#/components/schemas/SubscriptionAddOnRefundAdjustment" }
         packages:
           type: array
           items: { $ref: "#/components/schemas/SubscriptionPackage" }
         claimedFreePackageIds:
           type: array
           items: { type: string, format: uuid }
-      required: [eligible, eligibilityReason, primaryEndsAt, balances, packages, claimedFreePackageIds]
+      required: [eligible, eligibilityReason, primaryEndsAt, balances, refundAdjustments, packages, claimedFreePackageIds]
     ActivateFreeAddOnInput:
       type: object
       properties:

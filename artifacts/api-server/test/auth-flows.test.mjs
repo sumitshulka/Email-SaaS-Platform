@@ -4112,6 +4112,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
           active: true,
         },
       );
+      return dashboard.body;
     };
 
     await assertBalances(0, 0, 0);
@@ -4177,7 +4178,84 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       .where(eq(dbModule.paymentsTable.id, checkoutOrders[1].paymentId));
     assert.equal(partiallyRefundedPayment.status, "captured");
     assert.equal(partiallyRefundedPayment.refundedAmountMinor, 700);
-    await assertBalances(6, 4, 3);
+    const partialRefundDashboard = await assertBalances(6, 4, 3);
+    assert.equal(partialRefundDashboard.refundAdjustments.length, 1);
+    assert.deepEqual(
+      {
+        packageName: partialRefundDashboard.refundAdjustments[0].packageName,
+        refundedAmountMinor: partialRefundDashboard.refundAdjustments[0].refundedAmountMinor,
+        currency: partialRefundDashboard.refundAdjustments[0].currency,
+        researchCredits: partialRefundDashboard.refundAdjustments[0].researchCredits,
+        emailAssistDrafts: partialRefundDashboard.refundAdjustments[0].emailAssistDrafts,
+        additionalMailboxSlots: partialRefundDashboard.refundAdjustments[0].additionalMailboxSlots,
+      },
+      {
+        packageName: "Paid add-on webhook pack",
+        refundedAmountMinor: 700,
+        currency: "INR",
+        researchCredits: 2,
+        emailAssistDrafts: 1,
+        additionalMailboxSlots: 1,
+      },
+    );
+    assert.ok(Number.isFinite(Date.parse(partialRefundDashboard.refundAdjustments[0].purchasedAt)));
+
+    const otherCustomer = await loggedInUser({
+      username: "paid-addon-refund-other-customer",
+    });
+    const [otherAddon] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        packageType: "addon",
+        name: "Other account add-on",
+        description: "A separate account's refunded package",
+        amountMinor: 600,
+        currency: "USD",
+        periodDays: 0,
+        contactLimit: 0,
+        emailAccountLimit: 0,
+        researchAllowance: 9,
+        aiEmailAssistAllowance: 6,
+        additionalMailboxCount: 3,
+        preferred: false,
+        active: true,
+      })
+      .returning();
+    const [otherPayment] = await db
+      .insert(dbModule.paymentsTable)
+      .values({
+        userId: otherCustomer.user.id,
+        packageId: otherAddon.id,
+        receipt: "other-account-refund-receipt",
+        amountMinor: 600,
+        refundedAmountMinor: 100,
+        currency: "USD",
+        status: "captured",
+      })
+      .returning();
+    await db.insert(dbModule.addOnEntitlementsTable).values({
+      userId: otherCustomer.user.id,
+      packageId: otherAddon.id,
+      paymentId: otherPayment.id,
+      researchAllowance: 9,
+      aiEmailAssistAllowance: 6,
+      additionalMailboxCount: 3,
+    });
+    const ownRefunds = await api("/subscriptions/add-ons", {
+      cookie: customer.cookie,
+    });
+    assert.deepEqual(
+      ownRefunds.body.refundAdjustments.map((refund) => refund.packageName),
+      ["Paid add-on webhook pack"],
+      "the account should not receive another customer's refund details",
+    );
+    const otherAccountRefunds = await api("/subscriptions/add-ons", {
+      cookie: otherCustomer.cookie,
+    });
+    assert.deepEqual(
+      otherAccountRefunds.body.refundAdjustments.map((refund) => refund.packageName),
+      ["Other account add-on"],
+    );
 
     const duplicatePartialRefundWithoutTotal = await sendWebhook(
       "refund.processed",
@@ -4306,7 +4384,26 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       200,
       JSON.stringify(additionalPartialRefund.body),
     );
-    await assertBalances(5, 3, 2, 6, 4, 4);
+    const cumulativeRefundDashboard = await assertBalances(5, 3, 2, 6, 4, 4);
+    assert.deepEqual(
+      {
+        refundedAmountMinor:
+          cumulativeRefundDashboard.refundAdjustments[0].refundedAmountMinor,
+        researchCredits:
+          cumulativeRefundDashboard.refundAdjustments[0].researchCredits,
+        emailAssistDrafts:
+          cumulativeRefundDashboard.refundAdjustments[0].emailAssistDrafts,
+        additionalMailboxSlots:
+          cumulativeRefundDashboard.refundAdjustments[0].additionalMailboxSlots,
+      },
+      {
+        refundedAmountMinor: 1100,
+        researchCredits: 1,
+        emailAssistDrafts: 0,
+        additionalMailboxSlots: 0,
+      },
+      "the refund summary should use the cumulative refund and server prorating",
+    );
     const senderLimitAfterAdditionalRefund = await api("/sending/accounts", {
       cookie: customer.cookie,
     });

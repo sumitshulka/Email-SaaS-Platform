@@ -723,6 +723,22 @@ export default function PlansPage() {
           <p className="mt-2 text-[9px] leading-4 text-[#778596]">Current usable limit: {addOnDashboard?.balances.mailboxes.totalLimit ?? 0} total ({addOnDashboard?.balances.mailboxes.baseLimit ?? 0} base + add-on slots). {addOnDashboard?.balances.mailboxes.active ? 'Add-on slots are active.' : 'Add-on slots are paused until a paid primary plan is active.'}</p>
         </article>
       </div>
+      {(addOnDashboard?.refundAdjustments.length ?? 0) > 0 && <div data-testid="addon-refund-adjustments" className="mt-4 rounded-md border border-[#e5d9c8] bg-[#fffaf3] p-4">
+        <h3 className="text-[12px] font-semibold text-[#4a4034]">Partial refund adjustments</h3>
+        <p className="mt-1 text-[10px] leading-4 text-[#786b5b]">Refunds reduce each purchase’s add-on allowances proportionally. The amounts below are the allowances retained for each refunded purchase; the balances above show your account totals.</p>
+        <ul className="mt-3 space-y-3">
+          {addOnDashboard?.refundAdjustments.map((refund, index) => <li key={`${refund.packageName}-${refund.purchasedAt}-${index}`} data-testid={`addon-refund-adjustment-${index}`} className="rounded border border-[#eee3d4] bg-white px-3 py-2.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <strong className="text-[11px] text-[#34465a]">{refund.packageName}</strong>
+              <span className="text-[10px] font-semibold text-[#785b37]">Refunded {formatMinor(refund.refundedAmountMinor, refund.currency)}</span>
+            </div>
+            <p className="mt-1 text-[9px] text-[#788796]">Purchased {new Date(refund.purchasedAt).toLocaleDateString()}</p>
+            <p className="mt-1.5 text-[10px] leading-4 text-[#5e6c79]">
+              Allowances after refund: {refund.researchCredits} research credit{refund.researchCredits === 1 ? '' : 's'}, {refund.emailAssistDrafts} AI Email Assist draft{refund.emailAssistDrafts === 1 ? '' : 's'}, {refund.additionalMailboxSlots} additional mailbox slot{refund.additionalMailboxSlots === 1 ? '' : 's'}.
+            </p>
+          </li>)}
+        </ul>
+      </div>}
     </section>
 
     <section data-testid="subscription-add-on-catalog">

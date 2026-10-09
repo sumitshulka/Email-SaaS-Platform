@@ -233,6 +233,7 @@ async function installApiFixtures(context) {
               active: true,
             },
           },
+          refundAdjustments: [],
           packages: [],
           claimedFreePackageIds: [],
         },

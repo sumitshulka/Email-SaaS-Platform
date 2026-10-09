@@ -258,6 +258,7 @@ async function installFixtures(context, {
             emailAssist: { total: 0, used: 0, remaining: 0 },
             mailboxes: { baseLimit: 1, additionalSlots: 0, totalLimit: 1, used: 0, remaining: 1, active: Boolean(subscription?.status === 'active' && subscription.package?.amountMinor > 0) },
           },
+          refundAdjustments: [],
           packages: [],
           claimedFreePackageIds: [],
         },

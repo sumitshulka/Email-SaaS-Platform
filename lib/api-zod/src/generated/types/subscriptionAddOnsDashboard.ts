@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SubscriptionAddOnBalances } from './subscriptionAddOnBalances';
+import type { SubscriptionAddOnRefundAdjustment } from './subscriptionAddOnRefundAdjustment';
 import type { SubscriptionAddOnsDashboardEligibilityReason } from './subscriptionAddOnsDashboardEligibilityReason';
 import type { SubscriptionPackage } from './subscriptionPackage';
 
@@ -16,6 +17,7 @@ export interface SubscriptionAddOnsDashboard {
   /** @nullable */
   primaryEndsAt: Date | null;
   balances: SubscriptionAddOnBalances;
+  refundAdjustments: SubscriptionAddOnRefundAdjustment[];
   packages: SubscriptionPackage[];
   claimedFreePackageIds: string[];
 }
