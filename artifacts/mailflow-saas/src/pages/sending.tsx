@@ -134,6 +134,14 @@ const blankSettings = {
   host: '', port: '587', encryption: 'tls' as TenantSendingSettingsInput['encryption'],
   username: '', password: '', fromName: '', fromEmail: '', replyTo: '',
 };
+const smtpProviderPresets: Partial<Record<
+  TenantSendingSettingsInput['provider'],
+  { host: string; port: string; encryption: TenantSendingSettingsInput['encryption'] }
+>> = {
+  google_workspace: { host: 'smtp.gmail.com', port: '587', encryption: 'tls' },
+  gmail: { host: 'smtp.gmail.com', port: '587', encryption: 'tls' },
+  microsoft_365: { host: 'smtp.office365.com', port: '587', encryption: 'tls' },
+};
 
 export function SendingSettingsPage() {
   const query = useListTenantSendingAccounts();
@@ -222,6 +230,16 @@ export function SendingSettingsPage() {
     });
   };
   const change = (key: keyof typeof form, value: string) => setForm(current => ({ ...current, [key]: value }));
+  const changeProvider = (provider: TenantSendingSettingsInput['provider']) => {
+    const preset = smtpProviderPresets[provider];
+    setForm(current => ({
+      ...current,
+      provider,
+      host: preset?.host ?? '',
+      port: preset?.port ?? '587',
+      encryption: preset?.encryption ?? 'tls',
+    }));
+  };
   const refreshSenderAccounts = () => {
     void qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
     void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
@@ -432,7 +450,7 @@ export function SendingSettingsPage() {
           <form onSubmit={save} className={`${panelClass} p-5 sm:p-6`}>
             <div className="mb-5 flex items-start justify-between gap-3 border-b border-[#edf0f2] pb-4"><div><h2 className="display text-[18px] font-bold text-[#1b293a]">SMTP connection</h2><p className="mt-1 text-[12px] text-[#788392]">These settings are scoped to your tenant, never shared across workspaces.</p></div><span className="mono rounded bg-[#f4f6f8] px-2 py-1 text-[9px] tracking-wide text-[#788392]">TENANT ONLY</span></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <label><span className={labelClass}>Provider</span><select data-testid="select-sender-provider" className={inputClass} value={form.provider} onChange={e => change('provider', e.target.value)}><option value="google_workspace">Google Workspace</option><option value="gmail">Gmail</option><option value="microsoft_365">Microsoft 365</option><option value="other">Other SMTP</option></select></label>
+              <label><span className={labelClass}>Provider</span><select data-testid="select-sender-provider" className={inputClass} value={form.provider} onChange={e => changeProvider(e.target.value as TenantSendingSettingsInput['provider'])}><option value="google_workspace">Google Workspace</option><option value="gmail">Gmail</option><option value="microsoft_365">Microsoft 365</option><option value="other">Other SMTP</option></select><span className="mt-1.5 block text-[10px] leading-4 text-[#778291]">{form.provider === 'other' ? 'Enter the SMTP details supplied by your email provider.' : 'Common SMTP host, port, and encryption are filled in; adjust them if your provider requires different settings.'}</span></label>
               <Field label="SMTP host" value={form.host} onChange={v => change('host', v)} placeholder="smtp.example.com" required testId="input-smtp-host"/>
               <Field label="Port" value={form.port} onChange={v => change('port', v)} type="number" required testId="input-smtp-port"/>
               <label><span className={labelClass}>Encryption</span><select data-testid="select-smtp-encryption" className={inputClass} value={form.encryption} onChange={e => change('encryption', e.target.value)}><option value="tls">STARTTLS / TLS</option><option value="ssl">SSL</option><option value="none">None</option></select></label>

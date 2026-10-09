@@ -219,6 +219,37 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
     }
   });
 
+  it('prefills common SMTP settings when a sender provider is selected', async () => {
+    const { context, page } = await openEmailSetupPage();
+    try {
+      await page.getByTestId('tab-email-setup').click();
+      const provider = page.getByTestId('select-sender-provider');
+      const host = page.getByTestId('input-smtp-host');
+      const port = page.getByTestId('input-smtp-port');
+      const encryption = page.getByTestId('select-smtp-encryption');
+
+      await provider.selectOption('microsoft_365');
+      assert.deepEqual(
+        [await host.inputValue(), await port.inputValue(), await encryption.inputValue()],
+        ['smtp.office365.com', '587', 'tls'],
+      );
+
+      await provider.selectOption('google_workspace');
+      assert.deepEqual(
+        [await host.inputValue(), await port.inputValue(), await encryption.inputValue()],
+        ['smtp.gmail.com', '587', 'tls'],
+      );
+
+      await provider.selectOption('gmail');
+      assert.equal(await host.inputValue(), 'smtp.gmail.com');
+
+      await provider.selectOption('other');
+      assert.equal(await host.inputValue(), '');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('clears the masked secret after a rejected attempt and gives safe, actionable guidance', async () => {
     const { context, page } = await openEmailSetupPage();
     try {
