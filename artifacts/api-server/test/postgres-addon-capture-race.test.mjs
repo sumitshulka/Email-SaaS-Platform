@@ -8,7 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 const databaseUrl = process.env.ADDON_CAPTURE_RACE_TEST_DATABASE_URL;
 
 test(
-  "simultaneous Razorpay callbacks preserve paid add-on entitlements in PostgreSQL",
+  "Razorpay callbacks preserve add-on entitlements and reject changed event payloads in PostgreSQL",
   {
     skip: databaseUrl
       ? false
@@ -87,6 +87,7 @@ test(
     let primaryPackageId;
     let addonPackageId;
     let paymentId;
+    let reusedEventPaymentId;
     let acknowledgementRetryPaymentId;
     let primaryAcknowledgementRetryPaymentId;
     let originalConfiguration;
@@ -325,6 +326,103 @@ test(
           mailboxes: entitlements[0].additionalMailboxCount,
         },
         allowances,
+      );
+
+      const reusedEventOrderId = `order_reused_event_${testId}`;
+      const reusedEventProviderPaymentId = `pay_reused_event_${testId}`;
+      const [reusedEventPayment] = await db
+        .insert(paymentsTable)
+        .values({
+          userId,
+          packageId: addonPackageId,
+          receipt: `re_${testId.replaceAll("-", "")}`,
+          amountMinor,
+          currency: "INR",
+          packageSnapshot:
+            billingModule.createPackageCheckoutSnapshot(addonPackage),
+          status: "created",
+          razorpayEnvironment: "sandbox",
+          razorpayOrderId: reusedEventOrderId,
+        })
+        .returning({ id: paymentsTable.id });
+      reusedEventPaymentId = reusedEventPayment.id;
+
+      const changedPayloadBody = JSON.stringify({
+        event: "payment.captured",
+        payload: {
+          payment: {
+            entity: {
+              id: reusedEventProviderPaymentId,
+              order_id: reusedEventOrderId,
+              amount: amountMinor,
+              currency: "INR",
+              status: "captured",
+              captured: true,
+            },
+          },
+        },
+      });
+      const reusedEventId = captureEventIds[0];
+      const [originalEventBeforeReuse] = await db
+        .select()
+        .from(razorpayWebhookEventsTable)
+        .where(eq(razorpayWebhookEventsTable.eventId, reusedEventId))
+        .limit(1);
+      assert.ok(originalEventBeforeReuse);
+      const changedPayloadResponse = await sendWebhook(
+        changedPayloadBody,
+        reusedEventId,
+      );
+      const changedPayloadResponseBody = await changedPayloadResponse.json();
+      assert.equal(
+        changedPayloadResponse.status,
+        400,
+        JSON.stringify(changedPayloadResponseBody),
+      );
+      assert.equal(
+        changedPayloadResponseBody.code,
+        "WEBHOOK_EVENT_MISMATCH",
+      );
+
+      const [originalEventAfterReuse] = await db
+        .select()
+        .from(razorpayWebhookEventsTable)
+        .where(eq(razorpayWebhookEventsTable.eventId, reusedEventId))
+        .limit(1);
+      assert.deepEqual(
+        originalEventAfterReuse,
+        originalEventBeforeReuse,
+        "a changed payload must not replace or update the original event",
+      );
+      const [originalPaymentAfterReuse] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId))
+        .limit(1);
+      assert.deepEqual(
+        originalPaymentAfterReuse,
+        savedPayment,
+        "rejecting a changed event payload must leave the original payment unchanged",
+      );
+      const [reusedEventPaymentAfterRequest] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, reusedEventPaymentId))
+        .limit(1);
+      assert.equal(
+        reusedEventPaymentAfterRequest.status,
+        "created",
+        "the changed payload must not activate the different payment",
+      );
+      assert.equal(reusedEventPaymentAfterRequest.razorpayPaymentId, null);
+      const reusedEventEntitlements = await db
+        .select({ id: addOnEntitlementsTable.id })
+        .from(addOnEntitlementsTable)
+        .where(eq(addOnEntitlementsTable.paymentId, reusedEventPaymentId));
+      assert.equal(
+        reusedEventEntitlements.length,
+        0,
+        "the changed payload must not create entitlements for the different payment",
       );
 
       const processedEvents = await db
@@ -947,6 +1045,11 @@ test(
           .where(eq(userSubscriptionsTable.userId, userId));
         if (paymentId) {
           await db.delete(paymentsTable).where(eq(paymentsTable.id, paymentId));
+        }
+        if (reusedEventPaymentId) {
+          await db
+            .delete(paymentsTable)
+            .where(eq(paymentsTable.id, reusedEventPaymentId));
         }
         if (acknowledgementRetryPaymentId) {
           await db
