@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
@@ -56,7 +56,12 @@ test(
       `addon-refund-race-${testId}-first`,
       `addon-refund-race-${testId}-second`,
     ];
-    const eventIds = [...captureEventIds, ...refundEventIds];
+    const acknowledgementRetryEventId = `addon-capture-ack-retry-${testId}`;
+    const eventIds = [
+      ...captureEventIds,
+      ...refundEventIds,
+      acknowledgementRetryEventId,
+    ];
     const amountMinor = 1500;
     const allowances = {
       research: 11,
@@ -67,10 +72,11 @@ test(
     let primaryPackageId;
     let addonPackageId;
     let paymentId;
+    let acknowledgementRetryPaymentId;
     let originalConfiguration;
     let server;
     let lockClient;
-    let paymentLockHeld = false;
+    let transactionLockHeld = false;
     let callbackPromises = [];
 
     try {
@@ -200,24 +206,25 @@ test(
           },
         },
       });
-      const sendCapture = (eventId) =>
+      const sendWebhook = (body, eventId) =>
         fetch(webhookUrl, {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-razorpay-event-id": eventId,
             "x-razorpay-signature": createHmac("sha256", webhookSecret)
-              .update(webhookBody)
+              .update(body)
               .digest("hex"),
           },
-          body: webhookBody,
+          body,
         });
+      const sendCapture = (eventId) => sendWebhook(webhookBody, eventId);
 
       // Hold the payment row while two distinct signed webhook events reach
       // the production capture activation transaction.
       lockClient = await pool.connect();
       await lockClient.query("BEGIN");
-      paymentLockHeld = true;
+      transactionLockHeld = true;
       const { rows: lockedPayments } = await lockClient.query(
         "SELECT id FROM payments WHERE id = $1 FOR UPDATE",
         [paymentId],
@@ -267,7 +274,7 @@ test(
         "neither callback may finish while the payment row is locked",
       );
       await lockClient.query("COMMIT");
-      paymentLockHeld = false;
+      transactionLockHeld = false;
       const responses = await Promise.all(callbackPromises);
       const responseBodies = await Promise.all(
         responses.map((response) => response.json()),
@@ -378,7 +385,7 @@ test(
       // so both callbacks must add their distinct refund amounts to the latest
       // value read after acquiring the payment row lock.
       await lockClient.query("BEGIN");
-      paymentLockHeld = true;
+      transactionLockHeld = true;
       const { rows: refundLockedPayments } = await lockClient.query(
         "SELECT id FROM payments WHERE id = $1 FOR UPDATE",
         [paymentId],
@@ -426,7 +433,7 @@ test(
       );
 
       await lockClient.query("COMMIT");
-      paymentLockHeld = false;
+      transactionLockHeld = false;
       const refundResponses = await Promise.all(callbackPromises);
       const refundResponseBodies = await Promise.all(
         refundResponses.map((response) => response.json()),
@@ -476,11 +483,196 @@ test(
         .where(inArray(razorpayWebhookEventsTable.eventId, refundEventIds));
       assert.equal(processedRefundEvents.length, 2);
       assert.ok(processedRefundEvents.every((event) => event.processedAt));
+
+      const acknowledgementRetryOrderId = `order_addon_ack_${testId}`;
+      const acknowledgementRetryProviderPaymentId = `pay_addon_ack_${testId}`;
+      const [acknowledgementRetryPayment] = await db
+        .insert(paymentsTable)
+        .values({
+          userId,
+          packageId: addonPackageId,
+          receipt: `aa_${testId.replaceAll("-", "")}`,
+          amountMinor,
+          currency: "INR",
+          status: "created",
+          razorpayEnvironment: "sandbox",
+          razorpayOrderId: acknowledgementRetryOrderId,
+        })
+        .returning({ id: paymentsTable.id });
+      acknowledgementRetryPaymentId = acknowledgementRetryPayment.id;
+
+      const acknowledgementRetryBody = JSON.stringify({
+        event: "payment.captured",
+        payload: {
+          payment: {
+            entity: {
+              id: acknowledgementRetryProviderPaymentId,
+              order_id: acknowledgementRetryOrderId,
+              amount: amountMinor,
+              currency: "INR",
+              status: "captured",
+              captured: true,
+            },
+          },
+        },
+      });
+      const [pendingAcknowledgementEvent] = await db
+        .insert(razorpayWebhookEventsTable)
+        .values({
+          eventId: acknowledgementRetryEventId,
+          eventType: "payment.captured",
+          razorpayOrderId: acknowledgementRetryOrderId,
+          razorpayPaymentId: acknowledgementRetryProviderPaymentId,
+          bodySha256: createHash("sha256")
+            .update(acknowledgementRetryBody)
+            .digest("hex"),
+        })
+        .returning({ id: razorpayWebhookEventsTable.id });
+      assert.ok(pendingAcknowledgementEvent);
+
+      // Lock only the pending event row. The first delivery can commit its
+      // payment and entitlement, but its acknowledgement update must wait.
+      await lockClient.query("BEGIN");
+      transactionLockHeld = true;
+      const { rows: lockedAcknowledgementEvents } = await lockClient.query(
+        "SELECT id FROM razorpay_webhook_events WHERE event_id = $1 FOR UPDATE",
+        [acknowledgementRetryEventId],
+      );
+      assert.equal(lockedAcknowledgementEvents.length, 1);
+      const { rows: lockOwnerRows } = await lockClient.query(
+        "SELECT pg_backend_pid() AS pid",
+      );
+      const lockOwnerPid = lockOwnerRows[0].pid;
+      const firstRetryResponsePromise = sendWebhook(
+        acknowledgementRetryBody,
+        acknowledgementRetryEventId,
+      );
+      callbackPromises = [firstRetryResponsePromise];
+
+      const acknowledgementDeadline = Date.now() + 10_000;
+      let blockedAcknowledgementPid;
+      while (Date.now() < acknowledgementDeadline) {
+        const [capturedRetryPayment] = await db
+          .select({ status: paymentsTable.status })
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, acknowledgementRetryPaymentId))
+          .limit(1);
+        const retryEntitlements = await db
+          .select({ id: addOnEntitlementsTable.id })
+          .from(addOnEntitlementsTable)
+          .where(
+            eq(addOnEntitlementsTable.paymentId, acknowledgementRetryPaymentId),
+          );
+        const { rows: blockedAcknowledgements } = await lockClient.query(
+          `SELECT pid
+           FROM pg_stat_activity
+           WHERE pid <> pg_backend_pid()
+             AND state = 'active'
+             AND wait_event_type = 'Lock'
+             AND query ILIKE '%UPDATE%razorpay_webhook_events%'
+             AND $1::int = ANY(pg_blocking_pids(pid))`,
+          [lockOwnerPid],
+        );
+        if (
+          capturedRetryPayment?.status === "captured" &&
+          retryEntitlements.length === 1 &&
+          blockedAcknowledgements.length === 1
+        ) {
+          blockedAcknowledgementPid = blockedAcknowledgements[0].pid;
+          break;
+        }
+        await delay(10);
+      }
+      assert.ok(
+        blockedAcknowledgementPid,
+        "capture and entitlement must commit before the acknowledgement update blocks",
+      );
+      const { rows: cancellationResults } = await lockClient.query(
+        "SELECT pg_cancel_backend($1) AS cancelled",
+        [blockedAcknowledgementPid],
+      );
+      assert.equal(
+        cancellationResults[0].cancelled,
+        true,
+        "PostgreSQL must cancel the blocked acknowledgement update",
+      );
+
+      const failedAcknowledgementResponse = await firstRetryResponsePromise;
+      assert.equal(failedAcknowledgementResponse.status, 500);
+      const [stillPendingEvent] = await db
+        .select({ processedAt: razorpayWebhookEventsTable.processedAt })
+        .from(razorpayWebhookEventsTable)
+        .where(
+          eq(razorpayWebhookEventsTable.eventId, acknowledgementRetryEventId),
+        );
+      assert.equal(
+        stillPendingEvent.processedAt,
+        null,
+        "failed acknowledgement must leave the webhook retryable",
+      );
+
+      await lockClient.query("ROLLBACK");
+      transactionLockHeld = false;
+      const retriedAcknowledgementResponse = await sendWebhook(
+        acknowledgementRetryBody,
+        acknowledgementRetryEventId,
+      );
+      const retriedAcknowledgementBody =
+        await retriedAcknowledgementResponse.json();
+      assert.equal(
+        retriedAcknowledgementResponse.status,
+        200,
+        JSON.stringify(retriedAcknowledgementBody),
+      );
+
+      const retryEntitlements = await db
+        .select()
+        .from(addOnEntitlementsTable)
+        .where(
+          eq(addOnEntitlementsTable.paymentId, acknowledgementRetryPaymentId),
+        );
+      assert.equal(retryEntitlements.length, 1);
+      assert.deepEqual(
+        {
+          research: retryEntitlements[0].researchAllowance,
+          emailAssist: retryEntitlements[0].aiEmailAssistAllowance,
+          mailboxes: retryEntitlements[0].additionalMailboxCount,
+        },
+        allowances,
+      );
+      const [completedAcknowledgementEvent] = await db
+        .select({ processedAt: razorpayWebhookEventsTable.processedAt })
+        .from(razorpayWebhookEventsTable)
+        .where(
+          eq(razorpayWebhookEventsTable.eventId, acknowledgementRetryEventId),
+        );
+      assert.ok(completedAcknowledgementEvent.processedAt);
+
+      const retryDashboard =
+        await entitlementModule.getSubscriptionAddOnsDashboard(userId);
+      assert.deepEqual(retryDashboard.balances.research, {
+        total: 16,
+        used: 0,
+        remaining: 16,
+      });
+      assert.deepEqual(retryDashboard.balances.emailAssist, {
+        total: 10,
+        used: 0,
+        remaining: 10,
+      });
+      assert.deepEqual(retryDashboard.balances.mailboxes, {
+        baseLimit: 1,
+        additionalSlots: 4,
+        totalLimit: 5,
+        used: 0,
+        remaining: 5,
+        active: true,
+      });
     } finally {
       if (lockClient) {
-        if (paymentLockHeld) {
+        if (transactionLockHeld) {
           await lockClient.query("ROLLBACK").catch(() => {});
-          paymentLockHeld = false;
+          transactionLockHeld = false;
         }
         lockClient.release();
       }
@@ -503,6 +695,11 @@ test(
           .where(eq(userSubscriptionsTable.userId, userId));
         if (paymentId) {
           await db.delete(paymentsTable).where(eq(paymentsTable.id, paymentId));
+        }
+        if (acknowledgementRetryPaymentId) {
+          await db
+            .delete(paymentsTable)
+            .where(eq(paymentsTable.id, acknowledgementRetryPaymentId));
         }
         await db.delete(usersTable).where(eq(usersTable.id, userId));
       }
