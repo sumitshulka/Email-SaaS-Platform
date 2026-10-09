@@ -7244,6 +7244,7 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
       true,
     );
     await finishAiEmailAssistCredit(account.user.id, active.id, true);
+    await finishAiEmailAssistCredit(account.user.id, active.id, true);
 
     dashboard = await getSubscriptionAddOnsDashboard(account.user.id, now);
     assert.deepEqual(dashboard.balances.emailAssist, {
