@@ -432,9 +432,7 @@ export async function activateCapturedPayment(input: {
         .limit(1)
         .for("update");
       if (!source) {
-        throw new Error(
-          "The active plan changed while payment was processing. Contact the platform administrator before retrying.",
-        );
+        return markCapturedForReconciliation();
       }
 
       const [current] = await tx
@@ -456,9 +454,7 @@ export async function activateCapturedPayment(input: {
         source.endsAt.getTime() !== payment.planChangeEffectiveAt.getTime() ||
         source.endsAt <= now
       ) {
-        throw new Error(
-          "The active plan expired or changed while payment was processing. Contact the platform administrator before retrying.",
-        );
+        return markCapturedForReconciliation();
       }
 
       const endsAt = new Date(
