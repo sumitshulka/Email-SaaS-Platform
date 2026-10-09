@@ -1,7 +1,7 @@
 - [Phase 1 scope language](phase-scope.md) — don't present future sending or billing capabilities as available until backed by working flows and real data.
 - [Isolated API helper checks](api-helper-tests.md) — avoid ESM test bundles that pull in PostgreSQL internals; CommonJS worked for temporary Node checks here.
 - [pg-mem with Drizzle](pg-mem-drizzle-adapter.md) — pg-mem needs narrow SQL shims, and test DDL must preserve production nullability.
-- [PostgreSQL lock-race checks](postgres-lock-race-checks.md) — prove row locks with an explicit NOWAIT conflict and callback state, not only pg_stat_activity.
+- [PostgreSQL lock-race checks](postgres-lock-race-checks.md) — prove contention with NOWAIT and callback state; inject acknowledgement failures with a one-shot database trigger.
 - [Schema push verification](schema-push-verification.md) — inspect SQL errors and actual schema; a successful command exit can accompany a partially applied schema push.
 - [Provider report semantics](provider-report-semantics.md) — provider receipt timestamps and relay events are not final delivery; validate native exports before adding adapters.
 - [Payment capture timestamps](payment-capture-timestamps.md) — use subscription creation time for captures when available; payment-row updates can be unrelated backfills.
