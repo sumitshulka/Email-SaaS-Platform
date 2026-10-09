@@ -39,6 +39,7 @@ import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
+import { trackRegistrationSucceeded } from '@/lib/analytics';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
@@ -179,7 +180,7 @@ function RegisterPage() {
   const register = useRegister(); const [, setLocation] = useLocation();
   const passwordRequirement = usePasswordRequirement();
   const [values, setValues] = useState({ firstName: '', lastName: '', email: '', password: '' });
-  const onSubmit = (e: FormEvent) => { e.preventDefault(); register.mutate({ data: values }, { onSuccess: () => { sessionStorage.setItem('mailflow-verification-email', values.email); setLocation('/verify-email'); } }); };
+  const onSubmit = (e: FormEvent) => { e.preventDefault(); register.mutate({ data: values }, { onSuccess: () => { trackRegistrationSucceeded(); sessionStorage.setItem('mailflow-verification-email', values.email); setLocation('/verify-email'); } }); };
   return (
     <AuthFrame className="auth-branded-frame" label="Good email starts with a solid foundation.">
       <AuthTitle className="auth-form-title" overline="Create workspace access" title="Start with your account." sub="A few details are all we need to get you set up." />

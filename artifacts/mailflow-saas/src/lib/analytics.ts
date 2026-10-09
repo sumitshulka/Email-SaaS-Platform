@@ -1,11 +1,29 @@
 type AnalyticsData = Record<string, string | number | boolean>;
 
+type MarketingPage = 'home' | 'features';
+type SignupPlacement = 'header' | 'footer' | 'hero' | 'intro' | 'sender' | 'final_cta';
+type SignupAttribution = { page: MarketingPage; placement: SignupPlacement };
+
+const SIGNUP_ATTRIBUTION_KEY = 'mailflow-marketing-signup-attribution';
+
 declare global {
   interface Window {
     umami?: {
       track(name: string, data?: AnalyticsData): void;
     };
   }
+}
+
+function isSignupAttribution(value: unknown): value is SignupAttribution {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.page === 'home') {
+    return ['header', 'footer', 'hero', 'intro', 'final_cta'].includes(String(candidate.placement));
+  }
+  if (candidate.page === 'features') {
+    return ['header', 'footer', 'hero', 'sender', 'final_cta'].includes(String(candidate.placement));
+  }
+  return false;
 }
 
 export function trackEvent(name: string, data?: AnalyticsData): void {
@@ -16,6 +34,34 @@ export function trackEvent(name: string, data?: AnalyticsData): void {
   } catch {
     // Analytics must never break the app.
   }
+}
+
+export function trackMarketingSignupCta(page: MarketingPage, placement: SignupPlacement): void {
+  const attribution: SignupAttribution = { page, placement };
+  trackEvent('marketing_signup_cta_clicked', attribution);
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(SIGNUP_ATTRIBUTION_KEY, JSON.stringify(attribution));
+  } catch {
+    // Attribution storage must never block navigation.
+  }
+}
+
+export function trackRegistrationSucceeded(): void {
+  let attribution: SignupAttribution | undefined;
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.sessionStorage.getItem(SIGNUP_ATTRIBUTION_KEY);
+      window.sessionStorage.removeItem(SIGNUP_ATTRIBUTION_KEY);
+      const parsed: unknown = stored ? JSON.parse(stored) : undefined;
+      if (isSignupAttribution(parsed)) attribution = parsed;
+    } catch {
+      // Registration tracking must never affect account creation.
+    }
+  }
+
+  trackEvent('registration_succeeded', attribution);
 }
 
 export function trackPaidVerificationOutcome(outcome: 'pending' | 'failed'): void {

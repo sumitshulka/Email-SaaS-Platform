@@ -9,6 +9,7 @@ import { useListAvailableSubscriptionPackages } from '@workspace/api-client-reac
 import { MailflowBrand } from '@/components/brand';
 import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
 import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/lib/public-page-meta';
+import { trackMarketingSignupCta } from '@/lib/analytics';
 
 const homeMeta = PUBLIC_PAGE_METADATA.home;
 const pricingMeta = PUBLIC_PAGE_METADATA.pricing;
@@ -46,6 +47,7 @@ function usePageMeta(meta: PublicPageMetadata) {
 
 function Header({ active }: { active: 'home' | 'pricing' | 'features' | 'legal' }) {
   const [open, setOpen] = useState(false);
+  const marketingPage = active === 'home' || active === 'features' ? active : undefined;
   return (
     <header className="mf-header">
       <div className="mf-nav-wrap">
@@ -59,14 +61,14 @@ function Header({ active }: { active: 'home' | 'pricing' | 'features' | 'legal' 
           <Link href="/pricing" data-testid="nav-pricing" aria-current={active === 'pricing' ? 'page' : undefined} onClick={() => setOpen(false)}>Pricing</Link>
           <span className="mf-nav-spacer" />
           <Link href="/login" className="mf-login" data-testid="nav-login" onClick={() => setOpen(false)}>Log in</Link>
-          <Link href="/register" className="mf-button mf-button-small" data-testid="nav-register" onClick={() => setOpen(false)}>Get started <ArrowRight size={15}/></Link>
+          <Link href="/register" className="mf-button mf-button-small" data-testid="nav-register" onClick={() => { setOpen(false); if (marketingPage) trackMarketingSignupCta(marketingPage, 'header'); }}>Get started <ArrowRight size={15}/></Link>
         </nav>
       </div>
     </header>
   );
 }
 
-function Footer() {
+function Footer({ marketingPage }: { marketingPage?: 'home' | 'features' }) {
   return (
     <footer className="mf-footer">
       <div className="mf-footer-main">
@@ -76,7 +78,7 @@ function Footer() {
         </div>
         <div className="mf-footer-links">
           <div><span className="mf-footer-label">Explore</span><Link href="/" data-testid="footer-home">Overview</Link><Link href="/features" data-testid="footer-features">Features</Link><Link href="/pricing" data-testid="footer-pricing">Pricing</Link><Link href="/terms-and-conditions" data-testid="footer-terms">Terms and Conditions</Link><Link href="/privacy-policy" data-testid="footer-privacy">Privacy Policy</Link><Link href="/shipping-refund" data-testid="footer-shipping-refund">Shipping &amp; Refund</Link></div>
-          <div><span className="mf-footer-label">Your workspace</span><Link href="/register" data-testid="footer-register">Create an account</Link><Link href="/login" data-testid="footer-login">Log in</Link><a href="https://www.taskone.world/contact.html" data-testid="footer-contact" target="_blank" rel="noreferrer">Contact Us</a></div>
+          <div><span className="mf-footer-label">Your workspace</span><Link href="/register" data-testid="footer-register" onClick={() => { if (marketingPage) trackMarketingSignupCta(marketingPage, 'footer'); }}>Create an account</Link><Link href="/login" data-testid="footer-login">Log in</Link><a href="https://www.taskone.world/contact.html" data-testid="footer-contact" target="_blank" rel="noreferrer">Contact Us</a></div>
         </div>
       </div>
       <div className="mf-footer-bottom"><span>Mailflow</span><span>Mailflow is a product of Taskone Solutions Pvt Ltd.</span><a href="#top" data-testid="link-back-to-top">Back to top <ArrowDown size={13}/></a></div>
@@ -89,7 +91,8 @@ export function PublicMarketingLayout({ children }: { children: ReactNode }) {
 }
 
 function MetaLayout({ children, active }: { children: ReactNode; active: 'home' | 'pricing' | 'features' }) {
-  return <div className="mf-site" id="top"><Header active={active}/>{children}<Footer/><Styles/></div>;
+  const marketingPage = active === 'home' || active === 'features' ? active : undefined;
+  return <div className="mf-site" id="top"><Header active={active}/>{children}<Footer marketingPage={marketingPage}/><Styles/></div>;
 }
 
 function HeroIllustration() {
@@ -140,7 +143,7 @@ export function MarketingHomePage() {
               <SectionEyebrow>Email campaigns without the platform switch</SectionEyebrow>
               <h1>Keep your email.<br/><em>Simplify the campaign.</em></h1>
               <p className="mf-hero-lede">Mailflow is the campaign workspace for the SMTP account you control. Organize contacts and companies, prepare a message, choose a sender, then queue or schedule—without moving your sending to a separate bulk-email platform.</p>
-              <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="hero-get-started">Start with Mailflow <ArrowRight size={17}/></Link><Link href="/pricing" className="mf-text-link" data-testid="hero-view-pricing">See plans <ArrowUpRight size={16}/></Link></div>
+              <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="hero-get-started" onClick={() => trackMarketingSignupCta('home', 'hero')}>Start with Mailflow <ArrowRight size={17}/></Link><Link href="/pricing" className="mf-text-link" data-testid="hero-view-pricing">See plans <ArrowUpRight size={16}/></Link></div>
               <div className="mf-hero-footnote"><span className="mf-check-ring"><Check size={12}/></span> Your sending account stays yours <span className="mf-foot-divider"/> A clear route from list to send</div>
             </div>
             <HeroIllustration />
@@ -150,7 +153,7 @@ export function MarketingHomePage() {
 
         <section className="mf-intro mf-section-wrap" id="how-it-works">
           <div className="mf-intro-aside"><SectionEyebrow>Simple by design</SectionEyebrow><span className="mf-index">01 / THE WORKSPACE</span></div>
-          <div className="mf-intro-copy"><h2>A campaign workspace,<br/><span>not another maze.</span></h2><p>Keep contact and company context, audience selection, message preparation and campaign history together. Do the useful steps in order—without building complicated journeys just to send a considered email.</p><Link href="/register" className="mf-underlined-link" data-testid="intro-create-account">Set up your workspace <ArrowRight size={15}/></Link></div>
+          <div className="mf-intro-copy"><h2>A campaign workspace,<br/><span>not another maze.</span></h2><p>Keep contact and company context, audience selection, message preparation and campaign history together. Do the useful steps in order—without building complicated journeys just to send a considered email.</p><Link href="/register" className="mf-underlined-link" data-testid="intro-create-account" onClick={() => trackMarketingSignupCta('home', 'intro')}>Set up your workspace <ArrowRight size={15}/></Link></div>
           <div className="mf-route-graphic" aria-hidden="true"><div className="route-label">A BETTER ROUTE THROUGH EMAIL</div><div className="route-line"><i/><i/><i/><span><ArrowRight size={20}/></span></div><div className="route-steps"><span>Know your people</span><span>Shape your message</span><span>Understand the outcome</span></div></div>
         </section>
 
@@ -189,7 +192,7 @@ export function MarketingHomePage() {
           </div>
         </section>
 
-        <section className="mf-final-cta"><div className="cta-route" aria-hidden="true"><span/><span/><span/></div><div className="mf-final-inner"><SectionEyebrow>A good place to start</SectionEyebrow><h2>Keep your sender.<br/>Bring the next campaign into focus.</h2><p>Start with your audience, the email account you control and a campaign flow your team can follow.</p><Link href="/register" className="mf-button mf-button-light" data-testid="final-register">Start with Mailflow <ArrowRight size={17}/></Link><span className="cta-note">Your SMTP provider still controls delivery and its own limits.</span></div><div className="cta-side-note">MAILFLOW / 02<br/><span>THE ROUTE IS YOURS</span></div></section>
+        <section className="mf-final-cta"><div className="cta-route" aria-hidden="true"><span/><span/><span/></div><div className="mf-final-inner"><SectionEyebrow>A good place to start</SectionEyebrow><h2>Keep your sender.<br/>Bring the next campaign into focus.</h2><p>Start with your audience, the email account you control and a campaign flow your team can follow.</p><Link href="/register" className="mf-button mf-button-light" data-testid="final-register" onClick={() => trackMarketingSignupCta('home', 'final_cta')}>Start with Mailflow <ArrowRight size={17}/></Link><span className="cta-note">Your SMTP provider still controls delivery and its own limits.</span></div><div className="cta-side-note">MAILFLOW / 02<br/><span>THE ROUTE IS YOURS</span></div></section>
       </main>
     </MetaLayout>
   );
@@ -230,7 +233,7 @@ export function PublicFeaturesPage() {
             <p className="ft-hero-index">SMALL-TEAM EMAIL · YOUR SENDER, SIMPLIFIED</p>
             <h1>Your sender.<br/><em>Simpler campaigns.</em></h1>
             <p className="ft-hero-lede">Keep the email address and SMTP mailbox your team controls. Mailflow brings contacts, company context, campaign planning and honest outcome records together—without moving your sending to a separate bulk-email platform.</p>
-            <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register">Start with Mailflow <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
+            <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register" onClick={() => trackMarketingSignupCta('features', 'hero')}>Start with Mailflow <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
             <div className="ft-hero-note"><ShieldCheck size={16}/> Your configured SMTP account does the sending.</div>
           </div>
           <div className="ft-hero-art" aria-label="Mailflow campaign prep, from audience to your own sender">
@@ -281,7 +284,7 @@ export function PublicFeaturesPage() {
 
       <section className="ft-sender-section">
         <div className="mf-section-wrap ft-sender-layout">
-          <div className="ft-sender-heading"><SectionEyebrow>03 / YOUR SENDER, YOUR CALL</SectionEyebrow><h2>Keep your email<br/><em>address where it belongs.</em></h2><p>Mailflow doesn’t replace your email provider. Configure the SMTP mailbox you control, check the connection and send a test email. When your package allows multiple mailboxes, choose a different sender for each campaign.</p><Link href="/register" className="ft-underlined-cta" data-testid="features-sender-register">Set up your workspace <ArrowRight size={15}/></Link></div>
+          <div className="ft-sender-heading"><SectionEyebrow>03 / YOUR SENDER, YOUR CALL</SectionEyebrow><h2>Keep your email<br/><em>address where it belongs.</em></h2><p>Mailflow doesn’t replace your email provider. Configure the SMTP mailbox you control, check the connection and send a test email. When your package allows multiple mailboxes, choose a different sender for each campaign.</p><Link href="/register" className="ft-underlined-cta" data-testid="features-sender-register" onClick={() => trackMarketingSignupCta('features', 'sender')}>Set up your workspace <ArrowRight size={15}/></Link></div>
           <div className="ft-sender-panel">
             <div className="ft-sender-panel-head"><span><ShieldCheck size={15}/> SENDING ACCOUNT</span><span className="ft-sender-status"><i/> CONNECTION CHECKED</span></div>
             <div className="ft-sender-identity"><div className="ft-sender-avatar"><Mail size={19}/></div><span><small>SENDER IDENTITY</small><b>hello@yourstudio.example</b><em>Your name · Reply-to set by you</em></span><Check size={16}/></div>
@@ -339,7 +342,7 @@ export function PublicFeaturesPage() {
           <details><summary data-testid="feature-faq-reporting">Does an accepted SMTP response mean the email arrived? <ChevronDown size={17}/></summary><p>No. Acceptance is the sending server’s response, not confirmation that a message reached an inbox. Optional Gmail or Microsoft reporting also depends on provider and administrator configuration.</p></details>
         </div></div>
       </section>
-      <section className="ft-final-cta"><div className="ft-final-orbit" aria-hidden="true"><i/><i/><i/></div><div className="ft-final-inner"><SectionEyebrow>A CLEARER WAY TO GET READY</SectionEyebrow><h2>Keep the work close.<br/><em>Keep the sender yours.</em></h2><p>Start with your contacts, your plan and an SMTP account you control.</p><div><Link href="/register" className="mf-button mf-button-light" data-testid="features-final-register">Get started with Mailflow <ArrowRight size={16}/></Link><Link href="/pricing" className="ft-final-pricing" data-testid="features-final-pricing">See plans <ArrowUpRight size={14}/></Link></div><span className="ft-final-foot">SIMPLE CAMPAIGNS. YOUR SENDER. CLEAR BOUNDARIES.</span></div><span className="ft-final-index">MAILFLOW / FEATURES</span></section>
+      <section className="ft-final-cta"><div className="ft-final-orbit" aria-hidden="true"><i/><i/><i/></div><div className="ft-final-inner"><SectionEyebrow>A CLEARER WAY TO GET READY</SectionEyebrow><h2>Keep the work close.<br/><em>Keep the sender yours.</em></h2><p>Start with your contacts, your plan and an SMTP account you control.</p><div><Link href="/register" className="mf-button mf-button-light" data-testid="features-final-register" onClick={() => trackMarketingSignupCta('features', 'final_cta')}>Get started with Mailflow <ArrowRight size={16}/></Link><Link href="/pricing" className="ft-final-pricing" data-testid="features-final-pricing">See plans <ArrowUpRight size={14}/></Link></div><span className="ft-final-foot">SIMPLE CAMPAIGNS. YOUR SENDER. CLEAR BOUNDARIES.</span></div><span className="ft-final-index">MAILFLOW / FEATURES</span></section>
     </main>
   </MetaLayout>;
 }
