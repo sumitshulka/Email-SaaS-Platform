@@ -174,6 +174,11 @@ export interface RegisterInput {
      * @maxLength 256
      */
   password: string;
+  /**
+     * @minLength 32
+     * @maxLength 128
+     */
+  emailVerificationProof?: string;
 }
 
 export interface VerifyEmailInput {
@@ -183,6 +188,34 @@ export interface VerifyEmailInput {
      * @maxLength 6
      */
   code: string;
+}
+
+export interface PackageCheckoutEmailInput {
+  /** @maxLength 254 */
+  email: string;
+}
+
+export interface PackageCheckoutCodeInput {
+  /** @maxLength 254 */
+  email: string;
+  /**
+     * @minLength 6
+     * @maxLength 6
+     */
+  code: string;
+}
+
+export interface PackageCheckoutCodeRequestResponse {
+  message: string;
+}
+
+export interface PackageCheckoutCodeVerificationResponse {
+  accountExists: boolean;
+  /**
+     * @minLength 32
+     * @maxLength 128
+     */
+  registrationProofToken?: string;
 }
 
 export interface ForgotPasswordInput {

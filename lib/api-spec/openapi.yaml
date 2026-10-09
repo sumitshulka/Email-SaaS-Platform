@@ -133,6 +133,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /auth/package-checkout/request-code:
+    post:
+      operationId: requestPackageCheckoutCode
+      tags: [auth]
+      summary: Send a generic email verification code for package checkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PackageCheckoutEmailInput"
+      responses:
+        "200":
+          description: Generic verification instructions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageCheckoutCodeRequestResponse"
+        "429":
+          description: Package checkout verification is temporarily rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Email verification is unavailable or registration is paused for maintenance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/package-checkout/verify-code:
+    post:
+      operationId: verifyPackageCheckoutCode
+      tags: [auth]
+      summary: Verify package checkout email ownership before account lookup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PackageCheckoutCodeInput"
+      responses:
+        "200":
+          description: Verified email and account-creation decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageCheckoutCodeVerificationResponse"
+        "400":
+          description: Invalid, expired, or overused verification code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Package checkout verification is temporarily rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Registration is paused for maintenance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /auth/forgot-password:
     post:
       operationId: requestPasswordReset
@@ -3425,6 +3491,7 @@ components:
         lastName: { type: string, minLength: 1, maxLength: 80 }
         email: { type: string, format: email, maxLength: 254 }
         password: { type: string, minLength: 8, maxLength: 256 }
+        emailVerificationProof: { type: string, minLength: 32, maxLength: 128 }
       required: [firstName, lastName, email, password]
     VerifyEmailInput:
       type: object
@@ -3432,6 +3499,28 @@ components:
         email: { type: string, format: email }
         code: { type: string, minLength: 6, maxLength: 6 }
       required: [email, code]
+    PackageCheckoutEmailInput:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+      required: [email]
+    PackageCheckoutCodeInput:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        code: { type: string, minLength: 6, maxLength: 6 }
+      required: [email, code]
+    PackageCheckoutCodeRequestResponse:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
+    PackageCheckoutCodeVerificationResponse:
+      type: object
+      properties:
+        accountExists: { type: boolean }
+        registrationProofToken: { type: string, minLength: 32, maxLength: 128 }
+      required: [accountExists]
     ForgotPasswordInput:
       type: object
       properties:

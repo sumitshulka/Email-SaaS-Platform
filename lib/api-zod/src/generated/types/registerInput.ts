@@ -24,4 +24,9 @@ export interface RegisterInput {
      * @maxLength 256
      */
   password: string;
+  /**
+     * @minLength 32
+     * @maxLength 128
+     */
+  emailVerificationProof?: string;
 }

@@ -69,13 +69,17 @@ export const registerBodyEmailMax = 254;
 export const registerBodyPasswordMin = 8;
 export const registerBodyPasswordMax = 256;
 
+export const registerBodyEmailVerificationProofMin = 32;
+export const registerBodyEmailVerificationProofMax = 128;
+
 
 
 export const RegisterBody = zod.object({
   "firstName": zod.string().min(1).max(registerBodyFirstNameMax),
   "lastName": zod.string().min(1).max(registerBodyLastNameMax),
   "email": zod.string().email().max(registerBodyEmailMax),
-  "password": zod.string().min(registerBodyPasswordMin).max(registerBodyPasswordMax)
+  "password": zod.string().min(registerBodyPasswordMin).max(registerBodyPasswordMax),
+  "emailVerificationProof": zod.string().min(registerBodyEmailVerificationProofMin).max(registerBodyEmailVerificationProofMax).optional()
 })
 
 export const RegisterResponse = zod.object({
@@ -110,6 +114,48 @@ export const VerifyRegistrationEmailResponse = zod.object({
   "mustChangeCredentials": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
+})
+
+
+/**
+ * @summary Send a generic email verification code for package checkout
+ */
+export const requestPackageCheckoutCodeBodyEmailMax = 254;
+
+
+
+export const RequestPackageCheckoutCodeBody = zod.object({
+  "email": zod.string().email().max(requestPackageCheckoutCodeBodyEmailMax)
+})
+
+export const RequestPackageCheckoutCodeResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Verify package checkout email ownership before account lookup
+ */
+export const verifyPackageCheckoutCodeBodyEmailMax = 254;
+
+export const verifyPackageCheckoutCodeBodyCodeMin = 6;
+export const verifyPackageCheckoutCodeBodyCodeMax = 6;
+
+
+
+export const VerifyPackageCheckoutCodeBody = zod.object({
+  "email": zod.string().email().max(verifyPackageCheckoutCodeBodyEmailMax),
+  "code": zod.string().min(verifyPackageCheckoutCodeBodyCodeMin).max(verifyPackageCheckoutCodeBodyCodeMax)
+})
+
+export const verifyPackageCheckoutCodeResponseRegistrationProofTokenMin = 32;
+export const verifyPackageCheckoutCodeResponseRegistrationProofTokenMax = 128;
+
+
+
+export const VerifyPackageCheckoutCodeResponse = zod.object({
+  "accountExists": zod.boolean(),
+  "registrationProofToken": zod.string().min(verifyPackageCheckoutCodeResponseRegistrationProofTokenMin).max(verifyPackageCheckoutCodeResponseRegistrationProofTokenMax).optional()
 })
 
 

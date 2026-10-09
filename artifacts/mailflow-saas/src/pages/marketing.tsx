@@ -1,18 +1,31 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'wouter';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation } from 'wouter';
 import {
   ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, Clock3,
   ContactRound, Gauge, Layers3, ListChecks, Mail, Menu, Send, Search, SlidersHorizontal,
   ShieldCheck, Sparkles, X,
 } from 'lucide-react';
-import { useListAvailableSubscriptionPackages } from '@workspace/api-client-react';
+import {
+  getGetCurrentUserQueryKey, useListAvailableSubscriptionPackages, useLogin,
+  useRequestPackageCheckoutCode, useVerifyPackageCheckoutCode,
+} from '@workspace/api-client-react';
 import { MailflowBrand } from '@/components/brand';
 import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
 import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/lib/public-page-meta';
 import { trackMarketingSignupCta } from '@/lib/analytics';
+import {
+  clearPackageCheckoutSession,
+  isAmbiguousPackageCheckoutSlug,
+  packageCheckoutPath,
+  packageCheckoutSlugFromUrl,
+  packageNameSlug,
+  saveVerifiedPackageCheckout,
+} from '@/lib/package-checkout';
 
 const homeMeta = PUBLIC_PAGE_METADATA.home;
 const pricingMeta = PUBLIC_PAGE_METADATA.pricing;
+const checkoutMeta = PUBLIC_PAGE_METADATA.checkout;
 const featuresMeta = PUBLIC_PAGE_METADATA.features;
 
 function usePageMeta(meta: PublicPageMetadata) {
@@ -365,10 +378,11 @@ function formatMoney(pkg: SubscriptionPackage) {
   }
 }
 
-function PackageCard({ pkg, index, sendingLimits }: {
+function PackageCard({ pkg, index, sendingLimits, checkoutHref }: {
   pkg: SubscriptionPackage;
   index: number;
   sendingLimits: SubscriptionPackageList['sendingLimits'];
+  checkoutHref: string;
 }) {
   const cadence = pkg.periodDays === 1 ? 'per day' : pkg.periodDays === 7 ? 'per week' : pkg.periodDays === 30 ? 'per month' : pkg.periodDays === 365 ? 'per year' : `per ${pkg.periodDays} days`;
   const combinedHourly = sendingLimits.emailsPerHourPerSmtp * pkg.emailAccountLimit;
@@ -388,7 +402,7 @@ function PackageCard({ pkg, index, sendingLimits }: {
         <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
-      <Link href="/register" className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
+      <Link href={checkoutHref} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`}>Get started <ArrowRight size={16}/></Link>
       <p
         className="plan-footnote"
         data-testid={`text-package-total-send-capacity-${pkg.id}`}
@@ -418,7 +432,7 @@ function PricingContent() {
           {packagesQuery.isLoading ? <div className="mf-plans-skeleton" aria-label="Loading available plans"><div/><div/><div/></div> :
             packagesQuery.isError ? <div className="mf-pricing-state error-state" role="alert"><span className="state-icon"><CircleAlert size={21}/></span><div><h3>Plans aren’t available right now.</h3><p>We couldn’t load the current plan list. Please try again.</p></div><button type="button" className="mf-button button-outline retry-button" data-testid="button-retry-packages" onClick={() => packagesQuery.refetch()}>Try again <ArrowRight size={15}/></button></div> :
               packages.length === 0 ? <div className="mf-pricing-state empty-state"><span className="state-icon"><Sparkles size={20}/></span><div><h3>No plans are available just now.</h3><p>Available plans are managed by the Mailflow team. Please check back soon.</p></div></div> :
-                <div className="mf-plan-grid">{packages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index} sendingLimits={packagesQuery.data!.sendingLimits}/>)}</div>}
+                <div className="mf-plan-grid">{packages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index} sendingLimits={packagesQuery.data!.sendingLimits} checkoutHref={packageCheckoutPath(pkg, packages)}/>)}</div>}
           <div className="mf-pricing-note"><ShieldCheck size={17}/><p>Your sending account is configured separately. Mailflow records SMTP outcomes; an accepted message is not the same as confirmed inbox delivery.</p></div>
           <div className="mf-pricing-note" data-testid="text-pricing-refund-guarantee"><ShieldCheck size={17}/><p style={{ color: '#465c52', fontSize: 12, lineHeight: 1.7 }}>All subscriptions come with a Refund guarantee of 7 Days if no campaign is initiated. For details, please check <Link href="/shipping-refund" data-testid="link-pricing-refund-policy" style={{ color: '#1d4f8b', textDecoration: 'underline', textUnderlineOffset: '3px', fontWeight: 700 }}>Shipping and Refund Policy</Link>.</p></div>
         </div>
@@ -432,6 +446,162 @@ function PricingContent() {
 export function PublicPricingPage() {
   usePageMeta(pricingMeta);
   return <MetaLayout active="pricing"><PricingContent/></MetaLayout>;
+}
+
+export function PackageCheckoutPage() {
+  usePageMeta(checkoutMeta);
+  const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  const queryParams = new URLSearchParams(window.location.search);
+  const packageIdQuery = queryParams.get('packageId');
+  const requestedSlug = packageCheckoutSlugFromUrl(window.location.pathname, window.location.search);
+  const packagesQuery = useListAvailableSubscriptionPackages();
+  const requestCode = useRequestPackageCheckoutCode();
+  const verifyCode = useVerifyPackageCheckoutCode();
+  const login = useLogin();
+  const [step, setStep] = useState<'email' | 'code' | 'login'>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const packages = packagesQuery.data?.packages ?? [];
+  const slugMatches = requestedSlug
+    ? packages.filter(item => packageNameSlug(item.name) === requestedSlug)
+    : [];
+  const disambiguatedSlugMatch = requestedSlug
+    ? packages.find(item => `${packageNameSlug(item.name)}-${item.id.slice(0, 8).toLowerCase()}` === requestedSlug)
+    : undefined;
+  const pkg = packageIdQuery
+    ? packages.find(item => item.id === packageIdQuery)
+    : slugMatches.length === 1
+      ? slugMatches[0]
+      : disambiguatedSlugMatch;
+  const packageId = pkg?.id;
+  const ambiguousSlug = requestedSlug
+    ? isAmbiguousPackageCheckoutSlug(requestedSlug, packages)
+    : false;
+  const sendingLimits = packagesQuery.data?.sendingLimits;
+
+  const returnToEmail = () => {
+    requestCode.reset();
+    verifyCode.reset();
+    setCode('');
+    setStep('email');
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (step === 'email') {
+      requestCode.mutate({ data: { email: normalizedEmail } }, {
+        onSuccess: () => {
+          setEmail(normalizedEmail);
+          setStep('code');
+        },
+      });
+      return;
+    }
+    if (step === 'code') {
+      verifyCode.mutate({ data: { email: normalizedEmail, code: code.trim() } }, {
+        onSuccess: result => {
+          if (result.accountExists) {
+            setStep('login');
+            return;
+          }
+          if (!packageId || !result.registrationProofToken) return;
+          saveVerifiedPackageCheckout(packageId, normalizedEmail, result.registrationProofToken);
+          setLocation(`/register?packageId=${encodeURIComponent(packageId)}`);
+        },
+      });
+      return;
+    }
+    const password = new FormData(event.currentTarget).get('password');
+    if (typeof password !== 'string' || !password || !packageId) return;
+    login.mutate({ data: { identifier: normalizedEmail, password } }, {
+      onSuccess: result => {
+        queryClient.setQueryData(getGetCurrentUserQueryKey(), result.user);
+        clearPackageCheckoutSession();
+        if (result.user.role !== 'USER') {
+          setLocation('/admin');
+          return;
+        }
+        setLocation(result.user.mustChangeCredentials
+          ? `/profile?rotate=1&checkout=${encodeURIComponent(packageId ?? '')}`
+          : `/plans?checkout=${encodeURIComponent(packageId ?? '')}`);
+      },
+    });
+  };
+
+  const loading = packagesQuery.isLoading;
+  const selectionRequested = Boolean(packageIdQuery || requestedSlug);
+  const pageError = packagesQuery.isError
+    ? 'We could not load the current plan information. Try again.'
+    : selectionRequested && !loading && !pkg
+      ? ambiguousSlug
+        ? 'This package name matches more than one plan. Use the specific checkout link shown on the pricing page.'
+        : 'This plan is no longer available. Please choose a current plan.'
+      : !selectionRequested
+        ? 'Choose a plan from the pricing page to continue.'
+        : undefined;
+  const submitting = requestCode.isPending || verifyCode.isPending || login.isPending;
+  const mutationError = requestCode.isError
+    ? requestCode.error
+    : verifyCode.isError
+      ? verifyCode.error
+      : login.isError
+        ? login.error
+        : undefined;
+
+  return <MetaLayout active="pricing">
+    <main className="mx-auto min-h-[65vh] max-w-[1120px] px-5 py-10 md:px-8 md:py-16">
+      <div className="mb-8">
+        <div className="mono mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[.18em] text-[#61758a]"><span className="h-px w-6 bg-[#e18a42]"/>PACKAGE CHECKOUT / EMAIL VERIFICATION</div>
+        <h1 className="display text-[30px] font-bold tracking-[-.04em] text-[#172334] md:text-[38px]">Continue with your plan.</h1>
+        <p className="mt-2 max-w-[620px] text-[14px] leading-6 text-[#526276]">Confirm the plan and price, then verify your email. We’ll direct you to sign in or create your account before checkout.</p>
+      </div>
+
+      {pageError ? <section role={packagesQuery.isError ? 'alert' : 'status'} className="rounded-xl border border-[#e1e6eb] bg-white p-6">
+        <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-[#b76325]"/><div><h2 className="text-[15px] font-semibold text-[#1d2d40]">{pageError}</h2>{packagesQuery.isError && <button type="button" onClick={() => void packagesQuery.refetch()} className="mt-3 rounded-md border border-[#d5dfe7] px-3 py-2 text-[12px] font-semibold text-[#315879]">Try again</button>}<Link href="/pricing" className="mt-3 inline-block text-[12px] font-semibold text-[#245b9b] underline">Back to pricing</Link></div></div>
+      </section> : loading || !pkg || !sendingLimits ? <div aria-label="Loading selected plan" className="h-64 animate-pulse rounded-xl bg-[#eaf0f4]"/> : <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,.92fr)_minmax(390px,1.08fr)]">
+        <section className="rounded-xl border border-[#d5e0e8] bg-white p-5 shadow-[0_14px_38px_-34px_rgba(21,48,77,.6)] md:p-7" data-testid="selected-checkout-package">
+          <div className="mono text-[10px] uppercase tracking-[.16em] text-[#667b90]">YOUR SELECTED PLAN</div>
+          {pkg.preferred && <span className="mt-3 inline-flex rounded-full bg-[#eef4fb] px-2.5 py-1 text-[9px] font-bold tracking-[.1em] text-[#245b9b]">PREFERRED</span>}
+          <h2 className="display mt-3 text-[25px] font-bold text-[#1b2e43]">{pkg.name}</h2>
+          <p className="mt-2 text-[13px] leading-6 text-[#526276]">{pkg.description || 'A considered plan for your contacts and campaigns.'}</p>
+          <div className="mt-5 border-y border-[#e5e9ed] py-4">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><strong className="display text-[31px] font-bold tracking-[-.04em] text-[#172334]">{formatMoney(pkg)}</strong><span className="text-[12px] text-[#657487]">for {pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</span></div>
+            <p className="mt-1 text-[11px] leading-5 text-[#526276]">One-time payment for this term. Plans do not auto-renew.</p>
+          </div>
+          <ul className="mt-4 space-y-3 text-[12px] leading-5 text-[#405267]">
+            <li className="flex gap-2.5"><ContactRound size={16} className="mt-0.5 shrink-0 text-[#4c759d]"/>Up to <b>{pkg.contactLimit.toLocaleString()}</b> contacts</li>
+            <li className="flex gap-2.5"><Mail size={16} className="mt-0.5 shrink-0 text-[#4c759d]"/><span><b>{pkg.emailAccountLimit.toLocaleString()}</b> SMTP sender {pkg.emailAccountLimit === 1 ? 'account' : 'accounts'}</span></li>
+            <li className="flex gap-2.5"><Clock3 size={16} className="mt-0.5 shrink-0 text-[#4c759d]"/><span>Up to <b>{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}</b> campaign attempts per rolling hour, per SMTP mailbox</span></li>
+            <li className="flex gap-2.5"><Clock3 size={16} className="mt-0.5 shrink-0 text-[#4c759d]"/><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
+          </ul>
+          <p className="mt-4 rounded-md bg-[#f4f7f9] p-3 text-[11px] leading-5 text-[#526276]">Your account can be created before payment. If you close paid checkout without paying, no subscription will be activated.</p>
+        </section>
+
+        <section className="rounded-xl border border-[#dfe5e9] bg-[#fbfcfd] p-5 md:p-7" data-testid="package-checkout-identity-step">
+          <div className="mono text-[10px] uppercase tracking-[.16em] text-[#667b90]">ACCOUNT ACCESS</div>
+          <h2 className="display mt-2 text-[21px] font-bold text-[#1b2e43]">{step === 'email' ? 'Start with your email.' : step === 'code' ? 'Check your inbox.' : 'Welcome back.'}</h2>
+          <p className="mt-2 text-[12px] leading-5 text-[#526276]">
+            {step === 'email' ? 'We’ll send a verification code before deciding whether you should sign in or create an account.' : step === 'code' ? `Enter the six-digit code sent to ${email}.` : 'This verified email already has a Mailflow account. Enter its password to continue.'}
+          </p>
+          <form onSubmit={submit} className="mt-5 space-y-4">
+            {step === 'email' && <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Email address</span><input data-testid="input-package-checkout-email" type="email" required autoComplete="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} placeholder="you@company.com" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label>}
+            {step === 'code' && <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Six-digit verification code</span><input data-testid="input-package-checkout-code" type="text" required inputMode="numeric" autoComplete="one-time-code" minLength={6} maxLength={6} pattern="[0-9]{6}" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[14px] tracking-[.2em] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label>}
+            {step === 'login' && <><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Email address</span><input value={email} readOnly className="h-11 w-full rounded-md border border-[#d8dde4] bg-[#f3f5f7] px-3 text-[13px] text-[#536174]"/></label><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Password</span><input data-testid="input-package-checkout-password" name="password" type="password" required autoComplete="current-password" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label><div className="text-right"><Link href="/forgot-password" className="text-[11px] font-semibold text-[#245b9b] underline">Forgot password?</Link></div></>}
+            {requestCode.isSuccess && step === 'code' && <p role="status" className="rounded-md border border-[#d5e7db] bg-[#f2f8f4] px-3 py-2 text-[11px] leading-5 text-[#41674e]">{requestCode.data.message}</p>}
+            {mutationError && <p role="alert" data-testid="status-package-checkout-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">{mutationError instanceof Error ? mutationError.message : 'Something went wrong. Please try again.'}</p>}
+            <button type="submit" data-testid="button-package-checkout-continue" disabled={submitting || (step === 'email' && !email.trim())} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#174f99] px-4 text-[13px] font-semibold text-white transition hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55">
+              {submitting ? 'Please wait…' : step === 'email' ? 'Send verification code' : step === 'code' ? 'Verify email' : 'Sign in and continue'}
+              {submitting ? null : <ArrowRight size={16}/>}
+            </button>
+          </form>
+          {step !== 'email' && <button type="button" onClick={returnToEmail} className="mt-4 text-[11px] font-semibold text-[#245b9b] underline underline-offset-2">Use a different email address</button>}
+          <p className="mt-5 border-t border-[#e5e9ed] pt-4 text-[10px] leading-5 text-[#536579]">Your email is verified before Mailflow checks for an existing account. It is used to protect account access and continue this selected plan.</p>
+        </section>
+      </div>}
+    </main>
+  </MetaLayout>;
 }
 
 function Styles() {

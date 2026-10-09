@@ -6063,6 +6063,98 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     assert.ok(otp.consumedAt);
   });
 
+  it("verifies a new package-checkout email before creating a verified account and one-use session", async () => {
+    const email = "checkout.new@example.test";
+    const requested = await api("/auth/package-checkout/request-code", {
+      method: "POST",
+      body: { email },
+    });
+    assert.equal(requested.response.status, 200);
+    assert.match(requested.body.message, /if this address can receive/i);
+    const code = await getEmailCode();
+
+    const verified = await api("/auth/package-checkout/verify-code", {
+      method: "POST",
+      body: { email, code },
+    });
+    assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+    assert.equal(verified.body.accountExists, false);
+    assert.equal(typeof verified.body.registrationProofToken, "string");
+    assert.ok(verified.body.registrationProofToken.length >= 32);
+
+    const registered = await api("/auth/register", {
+      method: "POST",
+      body: {
+        firstName: "Checkout",
+        lastName: "Customer",
+        email,
+        password: "Checkout-customer-password-2026!",
+        emailVerificationProof: verified.body.registrationProofToken,
+      },
+    });
+    assert.equal(registered.response.status, 201, JSON.stringify(registered.body));
+    assert.ok(registered.cookie, "verified package registration should create a session");
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email));
+    assert.equal(user.emailVerified, true);
+    assert.ok(user.emailVerifiedAt);
+    const current = await api("/auth/me", { cookie: registered.cookie });
+    assert.equal(current.response.status, 200);
+    assert.equal(current.body.email, email);
+
+    const replay = await api("/auth/register", {
+      method: "POST",
+      body: {
+        firstName: "Replay",
+        lastName: "Attempt",
+        email,
+        password: "Checkout-customer-password-2026!",
+        emailVerificationProof: verified.body.registrationProofToken,
+      },
+    });
+    assert.equal(replay.response.status, 400);
+    assert.equal(replay.body.code, "PACKAGE_CHECKOUT_PROOF_INVALID");
+  });
+
+  it("uses the same package-checkout code response before branching existing and new email addresses", async () => {
+    const existingEmail = "checkout.existing@example.test";
+    await createUser({
+      username: "checkout-existing",
+      email: existingEmail,
+      emailVerified: false,
+    });
+    const existingRequest = await api("/auth/package-checkout/request-code", {
+      method: "POST",
+      body: { email: existingEmail },
+    });
+    const existingCode = await getEmailCode();
+    const newRequest = await api("/auth/package-checkout/request-code", {
+      method: "POST",
+      body: { email: "checkout.unknown@example.test" },
+    });
+    assert.equal(existingRequest.response.status, 200);
+    assert.equal(newRequest.response.status, 200);
+    assert.deepEqual(existingRequest.body, newRequest.body);
+
+    const verified = await api("/auth/package-checkout/verify-code", {
+      method: "POST",
+      body: { email: existingEmail, code: existingCode },
+    });
+    assert.equal(verified.response.status, 200);
+    assert.deepEqual(verified.body, { accountExists: true });
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, existingEmail));
+    assert.equal(user.emailVerified, true);
+
+    const loginResult = await login(existingEmail);
+    assert.equal(loginResult.response.status, 200);
+    assert.ok(loginResult.cookie);
+  });
+
   it("verifies an email change before restoring the account's verified state", async () => {
     const { cookie } = await loggedInUser();
     const changed = await api("/profile", {

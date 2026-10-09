@@ -7,12 +7,16 @@ import {
   GetPasswordPolicyResponse,
   LoginBody,
   LoginResponse,
+  RequestPackageCheckoutCodeBody,
+  RequestPackageCheckoutCodeResponse,
   RequestPasswordResetBody,
   RequestPasswordResetResponse,
   RegisterBody,
   RegisterResponse,
   ResetPasswordBody,
   ResetPasswordResponse,
+  VerifyPackageCheckoutCodeBody,
+  VerifyPackageCheckoutCodeResponse,
   VerifyRegistrationEmailBody,
   VerifyRegistrationEmailResponse,
 } from "@workspace/api-zod";
@@ -90,9 +94,12 @@ function getPasswordResetUrl(origin: string, token: string): string {
   return url.toString();
 }
 
-async function isPasswordResetRateLimited(
+async function isScopedRateLimited(
   email: string,
   ipAddress: string,
+  scope: string,
+  emailMaximum = RESET_RATE_LIMIT_EMAIL_MAX,
+  ipMaximum = RESET_RATE_LIMIT_IP_MAX,
 ): Promise<boolean> {
   const now = new Date();
   if (
@@ -110,8 +117,8 @@ async function isPasswordResetRateLimited(
     lastPasswordResetRateLimitCleanupAt = now.getTime();
   }
 
-  const emailScopeHash = hmac(email, "password-reset-email-rate-limit");
-  const ipScopeHash = hmac(ipAddress, "password-reset-ip-rate-limit");
+  const emailScopeHash = hmac(email, `${scope}-email-rate-limit`);
+  const ipScopeHash = hmac(ipAddress, `${scope}-ip-rate-limit`);
   const windowFloor = new Date(now.getTime() - RESET_RATE_LIMIT_WINDOW_MS);
   const counts = await db.transaction(async (tx) => {
     const incrementBucket = async (scopeHash: string): Promise<number> => {
@@ -144,8 +151,8 @@ async function isPasswordResetRateLimited(
   });
 
   return (
-    counts.email > RESET_RATE_LIMIT_EMAIL_MAX ||
-    counts.ip > RESET_RATE_LIMIT_IP_MAX
+    counts.email > emailMaximum ||
+    counts.ip > ipMaximum
   );
 }
 
@@ -316,6 +323,119 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
   const email = normalizeEmail(parsed.data.email);
+  if (parsed.data.password.length < settings.passwordMinimumLength) {
+    res.status(400).json({
+      error: `Password must be at least ${settings.passwordMinimumLength} characters.`,
+      code: "PASSWORD_TOO_SHORT",
+    });
+    return;
+  }
+
+  if (parsed.data.emailVerificationProof) {
+    const proofToken = parsed.data.emailVerificationProof;
+    const proofHash = sha256(proofToken);
+    const [candidateProof] = await db
+      .select({ id: otpVerificationsTable.id })
+      .from(otpVerificationsTable)
+      .where(
+        and(
+          eq(otpVerificationsTable.email, email),
+          eq(otpVerificationsTable.purpose, "package_checkout_proof"),
+          eq(otpVerificationsTable.codeHash, proofHash),
+          isNull(otpVerificationsTable.consumedAt),
+          gt(otpVerificationsTable.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    if (!candidateProof) {
+      res.status(400).json({
+        error: "Email verification expired. Return to package checkout and verify your email again.",
+        code: "PACKAGE_CHECKOUT_PROOF_INVALID",
+      });
+      return;
+    }
+
+    const usernameBase =
+      email.split("@")[0]!.replace(/[^a-z0-9._-]/g, "").slice(0, 38) || "user";
+    const username = `${usernameBase}-${randomToken(5).slice(0, 7)}`;
+    const passwordHash = await hashPassword(parsed.data.password);
+    const now = new Date();
+    const result = await db.transaction(async (tx) => {
+      const [proof] = await tx
+        .select()
+        .from(otpVerificationsTable)
+        .where(
+          and(
+            eq(otpVerificationsTable.id, candidateProof.id),
+            eq(otpVerificationsTable.email, email),
+            eq(otpVerificationsTable.purpose, "package_checkout_proof"),
+            eq(otpVerificationsTable.codeHash, proofHash),
+            isNull(otpVerificationsTable.consumedAt),
+            gt(otpVerificationsTable.expiresAt, now),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (!proof) return { kind: "invalid" as const };
+
+      const [existing] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(and(eq(usersTable.email, email), isNull(usersTable.deletedAt)))
+        .limit(1);
+      if (existing) {
+        await tx
+          .update(otpVerificationsTable)
+          .set({ consumedAt: now })
+          .where(eq(otpVerificationsTable.id, proof.id));
+        return { kind: "exists" as const };
+      }
+
+      const [createdUser] = await tx
+        .insert(usersTable)
+        .values({
+          username,
+          firstName: parsed.data.firstName.trim(),
+          lastName: parsed.data.lastName.trim(),
+          email,
+          passwordHash,
+          role: "USER",
+          timezone: settings.defaultTimezone,
+          active: true,
+          emailVerified: true,
+          emailVerifiedAt: now,
+        })
+        .returning();
+      await tx
+        .update(otpVerificationsTable)
+        .set({ consumedAt: now })
+        .where(eq(otpVerificationsTable.id, proof.id));
+      return { kind: "created" as const, user: createdUser };
+    });
+
+    if (result.kind === "invalid") {
+      res.status(400).json({
+        error: "Email verification expired. Return to package checkout and verify your email again.",
+        code: "PACKAGE_CHECKOUT_PROOF_INVALID",
+      });
+      return;
+    }
+    if (result.kind === "exists") {
+      res.status(409).json({
+        error: "An account with this email already exists. Sign in to continue.",
+        code: "EMAIL_IN_USE",
+      });
+      return;
+    }
+    await createUserSession(result.user, req, res);
+    res.status(201).json(
+      RegisterResponse.parse({
+        message: "Your account is ready. Continue to package checkout.",
+      }),
+    );
+    return;
+  }
+
   const [existing] = await db
     .select({ id: usersTable.id })
     .from(usersTable)
@@ -326,13 +446,6 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  if (parsed.data.password.length < settings.passwordMinimumLength) {
-    res.status(400).json({
-      error: `Password must be at least ${settings.passwordMinimumLength} characters.`,
-      code: "PASSWORD_TOO_SHORT",
-    });
-    return;
-  }
   if (!(await getApplicationEmailConfig())) {
     res.status(503).json({
       error: "Account verification is not available yet. Ask the administrator to configure application email.",
@@ -444,6 +557,202 @@ router.post("/auth/verify-email", async (req, res): Promise<void> => {
   res.json(VerifyRegistrationEmailResponse.parse({ user: toPublicUser(user) }));
 });
 
+router.post("/auth/package-checkout/request-code", async (req, res): Promise<void> => {
+  const settings = await getPlatformSettings();
+  if (settings.maintenanceMode) {
+    res.status(503).json({
+      error: "Package checkout is unavailable while Mailflow is under maintenance.",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+  const parsed = RequestPackageCheckoutCodeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter a valid email address.", code: "INVALID_INPUT" });
+    return;
+  }
+
+  const email = normalizeEmail(parsed.data.email);
+  const ipAddress = req.ip?.slice(0, 80) ?? "unknown";
+  if (await isScopedRateLimited(email, ipAddress, "package-checkout-request")) {
+    res.setHeader("Retry-After", String(Math.ceil(RESET_RATE_LIMIT_WINDOW_MS / 1000)));
+    res.status(429).json({
+      error: "Too many verification requests. Wait before trying again.",
+      code: "PACKAGE_CHECKOUT_RATE_LIMITED",
+    });
+    return;
+  }
+  if (!(await getApplicationEmailConfig())) {
+    res.status(503).json({
+      error: "Email verification is temporarily unavailable. Please try again later.",
+      code: "APPLICATION_EMAIL_NOT_CONFIGURED",
+    });
+    return;
+  }
+
+  const code = sixDigitCode();
+  const now = new Date();
+  const [challenge] = await db.transaction(async (tx) => {
+    await tx
+      .update(otpVerificationsTable)
+      .set({ consumedAt: now })
+      .where(
+        and(
+          eq(otpVerificationsTable.email, email),
+          or(
+            eq(otpVerificationsTable.purpose, "package_checkout"),
+            eq(otpVerificationsTable.purpose, "package_checkout_proof"),
+          ),
+          isNull(otpVerificationsTable.consumedAt),
+        ),
+      );
+    return tx
+      .insert(otpVerificationsTable)
+      .values({
+        userId: null,
+        email,
+        purpose: "package_checkout",
+        codeHash: hmac(`${email}:${code}`, "otp:package_checkout"),
+        expiresAt: new Date(now.getTime() + settings.otpExpiryMinutes * 60 * 1000),
+      })
+      .returning({ id: otpVerificationsTable.id });
+  });
+
+  try {
+    await sendApplicationEmail(
+      email,
+      "Verify your email for Mailflow",
+      `Your verification code is ${code}. Use it to continue with Mailflow package checkout. It expires in ${settings.otpExpiryMinutes} minutes.\n\nIf you did not request this, you can ignore this email.`,
+    );
+  } catch (error) {
+    await db
+      .update(otpVerificationsTable)
+      .set({ consumedAt: new Date() })
+      .where(eq(otpVerificationsTable.id, challenge.id));
+    req.log.warn(
+      { errorName: error instanceof Error ? error.name : "UnknownError" },
+      "Package checkout verification email could not be sent",
+    );
+    res.status(502).json({
+      error: "We could not send a verification email. Please try again later.",
+      code: "VERIFICATION_EMAIL_FAILED",
+    });
+    return;
+  }
+
+  res.json(
+    RequestPackageCheckoutCodeResponse.parse({
+      message: "If this address can receive Mailflow email, a verification code has been sent.",
+    }),
+  );
+});
+
+router.post("/auth/package-checkout/verify-code", async (req, res): Promise<void> => {
+  const settings = await getPlatformSettings();
+  if (settings.maintenanceMode) {
+    res.status(503).json({
+      error: "Package checkout is unavailable while Mailflow is under maintenance.",
+      code: "MAINTENANCE_MODE",
+    });
+    return;
+  }
+  const parsed = VerifyPackageCheckoutCodeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter the six-digit code sent to your email.", code: "INVALID_INPUT" });
+    return;
+  }
+
+  const email = normalizeEmail(parsed.data.email);
+  const ipAddress = req.ip?.slice(0, 80) ?? "unknown";
+  if (await isScopedRateLimited(email, ipAddress, "package-checkout-verify", 20, 50)) {
+    res.setHeader("Retry-After", String(Math.ceil(RESET_RATE_LIMIT_WINDOW_MS / 1000)));
+    res.status(429).json({
+      error: "Too many verification attempts. Wait before trying again.",
+      code: "PACKAGE_CHECKOUT_RATE_LIMITED",
+    });
+    return;
+  }
+
+  const now = new Date();
+  const expected = hmac(`${email}:${parsed.data.code}`, "otp:package_checkout");
+  const result = await db.transaction(async (tx) => {
+    const [challenge] = await tx
+      .select()
+      .from(otpVerificationsTable)
+      .where(
+        and(
+          eq(otpVerificationsTable.email, email),
+          eq(otpVerificationsTable.purpose, "package_checkout"),
+          isNull(otpVerificationsTable.consumedAt),
+          gt(otpVerificationsTable.expiresAt, now),
+        ),
+      )
+      .orderBy(desc(otpVerificationsTable.createdAt))
+      .for("update")
+      .limit(1);
+    if (!challenge) return { kind: "invalid" as const };
+    if (challenge.attempts >= settings.maxOtpAttempts) {
+      return { kind: "attempts" as const };
+    }
+    if (!constantTimeEqual(expected, challenge.codeHash)) {
+      await tx
+        .update(otpVerificationsTable)
+        .set({ attempts: challenge.attempts + 1 })
+        .where(eq(otpVerificationsTable.id, challenge.id));
+      return { kind: "wrong" as const };
+    }
+
+    await tx
+      .update(otpVerificationsTable)
+      .set({ consumedAt: now })
+      .where(eq(otpVerificationsTable.id, challenge.id));
+    const [user] = await tx
+      .select()
+      .from(usersTable)
+      .where(and(eq(usersTable.email, email), isNull(usersTable.deletedAt)))
+      .limit(1);
+    if (user) {
+      if (!user.emailVerified) {
+        await tx
+          .update(usersTable)
+          .set({ emailVerified: true, emailVerifiedAt: now })
+          .where(eq(usersTable.id, user.id));
+      }
+      return { kind: "existing" as const };
+    }
+
+    const proofToken = randomToken(32);
+    await tx.insert(otpVerificationsTable).values({
+      userId: null,
+      email,
+      purpose: "package_checkout_proof",
+      codeHash: sha256(proofToken),
+      expiresAt: new Date(now.getTime() + settings.otpExpiryMinutes * 60 * 1000),
+    });
+    return { kind: "new" as const, proofToken };
+  });
+
+  if (result.kind === "invalid") {
+    res.status(400).json({ error: "This code is invalid or expired. Request a new one.", code: "OTP_INVALID" });
+    return;
+  }
+  if (result.kind === "attempts") {
+    res.status(400).json({ error: "Too many code attempts. Request a new code.", code: "OTP_ATTEMPTS_EXCEEDED" });
+    return;
+  }
+  if (result.kind === "wrong") {
+    res.status(400).json({ error: "The verification code is incorrect.", code: "OTP_INVALID" });
+    return;
+  }
+  res.json(
+    VerifyPackageCheckoutCodeResponse.parse(
+      result.kind === "existing"
+        ? { accountExists: true }
+        : { accountExists: false, registrationProofToken: result.proofToken },
+    ),
+  );
+});
+
 router.post("/auth/forgot-password", async (req, res): Promise<void> => {
   const parsed = RequestPasswordResetBody.safeParse(req.body);
   if (!parsed.success) {
@@ -477,7 +786,7 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
   }
 
   const ipAddress = req.ip ?? req.socket.remoteAddress ?? "unknown";
-  if (await isPasswordResetRateLimited(email, ipAddress)) {
+  if (await isScopedRateLimited(email, ipAddress, "password-reset")) {
     res.setHeader(
       "Retry-After",
       String(Math.ceil(RESET_RATE_LIMIT_WINDOW_MS / 1000)),

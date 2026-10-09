@@ -34,12 +34,13 @@ import { AdminGlobalCompaniesPage } from '@/pages/admin-global-companies';
 import { AdminCompanyIntelligencePage } from '@/pages/admin-company-intelligence';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
-import { MarketingHomePage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
+import { MarketingHomePage, PackageCheckoutPage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
 import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@/pages/legal';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackRegistrationSucceeded } from '@/lib/analytics';
+import { clearPackageCheckoutSession, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
@@ -179,17 +180,34 @@ function LoginPage() {
 function RegisterPage() {
   const register = useRegister(); const [, setLocation] = useLocation();
   const passwordRequirement = usePasswordRequirement();
-  const [values, setValues] = useState({ firstName: '', lastName: '', email: '', password: '' });
-  const onSubmit = (e: FormEvent) => { e.preventDefault(); register.mutate({ data: values }, { onSuccess: () => { trackRegistrationSucceeded(); sessionStorage.setItem('mailflow-verification-email', values.email); setLocation('/verify-email'); } }); };
+  const checkoutPackageId = new URLSearchParams(window.location.search).get('packageId');
+  const verifiedCheckout = getVerifiedPackageCheckout(checkoutPackageId);
+  const [values, setValues] = useState({ firstName: '', lastName: '', email: verifiedCheckout?.email ?? '', password: '' });
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    register.mutate(
+      { data: { ...values, ...(verifiedCheckout ? { emailVerificationProof: verifiedCheckout.proof } : {}) } },
+      { onSuccess: () => {
+        trackRegistrationSucceeded();
+        if (verifiedCheckout && checkoutPackageId) {
+          clearPackageCheckoutSession();
+          setLocation(`/plans?checkout=${encodeURIComponent(checkoutPackageId)}`);
+          return;
+        }
+        sessionStorage.setItem('mailflow-verification-email', values.email);
+        setLocation('/verify-email');
+      } },
+    );
+  };
   return (
     <AuthFrame className="auth-branded-frame" label="Good email starts with a solid foundation.">
-      <AuthTitle className="auth-form-title" overline="Create workspace access" title="Start with your account." sub="A few details are all we need to get you set up." />
+      <AuthTitle className="auth-form-title" overline="Create workspace access" title="Start with your account." sub={verifiedCheckout ? 'Your email is verified. Create your account to continue to the selected plan.' : 'A few details are all we need to get you set up.'} />
       <form onSubmit={onSubmit} className="auth-form space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="First name" value={values.firstName} onChange={firstName => setValues(v => ({ ...v, firstName }))} testId="input-first-name" required autoComplete="given-name" />
           <Field label="Last name" value={values.lastName} onChange={lastName => setValues(v => ({ ...v, lastName }))} testId="input-last-name" required autoComplete="family-name" />
         </div>
-        <Field label="Work email" value={values.email} onChange={email => setValues(v => ({ ...v, email }))} testId="input-register-email" type="email" placeholder="name@company.com" required autoComplete="email" />
+        <Field label="Work email" value={values.email} onChange={email => setValues(v => ({ ...v, email }))} testId="input-register-email" type="email" placeholder="name@company.com" required autoComplete="email" disabled={Boolean(verifiedCheckout)} hint={verifiedCheckout ? 'Verified for the selected plan.' : undefined} />
         <Field label="Password" value={values.password} onChange={password => setValues(v => ({ ...v, password }))} testId="input-register-password" type="password" required minLength={passwordRequirement.minimumLength} hint={passwordRequirement.hint} autoComplete="new-password" />
         <FormError message={register.isError ? getError(register.error) : undefined} />
         <Button type="submit" testId="button-create-account" disabled={register.isPending} className="auth-submit w-full">
@@ -197,6 +215,7 @@ function RegisterPage() {
           <ArrowRight className="h-4 w-4" />
         </Button>
       </form>
+      {verifiedCheckout && checkoutPackageId && <div className="mt-3 text-center text-[11px]"><Link href={`/package-checkout?packageId=${encodeURIComponent(checkoutPackageId)}`} className="font-semibold text-[#245b9b] underline">Restart email verification</Link></div>}
       <div className="auth-footer mt-7 border-t border-[#e7eaee] pt-5 text-center text-[12px] text-[#737e8b]">
         Already have an account? <Link data-testid="link-login" href="/login" className="ml-1 font-semibold text-[#245b9b] no-underline hover:underline">Sign in</Link>
       </div>
@@ -1075,6 +1094,7 @@ function ProfilePage({ user }: { user: AuthUser }) {
   const [, setLocation] = useLocation();
   const [profile, setProfile] = useState({ username: user.username, firstName: user.firstName, lastName: user.lastName, email: user.email, timezone: user.timezone });
   const [password, setPassword] = useState({ currentPassword: '', newPassword: '' });
+  const pendingCheckoutId = new URLSearchParams(window.location.search).get('checkout');
   const saveProfile = (e: FormEvent) => {
     e.preventDefault();
     update.mutate(
@@ -1106,7 +1126,9 @@ function ProfilePage({ user }: { user: AuthUser }) {
             setRotate(false);
             const supportReturnPath = user.role === 'USER' ? getSupportTicketReturnPath() : undefined;
             sessionStorage.removeItem(SUPPORT_TICKET_RETURN_KEY);
-            setLocation(supportReturnPath || (user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'));
+            setLocation(pendingCheckoutId
+              ? `/plans?checkout=${encodeURIComponent(pendingCheckoutId)}`
+              : supportReturnPath || (user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'));
           }
         },
       },
@@ -1191,7 +1213,7 @@ function Routes() {
     query: { queryKey: getGetMaintenanceStatusQueryKey() },
   }).data?.maintenanceMode === true;
   return <RoutedErrorBoundary><Switch>
-     <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/terms-and-conditions" component={TermsAndConditionsPage}/><Route path="/privacy-policy" component={PrivacyPolicyPage}/><Route path="/shipping-refund" component={ShippingRefundPage}/><Route path="/unsubscribe" component={CampaignUnsubscribePage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
+     <Route path="/" component={MarketingHomePage}/><Route path="/features" component={PublicFeaturesPage}/><Route path="/pricing" component={PublicPricingPage}/><Route path="/package-checkout/:packageSlug" component={PackageCheckoutPage}/><Route path="/package-checkout" component={PackageCheckoutPage}/><Route path="/terms-and-conditions" component={TermsAndConditionsPage}/><Route path="/privacy-policy" component={PrivacyPolicyPage}/><Route path="/shipping-refund" component={ShippingRefundPage}/><Route path="/unsubscribe" component={CampaignUnsubscribePage}/><Route path="/login" component={LoginPage}/><Route path="/register" component={RegisterPage}/><Route path="/verify-email" component={VerifyPage}/><Route path="/forgot-password" component={ForgotPage}/><Route path="/reset-password" component={ResetPage}/>
     <Route path="/dashboard">{() => <RouteGate>{u => <UserDashboardPage user={u} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>

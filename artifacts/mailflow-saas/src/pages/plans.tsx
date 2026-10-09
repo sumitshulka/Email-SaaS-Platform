@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import {
@@ -266,7 +267,8 @@ export default function PlansPage() {
   const activateFreeAddOn = useActivateFreeAddOn();
   const verifyPayment = useVerifyRazorpayPayment();
   const [checkoutOrder, setCheckoutOrder] = useState<SubscriptionOrderCreated | null>(null);
-  const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'error' | 'dismissed'; message: string; label?: string } | null>(null);
+  const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'error' | 'dismissed'; message: string; label?: string; nextStepHref?: string } | null>(null);
+  const checkoutAutoStartRef = useRef<string | null>(null);
   const [startingPackage, setStartingPackage] = useState<string | null>(null);
   const [pendingPackage, setPendingPackage] = useState<SubscriptionPackage | null>(null);
   const [pendingPackageAccountLimit, setPendingPackageAccountLimit] = useState(1);
@@ -389,6 +391,7 @@ export default function PlansPage() {
           setPaymentState({
             kind: 'active',
             label: scheduled ? 'Plan change scheduled' : noCostPlanUpgrade ? 'Plan upgrade active' : undefined,
+            nextStepHref: pkg.amountMinor === 0 && !scheduled ? '/sending-settings' : undefined,
             message: scheduled
               ? `${pkg.name} is scheduled to start on ${startsAt.toLocaleDateString()}. No payment is due for this change.`
               : noCostPlanUpgrade
@@ -462,6 +465,13 @@ export default function PlansPage() {
 
   const purchase = (pkg: SubscriptionPackage) => {
     setPaymentState(null);
+    if (pkg.amountMinor > 0 && !onlinePaymentsEnabled) {
+      setPaymentState({
+        kind: 'error',
+        message: 'Online payments are not active at the moment. Please contact the platform administrator before starting a paid checkout.',
+      });
+      return;
+    }
     if (pkg.packageType === 'addon') {
       startPurchase(pkg);
       return;
@@ -517,6 +527,60 @@ export default function PlansPage() {
       getPlanAction(pkg, activeSubscription, scheduledSubscription).mode === 'no-cost-upgrade',
     );
   };
+
+  const checkoutPackageId = new URLSearchParams(window.location.search).get('checkout');
+  useEffect(() => {
+    if (!checkoutPackageId || checkoutAutoStartRef.current === checkoutPackageId) return;
+    const isLoading =
+      packagesQuery.isLoading ||
+      currentQuery.isLoading ||
+      addOnsQuery.isLoading ||
+      researchAllowanceQuery.isLoading ||
+      researchAllowanceQuery.isFetching ||
+      contactsUsageQuery.isLoading ||
+      contactsUsageQuery.isFetching ||
+      senderAccountsQuery.isLoading ||
+      paymentAvailabilityQuery.isLoading;
+    if (isLoading) return;
+
+    checkoutAutoStartRef.current = checkoutPackageId;
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+    if (
+      packagesQuery.isError ||
+      currentQuery.isError ||
+      addOnsQuery.isError ||
+      researchAllowanceQuery.isError ||
+      contactsUsageQuery.isError ||
+      senderAccountsQuery.isError ||
+      paymentAvailabilityQuery.isError
+    ) {
+      setPaymentState({
+        kind: 'error',
+        message: 'We could not verify the account and plan details for checkout. Retry loading the page before trying again.',
+      });
+      return;
+    }
+    const selected = packages.find(item => item.id === checkoutPackageId);
+    if (!selected) {
+      setPaymentState({
+        kind: 'error',
+        message: 'The selected plan is no longer available. Choose a current plan below.',
+      });
+      return;
+    }
+    purchase(selected);
+  }, [
+    checkoutPackageId,
+    packagesQuery.isLoading,
+    currentQuery.isLoading,
+    addOnsQuery.isLoading,
+    researchAllowanceQuery.isLoading,
+    researchAllowanceQuery.isFetching,
+    contactsUsageQuery.isLoading,
+    contactsUsageQuery.isFetching,
+    senderAccountsQuery.isLoading,
+    paymentAvailabilityQuery.isLoading,
+  ]);
 
   if (packagesQuery.isLoading || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || contactsUsageQuery.isLoading || contactsUsageQuery.isFetching || senderAccountsQuery.isLoading) {
     return <div className="space-y-5" aria-label="Loading subscription plans" data-testid="loading-plans"><div className="h-8 w-64 animate-pulse rounded bg-[#e9eef2]"/><div className="h-32 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/></div></div>;
@@ -690,7 +754,7 @@ export default function PlansPage() {
 
     {paymentState && <div role="status" data-testid="status-payment" className={`flex items-start gap-3 rounded-md border p-4 text-[12px] leading-5 ${paymentState.kind === 'active' ? 'border-[#d4e8dc] bg-[#f1f8f3] text-[#3c6d4f]' : paymentState.kind === 'pending' ? 'border-[#d6e3ef] bg-[#f3f7fb] text-[#385c7e]' : paymentState.kind === 'error' ? 'border-[#eed9ca] bg-[#fff8f2] text-[#965323]' : 'border-[#e2e6ea] bg-[#f7f8f9] text-[#647281]'}`}>
       {paymentState.kind === 'active' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'error' ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0"/> : paymentState.kind === 'pending' ? <LoaderCircle className="mt-0.5 h-4 w-4 shrink-0 animate-spin"/> : <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0"/>}
-      <div><div className="font-semibold">{paymentState.label ?? (paymentState.kind === 'active' ? 'Subscription active' : paymentState.kind === 'pending' ? 'Payment verification pending' : paymentState.kind === 'error' ? 'Payment needs attention' : 'Checkout closed')}</div><p>{paymentState.message}</p></div>
+      <div><div className="font-semibold">{paymentState.label ?? (paymentState.kind === 'active' ? 'Subscription active' : paymentState.kind === 'pending' ? 'Payment verification pending' : paymentState.kind === 'error' ? 'Payment needs attention' : 'Checkout closed')}</div><p>{paymentState.message}</p>{paymentState.nextStepHref && <Link href={paymentState.nextStepHref} data-testid="link-free-plan-smtp-setup" className="mt-2 inline-flex items-center gap-1 font-semibold text-[#245b9b] underline underline-offset-2">Set up your SMTP sending account <ArrowRight className="h-3.5 w-3.5"/></Link>}</div>
     </div>}
     {(createOrder.isError || verifyPayment.isError) && !paymentState && <p role="alert" data-testid="status-payment-error" className="rounded-md border border-[#eed9ca] bg-[#fff8f2] p-3 text-[12px] text-[#965323]">{errorText(createOrder.error || verifyPayment.error)}</p>}
     {paymentAvailabilityQuery.data?.enabled === false && <section data-testid="notice-online-payments-disabled" role="status" className="rounded-md border border-[#ead9c5] bg-[#fff8ef] p-4 text-[12px] leading-5 text-[#76552f]">

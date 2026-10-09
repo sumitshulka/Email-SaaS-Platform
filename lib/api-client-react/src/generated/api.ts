@@ -133,6 +133,10 @@ import type {
   Microsoft365TraceConnection,
   OnlinePaymentSettings,
   OnlinePaymentSettingsInput,
+  PackageCheckoutCodeInput,
+  PackageCheckoutCodeRequestResponse,
+  PackageCheckoutCodeVerificationResponse,
+  PackageCheckoutEmailInput,
   PasswordPolicy,
   PaymentVerificationResult,
   PlatformSettings,
@@ -627,6 +631,182 @@ export const useVerifyRegistrationEmail = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getVerifyRegistrationEmailMutationOptions(options));
+    }
+
+export const getRequestPackageCheckoutCodeUrl = () => {
+
+
+
+
+  return `/api/auth/package-checkout/request-code`
+}
+
+/**
+ * @summary Send a generic email verification code for package checkout
+ */
+export const requestPackageCheckoutCode = async (packageCheckoutEmailInput: PackageCheckoutEmailInput, options?: Parameters<typeof customFetch>[1]): Promise<PackageCheckoutCodeRequestResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PackageCheckoutCodeRequestResponse>(getRequestPackageCheckoutCodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(packageCheckoutEmailInput)
+  }
+);}
+
+
+
+
+
+export const getRequestPackageCheckoutCodeMutationKey = () => ['requestPackageCheckoutCode'] as const;
+
+export const getRequestPackageCheckoutCodeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPackageCheckoutCode>>, TError,RequestPackageCheckoutCodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPackageCheckoutCode>>, TError,RequestPackageCheckoutCodeMutationVariables, TContext> => {
+
+const mutationKey = getRequestPackageCheckoutCodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPackageCheckoutCode>>, RequestPackageCheckoutCodeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestPackageCheckoutCode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPackageCheckoutCodeMutationResult = NonNullable<Awaited<ReturnType<typeof requestPackageCheckoutCode>>>
+    export type RequestPackageCheckoutCodeMutationBody = BodyType<PackageCheckoutEmailInput>
+    export type RequestPackageCheckoutCodeMutationError = ErrorType<ApiError>
+    export type RequestPackageCheckoutCodeMutationVariables = {data: BodyType<PackageCheckoutEmailInput>}
+
+    /**
+ * @summary Send a generic email verification code for package checkout
+ */
+export const useRequestPackageCheckoutCode = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPackageCheckoutCode>>, TError,RequestPackageCheckoutCodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestPackageCheckoutCode>>,
+        TError,
+        RequestPackageCheckoutCodeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestPackageCheckoutCodeMutationOptions(options));
+    }
+
+export const getVerifyPackageCheckoutCodeUrl = () => {
+
+
+
+
+  return `/api/auth/package-checkout/verify-code`
+}
+
+/**
+ * @summary Verify package checkout email ownership before account lookup
+ */
+export const verifyPackageCheckoutCode = async (packageCheckoutCodeInput: PackageCheckoutCodeInput, options?: Parameters<typeof customFetch>[1]): Promise<PackageCheckoutCodeVerificationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PackageCheckoutCodeVerificationResponse>(getVerifyPackageCheckoutCodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(packageCheckoutCodeInput)
+  }
+);}
+
+
+
+
+
+export const getVerifyPackageCheckoutCodeMutationKey = () => ['verifyPackageCheckoutCode'] as const;
+
+export const getVerifyPackageCheckoutCodeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyPackageCheckoutCode>>, TError,VerifyPackageCheckoutCodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyPackageCheckoutCode>>, TError,VerifyPackageCheckoutCodeMutationVariables, TContext> => {
+
+const mutationKey = getVerifyPackageCheckoutCodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyPackageCheckoutCode>>, VerifyPackageCheckoutCodeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  verifyPackageCheckoutCode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyPackageCheckoutCodeMutationResult = NonNullable<Awaited<ReturnType<typeof verifyPackageCheckoutCode>>>
+    export type VerifyPackageCheckoutCodeMutationBody = BodyType<PackageCheckoutCodeInput>
+    export type VerifyPackageCheckoutCodeMutationError = ErrorType<ApiError>
+    export type VerifyPackageCheckoutCodeMutationVariables = {data: BodyType<PackageCheckoutCodeInput>}
+
+    /**
+ * @summary Verify package checkout email ownership before account lookup
+ */
+export const useVerifyPackageCheckoutCode = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyPackageCheckoutCode>>, TError,VerifyPackageCheckoutCodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyPackageCheckoutCode>>,
+        TError,
+        VerifyPackageCheckoutCodeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getVerifyPackageCheckoutCodeMutationOptions(options));
     }
 
 export const getRequestPasswordResetUrl = () => {

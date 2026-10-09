@@ -19,6 +19,12 @@ export const PUBLIC_PAGE_METADATA = {
     description:
       'Explore Mailflow plans for organizing contacts and preparing email campaigns. See current plan limits and pricing, with no invented numbers.',
   },
+  checkout: {
+    path: '/package-checkout',
+    title: 'Continue with a Mailflow plan',
+    description:
+      'Review your selected Mailflow plan, verify your email, then sign in or create an account to continue.',
+  },
   terms: {
     path: '/terms-and-conditions',
     title: 'Terms and Conditions | Mailflow',
