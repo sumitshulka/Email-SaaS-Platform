@@ -336,6 +336,80 @@ export async function activateCapturedPayment(input: {
     if (pkg.packageType !== "primary") {
       throw new Error("This package cannot be activated as a primary subscription.");
     }
+    if (payment.subscriptionChangeType === "scheduled") {
+      if (!payment.sourceSubscriptionId || !payment.planChangeEffectiveAt) {
+        throw new Error("The scheduled plan change is missing its current subscription.");
+      }
+      const [source] = await tx
+        .select()
+        .from(userSubscriptionsTable)
+        .where(
+          and(
+            eq(userSubscriptionsTable.id, payment.sourceSubscriptionId),
+            eq(userSubscriptionsTable.userId, payment.userId),
+            eq(userSubscriptionsTable.status, "active"),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!source) {
+        throw new Error(
+          "The active plan changed while payment was processing. Contact the platform administrator before retrying.",
+        );
+      }
+
+      const [current] = await tx
+        .select({ id: userSubscriptionsTable.id })
+        .from(userSubscriptionsTable)
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, payment.userId),
+            eq(userSubscriptionsTable.status, "active"),
+            lte(userSubscriptionsTable.startsAt, now),
+            gt(userSubscriptionsTable.endsAt, now),
+          ),
+        )
+        .orderBy(desc(userSubscriptionsTable.endsAt))
+        .limit(1)
+        .for("update");
+      if (
+        current?.id !== source.id ||
+        source.endsAt.getTime() !== payment.planChangeEffectiveAt.getTime() ||
+        source.endsAt <= now
+      ) {
+        throw new Error(
+          "The active plan expired or changed while payment was processing. Contact the platform administrator before retrying.",
+        );
+      }
+
+      const endsAt = new Date(
+        source.endsAt.getTime() + pkg.periodDays * 24 * 60 * 60 * 1000,
+      );
+      const [scheduledSubscription] = await tx
+        .insert(userSubscriptionsTable)
+        .values({
+          userId: payment.userId,
+          packageId: pkg.id,
+          paymentId: payment.id,
+          status: "active",
+          startsAt: source.endsAt,
+          endsAt,
+          senderAccountIdsToKeep: payment.senderAccountIdsToKeep,
+        })
+        .returning();
+      await tx
+        .update(paymentsTable)
+        .set({
+          status: "captured",
+          razorpayPaymentId: input.razorpayPaymentId,
+          updatedAt: now,
+        })
+        .where(eq(paymentsTable.id, payment.id));
+      return {
+        subscription: serializeSubscription(scheduledSubscription!, pkg),
+        addOnEntitlement: null,
+      };
+    }
     if (payment.subscriptionChangeType === "upgrade") {
       if (!payment.sourceSubscriptionId) {
         throw new Error("The plan upgrade is missing its current subscription.");

@@ -2782,7 +2782,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.deepEqual(downgradePayments, []);
   });
 
-describe("paid primary plan upgrades", { concurrency: false }, () => {
+describe("paid primary plan changes", { concurrency: false }, () => {
   const keySecret = "paid-plan-upgrade-key-secret";
   const webhookSecret = "paid-plan-upgrade-webhook-secret";
   const dayMs = 24 * 60 * 60 * 1000;
@@ -2821,7 +2821,11 @@ describe("paid primary plan upgrades", { concurrency: false }, () => {
     });
   }
 
-  function stubGateway({ orderId = "order_paid_plan_upgrade", paymentId = "pay_paid_plan_upgrade" } = {}) {
+  function stubGateway({
+    orderId = "order_paid_plan_upgrade",
+    paymentId = "pay_paid_plan_upgrade",
+    paymentStatus = "captured",
+  } = {}) {
     const originalFetch = globalThis.fetch;
     let orderRequest;
     globalThis.fetch = async (input, init) => {
@@ -2845,8 +2849,8 @@ describe("paid primary plan upgrades", { concurrency: false }, () => {
             order_id: orderId,
             amount: orderRequest.amount,
             currency: orderRequest.currency,
-            status: "captured",
-            captured: true,
+            status: paymentStatus,
+            captured: paymentStatus === "captured",
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
@@ -2892,6 +2896,36 @@ describe("paid primary plan upgrades", { concurrency: false }, () => {
         status: "active",
         startsAt: new Date(now - 15 * dayMs),
         endsAt: currentEndsAt ?? new Date(now + 15.25 * dayMs),
+      })
+      .returning();
+    await configureGateway();
+    return { user, currentPlan, targetPlan, sourceSubscription };
+  }
+
+  async function makeDowngradePair({ username, currentEndsAt }) {
+    const user = await loggedInUser({ username });
+    const currentPlan = await insertPlan({
+      name: `${username} current plan`,
+      amountMinor: 12_000,
+      currency: "INR",
+      contactLimit: 1_000,
+    });
+    const targetPlan = await insertPlan({
+      name: `${username} lower-limit plan`,
+      amountMinor: 6_000,
+      currency: "INR",
+      contactLimit: 500,
+    });
+    const now = Date.now();
+    const [sourceSubscription] = await db
+      .insert(dbModule.userSubscriptionsTable)
+      .values({
+        userId: user.user.id,
+        packageId: currentPlan.id,
+        paymentId: null,
+        status: "active",
+        startsAt: new Date(now - 15 * dayMs),
+        endsAt: currentEndsAt ?? new Date(now + 15 * dayMs),
       })
       .returning();
     await configureGateway();
@@ -3077,6 +3111,188 @@ describe("paid primary plan upgrades", { concurrency: false }, () => {
         payment.planChangeEffectiveAt.toISOString(),
         fixture.sourceSubscription.endsAt.toISOString(),
       );
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("charges a paid downgrade in full and starts it only when the current term ends", async () => {
+    const currentEnd = new Date(Date.now() + 5_000);
+    const fixture = await makeDowngradePair({
+      username: "paid-downgrade-scheduled-user",
+      currentEndsAt: currentEnd,
+    });
+    const gateway = stubGateway({
+      orderId: "order_paid_downgrade",
+      paymentId: "pay_paid_downgrade",
+    });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      assert.equal(order.body.amountMinor, fixture.targetPlan.amountMinor);
+      assert.equal(gateway.orderRequest().amount, fixture.targetPlan.amountMinor);
+      assert.equal(gateway.orderRequest().currency, fixture.targetPlan.currency);
+
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.subscriptionChangeType, "scheduled");
+      assert.equal(payment.amountMinor, fixture.targetPlan.amountMinor);
+      assert.equal(payment.sourceSubscriptionId, fixture.sourceSubscription.id);
+      assert.equal(payment.planChangeEffectiveAt.toISOString(), currentEnd.toISOString());
+
+      const currentBeforeCapture = await api("/subscriptions/current", {
+        cookie: fixture.user.cookie,
+      });
+      assert.equal(
+        currentBeforeCapture.body.subscription.package.id,
+        fixture.currentPlan.id,
+      );
+      assert.equal(currentBeforeCapture.body.scheduledSubscription, null);
+
+      const verified = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(verified.response.status, 200, JSON.stringify(verified.body));
+      assert.equal(verified.body.status, "active");
+      assert.equal(verified.body.subscription.package.id, fixture.targetPlan.id);
+      assert.equal(verified.body.subscription.startsAt, currentEnd.toISOString());
+      assert.equal(
+        verified.body.subscription.endsAt,
+        new Date(currentEnd.getTime() + fixture.targetPlan.periodDays * dayMs).toISOString(),
+      );
+
+      const currentDuringTerm = await api("/subscriptions/current", {
+        cookie: fixture.user.cookie,
+      });
+      assert.equal(currentDuringTerm.body.subscription.package.id, fixture.currentPlan.id);
+      assert.equal(
+        currentDuringTerm.body.subscription.package.contactLimit,
+        fixture.currentPlan.contactLimit,
+      );
+      assert.equal(
+        currentDuringTerm.body.scheduledSubscription.package.id,
+        fixture.targetPlan.id,
+      );
+      assert.equal(
+        currentDuringTerm.body.scheduledSubscription.startsAt,
+        currentEnd.toISOString(),
+      );
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 2);
+      assert.equal(
+        subscriptions.find((subscription) => subscription.id === fixture.sourceSubscription.id).status,
+        "active",
+      );
+      const scheduled = subscriptions.find(
+        (subscription) => subscription.paymentId === order.body.paymentId,
+      );
+      assert.equal(scheduled.status, "active");
+      assert.equal(scheduled.startsAt.toISOString(), currentEnd.toISOString());
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, currentEnd.getTime() - Date.now() + 25)),
+      );
+      const currentAfterTerm = await api("/subscriptions/current", {
+        cookie: fixture.user.cookie,
+      });
+      assert.equal(currentAfterTerm.body.subscription.package.id, fixture.targetPlan.id);
+      assert.equal(currentAfterTerm.body.scheduledSubscription, null);
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("does not schedule a paid downgrade when its payment fails", async () => {
+    const fixture = await makeDowngradePair({
+      username: "paid-downgrade-failed-payment-user",
+    });
+    const gateway = stubGateway({
+      orderId: "order_failed_downgrade",
+      paymentId: "pay_failed_downgrade",
+      paymentStatus: "failed",
+    });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+
+      const failed = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(failed.response.status, 200, JSON.stringify(failed.body));
+      assert.equal(failed.body.status, "pending");
+      assert.match(failed.body.message, /payment attempt failed/i);
+
+      const current = await api("/subscriptions/current", {
+        cookie: fixture.user.cookie,
+      });
+      assert.equal(current.body.subscription.package.id, fixture.currentPlan.id);
+      assert.equal(current.body.scheduledSubscription, null);
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 1);
+      assert.equal(subscriptions[0].id, fixture.sourceSubscription.id);
+    } finally {
+      gateway.restore();
+    }
+  });
+
+  it("does not schedule a paid downgrade when the source term changes before capture", async () => {
+    const fixture = await makeDowngradePair({
+      username: "paid-downgrade-stale-payment-user",
+    });
+    const gateway = stubGateway({
+      orderId: "order_stale_downgrade",
+      paymentId: "pay_stale_downgrade",
+    });
+
+    try {
+      const order = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(order.response.status, 201, JSON.stringify(order.body));
+      await db
+        .update(dbModule.userSubscriptionsTable)
+        .set({ endsAt: new Date(fixture.sourceSubscription.endsAt.getTime() + dayMs) })
+        .where(eq(dbModule.userSubscriptionsTable.id, fixture.sourceSubscription.id));
+
+      const stale = await verifyCapture(fixture.user, order.body, gateway);
+      assert.equal(stale.response.status, 502);
+      assert.equal(stale.body.code, "RAZORPAY_CONFIRMATION_PENDING");
+
+      const current = await api("/subscriptions/current", {
+        cookie: fixture.user.cookie,
+      });
+      assert.equal(current.body.subscription.package.id, fixture.currentPlan.id);
+      assert.equal(current.body.scheduledSubscription, null);
+
+      const subscriptions = await db
+        .select()
+        .from(dbModule.userSubscriptionsTable)
+        .where(eq(dbModule.userSubscriptionsTable.userId, fixture.user.user.id));
+      assert.equal(subscriptions.length, 1);
+      assert.equal(subscriptions[0].id, fixture.sourceSubscription.id);
+      const [payment] = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      assert.equal(payment.status, "created");
     } finally {
       gateway.restore();
     }

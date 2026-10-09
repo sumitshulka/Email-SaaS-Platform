@@ -31,7 +31,7 @@
 - [Mailflow brand direction](mailflow-brand-direction.md) — use Flowline, confident Taskone-inspired colors, and position around users’ own senders with simple campaign automation.
 - [Mailflow payment policy](mailflow-payment-policy.md) — Taskone owns Mailflow; plans do not auto-renew, expire immediately, and have a narrowly defined 7-day refund rule.
 - [Online payment availability](online-payment-gate.md) — default on for compatibility; off blocks only new paid checkouts, not free activation or settlement.
-- [Paid upgrade expiry](paid-upgrade-expiry.md) — capture must reject if the source plan expired or its saved expiry changed; never extend the purchased term.
+- [Paid plan change expiry](paid-upgrade-expiry.md) — validate the original active plan and expiry at capture; schedule lower-limit plans at that exact expiry.
 - [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
 - [Campaign claim atomicity](campaign-claim-atomicity.md) — win the conditional queued-to-sending transition before recording an attempt or calling SMTP.
 - [Global company privacy](global-company-privacy.md) — keep the global catalog profile-only; contacts stay tenant-private while linked company profiles sync.
