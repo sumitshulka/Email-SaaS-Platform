@@ -8,7 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 const databaseUrl = process.env.ADDON_CAPTURE_RACE_TEST_DATABASE_URL;
 
 test(
-  "simultaneous Razorpay capture callbacks grant one paid add-on entitlement in PostgreSQL",
+  "simultaneous Razorpay callbacks preserve paid add-on entitlements in PostgreSQL",
   {
     skip: databaseUrl
       ? false
@@ -48,10 +48,15 @@ test(
     const encryptedWebhookSecret = securityModule.encryptSecret(webhookSecret);
     const orderId = `order_addon_capture_${testId}`;
     const providerPaymentId = `pay_addon_capture_${testId}`;
-    const eventIds = [
+    const captureEventIds = [
       `addon-capture-race-${testId}-first`,
       `addon-capture-race-${testId}-second`,
     ];
+    const refundEventIds = [
+      `addon-refund-race-${testId}-first`,
+      `addon-refund-race-${testId}-second`,
+    ];
+    const eventIds = [...captureEventIds, ...refundEventIds];
     const amountMinor = 1500;
     const allowances = {
       research: 11,
@@ -236,12 +241,13 @@ test(
         pool.options.max >= 3,
         "the PostgreSQL pool must allow both callbacks alongside the lock holder",
       );
-      callbackPromises = eventIds.map(sendCapture);
-      await waitForBlockedCaptureCallbacks(
+      callbackPromises = captureEventIds.map(sendCapture);
+      await waitForBlockedCallbacks(
         lockClient,
         callbackPromises,
         pool,
-        eventIds,
+        captureEventIds,
+        "capture",
       );
 
       const persistedEvents = await db
@@ -250,10 +256,10 @@ test(
           processedAt: razorpayWebhookEventsTable.processedAt,
         })
         .from(razorpayWebhookEventsTable)
-        .where(inArray(razorpayWebhookEventsTable.eventId, eventIds));
+        .where(inArray(razorpayWebhookEventsTable.eventId, captureEventIds));
       assert.deepEqual(
         persistedEvents.map((event) => event.eventId).sort(),
-        [...eventIds].sort(),
+        [...captureEventIds].sort(),
         "both distinct event IDs must reach the locked payment row",
       );
       assert.ok(
@@ -299,7 +305,7 @@ test(
           processedAt: razorpayWebhookEventsTable.processedAt,
         })
         .from(razorpayWebhookEventsTable)
-        .where(inArray(razorpayWebhookEventsTable.eventId, eventIds));
+        .where(inArray(razorpayWebhookEventsTable.eventId, captureEventIds));
       assert.equal(processedEvents.length, 2);
       assert.ok(processedEvents.every((event) => event.processedAt));
 
@@ -328,6 +334,148 @@ test(
           totalLimit: 1 + allowances.mailboxes,
         },
       );
+
+      const refundAmounts = [300, 400];
+      const sendRefund = (eventId, refundAmountMinor) => {
+        const body = JSON.stringify({
+          event: "refund.processed",
+          payload: {
+            payment: {
+              entity: {
+                id: providerPaymentId,
+                order_id: orderId,
+                amount: amountMinor,
+                currency: "INR",
+                status: "captured",
+                captured: true,
+              },
+            },
+            refund: {
+              entity: {
+                id: `rfnd_${testId}_${eventId}`,
+                payment_id: providerPaymentId,
+                amount: refundAmountMinor,
+                currency: "INR",
+                status: "processed",
+              },
+            },
+          },
+        });
+        return fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-razorpay-event-id": eventId,
+            "x-razorpay-signature": createHmac("sha256", webhookSecret)
+              .update(body)
+              .digest("hex"),
+          },
+          body,
+        });
+      };
+
+      // Each partial refund omits the provider's cumulative amount_refunded,
+      // so both callbacks must add their distinct refund amounts to the latest
+      // value read after acquiring the payment row lock.
+      await lockClient.query("BEGIN");
+      paymentLockHeld = true;
+      const { rows: refundLockedPayments } = await lockClient.query(
+        "SELECT id FROM payments WHERE id = $1 FOR UPDATE",
+        [paymentId],
+      );
+      assert.equal(refundLockedPayments.length, 1);
+      const refundLockProbe = await pool.connect();
+      try {
+        await assert.rejects(
+          refundLockProbe.query(
+            "SELECT id FROM payments WHERE id = $1 FOR UPDATE NOWAIT",
+            [paymentId],
+          ),
+          (error) => error.code === "55P03",
+          "PostgreSQL must confirm the payment row is locked for refunds",
+        );
+      } finally {
+        refundLockProbe.release();
+      }
+
+      callbackPromises = refundEventIds.map((eventId, index) =>
+        sendRefund(eventId, refundAmounts[index]),
+      );
+      await waitForBlockedCallbacks(
+        lockClient,
+        callbackPromises,
+        pool,
+        refundEventIds,
+        "refund",
+      );
+      const pendingRefundEvents = await db
+        .select({
+          eventId: razorpayWebhookEventsTable.eventId,
+          processedAt: razorpayWebhookEventsTable.processedAt,
+        })
+        .from(razorpayWebhookEventsTable)
+        .where(inArray(razorpayWebhookEventsTable.eventId, refundEventIds));
+      assert.deepEqual(
+        pendingRefundEvents.map((event) => event.eventId).sort(),
+        [...refundEventIds].sort(),
+        "both distinct refund IDs must reach the locked payment row",
+      );
+      assert.ok(
+        pendingRefundEvents.every((event) => event.processedAt === null),
+        "neither refund callback may finish while the payment row is locked",
+      );
+
+      await lockClient.query("COMMIT");
+      paymentLockHeld = false;
+      const refundResponses = await Promise.all(callbackPromises);
+      const refundResponseBodies = await Promise.all(
+        refundResponses.map((response) => response.json()),
+      );
+      assert.deepEqual(
+        refundResponses.map((response) => response.status),
+        [200, 200],
+        JSON.stringify(refundResponseBodies),
+      );
+
+      const [refundedPayment] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId));
+      assert.equal(refundedPayment.status, "captured");
+      assert.equal(
+        refundedPayment.refundedAmountMinor,
+        refundAmounts.reduce((total, amount) => total + amount, 0),
+      );
+
+      const refundedDashboard =
+        await entitlementModule.getSubscriptionAddOnsDashboard(userId);
+      assert.deepEqual(refundedDashboard.balances.research, {
+        total: 5,
+        used: 0,
+        remaining: 5,
+      });
+      assert.deepEqual(refundedDashboard.balances.emailAssist, {
+        total: 3,
+        used: 0,
+        remaining: 3,
+      });
+      assert.deepEqual(refundedDashboard.balances.mailboxes, {
+        baseLimit: 1,
+        additionalSlots: 1,
+        totalLimit: 2,
+        used: 0,
+        remaining: 2,
+        active: true,
+      });
+      const processedRefundEvents = await db
+        .select({
+          eventId: razorpayWebhookEventsTable.eventId,
+          processedAt: razorpayWebhookEventsTable.processedAt,
+        })
+        .from(razorpayWebhookEventsTable)
+        .where(inArray(razorpayWebhookEventsTable.eventId, refundEventIds));
+      assert.equal(processedRefundEvents.length, 2);
+      assert.ok(processedRefundEvents.every((event) => event.processedAt));
     } finally {
       if (lockClient) {
         if (paymentLockHeld) {
@@ -387,11 +535,12 @@ test(
   },
 );
 
-async function waitForBlockedCaptureCallbacks(
+async function waitForBlockedCallbacks(
   lockClient,
   callbackPromises,
   pool,
   eventIds,
+  callbackType,
 ) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
@@ -412,7 +561,7 @@ async function waitForBlockedCaptureCallbacks(
     ]);
     if (settled) {
       throw new Error(
-        "A capture callback finished instead of blocking on the held payment row.",
+        `A ${callbackType} callback finished instead of blocking on the held payment row.`,
       );
     }
     if (
@@ -426,6 +575,6 @@ async function waitForBlockedCaptureCallbacks(
     await delay(10);
   }
   throw new Error(
-    `The capture callbacks did not both wait on PostgreSQL row locks. Events: ${eventIds.length}. Pool: ${JSON.stringify({ totalCount: pool.totalCount, idleCount: pool.idleCount, waitingCount: pool.waitingCount, max: pool.options.max })}.`,
+    `The ${callbackType} callbacks did not both wait on PostgreSQL row locks. Events: ${eventIds.length}. Pool: ${JSON.stringify({ totalCount: pool.totalCount, idleCount: pool.idleCount, waitingCount: pool.waitingCount, max: pool.options.max })}.`,
   );
 }
