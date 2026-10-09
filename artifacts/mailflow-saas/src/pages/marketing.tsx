@@ -8,21 +8,13 @@ import {
 import { useListAvailableSubscriptionPackages } from '@workspace/api-client-react';
 import { MailflowBrand } from '@/components/brand';
 import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
+import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/lib/public-page-meta';
 
-const homeMeta = {
-  title: 'Mailflow — simple email campaigns from your own sender',
-  description: 'Organize contacts and companies, prepare simple campaigns, and send with your SMTP account. Add company research and AI drafts when included in your plan.',
-};
-const pricingMeta = {
-  title: 'Mailflow pricing — plans for your next send',
-  description: 'Explore Mailflow plans for organizing contacts and preparing email campaigns. See current plan limits and pricing, with no invented numbers.',
-};
-const featuresMeta = {
-  title: 'Mailflow Features: Your Sender, Simpler Campaigns & AI',
-  description: 'Use your own SMTP, keep contact records private, and manage campaigns with stable variants, one-click unsubscribe, company research and optional AI drafts.',
-};
+const homeMeta = PUBLIC_PAGE_METADATA.home;
+const pricingMeta = PUBLIC_PAGE_METADATA.pricing;
+const featuresMeta = PUBLIC_PAGE_METADATA.features;
 
-function usePageMeta(meta: typeof homeMeta) {
+function usePageMeta(meta: PublicPageMetadata) {
   useEffect(() => {
     document.title = meta.title;
     const setMeta = (selector: string, attribute: string, value: string) => {
@@ -38,8 +30,17 @@ function usePageMeta(meta: typeof homeMeta) {
     setMeta('meta[name="description"]', 'content', meta.description);
     setMeta('meta[property="og:title"]', 'content', meta.title);
     setMeta('meta[property="og:description"]', 'content', meta.description);
+    setMeta('meta[property="og:url"]', 'content', canonicalUrl(meta.path));
     setMeta('meta[name="twitter:title"]', 'content', meta.title);
     setMeta('meta[name="twitter:description"]', 'content', meta.description);
+    setMeta('meta[name="twitter:url"]', 'content', canonicalUrl(meta.path));
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalUrl(meta.path);
   }, [meta]);
 }
 

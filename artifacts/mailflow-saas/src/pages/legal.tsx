@@ -2,28 +2,29 @@ import { useEffect, type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { PublicMarketingLayout } from '@/pages/marketing';
+import { canonicalUrl, PUBLIC_PAGE_METADATA } from '@/lib/public-page-meta';
 
 const updated = 'October 6, 2026';
 
 type DocumentKey = 'terms' | 'privacy' | 'shipping';
 type Section = { title: string; content: ReactNode };
 
-const pageMeta: Record<DocumentKey, { title: string; description: string; heading: string; intro: string }> = {
+const pageMeta: Record<
+  DocumentKey,
+  { path: string; title: string; description: string; heading: string; intro: string }
+> = {
   terms: {
-    title: 'Terms and Conditions | Mailflow',
-    description: 'Read the terms for using Mailflow, including account responsibilities, paid plan terms, permitted use and service scope.',
+    ...PUBLIC_PAGE_METADATA.terms,
     heading: 'Terms and Conditions',
     intro: 'The terms for using Mailflow and the workspace services provided by Taskone Solutions Pvt Ltd.',
   },
   privacy: {
-    title: 'Privacy Policy | Mailflow',
-    description: 'Learn what information Mailflow uses, how it supports the service, and how to submit a privacy request.',
+    ...PUBLIC_PAGE_METADATA.privacy,
     heading: 'Privacy Policy',
     intro: 'How Mailflow handles account, contact, campaign and service information.',
   },
   shipping: {
-    title: 'Shipping & Refund Policy | Mailflow',
-    description: 'Understand digital plan access and the exact eligibility requirements for Mailflow refunds.',
+    ...PUBLIC_PAGE_METADATA.shipping,
     heading: 'Shipping & Refund',
     intro: 'Information about digital service access, paid plan terms and refund eligibility.',
   },
@@ -46,6 +47,17 @@ function useLegalMeta(page: DocumentKey) {
     set('meta[name="description"]', 'content', meta.description);
     set('meta[property="og:title"]', 'content', meta.title);
     set('meta[property="og:description"]', 'content', meta.description);
+    set('meta[property="og:url"]', 'content', canonicalUrl(meta.path));
+    set('meta[name="twitter:title"]', 'content', meta.title);
+    set('meta[name="twitter:description"]', 'content', meta.description);
+    set('meta[name="twitter:url"]', 'content', canonicalUrl(meta.path));
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalUrl(meta.path);
   }, [page]);
 }
 

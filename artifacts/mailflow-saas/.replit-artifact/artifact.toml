@@ -20,6 +20,46 @@ serve = "static"
 publicDir = "artifacts/mailflow-saas/dist/public"
 
 [[services.production.rewrites]]
+from = "/features"
+to = "/features/index.html"
+
+[[services.production.rewrites]]
+from = "/features/"
+to = "/features/index.html"
+
+[[services.production.rewrites]]
+from = "/pricing"
+to = "/pricing/index.html"
+
+[[services.production.rewrites]]
+from = "/pricing/"
+to = "/pricing/index.html"
+
+[[services.production.rewrites]]
+from = "/terms-and-conditions"
+to = "/terms-and-conditions/index.html"
+
+[[services.production.rewrites]]
+from = "/terms-and-conditions/"
+to = "/terms-and-conditions/index.html"
+
+[[services.production.rewrites]]
+from = "/privacy-policy"
+to = "/privacy-policy/index.html"
+
+[[services.production.rewrites]]
+from = "/privacy-policy/"
+to = "/privacy-policy/index.html"
+
+[[services.production.rewrites]]
+from = "/shipping-refund"
+to = "/shipping-refund/index.html"
+
+[[services.production.rewrites]]
+from = "/shipping-refund/"
+to = "/shipping-refund/index.html"
+
+[[services.production.rewrites]]
 from = "/*"
 to = "/index.html"
 
