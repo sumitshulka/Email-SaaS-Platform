@@ -26,3 +26,9 @@ Partial refunds to paid add-ons reduce each allowance in proportion to the amoun
 **Why:** paid add-on value and usable units should change together, including across multiple partial refunds, without trying to reverse usage that already happened.
 
 **How to apply:** use the same prorated entitlement calculation for research, AI-assist, and mailbox limits in dashboard and enforcement paths. Treat full refunds as zero usable paid allowance.
+
+AI Email Assist reservation recovery must wait for the greater of its 15-minute minimum and the provider request timeout plus a 60-second settle grace. Keep regression tests tied to the provider timeout and simulate a provider timeout above the minimum; the current shorter provider timeout is otherwise masked by the minimum.
+
+**Why:** a test using only today's shorter provider timeout cannot catch a future change that makes the recovery threshold shorter than a long-running request.
+
+**How to apply:** have recovery and tests share the same effective-timeout calculation, then check both a real provider-window reservation and the case where the provider window exceeds the minimum.

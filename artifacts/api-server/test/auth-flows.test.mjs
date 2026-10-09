@@ -8178,6 +8178,114 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
       "a recent reservation must remain reserved after startup recovery",
     );
   });
+
+  it("keeps provider-window reservations charged and releases reservations beyond the effective timeout", async () => {
+    const {
+      AI_EMAIL_ASSIST_PROVIDER_SETTLE_GRACE_MS,
+      AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS,
+      getAiEmailAssistReservationTimeoutMs,
+      getSubscriptionAddOnsDashboard,
+      releaseStaleAiEmailAssistReservations,
+      reserveAiEmailAssistCredit,
+    } = await import("../src/lib/add-on-entitlements.ts");
+    const { RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS } = await import(
+      "../src/lib/company-research-provider.ts"
+    );
+
+    const simulatedLongProviderTimeoutMs =
+      AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS + 1;
+    assert.equal(
+      getAiEmailAssistReservationTimeoutMs(simulatedLongProviderTimeoutMs),
+      simulatedLongProviderTimeoutMs +
+        AI_EMAIL_ASSIST_PROVIDER_SETTLE_GRACE_MS,
+      "the provider duration plus settle grace must extend the stale timeout beyond its minimum",
+    );
+    const simulatedInFlightReservationAgeMs =
+      simulatedLongProviderTimeoutMs +
+      AI_EMAIL_ASSIST_PROVIDER_SETTLE_GRACE_MS -
+      1;
+    assert.ok(simulatedInFlightReservationAgeMs > AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS);
+    assert.ok(
+      simulatedInFlightReservationAgeMs <
+        getAiEmailAssistReservationTimeoutMs(simulatedLongProviderTimeoutMs),
+      "a reservation older than the minimum must still be protected during a longer provider request",
+    );
+
+    const account = await createAccount("ai-assist-provider-window-user", {
+      allowance: 2,
+    });
+    const [entitlement] = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.userId, account.user.id));
+    const now = new Date();
+    const effectiveTimeoutMs = getAiEmailAssistReservationTimeoutMs();
+    const providerWindowReservationAgeMs =
+      RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS +
+      AI_EMAIL_ASSIST_PROVIDER_SETTLE_GRACE_MS -
+      1;
+    assert.ok(
+      providerWindowReservationAgeMs < effectiveTimeoutMs,
+      "the reservation must be younger than the effective recovery timeout",
+    );
+
+    const [withinProviderWindow] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "reserved",
+        createdAt: new Date(now.getTime() - providerWindowReservationAgeMs),
+      })
+      .returning();
+    const [beyondEffectiveTimeout] = await db
+      .insert(dbModule.aiEmailAssistUsagesTable)
+      .values({
+        userId: account.user.id,
+        entitlementId: entitlement.id,
+        status: "reserved",
+        createdAt: new Date(now.getTime() - effectiveTimeoutMs - 1),
+      })
+      .returning();
+
+    assert.equal(await releaseStaleAiEmailAssistReservations(now), 1);
+    let usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.deepEqual(
+      Object.fromEntries(usages.map((usage) => [usage.id, usage.status])),
+      {
+        [withinProviderWindow.id]: "reserved",
+        [beyondEffectiveTimeout.id]: "released",
+      },
+    );
+    assert.deepEqual(
+      (await getSubscriptionAddOnsDashboard(account.user.id, now)).balances
+        .emailAssist,
+      { total: 2, used: 1, remaining: 1 },
+      "an active provider-window reservation stays charged while an expired reservation frees one credit",
+    );
+
+    const newlyAvailableCredit = await reserveAiEmailAssistCredit(
+      account.user.id,
+    );
+    assert.ok(newlyAvailableCredit);
+    usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.equal(
+      usages.find((usage) => usage.id === withinProviderWindow.id)?.status,
+      "reserved",
+      "recovering the expired reservation must not free the provider-window credit",
+    );
+    assert.deepEqual(
+      (await getSubscriptionAddOnsDashboard(account.user.id, now)).balances
+        .emailAssist,
+      { total: 2, used: 2, remaining: 0 },
+    );
+  });
 });
 
 describe("superadmin Google OAuth setup", { concurrency: false }, () => {

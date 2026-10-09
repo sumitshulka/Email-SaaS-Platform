@@ -25,10 +25,19 @@ import {
 import { logger } from "./logger";
 import { RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS } from "./company-research-provider";
 
-const AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS = 15 * 60 * 1000;
-const PROVIDER_SETTLE_GRACE_MS = 60 * 1000;
+export const AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS = 15 * 60 * 1000;
+export const AI_EMAIL_ASSIST_PROVIDER_SETTLE_GRACE_MS = 60 * 1000;
 const RESERVATION_CLEANUP_INTERVAL_MS = 60 * 1000;
 let reservationCleanupWorkerStarted = false;
+
+export function getAiEmailAssistReservationTimeoutMs(
+  providerRequestTimeoutMs = RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS,
+) {
+  return Math.max(
+    AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS,
+    providerRequestTimeoutMs + AI_EMAIL_ASSIST_PROVIDER_SETTLE_GRACE_MS,
+  );
+}
 
 const paidEntitlementCondition = or(
   isNull(addOnEntitlementsTable.paymentId),
@@ -85,10 +94,7 @@ function staleAiEmailAssistReservationCondition(now: Date, userId?: string) {
   // The existing 15-minute stale timeout remains the minimum. Keep it longer
   // than the provider's hard request timeout so cleanup cannot release a
   // reservation while its provider request is still active.
-  const staleAfterMs = Math.max(
-    AI_EMAIL_ASSIST_RESERVATION_TIMEOUT_MS,
-    RESEARCH_PROVIDER_REQUEST_TIMEOUT_MS + PROVIDER_SETTLE_GRACE_MS,
-  );
+  const staleAfterMs = getAiEmailAssistReservationTimeoutMs();
   return and(
     eq(aiEmailAssistUsagesTable.status, "reserved"),
     lt(
