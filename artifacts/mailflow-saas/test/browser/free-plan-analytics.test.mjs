@@ -489,7 +489,7 @@ async function openPlansPage(options) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await installFixtures(context, options);
   const page = await context.newPage();
-  await page.goto(`${baseUrl}/plans`);
+  await page.goto(`${baseUrl}${options?.path ?? '/plans'}`);
   return { context, page };
 }
 
@@ -607,6 +607,42 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         },
       ]);
       assert.deepEqual(await page.evaluate(() => window.__paidVerificationResponses), [200]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('records only a fixed package type and server-confirmed outcome for the public checkout payment', async () => {
+    const { context, page } = await openPlansPage({
+      path: `/plans?checkout=${encodeURIComponent(paidPackage.id)}`,
+      packages: [paidPackage],
+      checkoutAction: 'complete',
+    });
+    try {
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+
+      const trackingCalls = await page.evaluate(() => window.__analyticsCalls);
+      assert.deepEqual(trackingCalls, [
+        {
+          args: ['paid_checkout_started', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [],
+        },
+        {
+          args: ['package_checkout_payment_outcome', { package_type: 'primary', outcome: 'succeeded' }],
+          freeActivationResponses: [],
+          paidVerificationResponses: [200],
+        },
+        {
+          args: ['paid_subscription_activated', undefined],
+          freeActivationResponses: [],
+          paidVerificationResponses: [200],
+        },
+      ]);
+      const analyticsPayload = JSON.stringify(trackingCalls);
+      for (const privateValue of [paidPackage.id, paidPackage.name, paidOrder.orderId, paidOrder.paymentId, paidOrder.customerEmail]) {
+        assert.equal(analyticsPayload.includes(privateValue), false, `Analytics must not include ${privateValue}`);
+      }
     } finally {
       await context.close();
     }

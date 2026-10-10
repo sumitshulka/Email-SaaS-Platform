@@ -6,6 +6,17 @@ type SignupAttribution = { page: MarketingPage; placement: SignupPlacement };
 
 const SIGNUP_ATTRIBUTION_KEY = 'mailflow-marketing-signup-attribution';
 const PENDING_VERIFIED_SIGNUP_KEY = 'mailflow-pending-verified-signup';
+const PACKAGE_CHECKOUT_TYPE_KEY = 'mailflow-package-checkout-analytics-type';
+
+export type PackageCheckoutType = 'primary' | 'addon';
+export type PackageCheckoutPaymentOutcome =
+  | 'succeeded'
+  | 'pending'
+  | 'failed'
+  | 'dismissed'
+  | 'setup_failed'
+  | 'review_required'
+  | 'activated_without_payment';
 
 declare global {
   interface Window {
@@ -38,6 +49,71 @@ export function trackEvent(name: string, data?: AnalyticsData): void {
   } catch {
     // Analytics must never break the app.
   }
+}
+
+function isPackageCheckoutType(value: unknown): value is PackageCheckoutType {
+  return value === 'primary' || value === 'addon';
+}
+
+function getPackageCheckoutType(): PackageCheckoutType | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const value: unknown = window.sessionStorage.getItem(PACKAGE_CHECKOUT_TYPE_KEY);
+    return isPackageCheckoutType(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function trackPackageCheckoutSelection(packageType: PackageCheckoutType): void {
+  if (!isPackageCheckoutType(packageType)) return;
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(PACKAGE_CHECKOUT_TYPE_KEY, packageType);
+    } catch {
+      // Analytics context storage must never block checkout.
+    }
+  }
+  trackEvent('package_checkout_selected', { package_type: packageType });
+}
+
+export function trackPackageCheckoutVerification(
+  packageType: PackageCheckoutType,
+  branch: 'existing_account' | 'new_account',
+): void {
+  if (!isPackageCheckoutType(packageType)) return;
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(PACKAGE_CHECKOUT_TYPE_KEY, packageType);
+    } catch {
+      // Analytics context storage must never block checkout.
+    }
+  }
+  trackEvent('package_checkout_email_verified', { package_type: packageType });
+  trackEvent('package_checkout_account_branch', {
+    package_type: packageType,
+    branch,
+  });
+}
+
+export function trackPackageCheckoutRegistrationCompleted(): void {
+  const packageType = getPackageCheckoutType();
+  if (!packageType) return;
+  trackEvent('package_checkout_registration_completed', {
+    package_type: packageType,
+    outcome: 'success',
+  });
+}
+
+export function trackPackageCheckoutPaymentOutcome(
+  packageType: PackageCheckoutType,
+  outcome: PackageCheckoutPaymentOutcome,
+): void {
+  if (!isPackageCheckoutType(packageType)) return;
+  trackEvent('package_checkout_payment_outcome', {
+    package_type: packageType,
+    outcome,
+  });
 }
 
 export function trackMarketingSignupCta(page: MarketingPage, placement: SignupPlacement): void {

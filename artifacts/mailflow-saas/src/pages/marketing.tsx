@@ -13,7 +13,7 @@ import {
 import { MailflowBrand } from '@/components/brand';
 import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
 import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/lib/public-page-meta';
-import { trackMarketingSignupCta } from '@/lib/analytics';
+import { trackMarketingSignupCta, trackPackageCheckoutSelection, trackPackageCheckoutVerification } from '@/lib/analytics';
 import {
   clearPackageCheckoutSession,
   isAmbiguousPackageCheckoutSlug,
@@ -413,7 +413,7 @@ function PackageCard({ pkg, index, sendingLimits, checkoutHref }: {
         <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
-      <Link href={checkoutHref} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`} onClick={() => trackMarketingSignupCta('pricing', 'plan')}>Get started <ArrowRight size={16}/></Link>
+      <Link href={checkoutHref} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`} onClick={() => { trackMarketingSignupCta('pricing', 'plan'); trackPackageCheckoutSelection(pkg.packageType); }}>Get started <ArrowRight size={16}/></Link>
       <p
         className="plan-footnote"
         data-testid={`text-package-total-send-capacity-${pkg.id}`}
@@ -514,11 +514,14 @@ export function PackageCheckoutPage() {
     if (step === 'code') {
       verifyCode.mutate({ data: { email: normalizedEmail, code: code.trim() } }, {
         onSuccess: result => {
+          if (!pkg) return;
           if (result.accountExists) {
+            trackPackageCheckoutVerification(pkg.packageType, 'existing_account');
             setStep('login');
             return;
           }
           if (!packageId || !result.registrationProofToken) return;
+          trackPackageCheckoutVerification(pkg.packageType, 'new_account');
           saveVerifiedPackageCheckout(packageId, normalizedEmail, result.registrationProofToken);
           setLocation(`/register?packageId=${encodeURIComponent(packageId)}`);
         },

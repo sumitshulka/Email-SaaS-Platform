@@ -13,6 +13,7 @@ import {
   trackEvent,
   trackFreeActivationOutcome,
   trackPaidCheckoutOutcome,
+  trackPackageCheckoutPaymentOutcome,
   trackPaidVerificationOutcome,
   trackSmtpSenderRetentionCompleted,
 } from '@/lib/analytics';
@@ -273,6 +274,7 @@ export default function PlansPage() {
   const [pendingPackage, setPendingPackage] = useState<SubscriptionPackage | null>(null);
   const [pendingPackageAccountLimit, setPendingPackageAccountLimit] = useState(1);
   const [senderAccountsToKeep, setSenderAccountsToKeep] = useState<string[]>([]);
+  const checkoutPackageId = new URLSearchParams(window.location.search).get('checkout');
   const packages = packagesQuery.data?.packages ?? [];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const onlinePaymentsEnabled = paymentAvailabilityQuery.data?.enabled === true;
@@ -308,6 +310,7 @@ export default function PlansPage() {
   const runVerification = (
     order: SubscriptionOrderCreated,
     response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string },
+    packageType: SubscriptionPackage['packageType'],
     retentionAnalytics?: { accountCount: number; retainedCount: number; accountLimit: number },
   ) => {
     setPaymentState({ kind: 'pending', message: 'Payment received. Waiting for server confirmation…' });
@@ -319,6 +322,7 @@ export default function PlansPage() {
     } }, {
       onSuccess: result => {
         if (result.status === 'active' && result.subscription) {
+          if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(packageType, 'succeeded');
           trackEvent('paid_subscription_activated');
           if (retentionAnalytics) {
             trackSmtpSenderRetentionCompleted(
@@ -328,9 +332,13 @@ export default function PlansPage() {
             );
           }
         } else if (result.status === 'active' && result.addOnEntitlement) {
+          if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(packageType, 'succeeded');
           trackEvent('paid_addon_activated');
         } else if (result.status === 'pending') {
+          if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(packageType, 'pending');
           trackPaidVerificationOutcome('pending');
+        } else if (checkoutPackageId) {
+          trackPackageCheckoutPaymentOutcome(packageType, 'review_required');
         }
         setPaymentState({
           kind: result.status,
@@ -346,6 +354,7 @@ export default function PlansPage() {
         void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
       },
       onError: error => {
+        if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(packageType, 'failed');
         trackPaidVerificationOutcome('failed');
         setPaymentState({ kind: 'error', message: errorText(error) });
       },
@@ -362,6 +371,7 @@ export default function PlansPage() {
     if (pkg.amountMinor === 0 && pkg.packageType === 'addon') {
         activateFreeAddOn.mutate({ data: { packageId: pkg.id } }, {
           onSuccess: result => {
+            if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(pkg.packageType, 'succeeded');
             trackEvent('free_addon_activated');
             setPaymentState({ kind: 'active', label: 'Add-on activated', message: result.message });
             setStartingPackage(null);
@@ -379,6 +389,7 @@ export default function PlansPage() {
     if (pkg.amountMinor === 0 || noCostPlanUpgrade) {
       activateFree.mutate({ data: { packageId: pkg.id, ...(accountIdsToKeep !== undefined ? { senderAccountIdsToKeep: accountIdsToKeep } : {}) } }, {
         onSuccess: result => {
+          if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(pkg.packageType, 'activated_without_payment');
           if (accountIdsToKeep !== undefined) {
             trackSmtpSenderRetentionCompleted(
               senderAccounts.length,
@@ -407,6 +418,7 @@ export default function PlansPage() {
           void queryClient.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
         },
         onError: error => {
+          if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(pkg.packageType, 'failed');
           if (pkg.amountMinor === 0) trackFreeActivationOutcome('failed');
           setStartingPackage(null);
           setPaymentState({ kind: 'error', message: errorText(error) });
@@ -432,6 +444,7 @@ export default function PlansPage() {
             handler: response => runVerification(
               order,
               response,
+              pkg.packageType,
               accountIdsToKeep !== undefined
                 ? {
                     accountCount: senderAccounts.length,
@@ -441,6 +454,7 @@ export default function PlansPage() {
                 : undefined,
             ),
             modal: { ondismiss: () => {
+              if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(pkg.packageType, 'dismissed');
               trackPaidCheckoutOutcome('dismissed');
               setCheckoutOrder(null);
               setPaymentState({ kind: 'dismissed', message: 'Checkout was closed before a payment was confirmed. You can try again whenever you are ready.' });
@@ -449,6 +463,7 @@ export default function PlansPage() {
           checkout.open();
           trackPaidCheckoutOutcome('started');
         } catch (error) {
+          if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(pkg.packageType, 'setup_failed');
           trackPaidCheckoutOutcome('setup_failed');
           setCheckoutOrder(null);
           setPaymentState({ kind: 'error', message: errorText(error) });
@@ -457,6 +472,7 @@ export default function PlansPage() {
         }
       },
       onError: error => {
+        if (checkoutPackageId) trackPackageCheckoutPaymentOutcome(pkg.packageType, 'setup_failed');
         trackPaidCheckoutOutcome('setup_failed');
         setStartingPackage(null);
         setPaymentState({ kind: 'error', message: errorText(error) });
@@ -529,7 +545,6 @@ export default function PlansPage() {
     );
   };
 
-  const checkoutPackageId = new URLSearchParams(window.location.search).get('checkout');
   useEffect(() => {
     if (!checkoutPackageId || checkoutAutoStartRef.current === checkoutPackageId) return;
     const isLoading =

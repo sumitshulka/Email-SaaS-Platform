@@ -92,7 +92,12 @@ async function stopWebServer() {
   }
 }
 
-async function installFixtures(context, { registrationStatus = 201, verificationStatus = 200, packages = [] } = {}) {
+async function installFixtures(context, {
+  registrationStatus = 201,
+  verificationStatus = 200,
+  packageCheckoutResult = { accountExists: false, registrationProofToken: 'checkout-proof-secret' },
+  packages = [],
+} = {}) {
   const registrationBodies = [];
   const verificationBodies = [];
   await context.addInitScript(() => {
@@ -133,6 +138,14 @@ async function installFixtures(context, { registrationStatus = 201, verification
           ? { message: 'A verification code has been sent to your email address.' }
           : { error: 'An account with this email already exists.' },
       });
+      return;
+    }
+    if (pathname === '/api/auth/package-checkout/request-code' && request.method() === 'POST') {
+      await route.fulfill({ status: 200, json: { message: 'A verification code has been sent.' } });
+      return;
+    }
+    if (pathname === '/api/auth/package-checkout/verify-code' && request.method() === 'POST') {
+      await route.fulfill({ status: 200, json: packageCheckoutResult });
       return;
     }
     if (pathname === '/api/auth/verify-email' && request.method() === 'POST') {
@@ -227,6 +240,7 @@ describe('marketing signup analytics', { concurrency: false }, () => {
       const clickAnalytics = await page.evaluate(() => window.__analyticsCalls);
       assert.deepEqual(clickAnalytics, [
         { name: 'marketing_signup_cta_clicked', data: { page: 'pricing', placement: 'plan' } },
+        { name: 'package_checkout_selected', data: { package_type: 'primary' } },
       ]);
       await page.goto(`${baseUrl}/register`);
       await page.getByTestId('input-first-name').fill('Sample');
@@ -244,6 +258,120 @@ describe('marketing signup analytics', { concurrency: false }, () => {
         ...await page.evaluate(() => window.__analyticsCalls),
       ]);
       for (const privateValue of [pkg.id, pkg.name, 'Sample', 'Visitor', 'signup-test@example.test', 'registration-test-password']) {
+        assert.equal(analyticsPayload.includes(privateValue), false, `Analytics must not include ${privateValue}`);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks verified package checkout through the new-account branch and successful registration without private values', async () => {
+    const pkg = {
+      id: '9cf2f2ae-61bb-4523-a582-dcb843f48a30',
+      packageType: 'primary',
+      name: 'Growth plan',
+      description: 'A paid package used to verify checkout funnel analytics.',
+      amountMinor: 2499,
+      currency: 'USD',
+      periodDays: 30,
+      contactLimit: 100,
+      emailAccountLimit: 1,
+      researchAllowance: 0,
+      aiEmailAssistAllowance: 0,
+      additionalMailboxCount: 0,
+      preferred: false,
+      active: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    try {
+      const { registrationBodies } = await installFixtures(context, { packages: [pkg] });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/pricing`);
+      await page.getByTestId(`package-cta-${pkg.id}`).click();
+      await page.waitForURL(url => url.pathname.startsWith('/package-checkout/'));
+      await page.getByTestId('input-package-checkout-email').fill('checkout-customer@example.test');
+      await page.getByTestId('button-package-checkout-continue').click();
+      await page.getByTestId('input-package-checkout-code').waitFor();
+      await page.getByTestId('input-package-checkout-code').fill('123456');
+      await page.getByTestId('button-package-checkout-continue').click();
+      await page.waitForURL(url => url.pathname === '/register');
+
+      await page.getByTestId('input-first-name').fill('Checkout');
+      await page.getByTestId('input-last-name').fill('Customer');
+      await page.getByTestId('input-register-password').fill('checkout-test-password');
+      await page.getByTestId('button-create-account').click();
+      await page.waitForURL(url => url.pathname === '/plans');
+
+      const events = await page.evaluate(() => window.__analyticsCalls);
+      assert.deepEqual(events, [
+        { name: 'marketing_signup_cta_clicked', data: { page: 'pricing', placement: 'plan' } },
+        { name: 'package_checkout_selected', data: { package_type: 'primary' } },
+        { name: 'package_checkout_email_verified', data: { package_type: 'primary' } },
+        { name: 'package_checkout_account_branch', data: { package_type: 'primary', branch: 'new_account' } },
+        { name: 'package_checkout_registration_completed', data: { package_type: 'primary', outcome: 'success' } },
+        { name: 'registration_succeeded', data: { page: 'pricing', placement: 'plan' } },
+      ]);
+      const analyticsPayload = JSON.stringify(events);
+      for (const privateValue of [
+        pkg.id,
+        pkg.name,
+        'checkout-customer@example.test',
+        '123456',
+        'checkout-test-password',
+        'checkout-proof-secret',
+        'Checkout',
+        'Customer',
+      ]) {
+        assert.equal(analyticsPayload.includes(privateValue), false, `Analytics must not include ${privateValue}`);
+      }
+      assert.equal(registrationBodies.length, 1);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('tracks the existing-account branch only after package email verification succeeds', async () => {
+    const pkg = {
+      id: '9cf2f2ae-61bb-4523-a582-dcb843f48a30',
+      packageType: 'primary',
+      name: 'Growth plan',
+      description: 'A paid package used to verify checkout funnel analytics.',
+      amountMinor: 2499,
+      currency: 'USD',
+      periodDays: 30,
+      contactLimit: 100,
+      emailAccountLimit: 1,
+      researchAllowance: 0,
+      aiEmailAssistAllowance: 0,
+      additionalMailboxCount: 0,
+      preferred: false,
+      active: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    try {
+      await installFixtures(context, {
+        packages: [pkg],
+        packageCheckoutResult: { accountExists: true },
+      });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/package-checkout?packageId=${encodeURIComponent(pkg.id)}`);
+      await page.getByTestId('input-package-checkout-email').fill('existing-customer@example.test');
+      await page.getByTestId('button-package-checkout-continue').click();
+      await page.getByTestId('input-package-checkout-code').waitFor();
+      await page.getByTestId('input-package-checkout-code').fill('123456');
+      await page.getByTestId('button-package-checkout-continue').click();
+      await page.getByTestId('input-package-checkout-password').waitFor();
+
+      assert.deepEqual(await page.evaluate(() => window.__analyticsCalls), [
+        { name: 'package_checkout_email_verified', data: { package_type: 'primary' } },
+        { name: 'package_checkout_account_branch', data: { package_type: 'primary', branch: 'existing_account' } },
+      ]);
+      const analyticsPayload = JSON.stringify(await page.evaluate(() => window.__analyticsCalls));
+      for (const privateValue of [pkg.id, pkg.name, 'existing-customer@example.test', '123456']) {
         assert.equal(analyticsPayload.includes(privateValue), false, `Analytics must not include ${privateValue}`);
       }
     } finally {

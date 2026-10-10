@@ -39,7 +39,7 @@ import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
-import { trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
+import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
 import { clearPackageCheckoutSession, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
@@ -188,6 +188,7 @@ function RegisterPage() {
     register.mutate(
       { data: { ...values, ...(verifiedCheckout ? { emailVerificationProof: verifiedCheckout.proof } : {}) } },
       { onSuccess: () => {
+        if (verifiedCheckout && checkoutPackageId) trackPackageCheckoutRegistrationCompleted();
         trackRegistrationSucceeded(!verifiedCheckout);
         if (verifiedCheckout && checkoutPackageId) {
           clearPackageCheckoutSession();
