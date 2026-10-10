@@ -92,6 +92,112 @@ function withPageMetadata(html: string, page: PublicPageMetadata) {
   );
 }
 
+function metaAttribute(tag: string, attribute: string) {
+  const match = tag.match(new RegExp(`\\b${attribute}="([^"]*)"`, 'i'));
+  return match?.[1];
+}
+
+function requiredMetaContent(
+  html: string,
+  attribute: 'name' | 'property',
+  key: string,
+  routePath: string,
+) {
+  const matchingTags = [...html.matchAll(/<meta\b[^>]*>/gi)]
+    .map(([tag]) => tag)
+    .filter((tag) => metaAttribute(tag, attribute) === key);
+  if (matchingTags.length !== 1) {
+    throw new Error(
+      `Production metadata check failed for ${routePath}: expected exactly one ${attribute}="${key}" tag, found ${matchingTags.length}.`,
+    );
+  }
+
+  const content = metaAttribute(matchingTags[0], 'content');
+  if (!content) {
+    throw new Error(
+      `Production metadata check failed for ${routePath}: ${attribute}="${key}" has no content.`,
+    );
+  }
+  return content;
+}
+
+async function verifyPublicSocialMetadata(
+  publicDir: string,
+  pages: PublicPageMetadata[],
+) {
+  const imageUrl = new URL(SOCIAL_IMAGE_URL);
+  if (
+    !['http:', 'https:'].includes(imageUrl.protocol) ||
+    imageUrl.username ||
+    imageUrl.password ||
+    imageUrl.pathname !== '/mailflow-social-share.png'
+  ) {
+    throw new Error(
+      `Production metadata check failed: SOCIAL_IMAGE_URL must be an absolute HTTP(S) URL to /mailflow-social-share.png; received "${SOCIAL_IMAGE_URL}".`,
+    );
+  }
+
+  const imagePath = path.join(publicDir, imageUrl.pathname.slice(1));
+  let image: Buffer;
+  try {
+    image = await readFile(imagePath);
+  } catch {
+    throw new Error(
+      `Production metadata check failed: the copied social image is missing at ${imagePath}.`,
+    );
+  }
+
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (
+    image.length < 24 ||
+    !image.subarray(0, 8).equals(pngSignature) ||
+    image.readUInt32BE(12) !== 0x49484452
+  ) {
+    throw new Error(
+      `Production metadata check failed: ${imagePath} is not a valid PNG with an IHDR header.`,
+    );
+  }
+
+  const width = image.readUInt32BE(16);
+  const height = image.readUInt32BE(20);
+  if (width !== 1200 || height !== 630) {
+    throw new Error(
+      `Production metadata check failed: social image must be 1200×630; found ${width}×${height}.`,
+    );
+  }
+
+  for (const page of pages) {
+    const routeHtmlPath =
+      page.path === '/'
+        ? path.join(publicDir, 'index.html')
+        : path.join(publicDir, page.path.slice(1), 'index.html');
+    const html = await readFile(routeHtmlPath, 'utf8');
+
+    for (const [attribute, key] of [
+      ['property', 'og:image'],
+      ['name', 'twitter:image'],
+    ] as const) {
+      const content = requiredMetaContent(html, attribute, key, page.path);
+      let taggedImageUrl: URL;
+      try {
+        taggedImageUrl = new URL(content);
+      } catch {
+        throw new Error(
+          `Production metadata check failed for ${page.path}: ${attribute}="${key}" must use an absolute image URL.`,
+        );
+      }
+      if (
+        !['http:', 'https:'].includes(taggedImageUrl.protocol) ||
+        taggedImageUrl.href !== SOCIAL_IMAGE_URL
+      ) {
+        throw new Error(
+          `Production metadata check failed for ${page.path}: ${attribute}="${key}" must point to ${SOCIAL_IMAGE_URL}; received "${content}".`,
+        );
+      }
+    }
+  }
+}
+
 function routeAwareSeoPlugin(): Plugin {
   return {
     name: 'mailflow-route-aware-seo',
@@ -100,17 +206,20 @@ function routeAwareSeoPlugin(): Plugin {
       const publicDir = path.resolve(import.meta.dirname, 'dist/public');
       const html = await readFile(path.join(publicDir, 'index.html'), 'utf8');
 
-      for (const page of Object.values(PUBLIC_PAGE_METADATA)) {
+      const pages = Object.values(PUBLIC_PAGE_METADATA);
+      for (const page of pages) {
         if (page.path === '/') continue;
         const routeHtmlPath = path.join(publicDir, page.path.slice(1), 'index.html');
         await mkdir(path.dirname(routeHtmlPath), { recursive: true });
         await writeFile(routeHtmlPath, withPageMetadata(html, page));
       }
 
+      await verifyPublicSocialMetadata(publicDir, pages);
+
       const sitemap = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        ...Object.values(PUBLIC_PAGE_METADATA).map(
+        ...pages.map(
           (page) => `  <url><loc>${canonicalUrl(page.path)}</loc></url>`,
         ),
         '</urlset>',
