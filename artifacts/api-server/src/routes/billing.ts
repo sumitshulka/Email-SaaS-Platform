@@ -1060,7 +1060,7 @@ router.post(
     }
     const grant = await grantAdminGiftSubscription(parsed.data);
     if (grant?.kind === "primary-required") {
-      res.status(403).json({
+      res.status(409).json({
         error:
           "An active paid-priced primary package is required to gift an add-on. A previously gifted paid package qualifies.",
         code: "PAID_PRIMARY_REQUIRED",

@@ -69,6 +69,29 @@ function formatMinor(amountMinor: number, currency: string) {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(amountMinor / (10 ** digits));
 }
 
+function giftEligibilityLabel(user: AdminUser) {
+  switch (user.addOnGiftEligibility) {
+    case 'eligible': return 'Eligible for add-on gifts';
+    case 'free': return 'Ineligible · Free Primary plan';
+    case 'expired': return 'Ineligible · Primary plan expired';
+    case 'inactive': return 'Ineligible · Primary plan not active';
+    case 'missing': return 'Ineligible · No Primary plan';
+  }
+}
+
+function primaryPlanSummary(user: AdminUser) {
+  if (!user.primaryPackageName) return 'No Primary plan on record';
+  const price = user.primaryPackageAmountMinor === 0
+    ? 'Free'
+    : user.primaryPackageAmountMinor !== null && user.primaryPackageCurrency
+      ? formatMinor(user.primaryPackageAmountMinor, user.primaryPackageCurrency)
+      : 'Price unavailable';
+  const termEnd = user.primaryEndsAt
+    ? ` · term ends ${new Date(user.primaryEndsAt).toLocaleDateString()}`
+    : '';
+  return `Primary: ${user.primaryPackageName} · ${price}${termEnd}`;
+}
+
 function inputMinor(amount: string, currency: string) {
   try {
     const digits = new Intl.NumberFormat(undefined, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
@@ -326,10 +349,12 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <label htmlFor="gift-account-search" className="block text-[12px] font-semibold text-[#35445a]">Tenant account</label>
-            {giftRecipient ? <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-[#d8dfe6] bg-[#f8fafb] px-3 py-2" data-testid="selected-gift-recipient">
+            {giftRecipient ? <div className="flex min-h-10 items-start justify-between gap-3 rounded-md border border-[#d8dfe6] bg-[#f8fafb] px-3 py-2" data-testid="selected-gift-recipient">
               <div className="min-w-0">
                 <div className="truncate text-[12px] font-semibold text-[#23364b]">{giftRecipient.firstName} {giftRecipient.lastName}</div>
-                <div className="truncate text-[11px] text-[#748292]">{giftRecipient.email} · {giftRecipient.subscriptionStatus ?? 'No active subscription'}</div>
+                <div className="truncate text-[11px] text-[#748292]">{giftRecipient.email}</div>
+                <div className="mt-1 text-[10px] text-[#627387]">{primaryPlanSummary(giftRecipient)}</div>
+                <div className={`mt-1 text-[10px] font-semibold ${giftRecipient.addOnGiftEligibility === 'eligible' ? 'text-[#397451]' : 'text-[#a84926]'}`} data-testid="selected-gift-recipient-eligibility">{giftEligibilityLabel(giftRecipient)}</div>
               </div>
               <button type="button" data-testid="button-clear-gift-recipient" aria-label="Choose a different account" onClick={() => { setGiftRecipient(null); setGiftConfirmed(false); setGiftNotice(null); }} className="grid h-8 w-8 shrink-0 place-items-center rounded text-[#718093] hover:bg-white hover:text-[#294d70]"><X className="h-4 w-4"/></button>
             </div> : <>
@@ -354,7 +379,9 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
                       className="block w-full border-b border-[#edf0f2] px-3 py-2.5 text-left last:border-0 hover:bg-[#f7f9fa]"
                     >
                       <span className="block text-[12px] font-semibold text-[#26374a]">{user.firstName} {user.lastName}</span>
-                      <span className="mt-0.5 block text-[11px] text-[#788696]">{user.email} · {user.subscriptionStatus ?? 'No active subscription'}</span>
+                      <span className="mt-0.5 block text-[11px] text-[#788696]">{user.email}</span>
+                      <span className="mt-1 block text-[10px] text-[#627387]">{primaryPlanSummary(user)}</span>
+                      <span className={`mt-1 block text-[10px] font-semibold ${user.addOnGiftEligibility === 'eligible' ? 'text-[#397451]' : 'text-[#a84926]'}`} data-testid={`gift-eligibility-${user.id}`}>{giftEligibilityLabel(user)}</span>
                     </button>) : <p className="px-3 py-2.5 text-[11px] text-[#788696]">No matching tenant accounts.</p>}
               </div>}
               <p className="text-[10px] text-[#85909c]">Search includes active, disabled, and pending tenant accounts.</p>
@@ -380,7 +407,10 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
             </span>
           </label>
         </div>
-        {giftRecipient && giftPackageId && <label className="flex cursor-pointer items-start gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] p-3 text-[11px] leading-5 text-[#53677b]">
+        {giftRecipient && giftIsAddon && giftRecipient.addOnGiftEligibility !== 'eligible' && <p data-testid="status-gift-addon-ineligible" role="status" className="rounded-md border border-[#efd8c7] bg-[#fff8f2] px-3 py-2.5 text-[11px] leading-5 text-[#985120]">
+          This account is not currently eligible for an add-on gift. {giftEligibilityLabel(giftRecipient)}. The server checks eligibility again when a gift is submitted.
+        </p>}
+        {giftRecipient && giftPackageId && (!giftIsAddon || giftRecipient.addOnGiftEligibility === 'eligible') && <label className="flex cursor-pointer items-start gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] p-3 text-[11px] leading-5 text-[#53677b]">
           <input data-testid="checkbox-confirm-gift" type="checkbox" checked={giftConfirmed} onChange={event => setGiftConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#174f99]"/>
           <span>
             {giftIsAddon
@@ -391,7 +421,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         {giftNotice && <p data-testid="status-gift-subscription" role={giftNotice.bad ? 'alert' : 'status'} className={`rounded-md border px-3 py-2.5 text-[11px] ${giftNotice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{giftNotice.text}</p>}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-4">
           <p className="max-w-xl text-[10px] leading-5 text-[#788696]">Primary gifts grant a package term; add-on gifts add the package's allowances to the user's balance. Gifts do not create a payment or revenue entry.</p>
-          <button data-testid="button-grant-gift-subscription" type="submit" disabled={!giftRecipient || !giftPackageId || !giftConfirmed || giftSubscription.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
+          <button data-testid="button-grant-gift-subscription" type="submit" disabled={!giftRecipient || !giftPackageId || !giftConfirmed || giftSubscription.isPending || (giftIsAddon && giftRecipient?.addOnGiftEligibility !== 'eligible')} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
             {giftSubscription.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Gift className="h-4 w-4"/>}
             {giftSubscription.isPending ? 'Granting subscription…' : 'Grant subscription'}
           </button>

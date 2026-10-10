@@ -3248,6 +3248,17 @@ export const RazorpayEnvironment = {
   production: 'production',
 } as const;
 
+export type AdminUserAddOnGiftEligibility = typeof AdminUserAddOnGiftEligibility[keyof typeof AdminUserAddOnGiftEligibility];
+
+
+export const AdminUserAddOnGiftEligibility = {
+  eligible: 'eligible',
+  free: 'free',
+  expired: 'expired',
+  inactive: 'inactive',
+  missing: 'missing',
+} as const;
+
 export interface AdminUser {
   id: string;
   username: string;
@@ -3261,6 +3272,24 @@ export interface AdminUser {
   lastLoginAt: string | null;
   /** @nullable */
   subscriptionStatus: string | null;
+  /** @nullable */
+  primaryPackageName: string | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  primaryPackageAmountMinor: number | null;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     * @nullable
+     */
+  primaryPackageCurrency: string | null;
+  /** @nullable */
+  primaryStartsAt: string | null;
+  /** @nullable */
+  primaryEndsAt: string | null;
+  addOnGiftEligibility: AdminUserAddOnGiftEligibility;
 }
 
 export interface AdminDashboard {

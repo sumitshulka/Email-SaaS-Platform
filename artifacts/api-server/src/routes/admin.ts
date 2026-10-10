@@ -75,7 +75,31 @@ const SMTP_PROVIDER_PRESETS = {
 function toAdminUser(
   user: typeof usersTable.$inferSelect,
   subscriptionStatus: string | null = null,
+  primaryPlan: {
+    packageName: string;
+    amountMinor: number;
+    currency: string;
+    startsAt: Date;
+    endsAt: Date;
+    status: string;
+  } | null = null,
+  now = new Date(),
 ) {
+  const startsAt = primaryPlan?.startsAt.getTime() ?? null;
+  const endsAt = primaryPlan?.endsAt.getTime() ?? null;
+  const primaryGiftEligibility = !primaryPlan
+    ? "missing"
+    : primaryPlan.status === "active" &&
+        startsAt !== null &&
+        startsAt <= now.getTime() &&
+        endsAt !== null &&
+        endsAt > now.getTime()
+      ? primaryPlan.amountMinor > 0
+        ? "eligible"
+        : "free"
+      : endsAt !== null && endsAt <= now.getTime()
+        ? "expired"
+        : "inactive";
   return {
     id: user.id,
     username: user.username,
@@ -87,39 +111,105 @@ function toAdminUser(
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
     subscriptionStatus,
+    primaryPackageName: primaryPlan?.packageName ?? null,
+    primaryPackageAmountMinor: primaryPlan?.amountMinor ?? null,
+    primaryPackageCurrency: primaryPlan?.currency ?? null,
+    primaryStartsAt: primaryPlan?.startsAt.toISOString() ?? null,
+    primaryEndsAt: primaryPlan?.endsAt.toISOString() ?? null,
+    addOnGiftEligibility: primaryGiftEligibility,
   };
 }
 
 async function toAdminUsers(users: Array<typeof usersTable.$inferSelect>) {
   if (users.length === 0) return [];
   const now = new Date();
-  const subscriptionRows = await db
-    .select({
-      userId: userSubscriptionsTable.userId,
-      packageName: subscriptionPackagesTable.name,
-      endsAt: userSubscriptionsTable.endsAt,
-    })
-    .from(userSubscriptionsTable)
-    .innerJoin(
-      subscriptionPackagesTable,
-      eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
-    )
-    .where(
-      and(
-        inArray(userSubscriptionsTable.userId, users.map((user) => user.id)),
-        eq(userSubscriptionsTable.status, "active"),
-        lte(userSubscriptionsTable.startsAt, now),
-        gt(userSubscriptionsTable.endsAt, now),
-      ),
-    )
-    .orderBy(desc(userSubscriptionsTable.endsAt));
+  const [subscriptionRows, primaryPlanRows] = await Promise.all([
+    db
+      .select({
+        userId: userSubscriptionsTable.userId,
+        packageName: subscriptionPackagesTable.name,
+        endsAt: userSubscriptionsTable.endsAt,
+      })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          inArray(userSubscriptionsTable.userId, users.map((user) => user.id)),
+          eq(userSubscriptionsTable.status, "active"),
+          lte(userSubscriptionsTable.startsAt, now),
+          gt(userSubscriptionsTable.endsAt, now),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt)),
+    db
+      .select({
+        userId: userSubscriptionsTable.userId,
+        packageName: subscriptionPackagesTable.name,
+        amountMinor: subscriptionPackagesTable.amountMinor,
+        currency: subscriptionPackagesTable.currency,
+        startsAt: userSubscriptionsTable.startsAt,
+        endsAt: userSubscriptionsTable.endsAt,
+        status: userSubscriptionsTable.status,
+      })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          inArray(userSubscriptionsTable.userId, users.map((user) => user.id)),
+          eq(subscriptionPackagesTable.packageType, "primary"),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt)),
+  ]);
   const statusByUser = new Map<string, string>();
   for (const row of subscriptionRows) {
     if (!statusByUser.has(row.userId)) {
       statusByUser.set(row.userId, `Active · ${row.packageName}`);
     }
   }
-  return users.map((user) => toAdminUser(user, statusByUser.get(user.id) ?? null));
+  const primaryPlansByUser = new Map<
+    string,
+    (typeof primaryPlanRows)[number][]
+  >();
+  for (const row of primaryPlanRows) {
+    const rows = primaryPlansByUser.get(row.userId) ?? [];
+    rows.push(row);
+    primaryPlansByUser.set(row.userId, rows);
+  }
+  const nowTime = now.getTime();
+  return users.map((user) => {
+    const primaryPlan = (primaryPlansByUser.get(user.id) ?? []).sort((a, b) => {
+      const priority = (row: (typeof primaryPlanRows)[number]) => {
+        if (
+          row.status === "active" &&
+          row.startsAt.getTime() <= nowTime &&
+          row.endsAt.getTime() > nowTime
+        ) return 0;
+        if (
+          row.status === "active" &&
+          row.startsAt.getTime() > nowTime &&
+          row.endsAt.getTime() > nowTime
+        ) return 1;
+        return 2;
+      };
+      const priorityDifference = priority(a) - priority(b);
+      if (priorityDifference !== 0) return priorityDifference;
+      if (priority(a) === 1) return a.startsAt.getTime() - b.startsAt.getTime();
+      return b.endsAt.getTime() - a.endsAt.getTime();
+    })[0] ?? null;
+    return toAdminUser(
+      user,
+      statusByUser.get(user.id) ?? null,
+      primaryPlan,
+      now,
+    );
+  });
 }
 
 router.get("/admin/dashboard", requireSuperadmin, async (_req, res): Promise<void> => {

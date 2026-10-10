@@ -3253,8 +3253,8 @@ paths:
                 $ref: "#/components/schemas/AdminSubscriptionGiftResult"
         "400":
           description: Invalid gift request
-        "403":
-          description: An active paid-priced primary package is required to gift an add-on
+        "409":
+          description: Recipient no longer has an active paid-priced primary package for an add-on gift
         "404":
           description: Tenant account or subscription package not found
   /subscriptions/packages:
@@ -5296,7 +5296,13 @@ components:
         createdAt: { type: string, format: date-time }
         lastLoginAt: { type: ["string", "null"], format: date-time }
         subscriptionStatus: { type: ["string", "null"] }
-      required: [id, username, firstName, lastName, email, emailVerified, active, createdAt, lastLoginAt, subscriptionStatus]
+        primaryPackageName: { type: ["string", "null"] }
+        primaryPackageAmountMinor: { type: ["integer", "null"], minimum: 0 }
+        primaryPackageCurrency: { type: ["string", "null"], minLength: 3, maxLength: 3 }
+        primaryStartsAt: { type: ["string", "null"], format: date-time }
+        primaryEndsAt: { type: ["string", "null"], format: date-time }
+        addOnGiftEligibility: { type: string, enum: [eligible, free, expired, inactive, missing] }
+      required: [id, username, firstName, lastName, email, emailVerified, active, createdAt, lastLoginAt, subscriptionStatus, primaryPackageName, primaryPackageAmountMinor, primaryPackageCurrency, primaryStartsAt, primaryEndsAt, addOnGiftEligibility]
     AdminUserPage:
       type: object
       properties:

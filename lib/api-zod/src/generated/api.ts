@@ -4901,6 +4901,11 @@ export const getAdminDashboardResponseRegistrationsByMonthItemRegistrationsMin =
 export const getAdminDashboardResponseRevenueTrendItemMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
 export const getAdminDashboardResponseActiveSubscriptionsByPackageItemActiveSubscriptionsMin = 0;
 
+export const getAdminDashboardResponseRecentUsersItemPrimaryPackageAmountMinorMin = 0;
+
+export const getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMin = 3;
+export const getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMax = 3;
+
 
 
 export const GetAdminDashboardResponse = zod.object({
@@ -4956,7 +4961,13 @@ export const GetAdminDashboardResponse = zod.object({
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullable(),
-  "subscriptionStatus": zod.string().nullable()
+  "subscriptionStatus": zod.string().nullable(),
+  "primaryPackageName": zod.string().nullable(),
+  "primaryPackageAmountMinor": zod.number().int().min(getAdminDashboardResponseRecentUsersItemPrimaryPackageAmountMinorMin).nullable(),
+  "primaryPackageCurrency": zod.string().min(getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMin).max(getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMax).nullable(),
+  "primaryStartsAt": zod.coerce.date().nullable(),
+  "primaryEndsAt": zod.coerce.date().nullable(),
+  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing'])
 }))
 })
 
@@ -5342,6 +5353,13 @@ export const ListAdminUsersQueryParams = zod.object({
   "pageSize": zod.coerce.number().int().min(1).max(listAdminUsersQueryPageSizeMax).default(listAdminUsersQueryPageSizeDefault)
 })
 
+export const listAdminUsersResponseItemsItemPrimaryPackageAmountMinorMin = 0;
+
+export const listAdminUsersResponseItemsItemPrimaryPackageCurrencyMin = 3;
+export const listAdminUsersResponseItemsItemPrimaryPackageCurrencyMax = 3;
+
+
+
 export const ListAdminUsersResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -5353,7 +5371,13 @@ export const ListAdminUsersResponse = zod.object({
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullable(),
-  "subscriptionStatus": zod.string().nullable()
+  "subscriptionStatus": zod.string().nullable(),
+  "primaryPackageName": zod.string().nullable(),
+  "primaryPackageAmountMinor": zod.number().int().min(listAdminUsersResponseItemsItemPrimaryPackageAmountMinorMin).nullable(),
+  "primaryPackageCurrency": zod.string().min(listAdminUsersResponseItemsItemPrimaryPackageCurrencyMin).max(listAdminUsersResponseItemsItemPrimaryPackageCurrencyMax).nullable(),
+  "primaryStartsAt": zod.coerce.date().nullable(),
+  "primaryEndsAt": zod.coerce.date().nullable(),
+  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing'])
 })),
   "total": zod.number().int(),
   "page": zod.number().int(),
@@ -5372,6 +5396,13 @@ export const UpdateAdminUserStatusBody = zod.object({
   "active": zod.boolean()
 })
 
+export const updateAdminUserStatusResponsePrimaryPackageAmountMinorMin = 0;
+
+export const updateAdminUserStatusResponsePrimaryPackageCurrencyMin = 3;
+export const updateAdminUserStatusResponsePrimaryPackageCurrencyMax = 3;
+
+
+
 export const UpdateAdminUserStatusResponse = zod.object({
   "id": zod.string().uuid(),
   "username": zod.string(),
@@ -5382,7 +5413,13 @@ export const UpdateAdminUserStatusResponse = zod.object({
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "lastLoginAt": zod.coerce.date().nullable(),
-  "subscriptionStatus": zod.string().nullable()
+  "subscriptionStatus": zod.string().nullable(),
+  "primaryPackageName": zod.string().nullable(),
+  "primaryPackageAmountMinor": zod.number().int().min(updateAdminUserStatusResponsePrimaryPackageAmountMinorMin).nullable(),
+  "primaryPackageCurrency": zod.string().min(updateAdminUserStatusResponsePrimaryPackageCurrencyMin).max(updateAdminUserStatusResponsePrimaryPackageCurrencyMax).nullable(),
+  "primaryStartsAt": zod.coerce.date().nullable(),
+  "primaryEndsAt": zod.coerce.date().nullable(),
+  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing'])
 })
 
 

@@ -3790,6 +3790,9 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     const freeUser = await loggedInUser({ username: "addon-gift-free-user" });
     const noPlanUser = await loggedInUser({ username: "addon-gift-no-plan-user" });
+    const changingEligibilityUser = await loggedInUser({
+      username: "addon-gift-changing-eligibility-user",
+    });
 
     const paidPrimary = await api("/admin/billing/packages", {
       method: "POST",
@@ -3862,6 +3865,12 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         paymentId: null,
         ...activeTerm,
       },
+      {
+        userId: changingEligibilityUser.user.id,
+        packageId: paidPrimary.body.id,
+        paymentId: null,
+        ...activeTerm,
+      },
     ]);
 
     const primaryGift = await api("/admin/billing/subscriptions/gift", {
@@ -3874,6 +3883,37 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     assert.equal(primaryGift.response.status, 201, JSON.stringify(primaryGift.body));
     assert.equal(primaryGift.body.kind, "primary");
+
+    const recipientSearch = await api(
+      "/admin/users?search=addon-gift-&status=all&page=1&pageSize=20",
+      { cookie: admin.cookie },
+    );
+    assert.equal(recipientSearch.response.status, 200, JSON.stringify(recipientSearch.body));
+    const searchedUsers = new Map(
+      recipientSearch.body.items.map((user) => [user.id, user]),
+    );
+    const paidSearchResult = searchedUsers.get(paidUser.user.id);
+    assert.equal(paidSearchResult.addOnGiftEligibility, "eligible");
+    assert.equal(paidSearchResult.primaryPackageName, paidPrimary.body.name);
+    assert.equal(paidSearchResult.primaryPackageAmountMinor, paidPrimary.body.amountMinor);
+    assert.equal(paidSearchResult.primaryPackageCurrency, paidPrimary.body.currency);
+    assert.equal(paidSearchResult.primaryEndsAt, activeTerm.endsAt.toISOString());
+    assert.equal(
+      searchedUsers.get(freeUser.user.id).addOnGiftEligibility,
+      "free",
+    );
+    assert.equal(
+      searchedUsers.get(freeUser.user.id).primaryPackageName,
+      freePrimary.body.name,
+    );
+    assert.equal(
+      searchedUsers.get(noPlanUser.user.id).addOnGiftEligibility,
+      "missing",
+    );
+    assert.equal(
+      searchedUsers.get(changingEligibilityUser.user.id).addOnGiftEligibility,
+      "eligible",
+    );
 
     for (const recipient of [paidUser, giftedPrimaryUser]) {
       const gift = await api("/admin/billing/subscriptions/gift", {
@@ -3916,13 +3956,46 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(paidUserEntitlements.length, 2);
     assert.ok(paidUserEntitlements.every((item) => item.grantSource === "admin_gift"));
 
+    const expiredAt = new Date(Date.now() - 60_000);
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({ endsAt: expiredAt })
+      .where(
+        and(
+          eq(dbModule.userSubscriptionsTable.userId, changingEligibilityUser.user.id),
+          eq(dbModule.userSubscriptionsTable.packageId, paidPrimary.body.id),
+        ),
+      );
+    const expiredSearch = await api(
+      `/admin/users?search=${encodeURIComponent(changingEligibilityUser.user.username)}&status=all&page=1&pageSize=8`,
+      { cookie: admin.cookie },
+    );
+    assert.equal(expiredSearch.response.status, 200, JSON.stringify(expiredSearch.body));
+    assert.equal(expiredSearch.body.items[0].addOnGiftEligibility, "expired");
+    assert.equal(expiredSearch.body.items[0].primaryEndsAt, expiredAt.toISOString());
+    const changedEligibilityGift = await api("/admin/billing/subscriptions/gift", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        userId: changingEligibilityUser.user.id,
+        packageId: addonPackage.body.id,
+      },
+    });
+    assert.equal(changedEligibilityGift.response.status, 409, JSON.stringify(changedEligibilityGift.body));
+    assert.equal(changedEligibilityGift.body.code, "PAID_PRIMARY_REQUIRED");
+    const changedEligibilityEntitlements = await db
+      .select()
+      .from(dbModule.addOnEntitlementsTable)
+      .where(eq(dbModule.addOnEntitlementsTable.userId, changingEligibilityUser.user.id));
+    assert.equal(changedEligibilityEntitlements.length, 0);
+
     for (const recipient of [freeUser, noPlanUser]) {
       const rejected = await api("/admin/billing/subscriptions/gift", {
         method: "POST",
         cookie: admin.cookie,
         body: { userId: recipient.user.id, packageId: addonPackage.body.id },
       });
-      assert.equal(rejected.response.status, 403, JSON.stringify(rejected.body));
+      assert.equal(rejected.response.status, 409, JSON.stringify(rejected.body));
       assert.equal(rejected.body.code, "PAID_PRIMARY_REQUIRED");
       const entitlements = await db
         .select()

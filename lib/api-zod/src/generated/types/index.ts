@@ -38,6 +38,7 @@ export * from './adminSupportTicketCollection';
 export * from './adminSupportTicketDetail';
 export * from './adminSupportTicketSummary';
 export * from './adminUser';
+export * from './adminUserAddOnGiftEligibility';
 export * from './adminUserPage';
 export * from './aIProviderModel';
 export * from './aIProviderSettings';

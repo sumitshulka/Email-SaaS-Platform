@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminUserAddOnGiftEligibility } from './adminUserAddOnGiftEligibility';
 
 export interface AdminUser {
   id: string;
@@ -19,4 +20,22 @@ export interface AdminUser {
   lastLoginAt: Date | null;
   /** @nullable */
   subscriptionStatus: string | null;
+  /** @nullable */
+  primaryPackageName: string | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  primaryPackageAmountMinor: number | null;
+  /**
+     * @minLength 3
+     * @maxLength 3
+     * @nullable
+     */
+  primaryPackageCurrency: string | null;
+  /** @nullable */
+  primaryStartsAt: Date | null;
+  /** @nullable */
+  primaryEndsAt: Date | null;
+  addOnGiftEligibility: AdminUserAddOnGiftEligibility;
 }
