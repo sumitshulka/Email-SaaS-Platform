@@ -3642,6 +3642,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       orderId: "order_stale_downgrade",
       paymentId: "pay_stale_downgrade",
     });
+    let recoveryGateway;
 
     try {
       const order = await api("/subscriptions/orders", {
@@ -3679,7 +3680,46 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
       assert.equal(payment.status, "captured");
       assert.equal(payment.razorpayPaymentId, gateway.paymentId);
+
+      const blockedCheckout = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(blockedCheckout.response.status, 409);
+      assert.equal(
+        blockedCheckout.body.code,
+        "PAYMENT_REQUIRES_SUPPORT_REVIEW",
+      );
+      assert.match(blockedCheckout.body.error, /payment was captured/i);
+      assert.match(blockedCheckout.body.error, /Contact support/i);
+      const paymentsBeforeResolution = await db
+        .select()
+        .from(dbModule.paymentsTable)
+        .where(eq(dbModule.paymentsTable.userId, fixture.user.user.id));
+      assert.equal(paymentsBeforeResolution.length, 1);
+
+      await db
+        .update(dbModule.paymentsTable)
+        .set({ status: "refunded" })
+        .where(eq(dbModule.paymentsTable.id, order.body.paymentId));
+      gateway.restore();
+      recoveryGateway = stubGateway({
+        orderId: "order_after_plan_change_refund",
+        paymentId: "pay_after_plan_change_refund",
+      });
+      const checkoutAfterResolution = await api("/subscriptions/orders", {
+        method: "POST",
+        cookie: fixture.user.cookie,
+        body: { packageId: fixture.targetPlan.id },
+      });
+      assert.equal(
+        checkoutAfterResolution.response.status,
+        201,
+        JSON.stringify(checkoutAfterResolution.body),
+      );
     } finally {
+      recoveryGateway?.restore();
       gateway.restore();
     }
   });

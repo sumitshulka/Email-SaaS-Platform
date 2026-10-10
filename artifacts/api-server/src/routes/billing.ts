@@ -72,6 +72,7 @@ import {
   comparePrimaryPlanLimits,
   createPackageCheckoutSnapshot,
   getCurrentSubscriptionForUser,
+  hasUnresolvedCapturedPlanChangePayment,
   grantAdminGiftSubscription,
   markRefundedPayment,
   PlanChangeError,
@@ -1740,6 +1741,18 @@ router.post(
       res.status(400).json({
         error: "Free packages are activated directly and do not use Razorpay Checkout.",
         code: "FREE_PACKAGE_REQUIRES_DIRECT_ACTIVATION",
+      });
+      return;
+    }
+
+    if (
+      pkg.amountMinor > 0 &&
+      (await hasUnresolvedCapturedPlanChangePayment(req.authUser!.id))
+    ) {
+      res.status(409).json({
+        error:
+          "A previous plan-change payment was captured, but activation requires support review. Contact support to resolve it before starting another paid checkout.",
+        code: "PAYMENT_REQUIRES_SUPPORT_REVIEW",
       });
       return;
     }

@@ -236,6 +236,29 @@ async function isCapturedPaidScheduledChange(
   );
 }
 
+export async function hasUnresolvedCapturedPlanChangePayment(
+  userId: string,
+): Promise<boolean> {
+  const [payment] = await db
+    .select({ id: paymentsTable.id })
+    .from(paymentsTable)
+    .leftJoin(
+      userSubscriptionsTable,
+      eq(userSubscriptionsTable.paymentId, paymentsTable.id),
+    )
+    .where(
+      and(
+        eq(paymentsTable.userId, userId),
+        eq(paymentsTable.status, "captured"),
+        inArray(paymentsTable.subscriptionChangeType, ["upgrade", "scheduled"]),
+        gt(paymentsTable.amountMinor, 0),
+        isNull(userSubscriptionsTable.id),
+      ),
+    )
+    .limit(1);
+  return Boolean(payment);
+}
+
 async function applyDueEmailAccountRetention(userId: string): Promise<void> {
   const now = new Date();
   await db.transaction(async (tx) => {
