@@ -43,6 +43,7 @@ import {
 import { ingestDeliveryReports } from "./delivery-report-ingestion";
 
 const POLL_INTERVAL_MS = 2 * 60_000;
+const GMAIL_SYNC_LEASE_MS = 10 * 60_000;
 const OAUTH_STATE_MAX_AGE_MS = 10 * 60_000;
 const OAUTH_COOKIE = "mailflow_gmail_oauth_state";
 const OAUTH_STATE_PURPOSE = "gmail-mailbox-oauth-state";
@@ -1057,7 +1058,11 @@ function syncFailureStatus(error: unknown): {
   };
 }
 
-export async function syncDueGmailMailboxes(): Promise<void> {
+export async function syncDueGmailMailboxes(): Promise<{
+  attempted: number;
+  succeeded: number;
+  failed: number;
+}> {
   const now = new Date();
   const due = await db
     .select()
@@ -1074,8 +1079,11 @@ export async function syncDueGmailMailboxes(): Promise<void> {
     )
     .limit(20);
 
+  let attempted = 0;
+  let succeeded = 0;
+  let failed = 0;
   for (const connection of due) {
-    const leaseExpiresAt = new Date(Date.now() + 60_000);
+    const leaseExpiresAt = new Date(Date.now() + GMAIL_SYNC_LEASE_MS);
     const claimed = await db
       .update(gmailMailboxConnectionsTable)
       .set({ leaseExpiresAt, updatedAt: now })
@@ -1092,6 +1100,7 @@ export async function syncDueGmailMailboxes(): Promise<void> {
       )
       .returning({ id: gmailMailboxConnectionsTable.id });
     if (!claimed.length) continue;
+    attempted += 1;
 
     try {
       const refreshToken = decryptSecret(connection.refreshTokenEncrypted);
@@ -1126,7 +1135,9 @@ export async function syncDueGmailMailboxes(): Promise<void> {
           updatedAt: completedAt,
         })
         .where(eq(gmailMailboxConnectionsTable.id, connection.id));
+      succeeded += 1;
     } catch (error) {
+      failed += 1;
       const failure = syncFailureStatus(error);
       const failedAt = new Date();
       await db
@@ -1151,6 +1162,7 @@ export async function syncDueGmailMailboxes(): Promise<void> {
       );
     }
   }
+  return { attempted, succeeded, failed };
 }
 
 export function startGmailMailboxWorker(): void {

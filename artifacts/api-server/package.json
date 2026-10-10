@@ -7,6 +7,7 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "gmail-sync": "node --enable-source-maps ./dist/gmail-sync-runner.mjs",
     "test": "node --import tsx --test test/*.test.mjs",
     "test:postgres-ai-credit-recovery-race": "node --import tsx --test test/postgres-ai-credit-recovery-race.test.mjs",
     "test:postgres-addon-capture-race": "node --import tsx --test test/postgres-addon-capture-race.test.mjs",
