@@ -1347,6 +1347,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const aiAssist = useGenerateCampaignEmailDraft();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const [campaignContentError, setCampaignContentError] = useState<string | null>(null);
   const addOnCreditsQuery = useGetSubscriptionAddOns({
     query: {
       queryKey: getGetSubscriptionAddOnsQueryKey(),
@@ -1368,6 +1369,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [queueStartAt, setQueueStartAt] = useState('');
   const [serverMinimumStartAt, setServerMinimumStartAt] = useState<Date | null>(null);
   const [queueStartError, setQueueStartError] = useState<string | null>(null);
+  const [queuePolicyError, setQueuePolicyError] = useState<string | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
@@ -1502,8 +1504,9 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
-  const openEdit = (campaign: CampaignSummary) => { setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
+  const closeCampaignEditor = () => { setEditing(undefined); setCampaignContentError(null); };
+  const openNew = () => { dismiss(); setCampaignContentError(null); setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
+  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -1625,6 +1628,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.listIds.length || !audienceCheckReady || audienceActionInProgress.current) return;
+    setCampaignContentError(null);
     audienceActionInProgress.current = true;
     setAudienceActionPending(true);
     const subjectVariants = form.subjectVariants.map(value => value.trim()).filter(Boolean);
@@ -1648,8 +1652,17 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         setNotice({ kind: 'error', text: 'We couldn’t verify the current audience. Retry before saving this campaign.' });
         return;
       }
-      const success = () => { refresh(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
-      const fail = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
+      const success = () => { refresh(); closeCampaignEditor(); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
+      const fail = (error: unknown) => {
+        const errorData = error && typeof error === 'object' && 'data' in error && error.data && typeof error.data === 'object'
+          ? error.data as { code?: unknown }
+          : null;
+        if (errorData?.code === 'PROFANITY_BLOCKED') {
+          setCampaignContentError(mutationError(error));
+          return;
+        }
+        setNotice({ kind: 'error', text: mutationError(error) });
+      };
       if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
       else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
     } finally {
@@ -1660,6 +1673,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const queue = (campaign: CampaignSummary) => {
     setServerMinimumStartAt(null);
     setQueueStartError(null);
+    setQueuePolicyError(null);
     setQueueStartAt(dateTimeLocalValue(minimumCampaignStartAt(campaigns)));
     setPendingAction({ kind: 'queue', campaign });
   };
@@ -1678,7 +1692,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           return;
         }
         send.mutate({ campaignId: action.campaign.id, data: { scheduledAt: queueStartDate.toISOString() } }, {
-          onSuccess: response => { setPendingAction(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
+          onSuccess: response => { setPendingAction(null); setQueuePolicyError(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
           onError: error => {
             const apiError = (error as { data?: { code?: string; earliestStartAt?: string | null } }).data;
             if (apiError?.code === 'CAMPAIGN_START_TOO_EARLY' && apiError.earliestStartAt) {
@@ -1686,6 +1700,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
               setServerMinimumStartAt(earliest);
               setQueueStartAt(dateTimeLocalValue(roundUpToMinute(earliest)));
               setQueueStartError(`Delivery estimates changed. The earliest available start is ${formatDate(apiError.earliestStartAt)}.`);
+              return;
+            }
+            if (apiError?.code === 'PROFANITY_BLOCKED') {
+              setQueuePolicyError(mutationError(error));
               return;
             }
             setPendingAction(null);
@@ -1722,8 +1740,9 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           <td className="px-5 py-4"><div className="flex justify-end gap-1">{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
       </tr>)}</tbody></table></div>
     </section> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
-    {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Each selected list is processed in the order shown; overlapping addresses receive one email." close={() => setEditing(undefined)}>
+    {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Each selected list is processed in the order shown; overlapping addresses receive one email." close={closeCampaignEditor}>
       <form onSubmit={save} className="space-y-4">
+        {campaignContentError && <div role="alert" data-testid="status-campaign-content-policy-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-5 text-[#99501e]">{campaignContentError}</div>}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="min-w-0 space-y-3">
             <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>
@@ -1915,7 +1934,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
            </div>}
          </section>
          <div className="flex items-start gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] leading-5 text-[#607186]"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/><span>Only subscribed contacts are eligible. Duplicate email addresses are removed when queued. Each test assignment stays fixed for that recipient throughout the campaign; an unsubscribe link is included automatically.</span></div>
-         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button></div>
+         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={closeCampaignEditor}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button></div>
       </form>
     </Modal>}
      <ConfirmActionDialog
@@ -1928,7 +1947,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
        destructive={pendingAction?.kind !== 'queue'}
        pending={audienceActionPending || send.isPending || remove.isPending}
          confirmDisabled={pendingAction?.kind === 'queue' && (!queueStartIsValid || !audienceCheckReady)}
-       onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) setPendingAction(null); }}
+        onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) { setPendingAction(null); setQueuePolicyError(null); } }}
        onConfirm={confirmCampaignAction}
        testId="dialog-campaign-action"
       >
@@ -1950,6 +1969,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           </div>}
           {!hasActiveCampaigns && <p className="text-[11px] leading-5 text-[#788392]">Choose a future time. The time is interpreted in your device’s time zone.</p>}
           {queueStartError && <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{queueStartError}</div>}
+           {queuePolicyError && <div role="alert" data-testid="status-queue-campaign-content-policy-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{queuePolicyError}</div>}
         </div>}
       </ConfirmActionDialog>
   </></QueryState>;
