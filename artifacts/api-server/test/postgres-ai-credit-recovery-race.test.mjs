@@ -7,7 +7,7 @@ import { eq, inArray } from "drizzle-orm";
 const databaseUrl = process.env.AI_CREDIT_RECOVERY_RACE_TEST_DATABASE_URL;
 
 test(
-  "concurrent API-worker cleanup releases one stale AI credit and preserves successful use in PostgreSQL",
+  "concurrent PostgreSQL cleanup recovers a stale AI credit backlog without changing active or consumed usage",
   {
     skip: databaseUrl
       ? false
@@ -36,7 +36,9 @@ test(
     let userId;
     let primaryPackageId;
     let addonPackageId;
+    let backlogPackageId;
     let entitlementId;
+    let backlogEntitlementId;
     let lockClient;
     let transactionLockHeld = false;
     let cleanupPromises = [];
@@ -84,6 +86,22 @@ test(
         })
         .returning({ id: subscriptionPackagesTable.id });
       addonPackageId = addonPackage.id;
+
+      const [backlogPackage] = await db
+        .insert(subscriptionPackagesTable)
+        .values({
+          packageType: "addon",
+          name: `AI credit backlog add-on ${testId}`,
+          description: "AI Email Assist allowance for recovery backlog test.",
+          amountMinor: 0,
+          currency: "INR",
+          periodDays: 0,
+          contactLimit: 0,
+          emailAccountLimit: 0,
+          aiEmailAssistAllowance: 12,
+        })
+        .returning({ id: subscriptionPackagesTable.id });
+      backlogPackageId = backlogPackage.id;
 
       const now = new Date();
       await db.insert(userSubscriptionsTable).values({
@@ -187,15 +205,11 @@ test(
           entitlementId,
           status: "reserved",
           createdAt: new Date(
-            cleanupNow.getTime() -
-              getAiEmailAssistReservationTimeoutMs() +
-              1,
+            cleanupNow.getTime() - getAiEmailAssistReservationTimeoutMs() + 1,
           ),
         })
         .returning({ id: aiEmailAssistUsagesTable.id });
-      const successfulReservationCutoff = new Date(
-        cleanupNow.getTime() + 1,
-      );
+      const successfulReservationCutoff = new Date(cleanupNow.getTime() + 1);
       const [nearCutoffCleanupCount] = await Promise.all([
         entitlementModule.releaseStaleAiEmailAssistReservations(
           successfulReservationCutoff,
@@ -298,6 +312,188 @@ test(
         await entitlementModule.getSubscriptionAddOnsDashboard(userId);
       assert.equal(dashboard.balances.emailAssist.used, 1);
       assert.equal(dashboard.balances.emailAssist.remaining, 0);
+
+      const [backlogEntitlement] = await db
+        .insert(addOnEntitlementsTable)
+        .values({
+          userId,
+          packageId: backlogPackageId,
+          aiEmailAssistAllowance: 12,
+        })
+        .returning({ id: addOnEntitlementsTable.id });
+      backlogEntitlementId = backlogEntitlement.id;
+
+      const staleBacklogSize = 1024;
+      const backlogStaleCreatedAt = new Date(
+        cleanupNow.getTime() - getAiEmailAssistReservationTimeoutMs() - 60_000,
+      );
+      const activeCreatedAt = new Date(cleanupNow.getTime() - 30_000);
+      const consumedCompletedAt = new Date(cleanupNow.getTime() - 20_000);
+      const staleBacklogRows = Array.from({ length: staleBacklogSize }, () => ({
+        userId,
+        entitlementId: backlogEntitlementId,
+        status: "reserved",
+        createdAt: backlogStaleCreatedAt,
+      }));
+      const activeRows = Array.from({ length: 3 }, () => ({
+        userId,
+        entitlementId: backlogEntitlementId,
+        status: "reserved",
+        createdAt: activeCreatedAt,
+      }));
+      const consumedRows = Array.from({ length: 4 }, () => ({
+        userId,
+        entitlementId: backlogEntitlementId,
+        status: "consumed",
+        createdAt: backlogStaleCreatedAt,
+        completedAt: consumedCompletedAt,
+      }));
+      const backlogUsages = await db
+        .insert(aiEmailAssistUsagesTable)
+        .values([...staleBacklogRows, ...activeRows, ...consumedRows])
+        .returning({
+          id: aiEmailAssistUsagesTable.id,
+          status: aiEmailAssistUsagesTable.status,
+          completedAt: aiEmailAssistUsagesTable.completedAt,
+          createdAt: aiEmailAssistUsagesTable.createdAt,
+        });
+      const staleBacklogIds = backlogUsages
+        .filter(
+          (usage) =>
+            usage.status === "reserved" &&
+            usage.createdAt.getTime() <
+              cleanupNow.getTime() - getAiEmailAssistReservationTimeoutMs(),
+        )
+        .map((usage) => usage.id);
+      const activeUsageFixtures = backlogUsages.filter(
+        (usage) =>
+          usage.status === "reserved" &&
+          usage.createdAt.getTime() >=
+            cleanupNow.getTime() - getAiEmailAssistReservationTimeoutMs(),
+      );
+      const activeUsageIds = activeUsageFixtures.map((usage) => usage.id);
+      const consumedUsageFixtures = backlogUsages.filter(
+        (usage) => usage.status === "consumed",
+      );
+      assert.equal(staleBacklogIds.length, staleBacklogSize);
+      assert.equal(activeUsageIds.length, activeRows.length);
+      assert.equal(consumedUsageFixtures.length, consumedRows.length);
+
+      await lockClient.query("BEGIN");
+      transactionLockHeld = true;
+      const { rows: lockedBacklogRows } = await lockClient.query(
+        "SELECT id FROM ai_email_assist_usages WHERE id = $1 FOR UPDATE",
+        [staleBacklogIds[0]],
+      );
+      assert.equal(lockedBacklogRows.length, 1);
+
+      const activeClientsBeforeBacklogCleanups =
+        pool.totalCount - pool.idleCount;
+      assert.ok(
+        activeClientsBeforeBacklogCleanups + 2 <= pool.options.max,
+        "the PostgreSQL pool must allow both cleanup calls alongside the backlog lock",
+      );
+      cleanupPromises = [
+        entitlementModule.releaseStaleAiEmailAssistReservations(
+          cleanupNow,
+          userId,
+        ),
+        entitlementModule.releaseStaleAiEmailAssistReservations(
+          cleanupNow,
+          userId,
+        ),
+      ];
+      await waitForBlockedCleanupQueries(
+        cleanupPromises,
+        pool,
+        activeClientsBeforeBacklogCleanups,
+      );
+
+      await lockClient.query("COMMIT");
+      transactionLockHeld = false;
+      const backlogCleanupResults = await Promise.all(cleanupPromises);
+      cleanupPromises = [];
+      assert.equal(
+        backlogCleanupResults.reduce((total, released) => total + released, 0),
+        staleBacklogSize,
+        "overlapping cleanup calls must release every stale reservation exactly once",
+      );
+
+      const persistedBacklogUsages = await db
+        .select({
+          id: aiEmailAssistUsagesTable.id,
+          status: aiEmailAssistUsagesTable.status,
+          completedAt: aiEmailAssistUsagesTable.completedAt,
+          createdAt: aiEmailAssistUsagesTable.createdAt,
+        })
+        .from(aiEmailAssistUsagesTable)
+        .where(
+          inArray(aiEmailAssistUsagesTable.id, [
+            ...staleBacklogIds,
+            ...activeUsageIds,
+            ...consumedUsageFixtures.map((usage) => usage.id),
+          ]),
+        );
+      const persistedUsageById = new Map(
+        persistedBacklogUsages.map((usage) => [usage.id, usage]),
+      );
+      assert.equal(persistedBacklogUsages.length, staleBacklogSize + 7);
+      for (const id of staleBacklogIds) {
+        assert.equal(
+          persistedUsageById.get(id)?.status,
+          "released",
+          "every stale backlog reservation must be released",
+        );
+      }
+      for (const fixture of activeUsageFixtures) {
+        const usage = persistedUsageById.get(fixture.id);
+        assert.equal(usage?.status, "reserved");
+        assert.equal(usage?.completedAt, null);
+        assert.equal(
+          usage?.createdAt?.toISOString(),
+          fixture.createdAt.toISOString(),
+          "cleanup must preserve each active reservation creation time",
+        );
+      }
+      for (const fixture of consumedUsageFixtures) {
+        const usage = persistedUsageById.get(fixture.id);
+        assert.equal(usage?.status, "consumed");
+        assert.equal(
+          usage?.createdAt?.toISOString(),
+          fixture.createdAt.toISOString(),
+          "cleanup must preserve each consumed usage creation time",
+        );
+        assert.equal(
+          usage?.completedAt?.toISOString(),
+          fixture.completedAt?.toISOString(),
+          "cleanup must preserve each consumed usage completion time",
+        );
+      }
+
+      const persistedStatuses = await db
+        .select({ status: aiEmailAssistUsagesTable.status })
+        .from(aiEmailAssistUsagesTable)
+        .where(eq(aiEmailAssistUsagesTable.userId, userId));
+      const persistedUsedCount = persistedStatuses.filter(
+        (usage) => usage.status === "reserved" || usage.status === "consumed",
+      ).length;
+      const backlogDashboard =
+        await entitlementModule.getSubscriptionAddOnsDashboard(userId);
+      assert.equal(
+        backlogDashboard.balances.emailAssist.total,
+        13,
+        "the dashboard allowance must include both persisted entitlements",
+      );
+      assert.equal(
+        backlogDashboard.balances.emailAssist.used,
+        persistedUsedCount,
+        "dashboard usage must match persisted reserved and consumed rows",
+      );
+      assert.equal(
+        backlogDashboard.balances.emailAssist.remaining,
+        Math.max(0, 13 - persistedUsedCount),
+        "the remaining balance must match the persisted usage states",
+      );
     } finally {
       if (lockClient) {
         if (transactionLockHeld) {
@@ -312,17 +508,24 @@ test(
         await db
           .delete(aiEmailAssistUsagesTable)
           .where(eq(aiEmailAssistUsagesTable.userId, userId));
-        if (entitlementId) {
+        const entitlementIds = [entitlementId, backlogEntitlementId].filter(
+          Boolean,
+        );
+        if (entitlementIds.length) {
           await db
             .delete(addOnEntitlementsTable)
-            .where(eq(addOnEntitlementsTable.id, entitlementId));
+            .where(inArray(addOnEntitlementsTable.id, entitlementIds));
         }
         await db
           .delete(userSubscriptionsTable)
           .where(eq(userSubscriptionsTable.userId, userId));
         await db.delete(usersTable).where(eq(usersTable.id, userId));
       }
-      const packageIds = [primaryPackageId, addonPackageId].filter(Boolean);
+      const packageIds = [
+        primaryPackageId,
+        addonPackageId,
+        backlogPackageId,
+      ].filter(Boolean);
       if (packageIds.length) {
         await db
           .delete(subscriptionPackagesTable)
