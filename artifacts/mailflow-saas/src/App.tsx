@@ -836,11 +836,72 @@ const settingGroups: Array<{ title: string; description?: string; fields: Array<
   { title: 'Account & authentication', fields: [['maxContactsPerUser','Contacts per user','number'],['maxUploadFileSizeMb','Upload file size limit (MB)','number'],['allowedContactFileTypes','Allowed contact file types','list'],['passwordMinimumLength','Minimum password length','number'],['otpExpiryMinutes','OTP expiry (minutes)','number'],['maxOtpAttempts','Maximum OTP attempts','number'],['loginAttemptThreshold','Login attempt threshold','number'],['sessionDurationHours','Session duration (hours)','number']] },
   { title: 'Sending & delivery', fields: [['defaultEmailsPerHour','Default emails per hour','number'],['maxEmailsPerDay','Maximum emails per day','number'],['maxCampaignSize','Maximum campaign size','number'],['maxConcurrentCampaigns','Concurrent campaigns','number'],['retryAttempts','Retry attempts','number'],['retryDelaySeconds','Retry delay (seconds)','number'],['bounceThreshold','Bounce threshold','number'],['deliveryTrackingEnabled','Request SMTP delivery notices (best effort)','boolean'],['queuePollingSeconds','Queue polling (seconds)','number']] },
   { title: 'Campaign content tests', description: 'Set the number of subject, greeting, and signature options required to split recipients across a test, and the maximum options allowed. Below the minimum, the first option is used for everyone.', fields: [['subjectVariantMinimum','Minimum subject options','number'],['subjectVariantMaximum','Maximum subject options','number'],['greetingVariantMinimum','Minimum greeting options','number'],['greetingVariantMaximum','Maximum greeting options','number'],['signatureVariantMinimum','Minimum signature options','number'],['signatureVariantMaximum','Maximum signature options','number']] },
-  { title: 'Campaign content policy', description: 'Blocked words and phrases are checked in subject lines, greetings, body text, HTML content, and signatures. Separators such as spaces, dots, brackets, and zero-width characters between letters do not bypass the check.', fields: [['prohibitedEmailKeywords','Blocked words and phrases (comma-separated)','list']] },
+  { title: 'Campaign content policy', description: 'Add blocked words or phrases one at a time. They are checked in subject lines, greetings, body text, HTML content, and signatures. Separators such as spaces, dots, brackets, and zero-width characters between letters do not bypass the check.', fields: [['prohibitedEmailKeywords','Blocked words and phrases','list']] },
   { title: 'Subscription rules', fields: [['allowUserWithoutSubscription','Allow accounts without subscription','boolean'],['gracePeriodDays','Grace period (days)','number'],['packageVisibility','Package visibility','select',['public','hidden']]] },
 ];
 function SettingsGroup({ title, description, fields, values, setValues }: { title: string; description?: string; fields: Array<[keyof PlatformSettingsInput, string, 'text'|'number'|'boolean'|'list'|'select', string[]?]>; values: Fields; setValues: (v: Fields) => void }) {
-  return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2>{description && <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#687587]">{description}</p>}</div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
+  return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2>{description && <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#687587]">{description}</p>}</div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={key === 'prohibitedEmailKeywords' ? 'sm:col-span-2' : type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : type === 'list' && key === 'prohibitedEmailKeywords' ? <BlockedWordsEditor label={label} words={Array.isArray(values[key]) ? values[key] as string[] : []} onChange={words => setValues({ ...values, [key]: words })}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
+}
+function BlockedWordsEditor({ label, words, onChange }: { label: string; words: string[]; onChange: (words: string[]) => void }) {
+  const [draft, setDraft] = useState('');
+  const [message, setMessage] = useState('');
+
+  const addWords = () => {
+    const additions = draft.split(',').map(word => word.trim()).filter(Boolean);
+    if (!additions.length) {
+      setMessage('Enter a word or phrase first.');
+      return;
+    }
+    if (additions.some(word => word.length > 100)) {
+      setMessage('Each word or phrase must be 100 characters or fewer.');
+      return;
+    }
+    const known = new Set(words.map(word => word.toLocaleLowerCase()));
+    const uniqueAdditions = additions.filter(word => {
+      const normalized = word.toLocaleLowerCase();
+      if (known.has(normalized)) return false;
+      known.add(normalized);
+      return true;
+    });
+    if (!uniqueAdditions.length) {
+      setMessage('Those words are already in the list.');
+      return;
+    }
+    if (words.length + uniqueAdditions.length > 200) {
+      setMessage('You can add up to 200 words or phrases.');
+      return;
+    }
+    onChange([...words, ...uniqueAdditions]);
+    setDraft('');
+    setMessage('');
+  };
+
+  return <div className="space-y-2.5">
+    <span className="block text-[12px] font-semibold text-[#344154]">{label}</span>
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <input
+        data-testid="input-prohibited-keyword"
+        type="text"
+        value={draft}
+        onChange={event => { setDraft(event.target.value); setMessage(''); }}
+        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addWords(); } }}
+        placeholder="Type a word or phrase"
+        aria-label="Word or phrase to block"
+        className="h-10 min-w-0 flex-1 rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"
+      />
+      <Button testId="button-add-prohibited-keyword" variant="outline" onClick={addWords}>Add</Button>
+    </div>
+    {message && <p role="alert" className="text-[11px] text-[#a95218]">{message}</p>}
+    <div className="rounded-md border border-[#e4e8ec] bg-[#fafbfc] p-3" aria-live="polite">
+      {words.length ? <div className="flex flex-wrap gap-2">
+        {words.map((word, index) => <span key={`${word}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#dbe2ea] bg-white py-1 pl-3 pr-1 text-[12px] text-[#344154]">
+          <span className="break-all">{word}</span>
+          <button type="button" data-testid={`button-remove-prohibited-keyword-${index}`} aria-label={`Remove ${word}`} onClick={() => onChange(words.filter((_, wordIndex) => wordIndex !== index))} className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#687484] hover:bg-[#f0f2f4] hover:text-[#a13d36]">Remove</button>
+        </span>)}
+      </div> : <p className="text-[12px] text-[#7d8794]">No blocked words or phrases added yet.</p>}
+      <p className="mt-2 text-right text-[10px] text-[#7d8794]">{words.length} / 200</p>
+    </div>
+  </div>;
 }
 type SmtpProvider = 'google_workspace' | 'gmail' | 'microsoft_365' | 'zeptomail' | 'other';
 const SMTP_PROVIDER_OPTIONS = [
