@@ -128,11 +128,17 @@ function makeUser(email) {
   };
 }
 
-async function installCheckoutFixtures(context, { accountExists, packages }) {
+async function installCheckoutFixtures(context, {
+  accountExists,
+  packages,
+  initialUser = null,
+  scheduledSubscription = null,
+}) {
   const state = {
-    authenticated: false,
-    user: null,
+    authenticated: Boolean(initialUser),
+    user: initialUser,
     subscription: null,
+    scheduledSubscription,
     requestBodies: [],
     orderAttempts: [],
     freeActivationAttempts: [],
@@ -206,7 +212,10 @@ async function installCheckoutFixtures(context, { accountExists, packages }) {
       return respond(200, { unread: [], history: [] });
     }
     if (pathname === '/api/subscriptions/current' && method === 'GET') {
-      return respond(200, { subscription: state.subscription, scheduledSubscription: null });
+      return respond(200, {
+        subscription: state.subscription,
+        scheduledSubscription: state.scheduledSubscription,
+      });
     }
     if (pathname === '/api/subscriptions/add-ons' && method === 'GET') {
       return respond(200, {
@@ -395,6 +404,47 @@ describe('package checkout account and payment handoff', { concurrency: false },
       });
       assert.equal(accountAfterDismissal.email, email);
       assertPrivateValuesStayOutOfBrowserSurface(page.url(), browserLogs, [email, code]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('shows a Razorpay-confirmed scheduled plan and its effective date after revisiting Plans', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const customer = makeUser('scheduled-plan-customer@example.test');
+    const scheduledSubscription = {
+      id: 'scheduled-subscription-id',
+      status: 'active',
+      startsAt: '2026-10-22T15:30:00.000Z',
+      endsAt: '2026-11-21T15:30:00.000Z',
+      paymentConfirmed: true,
+      package: {
+        ...paidPackage,
+        id: 'lower-limit-plan-id',
+        name: 'Starter plan',
+        contactLimit: 25,
+        emailAccountLimit: 1,
+      },
+    };
+    await installCheckoutFixtures(context, {
+      accountExists: true,
+      packages: [paidPackage],
+      initialUser: customer,
+      scheduledSubscription,
+    });
+    const page = await context.newPage();
+    try {
+      await page.goto(`${baseUrl}/plans`);
+      await page.getByTestId('scheduled-plan-change').waitFor();
+      const confirmation = await page.getByTestId('text-scheduled-plan-date').innerText();
+      const expectedStartDate = await page.evaluate(
+        startsAt => new Date(startsAt).toLocaleDateString(),
+        scheduledSubscription.startsAt,
+      );
+      assert.match(confirmation, /Razorpay confirmed your payment/);
+      assert.match(confirmation, /Starter plan/);
+      assert.ok(confirmation.includes(expectedStartDate));
+      assert.match(confirmation, /no automatic renewal/i);
     } finally {
       await context.close();
     }

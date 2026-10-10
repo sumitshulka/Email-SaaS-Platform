@@ -98,6 +98,7 @@ type PlanSubscription = {
   status: string;
   startsAt: string;
   endsAt: string;
+  paymentConfirmed?: boolean;
   package: SubscriptionPackage;
 };
 
@@ -639,10 +640,12 @@ export default function PlansPage() {
         <div className="text-[10px] font-bold uppercase tracking-[.12em] text-[#895d31]">Next plan scheduled</div>
         <h2 className="display mt-1 text-[17px] font-bold text-[#49351f]">{scheduledSubscription.package.name}</h2>
         <p data-testid="text-scheduled-plan-date" className="mt-1 text-[11px] leading-5 text-[#735b3d]">
-          Starts {new Date(scheduledSubscription.startsAt).toLocaleDateString()} and runs for {durationLabel(scheduledSubscription.package.periodDays)}.
-          {scheduledSubscription.package.amountMinor === 0
+          {scheduledSubscription.paymentConfirmed
+            ? `Razorpay confirmed your payment. ${scheduledSubscription.package.name} starts on ${new Date(scheduledSubscription.startsAt).toLocaleDateString()} and runs for ${durationLabel(scheduledSubscription.package.periodDays)}. There will be no automatic renewal.`
+            : `Starts ${new Date(scheduledSubscription.startsAt).toLocaleDateString()} and runs for ${durationLabel(scheduledSubscription.package.periodDays)}.`}
+          {!scheduledSubscription.paymentConfirmed && (scheduledSubscription.package.amountMinor === 0
             ? ' No payment is due.'
-            : ' The one-time payment is already made; there will be no automatic renewal.'}
+            : ' Payment confirmation is not available for this scheduled plan. Contact support if you expected a paid plan change.')}
           {' '}You can schedule another primary plan change after this one starts.
         </p>
       </div>

@@ -6140,6 +6140,7 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
+  "paymentConfirmed": zod.boolean().optional().describe('Present for scheduled subscriptions and true only when their linked paid plan-change payment is captured.'),
   "package": zod.object({
   "id": zod.string().uuid(),
   "packageType": zod.enum(['primary', 'addon']),
@@ -6273,6 +6274,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
+  "paymentConfirmed": zod.boolean().optional().describe('Present for scheduled subscriptions and true only when their linked paid plan-change payment is captured.'),
   "package": zod.object({
   "id": zod.string().uuid(),
   "packageType": zod.enum(['primary', 'addon']),
@@ -6297,6 +6299,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
+  "paymentConfirmed": zod.boolean().optional().describe('Present for scheduled subscriptions and true only when their linked paid plan-change payment is captured.'),
   "package": zod.object({
   "id": zod.string().uuid(),
   "packageType": zod.enum(['primary', 'addon']),
@@ -6351,6 +6354,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
+  "paymentConfirmed": zod.boolean().optional().describe('Present for scheduled subscriptions and true only when their linked paid plan-change payment is captured.'),
   "package": zod.object({
   "id": zod.string().uuid(),
   "packageType": zod.enum(['primary', 'addon']),
@@ -6560,6 +6564,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "status": zod.enum(['active', 'superseded', 'cancelled', 'expired']),
   "startsAt": zod.coerce.date(),
   "endsAt": zod.coerce.date(),
+  "paymentConfirmed": zod.boolean().optional().describe('Present for scheduled subscriptions and true only when their linked paid plan-change payment is captured.'),
   "package": zod.object({
   "id": zod.string().uuid(),
   "packageType": zod.enum(['primary', 'addon']),

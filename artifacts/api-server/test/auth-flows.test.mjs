@@ -3555,6 +3555,10 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         currentBeforeExpiry.body.scheduledSubscription.startsAt,
         currentEnd.toISOString(),
       );
+      assert.equal(
+        currentBeforeExpiry.body.scheduledSubscription.paymentConfirmed,
+        true,
+      );
 
       const subscriptions = await db
         .select()

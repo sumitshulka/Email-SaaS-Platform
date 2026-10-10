@@ -3994,6 +3994,8 @@ export interface SubscriptionSummary {
   status: SubscriptionSummaryStatus;
   startsAt: string;
   endsAt: string;
+  /** Present for scheduled subscriptions and true only when their linked paid plan-change payment is captured. */
+  paymentConfirmed?: boolean;
   package: SubscriptionPackage;
 }
 

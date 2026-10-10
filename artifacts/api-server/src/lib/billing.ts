@@ -139,7 +139,14 @@ export async function getCurrentSubscriptionForUser(userId: string) {
     .orderBy(asc(userSubscriptionsTable.startsAt))
     .limit(1);
   const scheduledSubscription = scheduled
-    ? serializeSubscription(scheduled.subscription, scheduled.pkg)
+    ? {
+        ...serializeSubscription(scheduled.subscription, scheduled.pkg),
+        paymentConfirmed: await isCapturedPaidScheduledChange(
+          userId,
+          scheduled.subscription.paymentId,
+          scheduled.pkg.id,
+        ),
+      }
     : null;
   const [current] = await db
     .select({
@@ -198,6 +205,35 @@ export async function getCurrentSubscriptionForUser(userId: string) {
     ),
     scheduledSubscription,
   };
+}
+
+async function isCapturedPaidScheduledChange(
+  userId: string,
+  paymentId: string | null,
+  packageId: string,
+): Promise<boolean> {
+  if (!paymentId) return false;
+  const [payment] = await db
+    .select({
+      status: paymentsTable.status,
+      subscriptionChangeType: paymentsTable.subscriptionChangeType,
+      packageId: paymentsTable.packageId,
+      amountMinor: paymentsTable.amountMinor,
+    })
+    .from(paymentsTable)
+    .where(
+      and(
+        eq(paymentsTable.id, paymentId),
+        eq(paymentsTable.userId, userId),
+      ),
+    )
+    .limit(1);
+  return (
+    payment?.status === "captured" &&
+    payment.subscriptionChangeType === "scheduled" &&
+    payment.packageId === packageId &&
+    payment.amountMinor > 0
+  );
 }
 
 async function applyDueEmailAccountRetention(userId: string): Promise<void> {
