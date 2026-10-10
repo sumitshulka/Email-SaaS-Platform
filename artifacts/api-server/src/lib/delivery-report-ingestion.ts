@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, desc, eq, type SQL } from "drizzle-orm";
 import {
   db,
+  contactsTable,
   emailCampaignRecipientsTable,
   emailCampaignsTable,
   emailDeliveryReportsTable,
@@ -282,7 +283,64 @@ export async function ingestDeliveryReports(options: {
           ),
         )
         .limit(1);
-      if (existingEvent) return { status: "duplicate" as const };
+      if (existingEvent) {
+        const [latestAttempt] = await tx
+          .select({ id: emailSendAttemptsTable.id })
+          .from(emailSendAttemptsTable)
+          .where(
+            and(
+              eq(emailSendAttemptsTable.userId, userId),
+              eq(emailSendAttemptsTable.recipientId, recipient.id),
+            ),
+          )
+          .orderBy(
+            desc(emailSendAttemptsTable.attemptedAt),
+            desc(emailSendAttemptsTable.id),
+          )
+          .limit(1);
+        if (
+          report.outcome === "bounced" &&
+          recipient.contactId &&
+          latestAttempt?.id === attempt.id &&
+          shouldApplyReportProjection(
+            recipient,
+            report.outcome,
+            occurredAt,
+            verification,
+          )
+        ) {
+          await tx
+            .update(contactsTable)
+            .set({
+              subscribed: false,
+              emailStatus: "bounced",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(contactsTable.id, recipient.contactId),
+                eq(contactsTable.userId, userId),
+                eq(contactsTable.email, recipientEmail),
+                eq(contactsTable.subscribed, true),
+              ),
+            );
+          await tx
+            .update(emailCampaignRecipientsTable)
+            .set({
+              status: "suppressed",
+              lastError: "Recipient address bounced.",
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(emailCampaignRecipientsTable.userId, userId),
+                eq(emailCampaignRecipientsTable.contactId, recipient.contactId),
+                eq(emailCampaignRecipientsTable.status, "queued"),
+              ),
+            );
+        }
+        return { status: "duplicate" as const };
+      }
 
       const [storedEvent] = await tx
         .insert(emailDeliveryReportsTable)
@@ -365,6 +423,37 @@ export async function ingestDeliveryReports(options: {
             eq(emailCampaignRecipientsTable.userId, userId),
           ),
         );
+      if (report.outcome === "bounced" && recipient.contactId) {
+        await tx
+          .update(contactsTable)
+          .set({
+            subscribed: false,
+            emailStatus: "bounced",
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(contactsTable.id, recipient.contactId),
+              eq(contactsTable.userId, userId),
+              eq(contactsTable.email, recipientEmail),
+              eq(contactsTable.subscribed, true),
+            ),
+          );
+        await tx
+          .update(emailCampaignRecipientsTable)
+          .set({
+            status: "suppressed",
+            lastError: "Recipient address bounced.",
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(emailCampaignRecipientsTable.userId, userId),
+              eq(emailCampaignRecipientsTable.contactId, recipient.contactId),
+              eq(emailCampaignRecipientsTable.status, "queued"),
+            ),
+          );
+      }
       return { status: "imported" as const };
     });
 

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
-  Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
+  Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send, Pause, Play,
   ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
@@ -25,7 +25,7 @@ import {
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useSetCampaignPaused,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
@@ -1028,7 +1028,7 @@ export function ContactsPage() {
        {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
         <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="block text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
         <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{contact.listIds.length ? contact.listIds.map(id => <span key={id} className="rounded bg-[#f1f4f7] px-2 py-1 text-[10px] text-[#5f6e7f]">{lists.find(l => l.id === id)?.name || 'List'}</span>) : <span className="text-[11px] text-[#9aa3ad]">No list</span>}</div></td>
-        <td className="px-4 py-3.5"><button data-testid={`button-toggle-subscription-${contact.id}`} disabled={update.isPending} onClick={() => toggleSub(contact)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#dbe8f7] disabled:opacity-60"><Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status></button></td>
+        <td className="px-4 py-3.5">{(() => { const emailStatus = contact.emailStatus ?? (contact.subscribed ? 'subscribed' : 'unsubscribed'); return <button data-testid={`button-toggle-subscription-${contact.id}`} disabled={update.isPending || emailStatus === 'bounced'} onClick={() => toggleSub(contact)} title={emailStatus === 'bounced' ? 'Bounced addresses are suppressed; update the address and reconfirm consent before reactivating.' : undefined} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#dbe8f7] disabled:opacity-60"><Status tone={emailStatus === 'subscribed' ? 'green' : emailStatus === 'bounced' ? 'orange' : 'gray'}>{emailStatus === 'bounced' ? 'Bounced' : emailStatus === 'unsubscribed' ? 'Unsubscribed' : 'Subscribed'}</Status></button>; })()}</td>
          <td data-testid={`cell-contact-last-email-${contact.id}`} className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div data-testid={`contact-last-email-campaign-${contact.id}`} className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div data-testid={`contact-last-email-date-${contact.id}`} className="mt-1 truncate whitespace-nowrap text-[10px] text-[#7c8794]">{formatDate(contact.lastEmail.lastAttemptAt)}</div></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
           <td className="px-5 py-3.5"><div className="flex justify-end gap-1">
@@ -1384,7 +1384,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
   const variantLimitsQuery = useGetCampaignVariantLimits();
-  const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign();
+  const create = useCreateCampaign(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign(); const pauseCampaign = useSetCampaignPaused();
   const previewCampaign = usePreviewCampaign();
   const aiAssist = useGenerateCampaignEmailDraft();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -1776,10 +1776,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Queued / completed</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaigns.map(campaign => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
         <td className="max-w-[240px] px-5 py-4"><button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="text-left"><span className="block truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></td>
         <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).map(listId => lists.find(list => list.id === listId)?.name || 'Removed list').join(' · ') || 'No target lists selected'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
-        <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
+        <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') || campaign.pausedAt ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Maintenance paused' : campaign.pausedAt ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · provider bounce/failure reports count as rejected / failed · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
          <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]">{campaign.queuedAt ? <><span className="block">{campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'Starts' : 'Queued'} {formatDate(campaign.scheduledAt || campaign.queuedAt)}</span>{campaign.scheduledAt && <span className="block">Queued {formatDate(campaign.queuedAt)}</span>}{campaign.completedAt && <span className="block">Finished {formatDate(campaign.completedAt)}</span>}</> : 'Not queued'}</td>
-          <td className="px-5 py-4"><div className="flex justify-end gap-1">{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
+          <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: !campaign.pausedAt } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: campaign.pausedAt ? 'Campaign delivery resumed.' : 'Campaign delivery paused.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}>{campaign.pausedAt ? <><Play className="h-3.5 w-3.5"/>Resume</> : <><Pause className="h-3.5 w-3.5"/>Pause</>}</Button>}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
       </tr>)}</tbody></table></div>
     </section> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Each selected list is processed in the order shown; overlapping addresses receive one email." close={closeCampaignEditor}>
@@ -2029,9 +2029,23 @@ function formatDeliveryDuration(seconds: number) {
   const remainingHours = hours % 24;
   return remainingHours ? `${days} day ${remainingHours} hr` : `${days} day`;
 }
+function formatLiveDeliveryCountdown(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(total / 86_400);
+  const hours = Math.floor((total % 86_400) / 3_600);
+  const minutes = Math.floor((total % 3_600) / 60);
+  const remainingSeconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return days
+    ? `${days}d ${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`
+    : `${pad(days * 24 + hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
+}
 
 export function CampaignDashboardPage({ campaignId, maintenancePaused = false }: { campaignId: string; maintenancePaused?: boolean }) {
   const [, setLocation] = useLocation();
+  const qc = useQueryClient();
+  const pauseCampaign = useSetCampaignPaused();
+  const [clockNow, setClockNow] = useState(Date.now());
   const query = useGetCampaignDashboard(campaignId, {
     query: {
       queryKey: getGetCampaignDashboardQueryKey(campaignId),
@@ -2039,6 +2053,11 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
     },
   });
   const dashboard = query.data as CampaignDashboard | undefined;
+  useEffect(() => {
+    if (!dashboard || (dashboard.campaign.status !== 'queued' && dashboard.campaign.status !== 'sending') || dashboard.campaign.pausedAt || maintenancePaused) return;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [dashboard?.campaign.status, dashboard?.campaign.pausedAt, maintenancePaused]);
 
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => { void query.refetch(); }} label="campaign dashboard">
     {dashboard && (() => {
@@ -2047,6 +2066,12 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
       const resolved = campaign.status === 'draft' ? 0 : Math.max(0, campaign.recipients - campaign.queued);
       const progress = campaign.recipients > 0 ? Math.min(100, Math.round((resolved / campaign.recipients) * 100)) : 0;
       const isPausedForMaintenance = maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending');
+      const isUserPaused = Boolean(campaign.pausedAt);
+      const isActive = campaign.status === 'queued' || campaign.status === 'sending';
+      const pauseTimer = isPausedForMaintenance || isUserPaused;
+      const liveRemainingSeconds = pauseTimer || !pacing.estimatedCompletionAt
+        ? pacing.estimatedDurationSeconds
+        : Math.max(0, Math.ceil((new Date(pacing.estimatedCompletionAt).getTime() - clockNow) / 1000));
       const statusTone = isPausedForMaintenance ? 'orange' : campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
       const isScheduled = campaign.status === 'queued' && campaign.scheduledAt !== null && new Date(campaign.scheduledAt).getTime() > Date.now();
       const metrics = [
@@ -2061,7 +2086,9 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         <div className="mb-5">
           <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
         </div>
-        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<Status tone={statusTone}>{isPausedForMaintenance ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>}/>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2"><Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId, data: { paused: !isUserPaused } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); }, onError: () => { void query.refetch(); } })}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
+        {(isUserPaused || isPausedForMaintenance) && <div role="status" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]">Queued messages are on hold. A message already being submitted to the SMTP server may finish; remaining messages will wait until delivery resumes.</div>}
+        {pauseCampaign.isError && <div role="alert" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] text-[#895b2f]">Could not change the campaign pause state. Please try again.</div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`} style={metric.surface}>
             <div className="text-[11px] text-[#778291]">{metric.label}</div>
@@ -2077,8 +2104,8 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
               <Clock3 className="h-5 w-5 text-[#245b9b]"/>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">Estimated time remaining</div><div className="mt-1 text-[20px] font-bold text-[#26364a]">{formatDeliveryDuration(pacing.estimatedDurationSeconds)}</div></div>
-              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">{isPausedForMaintenance ? 'Delivery paused' : 'Estimated finish'}</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{isPausedForMaintenance ? 'Will resume automatically' : campaign.status === 'completed' ? formatDate(campaign.completedAt) : pacing.estimatedCompletionAt ? formatDate(pacing.estimatedCompletionAt) : 'No emails waiting'}</div></div>
+              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">Estimated time remaining</div><div aria-live="off" className="mt-1 text-[20px] font-bold tabular-nums text-[#26364a]">{isActive && !pauseTimer ? formatLiveDeliveryCountdown(liveRemainingSeconds) : formatDeliveryDuration(liveRemainingSeconds)}</div></div>
+              <div className="rounded-md bg-[#f5f8fb] p-3"><div className="text-[10px] uppercase tracking-wide text-[#7a8795]">{pauseTimer ? 'Delivery paused' : 'Estimated finish'}</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{isPausedForMaintenance ? 'Will resume automatically' : isUserPaused ? 'Resume when you are ready' : campaign.status === 'completed' ? formatDate(campaign.completedAt) : pacing.estimatedCompletionAt ? formatDate(pacing.estimatedCompletionAt) : 'No emails waiting'}</div></div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div><div className="text-[10px] text-[#85909d]">Hourly cap per SMTP</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerHour.toLocaleString()} emails / rolling hour</div></div>

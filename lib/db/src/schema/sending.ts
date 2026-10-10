@@ -326,6 +326,7 @@ export const emailCampaignsTable = pgTable(
     textBody: text("text_body").notNull(),
     htmlBody: text("html_body"),
     status: emailCampaignStatusEnum("status").notNull().default("draft"),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
     queuedAt: timestamp("queued_at", { withTimezone: true }),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),

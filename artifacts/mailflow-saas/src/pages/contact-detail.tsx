@@ -325,6 +325,7 @@ export function ContactDetailPage() {
     });
   };
 
+  const emailStatus = contact.emailStatus ?? (contact.subscribed ? 'subscribed' : 'unsubscribed');
   return <div className="fade-in">
     <CompanyLinkConfirmation replacement={replacement} pending={update.isPending}
       onCancel={() => setReplacement(null)} onConfirm={target => {
@@ -339,11 +340,11 @@ export function ContactDetailPage() {
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] font-semibold text-[#245b9b]">{(contact.firstName[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName[0]?.toUpperCase() || ''}</div>
         <div className="min-w-0"><div className="mb-1 font-mono text-[9px] uppercase tracking-[.16em] text-[#7d8794]">CONTACT RECORD / {contact.id.slice(0, 8)}</div><h1 className="display break-words text-[27px] font-bold leading-tight text-[#172334]">{displayName}</h1><p className="mt-1 break-all text-[13px] text-[#687484]">{contact.email}</p></div>
       </div>
-      <div className="flex items-center gap-2 rounded-md border border-[#dce5e0] bg-[#f5faf6] px-3 py-2 text-[11px] font-semibold text-[#397050]"><ShieldCheck className="h-4 w-4"/>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</div>
+      <div className={`flex items-center gap-2 rounded-md border px-3 py-2 text-[11px] font-semibold ${emailStatus === 'bounced' ? 'border-[#efd5c5] bg-[#fff6ef] text-[#9a552b]' : emailStatus === 'unsubscribed' ? 'border-[#e0e4e8] bg-[#f4f6f8] text-[#66717e]' : 'border-[#dce5e0] bg-[#f5faf6] text-[#397050]'}`}><ShieldCheck className="h-4 w-4"/>{emailStatus === 'bounced' ? 'Bounced' : emailStatus === 'unsubscribed' ? 'Unsubscribed' : 'Subscribed'}</div>
     </div>
     {notice && <div role={notice.kind === 'error' ? 'alert' : 'status'} data-testid="status-contact-save" className={`mb-5 flex items-center gap-2 rounded-md border px-4 py-3 text-[12px] ${notice.kind === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}><CheckCircle2 className="h-4 w-4 shrink-0"/>{notice.text}</div>}
     <div className="mb-5 grid gap-3 sm:grid-cols-3">
-      <div className={`${panel} p-4`}><div className="text-[10px] uppercase tracking-wide text-[#84909e]">Audience status</div><div className={`mt-2 text-[14px] font-semibold ${contact.subscribed ? 'text-[#397050]' : 'text-[#66717e]'}`}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</div><p className="mt-1 text-[10px] text-[#8993a0]">Campaign eligibility follows this status.</p></div>
+      <div className={`${panel} p-4`}><div className="text-[10px] uppercase tracking-wide text-[#84909e]">Consent status</div><div className={`mt-2 text-[14px] font-semibold ${emailStatus === 'bounced' ? 'text-[#9a552b]' : emailStatus === 'unsubscribed' ? 'text-[#66717e]' : 'text-[#397050]'}`}>{emailStatus === 'bounced' ? 'Bounced' : emailStatus === 'unsubscribed' ? 'Unsubscribed' : 'Subscribed'}</div><p className="mt-1 text-[10px] text-[#8993a0]">{emailStatus === 'bounced' ? 'This address is suppressed from future campaign sends.' : 'Campaign eligibility follows this status.'}</p></div>
       <div className={`${panel} p-4`}><div className="text-[10px] uppercase tracking-wide text-[#84909e]">Record created</div><div className="mt-2 text-[13px] font-semibold text-[#29384a]">{date(contact.createdAt)}</div><p className="mt-1 text-[10px] text-[#8993a0]">In this workspace</p></div>
       <div className={`${panel} p-4`}><div className="text-[10px] uppercase tracking-wide text-[#84909e]">Last updated</div><div className="mt-2 text-[13px] font-semibold text-[#29384a]">{date(contact.updatedAt)}</div><p className="mt-1 text-[10px] text-[#8993a0]">Contact record revision</p></div>
     </div>

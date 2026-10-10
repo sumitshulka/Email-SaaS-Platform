@@ -48,6 +48,8 @@ import type {
   CampaignEmailAssistInput,
   CampaignEmailAssistResponse,
   CampaignInput,
+  CampaignPauseInput,
+  CampaignPauseResponse,
   CampaignPreviewInput,
   CampaignQueueInput,
   CampaignSummary,
@@ -8086,6 +8088,95 @@ export const useDeleteCampaign = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteCampaignMutationOptions(options));
+    }
+
+export const getSetCampaignPausedUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/pause`
+}
+
+/**
+ * @summary Pause or resume delivery for an active campaign
+ */
+export const setCampaignPaused = async (campaignId: string,
+    campaignPauseInput: CampaignPauseInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignPauseResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignPauseResponse>(getSetCampaignPausedUrl(campaignId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignPauseInput)
+  }
+);}
+
+
+
+
+
+export const getSetCampaignPausedMutationKey = () => ['setCampaignPaused'] as const;
+
+export const getSetCampaignPausedMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setCampaignPaused>>, TError,SetCampaignPausedMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setCampaignPaused>>, TError,SetCampaignPausedMutationVariables, TContext> => {
+
+const mutationKey = getSetCampaignPausedMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setCampaignPaused>>, SetCampaignPausedMutationVariables> = (props) => {
+          const {campaignId,data} = props ?? {};
+
+          return  setCampaignPaused(campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetCampaignPausedMutationResult = NonNullable<Awaited<ReturnType<typeof setCampaignPaused>>>
+    export type SetCampaignPausedMutationBody = BodyType<CampaignPauseInput>
+    export type SetCampaignPausedMutationError = ErrorType<ApiError>
+    export type SetCampaignPausedMutationVariables = {campaignId: string;data: BodyType<CampaignPauseInput>}
+
+    /**
+ * @summary Pause or resume delivery for an active campaign
+ */
+export const useSetCampaignPaused = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setCampaignPaused>>, TError,SetCampaignPausedMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setCampaignPaused>>,
+        TError,
+        SetCampaignPausedMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetCampaignPausedMutationOptions(options));
     }
 
 export const getGetCampaignDeliveryReportUrl = (campaignId: string,

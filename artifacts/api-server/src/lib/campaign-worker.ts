@@ -207,7 +207,12 @@ async function completeCampaignIfFinished(
   if ((unfinished?.value ?? 0) > 0) return;
   await db
     .update(emailCampaignsTable)
-    .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
+    .set({
+      status: "completed",
+      pausedAt: null,
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(emailCampaignsTable.userId, userId),
@@ -508,6 +513,7 @@ async function claimDelivery(
           eq(emailCampaignsTable.userId, userId),
         ),
       )
+      .for("update")
       .limit(1);
     if (
       !campaign ||
@@ -523,6 +529,7 @@ async function claimDelivery(
         .where(eq(emailCampaignRecipientsTable.id, recipient.id));
       return { completedCampaignId: recipient.campaignId };
     }
+    if (campaign.pausedAt) return null;
     if (
       !normalizePublicAppOrigin(campaign.unsubscribeOrigin) &&
       !getPublicAppOrigin()
@@ -809,6 +816,7 @@ export async function processPendingCampaignDeliveries(
         eq(emailCampaignRecipientsTable.status, "queued"),
         lte(emailCampaignRecipientsTable.nextAttemptAt, now),
         inArray(emailCampaignsTable.status, ["queued", "sending"]),
+        isNull(emailCampaignsTable.pausedAt),
       ),
     )
     .orderBy(

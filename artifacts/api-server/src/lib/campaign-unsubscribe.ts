@@ -159,7 +159,11 @@ export async function applyCampaignUnsubscribeToken(token: string): Promise<void
 
     await tx
       .update(contactsTable)
-      .set({ subscribed: false, updatedAt: new Date() })
+      .set({
+        subscribed: false,
+        emailStatus: "unsubscribed",
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(contactsTable.id, payload.contactId),

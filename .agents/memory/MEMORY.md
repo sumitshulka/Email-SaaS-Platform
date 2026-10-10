@@ -40,3 +40,4 @@
 - [Gmail sync diagnostic privacy](gmail-sync-diagnostic-privacy.md) — keep sync diagnostics tenant-scoped, aggregate-only, and free of message or provider payloads.
 - [Add-on entitlement lifecycle](mailflow-add-on-entitlements.md) — add-ons pause when paid-primary access ends; unused allowances resume on a later paid term.
 - [Signup verification analytics](signup-verification-analytics.md) — count signup verification only when a pending unverified registration is confirmed, not for other uses of the shared verification flow.
+- [Contact bounce consent](contact-bounce-consent.md) — a bounced address is suppressed but not unsubscribed; only the recipient’s unsubscribe action records an unsubscribe.

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Company } from './company';
+import type { ContactEmailStatus } from './contactEmailStatus';
 
 export interface Contact {
   id: string;
@@ -172,6 +173,8 @@ export interface Contact {
      */
   companyLocation: string | null;
   subscribed: boolean;
+  /** @nullable */
+  emailStatus: ContactEmailStatus;
   listIds: string[];
   createdAt: Date;
   updatedAt: Date;

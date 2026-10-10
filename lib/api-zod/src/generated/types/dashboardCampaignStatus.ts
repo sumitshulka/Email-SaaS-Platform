@@ -10,6 +10,7 @@ export type DashboardCampaignStatus = typeof DashboardCampaignStatus[keyof typeo
 
 
 export const DashboardCampaignStatus = {
+  draft: 'draft',
   queued: 'queued',
   sending: 'sending',
   completed: 'completed',

@@ -33,6 +33,8 @@ import {
   GetCampaignDashboardResponse,
   GetCampaignVariantLimitsResponse,
   ApplyCampaignUnsubscribeResponse,
+  SetCampaignPausedBody,
+  SetCampaignPausedResponse,
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
@@ -2618,6 +2620,7 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
         phoneNumber: optionalContactValue(parsed.data.phoneNumber),
         ...contactEnrichmentPatch(parsed.data),
         subscribed,
+        emailStatus: subscribed ? "subscribed" : "unsubscribed",
       })
       .onConflictDoNothing({
         target: [contactsTable.userId, contactsTable.email],
@@ -2855,6 +2858,7 @@ router.post(
             phoneNumber: optionalContactValue(data.phoneNumber),
             ...contactEnrichmentPatch(data),
             subscribed: data.subscribed ?? false,
+            emailStatus: data.subscribed ? "subscribed" : "unsubscribed",
           })
           .onConflictDoNothing({
             target: [contactsTable.userId, contactsTable.email],
@@ -3131,7 +3135,14 @@ router.patch(
             : {}),
           ...companyProfilePatch,
           ...(parsed.data.subscribed !== undefined
-            ? { subscribed: parsed.data.subscribed }
+            ? {
+                subscribed: parsed.data.subscribed,
+                emailStatus: parsed.data.subscribed
+                  ? "subscribed"
+                  : existing.emailStatus === "bounced"
+                    ? "bounced"
+                    : "unsubscribed",
+              }
             : {}),
           updatedAt: new Date(),
         })
@@ -3650,6 +3661,61 @@ router.get("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.json(ListCampaignsResponse.parse(await campaignPayloads(req.authUser!.id)));
 });
 
+router.patch(
+  "/campaigns/:campaignId/pause",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetCampaignDashboardParams.safeParse(req.params);
+    const body = SetCampaignPausedBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid campaign pause request.", code: "INVALID_INPUT" });
+      return;
+    }
+    const result = await db.transaction(async (tx) => {
+      const [campaign] = await tx
+        .select({
+          id: emailCampaignsTable.id,
+          status: emailCampaignsTable.status,
+          pausedAt: emailCampaignsTable.pausedAt,
+        })
+        .from(emailCampaignsTable)
+        .where(
+          and(
+            eq(emailCampaignsTable.id, params.data.campaignId),
+            eq(emailCampaignsTable.userId, req.authUser!.id),
+          ),
+        )
+        .for("update");
+      if (!campaign) return { kind: "not_found" as const };
+      if (campaign.status !== "queued" && campaign.status !== "sending") {
+        return { kind: "not_active" as const };
+      }
+      const pausedAt = body.data.paused
+        ? campaign.pausedAt ?? new Date()
+        : null;
+      const [updated] = await tx
+        .update(emailCampaignsTable)
+        .set({ pausedAt, updatedAt: new Date() })
+        .where(eq(emailCampaignsTable.id, campaign.id))
+        .returning({ pausedAt: emailCampaignsTable.pausedAt });
+      return { kind: "ok" as const, pausedAt: updated.pausedAt };
+    });
+    if (result.kind === "not_found") {
+      res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      return;
+    }
+    if (result.kind === "not_active") {
+      res.status(409).json({ error: "Only queued or sending campaigns can be paused.", code: "CAMPAIGN_NOT_ACTIVE" });
+      return;
+    }
+    res.json(SetCampaignPausedResponse.parse({
+      campaignId: params.data.campaignId,
+      paused: result.pausedAt !== null,
+      pausedAt: result.pausedAt,
+    }));
+  },
+);
+
 router.post(
   "/campaigns/preview",
   requireUserRole,
@@ -3733,6 +3799,7 @@ router.post(
         companyName: contactsTable.companyName,
         linkedinUrl: contactsTable.linkedinUrl,
         phoneNumber: contactsTable.phoneNumber,
+        emailStatus: contactsTable.emailStatus,
         createdAt: contactsTable.createdAt,
       })
       .from(contactListMembersTable)
@@ -4739,8 +4806,8 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     lifecycleStageRows,
     leadStatusRows,
     contactFieldOptions,
-    runningCampaigns,
-    recentCampaigns,
+    [campaignCountRow],
+    campaignRows,
   ] = await Promise.all([
     getCurrentSubscriptionForUser(userId),
     db
@@ -4819,24 +4886,9 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
         asc(contactFieldOptionsTable.normalizedValue),
       ),
     db
-      .select({
-        id: emailCampaignsTable.id,
-        senderAccountId: emailCampaignsTable.senderAccountId,
-        name: emailCampaignsTable.name,
-        status: emailCampaignsTable.status,
-        queuedAt: emailCampaignsTable.queuedAt,
-        completedAt: emailCampaignsTable.completedAt,
-        updatedAt: emailCampaignsTable.updatedAt,
-      })
+      .select({ value: count() })
       .from(emailCampaignsTable)
-      .where(
-        and(
-          eq(emailCampaignsTable.userId, userId),
-          inArray(emailCampaignsTable.status, ["queued", "sending"]),
-        ),
-      )
-      .orderBy(desc(emailCampaignsTable.updatedAt))
-      .limit(20),
+      .where(eq(emailCampaignsTable.userId, userId)),
     db
       .select({
         id: emailCampaignsTable.id,
@@ -4848,20 +4900,15 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
         updatedAt: emailCampaignsTable.updatedAt,
       })
       .from(emailCampaignsTable)
-      .where(
-        and(
-          eq(emailCampaignsTable.userId, userId),
-          eq(emailCampaignsTable.status, "completed"),
-        ),
-      )
+      .where(eq(emailCampaignsTable.userId, userId))
       .orderBy(desc(emailCampaignsTable.updatedAt))
-      .limit(6),
+      .limit(5),
   ]);
 
   const contacts = contactCount?.value ?? 0;
   const companies = companyCount?.value ?? 0;
   const activeLists = listCount?.value ?? 0;
-  const campaigns = [...runningCampaigns, ...recentCampaigns];
+  const campaigns = campaignRows;
   const campaignIds = campaigns.map((campaign) => campaign.id);
   const attemptSenderAccountExpression =
     sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId})`;
@@ -5034,6 +5081,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       "lifecycleStage",
     ),
     leadStatuses: buildContactSegments(leadStatusRows, "leadStatus"),
+    campaignCount: Number(campaignCountRow?.value ?? 0),
     campaigns: dashboardCampaigns,
     setupStepsCompleted,
     setupStepsTotal: 4,

@@ -2321,6 +2321,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/pause:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: setCampaignPaused
+      tags: [sending]
+      summary: Pause or resume delivery for an active campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignPauseInput" }
+      responses:
+        "200":
+          description: Updated campaign pause state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignPauseResponse" }
+        "400":
+          description: Invalid pause request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Only active campaigns can be paused or resumed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /campaigns/{campaignId}/delivery-report:
     parameters:
       - name: campaignId
@@ -3594,12 +3630,13 @@ components:
         leadStatuses:
           type: array
           items: { $ref: "#/components/schemas/DashboardContactSegment" }
+        campaignCount: { type: integer, minimum: 0 }
         campaigns:
           type: array
           items: { $ref: "#/components/schemas/DashboardCampaign" }
         setupStepsCompleted: { type: integer }
         setupStepsTotal: { type: integer }
-      required: [subscriptionStatus, contacts, companies, activeLists, amountSpentByCurrency, lifecycleStages, leadStatuses, campaigns, setupStepsCompleted, setupStepsTotal]
+      required: [subscriptionStatus, contacts, companies, activeLists, amountSpentByCurrency, lifecycleStages, leadStatuses, campaignCount, campaigns, setupStepsCompleted, setupStepsTotal]
     UserNotification:
       type: object
       properties:
@@ -3687,7 +3724,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        status: { type: string, enum: [queued, sending, completed] }
+        status: { type: string, enum: [draft, queued, sending, completed] }
         recipients: { type: integer, minimum: 0 }
         queued: { type: integer, minimum: 0 }
         delivered: { type: integer, minimum: 0 }
@@ -4534,10 +4571,13 @@ components:
         companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         companyLocation: { type: ["string", "null"], maxLength: 200 }
         subscribed: { type: boolean }
+        emailStatus:
+          type: ["string", "null"]
+          enum: [subscribed, bounced, unsubscribed, null]
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, listIds, createdAt, updatedAt]
     ContactEmailHistoryItem:
       type: object
       properties:
@@ -4871,6 +4911,7 @@ components:
           description: Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.
           items: { type: string, format: uuid }
         status: { type: string, enum: [draft, queued, sending, completed] }
+        pausedAt: { type: ["string", "null"], format: date-time }
         recipients: { type: integer }
         estimatedDurationSeconds: { type: integer }
         queued: { type: integer }
@@ -4883,7 +4924,19 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, status, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, status, pausedAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+    CampaignPauseInput:
+      type: object
+      properties:
+        paused: { type: boolean }
+      required: [paused]
+    CampaignPauseResponse:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        paused: { type: boolean }
+        pausedAt: { type: ["string", "null"], format: date-time }
+      required: [campaignId, paused, pausedAt]
     CampaignAudienceSummary:
       type: object
       properties:

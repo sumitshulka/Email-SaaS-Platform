@@ -300,6 +300,8 @@ export const getUserDashboardResponseLifecycleStagesItemCountMin = 0;
 
 export const getUserDashboardResponseLeadStatusesItemCountMin = 0;
 
+export const getUserDashboardResponseCampaignCountMin = 0;
+
 export const getUserDashboardResponseCampaignsItemRecipientsMin = 0;
 
 export const getUserDashboardResponseCampaignsItemQueuedMin = 0;
@@ -336,10 +338,11 @@ export const GetUserDashboardResponse = zod.object({
   "value": zod.string(),
   "count": zod.number().int().min(getUserDashboardResponseLeadStatusesItemCountMin)
 })),
+  "campaignCount": zod.number().int().min(getUserDashboardResponseCampaignCountMin),
   "campaigns": zod.array(zod.object({
   "id": zod.string().uuid(),
   "name": zod.string(),
-  "status": zod.enum(['queued', 'sending', 'completed']),
+  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "recipients": zod.number().int().min(getUserDashboardResponseCampaignsItemRecipientsMin),
   "queued": zod.number().int().min(getUserDashboardResponseCampaignsItemQueuedMin),
   "delivered": zod.number().int().min(getUserDashboardResponseCampaignsItemDeliveredMin),
@@ -1346,6 +1349,7 @@ export const ListContactsResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(listContactsResponseContactsItemOneCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(listContactsResponseContactsItemOneCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
+  "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1645,6 +1649,7 @@ export const CreateContactResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(createContactResponseCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(createContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
+  "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3567,6 +3572,7 @@ export const GetContactResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(getContactResponseCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(getContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
+  "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3838,6 +3844,7 @@ export const UpdateContactResponse = zod.object({
   "companyLinkedinUrl": zod.string().max(updateContactResponseCompanyLinkedinUrlMax).nullable(),
   "companyLocation": zod.string().max(updateContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
+  "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -4177,6 +4184,7 @@ export const ListCampaignsResponseItem = zod.object({
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4259,6 +4267,7 @@ export const CreateCampaignResponse = zod.object({
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4506,6 +4515,7 @@ export const GetCampaignDashboardResponse = zod.object({
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4655,6 +4665,7 @@ export const UpdateCampaignResponse = zod.object({
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4678,6 +4689,24 @@ export const DeleteCampaignParams = zod.object({
 })
 
 export const DeleteCampaignResponse = zod.void()
+
+
+/**
+ * @summary Pause or resume delivery for an active campaign
+ */
+export const SetCampaignPausedParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const SetCampaignPausedBody = zod.object({
+  "paused": zod.boolean()
+})
+
+export const SetCampaignPausedResponse = zod.object({
+  "campaignId": zod.string().uuid(),
+  "paused": zod.boolean(),
+  "pausedAt": zod.coerce.date().nullable()
+})
 
 
 /**
@@ -4833,6 +4862,7 @@ export const SendCampaignResponse = zod.object({
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),

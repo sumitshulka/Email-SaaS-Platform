@@ -442,6 +442,7 @@ memory.public.none(`
     company_linkedin_url varchar(2048),
     company_location varchar(200),
     subscribed boolean NOT NULL DEFAULT true,
+    email_status varchar(20),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, email),
@@ -515,6 +516,7 @@ memory.public.none(`
     html_body text,
     unsubscribe_origin text,
     status email_campaign_status NOT NULL DEFAULT 'draft',
+    paused_at timestamptz,
     queued_at timestamptz,
     scheduled_at timestamptz,
     completed_at timestamptz,
@@ -11799,6 +11801,11 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       cookie: owner.cookie,
     });
     assert.equal(draftDashboard.response.status, 200, JSON.stringify(draftDashboard.body));
+    const workspaceDashboard = await api("/dashboard", { cookie: owner.cookie });
+    assert.equal(workspaceDashboard.response.status, 200, JSON.stringify(workspaceDashboard.body));
+    assert.ok(workspaceDashboard.body.campaignCount >= 1);
+    assert.ok(workspaceDashboard.body.campaigns.length <= 5);
+    assert.ok(workspaceDashboard.body.campaigns.some((item) => item.id === campaign.body.id));
     assert.equal(draftDashboard.body.targetList.name, ownerSecondaryList.body.name);
     assert.deepEqual(
       draftDashboard.body.targetLists.map((list) => list.name),
@@ -11826,6 +11833,26 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
     assert.equal(queued.body.recipients, 3);
     assert.ok(queued.body.scheduledAt);
+    const pausedCampaign = await api(`/campaigns/${campaign.body.id}/pause`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { paused: true },
+    });
+    assert.equal(pausedCampaign.response.status, 200);
+    assert.equal(pausedCampaign.body.paused, true);
+    assert.ok(pausedCampaign.body.pausedAt);
+    const pausedDashboard = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(pausedDashboard.body.campaign.pausedAt, pausedCampaign.body.pausedAt);
+    const resumedCampaign = await api(`/campaigns/${campaign.body.id}/pause`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { paused: false },
+    });
+    assert.equal(resumedCampaign.response.status, 200);
+    assert.equal(resumedCampaign.body.paused, false);
+    assert.equal(resumedCampaign.body.pausedAt, null);
     const inUseSenderDeletion = await api(
       `/sending/accounts/${backupSender.body.account.id}`,
       { method: "DELETE", cookie: owner.cookie },
@@ -12683,6 +12710,15 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       }),
     );
     assert.equal(latestBounce.body.imported, 1);
+    const [contactAfterBounce] = await db
+      .select({
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      })
+      .from(dbModule.contactsTable)
+      .where(eq(dbModule.contactsTable.id, deliveredRecipient.contactId));
+    assert.equal(contactAfterBounce.subscribed, false);
+    assert.equal(contactAfterBounce.emailStatus, "bounced");
     const bounceEvidence = await api(
       `/campaigns/${campaign.body.id}/delivery-report?limit=100`,
       { cookie: owner.cookie },
@@ -12908,6 +12944,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .update(dbModule.emailSendAttemptsTable)
       .set({ attemptedAt: new Date(Date.now() - 60_000) })
       .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+    await db
+      .update(dbModule.contactsTable)
+      .set({ subscribed: true, emailStatus: "subscribed" })
+      .where(eq(dbModule.contactsTable.id, deliveredRecipient.contactId));
     const retryEvidenceReset = await campaignWorkerModule.processPendingCampaignDeliveries(1);
     assert.equal(retryEvidenceReset, 1);
     const [resetRecipient] = await db
@@ -13040,10 +13080,14 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(oneClickResponse.status, 200);
     const [unsubscribedContact] = await db
-      .select({ subscribed: dbModule.contactsTable.subscribed })
+      .select({
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      })
       .from(dbModule.contactsTable)
       .where(eq(dbModule.contactsTable.id, deliveredRecipient.contactId));
     assert.equal(unsubscribedContact.subscribed, false);
+    assert.equal(unsubscribedContact.emailStatus, "unsubscribed");
     const [suppressedPendingRecipient] = await db
       .select()
       .from(dbModule.emailCampaignRecipientsTable)

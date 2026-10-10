@@ -38,6 +38,8 @@ export interface CampaignSummary {
   /** Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses. */
   listIds: string[];
   status: CampaignSummaryStatus;
+  /** @nullable */
+  pausedAt: Date | null;
   recipients: number;
   estimatedDurationSeconds: number;
   queued: number;

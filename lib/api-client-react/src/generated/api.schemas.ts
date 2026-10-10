@@ -302,6 +302,7 @@ export type DashboardCampaignStatus = typeof DashboardCampaignStatus[keyof typeo
 
 
 export const DashboardCampaignStatus = {
+  draft: 'draft',
   queued: 'queued',
   sending: 'sending',
   completed: 'completed',
@@ -344,6 +345,8 @@ export interface UserDashboard {
   amountSpentByCurrency: DashboardAmountByCurrency[];
   lifecycleStages: DashboardContactSegment[];
   leadStatuses: DashboardContactSegment[];
+  /** @minimum 0 */
+  campaignCount: number;
   campaigns: DashboardCampaign[];
   setupStepsCompleted: number;
   setupStepsTotal: number;
@@ -1847,6 +1850,18 @@ export interface UnlinkedCompanyProfileCollection {
   profiles: UnlinkedCompanyProfile[];
 }
 
+/**
+ * @nullable
+ */
+export type ContactEmailStatus = typeof ContactEmailStatus[keyof typeof ContactEmailStatus] | null;
+
+
+export const ContactEmailStatus = {
+  subscribed: 'subscribed',
+  bounced: 'bounced',
+  unsubscribed: 'unsubscribed',
+} as const;
+
 export interface Contact {
   id: string;
   email: string;
@@ -2012,6 +2027,8 @@ export interface Contact {
      */
   companyLocation: string | null;
   subscribed: boolean;
+  /** @nullable */
+  emailStatus: ContactEmailStatus;
   listIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -2743,6 +2760,8 @@ export interface CampaignSummary {
   /** Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses. */
   listIds: string[];
   status: CampaignSummaryStatus;
+  /** @nullable */
+  pausedAt: string | null;
   recipients: number;
   estimatedDurationSeconds: number;
   queued: number;
@@ -2758,6 +2777,17 @@ export interface CampaignSummary {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CampaignPauseInput {
+  paused: boolean;
+}
+
+export interface CampaignPauseResponse {
+  campaignId: string;
+  paused: boolean;
+  /** @nullable */
+  pausedAt: string | null;
 }
 
 export interface CampaignAudienceSummary {

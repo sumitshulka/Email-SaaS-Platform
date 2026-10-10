@@ -268,6 +268,7 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
         firstName,
         lastName,
         subscribed: parsed.data.subscribed ?? true,
+        emailStatus: parsed.data.subscribed === false ? "unsubscribed" : "subscribed",
       })
       .returning();
     return { kind: "created" as const, contact: contact! };
@@ -692,6 +693,7 @@ async function importContactCsv(
         lastName: contact.lastName,
         ...contact.enrichment,
         subscribed: true,
+        emailStatus: "subscribed",
       });
     }
 

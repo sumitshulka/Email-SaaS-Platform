@@ -553,7 +553,7 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
     <Panel className="overflow-hidden">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8ece8] px-5 py-5 sm:px-6">
         <ChartHeading eyebrow="CAMPAIGN ACTIVITY" title="Campaigns" detail="Sending and outcome figures are scoped to each campaign."/>
-        <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]">Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
+        <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]"><span className="rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] tabular-nums" data-testid="overview-campaign-count">{data.campaignCount.toLocaleString()}</span>Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
       </div>
       {data.campaigns.length ? <div className="divide-y divide-[#edf0ed]">
         {data.campaigns.map(campaign => {

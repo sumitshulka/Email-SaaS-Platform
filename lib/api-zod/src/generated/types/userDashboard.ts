@@ -18,6 +18,8 @@ export interface UserDashboard {
   amountSpentByCurrency: DashboardAmountByCurrency[];
   lifecycleStages: DashboardContactSegment[];
   leadStatuses: DashboardContactSegment[];
+  /** @minimum 0 */
+  campaignCount: number;
   campaigns: DashboardCampaign[];
   setupStepsCompleted: number;
   setupStepsTotal: number;

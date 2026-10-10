@@ -61,6 +61,7 @@ export const contactsTable = pgTable(
     companyLinkedinUrl: varchar("company_linkedin_url", { length: 2048 }),
     companyLocation: varchar("company_location", { length: 200 }),
     subscribed: boolean("subscribed").notNull().default(true),
+    emailStatus: varchar("email_status", { length: 20 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
