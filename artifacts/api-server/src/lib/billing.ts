@@ -674,6 +674,7 @@ export async function markRefundedPayment(input: {
   currency: string;
   refundAmountMinor: number;
   totalRefundedAmountMinor: number | null;
+  refundAmountIsCumulative?: boolean;
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
     const [payment] = await tx
@@ -710,18 +711,8 @@ export async function markRefundedPayment(input: {
       .limit(1);
     if (pkg?.packageType !== "addon") return false;
 
-    if (input.razorpayRefundId !== null) {
-      const [newRefund] = await tx
-        .insert(razorpayRefundsTable)
-        .values({
-          paymentId: payment.id,
-          razorpayRefundId: input.razorpayRefundId,
-          amountMinor: input.refundAmountMinor,
-        })
-        .onConflictDoNothing()
-        .returning({ id: razorpayRefundsTable.id });
-      if (!newRefund) return false;
-    } else if (
+    if (
+      input.razorpayRefundId === null &&
       input.totalRefundedAmountMinor === null &&
       input.refundAmountMinor < payment.amountMinor
     ) {
@@ -733,12 +724,31 @@ export async function markRefundedPayment(input: {
     const previouslyRefunded = payment.refundedAmountMinor ?? 0;
     const refundTotal = Math.min(
       payment.amountMinor,
-      Math.max(
-        previouslyRefunded,
-        input.totalRefundedAmountMinor ??
-          previouslyRefunded + input.refundAmountMinor,
-      ),
+      input.refundAmountIsCumulative
+        ? Math.max(
+            previouslyRefunded,
+            input.totalRefundedAmountMinor ??
+              previouslyRefunded + input.refundAmountMinor,
+          )
+        : previouslyRefunded + input.refundAmountMinor,
     );
+    if (input.razorpayRefundId !== null) {
+      const eventAmountMinor = input.refundAmountIsCumulative
+        ? Math.max(0, refundTotal - previouslyRefunded)
+        : input.refundAmountMinor;
+      if (eventAmountMinor > 0) {
+        const [newRefund] = await tx
+          .insert(razorpayRefundsTable)
+          .values({
+            paymentId: payment.id,
+            razorpayRefundId: input.razorpayRefundId,
+            amountMinor: eventAmountMinor,
+          })
+          .onConflictDoNothing()
+          .returning({ id: razorpayRefundsTable.id });
+        if (!newRefund) return false;
+      }
+    }
     await tx
       .update(paymentsTable)
       .set({

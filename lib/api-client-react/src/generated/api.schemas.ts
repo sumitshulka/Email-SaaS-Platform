@@ -4127,11 +4127,18 @@ export interface SubscriptionAddOnBalances {
   mailboxes: SubscriptionAddOnMailboxMetric;
 }
 
+export interface SubscriptionAddOnRefundEvent {
+  /** @minimum 1 */
+  amountMinor: number;
+  refundedAt: string;
+}
+
 export interface SubscriptionAddOnRefundAdjustment {
   packageName: string;
   purchasedAt: string;
   /** @minimum 1 */
   refundedAmountMinor: number;
+  refunds: SubscriptionAddOnRefundEvent[];
   /**
      * @minLength 3
      * @maxLength 3

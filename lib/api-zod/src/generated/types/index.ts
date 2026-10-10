@@ -277,6 +277,7 @@ export * from './subscriptionAddOnBalances';
 export * from './subscriptionAddOnMailboxMetric';
 export * from './subscriptionAddOnMetric';
 export * from './subscriptionAddOnRefundAdjustment';
+export * from './subscriptionAddOnRefundEvent';
 export * from './subscriptionAddOnsDashboard';
 export * from './subscriptionAddOnsDashboardEligibilityReason';
 export * from './subscriptionGiftInput';

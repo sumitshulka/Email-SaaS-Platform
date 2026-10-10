@@ -17,6 +17,7 @@ import {
   aiEmailAssistUsagesTable,
   db,
   paymentsTable,
+  razorpayRefundsTable,
   subscriptionPackagesTable,
   tenantSendingConfigurationTable,
   userSubscriptionsTable,
@@ -201,6 +202,70 @@ export async function getSubscriptionAddOnsDashboard(
         paidEntitlementCondition,
       ),
     );
+  const refundAdjustmentRows = await db
+    .select({
+      paymentId: paymentsTable.id,
+      packageName: subscriptionPackagesTable.name,
+      researchAllowance: addOnEntitlementsTable.researchAllowance,
+      aiEmailAssistAllowance: addOnEntitlementsTable.aiEmailAssistAllowance,
+      additionalMailboxCount: addOnEntitlementsTable.additionalMailboxCount,
+      paymentAmountMinor: paymentsTable.amountMinor,
+      refundedAmountMinor: paymentsTable.refundedAmountMinor,
+      paymentCurrency: paymentsTable.currency,
+      purchasedAt: paymentsTable.createdAt,
+      paymentUpdatedAt: paymentsTable.updatedAt,
+    })
+    .from(addOnEntitlementsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(addOnEntitlementsTable.packageId, subscriptionPackagesTable.id),
+    )
+    .innerJoin(
+      paymentsTable,
+      eq(addOnEntitlementsTable.paymentId, paymentsTable.id),
+    )
+    .where(
+      and(
+        eq(addOnEntitlementsTable.userId, userId),
+        eq(paymentsTable.userId, userId),
+        eq(subscriptionPackagesTable.packageType, "addon"),
+        inArray(paymentsTable.status, ["captured", "refunded"]),
+        gt(paymentsTable.refundedAmountMinor, 0),
+      ),
+    );
+  const paidPaymentIds = refundAdjustmentRows.map((row) => row.paymentId);
+  const refundRows = paidPaymentIds.length
+    ? await db
+        .select({
+          paymentId: razorpayRefundsTable.paymentId,
+          amountMinor: razorpayRefundsTable.amountMinor,
+          refundedAt: razorpayRefundsTable.createdAt,
+        })
+        .from(razorpayRefundsTable)
+        .innerJoin(
+          paymentsTable,
+          eq(razorpayRefundsTable.paymentId, paymentsTable.id),
+        )
+        .where(
+          and(
+            inArray(razorpayRefundsTable.paymentId, paidPaymentIds),
+            eq(paymentsTable.userId, userId),
+          ),
+        )
+        .orderBy(asc(razorpayRefundsTable.createdAt), asc(razorpayRefundsTable.id))
+    : [];
+  const refundsByPaymentId = new Map<
+    string,
+    { amountMinor: number; refundedAt: string }[]
+  >();
+  for (const refund of refundRows) {
+    const events = refundsByPaymentId.get(refund.paymentId) ?? [];
+    events.push({
+      amountMinor: refund.amountMinor,
+      refundedAt: refund.refundedAt.toISOString(),
+    });
+    refundsByPaymentId.set(refund.paymentId, events);
+  }
   const researchTotal = entitlementRows.reduce(
     (total, row) =>
       total +
@@ -235,21 +300,26 @@ export async function getSubscriptionAddOnsDashboard(
       ),
     0,
   );
-  const refundAdjustments = entitlementRows.flatMap((row) => {
-    if (
-      row.paymentId === null ||
-      row.paymentAmountMinor === null ||
-      row.refundedAmountMinor === null ||
-      row.refundedAmountMinor <= 0 ||
-      row.paymentCurrency === null ||
-      row.purchasedAt === null
-    ) {
-      return [];
+  const refundAdjustments = refundAdjustmentRows.map((row) => {
+    const refunds = [...(refundsByPaymentId.get(row.paymentId) ?? [])];
+    const recordedRefundTotal = refunds.reduce(
+      (total, refund) => total + refund.amountMinor,
+      0,
+    );
+    if (recordedRefundTotal < row.refundedAmountMinor) {
+      // Older aggregate refund notifications updated the cumulative payment
+      // total without creating an individual refund row. Preserve that history
+      // as one dated remainder rather than hiding part of the accepted total.
+      refunds.push({
+        amountMinor: row.refundedAmountMinor - recordedRefundTotal,
+        refundedAt: row.paymentUpdatedAt.toISOString(),
+      });
     }
-    return [{
+    return {
       packageName: row.packageName,
       purchasedAt: row.purchasedAt.toISOString(),
       refundedAmountMinor: row.refundedAmountMinor,
+      refunds,
       currency: row.paymentCurrency,
       researchCredits: prorateAddOnAllowance(
         row.researchAllowance,
@@ -266,7 +336,7 @@ export async function getSubscriptionAddOnsDashboard(
         row.paymentAmountMinor,
         row.refundedAmountMinor,
       ),
-    }];
+    };
   });
 
   await releaseStaleAiEmailAssistReservations(now, userId);

@@ -4403,6 +4403,14 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       },
     );
     assert.ok(Number.isFinite(Date.parse(partialRefundDashboard.refundAdjustments[0].purchasedAt)));
+    assert.deepEqual(
+      partialRefundDashboard.refundAdjustments[0].refunds.map((refund) => ({
+        amountMinor: refund.amountMinor,
+        hasValidDate: Number.isFinite(Date.parse(refund.refundedAt)),
+      })),
+      [{ amountMinor: 700, hasValidDate: true }],
+      "the refund history should include the accepted partial refund and its date",
+    );
 
     const otherCustomer = await loggedInUser({
       username: "paid-addon-refund-other-customer",
@@ -4459,6 +4467,19 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.deepEqual(
       otherAccountRefunds.body.refundAdjustments.map((refund) => refund.packageName),
       ["Other account add-on"],
+    );
+    assert.deepEqual(
+      otherAccountRefunds.body.refundAdjustments[0].refunds.map(
+        (refund) => refund.amountMinor,
+      ),
+      [100],
+      "legacy aggregate refunds should remain visible to their owner",
+    );
+    assert.ok(
+      Number.isFinite(
+        Date.parse(otherAccountRefunds.body.refundAdjustments[0].refunds[0].refundedAt),
+      ),
+      "legacy refund history should include a valid date",
     );
 
     const duplicatePartialRefundWithoutTotal = await sendWebhook(
@@ -4608,6 +4629,17 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       },
       "the refund summary should use the cumulative refund and server prorating",
     );
+    const refundEvents = cumulativeRefundDashboard.refundAdjustments[0].refunds;
+    assert.deepEqual(
+      refundEvents.map((refund) => refund.amountMinor),
+      [700, 400],
+      "every accepted partial refund should appear as a separate event",
+    );
+    assert.equal(
+      refundEvents.reduce((total, refund) => total + refund.amountMinor, 0),
+      cumulativeRefundDashboard.refundAdjustments[0].refundedAmountMinor,
+      "the event amounts should equal the cumulative amount used for entitlements",
+    );
     const senderLimitAfterAdditionalRefund = await api("/sending/accounts", {
       cookie: customer.cookie,
     });
@@ -4684,6 +4716,20 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(refundedPayment.status, "refunded");
     assert.equal(refundedPayment.refundedAmountMinor, 1500);
     await assertBalances(4, 3, 2, 4, 3, 4);
+    const fullyRefundedDashboard = await api("/subscriptions/add-ons", {
+      cookie: customer.cookie,
+    });
+    const fullyRefundedAdjustment = fullyRefundedDashboard.body.refundAdjustments
+      .find((refund) => refund.packageName === "Paid add-on webhook pack");
+    assert.equal(fullyRefundedAdjustment.refundedAmountMinor, 1500);
+    assert.equal(
+      fullyRefundedAdjustment.refunds.reduce(
+        (total, refund) => total + refund.amountMinor,
+        0,
+      ),
+      1500,
+      "the full refund history should still total the cumulative entitlement refund",
+    );
 
     const delayedCapture = await sendWebhook(
       "payment.captured",
@@ -4715,6 +4761,29 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       .where(eq(dbModule.addOnEntitlementsTable.paymentId, failedPayment.id));
     assert.equal(failedEntitlements.length, 0);
     await assertBalances(4, 3, 2, 4, 3, 4);
+
+    const aggregateRefund = await sendWebhook(
+      "payment.refunded",
+      {
+        ...paymentEntity(checkoutOrders[0], "pay_paid_addon_1", "refunded", false),
+        amount_refunded: 1500,
+      },
+      "paid-addon-aggregate-refund",
+    );
+    assert.equal(aggregateRefund.response.status, 200);
+    const aggregateRefundDashboard = await api("/subscriptions/add-ons", {
+      cookie: customer.cookie,
+    });
+    const aggregateRefundAdjustment = aggregateRefundDashboard.body.refundAdjustments
+      .find((refund) =>
+        refund.refunds.some((event) => event.amountMinor === 1500),
+      );
+    assert.ok(aggregateRefundAdjustment);
+    assert.deepEqual(
+      aggregateRefundAdjustment.refunds.map((refund) => refund.amountMinor),
+      [1500],
+      "a full-payment refund notification should also create a dated refund event",
+    );
   });
 
   it("isolates contacts by tenant and enforces package limits on every create", async () => {

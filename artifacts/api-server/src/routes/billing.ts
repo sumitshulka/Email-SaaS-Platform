@@ -2221,7 +2221,7 @@ router.post(
       const providerRefundId =
         eventType === "refund.processed"
           ? webhookText(providerRefund?.id)
-          : null;
+          : `evt_${createHash("sha256").update(eventId).digest("hex")}`;
       const isProcessedRefund =
         eventType === "payment.refunded"
           ? providerPayment?.status === "refunded"
@@ -2274,6 +2274,7 @@ router.post(
             reportedRefundTotal <= amount
               ? reportedRefundTotal
               : null,
+          refundAmountIsCumulative: eventType === "payment.refunded",
         });
         await db
           .update(razorpayWebhookEventsTable)

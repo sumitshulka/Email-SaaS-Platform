@@ -6439,6 +6439,7 @@ export const getSubscriptionAddOnsResponseBalancesMailboxesUsedMin = 0;
 export const getSubscriptionAddOnsResponseBalancesMailboxesRemainingMin = 0;
 
 
+
 export const getSubscriptionAddOnsResponseRefundAdjustmentsItemCurrencyMin = 3;
 export const getSubscriptionAddOnsResponseRefundAdjustmentsItemCurrencyMax = 3;
 
@@ -6494,6 +6495,10 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "packageName": zod.string(),
   "purchasedAt": zod.coerce.date(),
   "refundedAmountMinor": zod.number().int().min(1),
+  "refunds": zod.array(zod.object({
+  "amountMinor": zod.number().int().min(1),
+  "refundedAt": zod.coerce.date()
+})),
   "currency": zod.string().min(getSubscriptionAddOnsResponseRefundAdjustmentsItemCurrencyMin).max(getSubscriptionAddOnsResponseRefundAdjustmentsItemCurrencyMax),
   "researchCredits": zod.number().int().min(getSubscriptionAddOnsResponseRefundAdjustmentsItemResearchCreditsMin),
   "emailAssistDrafts": zod.number().int().min(getSubscriptionAddOnsResponseRefundAdjustmentsItemEmailAssistDraftsMin),

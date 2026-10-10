@@ -5,12 +5,14 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { SubscriptionAddOnRefundEvent } from './subscriptionAddOnRefundEvent';
 
 export interface SubscriptionAddOnRefundAdjustment {
   packageName: string;
   purchasedAt: Date;
   /** @minimum 1 */
   refundedAmountMinor: number;
+  refunds: SubscriptionAddOnRefundEvent[];
   /**
      * @minLength 3
      * @maxLength 3
