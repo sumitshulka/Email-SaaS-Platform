@@ -22,6 +22,14 @@ describe("campaign profanity filter", () => {
         value,
       );
     }
+    assert.deepEqual(
+      findProhibitedCampaignContent({ body: "BADWORD" }, ["badword"]),
+      ["body"],
+    );
+    assert.deepEqual(
+      findProhibitedCampaignContent({ body: "badword" }, ["BADWORD"]),
+      ["body"],
+    );
   });
 
   it("checks all campaign fields and numeric HTML entities", () => {

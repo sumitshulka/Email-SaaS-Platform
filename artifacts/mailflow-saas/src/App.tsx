@@ -6,7 +6,7 @@ import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, BrainCircuit, Check, Eye, EyeOff,
   ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, CreditCard, Gauge, KeyRound, LoaderCircle,
   LockKeyhole, LogOut, Menu, Package, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
-  Trash2, UserRound, Users, Building2, LifeBuoy,
+  Trash2, UserRound, Users, Building2, LifeBuoy, X,
 } from 'lucide-react';
 import {
   getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey,
@@ -896,7 +896,9 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
       {words.length ? <div className="flex flex-wrap gap-2">
         {words.map((word, index) => <span key={`${word}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#dbe2ea] bg-white py-1 pl-3 pr-1 text-[12px] text-[#344154]">
           <span className="break-all">{word}</span>
-          <button type="button" data-testid={`button-remove-prohibited-keyword-${index}`} aria-label={`Remove ${word}`} onClick={() => onChange(words.filter((_, wordIndex) => wordIndex !== index))} className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#687484] hover:bg-[#f0f2f4] hover:text-[#a13d36]">Remove</button>
+          <button type="button" data-testid={`button-remove-prohibited-keyword-${index}`} aria-label={`Remove ${word}`} title={`Remove ${word}`} onClick={() => onChange(words.filter((_, wordIndex) => wordIndex !== index))} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[#687484] hover:bg-[#f0f2f4] hover:text-[#a13d36]">
+            <X aria-hidden="true" className="h-3.5 w-3.5"/>
+          </button>
         </span>)}
       </div> : <p className="text-[12px] text-[#7d8794]">No blocked words or phrases added yet.</p>}
       <p className="mt-2 text-right text-[10px] text-[#7d8794]">{words.length} / 200</p>
