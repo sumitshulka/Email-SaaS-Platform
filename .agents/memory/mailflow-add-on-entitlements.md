@@ -27,6 +27,12 @@ Partial refunds to paid add-ons reduce each allowance in proportion to the amoun
 
 **How to apply:** use the same prorated entitlement calculation for research, AI-assist, and mailbox limits in dashboard and enforcement paths. Treat full refunds as zero usable paid allowance.
 
+Superadmin corrections to gifted add-ons remove only unused research and AI-assist units. Preserve research counters and AI usage rows; keep enough gifted mailbox slots to cover configured mailboxes that would otherwise exceed the primary plan and other add-ons. Record actor, package, and removed/retained amounts in the same transaction as the correction.
+
+**Why:** a mistaken grant must be reversible without erasing usage history or making already-configured mailbox access inconsistent with the remaining entitlements.
+
+**How to apply:** target one admin-gift entitlement, recheck usage and mailbox needs while locked, and never create or edit payment records during a gift correction.
+
 AI Email Assist reservation recovery must wait for the greater of its 15-minute minimum and the provider request timeout plus a 60-second settle grace. Keep regression tests tied to the provider timeout and simulate a provider timeout above the minimum; the current shorter provider timeout is otherwise masked by the minimum.
 
 **Why:** a test using only today's shorter provider timeout cannot catch a future change that makes the recovery threshold shorter than a long-running request.

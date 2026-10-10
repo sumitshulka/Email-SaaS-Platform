@@ -4,9 +4,9 @@ import {
   Activity, CircleAlert, CreditCard, Gift, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck, X,
 } from 'lucide-react';
 import {
-  getGetOnlinePaymentSettingsQueryKey, getGetRazorpaySettingsQueryKey, getListAdminSubscriptionPackagesQueryKey, getListAdminUsersQueryKey,
+  getGetOnlinePaymentSettingsQueryKey, getGetRazorpaySettingsQueryKey, getListAdminAddOnGiftEntitlementsQueryKey, getListAdminSubscriptionPackagesQueryKey, getListAdminUsersQueryKey,
   getListAvailableSubscriptionPackagesQueryKey,
-  useCreateSubscriptionPackage, useGetOnlinePaymentSettings, useGetRazorpaySettings, useGiftAdminSubscription, useListAdminSubscriptionPackages,
+  useCorrectAdminAddOnGift, useCreateSubscriptionPackage, useGetOnlinePaymentSettings, useGetRazorpaySettings, useGiftAdminSubscription, useListAdminAddOnGiftEntitlements, useListAdminSubscriptionPackages,
   useListAdminUsers,
   useSetActiveRazorpayEnvironment, useTestRazorpayConnection,
   useUpdateOnlinePaymentSettings, useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
@@ -130,6 +130,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
   const createPackage = useCreateSubscriptionPackage();
   const updatePackage = useUpdateSubscriptionPackage();
   const giftSubscription = useGiftAdminSubscription();
+  const correctAddOnGift = useCorrectAdminAddOnGift();
   const settings = settingsQuery.data;
   const onlinePaymentsEnabled = onlinePaymentsQuery.data?.enabled ?? true;
   const onlinePaymentsUpdatedAt = onlinePaymentsQuery.data?.updatedAt ?? null;
@@ -152,6 +153,28 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     query: {
       enabled: giftSearch.trim().length >= 2 && !giftRecipient,
       queryKey: getListAdminUsersQueryKey(giftUserSearchParams),
+    },
+  });
+  const [correctionSearch, setCorrectionSearch] = useState('');
+  const [correctionRecipient, setCorrectionRecipient] = useState<AdminUser | null>(null);
+  const [correctionReviewId, setCorrectionReviewId] = useState<string | null>(null);
+  const [correctionNotice, setCorrectionNotice] = useState<{ text: string; bad?: boolean } | null>(null);
+  const correctionUserSearchParams = {
+    search: correctionSearch.trim(),
+    status: 'all',
+    page: 1,
+    pageSize: 8,
+  } as const;
+  const correctionUsersQuery = useListAdminUsers(correctionUserSearchParams, {
+    query: {
+      enabled: isPackagesPage && correctionSearch.trim().length >= 2 && !correctionRecipient,
+      queryKey: getListAdminUsersQueryKey(correctionUserSearchParams),
+    },
+  });
+  const correctionGiftsQuery = useListAdminAddOnGiftEntitlements(correctionRecipient?.id ?? '', {
+    query: {
+      enabled: isPackagesPage && Boolean(correctionRecipient),
+      queryKey: getListAdminAddOnGiftEntitlementsQueryKey(correctionRecipient?.id ?? ''),
     },
   });
   const [gatewayDrafts, setGatewayDrafts] = useState<Record<GatewayEnvironment, GatewayDraft>>({
@@ -262,6 +285,36 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         setGiftConfirmed(false);
       },
       onError: error => setGiftNotice({ text: errorText(error), bad: true }),
+    });
+  };
+
+  const reviewCorrection = (entitlementId: string) => {
+    setCorrectionReviewId(current => current === entitlementId ? null : entitlementId);
+    setCorrectionNotice(null);
+  };
+
+  const submitCorrection = (entitlementId: string) => {
+    if (!correctionRecipient) return;
+    correctAddOnGift.mutate({
+      entitlementId,
+      data: { userId: correctionRecipient.id },
+    }, {
+      onSuccess: result => {
+        void queryClient.invalidateQueries({
+          queryKey: getListAdminAddOnGiftEntitlementsQueryKey(correctionRecipient.id),
+        });
+        setCorrectionReviewId(null);
+        setCorrectionNotice({
+          text: `Corrected ${result.packageName}: removed ${result.removed.researchAllowance} research credits, ${result.removed.aiEmailAssistAllowance} AI-assist credits, and ${result.removed.additionalMailboxCount} unused mailbox slots. Usage and configured mailbox access were retained.`,
+        });
+      },
+      onError: error => {
+        setCorrectionReviewId(null);
+        setCorrectionNotice({ text: errorText(error), bad: true });
+        void queryClient.invalidateQueries({
+          queryKey: getListAdminAddOnGiftEntitlementsQueryKey(correctionRecipient.id),
+        });
+      },
     });
   };
 
@@ -427,6 +480,112 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
           </button>
         </div>
       </form>
+    </Panel>}
+
+    {isPackagesPage && <Panel className="overflow-hidden" testId="correct-add-on-gift-panel">
+      <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6">
+        <span className="grid h-9 w-9 place-items-center rounded-md bg-[#fff3e8] text-[#9b5a25]"><PencilLine className="h-[17px] w-[17px]"/></span>
+        <div>
+          <h2 className="text-[15px] font-bold text-[#1d2d40]">Correct an add-on gift</h2>
+          <p className="mt-0.5 text-[11px] text-[#788696]">Find the recipient and remove only unused allowances from a specific admin gift. Payment history is not changed.</p>
+        </div>
+      </div>
+      <div className="space-y-4 p-5 md:p-6">
+        <div className="max-w-xl space-y-1.5">
+          <label htmlFor="correction-account-search" className="block text-[12px] font-semibold text-[#35445a]">Tenant account</label>
+          {correctionRecipient ? <div className="flex min-h-10 items-start justify-between gap-3 rounded-md border border-[#d8dfe6] bg-[#f8fafb] px-3 py-2" data-testid="selected-correction-recipient">
+            <div className="min-w-0">
+              <div className="truncate text-[12px] font-semibold text-[#23364b]">{correctionRecipient.firstName} {correctionRecipient.lastName}</div>
+              <div className="truncate text-[11px] text-[#748292]">{correctionRecipient.email}</div>
+            </div>
+            <button type="button" data-testid="button-clear-correction-recipient" aria-label="Choose a different account" onClick={() => { setCorrectionRecipient(null); setCorrectionReviewId(null); setCorrectionNotice(null); }} className="grid h-8 w-8 shrink-0 place-items-center rounded text-[#718093] hover:bg-white hover:text-[#294d70]"><X className="h-4 w-4"/></button>
+          </div> : <>
+            <input
+              id="correction-account-search"
+              data-testid="input-correction-account-search"
+              type="search"
+              value={correctionSearch}
+              onChange={event => { setCorrectionSearch(event.target.value); setCorrectionNotice(null); }}
+              placeholder="Search by name, email, or username"
+              autoComplete="off"
+              className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] outline-none transition focus:border-[#4179b4] focus:ring-2 focus:ring-[#e4eef8]"
+            />
+            {correctionSearch.trim().length >= 2 && <div className="max-h-52 overflow-y-auto rounded-md border border-[#e1e6eb] bg-white" data-testid="correction-account-results">
+              {correctionUsersQuery.isLoading || correctionUsersQuery.isFetching ? <p className="px-3 py-2.5 text-[11px] text-[#788696]">Searching accounts…</p>
+                : correctionUsersQuery.isError ? <p role="alert" className="px-3 py-2.5 text-[11px] text-[#a84926]">{errorText(correctionUsersQuery.error)}</p>
+                  : correctionUsersQuery.data?.items.length ? correctionUsersQuery.data.items.map(user => <button
+                    type="button"
+                    key={user.id}
+                    data-testid={`button-correction-account-${user.id}`}
+                    onClick={() => { setCorrectionRecipient(user); setCorrectionSearch(''); setCorrectionReviewId(null); setCorrectionNotice(null); }}
+                    className="block w-full border-b border-[#edf0f2] px-3 py-2.5 text-left last:border-0 hover:bg-[#f7f9fa]"
+                  >
+                    <span className="block text-[12px] font-semibold text-[#26374a]">{user.firstName} {user.lastName}</span>
+                    <span className="mt-0.5 block text-[11px] text-[#788696]">{user.email}</span>
+                  </button>) : <p className="px-3 py-2.5 text-[11px] text-[#788696]">No matching tenant accounts.</p>}
+            </div>}
+            <p className="text-[10px] text-[#85909c]">Search includes active, disabled, and pending tenant accounts.</p>
+          </>}
+        </div>
+
+        {correctionRecipient && <div className="space-y-3" data-testid="admin-addon-gift-results">
+          {correctionGiftsQuery.isLoading || correctionGiftsQuery.isFetching
+            ? <p className="rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-3 text-[11px] text-[#788696]">Loading add-on gifts…</p>
+            : correctionGiftsQuery.isError
+              ? <p role="alert" className="rounded-md border border-[#efd8c7] bg-[#fff8f2] px-3 py-3 text-[11px] text-[#a84926]">{errorText(correctionGiftsQuery.error)}</p>
+              : correctionGiftsQuery.data?.length
+                ? correctionGiftsQuery.data.map(gift => {
+                  const removable = gift.removable.researchAllowance > 0 ||
+                    gift.removable.aiEmailAssistAllowance > 0 ||
+                    gift.removable.additionalMailboxCount > 0;
+                  const reviewing = correctionReviewId === gift.entitlementId;
+                  return <article key={gift.entitlementId} data-testid={`admin-addon-gift-${gift.entitlementId}`} className="rounded-md border border-[#e1e6eb] bg-[#fcfdfe] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-[12px] font-semibold text-[#26374a]">{gift.packageName}</h3>
+                        <p className="mt-0.5 text-[10px] text-[#788696]">Gifted {new Date(gift.createdAt).toLocaleString()}</p>
+                        <p className="mt-2 text-[11px] leading-5 text-[#53677b]">
+                          Research: {gift.researchUsed} used / {gift.researchAllowance} granted · AI assist: {gift.aiEmailAssistUsed} used or reserved / {gift.aiEmailAssistAllowance} granted · Mailbox slots: {gift.additionalMailboxCount} granted
+                        </p>
+                        <p className="mt-1 text-[10px] text-[#788696]">
+                          Removable now: {gift.removable.researchAllowance} research · {gift.removable.aiEmailAssistAllowance} AI assist · {gift.removable.additionalMailboxCount} mailbox slots
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        data-testid={`button-review-correction-${gift.entitlementId}`}
+                        disabled={!removable || correctAddOnGift.isPending}
+                        onClick={() => reviewCorrection(gift.entitlementId)}
+                        className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#d8dfe6] px-3 text-[11px] font-semibold text-[#294d70] hover:bg-[#f1f6fa] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {reviewing ? 'Hide review' : removable ? 'Review correction' : 'No unused allowance'}
+                      </button>
+                    </div>
+                    {reviewing && <div className="mt-3 rounded-md border border-[#efd8c7] bg-[#fff8f2] p-3">
+                      <p className="text-[11px] leading-5 text-[#80501f]">
+                        This will remove {gift.removable.researchAllowance} unused research credits, {gift.removable.aiEmailAssistAllowance} unused AI-assist credits, and {gift.removable.additionalMailboxCount} mailbox slots not needed by currently configured mailboxes. Consumed or reserved usage is preserved. The server rechecks balances before saving.
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid={`button-confirm-correction-${gift.entitlementId}`}
+                          disabled={correctAddOnGift.isPending}
+                          onClick={() => submitCorrection(gift.entitlementId)}
+                          className="inline-flex min-h-9 items-center gap-2 rounded-md bg-[#9b4a28] px-3 text-[11px] font-semibold text-white hover:bg-[#813c20] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {correctAddOnGift.isPending && <LoaderCircle className="h-3.5 w-3.5 animate-spin"/>}
+                          Confirm correction
+                        </button>
+                        <button type="button" onClick={() => setCorrectionReviewId(null)} className="min-h-9 rounded-md border border-[#e3d5c8] px-3 text-[11px] font-semibold text-[#80501f]">Cancel</button>
+                      </div>
+                    </div>}
+                  </article>;
+                })
+                : <p className="rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-3 text-[11px] text-[#788696]">No admin-gifted add-ons were found for this account.</p>}
+        </div>}
+        {correctionNotice && <p data-testid="status-addon-gift-correction" role={correctionNotice.bad ? 'alert' : 'status'} className={`rounded-md border px-3 py-2.5 text-[11px] leading-5 ${correctionNotice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#a84926]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{correctionNotice.text}</p>}
+        <p className="border-t border-[#edf0f2] pt-3 text-[10px] leading-5 text-[#788696]">Each correction is recorded in the admin audit log with its package and allowance changes. Payments and revenue records are never edited.</p>
+      </div>
     </Panel>}
 
     {isBillingPage && <>

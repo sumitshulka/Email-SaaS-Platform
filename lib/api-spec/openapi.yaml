@@ -3257,6 +3257,60 @@ paths:
           description: Recipient no longer has an active paid-priced primary package for an add-on gift
         "404":
           description: Tenant account or subscription package not found
+  /admin/billing/users/{userId}/add-on-gifts:
+    get:
+      operationId: listAdminAddOnGiftEntitlements
+      tags: [billing]
+      summary: List add-on gifts for a tenant account
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Gifted add-on entitlements and currently removable allowances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminAddOnGiftEntitlement"
+        "404":
+          description: Tenant account not found
+  /admin/billing/add-on-gifts/{entitlementId}/correct:
+    post:
+      operationId: correctAdminAddOnGift
+      tags: [billing]
+      summary: Remove unused allowances from one admin-gifted add-on
+      parameters:
+        - name: entitlementId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminAddOnGiftCorrectionInput"
+      responses:
+        "200":
+          description: Unused allowances removed while retaining usage and mailbox access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAddOnGiftCorrectionResult"
+        "400":
+          description: Invalid correction request
+        "404":
+          description: Gift entitlement or tenant account not found
+        "409":
+          description: No unused gift allowances can be removed
   /subscriptions/packages:
     get:
       operationId: listAvailableSubscriptionPackages
@@ -5721,6 +5775,42 @@ components:
         aiEmailAssistAllowance: { type: integer, minimum: 0 }
         additionalMailboxCount: { type: integer, minimum: 0 }
       required: [kind, entitlementId, packageId, packageName, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount]
+    AdminAddOnGiftAllowanceSet:
+      type: object
+      properties:
+        researchAllowance: { type: integer, minimum: 0 }
+        aiEmailAssistAllowance: { type: integer, minimum: 0 }
+        additionalMailboxCount: { type: integer, minimum: 0 }
+      required: [researchAllowance, aiEmailAssistAllowance, additionalMailboxCount]
+    AdminAddOnGiftEntitlement:
+      type: object
+      properties:
+        entitlementId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        packageId: { type: string, format: uuid }
+        packageName: { type: string }
+        researchAllowance: { type: integer, minimum: 0 }
+        researchUsed: { type: integer, minimum: 0 }
+        aiEmailAssistAllowance: { type: integer, minimum: 0 }
+        aiEmailAssistUsed: { type: integer, minimum: 0 }
+        additionalMailboxCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        removable: { $ref: "#/components/schemas/AdminAddOnGiftAllowanceSet" }
+      required: [entitlementId, userId, packageId, packageName, researchAllowance, researchUsed, aiEmailAssistAllowance, aiEmailAssistUsed, additionalMailboxCount, createdAt, removable]
+    AdminAddOnGiftCorrectionInput:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+      required: [userId]
+    AdminAddOnGiftCorrectionResult:
+      type: object
+      properties:
+        entitlementId: { type: string, format: uuid }
+        packageId: { type: string, format: uuid }
+        packageName: { type: string }
+        removed: { $ref: "#/components/schemas/AdminAddOnGiftAllowanceSet" }
+        retained: { $ref: "#/components/schemas/AdminAddOnGiftAllowanceSet" }
+      required: [entitlementId, packageId, packageName, removed, retained]
     SubscriptionPackageUpdateInput:
       type: object
       properties:

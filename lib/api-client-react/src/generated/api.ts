@@ -25,6 +25,9 @@ import type {
   AIProviderTestResult,
   ActivateFreeAddOnInput,
   ActivateFreeSubscriptionInput,
+  AdminAddOnGiftCorrectionInput,
+  AdminAddOnGiftCorrectionResult,
+  AdminAddOnGiftEntitlement,
   AdminDashboard,
   AdminFinancePaymentPage,
   AdminNotification,
@@ -11359,6 +11362,172 @@ export const useGiftAdminSubscription = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getGiftAdminSubscriptionMutationOptions(options));
+    }
+
+export const getListAdminAddOnGiftEntitlementsUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/billing/users/${userId}/add-on-gifts`
+}
+
+/**
+ * @summary List add-on gifts for a tenant account
+ */
+export const listAdminAddOnGiftEntitlements = async (userId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminAddOnGiftEntitlement[]> => {
+
+  return customFetch<AdminAddOnGiftEntitlement[]>(getListAdminAddOnGiftEntitlementsUrl(userId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminAddOnGiftEntitlementsQueryKey = (userId: string,) => {
+    return [
+    `/api/admin/billing/users/${userId}/add-on-gifts`
+    ] as const;
+    }
+
+
+export const getListAdminAddOnGiftEntitlementsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>, TError = ErrorType<void>>(userId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminAddOnGiftEntitlementsQueryKey(userId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>> = ({ signal }) => listAdminAddOnGiftEntitlements(userId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: userId !== null && userId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminAddOnGiftEntitlementsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>>
+export type ListAdminAddOnGiftEntitlementsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List add-on gifts for a tenant account
+ */
+
+export function useListAdminAddOnGiftEntitlements<TData = Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>, TError = ErrorType<void>>(
+ userId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAddOnGiftEntitlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminAddOnGiftEntitlementsQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCorrectAdminAddOnGiftUrl = (entitlementId: string,) => {
+
+
+
+
+  return `/api/admin/billing/add-on-gifts/${entitlementId}/correct`
+}
+
+/**
+ * @summary Remove unused allowances from one admin-gifted add-on
+ */
+export const correctAdminAddOnGift = async (entitlementId: string,
+    adminAddOnGiftCorrectionInput: AdminAddOnGiftCorrectionInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAddOnGiftCorrectionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminAddOnGiftCorrectionResult>(getCorrectAdminAddOnGiftUrl(entitlementId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminAddOnGiftCorrectionInput)
+  }
+);}
+
+
+
+
+
+export const getCorrectAdminAddOnGiftMutationKey = () => ['correctAdminAddOnGift'] as const;
+
+export const getCorrectAdminAddOnGiftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof correctAdminAddOnGift>>, TError,CorrectAdminAddOnGiftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof correctAdminAddOnGift>>, TError,CorrectAdminAddOnGiftMutationVariables, TContext> => {
+
+const mutationKey = getCorrectAdminAddOnGiftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof correctAdminAddOnGift>>, CorrectAdminAddOnGiftMutationVariables> = (props) => {
+          const {entitlementId,data} = props ?? {};
+
+          return  correctAdminAddOnGift(entitlementId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CorrectAdminAddOnGiftMutationResult = NonNullable<Awaited<ReturnType<typeof correctAdminAddOnGift>>>
+    export type CorrectAdminAddOnGiftMutationBody = BodyType<AdminAddOnGiftCorrectionInput>
+    export type CorrectAdminAddOnGiftMutationError = ErrorType<void>
+    export type CorrectAdminAddOnGiftMutationVariables = {entitlementId: string;data: BodyType<AdminAddOnGiftCorrectionInput>}
+
+    /**
+ * @summary Remove unused allowances from one admin-gifted add-on
+ */
+export const useCorrectAdminAddOnGift = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof correctAdminAddOnGift>>, TError,CorrectAdminAddOnGiftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof correctAdminAddOnGift>>,
+        TError,
+        CorrectAdminAddOnGiftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCorrectAdminAddOnGiftMutationOptions(options));
     }
 
 export const getListAvailableSubscriptionPackagesUrl = () => {

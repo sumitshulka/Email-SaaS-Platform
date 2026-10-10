@@ -4106,6 +4106,46 @@ export interface AdminAddOnGiftResult {
 
 export type AdminSubscriptionGiftResult = AdminPrimarySubscriptionGiftResult | AdminAddOnGiftResult;
 
+export interface AdminAddOnGiftAllowanceSet {
+  /** @minimum 0 */
+  researchAllowance: number;
+  /** @minimum 0 */
+  aiEmailAssistAllowance: number;
+  /** @minimum 0 */
+  additionalMailboxCount: number;
+}
+
+export interface AdminAddOnGiftEntitlement {
+  entitlementId: string;
+  userId: string;
+  packageId: string;
+  packageName: string;
+  /** @minimum 0 */
+  researchAllowance: number;
+  /** @minimum 0 */
+  researchUsed: number;
+  /** @minimum 0 */
+  aiEmailAssistAllowance: number;
+  /** @minimum 0 */
+  aiEmailAssistUsed: number;
+  /** @minimum 0 */
+  additionalMailboxCount: number;
+  createdAt: string;
+  removable: AdminAddOnGiftAllowanceSet;
+}
+
+export interface AdminAddOnGiftCorrectionInput {
+  userId: string;
+}
+
+export interface AdminAddOnGiftCorrectionResult {
+  entitlementId: string;
+  packageId: string;
+  packageName: string;
+  removed: AdminAddOnGiftAllowanceSet;
+  retained: AdminAddOnGiftAllowanceSet;
+}
+
 export interface SubscriptionPackageUpdateInput {
   /**
      * @minLength 2

@@ -6275,6 +6275,93 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
 
 
 /**
+ * @summary List add-on gifts for a tenant account
+ */
+export const ListAdminAddOnGiftEntitlementsParams = zod.object({
+  "userId": zod.coerce.string().uuid()
+})
+
+export const listAdminAddOnGiftEntitlementsResponseResearchAllowanceMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseResearchUsedMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseAiEmailAssistAllowanceMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseAiEmailAssistUsedMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseAdditionalMailboxCountMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseRemovableResearchAllowanceMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseRemovableAiEmailAssistAllowanceMin = 0;
+
+export const listAdminAddOnGiftEntitlementsResponseRemovableAdditionalMailboxCountMin = 0;
+
+
+
+export const ListAdminAddOnGiftEntitlementsResponseItem = zod.object({
+  "entitlementId": zod.string().uuid(),
+  "userId": zod.string().uuid(),
+  "packageId": zod.string().uuid(),
+  "packageName": zod.string(),
+  "researchAllowance": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseResearchAllowanceMin),
+  "researchUsed": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseResearchUsedMin),
+  "aiEmailAssistAllowance": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseAiEmailAssistAllowanceMin),
+  "aiEmailAssistUsed": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseAiEmailAssistUsedMin),
+  "additionalMailboxCount": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseAdditionalMailboxCountMin),
+  "createdAt": zod.coerce.date(),
+  "removable": zod.object({
+  "researchAllowance": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseRemovableResearchAllowanceMin),
+  "aiEmailAssistAllowance": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseRemovableAiEmailAssistAllowanceMin),
+  "additionalMailboxCount": zod.number().int().min(listAdminAddOnGiftEntitlementsResponseRemovableAdditionalMailboxCountMin)
+})
+})
+export const ListAdminAddOnGiftEntitlementsResponse = zod.array(ListAdminAddOnGiftEntitlementsResponseItem)
+
+
+/**
+ * @summary Remove unused allowances from one admin-gifted add-on
+ */
+export const CorrectAdminAddOnGiftParams = zod.object({
+  "entitlementId": zod.coerce.string().uuid()
+})
+
+export const CorrectAdminAddOnGiftBody = zod.object({
+  "userId": zod.string().uuid()
+})
+
+export const correctAdminAddOnGiftResponseRemovedResearchAllowanceMin = 0;
+
+export const correctAdminAddOnGiftResponseRemovedAiEmailAssistAllowanceMin = 0;
+
+export const correctAdminAddOnGiftResponseRemovedAdditionalMailboxCountMin = 0;
+
+export const correctAdminAddOnGiftResponseRetainedResearchAllowanceMin = 0;
+
+export const correctAdminAddOnGiftResponseRetainedAiEmailAssistAllowanceMin = 0;
+
+export const correctAdminAddOnGiftResponseRetainedAdditionalMailboxCountMin = 0;
+
+
+
+export const CorrectAdminAddOnGiftResponse = zod.object({
+  "entitlementId": zod.string().uuid(),
+  "packageId": zod.string().uuid(),
+  "packageName": zod.string(),
+  "removed": zod.object({
+  "researchAllowance": zod.number().int().min(correctAdminAddOnGiftResponseRemovedResearchAllowanceMin),
+  "aiEmailAssistAllowance": zod.number().int().min(correctAdminAddOnGiftResponseRemovedAiEmailAssistAllowanceMin),
+  "additionalMailboxCount": zod.number().int().min(correctAdminAddOnGiftResponseRemovedAdditionalMailboxCountMin)
+}),
+  "retained": zod.object({
+  "researchAllowance": zod.number().int().min(correctAdminAddOnGiftResponseRetainedResearchAllowanceMin),
+  "aiEmailAssistAllowance": zod.number().int().min(correctAdminAddOnGiftResponseRetainedAiEmailAssistAllowanceMin),
+  "additionalMailboxCount": zod.number().int().min(correctAdminAddOnGiftResponseRetainedAdditionalMailboxCountMin)
+})
+})
+
+
+/**
  * Returns active packages when package visibility is public. Does not require authentication.
  * @summary List publicly visible subscription packages
  */

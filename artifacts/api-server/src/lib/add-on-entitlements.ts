@@ -13,6 +13,7 @@ import {
   sql,
 } from "drizzle-orm";
 import {
+  auditLogsTable,
   addOnEntitlementsTable,
   aiEmailAssistUsagesTable,
   db,
@@ -422,6 +423,382 @@ export async function getSubscriptionAddOnsDashboard(
     packages: packages.map(serializePackage),
     claimedFreePackageIds,
   };
+}
+
+function mailboxAllowanceToRetain(input: {
+  giftedSlots: number;
+  configuredAccounts: number;
+  baseLimit: number;
+  otherSlots: number;
+}) {
+  const slotsNeededFromGift = Math.max(
+    0,
+    input.configuredAccounts - input.baseLimit - input.otherSlots,
+  );
+  return Math.min(input.giftedSlots, slotsNeededFromGift);
+}
+
+export function calculateAdminAddOnGiftCorrection(input: {
+  researchAllowance: number;
+  researchUsed: number;
+  aiEmailAssistAllowance: number;
+  aiEmailAssistUsed: number;
+  additionalMailboxCount: number;
+  configuredAccounts: number;
+  baseLimit: number;
+  otherSlots: number;
+}) {
+  const retained = {
+    researchAllowance: input.researchAllowance,
+    aiEmailAssistAllowance: input.aiEmailAssistAllowance,
+    additionalMailboxCount: mailboxAllowanceToRetain({
+      giftedSlots: input.additionalMailboxCount,
+      configuredAccounts: input.configuredAccounts,
+      baseLimit: input.baseLimit,
+      otherSlots: input.otherSlots,
+    }),
+  };
+  const removed = {
+    researchAllowance: Math.max(
+      0,
+      input.researchAllowance - input.researchUsed,
+    ),
+    aiEmailAssistAllowance: Math.max(
+      0,
+      input.aiEmailAssistAllowance - input.aiEmailAssistUsed,
+    ),
+    additionalMailboxCount:
+      input.additionalMailboxCount - retained.additionalMailboxCount,
+  };
+  retained.researchAllowance -= removed.researchAllowance;
+  retained.aiEmailAssistAllowance -= removed.aiEmailAssistAllowance;
+  return { removed, retained };
+}
+
+function sumUsableMailboxSlots(
+  rows: Array<{
+    entitlement: {
+      paymentId: string | null;
+      additionalMailboxCount: number;
+    };
+    amountMinor: number | null;
+    refundedAmountMinor: number | null;
+    paymentStatus: string | null;
+  }>,
+) {
+  return rows.reduce((total, row) => {
+    if (
+      row.entitlement.paymentId !== null &&
+      row.paymentStatus !== "captured"
+    ) {
+      return total;
+    }
+    return total + prorateAddOnAllowance(
+      row.entitlement.additionalMailboxCount,
+      row.entitlement.paymentId === null ? null : row.amountMinor,
+      row.entitlement.paymentId === null ? null : row.refundedAmountMinor,
+    );
+  }, 0);
+}
+
+export async function listAdminAddOnGiftEntitlements(userId: string) {
+  const [user] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user) return null;
+
+  const entitlements = await db
+    .select({
+      id: addOnEntitlementsTable.id,
+      userId: addOnEntitlementsTable.userId,
+      packageId: addOnEntitlementsTable.packageId,
+      packageName: subscriptionPackagesTable.name,
+      researchAllowance: addOnEntitlementsTable.researchAllowance,
+      researchUsed: addOnEntitlementsTable.researchUsed,
+      aiEmailAssistAllowance: addOnEntitlementsTable.aiEmailAssistAllowance,
+      additionalMailboxCount: addOnEntitlementsTable.additionalMailboxCount,
+      createdAt: addOnEntitlementsTable.createdAt,
+    })
+    .from(addOnEntitlementsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(addOnEntitlementsTable.packageId, subscriptionPackagesTable.id),
+    )
+    .where(
+      and(
+        eq(addOnEntitlementsTable.userId, userId),
+        eq(addOnEntitlementsTable.grantSource, "admin_gift"),
+        eq(subscriptionPackagesTable.packageType, "addon"),
+      ),
+    )
+    .orderBy(desc(addOnEntitlementsTable.createdAt));
+  if (entitlements.length === 0) return [];
+
+  const entitlementIds = entitlements.map((row) => row.id);
+  const [usageRows, accountRows, activeRows, mailboxRows] = await Promise.all([
+    db
+      .select({
+        entitlementId: aiEmailAssistUsagesTable.entitlementId,
+        used: count(),
+      })
+      .from(aiEmailAssistUsagesTable)
+      .where(
+        and(
+          eq(aiEmailAssistUsagesTable.userId, userId),
+          inArray(aiEmailAssistUsagesTable.entitlementId, entitlementIds),
+          inArray(aiEmailAssistUsagesTable.status, ["consumed", "reserved"]),
+        ),
+      )
+      .groupBy(aiEmailAssistUsagesTable.entitlementId),
+    db
+      .select({ value: count() })
+      .from(tenantSendingConfigurationTable)
+      .where(eq(tenantSendingConfigurationTable.userId, userId)),
+    db
+      .select({ package: subscriptionPackagesTable })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, userId),
+          eq(userSubscriptionsTable.status, "active"),
+          lte(userSubscriptionsTable.startsAt, new Date()),
+          gt(userSubscriptionsTable.endsAt, new Date()),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1),
+    db
+      .select({
+        entitlement: addOnEntitlementsTable,
+        amountMinor: paymentsTable.amountMinor,
+        refundedAmountMinor: paymentsTable.refundedAmountMinor,
+        paymentStatus: paymentsTable.status,
+      })
+      .from(addOnEntitlementsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(addOnEntitlementsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .leftJoin(
+        paymentsTable,
+        eq(addOnEntitlementsTable.paymentId, paymentsTable.id),
+      )
+      .where(
+        and(
+          eq(addOnEntitlementsTable.userId, userId),
+          eq(subscriptionPackagesTable.packageType, "addon"),
+          or(
+            isNull(addOnEntitlementsTable.paymentId),
+            eq(paymentsTable.status, "captured"),
+          ),
+        ),
+      ),
+  ]);
+  const usedByEntitlement = new Map(
+    usageRows.map((row) => [row.entitlementId, Number(row.used)]),
+  );
+  const configuredAccounts = Number(accountRows[0]?.value ?? 0);
+  const baseLimit = activeRows[0]?.package.emailAccountLimit ?? 1;
+
+  return entitlements.map((row) => {
+    const otherSlots = sumUsableMailboxSlots(
+      mailboxRows.filter((gift) => gift.entitlement.id !== row.id),
+    );
+    const aiEmailAssistUsed = usedByEntitlement.get(row.id) ?? 0;
+    const correction = calculateAdminAddOnGiftCorrection({
+      researchAllowance: row.researchAllowance,
+      researchUsed: row.researchUsed,
+      aiEmailAssistAllowance: row.aiEmailAssistAllowance,
+      aiEmailAssistUsed,
+      additionalMailboxCount: row.additionalMailboxCount,
+      configuredAccounts,
+      baseLimit,
+      otherSlots,
+    });
+    return {
+      entitlementId: row.id,
+      userId: row.userId,
+      packageId: row.packageId,
+      packageName: row.packageName,
+      researchAllowance: row.researchAllowance,
+      researchUsed: row.researchUsed,
+      aiEmailAssistAllowance: row.aiEmailAssistAllowance,
+      aiEmailAssistUsed,
+      additionalMailboxCount: row.additionalMailboxCount,
+      createdAt: row.createdAt.toISOString(),
+      removable: correction.removed,
+    };
+  });
+}
+
+export async function correctAdminAddOnGift(input: {
+  actorId: string;
+  userId: string;
+  entitlementId: string;
+  ipAddress?: string | null;
+}) {
+  return db.transaction(async (tx) => {
+    // AI-assist reservations use the same owner lock, so correction and new
+    // reservations cannot spend the same remaining allowance concurrently.
+    const [user] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, input.userId))
+      .limit(1)
+      .for("update");
+    if (!user) return { kind: "not-found" as const };
+
+    const [entitlement] = await tx
+      .select({
+        id: addOnEntitlementsTable.id,
+        userId: addOnEntitlementsTable.userId,
+        packageId: addOnEntitlementsTable.packageId,
+        packageName: subscriptionPackagesTable.name,
+        packageType: subscriptionPackagesTable.packageType,
+        researchAllowance: addOnEntitlementsTable.researchAllowance,
+        researchUsed: addOnEntitlementsTable.researchUsed,
+        aiEmailAssistAllowance: addOnEntitlementsTable.aiEmailAssistAllowance,
+        additionalMailboxCount: addOnEntitlementsTable.additionalMailboxCount,
+      })
+      .from(addOnEntitlementsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(addOnEntitlementsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          eq(addOnEntitlementsTable.id, input.entitlementId),
+          eq(addOnEntitlementsTable.userId, input.userId),
+          eq(addOnEntitlementsTable.grantSource, "admin_gift"),
+          eq(subscriptionPackagesTable.packageType, "addon"),
+        ),
+      )
+      .for("update");
+    if (!entitlement) return { kind: "not-found" as const };
+
+    const [aiUsageRows, accountRows, activeRows, mailboxRows] = await Promise.all([
+      tx
+        .select({ used: count() })
+        .from(aiEmailAssistUsagesTable)
+        .where(
+          and(
+            eq(aiEmailAssistUsagesTable.userId, input.userId),
+            eq(aiEmailAssistUsagesTable.entitlementId, entitlement.id),
+            inArray(aiEmailAssistUsagesTable.status, ["consumed", "reserved"]),
+          ),
+        ),
+      tx
+        .select({ value: count() })
+        .from(tenantSendingConfigurationTable)
+        .where(eq(tenantSendingConfigurationTable.userId, input.userId)),
+      tx
+        .select({ package: subscriptionPackagesTable })
+        .from(userSubscriptionsTable)
+        .innerJoin(
+          subscriptionPackagesTable,
+          eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+        )
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, input.userId),
+            eq(userSubscriptionsTable.status, "active"),
+            lte(userSubscriptionsTable.startsAt, new Date()),
+            gt(userSubscriptionsTable.endsAt, new Date()),
+          ),
+        )
+        .orderBy(desc(userSubscriptionsTable.endsAt))
+        .limit(1),
+      tx
+        .select({
+          entitlement: addOnEntitlementsTable,
+          amountMinor: paymentsTable.amountMinor,
+          refundedAmountMinor: paymentsTable.refundedAmountMinor,
+          paymentStatus: paymentsTable.status,
+        })
+        .from(addOnEntitlementsTable)
+        .innerJoin(
+          subscriptionPackagesTable,
+          eq(addOnEntitlementsTable.packageId, subscriptionPackagesTable.id),
+        )
+        .leftJoin(
+          paymentsTable,
+          eq(addOnEntitlementsTable.paymentId, paymentsTable.id),
+        )
+        .where(
+          and(
+            eq(addOnEntitlementsTable.userId, input.userId),
+            eq(subscriptionPackagesTable.packageType, "addon"),
+            sql`${addOnEntitlementsTable.id} <> ${entitlement.id}`,
+            or(
+              isNull(addOnEntitlementsTable.paymentId),
+              eq(paymentsTable.status, "captured"),
+            ),
+          ),
+        ),
+    ]);
+    const aiEmailAssistUsed = Number(aiUsageRows[0]?.used ?? 0);
+    const configuredAccounts = Number(accountRows[0]?.value ?? 0);
+    const baseLimit = activeRows[0]?.package.emailAccountLimit ?? 1;
+    const otherSlots = sumUsableMailboxSlots(mailboxRows);
+    const correction = calculateAdminAddOnGiftCorrection({
+      researchAllowance: entitlement.researchAllowance,
+      researchUsed: entitlement.researchUsed,
+      aiEmailAssistAllowance: entitlement.aiEmailAssistAllowance,
+      aiEmailAssistUsed,
+      additionalMailboxCount: entitlement.additionalMailboxCount,
+      configuredAccounts,
+      baseLimit,
+      otherSlots,
+    });
+    const { removed, retained } = correction;
+    if (
+      removed.researchAllowance === 0 &&
+      removed.aiEmailAssistAllowance === 0 &&
+      removed.additionalMailboxCount === 0
+    ) {
+      return { kind: "nothing-unused" as const };
+    }
+
+    await tx
+      .update(addOnEntitlementsTable)
+      .set({
+        researchAllowance: retained.researchAllowance,
+        aiEmailAssistAllowance: retained.aiEmailAssistAllowance,
+        additionalMailboxCount: retained.additionalMailboxCount,
+      })
+      .where(eq(addOnEntitlementsTable.id, entitlement.id));
+    await tx.insert(auditLogsTable).values({
+      actorId: input.actorId,
+      action: "subscription.add_on_gift_corrected",
+      entity: "add_on_entitlement",
+      entityId: entitlement.id,
+      ipAddress: input.ipAddress?.slice(0, 80) ?? null,
+      metadata: {
+        userId: input.userId,
+        packageId: entitlement.packageId,
+        packageName: entitlement.packageName,
+        removedAllowances: removed,
+        retainedAllowances: retained,
+        researchUsed: entitlement.researchUsed,
+        aiEmailAssistUsed,
+        configuredMailboxCount: configuredAccounts,
+      },
+    });
+    return {
+      kind: "corrected" as const,
+      entitlementId: entitlement.id,
+      packageId: entitlement.packageId,
+      packageName: entitlement.packageName,
+      removed,
+      retained,
+    };
+  });
 }
 
 export async function reserveAiEmailAssistCredit(userId: string) {

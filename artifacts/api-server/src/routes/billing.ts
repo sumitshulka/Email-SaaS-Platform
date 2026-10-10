@@ -23,6 +23,9 @@ import {
   ActivateFreeSubscriptionResponse,
   ActivateFreeAddOnBody,
   ActivateFreeAddOnResponse,
+  CorrectAdminAddOnGiftBody,
+  CorrectAdminAddOnGiftParams,
+  CorrectAdminAddOnGiftResponse,
   CreateSubscriptionOrderBody,
   CreateSubscriptionPackageBody,
   CreateSubscriptionPackageResponse,
@@ -34,6 +37,8 @@ import {
   GetSubscriptionAddOnsResponse,
   GetSubscriptionPaymentAvailabilityResponse,
   ListAdminSubscriptionPackagesResponse,
+  ListAdminAddOnGiftEntitlementsParams,
+  ListAdminAddOnGiftEntitlementsResponse,
   ListAvailableSubscriptionPackagesResponse,
   ListAdminFinancePaymentsQueryParams,
   ListAdminFinancePaymentsResponse,
@@ -79,7 +84,11 @@ import {
   serializePackage,
 } from "../lib/billing";
 import { writeAuditLog } from "../lib/audit";
-import { getSubscriptionAddOnsDashboard } from "../lib/add-on-entitlements";
+import {
+  correctAdminAddOnGift,
+  getSubscriptionAddOnsDashboard,
+  listAdminAddOnGiftEntitlements,
+} from "../lib/add-on-entitlements";
 import { encryptSecret } from "../lib/security";
 import {
   createRazorpayOrder,
@@ -1100,6 +1109,55 @@ router.post(
       },
     });
     res.status(201).json(GiftAdminSubscriptionResponse.parse(grant));
+  },
+);
+
+router.get(
+  "/admin/billing/users/:userId/add-on-gifts",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const params = ListAdminAddOnGiftEntitlementsParams.safeParse(req.params);
+    if (!params.success) {
+      invalidInput(res, "Choose a valid tenant account.");
+      return;
+    }
+    const gifts = await listAdminAddOnGiftEntitlements(params.data.userId);
+    if (gifts === null) {
+      res.status(404).json({ error: "Tenant account not found.", code: "NOT_FOUND" });
+      return;
+    }
+    res.json(ListAdminAddOnGiftEntitlementsResponse.parse(gifts));
+  },
+);
+
+router.post(
+  "/admin/billing/add-on-gifts/:entitlementId/correct",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const params = CorrectAdminAddOnGiftParams.safeParse(req.params);
+    const parsed = CorrectAdminAddOnGiftBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      invalidInput(res, "Choose a valid tenant account and add-on gift.");
+      return;
+    }
+    const result = await correctAdminAddOnGift({
+      actorId: req.authUser!.id,
+      userId: parsed.data.userId,
+      entitlementId: params.data.entitlementId,
+      ipAddress: req.ip,
+    });
+    if (result.kind === "not-found") {
+      res.status(404).json({ error: "Gift entitlement or tenant account not found.", code: "NOT_FOUND" });
+      return;
+    }
+    if (result.kind === "nothing-unused") {
+      res.status(409).json({
+        error: "No unused allowances can be removed from this add-on gift.",
+        code: "NO_UNUSED_ALLOWANCES",
+      });
+      return;
+    }
+    res.json(CorrectAdminAddOnGiftResponse.parse(result));
   },
 );
 
