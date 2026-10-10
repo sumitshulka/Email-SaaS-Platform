@@ -112,6 +112,7 @@ import type {
   GlobalCompanyInput,
   GlobalCompanyUpdate,
   GmailMailboxConnection,
+  GmailMailboxSyncNowResult,
   GmailOAuthStart,
   GmailRecentRescanInput,
   GmailRecentRescanResult,
@@ -2840,6 +2841,80 @@ export const useDisconnectGmailMailbox = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDisconnectGmailMailboxMutationOptions(options));
+    }
+
+export const getSyncGmailMailboxNowUrl = () => {
+
+
+
+
+  return `/api/sending/gmail/sync-now`
+}
+
+/**
+ * @summary Immediately sync the tenant's authorized Gmail mailbox
+ */
+export const syncGmailMailboxNow = async ( options?: Parameters<typeof customFetch>[1]): Promise<GmailMailboxSyncNowResult> => {
+
+  return customFetch<GmailMailboxSyncNowResult>(getSyncGmailMailboxNowUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncGmailMailboxNowMutationKey = () => ['syncGmailMailboxNow'] as const;
+
+export const getSyncGmailMailboxNowMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncGmailMailboxNow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncGmailMailboxNow>>, TError,void, TContext> => {
+
+const mutationKey = getSyncGmailMailboxNowMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncGmailMailboxNow>>, void> = () => {
+
+
+          return  syncGmailMailboxNow(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncGmailMailboxNowMutationResult = NonNullable<Awaited<ReturnType<typeof syncGmailMailboxNow>>>
+
+    export type SyncGmailMailboxNowMutationError = ErrorType<ApiError>
+
+
+    /**
+ * @summary Immediately sync the tenant's authorized Gmail mailbox
+ */
+export const useSyncGmailMailboxNow = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncGmailMailboxNow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncGmailMailboxNow>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncGmailMailboxNowMutationOptions(options));
     }
 
 export const getRescanRecentGmailMessagesUrl = () => {

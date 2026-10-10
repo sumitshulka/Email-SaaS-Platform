@@ -693,6 +693,30 @@ paths:
       responses:
         "204":
           description: Mailbox disconnected and stored refresh token removed
+  /sending/gmail/sync-now:
+    post:
+      operationId: syncGmailMailboxNow
+      tags: [sending]
+      summary: Immediately sync the tenant's authorized Gmail mailbox
+      responses:
+        "200":
+          description: Safe aggregate counts from the immediate Gmail history sync
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailMailboxSyncNowResult"
+        "404":
+          description: No Gmail mailbox is connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Sync cannot run because the mailbox is already syncing or needs reconnection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /sending/gmail/rescan:
     post:
       operationId: rescanRecentGmailMessages
@@ -3800,6 +3824,19 @@ components:
       properties:
         windowDays: { type: integer, enum: [1, 3, 7, 14] }
       required: [windowDays]
+    GmailMailboxSyncNowResult:
+      type: object
+      properties:
+        attempted: { type: integer, minimum: 0 }
+        succeeded: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        messagesChecked: { type: integer, minimum: 0 }
+        dsnCandidates: { type: integer, minimum: 0 }
+        importedReports: { type: integer, minimum: 0 }
+        duplicates: { type: integer, minimum: 0 }
+        unmatchedReports: { type: integer, minimum: 0 }
+        warnings: { type: integer, minimum: 0 }
+      required: [attempted, succeeded, failed, messagesChecked, dsnCandidates, importedReports, duplicates, unmatchedReports, warnings]
     Microsoft365TraceConnectInput:
       type: object
       description: Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.

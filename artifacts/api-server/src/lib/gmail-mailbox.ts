@@ -410,6 +410,52 @@ export function createGmailMailboxRouter(): IRouter {
 );
 
   router.post(
+    "/sending/gmail/sync-now",
+    requireUserRole,
+    async (req, res): Promise<void> => {
+      const userId = req.authUser!.id;
+      const [connection] = await db
+        .select({
+          id: gmailMailboxConnectionsTable.id,
+          syncStatus: gmailMailboxConnectionsTable.syncStatus,
+        })
+        .from(gmailMailboxConnectionsTable)
+        .where(eq(gmailMailboxConnectionsTable.userId, userId))
+        .limit(1);
+      if (!connection) {
+        res.status(404).json({
+          error: "Connect a Gmail mailbox before checking for bounce reports.",
+          code: "GMAIL_NOT_CONNECTED",
+        });
+        return;
+      }
+      if (connection.syncStatus !== "connected" && connection.syncStatus !== "error") {
+        res.status(409).json({
+          error:
+            connection.syncStatus === "history_expired"
+              ? "Gmail history has expired. Reconnect the mailbox before checking for new reports."
+              : "Reconnect the Gmail mailbox before checking for bounce reports.",
+          code:
+            connection.syncStatus === "history_expired"
+              ? "GMAIL_HISTORY_EXPIRED"
+              : "GMAIL_REAUTHORIZATION_REQUIRED",
+        });
+        return;
+      }
+
+      const result = await syncDueGmailMailboxes({ userId, force: true });
+      if (result.attempted === 0) {
+        res.status(409).json({
+          error: "Gmail is already syncing. Wait for it to finish, then try again.",
+          code: "GMAIL_SYNC_IN_PROGRESS",
+        });
+        return;
+      }
+      res.json(result);
+    },
+  );
+
+  router.post(
     "/sending/gmail/rescan",
     requireUserRole,
     async (req, res): Promise<void> => {
@@ -1058,46 +1104,66 @@ function syncFailureStatus(error: unknown): {
   };
 }
 
-export async function syncDueGmailMailboxes(): Promise<{
+export async function syncDueGmailMailboxes(options: {
+  userId?: string;
+  force?: boolean;
+} = {}): Promise<{
   attempted: number;
   succeeded: number;
   failed: number;
+  messagesChecked: number;
+  dsnCandidates: number;
+  importedReports: number;
+  duplicates: number;
+  unmatchedReports: number;
+  warnings: number;
 }> {
   const now = new Date();
+  const dueConditions = [
+    inArray(gmailMailboxConnectionsTable.syncStatus, ["connected", "error"]),
+    or(
+      isNull(gmailMailboxConnectionsTable.leaseExpiresAt),
+      lte(gmailMailboxConnectionsTable.leaseExpiresAt, now),
+    ),
+  ];
+  if (options.userId) {
+    dueConditions.push(eq(gmailMailboxConnectionsTable.userId, options.userId));
+  }
+  if (!options.force) {
+    dueConditions.push(lte(gmailMailboxConnectionsTable.nextSyncAt, now));
+  }
   const due = await db
     .select()
     .from(gmailMailboxConnectionsTable)
-    .where(
-      and(
-        inArray(gmailMailboxConnectionsTable.syncStatus, ["connected", "error"]),
-        lte(gmailMailboxConnectionsTable.nextSyncAt, now),
-        or(
-          isNull(gmailMailboxConnectionsTable.leaseExpiresAt),
-          lte(gmailMailboxConnectionsTable.leaseExpiresAt, now),
-        ),
-      ),
-    )
+    .where(and(...dueConditions))
     .limit(20);
 
   let attempted = 0;
   let succeeded = 0;
   let failed = 0;
+  let messagesChecked = 0;
+  let dsnCandidates = 0;
+  let importedReports = 0;
+  let duplicates = 0;
+  let unmatchedReports = 0;
+  let warnings = 0;
   for (const connection of due) {
     const leaseExpiresAt = new Date(Date.now() + GMAIL_SYNC_LEASE_MS);
+    const claimConditions = [
+      eq(gmailMailboxConnectionsTable.id, connection.id),
+      inArray(gmailMailboxConnectionsTable.syncStatus, ["connected", "error"]),
+      or(
+        isNull(gmailMailboxConnectionsTable.leaseExpiresAt),
+        lte(gmailMailboxConnectionsTable.leaseExpiresAt, now),
+      ),
+    ];
+    if (!options.force) {
+      claimConditions.push(lte(gmailMailboxConnectionsTable.nextSyncAt, now));
+    }
     const claimed = await db
       .update(gmailMailboxConnectionsTable)
       .set({ leaseExpiresAt, updatedAt: now })
-      .where(
-        and(
-          eq(gmailMailboxConnectionsTable.id, connection.id),
-          inArray(gmailMailboxConnectionsTable.syncStatus, ["connected", "error"]),
-          lte(gmailMailboxConnectionsTable.nextSyncAt, now),
-          or(
-            isNull(gmailMailboxConnectionsTable.leaseExpiresAt),
-            lte(gmailMailboxConnectionsTable.leaseExpiresAt, now),
-          ),
-        ),
-      )
+      .where(and(...claimConditions))
       .returning({ id: gmailMailboxConnectionsTable.id });
     if (!claimed.length) continue;
     attempted += 1;
@@ -1116,6 +1182,12 @@ export async function syncDueGmailMailboxes(): Promise<{
             gmailMailboxConnectionId: connection.id,
           }),
       });
+      messagesChecked += result.messagesChecked;
+      dsnCandidates += result.candidateMessages;
+      importedReports += result.imported;
+      duplicates += result.duplicates;
+      unmatchedReports += result.unmatched;
+      warnings += result.warningCount;
       const completedAt = new Date();
       const lastError =
         result.warningCount || result.unmatched || result.ignored
@@ -1162,7 +1234,17 @@ export async function syncDueGmailMailboxes(): Promise<{
       );
     }
   }
-  return { attempted, succeeded, failed };
+  return {
+    attempted,
+    succeeded,
+    failed,
+    messagesChecked,
+    dsnCandidates,
+    importedReports,
+    duplicates,
+    unmatchedReports,
+    warnings,
+  };
 }
 
 export function startGmailMailboxWorker(): void {

@@ -898,6 +898,42 @@ export const DisconnectGmailMailboxResponse = zod.void()
 
 
 /**
+ * @summary Immediately sync the tenant's authorized Gmail mailbox
+ */
+export const syncGmailMailboxNowResponseAttemptedMin = 0;
+
+export const syncGmailMailboxNowResponseSucceededMin = 0;
+
+export const syncGmailMailboxNowResponseFailedMin = 0;
+
+export const syncGmailMailboxNowResponseMessagesCheckedMin = 0;
+
+export const syncGmailMailboxNowResponseDsnCandidatesMin = 0;
+
+export const syncGmailMailboxNowResponseImportedReportsMin = 0;
+
+export const syncGmailMailboxNowResponseDuplicatesMin = 0;
+
+export const syncGmailMailboxNowResponseUnmatchedReportsMin = 0;
+
+export const syncGmailMailboxNowResponseWarningsMin = 0;
+
+
+
+export const SyncGmailMailboxNowResponse = zod.object({
+  "attempted": zod.number().int().min(syncGmailMailboxNowResponseAttemptedMin),
+  "succeeded": zod.number().int().min(syncGmailMailboxNowResponseSucceededMin),
+  "failed": zod.number().int().min(syncGmailMailboxNowResponseFailedMin),
+  "messagesChecked": zod.number().int().min(syncGmailMailboxNowResponseMessagesCheckedMin),
+  "dsnCandidates": zod.number().int().min(syncGmailMailboxNowResponseDsnCandidatesMin),
+  "importedReports": zod.number().int().min(syncGmailMailboxNowResponseImportedReportsMin),
+  "duplicates": zod.number().int().min(syncGmailMailboxNowResponseDuplicatesMin),
+  "unmatchedReports": zod.number().int().min(syncGmailMailboxNowResponseUnmatchedReportsMin),
+  "warnings": zod.number().int().min(syncGmailMailboxNowResponseWarningsMin)
+})
+
+
+/**
  * @summary Rescan a bounded recent Gmail window for delivery-status reports
  */
 export const RescanRecentGmailMessagesBody = zod.object({

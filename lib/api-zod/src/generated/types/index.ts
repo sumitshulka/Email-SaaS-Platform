@@ -192,6 +192,7 @@ export * from './globalCompanyInput';
 export * from './globalCompanyUpdate';
 export * from './gmailMailboxConnection';
 export * from './gmailMailboxConnectionSyncStatus';
+export * from './gmailMailboxSyncNowResult';
 export * from './gmailOAuthStart';
 export * from './gmailRecentRescanInput';
 export * from './gmailRecentRescanInputWindowDays';

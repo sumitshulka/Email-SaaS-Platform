@@ -4,7 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
   Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send,
-  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles,
+  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
@@ -23,6 +23,7 @@ import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
+  useSyncGmailMailboxNow,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateContact, useCreateContactList, useCreateContactSegment,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
@@ -34,6 +35,7 @@ import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
   GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
+  GmailMailboxSyncNowResult,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -163,11 +165,13 @@ export function SendingSettingsPage() {
   const startGmailConnection = useStartGmailMailboxConnection();
   const disconnectGmailConnection = useDisconnectGmailMailbox();
   const recentGmailRescan = useRescanRecentGmailMessages();
+  const immediateGmailSync = useSyncGmailMailboxNow();
   const qc = useQueryClient();
   const { notice, setNotice, dismiss } = useNotice();
   const [recentRescanResult, setRecentRescanResult] = useState<GmailRecentRescanResult | null>(null);
   const [recentRescanError, setRecentRescanError] = useState<string | null>(null);
   const [recentRescanWindowDays, setRecentRescanWindowDays] = useState<GmailRecentRescanInput['windowDays']>(14);
+  const [gmailSyncNowResult, setGmailSyncNowResult] = useState<GmailMailboxSyncNowResult | null>(null);
   const [form, setForm] = useState(blankSettings);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [initialized, setInitialized] = useState(false);
@@ -227,6 +231,22 @@ export function SendingSettingsPage() {
     recentGmailRescan.mutate({ data: { windowDays: recentRescanWindowDays } }, {
       onSuccess: result => setRecentRescanResult(result),
       onError: error => setRecentRescanError(mutationError(error)),
+    });
+  };
+  const syncGmailNow = () => {
+    setGmailSyncNowResult(null);
+    immediateGmailSync.mutate(undefined, {
+      onSuccess: result => {
+        setGmailSyncNowResult(result);
+        void qc.invalidateQueries({ queryKey: getGetGmailMailboxConnectionQueryKey() });
+        setNotice({
+          kind: result.failed > 0 ? 'error' : 'success',
+          text: result.failed > 0
+            ? 'Gmail could not finish checking for bounce reports. Review the sync status below and try again.'
+            : `Gmail check complete: ${result.importedReports} bounce report(s) added from ${result.messagesChecked} message(s).`,
+        });
+      },
+      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
     });
   };
   const change = (key: keyof typeof form, value: string) => setForm(current => ({ ...current, [key]: value }));
@@ -533,6 +553,28 @@ export function SendingSettingsPage() {
                       <div data-testid={`text-gmail-sync-count-${label.toLowerCase().replaceAll(' ', '-')}`} className="mt-1 text-[15px] font-semibold text-[#26364a]">{count === null ? '—' : count.toLocaleString()}</div>
                     </div>)}
                   </div>
+                </div>}
+                {gmailConnection.data.connected && <div className="mt-3 flex flex-col gap-3 rounded-md border border-[#dce4ee] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-[12px] font-semibold text-[#26364a]">Check for bounce reports</h3>
+                    <p className="mt-1 text-[11px] leading-5 text-[#687484]">Run a Gmail sync now instead of waiting for the next automatic check.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    testId="button-sync-gmail-now"
+                    disabled={immediateGmailSync.isPending}
+                    onClick={syncGmailNow}
+                    className="shrink-0"
+                  >
+                    {immediateGmailSync.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin"/>Checking Gmail…</> : <><RefreshCw className="h-4 w-4"/>Check now</>}
+                  </Button>
+                  {gmailSyncNowResult && <div data-testid="panel-gmail-sync-now-result" role="status" className="basis-full rounded bg-[#f7f9fb] p-3 text-[11px] leading-5 text-[#596777]">
+                    Checked {gmailSyncNowResult.messagesChecked.toLocaleString()} messages; found {gmailSyncNowResult.dsnCandidates.toLocaleString()} delivery-status reports and added {gmailSyncNowResult.importedReports.toLocaleString()} new bounce reports.
+                    {gmailSyncNowResult.duplicates > 0 && ` ${gmailSyncNowResult.duplicates.toLocaleString()} were already recorded.`}
+                    {gmailSyncNowResult.unmatchedReports > 0 && ` ${gmailSyncNowResult.unmatchedReports.toLocaleString()} could not be matched to a campaign.`}
+                    {gmailSyncNowResult.warnings > 0 && ` ${gmailSyncNowResult.warnings.toLocaleString()} report warning(s).`}
+                    {gmailSyncNowResult.failed > 0 && ` ${gmailSyncNowResult.failed.toLocaleString()} mailbox sync failed.`}
+                  </div>}
                 </div>}
               </div>}
           {gmailConnection.data?.connected && <div className="mt-4 rounded-md border border-[#dce4ee] bg-white p-4">

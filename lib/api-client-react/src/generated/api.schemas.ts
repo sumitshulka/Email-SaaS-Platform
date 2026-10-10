@@ -685,6 +685,27 @@ export interface GmailRecentRescanInput {
   windowDays: GmailRecentRescanInputWindowDays;
 }
 
+export interface GmailMailboxSyncNowResult {
+  /** @minimum 0 */
+  attempted: number;
+  /** @minimum 0 */
+  succeeded: number;
+  /** @minimum 0 */
+  failed: number;
+  /** @minimum 0 */
+  messagesChecked: number;
+  /** @minimum 0 */
+  dsnCandidates: number;
+  /** @minimum 0 */
+  importedReports: number;
+  /** @minimum 0 */
+  duplicates: number;
+  /** @minimum 0 */
+  unmatchedReports: number;
+  /** @minimum 0 */
+  warnings: number;
+}
+
 /**
  * Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.
  */

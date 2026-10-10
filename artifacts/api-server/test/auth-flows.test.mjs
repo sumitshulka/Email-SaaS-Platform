@@ -12363,6 +12363,49 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           assert.equal(otherTenantRescan.body.code, "GMAIL_NOT_CONNECTED");
         }),
     );
+    let gmailSyncNowProviderCalls = 0;
+    await withGmailOAuthConfig(
+      () =>
+        withGoogleFetch(async (url, init) => {
+          gmailSyncNowProviderCalls += 1;
+          if (
+            url.hostname === "oauth2.googleapis.com" &&
+            url.pathname === "/token"
+          ) {
+            const fields = new URLSearchParams(init?.body);
+            assert.equal(fields.get("refresh_token"), "recent-rescan-refresh-token");
+            return googleJson({ access_token: "gmail-sync-now-access-token" });
+          }
+          if (
+            url.hostname === "gmail.googleapis.com" &&
+            url.pathname.endsWith("/users/me/history")
+          ) {
+            assert.equal(url.searchParams.get("startHistoryId"), gmailHistoryBeforeRescan);
+            return googleJson({ historyId: "gmail-history-101", history: [] });
+          }
+          throw new Error(`Unexpected Gmail sync-now request: ${url}`);
+        }, async () => {
+          const syncNow = await api("/sending/gmail/sync-now", {
+            method: "POST",
+            cookie: owner.cookie,
+          });
+          assert.equal(syncNow.response.status, 200, JSON.stringify(syncNow.body));
+          assert.equal(syncNow.body.attempted, 1);
+          assert.equal(syncNow.body.succeeded, 1);
+          assert.equal(syncNow.body.failed, 0);
+          assert.equal(syncNow.body.messagesChecked, 0);
+          assert.equal(syncNow.body.importedReports, 0);
+          assert.equal(gmailSyncNowProviderCalls, 2);
+
+          const otherTenantSyncNow = await api("/sending/gmail/sync-now", {
+            method: "POST",
+            cookie: other.cookie,
+          });
+          assert.equal(otherTenantSyncNow.response.status, 404);
+          assert.equal(otherTenantSyncNow.body.code, "GMAIL_NOT_CONNECTED");
+          assert.equal(gmailSyncNowProviderCalls, 2);
+        }),
+    );
     const providerCallsBeforeLeaseConflict = gmailRescanProviderCalls;
     await db
       .update(dbModule.gmailMailboxConnectionsTable)
@@ -12383,7 +12426,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .select()
       .from(dbModule.gmailMailboxConnectionsTable)
       .where(eq(dbModule.gmailMailboxConnectionsTable.id, gmailConnection.id));
-    assert.equal(connectionAfterRescan.historyId, gmailHistoryBeforeRescan);
+    assert.equal(connectionAfterRescan.historyId, "gmail-history-101");
     assert.equal(connectionAfterRescan.leaseExpiresAt, null);
     const authorizedDeliveryPage = await api(
       `/campaigns/${campaign.body.id}/delivery-report?limit=1&offset=0`,
