@@ -67,6 +67,8 @@ test(
       `addon-refund-duplicate-${testId}-first`,
       `addon-refund-duplicate-${testId}-second`,
     ];
+    const failedRefundRetryEventId = `addon-refund-update-retry-${testId}`;
+    const failedRefundProviderId = `update-failure-${testId}`;
     const acknowledgementRetryEventId = `addon-capture-ack-retry-${testId}`;
     const primaryAcknowledgementRetryEventId =
       `primary-capture-ack-retry-${testId}`;
@@ -74,6 +76,7 @@ test(
       ...captureEventIds,
       ...refundEventIds,
       ...duplicateRefundEventIds,
+      failedRefundRetryEventId,
       acknowledgementRetryEventId,
       primaryAcknowledgementRetryEventId,
     ];
@@ -701,6 +704,102 @@ test(
         active: true,
       });
 
+      // Fail the payment update only after the refund identity was inserted
+      // inside the same transaction. The failed delivery must leave neither
+      // write committed so the provider can safely retry the event.
+      const failedRefundAmount = 125;
+      const failedRefundId = `rfnd_${testId}_${failedRefundProviderId}`;
+      const failedRefundBody = JSON.stringify({
+        event: "refund.processed",
+        payload: {
+          payment: {
+            entity: {
+              id: providerPaymentId,
+              order_id: orderId,
+              amount: amountMinor,
+              currency: "INR",
+              status: "captured",
+              captured: true,
+            },
+          },
+          refund: {
+            entity: {
+              id: failedRefundId,
+              payment_id: providerPaymentId,
+              amount: failedRefundAmount,
+              currency: "INR",
+              status: "processed",
+            },
+          },
+        },
+      });
+      await failPaymentUpdateAfterRefundIdentity({
+        client: lockClient,
+        paymentId,
+        refundId: failedRefundId,
+        sendWebhook,
+        eventId: failedRefundRetryEventId,
+        body: failedRefundBody,
+      });
+      const [paymentAfterFailedRefund] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId));
+      assert.equal(
+        paymentAfterFailedRefund.refundedAmountMinor,
+        refundAmounts.reduce((total, amount) => total + amount, 0) +
+          duplicateRefundAmount,
+        "a failed payment update must not change the refunded total",
+      );
+      const refundsAfterFailure = await db
+        .select()
+        .from(razorpayRefundsTable)
+        .where(eq(razorpayRefundsTable.razorpayRefundId, failedRefundId));
+      assert.equal(
+        refundsAfterFailure.length,
+        0,
+        "the refund identity must roll back with the failed payment update",
+      );
+      const [failedRefundEvent] = await db
+        .select({ processedAt: razorpayWebhookEventsTable.processedAt })
+        .from(razorpayWebhookEventsTable)
+        .where(
+          eq(razorpayWebhookEventsTable.eventId, failedRefundRetryEventId),
+        );
+      assert.equal(
+        failedRefundEvent.processedAt,
+        null,
+        "a failed refund transaction must leave its webhook eligible for retry",
+      );
+
+      const retriedRefundResponse = await sendWebhook(
+        failedRefundBody,
+        failedRefundRetryEventId,
+      );
+      const retriedRefundResponseBody = await retriedRefundResponse.json();
+      assert.equal(
+        retriedRefundResponse.status,
+        200,
+        JSON.stringify(retriedRefundResponseBody),
+      );
+      const [paymentAfterRefundRetry] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId));
+      assert.equal(
+        paymentAfterRefundRetry.refundedAmountMinor,
+        refundAmounts.reduce((total, amount) => total + amount, 0) +
+          duplicateRefundAmount +
+          failedRefundAmount,
+        "retry must apply the refund amount exactly once",
+      );
+      const refundsAfterRetry = await db
+        .select()
+        .from(razorpayRefundsTable)
+        .where(eq(razorpayRefundsTable.razorpayRefundId, failedRefundId));
+      assert.equal(refundsAfterRetry.length, 1);
+      assert.equal(refundsAfterRetry[0].amountMinor, failedRefundAmount);
+
       const acknowledgementRetryOrderId = `order_addon_ack_${testId}`;
       const acknowledgementRetryProviderPaymentId = `pay_addon_ack_${testId}`;
       const [acknowledgementRetryPayment] = await db
@@ -1187,6 +1286,60 @@ async function failWebhookAcknowledgementOnce({
   } finally {
     await client.query(
       `DROP TRIGGER IF EXISTS ${triggerName} ON public.razorpay_webhook_events`,
+    );
+    await client.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
+  }
+}
+
+async function failPaymentUpdateAfterRefundIdentity({
+  client,
+  paymentId,
+  refundId,
+  sendWebhook,
+  eventId,
+  body,
+}) {
+  const suffix = randomUUID().replaceAll("-", "");
+  const functionName = `test_fail_refund_update_${suffix}`;
+  const triggerName = `test_fail_refund_update_${suffix}`;
+  const { rows } = await client.query(
+    "SELECT quote_literal($1) AS quoted_payment_id, quote_literal($2) AS quoted_refund_id",
+    [paymentId, refundId],
+  );
+  try {
+    await client.query(
+      `CREATE FUNCTION public.${functionName}() RETURNS trigger
+       LANGUAGE plpgsql
+       AS $payment_failure$
+       BEGIN
+         IF OLD.id::text = TG_ARGV[0]
+            AND EXISTS (
+              SELECT 1
+              FROM public.razorpay_refunds
+              WHERE razorpay_refund_id = TG_ARGV[1]
+            ) THEN
+           RAISE EXCEPTION 'simulated payment update failure after refund identity insertion';
+         END IF;
+         RETURN NEW;
+       END;
+       $payment_failure$`,
+    );
+    await client.query(
+      `CREATE TRIGGER ${triggerName}
+       BEFORE UPDATE ON public.payments
+       FOR EACH ROW
+       EXECUTE FUNCTION public.${functionName}(${rows[0].quoted_payment_id}, ${rows[0].quoted_refund_id})`,
+    );
+    const response = await sendWebhook(body, eventId);
+    const responseBody = await response.text();
+    assert.equal(
+      response.status,
+      500,
+      `the database must reject the payment update after the refund identity is inserted: ${responseBody}`,
+    );
+  } finally {
+    await client.query(
+      `DROP TRIGGER IF EXISTS ${triggerName} ON public.payments`,
     );
     await client.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
   }
