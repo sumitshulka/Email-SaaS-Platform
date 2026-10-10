@@ -5255,11 +5255,12 @@ components:
         greetingVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
         signatureVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
         signatureVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
+        prohibitedEmailKeywords: { type: array, maxItems: 200, items: { type: string, minLength: 1, maxLength: 100 } }
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer }
         packageVisibility: { type: string, enum: [public, hidden] }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt]
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt]
     PlatformSettingsInput:
       type: object
       properties:
@@ -5293,6 +5294,7 @@ components:
         greetingVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
         signatureVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
         signatureVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
+        prohibitedEmailKeywords: { type: array, maxItems: 200, items: { type: string, minLength: 1, maxLength: 100 } }
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer, minimum: 0 }
         packageVisibility: { type: string, enum: [public, hidden] }

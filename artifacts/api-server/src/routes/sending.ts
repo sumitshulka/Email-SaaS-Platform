@@ -136,6 +136,10 @@ import {
   getPlatformSettings,
 } from "../lib/platform-settings";
 import {
+  describeBlockedCampaignFields,
+  findProhibitedCampaignContent,
+} from "../lib/profanity-filter";
+import {
   assignCampaignVariants,
   normalizeCampaignVariantValues,
   summarizeCampaignVariantResults,
@@ -3659,6 +3663,23 @@ router.post(
       return;
     }
 
+    const policy = await getPlatformSettings();
+    const blockedFields = findProhibitedCampaignContent({
+      subject: parsed.data.subjectVariants ?? [parsed.data.subject],
+      greeting: parsed.data.greetingVariants,
+      signature: parsed.data.signatureVariants,
+      body: parsed.data.textBody,
+      htmlBody: parsed.data.htmlBody,
+    }, policy.prohibitedEmailKeywords);
+    if (blockedFields.length) {
+      res.status(422).json({
+        error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(blockedFields)}.`,
+        code: "PROFANITY_BLOCKED",
+        fields: blockedFields,
+      });
+      return;
+    }
+
     const userId = req.authUser!.id;
     const listIds =
       parsed.data.listIds ??
@@ -3988,6 +4009,21 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     greeting: parsed.data.greetingVariants,
     signature: parsed.data.signatureVariants,
   });
+  const blockedFields = findProhibitedCampaignContent({
+    subject: variants.subject,
+    greeting: variants.greeting,
+    signature: variants.signature,
+    body: parsed.data.textBody,
+    htmlBody: parsed.data.htmlBody,
+  }, settings.prohibitedEmailKeywords);
+  if (blockedFields.length) {
+    res.status(422).json({
+      error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(blockedFields)}.`,
+      code: "PROFANITY_BLOCKED",
+      fields: blockedFields,
+    });
+    return;
+  }
   const variantsError = variantLimitError(variants, settings);
   if (variantsError) {
     res.status(400).json({ error: variantsError, code: "INVALID_CAMPAIGN_VARIANTS" });
@@ -4113,6 +4149,21 @@ router.patch(
       : campaignVariantCountError(changedVariantCounts, settings);
     if (variantsError) {
       res.status(400).json({ error: variantsError, code: "INVALID_CAMPAIGN_VARIANTS" });
+      return;
+    }
+    const blockedFields = findProhibitedCampaignContent({
+      subject: effectiveVariants.subject,
+      greeting: effectiveVariants.greeting,
+      signature: effectiveVariants.signature,
+      body: parsed.data.textBody ?? campaignBeforeUpdate.textBody,
+      htmlBody: parsed.data.htmlBody ?? campaignBeforeUpdate.htmlBody,
+    }, settings.prohibitedEmailKeywords);
+    if (blockedFields.length) {
+      res.status(422).json({
+        error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(blockedFields)}.`,
+        code: "PROFANITY_BLOCKED",
+        fields: blockedFields,
+      });
       return;
     }
     const requestedListIds =
@@ -4310,6 +4361,16 @@ router.post(
       const variants = cleanedVariantValues(
         normalizeCampaignVariantValues(campaign),
       );
+      const blockedFields = findProhibitedCampaignContent({
+        subject: variants.subject,
+        greeting: variants.greeting,
+        signature: variants.signature,
+        body: campaign.textBody,
+        htmlBody: campaign.htmlBody,
+      }, settings.prohibitedEmailKeywords);
+      if (blockedFields.length) {
+        return { error: "profanity" as const, fields: blockedFields };
+      }
       const variantsError = variantLimitError(variants, settings);
       if (variantsError) {
         return { error: "variant_limits" as const, message: variantsError };
@@ -4595,6 +4656,12 @@ router.post(
         res.status(409).json({
           error: "Only draft campaigns can be queued.",
           code: "CAMPAIGN_NOT_SENDABLE",
+        });
+      } else if (outcome.error === "profanity") {
+        res.status(422).json({
+          error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(outcome.fields)}. Edit the draft before sending.`,
+          code: "PROFANITY_BLOCKED",
+          fields: outcome.fields,
         });
       } else if (outcome.error === "variant_limits") {
         res.status(400).json({

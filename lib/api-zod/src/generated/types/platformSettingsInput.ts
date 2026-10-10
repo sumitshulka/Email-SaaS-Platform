@@ -115,6 +115,12 @@ export interface PlatformSettingsInput {
      * @maximum 20
      */
   signatureVariantMaximum: number;
+  /**
+     * @maxItems 200
+     * @items.minLength 1
+     * @items.maxLength 100
+     */
+  prohibitedEmailKeywords?: string[];
   allowUserWithoutSubscription: boolean;
   /** @minimum 0 */
   gracePeriodDays: number;

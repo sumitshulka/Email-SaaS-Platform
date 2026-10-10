@@ -33,6 +33,7 @@ export type PlatformSettingsInput = {
   greetingVariantMaximum: number;
   signatureVariantMinimum: number;
   signatureVariantMaximum: number;
+  prohibitedEmailKeywords: string[];
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: "public" | "hidden";
@@ -69,6 +70,7 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   greetingVariantMaximum: 7,
   signatureVariantMinimum: 3,
   signatureVariantMaximum: 7,
+  prohibitedEmailKeywords: [],
   allowUserWithoutSubscription: false,
   gracePeriodDays: 0,
   packageVisibility: "public",

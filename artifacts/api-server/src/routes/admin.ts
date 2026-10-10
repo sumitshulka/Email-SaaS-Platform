@@ -557,13 +557,21 @@ router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void>
     });
     return;
   }
+  const currentSettings = await getPlatformSettings();
+  const settingsToSave = {
+    ...parsed.data,
+    // Preserve this policy when an older client omits the newly added field.
+    prohibitedEmailKeywords:
+      parsed.data.prohibitedEmailKeywords ??
+      currentSettings.prohibitedEmailKeywords,
+  };
   await db
     .insert(systemConfigurationTable)
-    .values({ key: "platform", value: parsed.data, updatedBy: req.authUser!.id })
+    .values({ key: "platform", value: settingsToSave, updatedBy: req.authUser!.id })
     .onConflictDoUpdate({
       target: systemConfigurationTable.key,
       set: {
-        value: parsed.data,
+        value: settingsToSave,
         updatedBy: req.authUser!.id,
         updatedAt: new Date(),
       },

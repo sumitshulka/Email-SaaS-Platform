@@ -5348,6 +5348,10 @@ export const getAdminSettingsResponseSignatureVariantMinimumMax = 20;
 
 export const getAdminSettingsResponseSignatureVariantMaximumMax = 20;
 
+export const getAdminSettingsResponseProhibitedEmailKeywordsItemMax = 100;
+
+export const getAdminSettingsResponseProhibitedEmailKeywordsMax = 200;
+
 
 
 export const GetAdminSettingsResponse = zod.object({
@@ -5381,6 +5385,7 @@ export const GetAdminSettingsResponse = zod.object({
   "greetingVariantMaximum": zod.number().int().min(1).max(getAdminSettingsResponseGreetingVariantMaximumMax),
   "signatureVariantMinimum": zod.number().int().min(getAdminSettingsResponseSignatureVariantMinimumMin).max(getAdminSettingsResponseSignatureVariantMinimumMax),
   "signatureVariantMaximum": zod.number().int().min(1).max(getAdminSettingsResponseSignatureVariantMaximumMax),
+  "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(getAdminSettingsResponseProhibitedEmailKeywordsItemMax)).max(getAdminSettingsResponseProhibitedEmailKeywordsMax),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
@@ -5442,6 +5447,10 @@ export const updateAdminSettingsBodySignatureVariantMinimumMax = 20;
 
 export const updateAdminSettingsBodySignatureVariantMaximumMax = 20;
 
+export const updateAdminSettingsBodyProhibitedEmailKeywordsItemMax = 100;
+
+export const updateAdminSettingsBodyProhibitedEmailKeywordsMax = 200;
+
 export const updateAdminSettingsBodyGracePeriodDaysMin = 0;
 
 
@@ -5477,6 +5486,7 @@ export const UpdateAdminSettingsBody = zod.object({
   "greetingVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsBodyGreetingVariantMaximumMax),
   "signatureVariantMinimum": zod.number().int().min(updateAdminSettingsBodySignatureVariantMinimumMin).max(updateAdminSettingsBodySignatureVariantMinimumMax),
   "signatureVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsBodySignatureVariantMaximumMax),
+  "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(updateAdminSettingsBodyProhibitedEmailKeywordsItemMax)).max(updateAdminSettingsBodyProhibitedEmailKeywordsMax).optional(),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int().min(updateAdminSettingsBodyGracePeriodDaysMin),
   "packageVisibility": zod.enum(['public', 'hidden'])
@@ -5496,6 +5506,10 @@ export const updateAdminSettingsResponseSignatureVariantMinimumMin = 2;
 export const updateAdminSettingsResponseSignatureVariantMinimumMax = 20;
 
 export const updateAdminSettingsResponseSignatureVariantMaximumMax = 20;
+
+export const updateAdminSettingsResponseProhibitedEmailKeywordsItemMax = 100;
+
+export const updateAdminSettingsResponseProhibitedEmailKeywordsMax = 200;
 
 
 
@@ -5530,6 +5544,7 @@ export const UpdateAdminSettingsResponse = zod.object({
   "greetingVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsResponseGreetingVariantMaximumMax),
   "signatureVariantMinimum": zod.number().int().min(updateAdminSettingsResponseSignatureVariantMinimumMin).max(updateAdminSettingsResponseSignatureVariantMinimumMax),
   "signatureVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsResponseSignatureVariantMaximumMax),
+  "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(updateAdminSettingsResponseProhibitedEmailKeywordsItemMax)).max(updateAdminSettingsResponseProhibitedEmailKeywordsMax),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
