@@ -131,6 +131,7 @@ function makeUser(email) {
 async function installCheckoutFixtures(context, {
   accountExists,
   packages,
+  unavailablePackageIdOnVerify,
   initialUser = null,
   scheduledSubscription = null,
 }) {
@@ -139,6 +140,7 @@ async function installCheckoutFixtures(context, {
     user: initialUser,
     subscription: null,
     scheduledSubscription,
+    packages: [...packages],
     requestBodies: [],
     orderAttempts: [],
     freeActivationAttempts: [],
@@ -178,7 +180,7 @@ async function installCheckoutFixtures(context, {
     if (pathname === '/api/auth/password-policy') return respond(200, { passwordMinimumLength: 12 });
     if (pathname === '/api/subscriptions/packages' && method === 'GET') {
       return respond(200, {
-        packages,
+        packages: state.packages,
         sendingLimits: { emailsPerHourPerSmtp: 100, emailsPerDayPerSmtp: 1000 },
       });
     }
@@ -188,6 +190,9 @@ async function installCheckoutFixtures(context, {
     }
     if (pathname === '/api/auth/package-checkout/verify-code' && method === 'POST') {
       state.requestBodies.push({ pathname, body: jsonBody });
+      if (unavailablePackageIdOnVerify) {
+        state.packages = state.packages.filter(pkg => pkg.id !== unavailablePackageIdOnVerify);
+      }
       return respond(200, accountExists
         ? { accountExists: true }
         : { accountExists: false, registrationProofToken: 'private-registration-proof-token' });
@@ -256,7 +261,8 @@ async function installCheckoutFixtures(context, {
     }
     if (pathname === '/api/subscriptions/free' && method === 'POST') {
       state.freeActivationAttempts.push({ authenticated: state.authenticated, body: jsonBody });
-      const selected = packages.find(pkg => pkg.id === jsonBody.packageId);
+      const selected = state.packages.find(pkg => pkg.id === jsonBody.packageId);
+      if (!selected) return respond(404, { error: 'That free package is not available for activation.' });
       state.subscription = {
         id: 'free-subscription-id',
         status: 'active',
@@ -268,6 +274,9 @@ async function installCheckoutFixtures(context, {
     }
     if (pathname === '/api/subscriptions/orders' && method === 'POST') {
       state.orderAttempts.push({ authenticated: state.authenticated, user: state.user, body: jsonBody });
+      if (!state.packages.some(pkg => pkg.id === jsonBody.packageId)) {
+        return respond(404, { error: 'That package is not available for purchase.' });
+      }
       return respond(201, order);
     }
     return respond(404, { error: `Unexpected API request: ${pathname} ${method}` });
@@ -351,6 +360,53 @@ describe('package checkout account and payment handoff', { concurrency: false },
       await context.close();
     }
   });
+
+  for (const { selectedPackage, otherPackage, outcomeLabel } of [
+    { selectedPackage: freePackage, otherPackage: paidPackage, outcomeLabel: 'free activation' },
+    { selectedPackage: paidPackage, otherPackage: freePackage, outcomeLabel: 'paid order' },
+  ]) {
+    it(`keeps a new account usable and stops a stale ${outcomeLabel}`, async () => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const state = await installCheckoutFixtures(context, {
+        accountExists: false,
+        packages: [selectedPackage, otherPackage],
+        unavailablePackageIdOnVerify: selectedPackage.id,
+      });
+      const page = await context.newPage();
+      const email = `stale-${outcomeLabel.replaceAll(' ', '-')}-customer@example.test`;
+      try {
+        await page.goto(`${baseUrl}/pricing`);
+        await page.getByTestId(`package-cta-${selectedPackage.id}`).click();
+        await page.waitForURL(url => url.pathname.startsWith('/package-checkout/'));
+        await page.getByTestId('input-package-checkout-email').fill(email);
+        await page.getByTestId('button-package-checkout-continue').click();
+        await page.getByTestId('input-package-checkout-code').waitFor();
+        await page.getByTestId('input-package-checkout-code').fill('123456');
+        await page.getByTestId('button-package-checkout-continue').click();
+
+        await page.waitForURL(url => url.pathname === '/register');
+        await page.getByTestId('input-first-name').fill('Stale');
+        await page.getByTestId('input-last-name').fill('Plan');
+        await page.getByTestId('input-register-password').fill('stale-plan-customer-2026');
+        await page.getByTestId('button-create-account').click();
+        await page.waitForURL(url => url.pathname === '/plans');
+        await page.getByTestId('status-payment').getByText(/selected plan is no longer available/i).waitFor();
+
+        assert.equal(state.authenticated, true, 'the account should be created and signed in');
+        assert.equal(state.user.email, email);
+        assert.deepEqual(state.freeActivationAttempts, [], 'a hidden free package must not be activated');
+        assert.deepEqual(state.orderAttempts, [], 'a hidden paid package must not create a paid order');
+        assert.equal(await page.evaluate(() => window.__checkoutOptions.length), 0);
+        const accountAfterCheckout = await page.evaluate(async () => {
+          const response = await fetch('/api/auth/me');
+          return response.ok ? response.json() : null;
+        });
+        assert.equal(accountAfterCheckout.email, email, 'the account remains accessible after the unavailable plan is rejected');
+      } finally {
+        await context.close();
+      }
+    });
+  }
 
   it('authenticates the existing account before routing the selected paid package to Razorpay and preserves it on dismissal', async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });

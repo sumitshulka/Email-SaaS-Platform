@@ -473,6 +473,8 @@ export function PackageCheckoutPage() {
   const [step, setStep] = useState<'email' | 'code' | 'login'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [verifiedPackageId, setVerifiedPackageId] = useState<string | null>(null);
+  const [planAvailability, setPlanAvailability] = useState<'available' | 'unavailable' | 'check_failed' | null>(null);
   const packages = packagesQuery.data?.packages ?? [];
   const slugMatches = requestedSlug
     ? packages.filter(item => packageNameSlug(item.name) === requestedSlug)
@@ -490,6 +492,7 @@ export function PackageCheckoutPage() {
     ? isAmbiguousPackageCheckoutSlug(requestedSlug, packages)
     : false;
   const sendingLimits = packagesQuery.data?.sendingLimits;
+  const canContinueWithoutSelectedPlan = step === 'login' && planAvailability !== 'available';
 
   const returnToEmail = () => {
     requestCode.reset();
@@ -513,17 +516,28 @@ export function PackageCheckoutPage() {
     }
     if (step === 'code') {
       verifyCode.mutate({ data: { email: normalizedEmail, code: code.trim() } }, {
-        onSuccess: result => {
+        onSuccess: async result => {
           if (!pkg) return;
+          const selectedPackageId = pkg.id;
+          setVerifiedPackageId(selectedPackageId);
+          const currentPackages = await packagesQuery.refetch();
+          const selectedStillAvailable = currentPackages.data?.packages.some(item => item.id === selectedPackageId) ?? false;
+          setPlanAvailability(
+            currentPackages.isError
+              ? 'check_failed'
+              : selectedStillAvailable
+                ? 'available'
+                : 'unavailable',
+          );
           if (result.accountExists) {
             trackPackageCheckoutVerification(pkg.packageType, 'existing_account');
             setStep('login');
             return;
           }
-          if (!packageId || !result.registrationProofToken) return;
+          if (!result.registrationProofToken) return;
           trackPackageCheckoutVerification(pkg.packageType, 'new_account');
-          saveVerifiedPackageCheckout(packageId, normalizedEmail, result.registrationProofToken);
-          setLocation(`/register?packageId=${encodeURIComponent(packageId)}`);
+          saveVerifiedPackageCheckout(selectedPackageId, normalizedEmail, result.registrationProofToken);
+          setLocation(`/register?packageId=${encodeURIComponent(selectedPackageId)}`);
         },
         onError: error => {
           if (getApiErrorDetails(error).code === 'SUPERADMIN_PACKAGE_PURCHASE_FORBIDDEN') {
@@ -535,7 +549,7 @@ export function PackageCheckoutPage() {
       return;
     }
     const password = new FormData(event.currentTarget).get('password');
-    if (typeof password !== 'string' || !password || !packageId) return;
+    if (typeof password !== 'string' || !password) return;
     login.mutate({ data: { identifier: normalizedEmail, password } }, {
       onSuccess: result => {
         queryClient.setQueryData(getGetCurrentUserQueryKey(), result.user);
@@ -544,18 +558,24 @@ export function PackageCheckoutPage() {
           setLocation('/admin');
           return;
         }
+        const checkoutSelectionId = packageId ?? verifiedPackageId;
+        const continueWithSelectedPlan = planAvailability === 'available' && checkoutSelectionId;
         setLocation(result.user.mustChangeCredentials
-          ? `/profile?rotate=1&checkout=${encodeURIComponent(packageId ?? '')}`
-          : `/plans?checkout=${encodeURIComponent(packageId ?? '')}`);
+          ? continueWithSelectedPlan
+            ? `/profile?rotate=1&checkout=${encodeURIComponent(checkoutSelectionId)}`
+            : '/profile?rotate=1'
+          : continueWithSelectedPlan
+            ? `/plans?checkout=${encodeURIComponent(checkoutSelectionId)}`
+            : '/plans');
       },
     });
   };
 
   const loading = packagesQuery.isLoading;
   const selectionRequested = Boolean(packageIdQuery || requestedSlug);
-  const pageError = packagesQuery.isError
+  const pageError = packagesQuery.isError && !canContinueWithoutSelectedPlan
     ? 'We could not load the current plan information. Try again.'
-    : selectionRequested && !loading && !pkg
+    : selectionRequested && !loading && !pkg && !canContinueWithoutSelectedPlan
       ? ambiguousSlug
         ? 'This package name matches more than one plan. Use the specific checkout link shown on the pricing page.'
         : 'This plan is no longer available. Please choose a current plan.'
@@ -585,8 +605,14 @@ export function PackageCheckoutPage() {
 
       {pageError ? <section role={packagesQuery.isError ? 'alert' : 'status'} className="rounded-xl border border-[#e1e6eb] bg-white p-6">
         <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-[#b76325]"/><div><h2 className="text-[15px] font-semibold text-[#1d2d40]">{pageError}</h2>{packagesQuery.isError && <button type="button" onClick={() => void packagesQuery.refetch()} className="mt-3 rounded-md border border-[#d5dfe7] px-3 py-2 text-[12px] font-semibold text-[#315879]">Try again</button>}<Link href="/pricing" className="mt-3 inline-block text-[12px] font-semibold text-[#245b9b] underline">Back to pricing</Link></div></div>
-      </section> : loading || !pkg || !sendingLimits ? <div aria-label="Loading selected plan" className="h-64 animate-pulse rounded-xl bg-[#eaf0f4]"/> : <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,.92fr)_minmax(390px,1.08fr)]">
+      </section> : loading || (!pkg && step !== 'login') || (!sendingLimits && step !== 'login') ? <div aria-label="Loading selected plan" className="h-64 animate-pulse rounded-xl bg-[#eaf0f4]"/> : <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,.92fr)_minmax(390px,1.08fr)]">
         <section className="rounded-xl border border-[#d5e0e8] bg-white p-5 shadow-[0_14px_38px_-34px_rgba(21,48,77,.6)] md:p-7" data-testid="selected-checkout-package">
+          {!pkg && step === 'login' ? <>
+            <div className="mono text-[10px] uppercase tracking-[.16em] text-[#667b90]">PLAN AVAILABILITY</div>
+            <h2 className="display mt-3 text-[25px] font-bold text-[#1b2e43]">{planAvailability === 'unavailable' ? 'This plan is no longer available.' : 'Plan availability could not be confirmed.'}</h2>
+            <p className="mt-2 text-[13px] leading-6 text-[#526276]">Your Mailflow account is still available. Sign in without starting checkout for this selection, then choose from the current plans.</p>
+            <Link href="/pricing" className="mt-4 inline-block text-[12px] font-semibold text-[#245b9b] underline">See current plans</Link>
+          </> : pkg && sendingLimits ? <>
           <div className="mono text-[10px] uppercase tracking-[.16em] text-[#667b90]">YOUR SELECTED PLAN</div>
           {pkg.preferred && <span className="mt-3 inline-flex rounded-full bg-[#eef4fb] px-2.5 py-1 text-[9px] font-bold tracking-[.1em] text-[#245b9b]">PREFERRED</span>}
           <h2 className="display mt-3 text-[25px] font-bold text-[#1b2e43]">{pkg.name}</h2>
@@ -602,6 +628,7 @@ export function PackageCheckoutPage() {
             <li className="flex gap-2.5"><Clock3 size={16} className="mt-0.5 shrink-0 text-[#4c759d]"/><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
           </ul>
           <p className="mt-4 rounded-md bg-[#f4f7f9] p-3 text-[11px] leading-5 text-[#526276]">Your account can be created before payment. If you close paid checkout without paying, no subscription will be activated.</p>
+          </> : null}
         </section>
 
         <section className="rounded-xl border border-[#dfe5e9] bg-[#fbfcfd] p-5 md:p-7" data-testid="package-checkout-identity-step">
@@ -615,6 +642,8 @@ export function PackageCheckoutPage() {
             {step === 'code' && <label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Six-digit verification code</span><input data-testid="input-package-checkout-code" type="text" required inputMode="numeric" autoComplete="one-time-code" minLength={6} maxLength={6} pattern="[0-9]{6}" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[14px] tracking-[.2em] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label>}
             {step === 'login' && <><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Email address</span><input value={email} readOnly className="h-11 w-full rounded-md border border-[#d8dde4] bg-[#f3f5f7] px-3 text-[13px] text-[#536174]"/></label><label className="block space-y-1.5"><span className="text-[12px] font-semibold text-[#344154]">Password</span><input data-testid="input-package-checkout-password" name="password" type="password" required autoComplete="current-password" className="h-11 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label><div className="text-right"><Link href="/forgot-password" className="text-[11px] font-semibold text-[#245b9b] underline">Forgot password?</Link></div></>}
             {requestCode.isSuccess && step === 'code' && <p role="status" className="rounded-md border border-[#d5e7db] bg-[#f2f8f4] px-3 py-2 text-[11px] leading-5 text-[#41674e]">{requestCode.data.message}</p>}
+            {step === 'login' && planAvailability === 'unavailable' && <p role="status" data-testid="status-package-unavailable" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">The plan you selected is no longer available. No order or plan activation was created. You can still sign in to your account and choose a current plan.</p>}
+            {step === 'login' && planAvailability === 'check_failed' && <p role="status" data-testid="status-package-availability-check" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">We could not confirm that plan is still available. You can still sign in; no checkout will start for the unconfirmed selection.</p>}
             {mutationError && <div role="alert" data-testid="status-package-checkout-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]"><p>{mutationErrorMessage}</p>{isSuperadminPurchaseBlocked && <Link href="/login" className="mt-2 inline-block font-semibold text-[#245b9b] underline">Sign in to the superadmin workspace</Link>}</div>}
             <button type="submit" data-testid="button-package-checkout-continue" disabled={submitting || (step === 'email' && !email.trim())} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#174f99] px-4 text-[13px] font-semibold text-white transition hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55">
               {submitting ? 'Please wait…' : step === 'email' ? 'Send verification code' : step === 'code' ? 'Verify email' : 'Sign in and continue'}

@@ -244,7 +244,13 @@ function PackageCard({ item, featured, scheduled, pending, disabled, action, onl
 
 export default function PlansPage() {
   const queryClient = useQueryClient();
-  const packagesQuery = useListAvailableSubscriptionPackages();
+  const packagesQuery = useListAvailableSubscriptionPackages({
+    query: {
+      queryKey: getListAvailableSubscriptionPackagesQueryKey(),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
   const currentQuery = useGetCurrentSubscription();
   const addOnsQuery = useGetSubscriptionAddOns();
   const researchAllowanceQuery = useGetCompanyResearchAllowance({
@@ -550,6 +556,7 @@ export default function PlansPage() {
     if (!checkoutPackageId || checkoutAutoStartRef.current === checkoutPackageId) return;
     const isLoading =
       packagesQuery.isLoading ||
+      packagesQuery.isFetching ||
       currentQuery.isLoading ||
       addOnsQuery.isLoading ||
       researchAllowanceQuery.isLoading ||
@@ -589,6 +596,7 @@ export default function PlansPage() {
   }, [
     checkoutPackageId,
     packagesQuery.isLoading,
+    packagesQuery.isFetching,
     currentQuery.isLoading,
     addOnsQuery.isLoading,
     researchAllowanceQuery.isLoading,
@@ -599,7 +607,7 @@ export default function PlansPage() {
     paymentAvailabilityQuery.isLoading,
   ]);
 
-  if (packagesQuery.isLoading || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || contactsUsageQuery.isLoading || contactsUsageQuery.isFetching || senderAccountsQuery.isLoading) {
+  if (packagesQuery.isLoading || packagesQuery.isFetching || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || contactsUsageQuery.isLoading || contactsUsageQuery.isFetching || senderAccountsQuery.isLoading) {
     return <div className="space-y-5" aria-label="Loading subscription plans" data-testid="loading-plans"><div className="h-8 w-64 animate-pulse rounded bg-[#e9eef2]"/><div className="h-32 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/><div className="h-80 animate-pulse rounded-lg bg-[#edf1f4]"/></div></div>;
   }
   if (packagesQuery.isError || currentQuery.isError || addOnsQuery.isError || researchAllowanceQuery.isError || contactsUsageQuery.isError || senderAccountsQuery.isError) {
