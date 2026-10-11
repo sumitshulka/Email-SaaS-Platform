@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
-  Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, CirclePlus, Clock3,
+  Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, ChevronDown, ChevronRight, CirclePlus, Clock3,
   Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send, Pause, Play,
   ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw,
 } from 'lucide-react';
@@ -1434,6 +1434,12 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const audienceActionInProgress = useRef(false);
   const [campaignListSearch, setCampaignListSearch] = useState('');
   const [showSelectedCampaignLists, setShowSelectedCampaignLists] = useState(false);
+  const [campaignSearch, setCampaignSearch] = useState('');
+  const [campaignStatusFilter, setCampaignStatusFilter] = useState('all');
+  const [campaignTypeFilter, setCampaignTypeFilter] = useState('all');
+  const [campaignListFilter, setCampaignListFilter] = useState('all');
+  const [campaignDateFilter, setCampaignDateFilter] = useState('all');
+  const [collapsedCampaignIds, setCollapsedCampaignIds] = useState<Set<string>>(() => new Set());
   const [sampleContactId, setSampleContactId] = useState('');
   const [aiDraftPreview, setAiDraftPreview] = useState<{ subject: string; greeting: string; body: string; signature: string; remaining: number } | null>(null);
   const [aiDraftError, setAiDraftError] = useState<string | null>(null);
@@ -1448,6 +1454,62 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [pauseTarget, setPauseTarget] = useState<CampaignSummary | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
+  const campaignTree = useMemo(() => {
+    const byId = new Map(campaigns.map(campaign => [campaign.id, campaign]));
+    const children = new Map<string, CampaignSummary[]>();
+    const roots: CampaignSummary[] = [];
+    for (const campaign of campaigns) {
+      const parent = campaign.parentCampaignId ? byId.get(campaign.parentCampaignId) : undefined;
+      if (parent) children.set(parent.id, [...(children.get(parent.id) ?? []), campaign]);
+      else roots.push(campaign);
+    }
+    const newestFirst = (items: CampaignSummary[]) => items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    newestFirst(roots);
+    for (const items of children.values()) newestFirst(items);
+
+    const search = campaignSearch.trim().toLowerCase();
+    const cutoff = campaignDateFilter === 'all' ? null : Date.now() - Number(campaignDateFilter) * 24 * 60 * 60 * 1000;
+    const matches = new Set(campaigns.filter(campaign => {
+      const textMatches = !search || [campaign.name, campaign.objective, campaign.subject, campaign.senderEmail]
+        .some(value => value?.toLowerCase().includes(search));
+      const listIds = campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : [];
+      const listMatches = campaignListFilter === 'all' || listIds.includes(campaignListFilter);
+      const typeMatches = campaignTypeFilter === 'all' || campaign.campaignType === campaignTypeFilter;
+      const scheduled = campaign.status === 'queued' && Boolean(campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now());
+      const statusMatches = campaignStatusFilter === 'all'
+        || (campaignStatusFilter === 'paused' ? Boolean(campaign.pausedAt) : campaignStatusFilter === 'scheduled' ? scheduled : campaignStatusFilter === 'queued' ? campaign.status === 'queued' && !scheduled && !campaign.pausedAt : campaign.status === campaignStatusFilter);
+      const dateMatches = cutoff === null || new Date(campaign.createdAt).getTime() >= cutoff;
+      return textMatches && listMatches && typeMatches && statusMatches && dateMatches;
+    }).map(campaign => campaign.id));
+
+    // Keep parent rows visible as context whenever a matching follow-up is found.
+    const visible = new Set(matches);
+    for (const id of matches) {
+      let current = byId.get(id);
+      const seen = new Set<string>([id]);
+      while (current?.parentCampaignId && !seen.has(current.parentCampaignId)) {
+        seen.add(current.parentCampaignId);
+        visible.add(current.parentCampaignId);
+        current = byId.get(current.parentCampaignId);
+      }
+    }
+    const rows: Array<{ campaign: CampaignSummary; depth: number; hasChildren: boolean; contextOnly: boolean }> = [];
+    const parentIds = new Set<string>();
+    const walk = (campaign: CampaignSummary, depth: number, path: Set<string>) => {
+      if (!visible.has(campaign.id) || path.has(campaign.id)) return;
+      const visibleChildren = (children.get(campaign.id) ?? []).filter(child => visible.has(child.id));
+      const hasChildren = visibleChildren.length > 0;
+      if (hasChildren) parentIds.add(campaign.id);
+      rows.push({ campaign, depth, hasChildren, contextOnly: !matches.has(campaign.id) });
+      if (!hasChildren || collapsedCampaignIds.has(campaign.id)) return;
+      const nextPath = new Set(path).add(campaign.id);
+      for (const child of visibleChildren) walk(child, depth + 1, nextPath);
+    };
+    for (const root of roots) walk(root, 0, new Set());
+    // Include campaigns with missing parent records as top-level entries.
+    for (const campaign of campaigns) if (!campaign.parentCampaignId && !rows.some(row => row.campaign.id === campaign.id)) walk(campaign, 0, new Set());
+    return { rows, matches, parentIds, matchCount: matches.size };
+  }, [campaigns, campaignDateFilter, campaignListFilter, campaignSearch, campaignStatusFilter, campaignTypeFilter, collapsedCampaignIds]);
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const aiAssistBalance = addOnCreditsQuery.data?.balances.emailAssist;
   const aiAssistAvailable = Boolean(
@@ -1813,18 +1875,31 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<Button testId="button-create-campaign" onClick={openNew} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     {!activeLists.length && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before creating a campaign. Drafts can only target active lists.</span></div>}
-       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Campaigns</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{campaigns.length}</div><div className="mt-1 text-[10px] text-[#6f8092]">{campaigns.filter(c => c.status === 'draft').length} drafts · {campaigns.filter(c => c.status !== 'draft').length} queued or sent</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">SMTP accepted</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{totalDelivered.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">Inbox delivery is not confirmed</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#fff5eb', borderColor: '#f0dfcb' }}><div className="text-[11px] text-[#8b6747]">Rejected / failed</div><div className="display mt-2 text-[26px] font-bold text-[#ae642c]">{totalBounced.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#816f5f]">Includes matched provider bounce or failure reports</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' }}><div className="text-[11px] text-[#677484]">Suppressed</div><div className="display mt-2 text-[26px] font-bold text-[#596675]">{campaigns.reduce((sum, campaign) => sum + campaign.suppressed, 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#738092]">Unsubscribed or removed before send</div></div></div>
-    {campaigns.length ? <section className={panelClass}>
-       <div className="flex items-center justify-between border-b border-[#e9edf0] px-4 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign activity</h2><p className="mt-1 text-[11px] text-[#788392]">Campaign start and finish times with final delivery counts from your workspace.</p></div><span className="mono hidden text-[9px] tracking-[.12em] text-[#9aa3ad] sm:block"><Activity className="mr-1 inline h-3.5 w-3.5"/>DELIVERY LOG</span></div>
-       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Start / end</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaigns.map(campaign => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
-        <td className="max-w-[240px] px-5 py-4"><button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="text-left"><span className="block truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></td>
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Campaigns</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{campaigns.length}</div><div className="mt-1 text-[10px] text-[#6f8092]">{campaigns.filter(c => c.status === 'draft').length} drafts · {campaigns.filter(c => c.status !== 'draft').length} queued or sent</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">SMTP accepted</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{totalDelivered.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">Inbox delivery is not confirmed</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#fff5eb', borderColor: '#f0dfcb' }}><div className="text-[11px] text-[#8b6747]">Rejected / failed</div><div className="display mt-2 text-[26px] font-bold text-[#ae642c]">{totalBounced.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#816f5f]">Includes matched provider bounce or failure reports</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' }}><div className="text-[11px] text-[#677484]">Suppressed</div><div className="display mt-2 text-[26px] font-bold text-[#596675]">{campaigns.reduce((sum, campaign) => sum + campaign.suppressed, 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#738092]">Unsubscribed or removed before send</div></div></div>
+        <section data-testid="campaign-filters" className={`${panelClass} mb-5 p-4 sm:p-5`}>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="display text-[16px] font-bold text-[#1b293a]">Find a campaign</h2><p className="mt-1 text-[11px] text-[#778393]">Search names, subjects, objectives, or senders; filter the tree without losing parent context.</p></div>
+            <Button variant="outline" testId="button-reset-campaign-filters" onClick={() => { setCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); }} disabled={!campaignSearch && campaignStatusFilter === 'all' && campaignTypeFilter === 'all' && campaignListFilter === 'all' && campaignDateFilter === 'all'}><X className="h-3.5 w-3.5"/>Reset filters</Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,2fr)_repeat(4,minmax(140px,1fr))]">
+            <label><span className={labelClass}>Search campaigns</span><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8290a0]"/><input data-testid="input-campaign-search" className={`${inputClass} pl-9`} placeholder="Name, subject, objective, sender" value={campaignSearch} onChange={event => setCampaignSearch(event.target.value)}/></div></label>
+            <label><span className={labelClass}>Status</span><select data-testid="select-campaign-status-filter" className={inputClass} value={campaignStatusFilter} onChange={event => setCampaignStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="queued">Queued</option><option value="scheduled">Scheduled</option><option value="sending">Sending</option><option value="paused">Paused</option><option value="completed">Completed</option></select></label>
+            <label><span className={labelClass}>Campaign type</span><select data-testid="select-campaign-type-filter" className={inputClass} value={campaignTypeFilter} onChange={event => setCampaignTypeFilter(event.target.value)}><option value="all">Primary + follow-ups</option><option value="primary">Primary only</option><option value="follow_up">Follow-ups</option></select></label>
+            <label><span className={labelClass}>Audience list</span><select data-testid="select-campaign-list-filter" className={inputClass} value={campaignListFilter} onChange={event => setCampaignListFilter(event.target.value)}><option value="all">All lists</option>{lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}</select></label>
+            <label><span className={labelClass}>Created</span><select data-testid="select-campaign-date-filter" className={inputClass} value={campaignDateFilter} onChange={event => setCampaignDateFilter(event.target.value)}><option value="all">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
+          </div>
+        </section>
+     {campaigns.length ? campaignTree.rows.length ? <section className={panelClass}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf0] px-4 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign tree</h2><p className="mt-1 text-[11px] text-[#788392]">{campaignTree.matchCount.toLocaleString()} matching campaigns · follow-ups are nested beneath their parent campaign.</p></div>{campaignTree.parentIds.size > 0 && <Button variant="outline" testId="button-toggle-campaign-tree" onClick={() => setCollapsedCampaignIds(current => [...campaignTree.parentIds].every(id => current.has(id)) ? new Set() : new Set(campaignTree.parentIds))}>{[...campaignTree.parentIds].every(id => collapsedCampaignIds.has(id)) ? 'Expand all' : 'Collapse all'}</Button>}</div>
+       <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Start / end</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaignTree.rows.map(({ campaign, depth, hasChildren, contextOnly }) => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
+        <td className="max-w-[280px] px-5 py-4"><div className="flex min-w-0 items-start gap-1" style={{ paddingLeft: `${depth * 20}px` }}>{hasChildren ? <button type="button" aria-label={`${collapsedCampaignIds.has(campaign.id) ? 'Expand' : 'Collapse'} follow-ups for ${campaign.name}`} data-testid={`button-toggle-campaign-${campaign.id}`} className="mt-0.5 rounded p-1 text-[#63758a] hover:bg-[#eef3f8]" onClick={() => setCollapsedCampaignIds(current => { const next = new Set(current); if (next.has(campaign.id)) next.delete(campaign.id); else next.add(campaign.id); return next; })}>{collapsedCampaignIds.has(campaign.id) ? <ChevronRight className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}</button> : <span className="w-6 shrink-0"/>}<button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="min-w-0 text-left"><span className="flex flex-wrap items-center gap-1.5"><span className="truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span>{campaign.campaignType === 'follow_up' && <Status tone="blue">Follow-up</Status>}{contextOnly && <span className="text-[9px] text-[#7c8794]">parent context</span>}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></div></td>
         <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).map(listId => lists.find(list => list.id === listId)?.name || 'Removed list').join(' · ') || 'No target lists selected'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
         <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') || campaign.pausedAt ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Maintenance paused' : campaign.pausedAt ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · provider bounce/failure reports count as rejected / failed · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
           <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]"><span className="block">Start {campaign.scheduledAt || campaign.queuedAt ? formatDate(campaign.scheduledAt || campaign.queuedAt) : '—'}</span><span className="block">End {campaign.completedAt ? formatDate(campaign.completedAt) : '—'}</span>{campaign.pausedAt && campaign.resumeAt && <span data-testid={`text-campaign-resume-at-${campaign.id}`} className="block font-semibold text-[#a95218]">Resume {formatDate(campaign.resumeAt)}</span>}</td>
           <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'completed') && <Button variant="quiet" testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><CirclePlus className="h-3.5 w-3.5"/>Follow-up</Button>}{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => campaign.pausedAt ? pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) }) : setPauseTarget(campaign)}>{campaign.pausedAt ? <><Play className="h-3.5 w-3.5"/>Resume</> : <><Pause className="h-3.5 w-3.5"/>Pause</>}</Button>}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
-      </tr>)}</tbody></table></div>
-    </section> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
+       </tr>)}</tbody></table></div>
+     </section> : <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Each selected list is processed in the order shown; overlapping addresses receive one email." close={closeCampaignEditor}>
       <form onSubmit={save} className="space-y-4">
         {campaignContentError && <div role="alert" data-testid="status-campaign-content-policy-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-5 text-[#99501e]">{campaignContentError}</div>}
