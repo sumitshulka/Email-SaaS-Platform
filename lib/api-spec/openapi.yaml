@@ -1826,7 +1826,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Contact"
         "400":
-          description: Invalid contact update
+          description: Invalid contact update, or a bounced contact was marked subscribed without changing its address
           content:
             application/json:
               schema:

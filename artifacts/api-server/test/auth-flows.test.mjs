@@ -5908,6 +5908,44 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(afterMove.body.companyId, company.id);
   });
 
+  it("requires a corrected address before resubscribing a bounced contact", async () => {
+    const owner = await loggedInUser({ username: "bounced-contact-correction-owner" });
+    const [contact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      name: "Bounced Contact",
+      firstName: "Bounced",
+      lastName: "Contact",
+      email: "old-address@invalid.test",
+      subscribed: false,
+      emailStatus: "bounced",
+    }).returning();
+
+    const unchangedAddress = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { email: contact.email.toUpperCase(), subscribed: true },
+    });
+    assert.equal(unchangedAddress.response.status, 400);
+    assert.equal(unchangedAddress.body.code, "BOUNCED_EMAIL_UNCHANGED");
+
+    const stillBounced = await api(`/contacts/${contact.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(stillBounced.body.email, contact.email);
+    assert.equal(stillBounced.body.subscribed, false);
+    assert.equal(stillBounced.body.emailStatus, "bounced");
+
+    const correctedAddress = await api(`/contacts/${contact.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { email: "Corrected.Address@example.test", subscribed: true },
+    });
+    assert.equal(correctedAddress.response.status, 200, JSON.stringify(correctedAddress.body));
+    assert.equal(correctedAddress.body.email, "corrected.address@example.test");
+    assert.equal(correctedAddress.body.subscribed, true);
+    assert.equal(correctedAddress.body.emailStatus, "subscribed");
+  });
+
   it("lists only each workspace's companies and counts only its contacts", async () => {
     const owner = await loggedInUser({
       username: "company-list-owner",

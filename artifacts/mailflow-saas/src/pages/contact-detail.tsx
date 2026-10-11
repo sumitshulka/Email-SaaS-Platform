@@ -240,6 +240,14 @@ export function ContactDetailPage() {
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!contact || !form) return;
+    if (
+      contact.emailStatus === 'bounced' &&
+      form.subscribed &&
+      form.email.trim().toLowerCase() === contact.email.trim().toLowerCase()
+    ) {
+      setNotice({ kind: 'error', text: 'This address was reported as bounced. Enter a corrected email address before marking the contact subscribed.' });
+      return;
+    }
     const leadStatusChanged = nullableValue(form.leadStatus) !== contact.leadStatus;
     const reason = leadStatusChangeReason.trim();
     if (leadStatusChanged && !reason) {
@@ -351,6 +359,7 @@ export function ContactDetailPage() {
     <form onSubmit={save} className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(330px,.88fr)]">
       <div className="space-y-5">
         <Section title="Contact details" eyebrow="PERSON / IDENTITY">
+          {emailStatus === 'bounced' && <div role="note" data-testid="notice-bounced-email-correction" className="mb-4 rounded-md border border-[#efd5c5] bg-[#fff6ef] px-3 py-2.5 text-[11px] leading-5 text-[#94501f]">This address bounced and is suppressed from future sends. Replace it with a corrected address, then mark the contact subscribed to use it in new campaigns.</div>}
           <div className="grid gap-4 sm:grid-cols-2">
             <InputField title="First name" value={form.firstName} onChange={setString('firstName')} testId="input-detail-first-name"/>
             <InputField title="Last name" value={form.lastName} onChange={setString('lastName')} testId="input-detail-last-name"/>
@@ -439,7 +448,7 @@ export function ContactDetailPage() {
         <Section title="Workspace controls" eyebrow="CONSENT / MEMBERSHIP">
           <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#e7ebef] bg-[#fbfcfd] p-3">
             <input data-testid="checkbox-detail-subscribed" type="checkbox" checked={form.subscribed} onChange={event => change('subscribed', event.target.checked)} className="mt-0.5 accent-[#174f99]"/>
-            <span><span className="block text-[12px] font-semibold text-[#344154]">Subscribed to email</span><span className="mt-1 block text-[10px] leading-4 text-[#7c8794]">Only subscribed contacts are eligible for campaign sends.</span></span>
+            <span><span className="block text-[12px] font-semibold text-[#344154]">Subscribed to email</span><span className="mt-1 block text-[10px] leading-4 text-[#7c8794]">{emailStatus === 'bounced' ? 'After correcting the email address, check this to make the contact eligible for new campaigns. Previously suppressed sends will stay suppressed.' : 'Only subscribed contacts are eligible for campaign sends.'}</span></span>
           </label>
           <div className="mt-4"><div className={label}>List memberships</div>{contact.listIds.length ? listsQuery.isLoading ? <p className="text-[11px] text-[#929ba6]">Loading list names…</p> : listsQuery.isError ? <p className="text-[11px] text-[#929ba6]">List names could not be loaded.</p> : <div className="flex flex-wrap gap-2">{contact.listIds.map(id => <span key={id} className="rounded bg-[#f1f4f7] px-2.5 py-1.5 text-[11px] text-[#5f6e7f]">{listsQuery.data?.find(list => list.id === id)?.name ?? 'List'}</span>)}</div> : <p className="text-[11px] text-[#929ba6]">No list memberships</p>}</div>
         </Section>

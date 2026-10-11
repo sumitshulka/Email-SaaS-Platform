@@ -3002,6 +3002,14 @@ router.patch(
         )
         .for("update");
       if (!existing) return { kind: "not_found" as const };
+      const nextEmail = parsed.data.email?.trim().toLowerCase() ?? existing.email.toLowerCase();
+      if (
+        existing.emailStatus === "bounced" &&
+        parsed.data.subscribed === true &&
+        nextEmail === existing.email.toLowerCase()
+      ) {
+        return { kind: "bounced_email_unchanged" as const };
+      }
       const leadStatusChanged =
         parsed.data.leadStatus !== undefined &&
         optionalContactValue(parsed.data.leadStatus) !== existing.leadStatus;
@@ -3216,6 +3224,13 @@ router.patch(
       res.status(400).json({
         error: "Enter a reason before changing this contact's lead status.",
         code: "LEAD_STATUS_CHANGE_REASON_REQUIRED",
+      });
+      return;
+    }
+    if (updateResult.kind === "bounced_email_unchanged") {
+      res.status(400).json({
+        error: "This address was reported as bounced. Enter a corrected email address before marking the contact subscribed.",
+        code: "BOUNCED_EMAIL_UNCHANGED",
       });
       return;
     }
