@@ -1856,6 +1856,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/verify-email:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: verifyContactEmail
+      tags: [sending]
+      summary: Run a no-message SMTP verification for one tenant-owned contact
+      description: Checks the selected contact's stored address using SMTP recipient commands only. The server stops before DATA and never sends a message. Results are best-effort; catch-all and privacy-protecting mail servers may make mailbox existence inconclusive.
+      responses:
+        "200":
+          description: Verification result for the selected contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactEmailVerification"
+        "400":
+          description: Invalid contact identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Contact not found in this workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/{contactId}/email-history:
     parameters:
       - name: contactId
@@ -4681,6 +4713,18 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, listIds, createdAt, updatedAt]
+    ContactEmailVerification:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected, catch_all, no_mail_server, inconclusive]
+        checkedAt: { type: string, format: date-time }
+        mailServer: { type: ["string", "null"] }
+        catchAll: { type: ["boolean", "null"] }
+        noReplyStyle: { type: boolean }
+        message: { type: string }
+      required: [status, checkedAt, mailServer, catchAll, noReplyStyle, message]
     ContactEmailHistoryItem:
       type: object
       properties:

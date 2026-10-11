@@ -3863,6 +3863,24 @@ export const DeleteContactResponse = zod.void()
 
 
 /**
+ * Checks the selected contact's stored address using SMTP recipient commands only. The server stops before DATA and never sends a message. Results are best-effort; catch-all and privacy-protecting mail servers may make mailbox existence inconclusive.
+ * @summary Run a no-message SMTP verification for one tenant-owned contact
+ */
+export const VerifyContactEmailParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const VerifyContactEmailResponse = zod.object({
+  "status": zod.enum(['accepted', 'rejected', 'catch_all', 'no_mail_server', 'inconclusive']),
+  "checkedAt": zod.coerce.date(),
+  "mailServer": zod.string().nullable(),
+  "catchAll": zod.boolean().nullable(),
+  "noReplyStyle": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary List attempted campaign emails for a tenant contact
  */
 export const GetContactEmailHistoryParams = zod.object({

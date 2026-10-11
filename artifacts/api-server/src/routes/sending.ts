@@ -157,6 +157,7 @@ import {
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import { getSubscriptionAddOnsDashboard } from "../lib/add-on-entitlements";
 import { requireUserRole } from "../lib/session";
+import { verifyContactEmail } from "../lib/contact-email-verifier";
 import {
   companyDomainKey,
   companyProfileFields,
@@ -2423,6 +2424,34 @@ router.get(
       return;
     }
     res.json(GetContactResponse.parse(await getContactPayload(userId, contact)));
+  },
+);
+
+router.post(
+  "/contacts/:contactId/verify-email",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetContactParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid contact identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const [contact] = await db
+      .select({ email: contactsTable.email })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.userId, req.authUser!.id),
+        ),
+      )
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
+      return;
+    }
+    const result = await verifyContactEmail(contact.email);
+    res.json(result);
   },
 );
 

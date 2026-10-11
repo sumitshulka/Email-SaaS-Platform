@@ -86,6 +86,7 @@ import type {
   ContactCollection,
   ContactCsvInput,
   ContactEmailHistoryItem,
+  ContactEmailVerification,
   ContactExportInput,
   ContactFieldOptionCollection,
   ContactFieldOptionInput,
@@ -6453,6 +6454,81 @@ export const useDeleteContact = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getDeleteContactMutationOptions(options));
+    }
+
+export const getVerifyContactEmailUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/verify-email`
+}
+
+/**
+ * Checks the selected contact's stored address using SMTP recipient commands only. The server stops before DATA and never sends a message. Results are best-effort; catch-all and privacy-protecting mail servers may make mailbox existence inconclusive.
+ * @summary Run a no-message SMTP verification for one tenant-owned contact
+ */
+export const verifyContactEmail = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContactEmailVerification> => {
+
+  return customFetch<ContactEmailVerification>(getVerifyContactEmailUrl(contactId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getVerifyContactEmailMutationKey = () => ['verifyContactEmail'] as const;
+
+export const getVerifyContactEmailMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyContactEmail>>, TError,VerifyContactEmailMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyContactEmail>>, TError,VerifyContactEmailMutationVariables, TContext> => {
+
+const mutationKey = getVerifyContactEmailMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyContactEmail>>, VerifyContactEmailMutationVariables> = (props) => {
+          const {contactId} = props ?? {};
+
+          return  verifyContactEmail(contactId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyContactEmailMutationResult = NonNullable<Awaited<ReturnType<typeof verifyContactEmail>>>
+
+    export type VerifyContactEmailMutationError = ErrorType<ApiError>
+    export type VerifyContactEmailMutationVariables = {contactId: string}
+
+    /**
+ * @summary Run a no-message SMTP verification for one tenant-owned contact
+ */
+export const useVerifyContactEmail = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyContactEmail>>, TError,VerifyContactEmailMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyContactEmail>>,
+        TError,
+        VerifyContactEmailMutationVariables,
+        TContext
+      > => {
+      return useMutation(getVerifyContactEmailMutationOptions(options));
     }
 
 export const getGetContactEmailHistoryUrl = (contactId: string,) => {

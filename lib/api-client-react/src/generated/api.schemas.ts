@@ -2034,6 +2034,28 @@ export interface Contact {
   updatedAt: string;
 }
 
+export type ContactEmailVerificationStatus = typeof ContactEmailVerificationStatus[keyof typeof ContactEmailVerificationStatus];
+
+
+export const ContactEmailVerificationStatus = {
+  accepted: 'accepted',
+  rejected: 'rejected',
+  catch_all: 'catch_all',
+  no_mail_server: 'no_mail_server',
+  inconclusive: 'inconclusive',
+} as const;
+
+export interface ContactEmailVerification {
+  status: ContactEmailVerificationStatus;
+  checkedAt: string;
+  /** @nullable */
+  mailServer: string | null;
+  /** @nullable */
+  catchAll: boolean | null;
+  noReplyStyle: boolean;
+  message: string;
+}
+
 /**
  * @nullable
  */

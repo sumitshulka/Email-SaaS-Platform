@@ -4,7 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, ChevronDown, ChevronRight, CirclePlus, Clock3,
   Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send, Pause, Play,
-  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw,
+  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw, MailCheck,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
@@ -28,7 +28,7 @@ import {
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useSetCampaignPaused,
   useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
-  useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment,
+  useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
   useUpdateContactList,
 } from '@workspace/api-client-react';
 import type {
@@ -779,6 +779,7 @@ export function ContactsPage() {
     query: { queryKey: getListContactSegmentsQueryKey(), staleTime: 0, refetchOnMount: 'always' },
   });
   const create = useCreateContact(); const update = useUpdateContact(); const remove = useDeleteContact();
+  const verifyEmail = useVerifyContactEmail();
   const createSegment = useCreateContactSegment();
   const updateSegment = useUpdateContactSegment();
   const removeSegment = useDeleteContactSegment();
@@ -1070,6 +1071,10 @@ export function ContactsPage() {
                 <span className="inline-flex h-9 w-10 shrink-0 items-center justify-center">
                   {linkedinHref && <a data-testid={`link-contact-linkedin-${contact.id}`} href={linkedinHref} target="_blank" rel="noopener noreferrer" aria-label={`Open LinkedIn profile for ${contactName}`} title="Open LinkedIn profile" className="inline-flex h-9 w-10 shrink-0 items-center justify-center rounded-md text-[#245b9b] transition hover:bg-[#edf4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe8f7]"><Linkedin aria-hidden="true" className="h-4 w-4"/></a>}
                 </span>
+                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`Verify email for ${contactName}`} title="Verify email without sending" disabled={verifyEmail.isPending} onClick={() => verifyEmail.mutate({ contactId: contact.id }, { onSuccess: result => {
+                  const noReplyNote = result.noReplyStyle ? ' This address looks like a no-reply alias; reply behavior cannot be confirmed without sending.' : '';
+                  setNotice({ kind: result.status === 'accepted' && !result.noReplyStyle ? 'success' : 'error', text: `${contact.email}: ${result.message}${noReplyNote}` });
+                }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><MailCheck aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-contact-history-${contact.id}`} ariaLabel={`Email history for ${contactName}`} title="Email history" onClick={() => setHistoryContact(contact)}><Clock3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-edit-contact-${contact.id}`} ariaLabel={`Edit ${contactName}`} title="Edit contact" onClick={() => openEdit(contact)}><Edit3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-delete-contact-${contact.id}`} ariaLabel={`Delete ${contactName}`} title="Delete contact" disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 aria-hidden="true" className="h-4 w-4 text-[#b85b20]"/></Button>
