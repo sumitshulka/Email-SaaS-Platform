@@ -32,7 +32,7 @@ import {
   useUpdateContactList,
 } from '@workspace/api-client-react';
 import type {
-  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactList, ContactOption,
+  CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactEmailVerification, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
   GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
@@ -790,6 +790,11 @@ export function ContactsPage() {
   const [segmentToDelete, setSegmentToDelete] = useState<ContactAudienceSegment | null>(null);
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
+  const [emailVerification, setEmailVerification] = useState<{
+    contact: ContactDirectoryItem;
+    result?: ContactEmailVerification;
+    error?: string;
+  } | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const contacts = contactsQuery.data?.contacts ?? [];
@@ -957,6 +962,34 @@ export function ContactsPage() {
   return <QueryState loading={contactsQuery.isLoading || listsQuery.isLoading} error={contactsQuery.isError || listsQuery.isError} retry={() => { void contactsQuery.refetch(); void listsQuery.refetch(); }} label="contacts"><>
     <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-download-contacts" disabled={contactsQuery.isFetching || debouncedSearch !== filters.search} onClick={() => setDownloadOpen(true)}><Download className="h-4 w-4"/>Download list</Button><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
+    {emailVerification && <Modal
+      title="Email verification"
+      subtitle={emailVerification.contact.email}
+      close={() => { if (!verifyEmail.isPending) setEmailVerification(null); }}
+    >
+      <div className="space-y-4">
+        {verifyEmail.isPending ? (
+          <div role="status" data-testid="status-contact-email-verification-loading" className="flex items-center gap-3 rounded-lg border border-[#dce5ee] bg-[#f6f9fc] p-4 text-[13px] text-[#46576c]">
+            <LoaderCircle className="h-5 w-5 animate-spin text-[#245b9b]"/>Checking the mail server. No message will be sent.
+          </div>
+        ) : emailVerification.error ? (
+          <div role="alert" data-testid="status-contact-email-verification-error" className="rounded-lg border border-[#f0d5bd] bg-[#fff8f1] p-4 text-[13px] text-[#99501e]">{emailVerification.error}</div>
+        ) : emailVerification.result && (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Status tone={emailVerification.result.status === 'accepted' ? 'green' : emailVerification.result.status === 'catch_all' || emailVerification.result.status === 'inconclusive' ? 'orange' : 'gray'}>{emailVerification.result.status.replaceAll('_', ' ')}</Status>
+              <span className="text-[10px] text-[#788596]">Checked {formatDate(emailVerification.result.checkedAt)}</span>
+            </div>
+            <p role="status" data-testid="status-contact-email-verification-result" className="rounded-lg border border-[#e3e8ee] bg-[#f8fafc] p-4 text-[13px] leading-6 text-[#435267]">{emailVerification.result.message}</p>
+            {emailVerification.result.noReplyStyle && <p className="rounded-md bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">The address name resembles a no-reply alias. This is only a naming hint; reply behavior cannot be checked without sending a message.</p>}
+            <p className="text-[10px] leading-5 text-[#788596]">SMTP checks are best-effort, not proof of inbox delivery or future sendability. Catch-all servers may accept addresses that do not exist.</p>
+          </>
+        )}
+        <div className="flex justify-end border-t border-[#edf0f2] pt-3">
+          <Button variant="outline" testId="button-close-contact-email-verification" disabled={verifyEmail.isPending} onClick={() => setEmailVerification(null)}>Close</Button>
+        </div>
+      </div>
+    </Modal>}
     {downloadOpen && <DownloadListDialog
       title="Download contacts"
       description="Choose the rows and contact fields to include in your Excel workbook."
@@ -1071,10 +1104,13 @@ export function ContactsPage() {
                 <span className="inline-flex h-9 w-10 shrink-0 items-center justify-center">
                   {linkedinHref && <a data-testid={`link-contact-linkedin-${contact.id}`} href={linkedinHref} target="_blank" rel="noopener noreferrer" aria-label={`Open LinkedIn profile for ${contactName}`} title="Open LinkedIn profile" className="inline-flex h-9 w-10 shrink-0 items-center justify-center rounded-md text-[#245b9b] transition hover:bg-[#edf4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe8f7]"><Linkedin aria-hidden="true" className="h-4 w-4"/></a>}
                 </span>
-                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`Verify email for ${contactName}`} title="Verify email without sending" disabled={verifyEmail.isPending} onClick={() => verifyEmail.mutate({ contactId: contact.id }, { onSuccess: result => {
-                  const noReplyNote = result.noReplyStyle ? ' This address looks like a no-reply alias; reply behavior cannot be confirmed without sending.' : '';
-                  setNotice({ kind: result.status === 'accepted' && !result.noReplyStyle ? 'success' : 'error', text: `${contact.email}: ${result.message}${noReplyNote}` });
-                }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><MailCheck aria-hidden="true" className="h-4 w-4"/></Button>
+                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`Verify email for ${contactName}`} title="Verify email without sending" disabled={verifyEmail.isPending} onClick={() => {
+                  setEmailVerification({ contact });
+                  verifyEmail.mutate({ contactId: contact.id }, {
+                    onSuccess: result => setEmailVerification({ contact, result }),
+                    onError: error => setEmailVerification({ contact, error: mutationError(error) }),
+                  });
+                }}><MailCheck aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-contact-history-${contact.id}`} ariaLabel={`Email history for ${contactName}`} title="Email history" onClick={() => setHistoryContact(contact)}><Clock3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-edit-contact-${contact.id}`} ariaLabel={`Edit ${contactName}`} title="Edit contact" onClick={() => openEdit(contact)}><Edit3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-delete-contact-${contact.id}`} ariaLabel={`Delete ${contactName}`} title="Delete contact" disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 aria-hidden="true" className="h-4 w-4 text-[#b85b20]"/></Button>
