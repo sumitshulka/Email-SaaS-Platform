@@ -69,6 +69,7 @@ test(
     ];
     const failedRefundRetryEventId = `addon-refund-update-retry-${testId}`;
     const failedRefundProviderId = `update-failure-${testId}`;
+    const fullRefundEventId = `addon-full-refund-${testId}`;
     const acknowledgementRetryEventId = `addon-capture-ack-retry-${testId}`;
     const primaryAcknowledgementRetryEventId =
       `primary-capture-ack-retry-${testId}`;
@@ -77,6 +78,7 @@ test(
       ...refundEventIds,
       ...duplicateRefundEventIds,
       failedRefundRetryEventId,
+      fullRefundEventId,
       acknowledgementRetryEventId,
       primaryAcknowledgementRetryEventId,
     ];
@@ -1117,6 +1119,64 @@ test(
           ),
         );
       assert.ok(completedPrimaryAcknowledgementEvent.processedAt);
+
+      const [paymentBeforeFullRefund] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId));
+      const remainingRefundAmount =
+        amountMinor - paymentBeforeFullRefund.refundedAmountMinor;
+      assert.ok(remainingRefundAmount > 0);
+      const fullRefundResponse = await sendRefund(
+        fullRefundEventId,
+        remainingRefundAmount,
+      );
+      const fullRefundResponseBody = await fullRefundResponse.json();
+      assert.equal(
+        fullRefundResponse.status,
+        200,
+        JSON.stringify(fullRefundResponseBody),
+      );
+
+      const [fullyRefundedPayment] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, paymentId));
+      assert.equal(fullyRefundedPayment.status, "refunded");
+      assert.equal(fullyRefundedPayment.refundedAmountMinor, amountMinor);
+
+      const [unrelatedAddonPayment] = await db
+        .select()
+        .from(paymentsTable)
+        .where(eq(paymentsTable.id, acknowledgementRetryPaymentId));
+      assert.equal(unrelatedAddonPayment.status, "captured");
+      assert.equal(unrelatedAddonPayment.refundedAmountMinor, 0);
+
+      const fullyRefundedDashboard =
+        await entitlementModule.getSubscriptionAddOnsDashboard(userId);
+      assert.equal(fullyRefundedDashboard.eligible, true);
+      assert.equal(
+        fullyRefundedDashboard.primaryEndsAt,
+        initialPrimaryTermEnd.toISOString(),
+      );
+      assert.deepEqual(fullyRefundedDashboard.balances.research, {
+        total: allowances.research,
+        used: 0,
+        remaining: allowances.research,
+      });
+      assert.deepEqual(fullyRefundedDashboard.balances.emailAssist, {
+        total: allowances.emailAssist,
+        used: 0,
+        remaining: allowances.emailAssist,
+      });
+      assert.deepEqual(fullyRefundedDashboard.balances.mailboxes, {
+        baseLimit: 1,
+        additionalSlots: allowances.mailboxes,
+        totalLimit: 1 + allowances.mailboxes,
+        used: 0,
+        remaining: 1 + allowances.mailboxes,
+        active: true,
+      });
     } finally {
       if (lockClient) {
         if (transactionLockHeld) {
