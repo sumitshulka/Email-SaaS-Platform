@@ -12401,6 +12401,16 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         maxEmailsPerDay: 2,
         maxConcurrentCampaigns: 2,
       },
+    }).onConflictDoUpdate({
+      target: dbModule.systemConfigurationTable.key,
+      set: {
+        value: {
+          defaultEmailsPerHour: 1,
+          deliveryTrackingEnabled: true,
+          maxEmailsPerDay: 2,
+          maxConcurrentCampaigns: 2,
+        },
+      },
     });
     const queued = await api(`/campaigns/${campaign.body.id}/send`, {
       method: "POST",
@@ -13190,6 +13200,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.ok(bouncedAttempt);
     const makeDsn = ({
       attempt = deliveredAttempt,
+      recipientEmail = deliveredRecipient.email,
       envelopeId,
       outcome,
       occurredAt,
@@ -13197,7 +13208,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       [
         `Original-Message-ID: ${attempt.messageId}`,
         ...(envelopeId ? [`Original-Envelope-ID: ${envelopeId}`] : []),
-        `Final-Recipient: rfc822; ${deliveredRecipient.email}`,
+        `Final-Recipient: rfc822; ${recipientEmail}`,
         `Action: ${outcome === "bounced" ? "failed" : outcome}`,
         `Status: ${outcome === "bounced" ? "5.1.1" : outcome === "delayed" ? "4.2.0" : "2.0.0"}`,
         ...(occurredAt ? [`Last-Attempt-Date: ${occurredAt}`] : []),
@@ -13347,6 +13358,242 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       (item) => item.id === campaign.body.id,
     );
     assert.equal(dashboardCampaignAfterBounce.bounced, 2);
+
+    const bounceCorrectionContactId = ownerContacts[2].body.id;
+    const [bounceCorrectionContactBefore] = await db
+      .select({
+        email: dbModule.contactsTable.email,
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      })
+      .from(dbModule.contactsTable)
+      .where(eq(dbModule.contactsTable.id, bounceCorrectionContactId));
+    assert.equal(bounceCorrectionContactBefore.subscribed, false);
+    const bounceCorrectionOriginalEmail = bounceCorrectionContactBefore.email;
+    const resubscribedBeforeBounce = await api(
+      `/contacts/${bounceCorrectionContactId}`,
+      {
+        method: "PATCH",
+        cookie: owner.cookie,
+        body: { subscribed: true },
+      },
+    );
+    assert.equal(
+      resubscribedBeforeBounce.response.status,
+      200,
+      JSON.stringify(resubscribedBeforeBounce.body),
+    );
+    const makeQueuedBounceCorrectionCampaign = async (name) => {
+      const draft = await api("/campaigns", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: {
+          name,
+          subject: "A campaign for {{firstName}}",
+          textBody: "A campaign message.",
+          listIds: [ownerSecondaryList.body.id, ownerList.body.id],
+          senderAccountId: backupSender.body.account.id,
+        },
+      });
+      assert.equal(draft.response.status, 201, JSON.stringify(draft.body));
+      const sendCampaign = (scheduledAt) =>
+        api(`/campaigns/${draft.body.id}/send`, {
+          method: "POST",
+          cookie: owner.cookie,
+          body: { scheduledAt: scheduledAt.toISOString() },
+        });
+      let send = await sendCampaign(new Date(Date.now() + 24 * 60 * 60_000));
+      if (
+        send.response.status === 409 &&
+        send.body.code === "CAMPAIGN_START_TOO_EARLY"
+      ) {
+        send = await sendCampaign(
+          new Date(new Date(send.body.earliestStartAt).getTime() + 60_000),
+        );
+      }
+      assert.equal(send.response.status, 202, JSON.stringify(send.body));
+      return draft.body;
+    };
+    const bounceCorrectionCampaign =
+      await makeQueuedBounceCorrectionCampaign("Bounce correction regression");
+    const [queuedBeforeCorrection] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(
+        and(
+          eq(
+            dbModule.emailCampaignRecipientsTable.campaignId,
+            bounceCorrectionCampaign.id,
+          ),
+          eq(
+            dbModule.emailCampaignRecipientsTable.contactId,
+            bounceCorrectionContactId,
+          ),
+        ),
+      );
+    assert.ok(queuedBeforeCorrection);
+    assert.equal(queuedBeforeCorrection.status, "queued");
+    assert.equal(queuedBeforeCorrection.email, bounceCorrectionOriginalEmail);
+    const bounceAttemptAt = new Date(
+      Math.floor((Date.now() - 1000) / 1000) * 1000,
+    );
+    const [bounceCorrectionAttempt] = await db
+      .insert(dbModule.emailSendAttemptsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: backupSender.body.account.id,
+        recipientId: queuedBeforeCorrection.id,
+        messageId: `<${randomUUID()}@mailflow.local>`,
+        outcome: "smtp_accepted",
+        smtpCode: 250,
+        dsnRequested: true,
+        attemptedAt: bounceAttemptAt,
+      })
+      .returning();
+    await db
+      .update(dbModule.emailCampaignRecipientsTable)
+      .set({ attempts: 1 })
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, queuedBeforeCorrection.id));
+    const correctionBounceAt = new Date(bounceAttemptAt.getTime() + 1000);
+    const correctionBounceReport = await importDsn(
+      makeDsn({
+        attempt: bounceCorrectionAttempt,
+        recipientEmail: bounceCorrectionOriginalEmail,
+        outcome: "bounced",
+        occurredAt: correctionBounceAt.toUTCString(),
+      }),
+    );
+    assert.equal(correctionBounceReport.body.imported, 1);
+    const [suppressedBeforeCorrection] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, queuedBeforeCorrection.id));
+    assert.equal(suppressedBeforeCorrection.status, "suppressed");
+    assert.equal(suppressedBeforeCorrection.email, bounceCorrectionOriginalEmail);
+    assert.equal(suppressedBeforeCorrection.lastError, "Recipient address bounced.");
+    assert.equal(suppressedBeforeCorrection.reportOutcome, "bounced");
+    const correctedEmail = `corrected-${randomUUID()}@owner.test`;
+    const correctedAndResubscribed = await api(
+      `/contacts/${bounceCorrectionContactId}`,
+      {
+        method: "PATCH",
+        cookie: owner.cookie,
+        body: { email: correctedEmail, subscribed: true },
+      },
+    );
+    assert.equal(
+      correctedAndResubscribed.response.status,
+      200,
+      JSON.stringify(correctedAndResubscribed.body),
+    );
+    assert.equal(correctedAndResubscribed.body.email, correctedEmail);
+    assert.equal(correctedAndResubscribed.body.subscribed, true);
+    assert.equal(correctedAndResubscribed.body.emailStatus, "subscribed");
+    const correctedAddressCampaign =
+      await makeQueuedBounceCorrectionCampaign("Corrected address eligibility");
+    const [correctedAddressRecipient] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(
+        and(
+          eq(
+            dbModule.emailCampaignRecipientsTable.campaignId,
+            correctedAddressCampaign.id,
+          ),
+          eq(
+            dbModule.emailCampaignRecipientsTable.contactId,
+            bounceCorrectionContactId,
+          ),
+        ),
+      );
+    assert.ok(correctedAddressRecipient);
+    assert.equal(correctedAddressRecipient.status, "queued");
+    assert.equal(correctedAddressRecipient.email, correctedEmail);
+    const laterOldAddressBounce = await importDsn(
+      makeDsn({
+        attempt: bounceCorrectionAttempt,
+        recipientEmail: bounceCorrectionOriginalEmail,
+        outcome: "bounced",
+        occurredAt: new Date(correctionBounceAt.getTime() + 1000).toUTCString(),
+      }),
+    );
+    assert.equal(laterOldAddressBounce.body.imported, 1);
+    const [oldAddressRecipientAfterCorrection] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, queuedBeforeCorrection.id));
+    const [correctedAddressRecipientAfterOldBounce] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, correctedAddressRecipient.id));
+    assert.equal(oldAddressRecipientAfterCorrection.status, "suppressed");
+    assert.equal(
+      oldAddressRecipientAfterCorrection.email,
+      bounceCorrectionOriginalEmail,
+    );
+    assert.equal(oldAddressRecipientAfterCorrection.reportOutcome, "bounced");
+    assert.equal(
+      oldAddressRecipientAfterCorrection.reportAt.toISOString(),
+      new Date(correctionBounceAt.getTime() + 1000).toISOString(),
+    );
+    assert.equal(
+      oldAddressRecipientAfterCorrection.lastError,
+      "Recipient address bounced.",
+    );
+    const originalBounceEvents = await db
+      .select()
+      .from(dbModule.emailDeliveryReportsTable)
+      .where(
+        eq(
+          dbModule.emailDeliveryReportsTable.recipientId,
+          queuedBeforeCorrection.id,
+        ),
+      );
+    assert.equal(originalBounceEvents.length, 2);
+    assert.ok(originalBounceEvents.every((event) => event.outcome === "bounced"));
+    assert.equal(correctedAddressRecipientAfterOldBounce.status, "queued");
+    assert.equal(correctedAddressRecipientAfterOldBounce.email, correctedEmail);
+    const oldAddressHistory = await api(
+      `/contacts/${bounceCorrectionContactId}/email-history`,
+      { cookie: owner.cookie },
+    );
+    const oldAddressHistoryEntry = oldAddressHistory.body.find(
+      (entry) => entry.id === queuedBeforeCorrection.id,
+    );
+    assert.ok(oldAddressHistoryEntry);
+    assert.equal(oldAddressHistoryEntry.status, "suppressed");
+    assert.equal(oldAddressHistoryEntry.attempts, 1);
+    assert.equal(oldAddressHistoryEntry.messageId, bounceCorrectionAttempt.messageId);
+    assert.equal(oldAddressHistoryEntry.reportOutcome, "bounced");
+    assert.equal(
+      new Date(oldAddressHistoryEntry.reportAt).toISOString(),
+      new Date(correctionBounceAt.getTime() + 1000).toISOString(),
+    );
+    const [correctedContactAfterOldBounce] = await db
+      .select({
+        email: dbModule.contactsTable.email,
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      })
+      .from(dbModule.contactsTable)
+      .where(eq(dbModule.contactsTable.id, bounceCorrectionContactId));
+    assert.equal(correctedContactAfterOldBounce.email, correctedEmail);
+    assert.equal(correctedContactAfterOldBounce.subscribed, true);
+    assert.equal(correctedContactAfterOldBounce.emailStatus, "subscribed");
+    await db
+      .delete(dbModule.emailCampaignsTable)
+      .where(eq(dbModule.emailCampaignsTable.id, correctedAddressCampaign.id));
+    await db
+      .delete(dbModule.emailCampaignsTable)
+      .where(eq(dbModule.emailCampaignsTable.id, bounceCorrectionCampaign.id));
+    await db
+      .update(dbModule.contactsTable)
+      .set({
+        email: bounceCorrectionOriginalEmail,
+        subscribed: false,
+        emailStatus: "unsubscribed",
+      })
+      .where(eq(dbModule.contactsTable.id, bounceCorrectionContactId));
     const precedingSecondRfcBounce = await importDsn(
       makeDsn({
         outcome: "bounced",

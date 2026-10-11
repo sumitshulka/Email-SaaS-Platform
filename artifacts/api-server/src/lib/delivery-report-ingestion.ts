@@ -335,6 +335,7 @@ export async function ingestDeliveryReports(options: {
               and(
                 eq(emailCampaignRecipientsTable.userId, userId),
                 eq(emailCampaignRecipientsTable.contactId, recipient.contactId),
+                eq(emailCampaignRecipientsTable.email, recipientEmail),
                 eq(emailCampaignRecipientsTable.status, "queued"),
               ),
             );
@@ -450,6 +451,7 @@ export async function ingestDeliveryReports(options: {
             and(
               eq(emailCampaignRecipientsTable.userId, userId),
               eq(emailCampaignRecipientsTable.contactId, recipient.contactId),
+              eq(emailCampaignRecipientsTable.email, recipientEmail),
               eq(emailCampaignRecipientsTable.status, "queued"),
             ),
           );
