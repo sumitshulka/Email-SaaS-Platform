@@ -36,6 +36,7 @@ import type {
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
   GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
+  ListContactsQueryResult,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -856,11 +857,31 @@ export function ContactsPage() {
     const lastName = form.lastName.trim();
     const email = form.email.trim();
     if (!firstName || !lastName || !email) { setNotice({ kind: 'error', text: 'First name, last name, and email are required.' }); return; }
+    if (editing?.emailStatus === 'bounced' && form.subscribed && email.toLowerCase() === editing.email.toLowerCase()) {
+      setNotice({ kind: 'error', text: 'This address bounced. Enter a corrected email address before marking the contact subscribed.' });
+      return;
+    }
     const done = () => { reload(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Contact changes saved.' : 'Contact added to your audience.' }); };
     const failed = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
     const companyName = form.companyName.trim(); const linkedinUrl = form.linkedinUrl.trim(); const phoneNumber = form.phoneNumber.trim();
     if (editing) {
-      update.mutate({ contactId: editing.id, data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, companyName: companyName || null, linkedinUrl: linkedinUrl || null, phoneNumber: phoneNumber || null } }, { onSuccess: done, onError: failed });
+      update.mutate(
+        { contactId: editing.id, data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, companyName: companyName || null, linkedinUrl: linkedinUrl || null, phoneNumber: phoneNumber || null } },
+        {
+          onSuccess: updatedContact => {
+            qc.setQueriesData<ListContactsQueryResult>({ queryKey: getListContactsQueryKey() }, previous => previous
+              ? {
+                  ...previous,
+                  contacts: previous.contacts.map(contact => contact.id === updatedContact.id
+                    ? { ...contact, email: updatedContact.email, subscribed: updatedContact.subscribed, emailStatus: updatedContact.emailStatus }
+                    : contact),
+                }
+              : previous);
+            done();
+          },
+          onError: failed,
+        },
+      );
     } else {
       create.mutate({ data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, ...(companyName ? { companyName } : {}), ...(linkedinUrl ? { linkedinUrl } : {}), ...(phoneNumber ? { phoneNumber } : {}) } }, { onSuccess: done, onError: failed });
     }
@@ -1091,7 +1112,9 @@ export function ContactsPage() {
        testId="dialog-delete-contact-segment"
      />
     {editing !== undefined && <Modal title={editing ? 'Edit contact' : 'Add contact'} subtitle="Contact details and list memberships for this workspace." close={() => setEditing(undefined)}>
+       {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
       <form onSubmit={submit} className="space-y-4">
+         {editing?.emailStatus === 'bounced' && <div role="note" className="rounded-md border border-[#efd5c5] bg-[#fff6ef] px-3 py-2.5 text-[11px] leading-5 text-[#94501f]">This address bounced. To restore campaign eligibility, enter a corrected email address and check the subscription box. The bounced address must change; previously suppressed sends stay suppressed.</div>}
         <Field label="Email address" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} type="email" placeholder="person@company.com" required maxLength={254} testId="input-contact-email"/>
         <div className="grid gap-3 sm:grid-cols-2"><Field label="First name" value={form.firstName} onChange={v => setForm(f => ({ ...f, firstName: v }))} required maxLength={100} testId="input-contact-first-name"/><Field label="Last name" value={form.lastName} onChange={v => setForm(f => ({ ...f, lastName: v }))} required maxLength={100} testId="input-contact-last-name"/></div>
         <Field label="Company name" value={form.companyName} onChange={v => setForm(f => ({ ...f, companyName: v }))} maxLength={200} placeholder="Optional" testId="input-contact-company"/>

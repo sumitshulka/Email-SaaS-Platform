@@ -5923,7 +5923,16 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     const unchangedAddress = await api(`/contacts/${contact.id}`, {
       method: "PATCH",
       cookie: owner.cookie,
-      body: { email: contact.email.toUpperCase(), subscribed: true },
+      body: {
+        email: contact.email.toUpperCase(),
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        subscribed: true,
+        listIds: [],
+        companyName: null,
+        linkedinUrl: null,
+        phoneNumber: null,
+      },
     });
     assert.equal(unchangedAddress.response.status, 400);
     assert.equal(unchangedAddress.body.code, "BOUNCED_EMAIL_UNCHANGED");
@@ -5938,7 +5947,16 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     const correctedAddress = await api(`/contacts/${contact.id}`, {
       method: "PATCH",
       cookie: owner.cookie,
-      body: { email: "Corrected.Address@example.test", subscribed: true },
+      body: {
+        email: "Corrected.Address@example.test",
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        subscribed: true,
+        listIds: [],
+        companyName: null,
+        linkedinUrl: null,
+        phoneNumber: null,
+      },
     });
     assert.equal(correctedAddress.response.status, 200, JSON.stringify(correctedAddress.body));
     assert.equal(correctedAddress.body.email, "corrected.address@example.test");
