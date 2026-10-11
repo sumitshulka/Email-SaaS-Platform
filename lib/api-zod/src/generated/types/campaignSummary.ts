@@ -40,6 +40,8 @@ export interface CampaignSummary {
   status: CampaignSummaryStatus;
   /** @nullable */
   pausedAt: Date | null;
+  /** @nullable */
+  resumeAt: Date | null;
   recipients: number;
   estimatedDurationSeconds: number;
   queued: number;

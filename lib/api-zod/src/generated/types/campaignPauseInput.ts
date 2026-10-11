@@ -8,4 +8,6 @@
 
 export interface CampaignPauseInput {
   paused: boolean;
+  /** @nullable */
+  resumeAt?: Date | null;
 }

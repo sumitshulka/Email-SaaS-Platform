@@ -327,6 +327,7 @@ export const emailCampaignsTable = pgTable(
     htmlBody: text("html_body"),
     status: emailCampaignStatusEnum("status").notNull().default("draft"),
     pausedAt: timestamp("paused_at", { withTimezone: true }),
+    resumeAt: timestamp("resume_at", { withTimezone: true }),
     queuedAt: timestamp("queued_at", { withTimezone: true }),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -343,6 +344,9 @@ export const emailCampaignsTable = pgTable(
     index("email_campaigns_user_status_idx").on(table.userId, table.status),
     index("email_campaigns_list_idx").on(table.listId),
     index("email_campaigns_sender_account_idx").on(table.senderAccountId),
+    index("email_campaigns_resume_at_idx")
+      .on(table.resumeAt)
+      .where(sql`${table.resumeAt} IS NOT NULL`),
   ],
 );
 

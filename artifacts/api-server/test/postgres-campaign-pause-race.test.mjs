@@ -206,6 +206,64 @@ test(
         .from(emailSendAttemptsTable)
         .where(eq(emailSendAttemptsTable.recipientId, recipient.id));
       assert.equal(attempts.length, 0);
+
+      const pastResumeAt = new Date(Date.now() - 1000);
+      const futureResumeAt = new Date(Date.now() + 60_000);
+      await db
+        .update(emailCampaignsTable)
+        .set({ resumeAt: pastResumeAt })
+        .where(eq(emailCampaignsTable.id, campaign.id));
+      const [futureCampaign] = await db
+        .insert(emailCampaignsTable)
+        .values({
+          userId: owner.id,
+          name: "Future campaign resume test",
+          subject: "This campaign must stay paused",
+          textBody: "A future resume deadline must not be applied early.",
+          status: "sending",
+          pausedAt: new Date(),
+          resumeAt: futureResumeAt,
+        })
+        .returning();
+      const [completedCampaign] = await db
+        .insert(emailCampaignsTable)
+        .values({
+          userId: owner.id,
+          name: "Completed campaign resume test",
+          subject: "This campaign must stay completed",
+          textBody: "A due resume deadline must not reactivate a completed campaign.",
+          status: "completed",
+          pausedAt: new Date(),
+          resumeAt: pastResumeAt,
+        })
+        .returning();
+
+      await workerModule.processPendingCampaignDeliveries(0);
+      const [resumedCampaign] = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(eq(emailCampaignsTable.id, campaign.id));
+      assert.equal(resumedCampaign.pausedAt, null);
+      assert.equal(resumedCampaign.resumeAt, null);
+      const [stillScheduledCampaign] = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(eq(emailCampaignsTable.id, futureCampaign.id));
+      assert.ok(stillScheduledCampaign.pausedAt);
+      assert.equal(stillScheduledCampaign.resumeAt?.getTime(), futureResumeAt.getTime());
+      const [stillCompletedCampaign] = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(eq(emailCampaignsTable.id, completedCampaign.id));
+      assert.equal(stillCompletedCampaign.status, "completed");
+      assert.ok(stillCompletedCampaign.pausedAt);
+      assert.equal(stillCompletedCampaign.resumeAt?.getTime(), pastResumeAt.getTime());
+      const [stillQueuedRecipient] = await db
+        .select()
+        .from(emailCampaignRecipientsTable)
+        .where(eq(emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(stillQueuedRecipient.status, "queued");
+      assert.equal(stillQueuedRecipient.attempts, 0);
     } finally {
       releaseClaim?.();
       if (pauseClient) {

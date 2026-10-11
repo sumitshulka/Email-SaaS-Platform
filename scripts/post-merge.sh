@@ -7,3 +7,4 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0002_preserve_smtp_
 pnpm --filter @workspace/db run push
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0009_contact_email_status.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0010_campaign_user_pause.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0011_campaign_scheduled_resume.sql

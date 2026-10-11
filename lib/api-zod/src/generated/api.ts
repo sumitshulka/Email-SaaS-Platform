@@ -4185,6 +4185,7 @@ export const ListCampaignsResponseItem = zod.object({
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4268,6 +4269,7 @@ export const CreateCampaignResponse = zod.object({
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4516,6 +4518,7 @@ export const GetCampaignDashboardResponse = zod.object({
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4666,6 +4669,7 @@ export const UpdateCampaignResponse = zod.object({
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),
@@ -4699,13 +4703,15 @@ export const SetCampaignPausedParams = zod.object({
 })
 
 export const SetCampaignPausedBody = zod.object({
-  "paused": zod.boolean()
+  "paused": zod.boolean(),
+  "resumeAt": zod.coerce.date().nullish()
 })
 
 export const SetCampaignPausedResponse = zod.object({
   "campaignId": zod.string().uuid(),
   "paused": zod.boolean(),
-  "pausedAt": zod.coerce.date().nullable()
+  "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable()
 })
 
 
@@ -4863,6 +4869,7 @@ export const SendCampaignResponse = zod.object({
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
   "recipients": zod.number().int(),
   "estimatedDurationSeconds": zod.number().int(),
   "queued": zod.number().int(),

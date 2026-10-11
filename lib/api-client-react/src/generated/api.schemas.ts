@@ -2762,6 +2762,8 @@ export interface CampaignSummary {
   status: CampaignSummaryStatus;
   /** @nullable */
   pausedAt: string | null;
+  /** @nullable */
+  resumeAt: string | null;
   recipients: number;
   estimatedDurationSeconds: number;
   queued: number;
@@ -2781,6 +2783,8 @@ export interface CampaignSummary {
 
 export interface CampaignPauseInput {
   paused: boolean;
+  /** @nullable */
+  resumeAt?: string | null;
 }
 
 export interface CampaignPauseResponse {
@@ -2788,6 +2792,8 @@ export interface CampaignPauseResponse {
   paused: boolean;
   /** @nullable */
   pausedAt: string | null;
+  /** @nullable */
+  resumeAt: string | null;
 }
 
 export interface CampaignAudienceSummary {

@@ -3692,6 +3692,7 @@ router.patch(
           id: emailCampaignsTable.id,
           status: emailCampaignsTable.status,
           pausedAt: emailCampaignsTable.pausedAt,
+          resumeAt: emailCampaignsTable.resumeAt,
         })
         .from(emailCampaignsTable)
         .where(
@@ -3705,15 +3706,35 @@ router.patch(
       if (campaign.status !== "queued" && campaign.status !== "sending") {
         return { kind: "not_active" as const };
       }
+      const now = new Date();
+      const requestedResumeAt =
+        body.data.resumeAt === undefined
+          ? campaign.resumeAt
+          : body.data.resumeAt;
+      if (
+        body.data.paused &&
+        requestedResumeAt &&
+        requestedResumeAt.getTime() <= now.getTime()
+      ) {
+        return { kind: "invalid_resume_time" as const };
+      }
       const pausedAt = body.data.paused
-        ? campaign.pausedAt ?? new Date()
+        ? campaign.pausedAt ?? now
         : null;
+      const resumeAt = body.data.paused ? requestedResumeAt ?? null : null;
       const [updated] = await tx
         .update(emailCampaignsTable)
-        .set({ pausedAt, updatedAt: new Date() })
+        .set({ pausedAt, resumeAt, updatedAt: now })
         .where(eq(emailCampaignsTable.id, campaign.id))
-        .returning({ pausedAt: emailCampaignsTable.pausedAt });
-      return { kind: "ok" as const, pausedAt: updated.pausedAt };
+        .returning({
+          pausedAt: emailCampaignsTable.pausedAt,
+          resumeAt: emailCampaignsTable.resumeAt,
+        });
+      return {
+        kind: "ok" as const,
+        pausedAt: updated.pausedAt,
+        resumeAt: updated.resumeAt,
+      };
     });
     if (result.kind === "not_found") {
       res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
@@ -3723,10 +3744,15 @@ router.patch(
       res.status(409).json({ error: "Only queued or sending campaigns can be paused.", code: "CAMPAIGN_NOT_ACTIVE" });
       return;
     }
+    if (result.kind === "invalid_resume_time") {
+      res.status(400).json({ error: "The scheduled resume time must be in the future.", code: "INVALID_RESUME_TIME" });
+      return;
+    }
     res.json(SetCampaignPausedResponse.parse({
       campaignId: params.data.campaignId,
       paused: result.pausedAt !== null,
       pausedAt: result.pausedAt,
+      resumeAt: result.resumeAt,
     }));
   },
 );

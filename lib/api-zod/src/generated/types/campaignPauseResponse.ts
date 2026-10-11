@@ -11,4 +11,6 @@ export interface CampaignPauseResponse {
   paused: boolean;
   /** @nullable */
   pausedAt: Date | null;
+  /** @nullable */
+  resumeAt: Date | null;
 }

@@ -7,6 +7,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
   lt,
@@ -798,9 +799,19 @@ export async function processPendingCampaignDeliveries(
   batchSize = MAX_DELIVERIES_PER_TICK,
 ): Promise<number> {
   const settings = await getPlatformSettings();
+  const now = new Date();
+  await db
+    .update(emailCampaignsTable)
+    .set({ pausedAt: null, resumeAt: null, updatedAt: now })
+    .where(
+      and(
+        inArray(emailCampaignsTable.status, ["queued", "sending"]),
+        isNotNull(emailCampaignsTable.pausedAt),
+        lte(emailCampaignsTable.resumeAt, now),
+      ),
+    );
   if (settings.maintenanceMode) return 0;
   await markInterruptedDeliveriesUnknown();
-  const now = new Date();
   const candidates = await db
     .select({
       id: emailCampaignRecipientsTable.id,
