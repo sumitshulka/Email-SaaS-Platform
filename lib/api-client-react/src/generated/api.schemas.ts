@@ -3570,6 +3570,21 @@ export interface PlatformSettingsInput {
   packageVisibility: PlatformSettingsInputPackageVisibility;
 }
 
+export interface BlockedTermPreviewInput {
+  /** @maxLength 10000 */
+  sampleText: string;
+  /**
+     * @maxItems 200
+     * @items.minLength 1
+     * @items.maxLength 100
+     */
+  prohibitedEmailKeywords: string[];
+}
+
+export interface BlockedTermPreviewResult {
+  matchedKeywords: string[];
+}
+
 export type ApplicationEmailSettingsProvider = typeof ApplicationEmailSettingsProvider[keyof typeof ApplicationEmailSettingsProvider];
 
 

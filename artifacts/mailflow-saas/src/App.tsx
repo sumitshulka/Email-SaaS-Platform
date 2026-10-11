@@ -15,7 +15,7 @@ import {
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetPasswordPolicy, useGetUserDashboard,
   useGetApplicationEmailSettings, useGetCurrentUser, useGetMaintenanceStatus, useListAdminUsers,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
-  useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
+  usePreviewBlockedTerms, useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
 } from '@workspace/api-client-react';
 import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, PlatformSettingsInput } from '@workspace/api-client-react';
@@ -845,6 +845,21 @@ function SettingsGroup({ title, description, fields, values, setValues }: { titl
 function BlockedWordsEditor({ label, words, onChange }: { label: string; words: string[]; onChange: (words: string[]) => void }) {
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
+  const [sampleText, setSampleText] = useState('');
+  const [previewResult, setPreviewResult] = useState<string[] | null>(null);
+  const [previewedInput, setPreviewedInput] = useState<string | null>(null);
+  const preview = usePreviewBlockedTerms();
+
+  const clearPreview = () => {
+    setPreviewResult(null);
+    setPreviewedInput(null);
+    preview.reset();
+  };
+
+  const updateWords = (updatedWords: string[]) => {
+    clearPreview();
+    onChange(updatedWords);
+  };
 
   const addWords = () => {
     const additions = draft.split(',').map(word => word.trim()).filter(Boolean);
@@ -871,7 +886,7 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
       setMessage('You can add up to 200 words or phrases.');
       return;
     }
-    onChange([...words, ...uniqueAdditions]);
+    updateWords([...words, ...uniqueAdditions]);
     setDraft('');
     setMessage('');
   };
@@ -896,12 +911,62 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
       {words.length ? <div className="flex flex-wrap gap-2">
         {words.map((word, index) => <span key={`${word}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#dbe2ea] bg-white py-1 pl-3 pr-1 text-[12px] text-[#344154]">
           <span className="break-all">{word}</span>
-          <button type="button" data-testid={`button-remove-prohibited-keyword-${index}`} aria-label={`Remove ${word}`} title={`Remove ${word}`} onClick={() => onChange(words.filter((_, wordIndex) => wordIndex !== index))} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[#687484] hover:bg-[#f0f2f4] hover:text-[#a13d36]">
+          <button type="button" data-testid={`button-remove-prohibited-keyword-${index}`} aria-label={`Remove ${word}`} title={`Remove ${word}`} onClick={() => updateWords(words.filter((_, wordIndex) => wordIndex !== index))} className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[#687484] hover:bg-[#f0f2f4] hover:text-[#a13d36]">
             <X aria-hidden="true" className="h-3.5 w-3.5"/>
           </button>
         </span>)}
       </div> : <p className="text-[12px] text-[#7d8794]">No blocked words or phrases added yet.</p>}
       <p className="mt-2 text-right text-[10px] text-[#7d8794]">{words.length} / 200</p>
+    </div>
+    <div className="space-y-2 rounded-md border border-[#e4e8ec] bg-white p-3">
+      <div>
+        <h3 className="text-[12px] font-semibold text-[#344154]">Preview blocked-term matches</h3>
+        <p className="mt-1 text-[11px] leading-4 text-[#778392]">Test sample copy against the words currently in this form, including unsaved edits. Previewing does not save settings or send email.</p>
+      </div>
+      <textarea
+        data-testid="input-blocked-term-preview"
+        aria-label="Sample campaign text"
+        value={sampleText}
+        maxLength={10000}
+        rows={4}
+        onChange={event => {
+          setSampleText(event.target.value);
+          clearPreview();
+        }}
+        placeholder="Paste or type sample campaign text"
+        className="min-h-24 w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[10px] text-[#7d8794]">{sampleText.length} / 10000 characters</span>
+        <Button
+          type="button"
+          testId="button-preview-blocked-terms"
+          variant="outline"
+          disabled={preview.isPending || words.length > 200 || sampleText.length > 10000}
+          onClick={() => {
+            const submittedInput = JSON.stringify([sampleText, words]);
+            setPreviewResult(null);
+            setPreviewedInput(null);
+            preview.mutate(
+              { data: { sampleText, prohibitedEmailKeywords: words } },
+              {
+                onSuccess: result => {
+                  setPreviewResult(result.matchedKeywords);
+                  setPreviewedInput(submittedInput);
+                },
+              },
+            );
+          }}
+        >
+          {preview.isPending ? 'Checking…' : 'Preview matches'}
+        </Button>
+      </div>
+      {preview.isError && <p role="alert" data-testid="error-blocked-term-preview" className="text-[11px] text-[#a95218]">{getError(preview.error)}</p>}
+      {previewResult && previewedInput === JSON.stringify([sampleText, words]) && <div role="status" aria-live="polite" data-testid="result-blocked-term-preview" className={`rounded-md border px-3 py-2 text-[11px] ${previewResult.length ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#dce9df] bg-[#f5faf6] text-[#416b4b]'}`}>
+        {previewResult.length
+          ? <><span className="font-semibold">Match found:</span> {previewResult.join(', ')}</>
+          : 'No blocked terms matched this sample.'}
+      </div>}
     </div>
   </div>;
 }

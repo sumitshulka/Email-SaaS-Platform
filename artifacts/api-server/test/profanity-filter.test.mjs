@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  findProhibitedCampaignKeywordMatches,
   findProhibitedCampaignContent,
   normalizeProfanityText,
 } from "../src/lib/profanity-filter.ts";
@@ -59,6 +60,24 @@ describe("campaign profanity filter", () => {
       );
     }
     assert.equal(normalizeProfanityText("οаε"), "oae");
+  });
+
+  it("previews draft keywords with the same normalization used for campaign enforcement", () => {
+    const sampleText = "A safe bаd.word and OBJECTIONABLE—PHRASE.";
+    const matches = findProhibitedCampaignKeywordMatches(sampleText, terms);
+    assert.deepEqual(matches, terms);
+    assert.deepEqual(
+      findProhibitedCampaignContent({ body: sampleText }, terms),
+      ["body"],
+    );
+    assert.deepEqual(
+      findProhibitedCampaignKeywordMatches("safe campaign copy", terms),
+      [],
+    );
+    assert.deepEqual(
+      findProhibitedCampaignKeywordMatches("ordinary text", ["...", ""]),
+      [],
+    );
   });
 
   it("does not broadly transliterate ordinary Greek or Cyrillic text", () => {

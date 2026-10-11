@@ -5726,6 +5726,27 @@ export const UpdateAdminSettingsResponse = zod.object({
 
 
 /**
+ * @summary Preview blocked campaign terms against sample text
+ */
+export const previewBlockedTermsBodySampleTextMax = 10000;
+
+export const previewBlockedTermsBodyProhibitedEmailKeywordsItemMax = 100;
+
+export const previewBlockedTermsBodyProhibitedEmailKeywordsMax = 200;
+
+
+
+export const PreviewBlockedTermsBody = zod.object({
+  "sampleText": zod.string().max(previewBlockedTermsBodySampleTextMax),
+  "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(previewBlockedTermsBodyProhibitedEmailKeywordsItemMax)).max(previewBlockedTermsBodyProhibitedEmailKeywordsMax)
+})
+
+export const PreviewBlockedTermsResponse = zod.object({
+  "matchedKeywords": zod.array(zod.string())
+})
+
+
+/**
  * @summary Get masked application SMTP configuration
  */
 export const GetApplicationEmailSettingsResponse = zod.object({

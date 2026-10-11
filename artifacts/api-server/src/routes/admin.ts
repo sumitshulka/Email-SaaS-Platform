@@ -21,6 +21,8 @@ import {
   GetGoogleOAuthSettingsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
+  PreviewBlockedTermsBody,
+  PreviewBlockedTermsResponse,
   SendApplicationEmailTestBody,
   SendApplicationEmailTestResponse,
   UpdateAdminSettingsBody,
@@ -58,6 +60,7 @@ import {
   getPlatformSettings,
   lockPlatformSettings,
 } from "../lib/platform-settings";
+import { findProhibitedCampaignKeywordMatches } from "../lib/profanity-filter";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import {
   getGoogleOAuthSettingsStatus,
@@ -632,6 +635,29 @@ router.get("/admin/settings", requireSuperadmin, async (_req, res): Promise<void
   const settings = await getPlatformSettings();
   res.json(GetAdminSettingsResponse.parse(settings));
 });
+
+router.post(
+  "/admin/settings/blocked-terms/preview",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = PreviewBlockedTermsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Enter valid sample text and blocked words or phrases.",
+        code: "INVALID_BLOCKED_TERM_PREVIEW",
+      });
+      return;
+    }
+
+    const result = {
+      matchedKeywords: findProhibitedCampaignKeywordMatches(
+        parsed.data.sampleText,
+        parsed.data.prohibitedEmailKeywords,
+      ),
+    };
+    res.json(PreviewBlockedTermsResponse.parse(result));
+  },
+);
 
 router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void> => {
   const parsed = UpdateAdminSettingsBody.safeParse(req.body);

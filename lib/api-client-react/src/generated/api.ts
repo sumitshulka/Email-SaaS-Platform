@@ -45,6 +45,8 @@ import type {
   ApplyCampaignUnsubscribeParams,
   AuthResponse,
   AuthUser,
+  BlockedTermPreviewInput,
+  BlockedTermPreviewResult,
   CampaignAudienceSummary,
   CampaignDashboard,
   CampaignDeliveryReport,
@@ -9769,6 +9771,94 @@ export const useUpdateAdminSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAdminSettingsMutationOptions(options));
+    }
+
+export const getPreviewBlockedTermsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/blocked-terms/preview`
+}
+
+/**
+ * @summary Preview blocked campaign terms against sample text
+ */
+export const previewBlockedTerms = async (blockedTermPreviewInput: BlockedTermPreviewInput, options?: Parameters<typeof customFetch>[1]): Promise<BlockedTermPreviewResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<BlockedTermPreviewResult>(getPreviewBlockedTermsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(blockedTermPreviewInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewBlockedTermsMutationKey = () => ['previewBlockedTerms'] as const;
+
+export const getPreviewBlockedTermsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewBlockedTerms>>, TError,PreviewBlockedTermsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewBlockedTerms>>, TError,PreviewBlockedTermsMutationVariables, TContext> => {
+
+const mutationKey = getPreviewBlockedTermsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewBlockedTerms>>, PreviewBlockedTermsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewBlockedTerms(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewBlockedTermsMutationResult = NonNullable<Awaited<ReturnType<typeof previewBlockedTerms>>>
+    export type PreviewBlockedTermsMutationBody = BodyType<BlockedTermPreviewInput>
+    export type PreviewBlockedTermsMutationError = ErrorType<void>
+    export type PreviewBlockedTermsMutationVariables = {data: BodyType<BlockedTermPreviewInput>}
+
+    /**
+ * @summary Preview blocked campaign terms against sample text
+ */
+export const usePreviewBlockedTerms = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewBlockedTerms>>, TError,PreviewBlockedTermsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewBlockedTerms>>,
+        TError,
+        PreviewBlockedTermsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewBlockedTermsMutationOptions(options));
     }
 
 export const getGetApplicationEmailSettingsUrl = () => {

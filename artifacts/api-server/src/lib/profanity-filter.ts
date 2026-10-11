@@ -64,16 +64,42 @@ export function normalizeProfanityText(value: string): string {
     .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function getNormalizedProhibitedKeywords(
+  prohibitedKeywords: readonly string[],
+): Array<{ keyword: string; normalized: string }> {
+  const seen = new Set<string>();
+  const normalized: Array<{ keyword: string; normalized: string }> = [];
+  for (const keyword of prohibitedKeywords) {
+    if (typeof keyword !== "string") continue;
+    const normalizedKeyword = normalizeProfanityText(keyword);
+    if (!normalizedKeyword || seen.has(normalizedKeyword)) continue;
+    seen.add(normalizedKeyword);
+    normalized.push({ keyword, normalized: normalizedKeyword });
+  }
+  return normalized;
+}
+
+function containsProhibitedKeyword(normalizedText: string, normalizedKeyword: string): boolean {
+  return normalizedKeyword.length > 0 && normalizedText.includes(normalizedKeyword);
+}
+
+export function findProhibitedCampaignKeywordMatches(
+  sampleText: string,
+  prohibitedKeywords: readonly string[],
+): string[] {
+  const normalizedSample = normalizeProfanityText(sampleText);
+  if (!normalizedSample) return [];
+
+  return getNormalizedProhibitedKeywords(prohibitedKeywords)
+    .filter(({ normalized }) => containsProhibitedKeyword(normalizedSample, normalized))
+    .map(({ keyword }) => keyword);
+}
+
 export function findProhibitedCampaignContent(
   content: CampaignContentValues,
   prohibitedKeywords: readonly string[],
 ): CampaignContentField[] {
-  const normalizedKeywords = [...new Set(
-    prohibitedKeywords
-      .filter((keyword): keyword is string => typeof keyword === "string")
-      .map(normalizeProfanityText)
-      .filter((keyword) => keyword.length > 0),
-  )];
+  const normalizedKeywords = getNormalizedProhibitedKeywords(prohibitedKeywords);
   if (normalizedKeywords.length === 0) return [];
 
   const fields: CampaignContentField[] = ["subject", "greeting", "body", "signature"];
@@ -88,7 +114,7 @@ export function findProhibitedCampaignContent(
       normalizedValues.push(normalizeProfanityText(content.htmlBody));
     }
     if (normalizedValues.some((value) =>
-      normalizedKeywords.some((keyword) => value.includes(keyword)),
+      normalizedKeywords.some(({ normalized }) => containsProhibitedKeyword(value, normalized)),
     )) {
       blocked.add(field);
     }

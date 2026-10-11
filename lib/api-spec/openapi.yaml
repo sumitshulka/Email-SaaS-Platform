@@ -2916,6 +2916,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlatformSettings"
+  /admin/settings/blocked-terms/preview:
+    post:
+      operationId: previewBlockedTerms
+      tags: [settings]
+      summary: Preview blocked campaign terms against sample text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlockedTermPreviewInput"
+      responses:
+        "200":
+          description: Blocked terms found in the sample text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockedTermPreviewResult"
+        "400":
+          description: Invalid sample text or blocked terms
   /admin/settings/email:
     get:
       operationId: getApplicationEmailSettings
@@ -5484,6 +5504,22 @@ components:
         gracePeriodDays: { type: integer, minimum: 0 }
         packageVisibility: { type: string, enum: [public, hidden] }
       required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility]
+    BlockedTermPreviewInput:
+      type: object
+      properties:
+        sampleText: { type: string, maxLength: 10000 }
+        prohibitedEmailKeywords:
+          type: array
+          maxItems: 200
+          items: { type: string, minLength: 1, maxLength: 100 }
+      required: [sampleText, prohibitedEmailKeywords]
+    BlockedTermPreviewResult:
+      type: object
+      properties:
+        matchedKeywords:
+          type: array
+          items: { type: string }
+      required: [matchedKeywords]
     ApplicationEmailSettings:
       type: object
       properties:

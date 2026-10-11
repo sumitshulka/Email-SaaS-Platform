@@ -61,6 +61,8 @@ export * from './applyCampaignUnsubscribeParams';
 export * from './authResponse';
 export * from './authUser';
 export * from './authUserRole';
+export * from './blockedTermPreviewInput';
+export * from './blockedTermPreviewResult';
 export * from './campaignAudienceSummary';
 export * from './campaignDashboard';
 export * from './campaignDeliveryReport';
