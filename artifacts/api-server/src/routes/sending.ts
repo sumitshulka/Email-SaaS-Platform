@@ -1985,6 +1985,7 @@ router.post(
 );
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
+  try {
   const parsed = ListContactsQueryParams.safeParse({
     ...req.query,
     ...(req.query.includeHistory !== undefined
@@ -2200,6 +2201,24 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
       workspaceSubscribed: Number(workspaceSubscribedRows[0]?.value ?? 0),
     }),
   );
+  } catch (error) {
+    const detail = error as {
+      name?: string;
+      code?: string;
+      cause?: { code?: string; name?: string };
+      issues?: Array<{ code?: string; path?: Array<string | number> }>;
+    };
+    req.log.error({
+      errorName: detail?.name ?? "UnknownError",
+      errorCode: detail?.code ?? detail?.cause?.code ?? null,
+      causeName: detail?.cause?.name ?? null,
+      issueSummary: detail?.issues?.map((issue) => ({
+        code: issue.code ?? "unknown",
+        path: issue.path?.map(String).join(".") ?? "",
+      })) ?? [],
+    }, "Contacts listing failed");
+    throw error;
+  }
 });
 
 router.get("/contacts/options", requireUserRole, async (req, res): Promise<void> => {
