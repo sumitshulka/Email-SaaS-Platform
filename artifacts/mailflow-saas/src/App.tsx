@@ -40,7 +40,7 @@ import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingS
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
-import { clearPackageCheckoutCredentials, getVerifiedPackageCheckout } from '@/lib/package-checkout';
+import { clearPackageCheckoutCredentials, getPackageCheckoutTerms, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
@@ -182,6 +182,7 @@ function RegisterPage() {
   const passwordRequirement = usePasswordRequirement();
   const checkoutPackageId = new URLSearchParams(window.location.search).get('packageId');
   const verifiedCheckout = getVerifiedPackageCheckout(checkoutPackageId);
+  const checkoutTerms = getPackageCheckoutTerms(checkoutPackageId);
   const [values, setValues] = useState({ firstName: '', lastName: '', email: verifiedCheckout?.email ?? '', password: '' });
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -202,7 +203,7 @@ function RegisterPage() {
   };
   return (
     <AuthFrame className="auth-branded-frame" label="Good email starts with a solid foundation.">
-      <AuthTitle className="auth-form-title" overline="Create workspace access" title="Start with your account." sub={verifiedCheckout ? 'Your email is verified. Create your account to continue to the selected plan.' : 'A few details are all we need to get you set up.'} />
+      <AuthTitle className="auth-form-title" overline="Create workspace access" title="Start with your account." sub={verifiedCheckout ? `Your email is verified. Create your account to continue with ${checkoutTerms?.name ?? 'the selected plan'}.` : 'A few details are all we need to get you set up.'} />
       <form onSubmit={onSubmit} className="auth-form space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="First name" value={values.firstName} onChange={firstName => setValues(v => ({ ...v, firstName }))} testId="input-first-name" required autoComplete="given-name" />

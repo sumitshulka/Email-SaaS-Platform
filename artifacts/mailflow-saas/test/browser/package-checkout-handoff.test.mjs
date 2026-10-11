@@ -451,7 +451,7 @@ describe('package checkout account and payment handoff', { concurrency: false },
     { selectedPackage: freePackage, otherPackage: paidPackage, outcomeLabel: 'free activation' },
     { selectedPackage: paidPackage, otherPackage: freePackage, outcomeLabel: 'paid order' },
   ]) {
-    it(`keeps a new account usable and stops a stale ${outcomeLabel}`, async () => {
+    it(`lets a verified new customer switch to a current plan before ${outcomeLabel}`, async () => {
       const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
       const state = await installCheckoutFixtures(context, {
         accountExists: false,
@@ -459,7 +459,10 @@ describe('package checkout account and payment handoff', { concurrency: false },
         unavailablePackageIdOnVerify: selectedPackage.id,
       });
       const page = await context.newPage();
+      const browserLogs = [];
+      watchBrowserLogs(page, { browserLogs });
       const email = `stale-${outcomeLabel.replaceAll(' ', '-')}-customer@example.test`;
+      const proof = 'private-registration-proof-token';
       try {
         await page.goto(`${baseUrl}/pricing`);
         await page.getByTestId(`package-cta-${selectedPackage.id}`).click();
@@ -470,19 +473,46 @@ describe('package checkout account and payment handoff', { concurrency: false },
         await page.getByTestId('input-package-checkout-code').fill('123456');
         await page.getByTestId('button-package-checkout-continue').click();
 
+        await page.getByTestId('package-checkout-replacements').waitFor();
+        assert.equal(page.url().includes('/register'), false, 'account creation waits until a current plan is chosen');
+        assert.match(await page.getByTestId('package-checkout-replacements').innerText(), /no longer available/i);
+        assert.equal(await page.getByTestId(`card-package-${otherPackage.id}`).count(), 1);
+        assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/request-code').length, 1);
+        assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length, 1);
+        assertPrivateValuesStayOutOfBrowserSurface(page.url(), browserLogs, [email, '123456', proof]);
+
+        await page.getByTestId(`button-select-replacement-${otherPackage.id}`).click();
         await page.waitForURL(url => url.pathname === '/register');
+        assert.equal(new URL(page.url()).searchParams.get('packageId'), otherPackage.id);
+        assert.match(await page.locator('main').innerText(), new RegExp(otherPackage.name));
+        assertPrivateValuesStayOutOfBrowserSurface(page.url(), browserLogs, [email, '123456', proof]);
+
         await page.getByTestId('input-first-name').fill('Stale');
         await page.getByTestId('input-last-name').fill('Plan');
         await page.getByTestId('input-register-password').fill('stale-plan-customer-2026');
         await page.getByTestId('button-create-account').click();
         await page.waitForURL(url => url.pathname === '/plans');
-        await page.getByTestId('status-payment').getByText(/selected plan is no longer available/i).waitFor();
-
         assert.equal(state.authenticated, true, 'the account should be created and signed in');
         assert.equal(state.user.email, email);
-        assert.deepEqual(state.freeActivationAttempts, [], 'a hidden free package must not be activated');
-        assert.deepEqual(state.orderAttempts, [], 'a hidden paid package must not create a paid order');
-        assert.equal(await page.evaluate(() => window.__checkoutOptions.length), 0);
+        assert.equal(state.requestBodies.find(item => item.pathname === '/api/auth/register')?.body.emailVerificationProof, proof);
+        assert.deepEqual(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length, 1);
+        assertPrivateValuesStayOutOfBrowserSurface(page.url(), browserLogs, [email, '123456', proof]);
+
+        if (otherPackage.amountMinor === 0) {
+          await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+          assert.deepEqual(state.freeActivationAttempts, [{
+            authenticated: true,
+            body: { packageId: otherPackage.id },
+          }]);
+          assert.deepEqual(state.orderAttempts, []);
+          assert.equal(await page.getByTestId('current-subscription').innerText().then(text => text.includes(otherPackage.name)), true);
+        } else {
+          await page.getByTestId('status-payment').getByText(/Checkout was closed/).waitFor();
+          assert.deepEqual(state.freeActivationAttempts, []);
+          assert.equal(state.orderAttempts.length, 1);
+          assert.equal(state.orderAttempts[0].body.packageId, otherPackage.id);
+          assert.equal(await page.evaluate(() => window.__checkoutOptions[0]?.amount), otherPackage.amountMinor);
+        }
         const accountAfterCheckout = await page.evaluate(async () => {
           const response = await fetch('/api/auth/me');
           return response.ok ? response.json() : null;

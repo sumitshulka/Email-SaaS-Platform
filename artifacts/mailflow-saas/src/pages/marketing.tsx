@@ -20,6 +20,7 @@ import {
   packageCheckoutPath,
   packageCheckoutSlugFromUrl,
   packageNameSlug,
+  rebindVerifiedPackageCheckout,
   savePackageCheckoutTerms,
   saveVerifiedPackageCheckout,
 } from '@/lib/package-checkout';
@@ -390,11 +391,12 @@ function formatMoney(pkg: SubscriptionPackage) {
   }
 }
 
-function PackageCard({ pkg, index, sendingLimits, checkoutHref }: {
+function PackageCard({ pkg, index, sendingLimits, checkoutHref, onSelect }: {
   pkg: SubscriptionPackage;
   index: number;
   sendingLimits: SubscriptionPackageList['sendingLimits'];
-  checkoutHref: string;
+  checkoutHref?: string;
+  onSelect?: () => void;
 }) {
   const cadence = pkg.periodDays === 1 ? 'per day' : pkg.periodDays === 7 ? 'per week' : pkg.periodDays === 30 ? 'per month' : pkg.periodDays === 365 ? 'per year' : `per ${pkg.periodDays} days`;
   const combinedHourly = sendingLimits.emailsPerHourPerSmtp * pkg.emailAccountLimit;
@@ -414,7 +416,9 @@ function PackageCard({ pkg, index, sendingLimits, checkoutHref }: {
         <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
       </ul>
-      <Link href={checkoutHref} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`} onClick={() => { trackMarketingSignupCta('pricing', 'plan'); trackPackageCheckoutSelection(pkg.packageType); }}>Get started <ArrowRight size={16}/></Link>
+      {onSelect
+        ? <button type="button" className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`button-select-replacement-${pkg.id}`} onClick={onSelect}>Choose this plan <ArrowRight size={16}/></button>
+        : <Link href={checkoutHref ?? '/pricing'} className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`package-cta-${pkg.id}`} onClick={() => { trackMarketingSignupCta('pricing', 'plan'); trackPackageCheckoutSelection(pkg.packageType); }}>Get started <ArrowRight size={16}/></Link>}
       <p
         className="plan-footnote"
         data-testid={`text-package-total-send-capacity-${pkg.id}`}
@@ -471,11 +475,13 @@ export function PackageCheckoutPage() {
   const requestCode = useRequestPackageCheckoutCode();
   const verifyCode = useVerifyPackageCheckoutCode();
   const login = useLogin();
-  const [step, setStep] = useState<'email' | 'code' | 'login'>('email');
+  const [step, setStep] = useState<'email' | 'code' | 'login' | 'replacement'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [verifiedPackageId, setVerifiedPackageId] = useState<string | null>(null);
   const [planAvailability, setPlanAvailability] = useState<'available' | 'unavailable' | 'check_failed' | null>(null);
+  const [replacementError, setReplacementError] = useState<string | null>(null);
+  const [isSelectingReplacement, setIsSelectingReplacement] = useState(false);
   const packages = packagesQuery.data?.packages ?? [];
   const slugMatches = requestedSlug
     ? packages.filter(item => packageNameSlug(item.name) === requestedSlug)
@@ -493,13 +499,61 @@ export function PackageCheckoutPage() {
     ? isAmbiguousPackageCheckoutSlug(requestedSlug, packages)
     : false;
   const sendingLimits = packagesQuery.data?.sendingLimits;
-  const canContinueWithoutSelectedPlan = step === 'login' && planAvailability !== 'available';
+  const canContinueWithoutSelectedPlan = (step === 'login' || step === 'replacement') && planAvailability !== 'available';
 
   const returnToEmail = () => {
     requestCode.reset();
     verifyCode.reset();
     setCode('');
+    setVerifiedPackageId(null);
+    setPlanAvailability(null);
+    setReplacementError(null);
     setStep('email');
+  };
+
+  const retryPlanAvailability = async () => {
+    setReplacementError(null);
+    const currentPackages = await packagesQuery.refetch();
+    if (currentPackages.isError || !currentPackages.data) {
+      setPlanAvailability('check_failed');
+      return;
+    }
+    const selectedStillAvailable = currentPackages.data.packages.some(item => item.id === verifiedPackageId);
+    if (selectedStillAvailable && verifiedPackageId) {
+      setPlanAvailability('available');
+      setLocation(`/register?packageId=${encodeURIComponent(verifiedPackageId)}`);
+      return;
+    }
+    setPlanAvailability('unavailable');
+  };
+
+  const chooseReplacementPlan = async (replacement: SubscriptionPackage) => {
+    if (!verifiedPackageId || isSelectingReplacement) return;
+    setIsSelectingReplacement(true);
+    setReplacementError(null);
+    try {
+      const currentPackages = await packagesQuery.refetch();
+      if (currentPackages.isError || !currentPackages.data) {
+        setPlanAvailability('check_failed');
+        setReplacementError('We could not confirm the current plans. Please try again.');
+        return;
+      }
+      const currentReplacement = currentPackages.data.packages.find(item => item.id === replacement.id);
+      if (!currentReplacement) {
+        setPlanAvailability('unavailable');
+        setReplacementError('That plan is no longer available. Choose another current plan.');
+        return;
+      }
+      if (!rebindVerifiedPackageCheckout(verifiedPackageId, currentReplacement.id)) {
+        setReplacementError('Your verified email session has expired. Please verify your email again.');
+        return;
+      }
+      savePackageCheckoutTerms(currentReplacement, currentPackages.data.sendingLimits);
+      trackPackageCheckoutSelection(currentReplacement.packageType);
+      setLocation(`/register?packageId=${encodeURIComponent(currentReplacement.id)}`);
+    } finally {
+      setIsSelectingReplacement(false);
+    }
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -522,24 +576,37 @@ export function PackageCheckoutPage() {
           if (!pkg) return;
           const selectedPackageId = pkg.id;
           setVerifiedPackageId(selectedPackageId);
-          const currentPackages = await packagesQuery.refetch();
-          const selectedStillAvailable = currentPackages.data?.packages.some(item => item.id === selectedPackageId) ?? false;
-          setPlanAvailability(
-            currentPackages.isError
-              ? 'check_failed'
-              : selectedStillAvailable
-                ? 'available'
-                : 'unavailable',
-          );
           if (result.accountExists) {
+            const currentPackages = await packagesQuery.refetch();
+            const selectedStillAvailable = currentPackages.data?.packages.some(item => item.id === selectedPackageId) ?? false;
+            setPlanAvailability(
+              currentPackages.isError
+                ? 'check_failed'
+                : selectedStillAvailable
+                  ? 'available'
+                  : 'unavailable',
+            );
             trackPackageCheckoutVerification(pkg.packageType, 'existing_account');
             setStep('login');
             return;
           }
           if (!result.registrationProofToken) return;
-          trackPackageCheckoutVerification(pkg.packageType, 'new_account');
           saveVerifiedPackageCheckout(selectedPackageId, normalizedEmail, result.registrationProofToken);
-          setLocation(`/register?packageId=${encodeURIComponent(selectedPackageId)}`);
+          const currentPackages = await packagesQuery.refetch();
+          const selectedStillAvailable = currentPackages.data?.packages.some(item => item.id === selectedPackageId) ?? false;
+          trackPackageCheckoutVerification(pkg.packageType, 'new_account');
+          if (currentPackages.isError) {
+            setPlanAvailability('check_failed');
+            setStep('replacement');
+            return;
+          }
+          if (selectedStillAvailable) {
+            setPlanAvailability('available');
+            setLocation(`/register?packageId=${encodeURIComponent(selectedPackageId)}`);
+            return;
+          }
+          setPlanAvailability('unavailable');
+          setStep('replacement');
         },
         onError: error => {
           if (getApiErrorDetails(error).code === 'SUPERADMIN_PACKAGE_PURCHASE_FORBIDDEN') {
@@ -575,6 +642,7 @@ export function PackageCheckoutPage() {
 
   const loading = packagesQuery.isLoading;
   const selectionRequested = Boolean(packageIdQuery || requestedSlug);
+  const replacementSelection = step === 'replacement';
   const pageError = packagesQuery.isError && !canContinueWithoutSelectedPlan
     ? 'We could not load the current plan information. Try again.'
     : selectionRequested && !loading && !pkg && !canContinueWithoutSelectedPlan
@@ -607,6 +675,17 @@ export function PackageCheckoutPage() {
 
       {pageError ? <section role={packagesQuery.isError ? 'alert' : 'status'} className="rounded-xl border border-[#e1e6eb] bg-white p-6">
         <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-[#b76325]"/><div><h2 className="text-[15px] font-semibold text-[#1d2d40]">{pageError}</h2>{packagesQuery.isError && <button type="button" onClick={() => void packagesQuery.refetch()} className="mt-3 rounded-md border border-[#d5dfe7] px-3 py-2 text-[12px] font-semibold text-[#315879]">Try again</button>}<Link href="/pricing" className="mt-3 inline-block text-[12px] font-semibold text-[#245b9b] underline">Back to pricing</Link></div></div>
+      </section> : replacementSelection ? <section className="rounded-xl border border-[#d5e0e8] bg-white p-5 shadow-[0_14px_38px_-34px_rgba(21,48,77,.6)] md:p-7" data-testid="package-checkout-replacements">
+        <div className="mono text-[10px] uppercase tracking-[.16em] text-[#667b90]">PLAN AVAILABILITY</div>
+        <h2 className="display mt-3 text-[25px] font-bold text-[#1b2e43]">{planAvailability === 'check_failed' ? 'We couldn’t confirm the current plans.' : 'Choose a current plan.'}</h2>
+        <p className="mt-2 max-w-[680px] text-[13px] leading-6 text-[#526276]">{planAvailability === 'check_failed' ? 'Your email is verified and your proof is saved securely for this session. Check availability again to continue without repeating verification.' : 'The plan you selected is no longer available. Your email is verified, so choose one of the plans below to continue without another code.'}</p>
+        {replacementError && <p role="alert" data-testid="status-replacement-plan-error" className="mt-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">{replacementError}</p>}
+        {planAvailability === 'check_failed' || packagesQuery.isError
+          ? <button type="button" data-testid="button-retry-plan-availability" onClick={() => void retryPlanAvailability()} disabled={packagesQuery.isFetching} className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-55">{packagesQuery.isFetching ? 'Checking plans…' : 'Check plans again'} <ArrowRight size={15}/></button>
+          : packages.length === 0
+            ? <p className="mt-5 rounded-md bg-[#f4f7f9] p-4 text-[12px] text-[#526276]">There are no plans available right now. Please check back soon.</p>
+            : <div className="mf-plan-grid mt-6" data-testid="grid-replacement-plans">{packages.map((replacement, index) => <PackageCard key={replacement.id} pkg={replacement} index={index} sendingLimits={packagesQuery.data!.sendingLimits} onSelect={() => void chooseReplacementPlan(replacement)}/>)}</div>}
+        {isSelectingReplacement && <p role="status" className="mt-4 text-[11px] text-[#526276]">Confirming this plan…</p>}
       </section> : loading || (!pkg && step !== 'login') || (!sendingLimits && step !== 'login') ? <div aria-label="Loading selected plan" className="h-64 animate-pulse rounded-xl bg-[#eaf0f4]"/> : <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,.92fr)_minmax(390px,1.08fr)]">
         <section className="rounded-xl border border-[#d5e0e8] bg-white p-5 shadow-[0_14px_38px_-34px_rgba(21,48,77,.6)] md:p-7" data-testid="selected-checkout-package">
           {!pkg && step === 'login' ? <>

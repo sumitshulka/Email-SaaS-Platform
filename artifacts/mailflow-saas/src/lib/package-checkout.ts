@@ -175,6 +175,20 @@ export function getVerifiedPackageCheckout(id: string | null) {
   return email && proof ? { email, proof } : null;
 }
 
+export function rebindVerifiedPackageCheckout(
+  verifiedPackageId: string | null,
+  replacementPackageId: string,
+): boolean {
+  const verifiedCheckout = getVerifiedPackageCheckout(verifiedPackageId);
+  if (!verifiedCheckout || !replacementPackageId) return false;
+  saveVerifiedPackageCheckout(
+    replacementPackageId,
+    verifiedCheckout.email,
+    verifiedCheckout.proof,
+  );
+  return true;
+}
+
 export function clearPackageCheckoutCredentials() {
   sessionStorage.removeItem(PACKAGE_ID_KEY);
   sessionStorage.removeItem(PACKAGE_EMAIL_KEY);
