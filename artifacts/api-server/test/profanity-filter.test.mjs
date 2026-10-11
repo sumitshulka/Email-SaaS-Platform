@@ -45,6 +45,36 @@ describe("campaign profanity filter", () => {
     );
   });
 
+  it("matches common Greek and Cyrillic look-alikes in configured terms", () => {
+    for (const value of [
+      "bаdwоrd", // Cyrillic а and о
+      "οbjectionable phrase", // Greek ο
+      "bαdword", // Greek α
+      "bаdword", // Cyrillic а
+    ]) {
+      assert.deepEqual(
+        findProhibitedCampaignContent({ body: value }, terms),
+        ["body"],
+        value,
+      );
+    }
+    assert.equal(normalizeProfanityText("οаε"), "oae");
+  });
+
+  it("does not broadly transliterate ordinary Greek or Cyrillic text", () => {
+    assert.deepEqual(
+      findProhibitedCampaignContent(
+        { body: "Καλημέρα, κόσμε! Привет, мир." },
+        terms,
+      ),
+      [],
+    );
+    assert.deepEqual(
+      findProhibitedCampaignContent({ body: "objectionable phrase" }, ["badword"]),
+      [],
+    );
+  });
+
   it("ignores empty or punctuation-only configured keywords", () => {
     assert.deepEqual(findProhibitedCampaignContent({ body: "Anything" }, ["...", ""]), []);
     assert.equal(normalizeProfanityText("b [a] .d"), "bad");

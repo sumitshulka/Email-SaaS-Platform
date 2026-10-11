@@ -10,6 +10,31 @@ export type CampaignContentValues = Partial<
   htmlBody?: string | null;
 };
 
+const CONFUSABLE_LETTERS: Record<string, string> = {
+  // Greek letters with common Latin look-alikes.
+  α: "a",
+  ε: "e",
+  ι: "i",
+  κ: "k",
+  ο: "o",
+  ρ: "p",
+  τ: "t",
+  υ: "y",
+  χ: "x",
+  // Cyrillic letters commonly substituted into Latin words.
+  а: "a",
+  е: "e",
+  і: "i",
+  ј: "j",
+  к: "k",
+  м: "m",
+  о: "o",
+  р: "p",
+  с: "c",
+  х: "x",
+  у: "y",
+};
+
 function decodeHtmlNumericEntities(value: string): string {
   return value.replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/giu, (entity, hex, decimal) => {
     const codePoint = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
@@ -31,6 +56,9 @@ export function normalizeProfanityText(value: string): string {
     .normalize("NFKD")
     .toLocaleLowerCase("en-US")
     .replace(/\p{M}/gu, "")
+    .replace(/[αεικορτυχаеіјкморсху]/gu, (character) =>
+      CONFUSABLE_LETTERS[character] ?? character,
+    )
     // Ignore punctuation, spaces, brackets, format controls, and markup.
     // This makes "w.o.r.d", "w (o) r d", and zero-width separators equivalent.
     .replace(/[^\p{L}\p{N}]/gu, "");
