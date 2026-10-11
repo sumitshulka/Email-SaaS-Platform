@@ -106,7 +106,7 @@ async function openEmailSetupPage(gmailConnection = {
   nextSyncAt: null,
   lastError: null,
   pollIntervalSeconds: 120,
-}) {
+}, gmailApi = {}) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addCookies([{
     name: 'mailflow_session',
@@ -127,7 +127,14 @@ async function openEmailSetupPage(gmailConnection = {
         json: { accounts: [], emailAccountLimit: 1, configuredCount: 0, overLimit: false, scheduledDowngrade: null },
       });
     } else if (pathname === '/api/sending/gmail/connection' && request.method() === 'GET') {
-      await route.fulfill({ status: 200, json: gmailConnection });
+      await route.fulfill({
+        status: 200,
+        json: gmailApi.getConnection ? gmailApi.getConnection() : gmailConnection,
+      });
+    } else if (pathname === '/api/sending/gmail/sync-now' && request.method() === 'POST' && gmailApi.syncNow) {
+      await gmailApi.syncNow(route);
+    } else if (pathname === '/api/sending/gmail/rescan' && request.method() === 'POST' && gmailApi.rescan) {
+      await gmailApi.rescan(route);
     } else if (pathname === '/api/sending/microsoft-365/connection' && request.method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -414,6 +421,115 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
       } finally {
         await context.close();
       }
+    }
+  });
+
+  it('clears an overdue warning after a successful sync without letting recovery rescan change the checkpoint', async () => {
+    const checkpointAt = new Date(Date.now() - 60_000).toISOString();
+    const overdueConnection = {
+      configured: true,
+      redirectUri: null,
+      connected: true,
+      emailAddress: 'bounce-monitor@example.test',
+      syncStatus: 'connected',
+      lastSyncAt: checkpointAt,
+      lastSuccessAt: checkpointAt,
+      lastSyncDiagnostics: {
+        messagesChecked: 3,
+        dsnCandidates: 0,
+        importedReports: 0,
+        unmatchedReports: 0,
+        warnings: 0,
+        outcome: 'no_dsn_found',
+      },
+      nextSyncAt: new Date(Date.now() - 30_000).toISOString(),
+      lastError: null,
+      pollIntervalSeconds: 120,
+    };
+    let connection = overdueConnection;
+    let syncNowCalls = 0;
+    let rescanCalls = 0;
+    const { context, page } = await openEmailSetupPage(overdueConnection, {
+      getConnection: () => connection,
+      rescan: async route => {
+        rescanCalls += 1;
+        assert.deepEqual(route.request().postDataJSON(), { windowDays: 14 });
+        await route.fulfill({
+          status: 200,
+          json: {
+            windowDays: 14,
+            maxMessages: 500,
+            messagesChecked: 3,
+            candidateMessages: 0,
+            imported: 0,
+            duplicates: 0,
+            unmatched: 0,
+            ignored: 3,
+            warningCount: 0,
+          },
+        });
+      },
+      syncNow: async route => {
+        syncNowCalls += 1;
+        const recoveredAt = new Date().toISOString();
+        connection = {
+          ...overdueConnection,
+          lastSyncAt: recoveredAt,
+          lastSuccessAt: recoveredAt,
+          nextSyncAt: new Date(Date.now() + 120_000).toISOString(),
+          lastSyncDiagnostics: {
+            messagesChecked: 3,
+            dsnCandidates: 0,
+            importedReports: 0,
+            unmatchedReports: 0,
+            warnings: 0,
+            outcome: 'no_dsn_found',
+          },
+        };
+        await route.fulfill({
+          status: 200,
+          json: {
+            attempted: 1,
+            succeeded: 1,
+            failed: 0,
+            messagesChecked: 3,
+            dsnCandidates: 0,
+            importedReports: 0,
+            duplicates: 0,
+            unmatchedReports: 0,
+            warnings: 0,
+          },
+        });
+      },
+    });
+    try {
+      await page.getByTestId('tab-gmail-monitoring').click();
+      const overdueWarning = page.getByTestId('alert-gmail-sync-overdue');
+      await overdueWarning.waitFor();
+
+      await page.getByTestId('button-rescan-recent-gmail').click();
+      await page.getByTestId('panel-gmail-rescan-result').waitFor();
+      assert.equal(rescanCalls, 1);
+      assert.equal(syncNowCalls, 0, 'recovery rescan must not run a regular sync');
+      assert.equal(connection.lastSyncAt, checkpointAt, 'recovery rescan must leave the regular sync checkpoint unchanged');
+      assert.equal(await overdueWarning.count(), 1, 'recovery rescan must not clear the overdue warning');
+
+      await page.reload();
+      await page.getByTestId('tab-gmail-monitoring').click();
+      await page.getByTestId('alert-gmail-sync-overdue').waitFor();
+      assert.equal(connection.lastSyncAt, checkpointAt, 'the unchanged checkpoint must remain after status reload');
+
+      const refreshedStatus = page.waitForResponse(response =>
+        response.url().endsWith('/api/sending/gmail/connection') && response.request().method() === 'GET',
+      );
+      await page.getByTestId('button-sync-gmail-now').click();
+      await refreshedStatus;
+      await overdueWarning.waitFor({ state: 'detached' });
+      assert.equal(syncNowCalls, 1);
+      assert.notEqual(connection.lastSyncAt, checkpointAt, 'successful manual sync must advance the regular sync checkpoint');
+      assert.ok(Date.parse(connection.nextSyncAt) > Date.now(), 'successful manual sync must schedule the next check in the future');
+    } finally {
+      await context.close();
     }
   });
 });
