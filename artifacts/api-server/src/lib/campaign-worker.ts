@@ -37,6 +37,8 @@ import {
   renderCampaignForContact,
   type CampaignPersonalization,
 } from "./campaign-template";
+import { normalizeCampaignVariantValues } from "./campaign-variants";
+import { findProhibitedCampaignContent } from "./profanity-filter";
 import { logger } from "./logger";
 import {
   defaultPlatformSettings,
@@ -48,6 +50,16 @@ const MAX_DELIVERIES_PER_TICK = 100;
 const STALE_DELIVERY_MINUTES = 10;
 let beforeDeliveryClaimForTests: (() => Promise<void>) | null = null;
 const tenantClaimQueues = new Map<string, Promise<void>>();
+
+function prohibitedKeywordsFromSetting(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return defaultPlatformSettings.prohibitedEmailKeywords;
+  }
+  const keywords = (value as Record<string, unknown>).prohibitedEmailKeywords;
+  return Array.isArray(keywords)
+    ? keywords.filter((keyword): keyword is string => typeof keyword === "string")
+    : defaultPlatformSettings.prohibitedEmailKeywords;
+}
 
 async function withTenantClaimLock<T>(
   userId: string,
@@ -529,6 +541,34 @@ async function claimDelivery(
         })
         .where(eq(emailCampaignRecipientsTable.id, recipient.id));
       return { completedCampaignId: recipient.campaignId };
+    }
+    const variants = normalizeCampaignVariantValues(campaign);
+    const blockedFields = findProhibitedCampaignContent(
+      {
+        subject: variants.subject,
+        greeting: variants.greeting,
+        signature: variants.signature,
+        body: campaign.textBody,
+        htmlBody: campaign.htmlBody,
+      },
+      prohibitedKeywordsFromSetting(platformValue),
+    );
+    if (blockedFields.length > 0) {
+      await tx
+        .update(emailCampaignRecipientsTable)
+        .set({
+          status: "suppressed",
+          lastError: "Campaign content is blocked by the current platform policy.",
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(emailCampaignRecipientsTable.userId, userId),
+            eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+            eq(emailCampaignRecipientsTable.status, "queued"),
+          ),
+        );
+      return { completedCampaignId: campaign.id };
     }
     if (campaign.pausedAt) return null;
     if (

@@ -517,6 +517,7 @@ memory.public.none(`
     unsubscribe_origin text,
     status email_campaign_status NOT NULL DEFAULT 'draft',
     paused_at timestamptz,
+    resume_at timestamptz,
     queued_at timestamptz,
     scheduled_at timestamptz,
     completed_at timestamptz,
@@ -7532,6 +7533,181 @@ describe("authentication and account recovery", { concurrency: false }, () => {
           .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, oldDraft.body.id)),
         [],
         "blocked content must not produce queued recipients",
+      );
+    });
+
+    it("suppresses queued campaigns blocked by a new policy and continues clean campaigns", async () => {
+      const admin = await loggedInUser({
+        username: "campaign-policy-queued-admin",
+        role: "SUPERADMIN",
+      });
+      const owner = await loggedInUser({ username: "campaign-policy-queued-owner" });
+      const initialSettings = await updatePlatformSettings(admin, {
+        defaultEmailsPerHour: 100,
+        maxEmailsPerDay: 100,
+      });
+      assert.equal(
+        initialSettings.response.status,
+        200,
+        JSON.stringify(initialSettings.body),
+      );
+
+      const [sender] = await db
+        .insert(dbModule.tenantSendingConfigurationTable)
+        .values({
+          userId: owner.user.id,
+          isPrimary: true,
+          provider: "other",
+          host: "smtp.policy-test.invalid",
+          port: 2525,
+          encryption: "none",
+          usernameEncrypted: securityModule.encryptSecret("policy-test-user"),
+          passwordEncrypted: securityModule.encryptSecret("policy-test-password"),
+          fromName: "Policy Test",
+          fromEmail: "policy-test@example.test",
+          verifiedAt: new Date(),
+        })
+        .returning();
+
+      async function queueCampaign(name, email, textBody) {
+        const [contact] = await db
+          .insert(dbModule.contactsTable)
+          .values({
+            userId: owner.user.id,
+            email,
+            firstName: "Campaign",
+            lastName: "Recipient",
+          })
+          .returning();
+        const [campaign] = await db
+          .insert(dbModule.emailCampaignsTable)
+          .values({
+            userId: owner.user.id,
+            senderAccountId: sender.id,
+            name,
+            subject: "A useful update",
+            subjectVariants: [
+              "A useful update",
+              "A helpful update",
+              "A clean update",
+            ],
+            textBody,
+            status: "queued",
+            unsubscribeOrigin: "https://mailflow.test",
+          })
+          .returning();
+        await db.insert(dbModule.emailCampaignRecipientsTable).values({
+          campaignId: campaign.id,
+          userId: owner.user.id,
+          contactId: contact.id,
+          email,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          status: "queued",
+          nextAttemptAt: new Date(Date.now() - 1000),
+        });
+        return campaign.id;
+      }
+
+      const blockedCampaignId = await queueCampaign(
+        "Queued campaign later blocked",
+        "blocked@owner.test",
+        "This queued message contains restrictedoffer.",
+      );
+      const [secondBlockedContact] = await db
+        .insert(dbModule.contactsTable)
+        .values({
+          userId: owner.user.id,
+          email: "blocked-second@owner.test",
+          firstName: "Second",
+          lastName: "Recipient",
+        })
+        .returning();
+      await db.insert(dbModule.emailCampaignRecipientsTable).values({
+        campaignId: blockedCampaignId,
+        userId: owner.user.id,
+        contactId: secondBlockedContact.id,
+        email: secondBlockedContact.email,
+        firstName: secondBlockedContact.firstName,
+        lastName: secondBlockedContact.lastName,
+        status: "queued",
+        nextAttemptAt: new Date(Date.now() - 1000),
+      });
+      const changedPolicy = await updatePlatformSettings(admin, {
+        prohibitedEmailKeywords: ["restrictedoffer"],
+      });
+      assert.equal(changedPolicy.response.status, 200, JSON.stringify(changedPolicy.body));
+
+      const processedBlockedBatch =
+        await campaignWorkerModule.processPendingCampaignDeliveries();
+      assert.equal(
+        processedBlockedBatch,
+        0,
+        "the blocked recipient must be suppressed without counting as a delivery",
+      );
+      assert.deepEqual(tenantDeliveries, [], "blocked content must not reach SMTP");
+
+      const cleanCampaignId = await queueCampaign(
+        "Queued campaign still allowed",
+        "clean@owner.test",
+        "This queued message remains allowed.",
+      );
+      const processedCleanBatch =
+        await campaignWorkerModule.processPendingCampaignDeliveries();
+      assert.equal(processedCleanBatch, 1);
+      assert.deepEqual(
+        tenantDeliveries.map((message) => message.to),
+        ["clean@owner.test"],
+        "an unaffected campaign should continue sending after the blocked campaign is stopped",
+      );
+
+      const recipients = await db
+        .select({
+          campaignId: dbModule.emailCampaignRecipientsTable.campaignId,
+          email: dbModule.emailCampaignRecipientsTable.email,
+          status: dbModule.emailCampaignRecipientsTable.status,
+          lastError: dbModule.emailCampaignRecipientsTable.lastError,
+        })
+        .from(dbModule.emailCampaignRecipientsTable);
+      const blockedRecipient = recipients.find(
+        (recipient) => recipient.campaignId === blockedCampaignId,
+      );
+      const blockedRecipients = recipients.filter(
+        (recipient) => recipient.campaignId === blockedCampaignId,
+      );
+      const cleanRecipient = recipients.find(
+        (recipient) => recipient.campaignId === cleanCampaignId,
+      );
+      assert.equal(blockedRecipients.length, 2);
+      assert.ok(blockedRecipients.every((recipient) => recipient.status === "suppressed"));
+      assert.equal(blockedRecipient.status, "suppressed");
+      assert.equal(
+        blockedRecipient.lastError,
+        "Campaign content is blocked by the current platform policy.",
+      );
+      assert.equal(cleanRecipient.status, "delivered");
+
+      const blockedCampaignAttempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .innerJoin(
+          dbModule.emailCampaignRecipientsTable,
+          eq(
+            dbModule.emailSendAttemptsTable.recipientId,
+            dbModule.emailCampaignRecipientsTable.id,
+          ),
+        )
+        .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, blockedCampaignId));
+      assert.deepEqual(blockedCampaignAttempts, []);
+      const campaignSummary = await api("/campaigns", { cookie: owner.cookie });
+      assert.equal(campaignSummary.response.status, 200);
+      assert.equal(
+        campaignSummary.body.find((campaign) => campaign.id === blockedCampaignId).status,
+        "completed",
+      );
+      assert.equal(
+        campaignSummary.body.find((campaign) => campaign.id === cleanCampaignId).status,
+        "completed",
       );
     });
   });
