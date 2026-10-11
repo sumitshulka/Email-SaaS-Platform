@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { ContactEmailHistoryItemCampaignType } from './contactEmailHistoryItemCampaignType';
 import type { ContactEmailHistoryItemReportEvidenceVerification } from './contactEmailHistoryItemReportEvidenceVerification';
 import type { ContactEmailHistoryItemReportOutcome } from './contactEmailHistoryItemReportOutcome';
 import type { ContactEmailHistoryItemReportSource } from './contactEmailHistoryItemReportSource';
@@ -14,6 +15,8 @@ export interface ContactEmailHistoryItem {
   id: string;
   campaignId: string;
   campaignName: string;
+  /** @nullable */
+  campaignType: ContactEmailHistoryItemCampaignType;
   subject: string;
   status: ContactEmailHistoryItemStatus;
   /** @minimum 0 */

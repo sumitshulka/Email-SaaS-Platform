@@ -2267,6 +2267,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/follow-ups:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: createCampaignFollowUp
+      tags: [sending]
+      summary: Create a follow-up draft from a queued or completed campaign
+      responses:
+        "201":
+          description: Follow-up draft created from the primary campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSummary"
+        "404":
+          description: Source campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Source campaign is not queued or completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     patch:
       operationId: updateCampaign
       tags: [sending]
@@ -4638,6 +4667,7 @@ components:
         id: { type: string, format: uuid }
         campaignId: { type: string, format: uuid }
         campaignName: { type: string }
+        campaignType: { type: ["string", "null"], enum: [follow_up, null] }
         subject: { type: string }
         status:
           type: string
@@ -4653,7 +4683,7 @@ components:
         lastError: { type: ["string", "null"] }
         messageId: { type: ["string", "null"] }
         smtpResponse: { type: ["string", "null"] }
-      required: [id, campaignId, campaignName, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
+      required: [id, campaignId, campaignName, campaignType, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
     ContactLeadStatusUpdate:
       type: object
       properties:
@@ -4942,6 +4972,8 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
+        parentCampaignId: { type: ["string", "null"], format: uuid }
+        campaignType: { type: string, enum: [primary, follow_up] }
         senderAccountId: { type: ["string", "null"], format: uuid }
         senderEmail:
           type: ["string", "null"]
@@ -4979,7 +5011,7 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, status, pausedAt, resumeAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, parentCampaignId, campaignType, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, status, pausedAt, resumeAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignPauseInput:
       type: object
       properties:

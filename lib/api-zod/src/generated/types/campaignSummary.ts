@@ -5,10 +5,14 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignSummaryCampaignType } from './campaignSummaryCampaignType';
 import type { CampaignSummaryStatus } from './campaignSummaryStatus';
 
 export interface CampaignSummary {
   id: string;
+  /** @nullable */
+  parentCampaignId: string | null;
+  campaignType: CampaignSummaryCampaignType;
   /** @nullable */
   senderAccountId: string | null;
   /**

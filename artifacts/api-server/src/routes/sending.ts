@@ -529,6 +529,7 @@ async function getTenantContactEmailHistory(
       contactId: emailCampaignRecipientsTable.contactId,
       campaignId: emailCampaignRecipientsTable.campaignId,
       campaignName: emailCampaignsTable.name,
+      campaignType: sql<"follow_up" | null>`case when ${emailCampaignsTable.parentCampaignId} is not null then 'follow_up' else null end`,
       subject: emailCampaignsTable.subject,
       status: emailCampaignRecipientsTable.status,
       attempts: emailCampaignRecipientsTable.attempts,
@@ -918,6 +919,7 @@ async function campaignPayloads(userId: string) {
     const variants = normalizeCampaignVariantValues(campaign);
     return {
       ...campaign,
+      campaignType: campaign.parentCampaignId ? "follow_up" : "primary",
       subjectVariants: variants.subject,
       greetingVariants: variants.greeting,
       signatureVariants: variants.signature,
@@ -2164,6 +2166,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
             id: email.id,
             campaignId: email.campaignId,
             campaignName: email.campaignName,
+            campaignType: email.campaignType,
             subject: email.subject,
             status: email.status,
             attempts: email.attempts,
@@ -2504,6 +2507,7 @@ router.get(
           id: email.id,
           campaignId: email.campaignId,
           campaignName: email.campaignName,
+          campaignType: email.campaignType,
           subject: email.subject,
           status: email.status,
           attempts: email.attempts,
@@ -4194,6 +4198,49 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.status(201).json(CreateCampaignResponse.parse(summary));
 });
 
+router.post(
+  "/campaigns/:campaignId/follow-ups",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetCampaignDashboardParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid campaign identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [source] = await db.select().from(emailCampaignsTable).where(and(
+      eq(emailCampaignsTable.id, params.data.campaignId),
+      eq(emailCampaignsTable.userId, userId),
+    )).limit(1);
+    if (!source) {
+      res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      return;
+    }
+    if (source.status !== "queued" && source.status !== "completed") {
+      res.status(409).json({ error: "Follow-ups can only be created from queued or completed campaigns.", code: "CAMPAIGN_NOT_FOLLOW_UP_ELIGIBLE" });
+      return;
+    }
+    const [child] = await db.insert(emailCampaignsTable).values({
+      userId,
+      parentCampaignId: source.id,
+      senderAccountId: source.senderAccountId,
+      listId: source.listId,
+      listIds: campaignListIds(source),
+      name: `${source.name} — Follow-up`.slice(0, 160),
+      objective: source.objective,
+      subject: source.subject,
+      subjectVariants: source.subjectVariants,
+      greetingVariants: source.greetingVariants,
+      signatureVariants: source.signatureVariants,
+      textBody: source.textBody,
+      htmlBody: source.htmlBody,
+      unsubscribeOrigin: source.unsubscribeOrigin,
+    }).returning();
+    const [summary] = (await campaignPayloads(userId)).filter(item => item.id === child!.id);
+    res.status(201).json(summary);
+  },
+);
+
 router.patch(
   "/campaigns/:campaignId",
   requireUserRole,
@@ -4465,6 +4512,15 @@ router.post(
         .for("update");
       if (!campaign) return { error: "not_found" as const };
       if (campaign.status !== "draft") return { error: "not_draft" as const };
+      const parentCampaign = campaign.parentCampaignId
+        ? (await tx.select().from(emailCampaignsTable).where(and(
+            eq(emailCampaignsTable.id, campaign.parentCampaignId),
+            eq(emailCampaignsTable.userId, userId),
+          )).limit(1))[0]
+        : null;
+      if (campaign.parentCampaignId && (!parentCampaign || parentCampaign.status !== "completed" || !parentCampaign.completedAt)) {
+        return { error: "followup_parent_pending" as const };
+      }
 
       const variants = cleanedVariantValues(
         normalizeCampaignVariantValues(campaign),
@@ -4640,13 +4696,19 @@ router.post(
       const earliestStartAt = new Date(
         now.getTime() + latestActiveFinishSeconds * 1000,
       );
+      const scheduledAt = requestedStartAt ?? earliestStartAt;
+      const followUpMinimumAt = parentCampaign?.completedAt
+        ? new Date(parentCampaign.completedAt.getTime() + 24 * 60 * 60 * 1000)
+        : null;
+      if (followUpMinimumAt && scheduledAt.getTime() < followUpMinimumAt.getTime()) {
+        return { error: "followup_too_early" as const, earliestStartAt: followUpMinimumAt };
+      }
       if (
         requestedStartAt &&
         requestedStartAt.getTime() < earliestStartAt.getTime()
       ) {
         return { error: "start_too_early" as const, earliestStartAt };
       }
-      const scheduledAt = requestedStartAt ?? earliestStartAt;
       const [scheduledDowngrade] = await tx
         .select({
           startsAt: userSubscriptionsTable.startsAt,
@@ -4683,7 +4745,28 @@ router.post(
         return { error: "concurrency_limit" as const };
       }
 
-      const memberships = await tx
+      const memberships = campaign.parentCampaignId
+        ? await tx
+        .select({
+          id: contactsTable.id,
+          listId: sql<string>`${listIds[0]}`,
+          email: contactsTable.email,
+          firstName: contactsTable.firstName,
+          lastName: contactsTable.lastName,
+          createdAt: contactsTable.createdAt,
+        })
+        .from(emailCampaignRecipientsTable)
+        .innerJoin(contactsTable, and(
+          eq(contactsTable.id, emailCampaignRecipientsTable.contactId),
+          eq(contactsTable.userId, userId),
+          eq(contactsTable.subscribed, true),
+        ))
+        .where(and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaign.parentCampaignId),
+        ))
+        .orderBy(asc(contactsTable.createdAt))
+        : await tx
         .select({
           id: contactsTable.id,
           listId: contactListMembersTable.listId,
@@ -4706,7 +4789,9 @@ router.post(
           ),
         )
         .orderBy(asc(contactsTable.createdAt));
-      const recipients = uniqueCampaignRecipients(memberships, listIds);
+      const recipients = campaign.parentCampaignId
+        ? memberships
+        : uniqueCampaignRecipients(memberships, listIds);
       if (recipients.length === 0) return { error: "empty_list" as const };
       if (recipients.length > settings.maxCampaignSize) {
         return { error: "campaign_size_limit" as const };
@@ -4760,6 +4845,10 @@ router.post(
     if ("error" in outcome) {
       if (outcome.error === "not_found") {
         res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      } else if (outcome.error === "followup_parent_pending") {
+        res.status(409).json({ error: "A follow-up can be queued only after the primary campaign has completed.", code: "FOLLOW_UP_PRIMARY_NOT_COMPLETED" });
+      } else if (outcome.error === "followup_too_early") {
+        res.status(409).json({ error: `A follow-up may start no earlier than ${outcome.earliestStartAt.toISOString()}.`, code: "FOLLOW_UP_START_TOO_EARLY", earliestStartAt: outcome.earliestStartAt.toISOString() });
       } else if (outcome.error === "not_draft") {
         res.status(409).json({
           error: "Only draft campaigns can be queued.",

@@ -2034,6 +2034,16 @@ export interface Contact {
   updatedAt: string;
 }
 
+/**
+ * @nullable
+ */
+export type ContactEmailHistoryItemCampaignType = typeof ContactEmailHistoryItemCampaignType[keyof typeof ContactEmailHistoryItemCampaignType] | null;
+
+
+export const ContactEmailHistoryItemCampaignType = {
+  follow_up: 'follow_up',
+} as const;
+
 export type ContactEmailHistoryItemStatus = typeof ContactEmailHistoryItemStatus[keyof typeof ContactEmailHistoryItemStatus];
 
 
@@ -2086,6 +2096,8 @@ export interface ContactEmailHistoryItem {
   id: string;
   campaignId: string;
   campaignName: string;
+  /** @nullable */
+  campaignType: ContactEmailHistoryItemCampaignType;
   subject: string;
   status: ContactEmailHistoryItemStatus;
   /** @minimum 0 */
@@ -2719,6 +2731,14 @@ export interface CampaignQueueInput {
   scheduledAt?: string;
 }
 
+export type CampaignSummaryCampaignType = typeof CampaignSummaryCampaignType[keyof typeof CampaignSummaryCampaignType];
+
+
+export const CampaignSummaryCampaignType = {
+  primary: 'primary',
+  follow_up: 'follow_up',
+} as const;
+
 export type CampaignSummaryStatus = typeof CampaignSummaryStatus[keyof typeof CampaignSummaryStatus];
 
 
@@ -2731,6 +2751,9 @@ export const CampaignSummaryStatus = {
 
 export interface CampaignSummary {
   id: string;
+  /** @nullable */
+  parentCampaignId: string | null;
+  campaignType: CampaignSummaryCampaignType;
   /** @nullable */
   senderAccountId: string | null;
   /**

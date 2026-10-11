@@ -7930,12 +7930,86 @@ export function useGetCampaignDashboard<TData = Awaited<ReturnType<typeof getCam
 
 
 
+export const getCreateCampaignFollowUpUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/follow-ups`
+}
+
+/**
+ * @summary Create a follow-up draft from a queued or completed campaign
+ */
+export const createCampaignFollowUp = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
+
+  return customFetch<CampaignSummary>(getCreateCampaignFollowUpUrl(campaignId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateCampaignFollowUpMutationKey = () => ['createCampaignFollowUp'] as const;
+
+export const getCreateCampaignFollowUpMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaignFollowUp>>, TError,CreateCampaignFollowUpMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCampaignFollowUp>>, TError,CreateCampaignFollowUpMutationVariables, TContext> => {
+
+const mutationKey = getCreateCampaignFollowUpMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCampaignFollowUp>>, CreateCampaignFollowUpMutationVariables> = (props) => {
+          const {campaignId} = props ?? {};
+
+          return  createCampaignFollowUp(campaignId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCampaignFollowUpMutationResult = NonNullable<Awaited<ReturnType<typeof createCampaignFollowUp>>>
+
+    export type CreateCampaignFollowUpMutationError = ErrorType<ApiError>
+    export type CreateCampaignFollowUpMutationVariables = {campaignId: string}
+
+    /**
+ * @summary Create a follow-up draft from a queued or completed campaign
+ */
+export const useCreateCampaignFollowUp = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaignFollowUp>>, TError,CreateCampaignFollowUpMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCampaignFollowUp>>,
+        TError,
+        CreateCampaignFollowUpMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateCampaignFollowUpMutationOptions(options));
+    }
+
 export const getUpdateCampaignUrl = (campaignId: string,) => {
 
 
 
 
-  return `/api/campaigns/${campaignId}`
+  return `/api/campaigns/${campaignId}/follow-ups`
 }
 
 /**
@@ -8024,7 +8098,7 @@ export const getDeleteCampaignUrl = (campaignId: string,) => {
 
 
 
-  return `/api/campaigns/${campaignId}`
+  return `/api/campaigns/${campaignId}/follow-ups`
 }
 
 /**

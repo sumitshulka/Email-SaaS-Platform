@@ -502,6 +502,7 @@ memory.public.none(`
   CREATE TABLE email_campaigns (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    parent_campaign_id uuid,
     sender_account_id uuid REFERENCES tenant_sending_configurations(id) ON DELETE SET NULL,
     sender_email varchar(254),
     list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
@@ -12764,6 +12765,30 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       deliveredHistory.body[0].smtpResponse,
       "250 2.0.0 SMTP accepted",
     );
+    const completedPrimary = await api(`/campaigns/${campaign.body.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(completedPrimary.body.campaign.status, "completed");
+    const followUp = await api(`/campaigns/${campaign.body.id}/follow-ups`, {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(followUp.response.status, 201, JSON.stringify(followUp.body));
+    assert.equal(followUp.body.parentCampaignId, campaign.body.id);
+    assert.equal(followUp.body.campaignType, "follow_up");
+    assert.deepEqual(followUp.body.listIds, campaign.body.listIds);
+    const tooEarlyFollowUp = await api(`/campaigns/${followUp.body.id}/send`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        scheduledAt: new Date(
+          new Date(completedPrimary.body.campaign.completedAt).getTime() +
+            23 * 60 * 60 * 1000,
+        ).toISOString(),
+      },
+    });
+    assert.equal(tooEarlyFollowUp.response.status, 409);
+    assert.equal(tooEarlyFollowUp.body.code, "FOLLOW_UP_START_TOO_EARLY");
     const bouncedHistory = await api(
       `/contacts/${bouncedRecipient.contactId}/email-history`,
       { cookie: owner.cookie },

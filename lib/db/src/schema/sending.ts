@@ -296,6 +296,7 @@ export const emailCampaignsTable = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
+    parentCampaignId: uuid("parent_campaign_id"),
     listId: uuid("list_id").references(() => contactListsTable.id, {
       onDelete: "set null",
     }),
@@ -342,6 +343,7 @@ export const emailCampaignsTable = pgTable(
   (table) => [
     index("email_campaigns_user_created_idx").on(table.userId, table.createdAt),
     index("email_campaigns_user_status_idx").on(table.userId, table.status),
+    index("email_campaigns_parent_campaign_idx").on(table.parentCampaignId),
     index("email_campaigns_list_idx").on(table.listId),
     index("email_campaigns_sender_account_idx").on(table.senderAccountId),
     index("email_campaigns_resume_at_idx")
