@@ -4,7 +4,7 @@ import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, ChevronDown, ChevronRight, CirclePlus, Clock3,
   Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send, Pause, Play,
-  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw, MailCheck,
+  ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
@@ -94,6 +94,14 @@ function Modal({ title, subtitle, close, children, wide = false }: { title: stri
 function Status({ children, tone = 'gray' }: { children: ReactNode; tone?: 'blue' | 'green' | 'orange' | 'gray' }) {
   const color = { blue: 'bg-[#edf4fc] text-[#245b9b]', green: 'bg-[#edf7f0] text-[#397050]', orange: 'bg-[#fff3e8] text-[#a95218]', gray: 'bg-[#f0f2f4] text-[#66717e]' }[tone];
   return <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', color)}><span className={cx('h-1.5 w-1.5 rounded-full', tone === 'green' ? 'bg-[#4c9668]' : tone === 'orange' ? 'bg-[#e78b3b]' : tone === 'blue' ? 'bg-[#4382c4]' : 'bg-[#929ba6]')}/>{children}</span>;
+}
+function ContactEmailIcon({ status }: { status: ContactEmailVerification['status'] | null }) {
+  return <span className="relative inline-flex" aria-hidden="true">
+    <Mail className="h-4 w-4"/>
+    {status === 'accepted' && <Check className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#26834a]"/>}
+    {(status === 'rejected' || status === 'no_mail_server') && <X className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#c34343]"/>}
+    {(status === 'catch_all' || status === 'inconclusive') && <AlertCircle className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#d47a19]"/>}
+  </span>;
 }
 function formatDate(date: string | null | undefined) {
   return date ? new Date(date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
@@ -790,6 +798,7 @@ export function ContactsPage() {
   const [segmentToDelete, setSegmentToDelete] = useState<ContactAudienceSegment | null>(null);
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
+  const [emailVerificationByContact, setEmailVerificationByContact] = useState<Record<string, { email: string; status: ContactEmailVerification['status'] }>>({});
   const [emailVerification, setEmailVerification] = useState<{
     contact: ContactDirectoryItem;
     result?: ContactEmailVerification;
@@ -1100,17 +1109,39 @@ export function ContactsPage() {
             {(() => {
               const linkedinHref = getLinkedInProfileHref(contact.linkedinUrl);
               const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email;
+              const savedVerification = emailVerificationByContact[contact.id];
+              const verificationStatus = savedVerification?.email.toLowerCase() === contact.email.toLowerCase()
+                ? savedVerification.status
+                : null;
+              const verificationTitle = verificationStatus === 'accepted'
+                ? 'Mail server accepted this address; this does not prove inbox delivery'
+                : verificationStatus === 'rejected' || verificationStatus === 'no_mail_server'
+                  ? 'Mail server rejected this address'
+                  : verificationStatus === 'catch_all' || verificationStatus === 'inconclusive'
+                    ? 'Email check inconclusive'
+                    : 'Verify email without sending';
               return <>
                 <span className="inline-flex h-9 w-10 shrink-0 items-center justify-center">
                   {linkedinHref && <a data-testid={`link-contact-linkedin-${contact.id}`} href={linkedinHref} target="_blank" rel="noopener noreferrer" aria-label={`Open LinkedIn profile for ${contactName}`} title="Open LinkedIn profile" className="inline-flex h-9 w-10 shrink-0 items-center justify-center rounded-md text-[#245b9b] transition hover:bg-[#edf4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe8f7]"><Linkedin aria-hidden="true" className="h-4 w-4"/></a>}
                 </span>
-                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`Verify email for ${contactName}`} title="Verify email without sending" disabled={verifyEmail.isPending} onClick={() => {
+                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`${verificationTitle}: ${contactName}`} title={verificationTitle} disabled={verifyEmail.isPending} onClick={() => {
+                  setEmailVerificationByContact(previous => {
+                    const next = { ...previous };
+                    delete next[contact.id];
+                    return next;
+                  });
                   setEmailVerification({ contact });
                   verifyEmail.mutate({ contactId: contact.id }, {
-                    onSuccess: result => setEmailVerification({ contact, result }),
+                    onSuccess: result => {
+                      setEmailVerification({ contact, result });
+                      setEmailVerificationByContact(previous => ({
+                        ...previous,
+                        [contact.id]: { email: contact.email, status: result.status },
+                      }));
+                    },
                     onError: error => setEmailVerification({ contact, error: mutationError(error) }),
                   });
-                }}><MailCheck aria-hidden="true" className="h-4 w-4"/></Button>
+                }}><ContactEmailIcon status={verificationStatus}/></Button>
                 <Button variant="quiet" testId={`button-contact-history-${contact.id}`} ariaLabel={`Email history for ${contactName}`} title="Email history" onClick={() => setHistoryContact(contact)}><Clock3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-edit-contact-${contact.id}`} ariaLabel={`Edit ${contactName}`} title="Edit contact" onClick={() => openEdit(contact)}><Edit3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-delete-contact-${contact.id}`} ariaLabel={`Delete ${contactName}`} title="Delete contact" disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 aria-hidden="true" className="h-4 w-4 text-[#b85b20]"/></Button>
