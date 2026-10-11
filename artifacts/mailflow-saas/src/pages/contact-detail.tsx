@@ -263,7 +263,9 @@ export function ContactDetailPage() {
       subscribed: form.subscribed,
     };
     update.mutate({ contactId: contact.id, data }, {
-      onSuccess: () => {
+      onSuccess: updatedContact => {
+        setForm(fromContact(updatedContact));
+        qc.setQueryData(getGetContactQueryKey(contact.id), updatedContact);
         setLeadStatusChangeReason('');
         setLeadStatusReasonError(false);
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
