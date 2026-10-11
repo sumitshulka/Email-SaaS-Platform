@@ -321,4 +321,99 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
       await context.close();
     }
   });
+
+  it('distinguishes scheduled, overdue, and failed Gmail sync states', async () => {
+    const now = Date.now();
+    const baseConnection = {
+      configured: true,
+      redirectUri: null,
+      connected: true,
+      emailAddress: 'bounce-monitor@example.test',
+      syncStatus: 'connected',
+      lastSyncAt: new Date(now - 60_000).toISOString(),
+      lastSuccessAt: new Date(now - 60_000).toISOString(),
+      lastSyncDiagnostics: {
+        messagesChecked: 0,
+        dsnCandidates: 0,
+        importedReports: 0,
+        unmatchedReports: 0,
+        warnings: 0,
+        outcome: 'no_dsn_found',
+      },
+      nextSyncAt: new Date(now + 60_000).toISOString(),
+      lastError: null,
+      pollIntervalSeconds: 120,
+    };
+    const cases = [
+      {
+        name: 'scheduled sync',
+        connection: baseConnection,
+        expectOverdue: false,
+        expectFailure: false,
+      },
+      {
+        name: 'overdue sync',
+        connection: {
+          ...baseConnection,
+          nextSyncAt: new Date(now - 60_000).toISOString(),
+        },
+        expectOverdue: true,
+        expectFailure: false,
+      },
+      {
+        name: 'failed sync',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          lastSyncDiagnostics: {
+            messagesChecked: null,
+            dsnCandidates: null,
+            importedReports: null,
+            unmatchedReports: null,
+            warnings: null,
+            outcome: 'gmail_api_error',
+          },
+          lastError: 'Gmail sync failed; Mailflow will retry.',
+        },
+        expectOverdue: false,
+        expectFailure: true,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { context, page } = await openEmailSetupPage(testCase.connection);
+      try {
+        await page.getByTestId('tab-gmail-monitoring').click();
+        await page.getByTestId('section-gmail-bounce-monitor').waitFor();
+        assert.equal(
+          await page.getByTestId('alert-gmail-sync-overdue').count(),
+          testCase.expectOverdue ? 1 : 0,
+          `${testCase.name} overdue warning`,
+        );
+        assert.equal(
+          await page.getByTestId('text-gmail-sync-error').count(),
+          testCase.expectFailure ? 1 : 0,
+          `${testCase.name} failure message`,
+        );
+        if (testCase.expectOverdue) {
+          const warning = page.getByTestId('alert-gmail-sync-overdue');
+          assert.match(await warning.innerText(), /run a sync now/i);
+          assert.match(await warning.innerText(), /rescan recent messages/i);
+          assert.match(await warning.innerText(), /reconnect Google/i);
+          await page.getByTestId('button-sync-gmail-now').waitFor();
+          await page.getByTestId('button-rescan-recent-gmail').waitFor();
+          await page.getByTestId('button-connect-gmail').waitFor();
+        }
+        if (testCase.expectFailure) {
+          assert.match(await page.getByTestId('text-gmail-sync-error').innerText(), /will retry/i);
+          assert.match(
+            await page.getByTestId('text-gmail-sync-diagnostic-outcome').innerText(),
+            /Gmail could not finish the sync/i,
+          );
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  });
 });
