@@ -62,6 +62,12 @@ export const contactsTable = pgTable(
     companyLocation: varchar("company_location", { length: 200 }),
     subscribed: boolean("subscribed").notNull().default(true),
     emailStatus: varchar("email_status", { length: 20 }),
+    emailVerificationStatus: varchar("email_verification_status", {
+      length: 24,
+    }),
+    emailVerificationCheckedAt: timestamp("email_verification_checked_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

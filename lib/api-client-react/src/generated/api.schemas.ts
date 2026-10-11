@@ -1862,6 +1862,20 @@ export const ContactEmailStatus = {
   unsubscribed: 'unsubscribed',
 } as const;
 
+/**
+ * @nullable
+ */
+export type ContactEmailVerificationStatus = typeof ContactEmailVerificationStatus[keyof typeof ContactEmailVerificationStatus] | null;
+
+
+export const ContactEmailVerificationStatus = {
+  accepted: 'accepted',
+  rejected: 'rejected',
+  catch_all: 'catch_all',
+  no_mail_server: 'no_mail_server',
+  inconclusive: 'inconclusive',
+} as const;
+
 export interface Contact {
   id: string;
   email: string;
@@ -2029,21 +2043,14 @@ export interface Contact {
   subscribed: boolean;
   /** @nullable */
   emailStatus: ContactEmailStatus;
+  /** @nullable */
+  emailVerificationStatus: ContactEmailVerificationStatus;
+  /** @nullable */
+  emailVerificationCheckedAt: string | null;
   listIds: string[];
   createdAt: string;
   updatedAt: string;
 }
-
-export type ContactEmailVerificationStatus = typeof ContactEmailVerificationStatus[keyof typeof ContactEmailVerificationStatus];
-
-
-export const ContactEmailVerificationStatus = {
-  accepted: 'accepted',
-  rejected: 'rejected',
-  catch_all: 'catch_all',
-  no_mail_server: 'no_mail_server',
-  inconclusive: 'inconclusive',
-} as const;
 
 export interface ContactEmailVerification {
   status: ContactEmailVerificationStatus;

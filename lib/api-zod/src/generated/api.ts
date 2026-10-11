@@ -1350,6 +1350,8 @@ export const ListContactsResponse = zod.object({
   "companyLocation": zod.string().max(listContactsResponseContactsItemOneCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
+  "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
+  "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1651,6 +1653,8 @@ export const CreateContactResponse = zod.object({
   "companyLocation": zod.string().max(createContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
+  "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
+  "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3574,6 +3578,8 @@ export const GetContactResponse = zod.object({
   "companyLocation": zod.string().max(getContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
+  "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
+  "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3846,6 +3852,8 @@ export const UpdateContactResponse = zod.object({
   "companyLocation": zod.string().max(updateContactResponseCompanyLocationMax).nullable(),
   "subscribed": zod.boolean(),
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
+  "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
+  "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

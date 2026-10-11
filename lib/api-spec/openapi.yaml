@@ -4709,10 +4709,16 @@ components:
         emailStatus:
           type: ["string", "null"]
           enum: [subscribed, bounced, unsubscribed, null]
+        emailVerificationStatus:
+          type: ["string", "null"]
+          enum: [accepted, rejected, catch_all, no_mail_server, inconclusive, null]
+        emailVerificationCheckedAt:
+          type: ["string", "null"]
+          format: date-time
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, listIds, createdAt, updatedAt]
     ContactEmailVerification:
       type: object
       properties:

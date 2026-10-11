@@ -986,7 +986,7 @@ export function ContactsPage() {
         ) : emailVerification.result && (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Status tone={emailVerification.result.status === 'accepted' ? 'green' : emailVerification.result.status === 'catch_all' || emailVerification.result.status === 'inconclusive' ? 'orange' : 'gray'}>{emailVerification.result.status.replaceAll('_', ' ')}</Status>
+              <Status tone={emailVerification.result.status === 'accepted' ? 'green' : emailVerification.result.status === 'catch_all' || emailVerification.result.status === 'inconclusive' ? 'orange' : 'gray'}>{emailVerification.result.status?.replaceAll('_', ' ') ?? 'inconclusive'}</Status>
               <span className="text-[10px] text-[#788596]">Checked {formatDate(emailVerification.result.checkedAt)}</span>
             </div>
             <p role="status" data-testid="status-contact-email-verification-result" className="rounded-lg border border-[#e3e8ee] bg-[#f8fafc] p-4 text-[13px] leading-6 text-[#435267]">{emailVerification.result.message}</p>
@@ -1112,7 +1112,7 @@ export function ContactsPage() {
               const savedVerification = emailVerificationByContact[contact.id];
               const verificationStatus = savedVerification?.email.toLowerCase() === contact.email.toLowerCase()
                 ? savedVerification.status
-                : null;
+                : contact.emailVerificationStatus;
               const verificationTitle = verificationStatus === 'accepted'
                 ? 'Mail server accepted this address; this does not prove inbox delivery'
                 : verificationStatus === 'rejected' || verificationStatus === 'no_mail_server'
@@ -1138,6 +1138,7 @@ export function ContactsPage() {
                         ...previous,
                         [contact.id]: { email: contact.email, status: result.status },
                       }));
+                      void contactsQuery.refetch();
                     },
                     onError: error => setEmailVerification({ contact, error: mutationError(error) }),
                   });

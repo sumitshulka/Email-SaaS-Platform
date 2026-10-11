@@ -443,6 +443,8 @@ memory.public.none(`
     company_location varchar(200),
     subscribed boolean NOT NULL DEFAULT true,
     email_status varchar(20),
+    email_verification_status varchar(24),
+    email_verification_checked_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, email),
@@ -11879,12 +11881,38 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         listIds: [otherList.body.id],
       },
     });
-    assert.ok(ownerContacts.every((result) => result.response.status === 201));
+    assert.ok(
+      ownerContacts.every((result) => result.response.status === 201),
+      JSON.stringify(ownerContacts.map(({ response, body }) => ({
+        status: response.status,
+        body,
+      }))),
+    );
     assert.equal(otherContact.response.status, 201);
+
+    const emailVerification = await api(
+      `/contacts/${ownerContacts[0].body.id}/verify-email`,
+      { method: "POST", cookie: owner.cookie, body: {} },
+    );
+    assert.equal(emailVerification.response.status, 200, JSON.stringify(emailVerification.body));
+    const [persistedVerification] = await db
+      .select({
+        status: dbModule.contactsTable.emailVerificationStatus,
+        checkedAt: dbModule.contactsTable.emailVerificationCheckedAt,
+      })
+      .from(dbModule.contactsTable)
+      .where(eq(dbModule.contactsTable.id, ownerContacts[0].body.id));
+    assert.equal(persistedVerification.status, emailVerification.body.status);
+    assert.ok(persistedVerification.checkedAt instanceof Date);
 
     const isolatedContacts = await api("/contacts", { cookie: owner.cookie });
     assert.equal(isolatedContacts.response.status, 200);
     assert.equal(isolatedContacts.body.contacts.length, 3);
+    const verifiedContact = isolatedContacts.body.contacts.find(
+      (contact) => contact.id === ownerContacts[0].body.id,
+    );
+    assert.equal(verifiedContact.emailVerificationStatus, emailVerification.body.status);
+    assert.ok(verifiedContact.emailVerificationCheckedAt);
     assert.ok(
       isolatedContacts.body.contacts.every((contact) =>
         contact.email.endsWith("@owner.test"),

@@ -2457,7 +2457,7 @@ router.post(
       return;
     }
     const [contact] = await db
-      .select({ email: contactsTable.email })
+      .select({ id: contactsTable.id, email: contactsTable.email })
       .from(contactsTable)
       .where(
         and(
@@ -2471,6 +2471,28 @@ router.post(
       return;
     }
     const result = await verifyContactEmail(contact.email);
+    const [saved] = await db
+      .update(contactsTable)
+      .set({
+        emailVerificationStatus: result.status,
+        emailVerificationCheckedAt: new Date(result.checkedAt),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(contactsTable.id, contact.id),
+          eq(contactsTable.userId, req.authUser!.id),
+          eq(contactsTable.email, contact.email),
+        ),
+      )
+      .returning({ id: contactsTable.id });
+    if (!saved) {
+      res.status(409).json({
+        error: "The contact email changed during verification. Run the check again.",
+        code: "CONTACT_EMAIL_CHANGED_DURING_VERIFICATION",
+      });
+      return;
+    }
     res.json(result);
   },
 );
@@ -3057,6 +3079,7 @@ router.patch(
         .for("update");
       if (!existing) return { kind: "not_found" as const };
       const nextEmail = parsed.data.email?.trim().toLowerCase() ?? existing.email.toLowerCase();
+      const contactEmailChanged = nextEmail !== existing.email.toLowerCase();
       if (
         existing.emailStatus === "bounced" &&
         parsed.data.subscribed === true &&
@@ -3179,6 +3202,12 @@ router.patch(
           name: `${firstName} ${lastName}`.trim() || existing.name,
           ...(parsed.data.email
             ? { email: parsed.data.email.toLowerCase() }
+            : {}),
+          ...(contactEmailChanged
+            ? {
+                emailVerificationStatus: null,
+                emailVerificationCheckedAt: null,
+              }
             : {}),
           firstName,
           lastName,

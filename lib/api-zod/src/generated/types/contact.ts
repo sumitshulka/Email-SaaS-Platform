@@ -7,6 +7,7 @@
  */
 import type { Company } from './company';
 import type { ContactEmailStatus } from './contactEmailStatus';
+import type { ContactEmailVerificationStatus } from './contactEmailVerificationStatus';
 
 export interface Contact {
   id: string;
@@ -175,6 +176,10 @@ export interface Contact {
   subscribed: boolean;
   /** @nullable */
   emailStatus: ContactEmailStatus;
+  /** @nullable */
+  emailVerificationStatus: ContactEmailVerificationStatus;
+  /** @nullable */
+  emailVerificationCheckedAt: Date | null;
   listIds: string[];
   createdAt: Date;
   updatedAt: Date;

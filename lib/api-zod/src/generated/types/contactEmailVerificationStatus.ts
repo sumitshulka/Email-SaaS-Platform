@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ContactEmailVerificationStatus = typeof ContactEmailVerificationStatus[keyof typeof ContactEmailVerificationStatus];
+/**
+ * @nullable
+ */
+export type ContactEmailVerificationStatus = typeof ContactEmailVerificationStatus[keyof typeof ContactEmailVerificationStatus] | null;
 
 
 export const ContactEmailVerificationStatus = {
