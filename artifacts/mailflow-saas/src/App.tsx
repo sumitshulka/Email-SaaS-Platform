@@ -40,7 +40,7 @@ import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingS
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
-import { clearPackageCheckoutSession, getVerifiedPackageCheckout } from '@/lib/package-checkout';
+import { clearPackageCheckoutCredentials, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
@@ -191,7 +191,7 @@ function RegisterPage() {
         if (verifiedCheckout && checkoutPackageId) trackPackageCheckoutRegistrationCompleted();
         trackRegistrationSucceeded(!verifiedCheckout);
         if (verifiedCheckout && checkoutPackageId) {
-          clearPackageCheckoutSession();
+          clearPackageCheckoutCredentials();
           setLocation(`/plans?checkout=${encodeURIComponent(checkoutPackageId)}`);
           return;
         }

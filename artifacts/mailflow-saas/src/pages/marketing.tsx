@@ -15,11 +15,12 @@ import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/ap
 import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/lib/public-page-meta';
 import { trackMarketingSignupCta, trackPackageCheckoutSelection, trackPackageCheckoutVerification } from '@/lib/analytics';
 import {
-  clearPackageCheckoutSession,
+  clearPackageCheckoutCredentials,
   isAmbiguousPackageCheckoutSlug,
   packageCheckoutPath,
   packageCheckoutSlugFromUrl,
   packageNameSlug,
+  savePackageCheckoutTerms,
   saveVerifiedPackageCheckout,
 } from '@/lib/package-checkout';
 
@@ -507,6 +508,7 @@ export function PackageCheckoutPage() {
     if (step === 'email') {
       requestCode.mutate({ data: { email: normalizedEmail } }, {
         onSuccess: () => {
+          if (pkg && sendingLimits) savePackageCheckoutTerms(pkg, sendingLimits);
           verifyCode.reset();
           setEmail(normalizedEmail);
           setStep('code');
@@ -553,7 +555,7 @@ export function PackageCheckoutPage() {
     login.mutate({ data: { identifier: normalizedEmail, password } }, {
       onSuccess: result => {
         queryClient.setQueryData(getGetCurrentUserQueryKey(), result.user);
-        clearPackageCheckoutSession();
+        clearPackageCheckoutCredentials();
         if (result.user.role !== 'USER') {
           setLocation('/admin');
           return;

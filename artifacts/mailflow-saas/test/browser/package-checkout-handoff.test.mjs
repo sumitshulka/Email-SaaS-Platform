@@ -132,6 +132,7 @@ async function installCheckoutFixtures(context, {
   accountExists,
   packages,
   unavailablePackageIdOnVerify,
+  packageChangesOnVerify,
   initialUser = null,
   scheduledSubscription = null,
 }) {
@@ -190,6 +191,11 @@ async function installCheckoutFixtures(context, {
     }
     if (pathname === '/api/auth/package-checkout/verify-code' && method === 'POST') {
       state.requestBodies.push({ pathname, body: jsonBody });
+      if (packageChangesOnVerify) {
+        state.packages = state.packages.map(pkg => pkg.id === packageChangesOnVerify.packageId
+          ? { ...pkg, ...packageChangesOnVerify.changes }
+          : pkg);
+      }
       if (unavailablePackageIdOnVerify) {
         state.packages = state.packages.filter(pkg => pkg.id !== unavailablePackageIdOnVerify);
       }
@@ -274,10 +280,16 @@ async function installCheckoutFixtures(context, {
     }
     if (pathname === '/api/subscriptions/orders' && method === 'POST') {
       state.orderAttempts.push({ authenticated: state.authenticated, user: state.user, body: jsonBody });
-      if (!state.packages.some(pkg => pkg.id === jsonBody.packageId)) {
+      const selected = state.packages.find(pkg => pkg.id === jsonBody.packageId);
+      if (!selected) {
         return respond(404, { error: 'That package is not available for purchase.' });
       }
-      return respond(201, order);
+      return respond(201, {
+        ...order,
+        amountMinor: selected.amountMinor,
+        currency: selected.currency,
+        packageName: selected.name,
+      });
     }
     return respond(404, { error: `Unexpected API request: ${pathname} ${method}` });
   });
@@ -360,6 +372,80 @@ describe('package checkout account and payment handoff', { concurrency: false },
       await context.close();
     }
   });
+
+  for (const { label, selectedPackage, changes, expectedTerms, outcome } of [
+    {
+      label: 'price',
+      selectedPackage: paidPackage,
+      changes: { amountMinor: 3499 },
+      expectedTerms: /34\.99/,
+      outcome: 'order',
+    },
+    {
+      label: 'term',
+      selectedPackage: freePackage,
+      changes: { periodDays: 60 },
+      expectedTerms: /Term:\s*2 months/,
+      outcome: 'activation',
+    },
+    {
+      label: 'limits',
+      selectedPackage: paidPackage,
+      changes: { contactLimit: 250, emailAccountLimit: 2 },
+      expectedTerms: /Contacts:\s*up to 250[\s\S]*SMTP sender accounts:\s*2/,
+      outcome: 'order',
+    },
+  ]) {
+    it(`requires confirmation when the ${label} changes after the email code is sent`, async () => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const state = await installCheckoutFixtures(context, {
+        accountExists: false,
+        packages: [selectedPackage],
+        packageChangesOnVerify: {
+          packageId: selectedPackage.id,
+          changes,
+        },
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto(`${baseUrl}/pricing`);
+        await page.getByTestId(`package-cta-${selectedPackage.id}`).click();
+        await page.waitForURL(url => url.pathname.startsWith('/package-checkout/'));
+        await page.getByTestId('input-package-checkout-email').fill(`changed-${label}@example.test`);
+        await page.getByTestId('button-package-checkout-continue').click();
+        await page.getByTestId('input-package-checkout-code').waitFor();
+        await page.getByTestId('input-package-checkout-code').fill('123456');
+        await page.getByTestId('button-package-checkout-continue').click();
+        await page.waitForURL(url => url.pathname === '/register');
+
+        await page.getByTestId('input-first-name').fill('Changed');
+        await page.getByTestId('input-last-name').fill('Terms');
+        await page.getByTestId('input-register-password').fill('changed-plan-terms-password');
+        await page.getByTestId('button-create-account').click();
+        await page.waitForURL(url => url.pathname === '/plans');
+        await page.getByTestId('dialog-checkout-terms-changed').waitFor();
+
+        const displayedTerms = await page.getByTestId('current-checkout-terms').innerText();
+        assert.match(displayedTerms, expectedTerms);
+        assert.deepEqual(state.orderAttempts, [], 'no paid order is created before confirmation');
+        assert.deepEqual(state.freeActivationAttempts, [], 'no free plan is activated before confirmation');
+        assert.equal(await page.evaluate(() => window.__checkoutOptions.length), 0);
+
+        await page.getByTestId('button-confirm-current-plan-terms').click();
+        if (outcome === 'activation') {
+          await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+          assert.equal(state.freeActivationAttempts.length, 1);
+          assert.deepEqual(state.orderAttempts, []);
+        } else {
+          await page.getByTestId('status-payment').getByText(/Checkout was closed/).waitFor();
+          assert.equal(state.orderAttempts.length, 1);
+          assert.deepEqual(state.freeActivationAttempts, []);
+        }
+      } finally {
+        await context.close();
+      }
+    });
+  }
 
   for (const { selectedPackage, otherPackage, outcomeLabel } of [
     { selectedPackage: freePackage, otherPackage: paidPackage, outcomeLabel: 'free activation' },

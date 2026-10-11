@@ -10,6 +10,13 @@ import {
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage, SubscriptionPackageList, TenantSendingAccount } from '@workspace/api-client-react';
 import {
+  clearPackageCheckoutSession,
+  createPackageCheckoutTermsSnapshot,
+  getPackageCheckoutTerms,
+  packageCheckoutTermsMatch,
+  type PackageCheckoutTermsSnapshot,
+} from '@/lib/package-checkout';
+import {
   trackEvent,
   trackFreeActivationOutcome,
   trackPaidCheckoutOutcome,
@@ -244,6 +251,7 @@ function PackageCard({ item, featured, scheduled, pending, disabled, action, onl
 
 export default function PlansPage() {
   const queryClient = useQueryClient();
+  const checkoutPackageId = new URLSearchParams(window.location.search).get('checkout');
   const packagesQuery = useListAvailableSubscriptionPackages({
     query: {
       queryKey: getListAvailableSubscriptionPackagesQueryKey(),
@@ -279,9 +287,15 @@ export default function PlansPage() {
   const checkoutAutoStartRef = useRef<string | null>(null);
   const [startingPackage, setStartingPackage] = useState<string | null>(null);
   const [pendingPackage, setPendingPackage] = useState<SubscriptionPackage | null>(null);
+  const [checkoutTermsSnapshot] = useState(() => getPackageCheckoutTerms(checkoutPackageId));
+  const [checkoutTermsReview, setCheckoutTermsReview] = useState<{
+    pkg: SubscriptionPackage;
+    sendingLimits: SubscriptionPackageList['sendingLimits'];
+    shownTerms: PackageCheckoutTermsSnapshot;
+    missingSnapshot: boolean;
+  } | null>(null);
   const [pendingPackageAccountLimit, setPendingPackageAccountLimit] = useState(1);
   const [senderAccountsToKeep, setSenderAccountsToKeep] = useState<string[]>([]);
-  const checkoutPackageId = new URLSearchParams(window.location.search).get('checkout');
   const packages = packagesQuery.data?.packages ?? [];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const onlinePaymentsEnabled = paymentAvailabilityQuery.data?.enabled === true;
@@ -552,6 +566,42 @@ export default function PlansPage() {
     );
   };
 
+  const confirmCheckoutTerms = async () => {
+    if (!checkoutTermsReview) return;
+    const review = checkoutTermsReview;
+    const refreshed = await packagesQuery.refetch();
+    if (refreshed.isError || !refreshed.data) {
+      setPaymentState({
+        kind: 'error',
+        message: 'We could not refresh the plan terms. Retry before continuing.',
+      });
+      return;
+    }
+    const latest = refreshed.data.packages.find(item => item.id === review.pkg.id);
+    if (!latest) {
+      setCheckoutTermsReview(null);
+      clearPackageCheckoutSession();
+      setPaymentState({
+        kind: 'error',
+        message: 'The selected plan is no longer available. Choose a current plan below.',
+      });
+      return;
+    }
+    const latestTerms = createPackageCheckoutTermsSnapshot(latest, refreshed.data.sendingLimits);
+    if (!packageCheckoutTermsMatch(review.shownTerms, latest, refreshed.data.sendingLimits)) {
+      setCheckoutTermsReview({
+        pkg: latest,
+        sendingLimits: refreshed.data.sendingLimits,
+        shownTerms: latestTerms,
+        missingSnapshot: false,
+      });
+      return;
+    }
+    setCheckoutTermsReview(null);
+    clearPackageCheckoutSession();
+    purchase(latest);
+  };
+
   useEffect(() => {
     if (!checkoutPackageId || checkoutAutoStartRef.current === checkoutPackageId) return;
     const isLoading =
@@ -586,12 +636,32 @@ export default function PlansPage() {
     }
     const selected = packages.find(item => item.id === checkoutPackageId);
     if (!selected) {
+      clearPackageCheckoutSession();
       setPaymentState({
         kind: 'error',
         message: 'The selected plan is no longer available. Choose a current plan below.',
       });
       return;
     }
+    const sendingLimits = packagesQuery.data?.sendingLimits;
+    if (!sendingLimits || !checkoutTermsSnapshot ||
+      !packageCheckoutTermsMatch(checkoutTermsSnapshot, selected, sendingLimits)) {
+      const shownTerms = createPackageCheckoutTermsSnapshot(selected, sendingLimits ?? {
+        emailsPerHourPerSmtp: 0,
+        emailsPerDayPerSmtp: 0,
+      });
+      setCheckoutTermsReview({
+        pkg: selected,
+        sendingLimits: sendingLimits ?? {
+          emailsPerHourPerSmtp: 0,
+          emailsPerDayPerSmtp: 0,
+        },
+        shownTerms,
+        missingSnapshot: !checkoutTermsSnapshot,
+      });
+      return;
+    }
+    clearPackageCheckoutSession();
     purchase(selected);
   }, [
     checkoutPackageId,
@@ -605,6 +675,7 @@ export default function PlansPage() {
     contactsUsageQuery.isFetching,
     senderAccountsQuery.isLoading,
     paymentAvailabilityQuery.isLoading,
+    checkoutTermsSnapshot,
   ]);
 
   if (packagesQuery.isLoading || packagesQuery.isFetching || currentQuery.isLoading || addOnsQuery.isLoading || researchAllowanceQuery.isLoading || researchAllowanceQuery.isFetching || contactsUsageQuery.isLoading || contactsUsageQuery.isFetching || senderAccountsQuery.isLoading) {
@@ -837,6 +908,40 @@ export default function PlansPage() {
           return <PackageCard key={pkg.id} item={pkg} featured={activeSubscription?.package.id === pkg.id} scheduled={scheduledSubscription?.package.id === pkg.id} action={action} pending={startingPackage === pkg.id} disabled={busy || startingPackage !== null || checkoutOrder !== null || pendingPackage !== null} onlinePaymentsEnabled={onlinePaymentsEnabled} sendingLimits={packagesQuery.data!.sendingLimits} onPurchase={() => purchase(pkg)}/>;
         })}</div>}
     </section>
+
+    {checkoutTermsReview && <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-[#101d2a]/55 p-4" data-testid="dialog-checkout-terms-changed">
+      <section role="dialog" aria-modal="true" aria-labelledby="checkout-terms-title" className="my-auto w-full max-w-xl rounded-lg border border-[#dce3e9] bg-white p-5 shadow-xl sm:p-6">
+        <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">PLEASE REVIEW BEFORE CHECKOUT</div>
+        <h2 id="checkout-terms-title" className="display mt-2 text-[21px] font-bold text-[#1b293a]">Plan terms have changed</h2>
+        <p className="mt-2 text-[12px] leading-5 text-[#637284]">
+          {checkoutTermsReview.missingSnapshot
+            ? 'We could not compare this plan with the terms shown when you requested your email code. Review the current terms before continuing.'
+            : 'The plan changed after you requested your email code. Review the current terms. No order or activation will start unless you confirm.'}
+        </p>
+        <div className="mt-4 rounded-md border border-[#e1e7ec] bg-[#f8fafb] p-4" data-testid="current-checkout-terms">
+          <h3 className="text-[14px] font-semibold text-[#24384c]">{checkoutTermsReview.pkg.name}</h3>
+          {checkoutTermsReview.pkg.description && <p className="mt-1 text-[11px] leading-5 text-[#6b7b8c]">{checkoutTermsReview.pkg.description}</p>}
+          <div className="mt-3 grid gap-2 border-t border-[#e4e9ed] pt-3 text-[11px] text-[#43566a] sm:grid-cols-2">
+            <p><strong>Price:</strong> {checkoutTermsReview.pkg.amountMinor === 0 ? 'Free' : formatMinor(checkoutTermsReview.pkg.amountMinor, checkoutTermsReview.pkg.currency)}</p>
+            <p><strong>Term:</strong> {durationLabel(checkoutTermsReview.pkg.periodDays)}</p>
+            <p><strong>Contacts:</strong> up to {checkoutTermsReview.pkg.contactLimit.toLocaleString()}</p>
+            <p><strong>SMTP sender accounts:</strong> {checkoutTermsReview.pkg.emailAccountLimit.toLocaleString()}</p>
+            <p><strong>Research runs:</strong> {checkoutTermsReview.pkg.researchAllowance.toLocaleString()} per term</p>
+            <p><strong>AI email assist:</strong> {checkoutTermsReview.pkg.aiEmailAssistAllowance.toLocaleString()}</p>
+            <p><strong>Additional mailboxes:</strong> {checkoutTermsReview.pkg.additionalMailboxCount.toLocaleString()}</p>
+            <p><strong>Campaign attempts:</strong> up to {checkoutTermsReview.sendingLimits.emailsPerHourPerSmtp.toLocaleString()} per hour and {checkoutTermsReview.sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per 24 hours, per mailbox</p>
+          </div>
+          <p className="mt-3 border-t border-[#e4e9ed] pt-3 text-[10px] text-[#6b7b8c]">One-time plan term. Plans do not auto-renew.</p>
+        </div>
+        {checkoutTermsReview.sendingLimits.emailsPerHourPerSmtp === 0 && <p role="alert" className="mt-3 text-[11px] text-[#99501e]">Sending limits could not be confirmed. Retry loading the plan list before continuing.</p>}
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#edf0f2] pt-4">
+          <button type="button" data-testid="button-cancel-checkout-terms" onClick={() => { setCheckoutTermsReview(null); clearPackageCheckoutSession(); }} className="min-h-10 rounded-md border border-[#d7dce3] px-4 text-[12px] font-semibold text-[#38485a] hover:bg-[#f7f9fb]">Not now</button>
+          <button type="button" data-testid="button-confirm-current-plan-terms" disabled={packagesQuery.isFetching || checkoutTermsReview.sendingLimits.emailsPerHourPerSmtp === 0} onClick={() => void confirmCheckoutTerms()} className="min-h-10 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+            {packagesQuery.isFetching ? 'Refreshing terms…' : checkoutTermsReview.pkg.amountMinor === 0 ? 'Confirm and activate free plan' : 'Confirm terms and continue'}
+          </button>
+        </div>
+      </section>
+    </div>}
 
     {pendingPackage && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#101d2a]/55 p-4" data-testid="dialog-sender-retention">
       <section role="dialog" aria-modal="true" aria-labelledby="sender-retention-title" className="my-auto w-full max-w-xl rounded-lg border border-[#dce3e9] bg-white p-5 shadow-xl sm:p-6">

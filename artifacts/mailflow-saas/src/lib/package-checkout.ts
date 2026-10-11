@@ -1,6 +1,42 @@
 const PACKAGE_ID_KEY = 'mailflow-package-checkout-id';
 const PACKAGE_EMAIL_KEY = 'mailflow-package-checkout-email';
 const PACKAGE_PROOF_KEY = 'mailflow-package-checkout-proof';
+const PACKAGE_TERMS_KEY = 'mailflow-package-checkout-terms';
+
+export type PackageCheckoutTermsSnapshot = {
+  packageId: string;
+  name: string;
+  description: string;
+  amountMinor: number;
+  currency: string;
+  periodDays: number;
+  contactLimit: number;
+  emailAccountLimit: number;
+  researchAllowance: number;
+  aiEmailAssistAllowance: number;
+  additionalMailboxCount: number;
+  emailsPerHourPerSmtp: number;
+  emailsPerDayPerSmtp: number;
+};
+
+type PackageTermsSource = {
+  id: string;
+  name: string;
+  description?: string | null;
+  amountMinor: number;
+  currency: string;
+  periodDays: number;
+  contactLimit: number;
+  emailAccountLimit: number;
+  researchAllowance: number;
+  aiEmailAssistAllowance: number;
+  additionalMailboxCount: number;
+};
+
+type SendingLimitSource = {
+  emailsPerHourPerSmtp: number;
+  emailsPerDayPerSmtp: number;
+};
 
 export type PackageSlugSource = {
   id: string;
@@ -69,6 +105,69 @@ export function saveVerifiedPackageCheckout(id: string, email: string, proof: st
   sessionStorage.setItem(PACKAGE_PROOF_KEY, proof);
 }
 
+export function createPackageCheckoutTermsSnapshot(
+  pkg: PackageTermsSource,
+  sendingLimits: SendingLimitSource,
+): PackageCheckoutTermsSnapshot {
+  return {
+    packageId: pkg.id,
+    name: pkg.name,
+    description: pkg.description ?? '',
+    amountMinor: pkg.amountMinor,
+    currency: pkg.currency,
+    periodDays: pkg.periodDays,
+    contactLimit: pkg.contactLimit,
+    emailAccountLimit: pkg.emailAccountLimit,
+    researchAllowance: pkg.researchAllowance,
+    aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
+    additionalMailboxCount: pkg.additionalMailboxCount,
+    emailsPerHourPerSmtp: sendingLimits.emailsPerHourPerSmtp,
+    emailsPerDayPerSmtp: sendingLimits.emailsPerDayPerSmtp,
+  };
+}
+
+export function savePackageCheckoutTerms(
+  pkg: PackageTermsSource,
+  sendingLimits: SendingLimitSource,
+) {
+  const snapshot = createPackageCheckoutTermsSnapshot(pkg, sendingLimits);
+  sessionStorage.setItem(PACKAGE_TERMS_KEY, JSON.stringify(snapshot));
+}
+
+export function getPackageCheckoutTerms(
+  id: string | null,
+): PackageCheckoutTermsSnapshot | null {
+  if (!id) return null;
+  const serialized = sessionStorage.getItem(PACKAGE_TERMS_KEY);
+  if (!serialized) return null;
+  try {
+    const snapshot = JSON.parse(serialized) as PackageCheckoutTermsSnapshot;
+    return snapshot.packageId === id ? snapshot : null;
+  } catch {
+    return null;
+  }
+}
+
+export function packageCheckoutTermsMatch(
+  snapshot: PackageCheckoutTermsSnapshot,
+  pkg: PackageTermsSource,
+  sendingLimits: SendingLimitSource,
+): boolean {
+  return snapshot.packageId === pkg.id &&
+    snapshot.name === pkg.name &&
+    snapshot.description === (pkg.description ?? '') &&
+    snapshot.amountMinor === pkg.amountMinor &&
+    snapshot.currency === pkg.currency &&
+    snapshot.periodDays === pkg.periodDays &&
+    snapshot.contactLimit === pkg.contactLimit &&
+    snapshot.emailAccountLimit === pkg.emailAccountLimit &&
+    snapshot.researchAllowance === pkg.researchAllowance &&
+    snapshot.aiEmailAssistAllowance === pkg.aiEmailAssistAllowance &&
+    snapshot.additionalMailboxCount === pkg.additionalMailboxCount &&
+    snapshot.emailsPerHourPerSmtp === sendingLimits.emailsPerHourPerSmtp &&
+    snapshot.emailsPerDayPerSmtp === sendingLimits.emailsPerDayPerSmtp;
+}
+
 export function getVerifiedPackageCheckout(id: string | null) {
   if (!id || sessionStorage.getItem(PACKAGE_ID_KEY) !== id) return null;
   const email = sessionStorage.getItem(PACKAGE_EMAIL_KEY);
@@ -76,8 +175,13 @@ export function getVerifiedPackageCheckout(id: string | null) {
   return email && proof ? { email, proof } : null;
 }
 
-export function clearPackageCheckoutSession() {
+export function clearPackageCheckoutCredentials() {
   sessionStorage.removeItem(PACKAGE_ID_KEY);
   sessionStorage.removeItem(PACKAGE_EMAIL_KEY);
   sessionStorage.removeItem(PACKAGE_PROOF_KEY);
+}
+
+export function clearPackageCheckoutSession() {
+  clearPackageCheckoutCredentials();
+  sessionStorage.removeItem(PACKAGE_TERMS_KEY);
 }
