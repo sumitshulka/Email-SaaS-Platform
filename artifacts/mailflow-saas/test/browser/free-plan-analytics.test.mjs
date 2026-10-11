@@ -188,7 +188,10 @@ async function installFixtures(context, {
   senderAccounts: initialSenderAccounts = [],
   senderAccountLimit = 1,
   analyticsThrows = false,
+  sessionId = 'free-plan-browser-test',
+  userProfile = user,
   addOnRefundAdjustments = [],
+  addOnDashboardDelayMs = 0,
   deleteSenderAccountStatus = 204,
   createSenderAccountStatus = 201,
   setPrimarySenderAccountStatus = 200,
@@ -196,7 +199,7 @@ async function installFixtures(context, {
   let senderAccounts = structuredClone(initialSenderAccounts);
   await context.addCookies([{
     name: 'mailflow_session',
-    value: 'free-plan-browser-test',
+    value: sessionId,
     url: baseUrl,
     sameSite: 'Lax',
   }]);
@@ -295,12 +298,12 @@ async function installFixtures(context, {
     const { pathname } = new URL(request.url());
     const cookie = request.headers().cookie ?? '';
 
-    if (!cookie.includes('mailflow_session=free-plan-browser-test')) {
+    if (!cookie.includes(`mailflow_session=${sessionId}`)) {
       await route.fulfill({ status: 401, json: { error: 'Not authenticated.' } });
       return;
     }
     if (pathname === '/api/auth/me') {
-      await route.fulfill({ status: 200, json: user });
+      await route.fulfill({ status: 200, json: userProfile });
       return;
     }
     if (pathname === '/api/maintenance/status' && request.method() === 'GET') {
@@ -329,6 +332,7 @@ async function installFixtures(context, {
       return;
     }
     if (pathname === '/api/subscriptions/add-ons' && request.method() === 'GET') {
+      if (addOnDashboardDelayMs > 0) await delay(addOnDashboardDelayMs);
       await route.fulfill({
         status: 200,
         json: {
@@ -525,6 +529,7 @@ describe('subscription activation analytics', { concurrency: false }, () => {
         purchasedAt: '2026-10-01T00:00:00.000Z',
         refundedAmountMinor: 700,
         currency: 'INR',
+        refunds: [{ amountMinor: 700, refundedAt: '2026-10-02T00:00:00.000Z' }],
         researchCredits: 2,
         emailAssistDrafts: 1,
         additionalMailboxSlots: 1,
@@ -535,9 +540,122 @@ describe('subscription activation analytics', { concurrency: false }, () => {
       await adjustments.waitFor();
       const text = await adjustments.innerText();
       assert.match(text, /Research and Assist Pack/);
-      assert.match(text, /Refunded .*7/);
+      assert.match(text, /refunded .*7/i);
       assert.match(text, /2 research credits, 1 AI Email Assist draft, 1 additional mailbox slot/);
     } finally {
+      await context.close();
+    }
+  });
+
+  it('reloads every refund amount and date without exposing them to another account', async () => {
+    const refunds = [
+      {
+        packageName: 'Research Plus',
+        purchasedAt: '2026-09-18T12:00:00.000Z',
+        refundedAmountMinor: 1250,
+        currency: 'USD',
+        researchCredits: 3,
+        emailAssistDrafts: 1,
+        additionalMailboxSlots: 0,
+        refunds: [
+          { amountMinor: 500, refundedAt: '2026-09-20T12:00:00.000Z' },
+          { amountMinor: 750, refundedAt: '2026-09-21T12:00:00.000Z' },
+        ],
+      },
+      {
+        packageName: 'Mailbox Expansion',
+        purchasedAt: '2026-08-03T12:00:00.000Z',
+        refundedAmountMinor: 999,
+        currency: 'USD',
+        researchCredits: 0,
+        emailAssistDrafts: 0,
+        additionalMailboxSlots: 1,
+        refunds: [
+          { amountMinor: 999, refundedAt: '2026-08-05T12:00:00.000Z' },
+        ],
+      },
+    ];
+    const firstAccountUser = { ...user, id: 'refund-history-owner', email: 'refund-owner@example.test' };
+    const { context, page } = await openPlansPage({
+      sessionId: 'refund-history-owner-session',
+      userProfile: firstAccountUser,
+      addOnRefundAdjustments: refunds,
+    });
+    let secondContext;
+    try {
+      async function assertAllRefundDetailsVisible(historyText) {
+        for (const refund of refunds) {
+          assert.ok(historyText.includes(refund.packageName), `Expected ${refund.packageName} in refund history`);
+          const total = await page.evaluate(({ amountMinor, currency }) =>
+            new Intl.NumberFormat(undefined, {
+              style: 'currency',
+              currency,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(amountMinor / 100), {
+            amountMinor: refund.refundedAmountMinor,
+            currency: refund.currency,
+          });
+          assert.ok(historyText.includes(total), `Expected total refund ${total} in refund history`);
+          const purchaseDate = await page.evaluate(date => new Date(date).toLocaleDateString(), refund.purchasedAt);
+          assert.ok(historyText.includes(purchaseDate), `Expected purchase date ${purchaseDate} in refund history`);
+          for (const event of refund.refunds) {
+            const amount = await page.evaluate(({ amountMinor, currency }) =>
+              new Intl.NumberFormat(undefined, {
+                style: 'currency',
+                currency,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(amountMinor / 100), {
+              amountMinor: event.amountMinor,
+              currency: refund.currency,
+            });
+            assert.ok(historyText.includes(amount), `Expected refund amount ${amount} in refund history`);
+            const eventDate = await page.evaluate(date => new Date(date).toLocaleDateString(), event.refundedAt);
+            assert.ok(historyText.includes(eventDate), `Expected refund date ${eventDate} in refund history`);
+          }
+        }
+      }
+
+      const history = page.getByTestId('addon-refund-adjustments');
+      await history.waitFor({ state: 'visible' });
+      assert.equal(await page.locator('li[data-testid^="addon-refund-adjustment-"]').count(), refunds.length);
+      assert.equal(await page.getByTestId('addon-refund-event-0-0').count(), 1);
+      assert.equal(await page.getByTestId('addon-refund-event-0-1').count(), 1);
+      assert.equal(await page.getByTestId('addon-refund-event-1-0').count(), 1);
+
+      const historyText = await history.innerText();
+      await assertAllRefundDetailsVisible(historyText);
+
+      await page.reload();
+      await page.getByTestId('addon-refund-adjustments').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('li[data-testid^="addon-refund-adjustment-"]').count(), refunds.length);
+      const reloadedHistory = await page.getByTestId('addon-refund-adjustments').innerText();
+      await assertAllRefundDetailsVisible(reloadedHistory);
+
+      secondContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await installFixtures(secondContext, {
+        sessionId: 'refund-history-other-session',
+        userProfile: { ...user, id: 'refund-history-other-user', email: 'other-user@example.test' },
+        addOnRefundAdjustments: [],
+        addOnDashboardDelayMs: 1200,
+      });
+      const secondPage = await secondContext.newPage();
+      const pageErrors = [];
+      secondPage.on('pageerror', error => pageErrors.push(error.message));
+      await secondPage.goto(`${baseUrl}/plans`);
+
+      await secondPage.getByTestId('subscription-add-on-balances').waitFor({ state: 'visible' });
+      assert.equal(await secondPage.getByTestId('addon-refund-adjustments').count(), 0,
+        'refund history should not appear while this account dashboard is still loading');
+      await secondPage.getByTestId('addon-balance-research').waitFor({ state: 'visible' });
+      await secondPage.getByTestId('subscription-add-on-catalog').waitFor({ state: 'visible' });
+      await secondPage.waitForTimeout(1300);
+      assert.equal(await secondPage.getByTestId('addon-refund-adjustments').count(), 0,
+        'an account with no refunds should not see another account’s refund details');
+      assert.deepEqual(pageErrors, [], 'loading and empty refund history should not cause page errors');
+    } finally {
+      await secondContext?.close();
       await context.close();
     }
   });
