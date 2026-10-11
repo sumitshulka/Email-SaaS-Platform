@@ -7477,7 +7477,7 @@ describe("authentication and account recovery", { concurrency: false }, () => {
       assert.equal(campaigns.length, 1, "the blocked create must not persist a campaign");
     });
 
-    it("rechecks old drafts at preview and queue boundaries after policy changes", async () => {
+    it("rechecks old drafts at preview and queue boundaries when Cyrillic look-alikes evade a changed policy", async () => {
       const admin = await loggedInUser({
         username: "campaign-policy-old-draft-admin",
         role: "SUPERADMIN",
@@ -7488,7 +7488,7 @@ describe("authentication and account recovery", { concurrency: false }, () => {
         method: "POST",
         cookie: owner.cookie,
         body: draftBody(list.id, {
-          textBody: "The old draft mentions restrictedoffer.",
+          textBody: "The old draft mentions restrictedоffer.",
         }),
       });
       assert.equal(oldDraft.response.status, 201, JSON.stringify(oldDraft.body));
@@ -8483,7 +8483,7 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     assert.equal(exhausted.body.code, "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED");
   });
 
-  it("releases the reserved credit when generated campaign content is blocked", async () => {
+  it("releases the reserved credit when generated campaign content uses Greek look-alikes for a blocked term", async () => {
     const admin = await loggedInUser({
       username: "ai-assist-blocked-content-admin",
       role: "SUPERADMIN",
@@ -8498,7 +8498,7 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     let providerCalls = 0;
     const rejectedDraft = {
       ...validDraft,
-      body: "This restrictedoffer should not reach a campaign.",
+      body: "This restrictedοffer should not reach a campaign.",
     };
     await withAIProviderFetch(
       async () => {
