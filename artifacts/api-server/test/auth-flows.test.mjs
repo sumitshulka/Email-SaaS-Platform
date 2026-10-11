@@ -5921,6 +5921,31 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       subscribed: false,
       emailStatus: "bounced",
     }).returning();
+    const [unchangedBouncedContact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      name: "Unchanged Bounced Contact",
+      firstName: "Unchanged",
+      lastName: "Bounced",
+      email: "still-bounced@invalid.test",
+      subscribed: false,
+      emailStatus: "bounced",
+    }).returning();
+    const [list] = await db.insert(dbModule.contactListsTable).values({
+      userId: owner.user.id,
+      name: "Bounced contact correction audience",
+    }).returning();
+    await db.insert(dbModule.contactListMembersTable).values([
+      {
+        userId: owner.user.id,
+        listId: list.id,
+        contactId: contact.id,
+      },
+      {
+        userId: owner.user.id,
+        listId: list.id,
+        contactId: unchangedBouncedContact.id,
+      },
+    ]);
 
     const unchangedAddress = await api(`/contacts/${contact.id}`, {
       method: "PATCH",
@@ -5930,7 +5955,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         firstName: contact.firstName,
         lastName: contact.lastName,
         subscribed: true,
-        listIds: [],
+        listIds: [list.id],
         companyName: null,
         linkedinUrl: null,
         phoneNumber: null,
@@ -5954,7 +5979,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         firstName: contact.firstName,
         lastName: contact.lastName,
         subscribed: true,
-        listIds: [],
+        listIds: [list.id],
         companyName: null,
         linkedinUrl: null,
         phoneNumber: null,
@@ -5964,6 +5989,51 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(correctedAddress.body.email, "corrected.address@example.test");
     assert.equal(correctedAddress.body.subscribed, true);
     assert.equal(correctedAddress.body.emailStatus, "subscribed");
+
+    const [sender] = await db.insert(dbModule.tenantSendingConfigurationTable).values({
+      userId: owner.user.id,
+      isPrimary: true,
+      provider: "other",
+      host: "smtp.bounce-correction.invalid",
+      port: 2525,
+      encryption: "none",
+      usernameEncrypted: securityModule.encryptSecret("bounce-correction-user"),
+      passwordEncrypted: securityModule.encryptSecret("bounce-correction-password"),
+      fromName: "Bounce Correction Test",
+      fromEmail: "bounce-correction@example.test",
+      verifiedAt: new Date(),
+    }).returning();
+    const campaign = await api("/campaigns", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        name: "Corrected bounced contact audience",
+        objective: "Reach subscribed contacts.",
+        subject: "A useful update",
+        textBody: "A clean campaign message.",
+        listIds: [list.id],
+        senderAccountId: sender.id,
+      },
+    });
+    assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+
+    const queuedCampaign = await api(`/campaigns/${campaign.body.id}/send`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {},
+    });
+    assert.equal(queuedCampaign.response.status, 202, JSON.stringify(queuedCampaign.body));
+    const selectedRecipients = await db
+      .select({
+        contactId: dbModule.emailCampaignRecipientsTable.contactId,
+        email: dbModule.emailCampaignRecipientsTable.email,
+      })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id));
+    assert.deepEqual(selectedRecipients, [{
+      contactId: contact.id,
+      email: "corrected.address@example.test",
+    }]);
   });
 
   it("lists only each workspace's companies and counts only its contacts", async () => {
