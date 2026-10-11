@@ -845,6 +845,17 @@ async function api(
   };
 }
 
+async function updatePlatformSettings(admin, changes) {
+  const current = await api("/admin/settings", { cookie: admin.cookie });
+  assert.equal(current.response.status, 200, JSON.stringify(current.body));
+  const { updatedAt: _updatedAt, ...settings } = current.body;
+  return api("/admin/settings", {
+    method: "PUT",
+    cookie: admin.cookie,
+    body: { ...settings, ...changes },
+  });
+}
+
 async function apiBinary(path, { body, cookie, method = "POST" } = {}) {
   const headers = { "content-type": "application/json" };
   if (cookie) headers.cookie = cookie;
@@ -7315,15 +7326,158 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     });
     assert.equal(invalidVariantLimits.response.status, 400);
     assert.equal(invalidVariantLimits.body.code, "INVALID_CAMPAIGN_VARIANT_LIMITS");
+    const configuredPolicy = await api("/admin/settings", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { ...settings, prohibitedEmailKeywords: ["restrictedoffer"] },
+    });
+    assert.equal(configuredPolicy.response.status, 200, JSON.stringify(configuredPolicy.body));
+
+    const {
+      updatedAt: _policyUpdatedAt,
+      prohibitedEmailKeywords: _prohibitedEmailKeywords,
+      ...legacyClientSettings
+    } = configuredPolicy.body;
     const changedSettings = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
-      body: { ...settings, passwordMinimumLength: 17 },
+      body: { ...legacyClientSettings, passwordMinimumLength: 17 },
     });
-    assert.equal(changedSettings.response.status, 200);
+    assert.equal(changedSettings.response.status, 200, JSON.stringify(changedSettings.body));
+    assert.deepEqual(changedSettings.body.prohibitedEmailKeywords, ["restrictedoffer"]);
 
     const updatedPolicy = await api("/auth/password-policy");
     assert.deepEqual(updatedPolicy.body, { passwordMinimumLength: 17 });
+  });
+
+  describe("campaign prohibited content route checks", { concurrency: false }, () => {
+    async function createList(owner, name) {
+      const [list] = await db.insert(dbModule.contactListsTable).values({
+        userId: owner.user.id,
+        name,
+      }).returning();
+      return list;
+    }
+
+    function draftBody(listId, overrides = {}) {
+      return {
+        name: "Policy check draft",
+        objective: "Share a product update.",
+        subject: "A useful update",
+        textBody: "A clean campaign message.",
+        listIds: [listId],
+        ...overrides,
+      };
+    }
+
+    it("rejects prohibited manual campaign content on create and update", async () => {
+      const admin = await loggedInUser({
+        username: "campaign-policy-manual-admin",
+        role: "SUPERADMIN",
+      });
+      const owner = await loggedInUser({ username: "campaign-policy-manual-owner" });
+      const list = await createList(owner, "Manual policy list");
+
+      const existingDraft = await api("/campaigns", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: draftBody(list.id),
+      });
+      assert.equal(existingDraft.response.status, 201, JSON.stringify(existingDraft.body));
+
+      const configured = await updatePlatformSettings(admin, {
+        prohibitedEmailKeywords: ["restrictedoffer"],
+      });
+      assert.equal(configured.response.status, 200, JSON.stringify(configured.body));
+
+      const prohibitedCreate = await api("/campaigns", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: draftBody(list.id, {
+          subject: "A restrictedoffer for you",
+        }),
+      });
+      assert.equal(prohibitedCreate.response.status, 422);
+      assert.equal(prohibitedCreate.body.code, "PROFANITY_BLOCKED");
+      assert.deepEqual(prohibitedCreate.body.fields, ["subject"]);
+
+      const prohibitedUpdate = await api(`/campaigns/${existingDraft.body.id}`, {
+        method: "PATCH",
+        cookie: owner.cookie,
+        body: { textBody: "This restrictedoffer must not be saved." },
+      });
+      assert.equal(prohibitedUpdate.response.status, 422);
+      assert.equal(prohibitedUpdate.body.code, "PROFANITY_BLOCKED");
+      assert.deepEqual(prohibitedUpdate.body.fields, ["body"]);
+
+      const unchanged = await api(`/campaigns/${existingDraft.body.id}`, {
+        cookie: owner.cookie,
+      });
+      assert.equal(unchanged.response.status, 200);
+      assert.equal(unchanged.body.campaign.textBody, "A clean campaign message.");
+      const campaigns = await db.select().from(dbModule.emailCampaignsTable);
+      assert.equal(campaigns.length, 1, "the blocked create must not persist a campaign");
+    });
+
+    it("rechecks old drafts at preview and queue boundaries after policy changes", async () => {
+      const admin = await loggedInUser({
+        username: "campaign-policy-old-draft-admin",
+        role: "SUPERADMIN",
+      });
+      const owner = await loggedInUser({ username: "campaign-policy-old-draft-owner" });
+      const list = await createList(owner, "Old draft policy list");
+      const oldDraft = await api("/campaigns", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: draftBody(list.id, {
+          textBody: "The old draft mentions restrictedoffer.",
+        }),
+      });
+      assert.equal(oldDraft.response.status, 201, JSON.stringify(oldDraft.body));
+
+      const configured = await updatePlatformSettings(admin, {
+        prohibitedEmailKeywords: ["restrictedoffer"],
+      });
+      assert.equal(configured.response.status, 200, JSON.stringify(configured.body));
+
+      const preview = await api("/campaigns/preview", {
+        method: "POST",
+        cookie: owner.cookie,
+        body: {
+          listIds: [list.id],
+          contactId: randomUUID(),
+          subject: oldDraft.body.subject,
+          textBody: oldDraft.body.textBody,
+          htmlBody: oldDraft.body.htmlBody ?? "",
+        },
+      });
+      assert.equal(preview.response.status, 422);
+      assert.equal(preview.body.code, "PROFANITY_BLOCKED");
+      assert.deepEqual(preview.body.fields, ["body"]);
+
+      const queue = await api(`/campaigns/${oldDraft.body.id}/send`, {
+        method: "POST",
+        cookie: owner.cookie,
+        body: {},
+      });
+      assert.equal(queue.response.status, 422);
+      assert.equal(queue.body.code, "PROFANITY_BLOCKED");
+      assert.deepEqual(queue.body.fields, ["body"]);
+
+      const [persistedDraft] = await db
+        .select()
+        .from(dbModule.emailCampaignsTable)
+        .where(eq(dbModule.emailCampaignsTable.id, oldDraft.body.id));
+      assert.equal(persistedDraft.status, "draft");
+      assert.deepEqual(
+        await db
+          .select()
+          .from(dbModule.emailCampaignRecipientsTable)
+          .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, oldDraft.body.id)),
+        [],
+        "blocked content must not produce queued recipients",
+      );
+    });
   });
 
   it("keeps active sessions usable but limits new access and registration during maintenance", async () => {
@@ -8094,6 +8248,53 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     );
     assert.equal(exhausted.response.status, 403);
     assert.equal(exhausted.body.code, "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED");
+  });
+
+  it("releases the reserved credit when generated campaign content is blocked", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-blocked-content-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-blocked-content-user");
+    await configureProvider(admin);
+    const policy = await updatePlatformSettings(admin, {
+      prohibitedEmailKeywords: ["restrictedoffer"],
+    });
+    assert.equal(policy.response.status, 200, JSON.stringify(policy.body));
+
+    let providerCalls = 0;
+    const rejectedDraft = {
+      ...validDraft,
+      body: "This restrictedoffer should not reach a campaign.",
+    };
+    await withAIProviderFetch(
+      async () => {
+        providerCalls += 1;
+        return providerResponse(JSON.stringify(
+          providerCalls === 1 ? rejectedDraft : validDraft,
+        ));
+      },
+      async () => {
+        const blocked = await draftRequest(account);
+        assert.equal(blocked.response.status, 422);
+        assert.equal(blocked.body.code, "PROFANITY_BLOCKED");
+        assert.deepEqual(blocked.body.fields, ["body"]);
+        assert.match(blocked.body.error, /Your credit was not used/);
+
+        const usagesAfterBlock = await db
+          .select()
+          .from(dbModule.aiEmailAssistUsagesTable);
+        assert.equal(usagesAfterBlock.length, 1);
+        assert.equal(usagesAfterBlock[0].status, "released");
+
+        const retry = await draftRequest(account);
+        assert.equal(retry.response.status, 200, JSON.stringify(retry.body));
+        assert.deepEqual(retry.body.draft, validDraft);
+      },
+    );
+    assert.equal(providerCalls, 2);
+    const usages = await db.select().from(dbModule.aiEmailAssistUsagesTable);
+    assert.deepEqual(usages.map((usage) => usage.status), ["released", "consumed"]);
   });
 
   it("rejects accounts without an active paid primary or any remaining credits", async () => {
