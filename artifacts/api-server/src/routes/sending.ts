@@ -567,6 +567,7 @@ async function getTenantContactEmailHistory(
       emailCampaignRecipientsTable.contactId,
       emailCampaignRecipientsTable.campaignId,
       emailCampaignsTable.name,
+      emailCampaignsTable.parentCampaignId,
       emailCampaignsTable.subject,
       emailCampaignRecipientsTable.status,
       emailCampaignRecipientsTable.attempts,
