@@ -54,7 +54,10 @@ import {
   encryptSecret,
 } from "../lib/security";
 import { sendApplicationEmail } from "../lib/application-email";
-import { getPlatformSettings } from "../lib/platform-settings";
+import {
+  getPlatformSettings,
+  lockPlatformSettings,
+} from "../lib/platform-settings";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import {
   getGoogleOAuthSettingsStatus,
@@ -647,32 +650,38 @@ router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void>
     });
     return;
   }
-  const currentSettings = await getPlatformSettings();
-  const settingsToSave = {
-    ...parsed.data,
-    // Preserve this policy when an older client omits the newly added field.
-    prohibitedEmailKeywords:
-      parsed.data.prohibitedEmailKeywords ??
-      currentSettings.prohibitedEmailKeywords,
-  };
-  await db
-    .insert(systemConfigurationTable)
-    .values({ key: "platform", value: settingsToSave, updatedBy: req.authUser!.id })
-    .onConflictDoUpdate({
-      target: systemConfigurationTable.key,
-      set: {
+  await db.transaction(async (tx) => {
+    const currentSettings = await lockPlatformSettings(tx);
+    const settingsToSave = {
+      ...parsed.data,
+      // Preserve this policy when an older client omits the newly added field.
+      prohibitedEmailKeywords:
+        parsed.data.prohibitedEmailKeywords ??
+        currentSettings.prohibitedEmailKeywords,
+    };
+    await tx
+      .insert(systemConfigurationTable)
+      .values({
+        key: "platform",
         value: settingsToSave,
         updatedBy: req.authUser!.id,
-        updatedAt: new Date(),
-      },
+      })
+      .onConflictDoUpdate({
+        target: systemConfigurationTable.key,
+        set: {
+          value: settingsToSave,
+          updatedBy: req.authUser!.id,
+          updatedAt: new Date(),
+        },
+      });
+    await tx.insert(auditLogsTable).values({
+      actorId: req.authUser!.id,
+      action: "system_configuration.updated",
+      entity: "system_configuration",
+      entityId: "platform",
+      ipAddress: req.ip?.slice(0, 80) ?? null,
+      metadata: { changedFields: Object.keys(parsed.data) },
     });
-  await writeAuditLog({
-    actorId: req.authUser!.id,
-    action: "system_configuration.updated",
-    entity: "system_configuration",
-    entityId: "platform",
-    ipAddress: req.ip,
-    metadata: { changedFields: Object.keys(parsed.data) },
   });
   res.json(UpdateAdminSettingsResponse.parse(await getPlatformSettings()));
 });

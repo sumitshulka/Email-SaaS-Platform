@@ -136,6 +136,7 @@ import {
   estimateCampaignQueueDeliverySeconds,
   getMinimumEmailSpacingSeconds,
   getPlatformSettings,
+  lockPlatformSettings,
 } from "../lib/platform-settings";
 import {
   describeBlockedCampaignFields,
@@ -4115,32 +4116,11 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.authUser!.id;
-  const settings = await getPlatformSettings();
   const variants = cleanedVariantValues({
     subject: parsed.data.subjectVariants ?? [parsed.data.subject],
     greeting: parsed.data.greetingVariants,
     signature: parsed.data.signatureVariants,
   });
-  const blockedFields = findProhibitedCampaignContent({
-    subject: variants.subject,
-    greeting: variants.greeting,
-    signature: variants.signature,
-    body: parsed.data.textBody,
-    htmlBody: parsed.data.htmlBody,
-  }, settings.prohibitedEmailKeywords);
-  if (blockedFields.length) {
-    res.status(422).json({
-      error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(blockedFields)}.`,
-      code: "PROFANITY_BLOCKED",
-      fields: blockedFields,
-    });
-    return;
-  }
-  const variantsError = variantLimitError(variants, settings);
-  if (variantsError) {
-    res.status(400).json({ error: variantsError, code: "INVALID_CAMPAIGN_VARIANTS" });
-    return;
-  }
   const listIds =
     parsed.data.listIds ?? (parsed.data.listId ? [parsed.data.listId] : []);
   if (
@@ -4172,26 +4152,53 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       return;
     }
   }
-  const [campaign] = await db
-    .insert(emailCampaignsTable)
-    .values({
-      userId,
-      senderAccountId: parsed.data.senderAccountId ?? null,
-      listId: listIds[0],
-      listIds,
-      name: parsed.data.name.trim(),
-      objective: parsed.data.objective?.trim() ?? "",
-      subject: variants.subject[0]!,
-      subjectVariants: variants.subject,
-      greetingVariants: variants.greeting,
-      signatureVariants: variants.signature,
-      unsubscribeOrigin: getPublicAppOrigin(req.get("origin")),
-      textBody: parsed.data.textBody,
-      htmlBody: parsed.data.htmlBody
-        ? sanitizeCampaignHtml(parsed.data.htmlBody)
-        : null,
-    })
-    .returning();
+  const outcome = await db.transaction(async (tx) => {
+    const settings = await lockPlatformSettings(tx);
+    const blockedFields = findProhibitedCampaignContent({
+      subject: variants.subject,
+      greeting: variants.greeting,
+      signature: variants.signature,
+      body: parsed.data.textBody,
+      htmlBody: parsed.data.htmlBody,
+    }, settings.prohibitedEmailKeywords);
+    if (blockedFields.length) return { kind: "profanity" as const, fields: blockedFields };
+    const variantsError = variantLimitError(variants, settings);
+    if (variantsError) return { kind: "variant_limits" as const, message: variantsError };
+    const [campaign] = await tx
+      .insert(emailCampaignsTable)
+      .values({
+        userId,
+        senderAccountId: parsed.data.senderAccountId ?? null,
+        listId: listIds[0],
+        listIds,
+        name: parsed.data.name.trim(),
+        objective: parsed.data.objective?.trim() ?? "",
+        subject: variants.subject[0]!,
+        subjectVariants: variants.subject,
+        greetingVariants: variants.greeting,
+        signatureVariants: variants.signature,
+        unsubscribeOrigin: getPublicAppOrigin(req.get("origin")),
+        textBody: parsed.data.textBody,
+        htmlBody: parsed.data.htmlBody
+          ? sanitizeCampaignHtml(parsed.data.htmlBody)
+          : null,
+      })
+      .returning();
+    return { kind: "created" as const, campaign };
+  });
+  if (outcome.kind === "profanity") {
+    res.status(422).json({
+      error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(outcome.fields)}.`,
+      code: "PROFANITY_BLOCKED",
+      fields: outcome.fields,
+    });
+    return;
+  }
+  if (outcome.kind === "variant_limits") {
+    res.status(400).json({ error: outcome.message, code: "INVALID_CAMPAIGN_VARIANTS" });
+    return;
+  }
+  const { campaign } = outcome;
   const [summary] = (await campaignPayloads(userId)).filter(
     (item) => item.id === campaign.id,
   );
@@ -4357,54 +4364,79 @@ router.patch(
         return;
       }
     }
-    const [updated] = await db
-      .update(emailCampaignsTable)
-      .set({
-        ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
-        ...(subjectVariantsChanged
-          ? {
-              subject: effectiveVariants.subject[0]!,
-              subjectVariants: effectiveVariants.subject,
-            }
-          : {}),
-        ...(parsed.data.greetingVariants !== undefined
-          ? { greetingVariants: effectiveVariants.greeting }
-          : {}),
-        ...(parsed.data.signatureVariants !== undefined
-          ? { signatureVariants: effectiveVariants.signature }
-          : {}),
-        ...(parsed.data.objective !== undefined
-          ? { objective: parsed.data.objective.trim() }
-          : {}),
-        ...(parsed.data.textBody !== undefined
-          ? { textBody: parsed.data.textBody }
-          : {}),
-        ...(parsed.data.htmlBody !== undefined
-          ? {
-              htmlBody: parsed.data.htmlBody
-                ? sanitizeCampaignHtml(parsed.data.htmlBody)
-                : null,
-            }
-          : {}),
-        ...(parsed.data.senderAccountId !== undefined
-          ? { senderAccountId: parsed.data.senderAccountId }
-          : {}),
-        ...(requestedListIds !== undefined
-          ? {
-              listId: requestedListIds[0] ?? null,
-              listIds: requestedListIds,
-            }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(emailCampaignsTable.id, params.data.campaignId),
-          eq(emailCampaignsTable.userId, userId),
-          eq(emailCampaignsTable.status, "draft"),
-        ),
-      )
-      .returning();
+    const updateOutcome = await db.transaction(async (tx) => {
+      const settings = await lockPlatformSettings(tx);
+      const latestBlockedFields = findProhibitedCampaignContent({
+        subject: effectiveVariants.subject,
+        greeting: effectiveVariants.greeting,
+        signature: effectiveVariants.signature,
+        body: parsed.data.textBody ?? campaignBeforeUpdate.textBody,
+        htmlBody: parsed.data.htmlBody ?? campaignBeforeUpdate.htmlBody,
+      }, settings.prohibitedEmailKeywords);
+      if (latestBlockedFields.length) {
+        return { kind: "profanity" as const, fields: latestBlockedFields };
+      }
+      const [updated] = await tx
+        .update(emailCampaignsTable)
+        .set({
+          ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
+          ...(subjectVariantsChanged
+            ? {
+                subject: effectiveVariants.subject[0]!,
+                subjectVariants: effectiveVariants.subject,
+              }
+            : {}),
+          ...(parsed.data.greetingVariants !== undefined
+            ? { greetingVariants: effectiveVariants.greeting }
+            : {}),
+          ...(parsed.data.signatureVariants !== undefined
+            ? { signatureVariants: effectiveVariants.signature }
+            : {}),
+          ...(parsed.data.objective !== undefined
+            ? { objective: parsed.data.objective.trim() }
+            : {}),
+          ...(parsed.data.textBody !== undefined
+            ? { textBody: parsed.data.textBody }
+            : {}),
+          ...(parsed.data.htmlBody !== undefined
+            ? {
+                htmlBody: parsed.data.htmlBody
+                  ? sanitizeCampaignHtml(parsed.data.htmlBody)
+                  : null,
+              }
+            : {}),
+          ...(parsed.data.senderAccountId !== undefined
+            ? { senderAccountId: parsed.data.senderAccountId }
+            : {}),
+          ...(requestedListIds !== undefined
+            ? {
+                listId: requestedListIds[0] ?? null,
+                listIds: requestedListIds,
+              }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(emailCampaignsTable.id, params.data.campaignId),
+            eq(emailCampaignsTable.userId, userId),
+            eq(emailCampaignsTable.status, "draft"),
+          ),
+        )
+        .returning();
+      return updated
+        ? { kind: "updated" as const, campaign: updated }
+        : { kind: "not_updated" as const };
+    });
+    if (updateOutcome.kind === "profanity") {
+      res.status(422).json({
+        error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(updateOutcome.fields)}.`,
+        code: "PROFANITY_BLOCKED",
+        fields: updateOutcome.fields,
+      });
+      return;
+    }
+    const updated = updateOutcome.kind === "updated" ? updateOutcome.campaign : null;
     if (!updated) {
       const [existing] = await db
         .select({ id: emailCampaignsTable.id })
@@ -4491,10 +4523,10 @@ router.post(
       return;
     }
     const userId = req.authUser!.id;
-    const settings = await getPlatformSettings();
     const accountLimit = await tenantEmailAccountLimit(userId);
     const requestedStartAt = input.data.scheduledAt;
     const outcome = await db.transaction(async (tx) => {
+      const settings = await lockPlatformSettings(tx);
       await tx
         .select({ id: usersTable.id })
         .from(usersTable)

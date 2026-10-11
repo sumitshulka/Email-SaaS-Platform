@@ -351,3 +351,30 @@ export async function getPlatformSettings() {
     updatedAt: row?.updatedAt?.toISOString() ?? null,
   });
 }
+
+export async function lockPlatformSettings(
+  tx: Pick<typeof db, "insert" | "select">,
+) {
+  // Creating the singleton first makes the lock reliable even before settings
+  // have ever been saved on a fresh installation.
+  await tx
+    .insert(systemConfigurationTable)
+    .values({ key: "platform", value: defaultPlatformSettings })
+    .onConflictDoNothing();
+  const [row] = await tx
+    .select()
+    .from(systemConfigurationTable)
+    .where(eq(systemConfigurationTable.key, "platform"))
+    .for("update");
+
+  const persisted =
+    row?.value && typeof row.value === "object" && !Array.isArray(row.value)
+      ? (row.value as Record<string, unknown>)
+      : {};
+
+  return GetAdminSettingsResponse.parse({
+    ...defaultPlatformSettings,
+    ...persisted,
+    updatedAt: row?.updatedAt?.toISOString() ?? null,
+  });
+}
