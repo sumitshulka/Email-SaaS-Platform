@@ -46,8 +46,6 @@ const DETAIL_RECHECK_MS = 15 * 60_000;
 const MAX_INCREMENTAL_LOOKBACK_MS = 24 * 60 * 60_000;
 const MAX_WINDOW_MS = 10 * 24 * 60 * 60_000;
 const DEFAULT_ERROR_RETRY_MS = 5 * 60_000;
-let workerTimer: ReturnType<typeof setInterval> | null = null;
-let workerRunning = false;
 
 type Microsoft365TraceConnection =
   typeof microsoft365TraceConnectionsTable.$inferSelect;
@@ -647,7 +645,14 @@ function retryDelay(error: unknown): number {
   return DEFAULT_ERROR_RETRY_MS;
 }
 
-export async function syncDueMicrosoft365TraceConnections(): Promise<void> {
+export type Microsoft365TraceSyncResult = {
+  due: number;
+  claimed: number;
+  succeeded: number;
+  failed: number;
+};
+
+export async function syncDueMicrosoft365TraceConnections(): Promise<Microsoft365TraceSyncResult> {
   const now = new Date();
   const due = await db
     .select()
@@ -667,6 +672,13 @@ export async function syncDueMicrosoft365TraceConnections(): Promise<void> {
     )
     .orderBy(asc(microsoft365TraceConnectionsTable.nextSyncAt))
     .limit(20);
+
+  const result: Microsoft365TraceSyncResult = {
+    due: due.length,
+    claimed: 0,
+    succeeded: 0,
+    failed: 0,
+  };
 
   for (const connection of due) {
     const leaseExpiresAt = new Date(Date.now() + LEASE_MS);
@@ -689,6 +701,7 @@ export async function syncDueMicrosoft365TraceConnections(): Promise<void> {
       )
       .returning({ id: microsoft365TraceConnectionsTable.id });
     if (!claimed.length) continue;
+    result.claimed += 1;
 
     try {
       const accessToken = await requestMicrosoft365AccessToken(
@@ -704,7 +717,9 @@ export async function syncDueMicrosoft365TraceConnections(): Promise<void> {
           updatedAt: new Date(),
         })
         .where(eq(microsoft365TraceConnectionsTable.id, connection.id));
+      result.succeeded += 1;
     } catch (error) {
+      result.failed += 1;
       const failedAt = new Date();
       const message =
         error instanceof Microsoft365TraceApiError
@@ -731,27 +746,7 @@ export async function syncDueMicrosoft365TraceConnections(): Promise<void> {
       );
     }
   }
-}
-
-export function startMicrosoft365TraceWorker(): void {
-  if (workerTimer) return;
-  const tick = async () => {
-    if (workerRunning) return;
-    workerRunning = true;
-    try {
-      await syncDueMicrosoft365TraceConnections();
-    } catch (error) {
-      logger.error(
-        { errorName: error instanceof Error ? error.name : "UnknownError" },
-        "Microsoft 365 trace worker tick failed",
-      );
-    } finally {
-      workerRunning = false;
-    }
-  };
-  void tick();
-  workerTimer = setInterval(() => void tick(), POLL_INTERVAL_MS);
-  workerTimer.unref?.();
+  return result;
 }
 
 export default router;

@@ -18,6 +18,7 @@ async function buildAll() {
     entryPoints: [
       path.resolve(artifactDir, "src/index.ts"),
       path.resolve(artifactDir, "src/gmail-sync-runner.ts"),
+      path.resolve(artifactDir, "src/microsoft365-trace-runner.ts"),
     ],
     platform: "node",
     bundle: true,

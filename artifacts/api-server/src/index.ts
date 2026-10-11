@@ -4,7 +4,6 @@ import { ensureSeedSuperadmin } from "./lib/seed";
 import { requireSessionSecret } from "./lib/security";
 import { startCampaignWorker } from "./lib/campaign-worker";
 import { startGmailMailboxWorker } from "./lib/gmail-mailbox";
-import { startMicrosoft365TraceWorker } from "./lib/microsoft365-trace";
 import { startCompanyResearchWorker } from "./lib/company-intelligence";
 import { startAiEmailAssistReservationCleanupWorker } from "./lib/add-on-entitlements";
 
@@ -27,7 +26,6 @@ try {
   await ensureSeedSuperadmin();
   startCampaignWorker();
   startGmailMailboxWorker();
-  startMicrosoft365TraceWorker();
   startCompanyResearchWorker();
   await startAiEmailAssistReservationCleanupWorker();
   app.listen(port, (err) => {

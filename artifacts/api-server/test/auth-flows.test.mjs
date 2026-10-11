@@ -13579,7 +13579,14 @@ describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
         ],
       });
     }, async () => {
-      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      const firstRun =
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.deepEqual(firstRun, {
+        due: 1,
+        claimed: 1,
+        succeeded: 1,
+        failed: 0,
+      });
       let [afterFirstPage] = await db
         .select()
         .from(dbModule.microsoft365TraceConnectionsTable)
@@ -13595,7 +13602,14 @@ describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
         .update(dbModule.microsoft365TraceConnectionsTable)
         .set({ nextSyncAt: new Date(Date.now() - 60_000) })
         .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
-      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      const failedRun =
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.deepEqual(failedRun, {
+        due: 1,
+        claimed: 1,
+        succeeded: 0,
+        failed: 1,
+      });
       let [afterPageFailure] = await db
         .select()
         .from(dbModule.microsoft365TraceConnectionsTable)
@@ -13614,7 +13628,14 @@ describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
         .update(dbModule.microsoft365TraceConnectionsTable)
         .set({ nextSyncAt: new Date(Date.now() - 60_000) })
         .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
-      await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      const recoveredRun =
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.deepEqual(recoveredRun, {
+        due: 1,
+        claimed: 1,
+        succeeded: 1,
+        failed: 0,
+      });
 
       [afterFirstPage] = await db
         .select()
@@ -13745,13 +13766,26 @@ describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
       const firstSync = microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
       await tokenRequestEntered;
       try {
-        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+        const overlappingRun =
+          await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+        assert.deepEqual(overlappingRun, {
+          due: 0,
+          claimed: 0,
+          succeeded: 0,
+          failed: 0,
+        });
         assert.equal(tokenRequests, 1);
         assert.equal(listRequests, 0);
       } finally {
         releaseTokenRequest();
       }
-      await firstSync;
+      const firstRun = await firstSync;
+      assert.deepEqual(firstRun, {
+        due: 1,
+        claimed: 1,
+        succeeded: 1,
+        failed: 0,
+      });
       assert.equal(tokenRequests, 1);
       assert.equal(listRequests, 1);
       const [afterSync] = await db
