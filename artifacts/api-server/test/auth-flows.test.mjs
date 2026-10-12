@@ -11875,7 +11875,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       for (const expectedEmail of recipientEmails.slice(1)) {
         await db
           .update(dbModule.emailSendAttemptsTable)
-          .set({ attemptedAt: new Date(Date.now() - 60_000) })
+          .set({
+            attemptedAt: new Date(Date.now() - 60_000),
+            completedAt: new Date(Date.now() - 60_000),
+          })
           .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
         assert.equal(
           await campaignWorkerModule.processPendingCampaignDeliveries(1),
@@ -12066,6 +12069,93 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         );
       assert.equal(secondAttempts.length, 0);
       assert.deepEqual(deliveredTo, [recipientEmails[0]]);
+
+      const resumedCampaign = await api(
+        `/campaigns/${campaign.id}/pause`,
+        {
+          method: "PATCH",
+          cookie: owner.cookie,
+          body: { paused: false },
+        },
+      );
+      assert.equal(resumedCampaign.response.status, 200, JSON.stringify(resumedCampaign.body));
+      assert.equal(resumedCampaign.body.paused, false);
+      // Keep this regression focused on resume semantics rather than the
+      // mailbox's minimum spacing between completed sends.
+      await db
+        .update(dbModule.emailSendAttemptsTable)
+        .set({
+          attemptedAt: new Date(Date.now() - 60_000),
+          completedAt: new Date(Date.now() - 60_000),
+        })
+        .where(
+          eq(
+            dbModule.emailSendAttemptsTable.id,
+            firstAttempts[0].id,
+          ),
+        );
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(2),
+        1,
+      );
+      assert.deepEqual(deliveredTo, recipientEmails);
+
+      const recipientsAfterResume = await db
+        .select({
+          id: dbModule.emailCampaignRecipientsTable.id,
+          email: dbModule.emailCampaignRecipientsTable.email,
+          status: dbModule.emailCampaignRecipientsTable.status,
+          attempts: dbModule.emailCampaignRecipientsTable.attempts,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(
+          eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.id),
+        );
+      const recipientsAfterResumeByEmail = Object.fromEntries(
+        recipientsAfterResume.map((recipient) => [recipient.email, recipient]),
+      );
+      assert.equal(
+        recipientsAfterResumeByEmail[recipientEmails[0]].status,
+        "delivered",
+      );
+      assert.equal(
+        recipientsAfterResumeByEmail[recipientEmails[0]].attempts,
+        1,
+      );
+      assert.equal(
+        recipientsAfterResumeByEmail[recipientEmails[1]].status,
+        "delivered",
+      );
+      assert.equal(
+        recipientsAfterResumeByEmail[recipientEmails[1]].attempts,
+        1,
+      );
+
+      const firstAttemptsAfterResume = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(
+          eq(
+            dbModule.emailSendAttemptsTable.recipientId,
+            recipientsAfterResumeByEmail[recipientEmails[0]].id,
+          ),
+        );
+      assert.equal(firstAttemptsAfterResume.length, 1);
+      assert.equal(firstAttemptsAfterResume[0].outcome, "smtp_accepted");
+      assert.equal(firstAttemptsAfterResume[0].smtpCode, 250);
+      assert.ok(firstAttemptsAfterResume[0].completedAt);
+
+      const secondAttemptsAfterResume = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(
+          eq(
+            dbModule.emailSendAttemptsTable.recipientId,
+            recipientsAfterResumeByEmail[recipientEmails[1]].id,
+          ),
+        );
+      assert.equal(secondAttemptsAfterResume.length, 1);
+      assert.equal(secondAttemptsAfterResume[0].outcome, "smtp_accepted");
     } finally {
       finishFirstDelivery();
       emailModule.setTenantEmailTransportForTests(async (message) => {
