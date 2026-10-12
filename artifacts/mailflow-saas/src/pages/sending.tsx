@@ -2094,7 +2094,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         </ol>
         {campaignStepError && <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{campaignStepError}</div>}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="min-w-0 space-y-3">
+          <div className={cx('min-w-0 space-y-3', campaignStep === 2 && 'sm:col-span-2')}>
             {campaignStep === 0 && <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>}
             {campaignStep === 0 && <label className="block min-w-0">
               <span className={labelClass}>SMTP sender account</span>
