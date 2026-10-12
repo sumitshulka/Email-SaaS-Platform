@@ -97,6 +97,8 @@ import type {
   ContactImportResponse,
   ContactImportResult,
   ContactInput,
+  ContactIntentAnalyzeInput,
+  ContactIntentQuestionsInput,
   ContactLeadStatusUpdate,
   ContactList,
   ContactListInput,
@@ -116,6 +118,8 @@ import type {
   GetCampaignHistoryParams,
   GetCampaignRecipientSummaryParams,
   GetCompanyResearchUsageParams,
+  GetContactIntentQuestions200,
+  GetContactIntentReadiness200,
   GlobalCompany,
   GlobalCompanyAdminCollection,
   GlobalCompanyBulkImportInput,
@@ -155,7 +159,9 @@ import type {
   PaymentVerificationResult,
   PlatformSettings,
   PlatformSettingsInput,
+  PostContactIntentAnalysis200,
   ProfileUpdateInput,
+  PutContactIntentQuestions200,
   RazorpaySettings,
   RazorpaySettingsInput,
   RazorpayTestResponse,
@@ -6853,6 +6859,337 @@ export const useCreateContactNote = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateContactNoteMutationOptions(options));
+    }
+
+export const getGetContactIntentReadinessUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/intent`
+}
+
+/**
+ * @summary Get contact intent questions, source readiness, latest result, and research allowance
+ */
+export const getContactIntentReadiness = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<GetContactIntentReadiness200> => {
+
+  return customFetch<GetContactIntentReadiness200>(getGetContactIntentReadinessUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactIntentReadinessQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/intent`
+    ] as const;
+    }
+
+
+export const getGetContactIntentReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getContactIntentReadiness>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactIntentReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactIntentReadinessQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactIntentReadiness>>> = ({ signal }) => getContactIntentReadiness(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactIntentReadiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactIntentReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getContactIntentReadiness>>>
+export type GetContactIntentReadinessQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get contact intent questions, source readiness, latest result, and research allowance
+ */
+
+export function useGetContactIntentReadiness<TData = Awaited<ReturnType<typeof getContactIntentReadiness>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactIntentReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactIntentReadinessQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPostContactIntentAnalysisUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/intent/analyze`
+}
+
+/**
+ * @summary Analyze a contact's sent emails, dated notes, and questionnaire answers on explicit user request
+ */
+export const postContactIntentAnalysis = async (contactId: string,
+    contactIntentAnalyzeInput: ContactIntentAnalyzeInput, options?: Parameters<typeof customFetch>[1]): Promise<PostContactIntentAnalysis200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PostContactIntentAnalysis200>(getPostContactIntentAnalysisUrl(contactId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactIntentAnalyzeInput)
+  }
+);}
+
+
+
+
+
+export const getPostContactIntentAnalysisMutationKey = () => ['postContactIntentAnalysis'] as const;
+
+export const getPostContactIntentAnalysisMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postContactIntentAnalysis>>, TError,PostContactIntentAnalysisMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof postContactIntentAnalysis>>, TError,PostContactIntentAnalysisMutationVariables, TContext> => {
+
+const mutationKey = getPostContactIntentAnalysisMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postContactIntentAnalysis>>, PostContactIntentAnalysisMutationVariables> = (props) => {
+          const {contactId,data} = props ?? {};
+
+          return  postContactIntentAnalysis(contactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostContactIntentAnalysisMutationResult = NonNullable<Awaited<ReturnType<typeof postContactIntentAnalysis>>>
+    export type PostContactIntentAnalysisMutationBody = BodyType<ContactIntentAnalyzeInput>
+    export type PostContactIntentAnalysisMutationError = ErrorType<ApiError>
+    export type PostContactIntentAnalysisMutationVariables = {contactId: string;data: BodyType<ContactIntentAnalyzeInput>}
+
+    /**
+ * @summary Analyze a contact's sent emails, dated notes, and questionnaire answers on explicit user request
+ */
+export const usePostContactIntentAnalysis = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postContactIntentAnalysis>>, TError,PostContactIntentAnalysisMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof postContactIntentAnalysis>>,
+        TError,
+        PostContactIntentAnalysisMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostContactIntentAnalysisMutationOptions(options));
+    }
+
+export const getGetContactIntentQuestionsUrl = () => {
+
+
+
+
+  return `/api/admin/contact-intent/questions`
+}
+
+/**
+ * @summary Get the superadmin-managed factual intent questionnaire
+ */
+export const getContactIntentQuestions = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetContactIntentQuestions200> => {
+
+  return customFetch<GetContactIntentQuestions200>(getGetContactIntentQuestionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactIntentQuestionsQueryKey = () => {
+    return [
+    `/api/admin/contact-intent/questions`
+    ] as const;
+    }
+
+
+export const getGetContactIntentQuestionsQueryOptions = <TData = Awaited<ReturnType<typeof getContactIntentQuestions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactIntentQuestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactIntentQuestionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactIntentQuestions>>> = ({ signal }) => getContactIntentQuestions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactIntentQuestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactIntentQuestionsQueryResult = NonNullable<Awaited<ReturnType<typeof getContactIntentQuestions>>>
+export type GetContactIntentQuestionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the superadmin-managed factual intent questionnaire
+ */
+
+export function useGetContactIntentQuestions<TData = Awaited<ReturnType<typeof getContactIntentQuestions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactIntentQuestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactIntentQuestionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPutContactIntentQuestionsUrl = () => {
+
+
+
+
+  return `/api/admin/contact-intent/questions`
+}
+
+/**
+ * @summary Replace the contact intent questionnaire
+ */
+export const putContactIntentQuestions = async (contactIntentQuestionsInput: ContactIntentQuestionsInput, options?: Parameters<typeof customFetch>[1]): Promise<PutContactIntentQuestions200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PutContactIntentQuestions200>(getPutContactIntentQuestionsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactIntentQuestionsInput)
+  }
+);}
+
+
+
+
+
+export const getPutContactIntentQuestionsMutationKey = () => ['putContactIntentQuestions'] as const;
+
+export const getPutContactIntentQuestionsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putContactIntentQuestions>>, TError,PutContactIntentQuestionsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof putContactIntentQuestions>>, TError,PutContactIntentQuestionsMutationVariables, TContext> => {
+
+const mutationKey = getPutContactIntentQuestionsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putContactIntentQuestions>>, PutContactIntentQuestionsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  putContactIntentQuestions(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutContactIntentQuestionsMutationResult = NonNullable<Awaited<ReturnType<typeof putContactIntentQuestions>>>
+    export type PutContactIntentQuestionsMutationBody = BodyType<ContactIntentQuestionsInput>
+    export type PutContactIntentQuestionsMutationError = ErrorType<ApiError>
+    export type PutContactIntentQuestionsMutationVariables = {data: BodyType<ContactIntentQuestionsInput>}
+
+    /**
+ * @summary Replace the contact intent questionnaire
+ */
+export const usePutContactIntentQuestions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putContactIntentQuestions>>, TError,PutContactIntentQuestionsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof putContactIntentQuestions>>,
+        TError,
+        PutContactIntentQuestionsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutContactIntentQuestionsMutationOptions(options));
     }
 
 export const getListContactListsUrl = () => {

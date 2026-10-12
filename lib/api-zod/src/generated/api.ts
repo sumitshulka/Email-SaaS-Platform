@@ -4120,6 +4120,71 @@ export const CreateContactNoteResponse = zod.object({
 
 
 /**
+ * @summary Get contact intent questions, source readiness, latest result, and research allowance
+ */
+export const GetContactIntentReadinessParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const GetContactIntentReadinessResponse = zod.object({
+
+}).passthrough()
+
+
+/**
+ * @summary Analyze a contact's sent emails, dated notes, and questionnaire answers on explicit user request
+ */
+export const PostContactIntentAnalysisParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const postContactIntentAnalysisBodyAnswersMaxOne = 1000;
+
+
+
+export const PostContactIntentAnalysisBody = zod.object({
+  "answers": zod.record(zod.string(), zod.string().max(postContactIntentAnalysisBodyAnswersMaxOne))
+})
+
+export const PostContactIntentAnalysisResponse = zod.object({
+
+}).passthrough()
+
+
+/**
+ * @summary Get the superadmin-managed factual intent questionnaire
+ */
+export const GetContactIntentQuestionsResponse = zod.object({
+
+}).passthrough()
+
+
+/**
+ * @summary Replace the contact intent questionnaire
+ */
+export const putContactIntentQuestionsBodyQuestionsItemIdMax = 40;
+
+export const putContactIntentQuestionsBodyQuestionsItemTextMin = 8;
+export const putContactIntentQuestionsBodyQuestionsItemTextMax = 240;
+
+export const putContactIntentQuestionsBodyQuestionsMin = 8;
+export const putContactIntentQuestionsBodyQuestionsMax = 10;
+
+
+
+export const PutContactIntentQuestionsBody = zod.object({
+  "questions": zod.array(zod.object({
+  "id": zod.string().max(putContactIntentQuestionsBodyQuestionsItemIdMax),
+  "text": zod.string().min(putContactIntentQuestionsBodyQuestionsItemTextMin).max(putContactIntentQuestionsBodyQuestionsItemTextMax)
+})).min(putContactIntentQuestionsBodyQuestionsMin).max(putContactIntentQuestionsBodyQuestionsMax)
+})
+
+export const PutContactIntentQuestionsResponse = zod.object({
+
+}).passthrough()
+
+
+/**
  * @summary List contact lists belonging to the authenticated tenant
  */
 export const ListContactListsResponseItem = zod.object({

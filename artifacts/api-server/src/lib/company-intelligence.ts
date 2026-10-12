@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { addOnEntitlementsTable, auditLogsTable, companyIntelligenceTable, companyResearchJobsTable, db, globalCompaniesTable, paymentsTable, subscriptionPackagesTable, userSubscriptionsTable, usersTable, type CompanyIntelligence, type CompanyResearchJob } from "@workspace/db";
+import { contactIntentAnalysesTable } from "@workspace/db/schema";
 import { getAIProviderConfigurationStatus, getStoredAIProviderApiKey } from "./ai-provider-configuration";
 import type { AIProviderId } from "./ai-provider-client";
 import { intelligenceProfileSchema, researchFreshness, validateIntelligence } from "./company-intelligence-schema";
@@ -47,6 +48,12 @@ export async function getCompanyResearchAllowance(userId: string, now = new Date
     gte(companyResearchJobsTable.createdAt, active.startsAt),
     lt(companyResearchJobsTable.createdAt, active.endsAt),
   ));
+  const [intentUsage] = await db.select({ used: sql<number>`count(*)::int` }).from(contactIntentAnalysesTable).where(and(
+    eq(contactIntentAnalysesTable.userId, userId),
+    eq(contactIntentAnalysesTable.creditSource, "primary"),
+    gte(contactIntentAnalysesTable.analyzedAt, active.startsAt),
+    lt(contactIntentAnalysesTable.analyzedAt, active.endsAt),
+  ));
   const addOnRows = await db.select({
     paymentId: addOnEntitlementsTable.paymentId,
     allowance: addOnEntitlementsTable.researchAllowance,
@@ -74,7 +81,7 @@ export async function getCompanyResearchAllowance(userId: string, now = new Date
     0,
   );
   const addOnUsed = addOnRows.reduce((used, row) => used + row.used, 0);
-  const baseUsed = Math.min(Number(usage?.used ?? 0), active.baseLimit);
+  const baseUsed = Math.min(Number(usage?.used ?? 0) + Number(intentUsage?.used ?? 0), active.baseLimit);
   const isPaidPrimary =
     active.packageType === "primary" && active.amountMinor > 0;
   const eligibleAddOnLimit = isPaidPrimary ? addOnLimit : 0;

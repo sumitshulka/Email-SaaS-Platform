@@ -11,6 +11,7 @@ import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 import { ContactFieldSelect } from '@/components/contact-field-select';
 import { ContactReportEvidence } from '@/components/delivery-evidence';
+import { ContactIntentAnalyzer } from '@/components/contact-intent-analyzer';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -528,6 +529,7 @@ export function ContactDetailPage() {
             </div>}
       </Section>
     </div>
+    <ContactIntentAnalyzer contactId={contact.id}/>
     <div className="mt-5">
       <ContactLeadStatusUpdatesSection contactId={contact.id}/>
     </div>

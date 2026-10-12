@@ -32,6 +32,7 @@ import AdminBillingPage, { AdminPackagesPage } from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminAIProviderPage from '@/pages/admin-ai-provider';
+import AdminContactIntentPage from '@/pages/admin-contact-intent';
 import { AdminGlobalCompaniesPage } from '@/pages/admin-global-companies';
 import { AdminCompanyIntelligencePage } from '@/pages/admin-company-intelligence';
 import AdminFinancePage from '@/pages/finance';
@@ -348,6 +349,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
       { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
       { href: '/admin/ai-provider', label: 'AI integration', icon: BrainCircuit },
+      { href: '/admin/contact-intent', label: 'Intent questionnaire', icon: BrainCircuit },
       { href: '/admin/global-companies', label: 'Global companies', icon: Building2 },
       { href: '/admin/company-intelligence', label: 'Company intelligence', icon: BrainCircuit },
     ],
@@ -1523,6 +1525,7 @@ function Routes() {
     <Route path="/admin/settings">{() => <RouteGate admin>{() => <AdminSettingsPage/>}</RouteGate>}</Route>
     <Route path="/admin/google-oauth">{() => <RouteGate admin>{() => <AdminGoogleOAuthPage/>}</RouteGate>}</Route>
     <Route path="/admin/ai-provider">{() => <RouteGate admin>{() => <AdminAIProviderPage/>}</RouteGate>}</Route>
+    <Route path="/admin/contact-intent">{() => <RouteGate admin>{() => <AdminContactIntentPage/>}</RouteGate>}</Route>
     <Route path="/admin/company-intelligence">{() => <RouteGate admin>{() => <AdminCompanyIntelligencePage/>}</RouteGate>}</Route>
     <Route path="/admin/global-companies">{() => <RouteGate admin>{() => <AdminGlobalCompaniesPage/>}</RouteGate>}</Route>
     <Route path="/plans">{() => <RouteGate>{() => <PlansPage/>}</RouteGate>}</Route>

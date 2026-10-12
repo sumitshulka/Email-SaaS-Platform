@@ -1992,6 +1992,91 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/intent:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getContactIntentReadiness
+      tags: [sending]
+      summary: Get contact intent questions, source readiness, latest result, and research allowance
+      responses:
+        "200":
+          description: Tenant-private analysis readiness and result
+          content:
+            application/json:
+              schema: { type: object }
+        "404":
+          description: Contact not found in the authenticated tenant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /contacts/{contactId}/intent/analyze:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: postContactIntentAnalysis
+      tags: [sending]
+      summary: Analyze a contact's sent emails, dated notes, and questionnaire answers on explicit user request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactIntentAnalyzeInput"
+      responses:
+        "200":
+          description: Saved analysis or a reused result when the source fingerprint is unchanged
+          content:
+            application/json:
+              schema: { type: object }
+        "403":
+          description: No company research allowance remains
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "422":
+          description: Not enough eligible sent emails or dated notes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /admin/contact-intent/questions:
+    get:
+      operationId: getContactIntentQuestions
+      tags: [settings]
+      summary: Get the superadmin-managed factual intent questionnaire
+      responses:
+        "200":
+          description: The current set of eight to ten factual questions
+          content:
+            application/json:
+              schema: { type: object }
+    put:
+      operationId: putContactIntentQuestions
+      tags: [settings]
+      summary: Replace the contact intent questionnaire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactIntentQuestionsInput"
+      responses:
+        "200":
+          description: Saved questionnaire
+          content:
+            application/json:
+              schema: { type: object }
+        "400":
+          description: Invalid question set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
         "404":
           description: Contact not found in the authenticated tenant
           content:
@@ -6433,3 +6518,22 @@ components:
     RazorpayWebhookPayload:
       type: object
       additionalProperties: true
+    ContactIntentAnalyzeInput:
+      type: object
+      properties:
+        answers: { type: object, additionalProperties: { type: string, maxLength: 1000 } }
+      required: [answers]
+    ContactIntentQuestionsInput:
+      type: object
+      properties:
+        questions:
+          type: array
+          minItems: 8
+          maxItems: 10
+          items:
+            type: object
+            properties:
+              id: { type: string, maxLength: 40 }
+              text: { type: string, minLength: 8, maxLength: 240 }
+            required: [id, text]
+      required: [questions]

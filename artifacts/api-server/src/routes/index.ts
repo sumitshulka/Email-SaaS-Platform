@@ -20,6 +20,7 @@ import notificationsRouter from "./notifications";
 import adminNotificationsRouter from "./admin-notifications";
 import supportRouter from "./support";
 import maintenanceRouter from "./maintenance";
+import contactIntentRouter from "./contact-intent";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -30,6 +31,7 @@ router.use(campaignAiAssistRouter);
 router.use(companiesRouter);
 router.use(globalCompaniesRouter);
 router.use(companyIntelligenceRouter);
+router.use(contactIntentRouter);
 router.use(contactFieldOptionsRouter);
 router.use(notificationsRouter);
 router.use(contactImportRouter);

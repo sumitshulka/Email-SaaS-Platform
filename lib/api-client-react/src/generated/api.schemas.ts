@@ -4762,6 +4762,30 @@ export interface PaymentVerificationResult {
 
 export interface RazorpayWebhookPayload { [key: string]: unknown }
 
+export type ContactIntentAnalyzeInputAnswers = {[key: string]: string};
+
+export interface ContactIntentAnalyzeInput {
+  answers: ContactIntentAnalyzeInputAnswers;
+}
+
+export type ContactIntentQuestionsInputQuestionsItem = {
+  /** @maxLength 40 */
+  id: string;
+  /**
+     * @minLength 8
+     * @maxLength 240
+     */
+  text: string;
+};
+
+export interface ContactIntentQuestionsInput {
+  /**
+     * @minItems 8
+     * @maxItems 10
+     */
+  questions: ContactIntentQuestionsInputQuestionsItem[];
+}
+
 export type CompleteGmailMailboxConnectionParams = {
 code?: string;
 state?: string;
@@ -4929,6 +4953,14 @@ listIds?: string[];
  */
 listId?: string;
 };
+
+export type GetContactIntentReadiness200 = { [key: string]: unknown };
+
+export type PostContactIntentAnalysis200 = { [key: string]: unknown };
+
+export type GetContactIntentQuestions200 = { [key: string]: unknown };
+
+export type PutContactIntentQuestions200 = { [key: string]: unknown };
 
 export type GetCampaignHistoryParams = {
 /**
