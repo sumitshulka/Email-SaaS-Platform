@@ -413,12 +413,12 @@ function WorkspaceGettingStarted({ user }: { user: AuthUser }) {
   if (query.data && completeCount === steps.length) return null;
 
   return (
-    <section aria-label="Getting started guide" data-testid="workspace-getting-started" className="mb-6 overflow-hidden rounded-xl border border-[#bfd7cd] border-l-4 border-l-[#438775] bg-[#eef6f2] shadow-[0_10px_30px_rgba(30,75,61,.08)]">
+    <section aria-label="Getting started guide" data-testid="workspace-getting-started" className="mb-6 overflow-hidden rounded-xl border border-[#bad6c8] bg-[#eef7f2] shadow-[0_8px_28px_rgba(30,55,75,.04)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d4e5dc] bg-[#e5f0eb] px-4 py-4 sm:px-5">
         <div>
           <div className="mono text-[9px] uppercase tracking-[.16em] text-[#4e7a6d]">YOUR FIRST CAMPAIGN</div>
-          <h2 className="display mt-1 text-[18px] font-bold text-[#183b32]">Getting started</h2>
-          <p className="mt-1 text-[11px] font-medium text-[#4c685e]">{query.isError ? 'We could not refresh your progress.' : `${completeCount} of ${steps.length} steps completed`}</p>
+          <h2 className="display mt-1 text-[17px] font-bold text-[#183b32]">Getting started</h2>
+          <p className="mt-1 text-[11px] text-[#4c685e]">{query.isError ? 'We could not refresh your progress.' : `${completeCount} of ${steps.length} steps completed`}</p>
         </div>
         {query.data && <div className="flex items-center gap-2" aria-label={`${completeCount} of ${steps.length} onboarding steps complete`}>
           <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#cfe1d8]"><div className="h-full rounded-full bg-[#397d6c] transition-[width]" style={{ width: `${completeCount / steps.length * 100}%` }}/></div>
@@ -428,8 +428,8 @@ function WorkspaceGettingStarted({ user }: { user: AuthUser }) {
       {query.isError ? <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[11px] text-[#835a37] sm:px-5">
         <span>Progress is temporarily unavailable. Your setup is unchanged.</span>
         <button type="button" data-testid="button-retry-onboarding" onClick={() => void query.refetch()} className="rounded-md border border-[#e4c5a5] bg-white px-3 py-1.5 font-semibold text-[#89592f] hover:bg-[#fff8f1]">Retry</button>
-      </div> : <ol className="grid divide-y divide-[#d6e5de] sm:grid-cols-2 sm:divide-y-0 sm:divide-x">
-        {steps.map((step, index) => <li key={step.key} className="flex min-w-0 items-start gap-2.5 px-4 py-3 sm:border-[#d6e5de] sm:px-3 lg:flex-col lg:gap-2 lg:border-r lg:px-3 lg:py-4 last:lg:border-r-0">
+      </div> : <ol className="grid divide-y divide-[#d6e5de] sm:grid-cols-2 sm:divide-y-0 sm:divide-x lg:grid-cols-5">
+        {steps.map((step, index) => <li key={step.key} className="flex min-w-0 items-start gap-2.5 px-4 py-3 sm:px-3 lg:flex-col lg:gap-2 lg:border-r lg:border-[#d6e5de] lg:px-3 lg:py-4 last:lg:border-r-0">
           <span className={cn('mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] font-semibold', step.done ? 'border-[#a9cdbb] bg-[#dceee4] text-[#316c52]' : 'border-[#bfd4ca] bg-[#fafffc] text-[#45695c]')}>
             {step.done ? <Check className="h-3.5 w-3.5"/> : index + 1}
           </span>
