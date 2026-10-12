@@ -73,4 +73,9 @@ export interface PlatformSettings {
   packageVisibility: PlatformSettingsPackageVisibility;
   /** @nullable */
   updatedAt: Date | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  settingsVersion: string;
 }

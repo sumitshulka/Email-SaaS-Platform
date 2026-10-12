@@ -125,4 +125,9 @@ export interface PlatformSettingsInput {
   /** @minimum 0 */
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsInputPackageVisibility;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  expectedSettingsVersion: string;
 }

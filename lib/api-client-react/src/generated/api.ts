@@ -9803,7 +9803,7 @@ return customFetch<PlatformSettings>(getUpdateAdminSettingsUrl(),
 
 export const getUpdateAdminSettingsMutationKey = () => ['updateAdminSettings'] as const;
 
-export const getUpdateAdminSettingsMutationOptions = <TError = ErrorType<unknown>,
+export const getUpdateAdminSettingsMutationOptions = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,UpdateAdminSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,UpdateAdminSettingsMutationVariables, TContext> => {
 
@@ -9832,13 +9832,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateAdminSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminSettings>>>
     export type UpdateAdminSettingsMutationBody = BodyType<PlatformSettingsInput>
-    export type UpdateAdminSettingsMutationError = ErrorType<unknown>
+    export type UpdateAdminSettingsMutationError = ErrorType<ApiError>
     export type UpdateAdminSettingsMutationVariables = {data: BodyType<PlatformSettingsInput>}
 
     /**
  * @summary Update platform configuration
  */
-export const useUpdateAdminSettings = <TError = ErrorType<unknown>,
+export const useUpdateAdminSettings = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminSettings>>, TError,UpdateAdminSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateAdminSettings>>,

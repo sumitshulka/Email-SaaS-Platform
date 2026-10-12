@@ -2948,6 +2948,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlatformSettings"
+        "409":
+          description: The configuration changed after the submitted snapshot was loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/blocked-terms/preview:
     post:
       operationId: previewBlockedTerms
@@ -5547,7 +5553,8 @@ components:
         gracePeriodDays: { type: integer }
         packageVisibility: { type: string, enum: [public, hidden] }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt]
+        settingsVersion: { type: string, minLength: 1, maxLength: 128 }
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt, settingsVersion]
     PlatformSettingsInput:
       type: object
       properties:
@@ -5585,7 +5592,8 @@ components:
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer, minimum: 0 }
         packageVisibility: { type: string, enum: [public, hidden] }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility]
+        expectedSettingsVersion: { type: string, minLength: 1, maxLength: 128 }
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, expectedSettingsVersion]
     BlockedTermPreviewInput:
       type: object
       properties:

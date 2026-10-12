@@ -3517,6 +3517,11 @@ export interface PlatformSettings {
   packageVisibility: PlatformSettingsPackageVisibility;
   /** @nullable */
   updatedAt: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  settingsVersion: string;
 }
 
 export type PlatformSettingsInputPackageVisibility = typeof PlatformSettingsInputPackageVisibility[keyof typeof PlatformSettingsInputPackageVisibility];
@@ -3645,6 +3650,11 @@ export interface PlatformSettingsInput {
   /** @minimum 0 */
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsInputPackageVisibility;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  expectedSettingsVersion: string;
 }
 
 export interface BlockedTermPreviewInput {

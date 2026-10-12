@@ -676,13 +676,19 @@ router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void>
     });
     return;
   }
+  const { expectedSettingsVersion, ...submittedSettings } = parsed.data;
+  let staleSettings = false;
   await db.transaction(async (tx) => {
     const currentSettings = await lockPlatformSettings(tx);
+    if (expectedSettingsVersion !== currentSettings.settingsVersion) {
+      staleSettings = true;
+      return;
+    }
     const settingsToSave = {
-      ...parsed.data,
+      ...submittedSettings,
       // Preserve this policy when an older client omits the newly added field.
       prohibitedEmailKeywords:
-        parsed.data.prohibitedEmailKeywords ??
+        submittedSettings.prohibitedEmailKeywords ??
         currentSettings.prohibitedEmailKeywords,
     };
     await tx
@@ -706,9 +712,16 @@ router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void>
       entity: "system_configuration",
       entityId: "platform",
       ipAddress: req.ip?.slice(0, 80) ?? null,
-      metadata: { changedFields: Object.keys(parsed.data) },
+      metadata: { changedFields: Object.keys(submittedSettings) },
     });
   });
+  if (staleSettings) {
+    res.status(409).json({
+      error: "These platform settings changed since you loaded them. The latest values have been refreshed; review them before saving again.",
+      code: "STALE_PLATFORM_SETTINGS",
+    });
+    return;
+  }
   res.json(UpdateAdminSettingsResponse.parse(await getPlatformSettings()));
 });
 

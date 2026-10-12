@@ -5611,6 +5611,8 @@ export const getAdminSettingsResponseProhibitedEmailKeywordsItemMax = 100;
 
 export const getAdminSettingsResponseProhibitedEmailKeywordsMax = 200;
 
+export const getAdminSettingsResponseSettingsVersionMax = 128;
+
 
 
 export const GetAdminSettingsResponse = zod.object({
@@ -5648,7 +5650,8 @@ export const GetAdminSettingsResponse = zod.object({
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
-  "updatedAt": zod.coerce.date().nullable()
+  "updatedAt": zod.coerce.date().nullable(),
+  "settingsVersion": zod.string().min(1).max(getAdminSettingsResponseSettingsVersionMax)
 })
 
 
@@ -5712,6 +5715,8 @@ export const updateAdminSettingsBodyProhibitedEmailKeywordsMax = 200;
 
 export const updateAdminSettingsBodyGracePeriodDaysMin = 0;
 
+export const updateAdminSettingsBodyExpectedSettingsVersionMax = 128;
+
 
 
 export const UpdateAdminSettingsBody = zod.object({
@@ -5748,7 +5753,8 @@ export const UpdateAdminSettingsBody = zod.object({
   "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(updateAdminSettingsBodyProhibitedEmailKeywordsItemMax)).max(updateAdminSettingsBodyProhibitedEmailKeywordsMax).optional(),
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int().min(updateAdminSettingsBodyGracePeriodDaysMin),
-  "packageVisibility": zod.enum(['public', 'hidden'])
+  "packageVisibility": zod.enum(['public', 'hidden']),
+  "expectedSettingsVersion": zod.string().min(1).max(updateAdminSettingsBodyExpectedSettingsVersionMax)
 })
 
 export const updateAdminSettingsResponseSubjectVariantMinimumMin = 2;
@@ -5769,6 +5775,8 @@ export const updateAdminSettingsResponseSignatureVariantMaximumMax = 20;
 export const updateAdminSettingsResponseProhibitedEmailKeywordsItemMax = 100;
 
 export const updateAdminSettingsResponseProhibitedEmailKeywordsMax = 200;
+
+export const updateAdminSettingsResponseSettingsVersionMax = 128;
 
 
 
@@ -5807,7 +5815,8 @@ export const UpdateAdminSettingsResponse = zod.object({
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
-  "updatedAt": zod.coerce.date().nullable()
+  "updatedAt": zod.coerce.date().nullable(),
+  "settingsVersion": zod.string().min(1).max(updateAdminSettingsResponseSettingsVersionMax)
 })
 
 

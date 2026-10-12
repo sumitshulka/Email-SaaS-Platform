@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, systemConfigurationTable } from "@workspace/db";
 import { GetAdminSettingsResponse } from "@workspace/api-zod";
@@ -75,6 +76,15 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   gracePeriodDays: 0,
   packageVisibility: "public",
 };
+
+function withSettingsVersion(settings: unknown) {
+  const parsed = GetAdminSettingsResponse.omit({ settingsVersion: true }).parse(settings);
+  const { updatedAt: _updatedAt, ...configuration } = parsed;
+  const settingsVersion = createHash("sha256")
+    .update(JSON.stringify(configuration))
+    .digest("hex");
+  return GetAdminSettingsResponse.parse({ ...parsed, settingsVersion });
+}
 
 export function getMinimumEmailSpacingSeconds(
   settings: Pick<
@@ -345,7 +355,7 @@ export async function getPlatformSettings() {
       ? (row.value as Record<string, unknown>)
       : {};
 
-  return GetAdminSettingsResponse.parse({
+  return withSettingsVersion({
     ...defaultPlatformSettings,
     ...persisted,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
@@ -372,7 +382,7 @@ export async function lockPlatformSettings(
       ? (row.value as Record<string, unknown>)
       : {};
 
-  return GetAdminSettingsResponse.parse({
+  return withSettingsVersion({
     ...defaultPlatformSettings,
     ...persisted,
     updatedAt: row?.updatedAt?.toISOString() ?? null,

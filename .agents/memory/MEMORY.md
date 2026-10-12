@@ -22,6 +22,7 @@
 - [SMTP sender accounts](smtp-sender-account-quota.md) — sender slots/caps are mailbox-specific; M365 MFA mailboxes may need app passwords; ZeptoMail is transactional-only.
 - [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
+- [Settings snapshot concurrency](settings-snapshot-concurrency.md) — full settings replacements need a version of the locked current values; timestamps can be absent or imprecise.
 - [Browser test reliability](browser-test-resource-contention.md) — reuse managed Vite and stub shared app-shell APIs so missing fixtures do not look like blank-page regressions.
 - [Git secret cleanup](git-secret-history.md) — sanitize only outgoing commits and verify the unchanged upstream remains an ancestor before pushing.
 - [Radix dropdown browser checks](radix-dropdown-browser-checks.md) — after list status updates, verify pointer and keyboard ways to reopen the menu separately.

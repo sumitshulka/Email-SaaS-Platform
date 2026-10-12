@@ -996,11 +996,14 @@ function AdminSettingsPage() {
   const [settings, setSettings] = useState<Fields | null>(null);
   const [smtp, setSmtp] = useState<Record<string, string>>({ provider: 'other' });
   const [variantLimitsError, setVariantLimitsError] = useState('');
+  const [settingsVersion, setSettingsVersion] = useState('');
+  const [settingsConflict, setSettingsConflict] = useState('');
 
   useEffect(() => {
     if (q.data) {
-      const { updatedAt: _updatedAt, ...rest } = q.data;
+      const { updatedAt: _updatedAt, settingsVersion: version, ...rest } = q.data;
       setSettings(rest as unknown as Fields);
+      setSettingsVersion(version);
     }
   }, [q.data]);
 
@@ -1045,12 +1048,33 @@ function AdminSettingsPage() {
       return;
     }
     setVariantLimitsError('');
+    setSettingsConflict('');
     save.mutate(
-      { data: settings as unknown as PlatformSettingsInput },
+      {
+        data: {
+          ...(settings as unknown as PlatformSettingsInput),
+          expectedSettingsVersion: settingsVersion,
+        },
+      },
       {
         onSuccess: () => {
+          setSettingsConflict('');
           qc.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetMaintenanceStatusQueryKey() });
+        },
+        onError: (error) => {
+          const errorData = error && typeof error === 'object' && 'data' in error
+            ? error.data
+            : undefined;
+          if (
+            errorData &&
+            typeof errorData === 'object' &&
+            'code' in errorData &&
+            errorData.code === 'STALE_PLATFORM_SETTINGS'
+          ) {
+            setSettingsConflict('Another administrator changed these settings. The latest values have been loaded; review them and save again.');
+            void q.refetch();
+          }
         },
       },
     );
@@ -1132,7 +1156,7 @@ function AdminSettingsPage() {
             {save.isPending ? 'Saving…' : 'Save platform settings'}<Check className="h-4 w-4"/>
           </Button>
         </div>
-        <FormError message={save.isError ? getError(save.error) : undefined}/>
+        <FormError message={settingsConflict || (save.isError ? getError(save.error) : undefined)}/>
         {save.isSuccess && <div data-testid="status-platform-settings-saved" className="text-right text-[11px] text-[#245b9b]">Platform settings saved.</div>}
       </form>
 

@@ -138,7 +138,11 @@ test(
         cookie: adminLogin.cookie,
       });
       assert.equal(currentSettings.response.status, 200);
-      const { updatedAt: _updatedAt, ...settings } = currentSettings.body;
+      const {
+        updatedAt: _updatedAt,
+        settingsVersion: expectedSettingsVersion,
+        ...settings
+      } = currentSettings.body;
 
       client = await pool.connect();
       await client.query("BEGIN");
@@ -149,7 +153,11 @@ test(
       adminUpdateRequest = api("/admin/settings", {
         method: "PUT",
         cookie: adminLogin.cookie,
-        body: { ...settings, prohibitedEmailKeywords: [keyword] },
+        body: {
+          ...settings,
+          expectedSettingsVersion,
+          prohibitedEmailKeywords: [keyword],
+        },
       });
       await waitForPolicyRowLock(client, () => false, 1);
 
@@ -329,7 +337,11 @@ test(
         cookie: adminCookie,
       });
       assert.equal(current.response.status, 200, JSON.stringify(current.body));
-      const { updatedAt: _updatedAt, ...latestSettings } = current.body;
+      const {
+        updatedAt: _updatedAt,
+        settingsVersion: expectedSettingsVersion,
+        ...latestSettings
+      } = current.body;
 
       await client.query("BEGIN");
       await client.query(
@@ -340,7 +352,11 @@ test(
       const policyUpdate = api("/admin/settings", {
         method: "PUT",
         cookie: adminCookie,
-        body: { ...latestSettings, prohibitedEmailKeywords: [nextKeyword] },
+        body: {
+          ...latestSettings,
+          expectedSettingsVersion,
+          prohibitedEmailKeywords: [nextKeyword],
+        },
       }).finally(() => {
         adminSettled = true;
       });

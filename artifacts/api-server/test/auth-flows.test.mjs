@@ -857,11 +857,15 @@ async function api(
 async function updatePlatformSettings(admin, changes) {
   const current = await api("/admin/settings", { cookie: admin.cookie });
   assert.equal(current.response.status, 200, JSON.stringify(current.body));
-  const { updatedAt: _updatedAt, ...settings } = current.body;
+  const {
+    updatedAt: _updatedAt,
+    settingsVersion: expectedSettingsVersion,
+    ...settings
+  } = current.body;
   return api("/admin/settings", {
     method: "PUT",
     cookie: admin.cookie,
-    body: { ...settings, ...changes },
+    body: { ...settings, ...changes, expectedSettingsVersion },
   });
 }
 
@@ -7449,12 +7453,17 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const admin = await login("password-policy-admin@example.test");
     const settingsResponse = await api("/admin/settings", { cookie: admin.cookie });
     assert.equal(settingsResponse.response.status, 200);
-    const { updatedAt: _updatedAt, ...settings } = settingsResponse.body;
+    const {
+      updatedAt: _updatedAt,
+      settingsVersion: expectedSettingsVersion,
+      ...settings
+    } = settingsResponse.body;
     const invalidVariantLimits = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
       body: {
         ...settings,
+        expectedSettingsVersion,
         subjectVariantMinimum: 5,
         subjectVariantMaximum: 4,
       },
@@ -7464,25 +7473,87 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const configuredPolicy = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
-      body: { ...settings, prohibitedEmailKeywords: ["restrictedoffer"] },
+      body: {
+        ...settings,
+        expectedSettingsVersion,
+        prohibitedEmailKeywords: ["restrictedoffer"],
+      },
     });
     assert.equal(configuredPolicy.response.status, 200, JSON.stringify(configuredPolicy.body));
 
     const {
       updatedAt: _policyUpdatedAt,
+      settingsVersion: expectedPolicySettingsVersion,
       prohibitedEmailKeywords: _prohibitedEmailKeywords,
       ...legacyClientSettings
     } = configuredPolicy.body;
     const changedSettings = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
-      body: { ...legacyClientSettings, passwordMinimumLength: 17 },
+      body: {
+        ...legacyClientSettings,
+        expectedSettingsVersion: expectedPolicySettingsVersion,
+        passwordMinimumLength: 17,
+      },
     });
     assert.equal(changedSettings.response.status, 200, JSON.stringify(changedSettings.body));
     assert.deepEqual(changedSettings.body.prohibitedEmailKeywords, ["restrictedoffer"]);
 
     const updatedPolicy = await api("/auth/password-policy");
     assert.deepEqual(updatedPolicy.body, { passwordMinimumLength: 17 });
+  });
+
+  it("rejects a platform settings save based on an outdated snapshot", async () => {
+    const firstAdminUser = await createUser({
+      username: "settings-admin-first",
+      email: "settings-admin-first@example.test",
+      role: "SUPERADMIN",
+    });
+    const secondAdminUser = await createUser({
+      username: "settings-admin-second",
+      email: "settings-admin-second@example.test",
+      role: "SUPERADMIN",
+    });
+    const firstAdmin = await login(firstAdminUser.email);
+    const secondAdmin = await login(secondAdminUser.email);
+    assert.equal(firstAdmin.response.status, 200);
+    assert.equal(secondAdmin.response.status, 200);
+
+    const initial = await api("/admin/settings", { cookie: firstAdmin.cookie });
+    assert.equal(initial.response.status, 200, JSON.stringify(initial.body));
+    const {
+      updatedAt: _updatedAt,
+      settingsVersion: expectedSettingsVersion,
+      ...initialSnapshot
+    } = initial.body;
+
+    const firstSave = await api("/admin/settings", {
+      method: "PUT",
+      cookie: firstAdmin.cookie,
+      body: {
+        ...initialSnapshot,
+        expectedSettingsVersion,
+        supportPhone: "+1 555 0100",
+      },
+    });
+    assert.equal(firstSave.response.status, 200, JSON.stringify(firstSave.body));
+
+    const staleSave = await api("/admin/settings", {
+      method: "PUT",
+      cookie: secondAdmin.cookie,
+      body: {
+        ...initialSnapshot,
+        expectedSettingsVersion,
+        applicationName: "Older administrator form",
+      },
+    });
+    assert.equal(staleSave.response.status, 409, JSON.stringify(staleSave.body));
+    assert.equal(staleSave.body.code, "STALE_PLATFORM_SETTINGS");
+
+    const current = await api("/admin/settings", { cookie: secondAdmin.cookie });
+    assert.equal(current.response.status, 200);
+    assert.equal(current.body.supportPhone, "+1 555 0100");
+    assert.equal(current.body.applicationName, initialSnapshot.applicationName);
   });
 
   describe("campaign prohibited content route checks", { concurrency: false }, () => {
@@ -7800,11 +7871,15 @@ describe("authentication and account recovery", { concurrency: false }, () => {
       cookie: admin.cookie,
     });
     assert.equal(settingsResponse.response.status, 200);
-    const { updatedAt: _updatedAt, ...settings } = settingsResponse.body;
+    const {
+      updatedAt: _updatedAt,
+      settingsVersion: expectedSettingsVersion,
+      ...settings
+    } = settingsResponse.body;
     const enabled = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
-      body: { ...settings, maintenanceMode: true },
+      body: { ...settings, expectedSettingsVersion, maintenanceMode: true },
     });
     assert.equal(enabled.response.status, 200, JSON.stringify(enabled.body));
 
@@ -7860,11 +7935,19 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const afterLogout = await api("/auth/me", { cookie: customer.cookie });
     assert.equal(afterLogout.response.status, 401);
 
-    const { updatedAt: _latestUpdatedAt, ...latestSettings } = enabled.body;
+    const {
+      updatedAt: _latestUpdatedAt,
+      settingsVersion: expectedLatestSettingsVersion,
+      ...latestSettings
+    } = enabled.body;
     const disabled = await api("/admin/settings", {
       method: "PUT",
       cookie: admin.cookie,
-      body: { ...latestSettings, maintenanceMode: false },
+      body: {
+        ...latestSettings,
+        expectedSettingsVersion: expectedLatestSettingsVersion,
+        maintenanceMode: false,
+      },
     });
     assert.equal(disabled.response.status, 200, JSON.stringify(disabled.body));
     const statusAfter = await api("/maintenance/status");
