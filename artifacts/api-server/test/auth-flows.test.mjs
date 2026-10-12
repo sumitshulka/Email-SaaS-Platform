@@ -6047,6 +6047,131 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     }]);
   });
 
+  it("keeps a corrected bounced contact selectable after import without resubscribing its old address", async () => {
+    const owner = await loggedInUser({ username: "bounced-contact-import-owner" });
+    const [pkg] = await db.insert(dbModule.subscriptionPackagesTable).values({
+      name: "Bounced Contact Import Package",
+      description: "",
+      amountMinor: 1000,
+      currency: "INR",
+      periodDays: 30,
+    }).returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: randomUUID(),
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const [bouncedContact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      name: "Imported Contact",
+      firstName: "Imported",
+      lastName: "Contact",
+      email: "bounced-before-import@example.test",
+      subscribed: false,
+      emailStatus: "bounced",
+    }).returning();
+    const [list] = await db.insert(dbModule.contactListsTable).values({
+      userId: owner.user.id,
+      name: "Imported corrected addresses",
+    }).returning();
+    await db.insert(dbModule.contactListMembersTable).values({
+      userId: owner.user.id,
+      listId: list.id,
+      contactId: bouncedContact.id,
+    });
+
+    const imported = await api("/contacts/import", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        contacts: [
+          {
+            rowNumber: 2,
+            firstName: "Imported",
+            lastName: "Contact",
+            email: "corrected-after-import@example.test",
+            subscribed: true,
+            listIds: [list.id],
+          },
+          {
+            rowNumber: 3,
+            firstName: "Imported",
+            lastName: "Contact",
+            email: bouncedContact.email,
+            subscribed: true,
+            listIds: [list.id],
+          },
+        ],
+      },
+    });
+    assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
+    assert.equal(imported.body.imported, 1);
+    assert.equal(imported.body.duplicate, 1);
+    assert.match(imported.body.issues[0].reason, /already exists/i);
+
+    const corrected = await api(
+      `/contacts?listId=${list.id}&status=subscribed`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(corrected.response.status, 200, JSON.stringify(corrected.body));
+    assert.deepEqual(
+      corrected.body.contacts.map((contact) => contact.email),
+      ["corrected-after-import@example.test"],
+    );
+    const bouncedAfterImport = await api(`/contacts/${bouncedContact.id}`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(bouncedAfterImport.body.email, bouncedContact.email);
+    assert.equal(bouncedAfterImport.body.subscribed, false);
+    assert.equal(bouncedAfterImport.body.emailStatus, "bounced");
+
+    const [sender] = await db.insert(dbModule.tenantSendingConfigurationTable).values({
+      userId: owner.user.id,
+      isPrimary: true,
+      provider: "other",
+      host: "smtp.bounce-import.invalid",
+      port: 2525,
+      encryption: "none",
+      usernameEncrypted: securityModule.encryptSecret("bounce-import-user"),
+      passwordEncrypted: securityModule.encryptSecret("bounce-import-password"),
+      fromName: "Bounce Import Test",
+      fromEmail: "bounce-import@example.test",
+      verifiedAt: new Date(),
+    }).returning();
+    const campaign = await api("/campaigns", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {
+        name: "Imported corrected contact audience",
+        subject: "A useful update",
+        textBody: "A clean campaign message.",
+        listIds: [list.id],
+        senderAccountId: sender.id,
+      },
+    });
+    assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+    const queued = await api(`/campaigns/${campaign.body.id}/send`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: {},
+    });
+    assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
+    const selectedRecipients = await db
+      .select({
+        contactId: dbModule.emailCampaignRecipientsTable.contactId,
+        email: dbModule.emailCampaignRecipientsTable.email,
+      })
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.body.id));
+    assert.deepEqual(selectedRecipients, [{
+      contactId: corrected.body.contacts[0].id,
+      email: "corrected-after-import@example.test",
+    }]);
+  });
+
   it("suppresses bounced addresses across duplicate contacts without crossing workspaces or changing unsubscribe status", async () => {
     const owner = await loggedInUser({ username: "duplicate-bounce-owner" });
     const other = await loggedInUser({ username: "duplicate-bounce-other" });
