@@ -229,6 +229,9 @@ export function Microsoft365TraceSettingsPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const connection = connectionQuery.data;
   const busy = connect.isPending || disconnect.isPending || sync.isPending || backfill.isPending;
+  const nextSyncAt = connection?.nextSyncAt ?? null;
+  const nextSyncTimestamp = nextSyncAt ? Date.parse(nextSyncAt) : Number.NaN;
+  const isSyncOverdue = Number.isFinite(nextSyncTimestamp) && nextSyncTimestamp <= Date.now();
   const tenantIdValid = MICROSOFT_UUID.test(tenantId.trim());
   const clientIdValid = MICROSOFT_UUID.test(clientId.trim());
 
@@ -298,11 +301,18 @@ export function Microsoft365TraceSettingsPanel() {
         <div><span className="font-semibold text-[#344154]">Tenant:</span> <span className="mono break-all">{connection.tenantId}</span></div>
         <div><span className="font-semibold text-[#344154]">Authenticated source:</span> Microsoft Graph · {connection.permission}</div>
         <div><span className="font-semibold text-[#344154]">Last successful sync:</span> {connection.lastSuccessAt ? new Date(connection.lastSuccessAt).toLocaleString() : 'Not yet synced'}</div>
+        <div data-testid="text-microsoft365-next-check"><span className="font-semibold text-[#344154]">{connection.syncStatus === 'error' ? 'Next automatic retry:' : 'Next expected trace check:'}</span>{' '}
+          {nextSyncAt ? <time dateTime={nextSyncAt}>{new Date(nextSyncAt).toLocaleString()}</time> : 'Not scheduled'}
+        </div>
         <div><span className="font-semibold text-[#344154]">Backfill:</span> {connection.backfillStartAt ? `Working from ${new Date(connection.backfillStartAt).toLocaleDateString()} through ${connection.backfillEndAt ? new Date(connection.backfillEndAt).toLocaleDateString() : 'now'}` : connection.backfillCompletedAt ? `Complete · ${new Date(connection.backfillCompletedAt).toLocaleString()}` : 'Incremental sync is active'}</div>
       </div>
+      {isSyncOverdue && <div role="alert" data-testid="alert-microsoft365-trace-overdue" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
+        <p>The scheduled trace check or retry was due <time dateTime={nextSyncAt!}>{new Date(nextSyncAt!).toLocaleString()}</time> and is overdue. Request a check now to resume trace collection.</p>
+        <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>
+      </div>}
       {connection.lastError && <div role="status" data-testid="text-microsoft365-sync-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{connection.lastError}</div>}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>
+        {!isSyncOverdue && <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>}
         <label className="flex items-center gap-2 text-[11px] text-[#5c6877]">Backfill
           <select data-testid="select-microsoft365-backfill-days" className="h-9 rounded-md border border-[#d8dde4] bg-white px-2 text-[12px]" value={days} onChange={e => setDays(Number(e.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option></select>
         </label>

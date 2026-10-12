@@ -106,7 +106,29 @@ async function openEmailSetupPage(gmailConnection = {
   nextSyncAt: null,
   lastError: null,
   pollIntervalSeconds: 120,
-}, gmailApi = {}) {
+}, gmailApi = {}, microsoftTraceConnection = {
+  configured: false,
+  connected: false,
+  tenantId: null,
+  syncStatus: 'disconnected',
+  source: 'microsoft_365_graph',
+  evidenceVerification: 'microsoft365_authorized',
+  permission: 'ExchangeMessageTrace.Read.All',
+  tenantAdminConsentRequired: true,
+  exchangeTraceServicePrincipalAppId: '8bd644d1-64a1-4d4b-ae52-2e0cbf64e373',
+  backfillStartAt: null,
+  backfillEndAt: null,
+  backfillCompletedAt: null,
+  lastSyncAt: null,
+  lastSuccessAt: null,
+  nextSyncAt: null,
+  lastError: null,
+  pollIntervalSeconds: 300,
+  maxHistoryDays: 90,
+  maxQueryWindowDays: 10,
+  maxPageSize: 5000,
+  requestsPerFiveMinutes: 100,
+}) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addCookies([{
     name: 'mailflow_session',
@@ -138,29 +160,7 @@ async function openEmailSetupPage(gmailConnection = {
     } else if (pathname === '/api/sending/microsoft-365/connection' && request.method() === 'GET') {
       await route.fulfill({
         status: 200,
-        json: {
-          configured: false,
-          connected: false,
-          tenantId: null,
-          syncStatus: 'disconnected',
-          source: 'microsoft_365_graph',
-          evidenceVerification: 'microsoft365_authorized',
-          permission: 'ExchangeMessageTrace.Read.All',
-          tenantAdminConsentRequired: true,
-          exchangeTraceServicePrincipalAppId: '8bd644d1-64a1-4d4b-ae52-2e0cbf64e373',
-          backfillStartAt: null,
-          backfillEndAt: null,
-          backfillCompletedAt: null,
-          lastSyncAt: null,
-          lastSuccessAt: null,
-          nextSyncAt: null,
-          lastError: null,
-          pollIntervalSeconds: 300,
-          maxHistoryDays: 90,
-          maxQueryWindowDays: 10,
-          maxPageSize: 5000,
-          requestsPerFiveMinutes: 100,
-        },
+        json: microsoftTraceConnection,
       });
     } else if (pathname === '/api/sending/microsoft-365/connect' && request.method() === 'POST') {
       await route.fulfill({
@@ -282,6 +282,105 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
       assert.equal(errorText.includes(secretValue), false);
     } finally {
       await context.close();
+    }
+  });
+
+  it('shows the next trace check, flags overdue polling, and keeps retry errors distinct', async () => {
+    const now = Date.now();
+    const baseConnection = {
+      configured: true,
+      connected: true,
+      tenantId,
+      syncStatus: 'connected',
+      source: 'microsoft_365_graph',
+      evidenceVerification: 'microsoft365_authorized',
+      permission: 'ExchangeMessageTrace.Read.All',
+      tenantAdminConsentRequired: true,
+      exchangeTraceServicePrincipalAppId: '8bd644d1-64a1-4d4b-ae52-2e0cbf64e373',
+      backfillStartAt: null,
+      backfillEndAt: null,
+      backfillCompletedAt: new Date(now - 60_000).toISOString(),
+      lastSyncAt: new Date(now - 60_000).toISOString(),
+      lastSuccessAt: new Date(now - 60_000).toISOString(),
+      nextSyncAt: new Date(now + 60_000).toISOString(),
+      lastError: null,
+      pollIntervalSeconds: 300,
+      maxHistoryDays: 90,
+      maxQueryWindowDays: 10,
+      maxPageSize: 5000,
+      requestsPerFiveMinutes: 100,
+    };
+    const cases = [
+      { name: 'scheduled check', connection: baseConnection, overdue: false, error: false, label: /Next expected trace check/ },
+      {
+        name: 'overdue check',
+        connection: { ...baseConnection, nextSyncAt: new Date(now - 60_000).toISOString() },
+        overdue: true,
+        error: false,
+        label: /Next expected trace check/,
+      },
+      {
+        name: 'failed check',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          nextSyncAt: new Date(now + 120_000).toISOString(),
+          lastError: 'Microsoft 365 trace sync failed; Mailflow will retry.',
+        },
+        overdue: false,
+        error: true,
+        label: /Next automatic retry/,
+      },
+      {
+        name: 'overdue retry after failure',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          nextSyncAt: new Date(now - 60_000).toISOString(),
+          lastError: 'Microsoft 365 trace sync failed; Mailflow will retry.',
+        },
+        overdue: true,
+        error: true,
+        label: /Next automatic retry/,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { context, page } = await openEmailSetupPage(undefined, {}, testCase.connection);
+      try {
+        const nextCheck = page.getByTestId('text-microsoft365-next-check');
+        await nextCheck.waitFor();
+        assert.match(await nextCheck.innerText(), testCase.label, `${testCase.name} timing label`);
+        assert.equal(
+          await page.getByTestId('alert-microsoft365-trace-overdue').count(),
+          testCase.overdue ? 1 : 0,
+          `${testCase.name} overdue alert`,
+        );
+        assert.equal(
+          await page.getByTestId('text-microsoft365-sync-error').count(),
+          testCase.error ? 1 : 0,
+          `${testCase.name} saved error`,
+        );
+        if (testCase.connection.nextSyncAt) {
+          assert.equal(await nextCheck.locator('time').getAttribute('dateTime'), testCase.connection.nextSyncAt);
+        }
+        if (testCase.overdue) {
+          const warning = page.getByTestId('alert-microsoft365-trace-overdue');
+          assert.match(await warning.innerText(), /overdue/i);
+          assert.equal(await warning.getByTestId('button-sync-microsoft365-now').isVisible(), true);
+        }
+        if (testCase.error) {
+          assert.match(await page.getByTestId('text-microsoft365-sync-error').innerText(), /will retry/i);
+          assert.equal(
+            await page.getByTestId('alert-microsoft365-trace-overdue').count(),
+            testCase.overdue ? 1 : 0,
+            `${testCase.name} late retry alert`,
+          );
+          assert.equal(await page.getByTestId('button-sync-microsoft365-now').isVisible(), true);
+        }
+      } finally {
+        await context.close();
+      }
     }
   });
 
