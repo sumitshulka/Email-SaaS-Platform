@@ -11107,6 +11107,172 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     }
   });
 
+  it("finishes an in-flight campaign email after pause and leaves the next recipient queued", async () => {
+    const owner = await loggedInUser({
+      username: "campaign-pause-inflight-owner",
+    });
+    const recipientEmails = [
+      "first@campaign-pause.test",
+      "second@campaign-pause.test",
+    ];
+    const contacts = await db
+      .insert(dbModule.contactsTable)
+      .values(
+        recipientEmails.map((email, index) => ({
+          userId: owner.user.id,
+          email,
+          firstName: `Contact ${index + 1}`,
+          subscribed: true,
+        })),
+      )
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.campaign-pause.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("campaign-pause-user"),
+        passwordEncrypted: securityModule.encryptSecret("campaign-pause-password"),
+        fromName: "Campaign Pause Test",
+        fromEmail: "sender@campaign-pause.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Pause during delivery",
+        subject: "A campaign update",
+        textBody: "This message should finish safely.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    await db.insert(dbModule.emailCampaignRecipientsTable).values(
+      contacts.map((contact, index) => ({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - (recipientEmails.length - index) * 1000),
+        createdAt: new Date(Date.now() - (recipientEmails.length - index) * 1000),
+      })),
+    );
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "platform",
+      value: {
+        maintenanceMode: false,
+        defaultEmailsPerHour: 3600,
+        maxEmailsPerDay: 100,
+        queuePollingSeconds: 1,
+        deliveryTrackingEnabled: true,
+      },
+    });
+
+    let markFirstDeliveryStarted;
+    const firstDeliveryStarted = new Promise((resolve) => {
+      markFirstDeliveryStarted = resolve;
+    });
+    let finishFirstDelivery;
+    const firstDeliveryGate = new Promise((resolve) => {
+      finishFirstDelivery = resolve;
+    });
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      if (message.to === recipientEmails[0]) {
+        markFirstDeliveryStarted();
+        await firstDeliveryGate;
+      }
+      return {
+        accepted: true,
+        smtpResponse: "250 2.0.0 SMTP accepted",
+        smtpCode: 250,
+      };
+    });
+
+    try {
+      const inFlightBatch =
+        campaignWorkerModule.processPendingCampaignDeliveries(2);
+      await firstDeliveryStarted;
+
+      const pausedCampaign = await api(
+        `/campaigns/${campaign.id}/pause`,
+        {
+          method: "PATCH",
+          cookie: owner.cookie,
+          body: { paused: true },
+        },
+      );
+      assert.equal(pausedCampaign.response.status, 200, JSON.stringify(pausedCampaign.body));
+      assert.equal(pausedCampaign.body.paused, true);
+      assert.ok(pausedCampaign.body.pausedAt);
+
+      finishFirstDelivery();
+      assert.equal(await inFlightBatch, 1);
+      assert.deepEqual(deliveredTo, [recipientEmails[0]]);
+
+      const recipients = await db
+        .select({
+          id: dbModule.emailCampaignRecipientsTable.id,
+          email: dbModule.emailCampaignRecipientsTable.email,
+          status: dbModule.emailCampaignRecipientsTable.status,
+          attempts: dbModule.emailCampaignRecipientsTable.attempts,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(
+          eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.id),
+        );
+      const recipientByEmail = Object.fromEntries(
+        recipients.map((recipient) => [recipient.email, recipient]),
+      );
+      assert.equal(recipientByEmail[recipientEmails[0]].status, "delivered");
+      assert.equal(recipientByEmail[recipientEmails[0]].attempts, 1);
+      assert.equal(recipientByEmail[recipientEmails[1]].status, "queued");
+      assert.equal(recipientByEmail[recipientEmails[1]].attempts, 0);
+
+      const firstAttempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(
+          eq(
+            dbModule.emailSendAttemptsTable.recipientId,
+            recipientByEmail[recipientEmails[0]].id,
+          ),
+        );
+      assert.equal(firstAttempts.length, 1);
+      assert.equal(firstAttempts[0].outcome, "smtp_accepted");
+      assert.equal(firstAttempts[0].smtpCode, 250);
+      assert.ok(firstAttempts[0].completedAt);
+
+      const secondAttempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(
+          eq(
+            dbModule.emailSendAttemptsTable.recipientId,
+            recipientByEmail[recipientEmails[1]].id,
+          ),
+        );
+      assert.equal(secondAttempts.length, 0);
+      assert.deepEqual(deliveredTo, [recipientEmails[0]]);
+    } finally {
+      finishFirstDelivery();
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("keeps transiently failed campaign emails queued until maintenance ends and the retry time arrives", async () => {
     const owner = await loggedInUser({
       username: "maintenance-retry-owner",
