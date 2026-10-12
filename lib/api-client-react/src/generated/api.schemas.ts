@@ -4458,12 +4458,45 @@ export interface FreeAddOnActivation {
   message: string;
 }
 
+export type CampaignEmailAssistInputMaxWords = typeof CampaignEmailAssistInputMaxWords[keyof typeof CampaignEmailAssistInputMaxWords];
+
+
+export const CampaignEmailAssistInputMaxWords = {
+  NUMBER_50: 50,
+  NUMBER_100: 100,
+  NUMBER_150: 150,
+  NUMBER_200: 200,
+} as const;
+
 export interface CampaignEmailAssistInput {
+  /** @maxLength 500 */
+  objective?: string;
   /**
      * @minLength 1
-     * @maxLength 500
+     * @maxLength 1000
      */
-  objective: string;
+  persona: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  promotion: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  goal: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  desiredAction: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  guidance: string;
+  maxWords: CampaignEmailAssistInputMaxWords;
   /** @maxLength 10000 */
   currentBody?: string;
 }

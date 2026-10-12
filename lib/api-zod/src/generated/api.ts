@@ -4522,12 +4522,28 @@ export const PreviewCampaignResponse = zod.object({
  */
 export const generateCampaignEmailDraftBodyObjectiveMax = 500;
 
+export const generateCampaignEmailDraftBodyPersonaMax = 1000;
+
+export const generateCampaignEmailDraftBodyPromotionMax = 1000;
+
+export const generateCampaignEmailDraftBodyGoalMax = 1000;
+
+export const generateCampaignEmailDraftBodyDesiredActionMax = 1000;
+
+export const generateCampaignEmailDraftBodyGuidanceMax = 1000;
+
 export const generateCampaignEmailDraftBodyCurrentBodyMax = 10000;
 
 
 
 export const GenerateCampaignEmailDraftBody = zod.object({
-  "objective": zod.string().min(1).max(generateCampaignEmailDraftBodyObjectiveMax),
+  "objective": zod.string().max(generateCampaignEmailDraftBodyObjectiveMax).optional(),
+  "persona": zod.string().min(1).max(generateCampaignEmailDraftBodyPersonaMax),
+  "promotion": zod.string().min(1).max(generateCampaignEmailDraftBodyPromotionMax),
+  "goal": zod.string().min(1).max(generateCampaignEmailDraftBodyGoalMax),
+  "desiredAction": zod.string().min(1).max(generateCampaignEmailDraftBodyDesiredActionMax),
+  "guidance": zod.string().min(1).max(generateCampaignEmailDraftBodyGuidanceMax),
+  "maxWords": zod.union([zod.literal(50),zod.literal(100),zod.literal(150),zod.literal(200)]),
   "currentBody": zod.string().max(generateCampaignEmailDraftBodyCurrentBodyMax).optional()
 })
 

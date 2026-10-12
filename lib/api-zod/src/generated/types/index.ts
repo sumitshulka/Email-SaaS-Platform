@@ -70,6 +70,7 @@ export * from './campaignDeliveryReport';
 export * from './campaignDeliveryReportSummary';
 export * from './campaignEmailAssistDraft';
 export * from './campaignEmailAssistInput';
+export * from './campaignEmailAssistInputMaxWords';
 export * from './campaignEmailAssistResponse';
 export * from './campaignHistory';
 export * from './campaignHistorySummary';

@@ -5,13 +5,37 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignEmailAssistInputMaxWords } from './campaignEmailAssistInputMaxWords';
 
 export interface CampaignEmailAssistInput {
+  /** @maxLength 500 */
+  objective?: string;
   /**
      * @minLength 1
-     * @maxLength 500
+     * @maxLength 1000
      */
-  objective: string;
+  persona: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  promotion: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  goal: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  desiredAction: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  guidance: string;
+  maxWords: CampaignEmailAssistInputMaxWords;
   /** @maxLength 10000 */
   currentBody?: string;
 }

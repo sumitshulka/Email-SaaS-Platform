@@ -6144,9 +6144,15 @@ components:
     CampaignEmailAssistInput:
       type: object
       properties:
-        objective: { type: string, minLength: 1, maxLength: 500 }
+        objective: { type: string, maxLength: 500 }
+        persona: { type: string, minLength: 1, maxLength: 1000 }
+        promotion: { type: string, minLength: 1, maxLength: 1000 }
+        goal: { type: string, minLength: 1, maxLength: 1000 }
+        desiredAction: { type: string, minLength: 1, maxLength: 1000 }
+        guidance: { type: string, minLength: 1, maxLength: 1000 }
+        maxWords: { type: integer, enum: [50, 100, 150, 200] }
         currentBody: { type: string, maxLength: 10000 }
-      required: [objective]
+      required: [persona, promotion, goal, desiredAction, guidance, maxWords]
     CampaignEmailAssistDraft:
       type: object
       properties:

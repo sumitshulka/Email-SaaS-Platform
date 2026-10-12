@@ -167,12 +167,20 @@ async function installApiFixtures(context) {
     const request = route.request();
     const { pathname } = new URL(request.url());
     const method = request.method();
+    if (pathname === '/api/maintenance/status' && method === 'GET') {
+      await route.fulfill({ status: 200, json: { maintenanceMode: false } });
+      return;
+    }
     if (!(request.headers().cookie ?? '').includes(`mailflow_session=${sessionCookie}`)) {
       await route.fulfill({ status: 401, json: { error: 'Not authenticated.' } });
       return;
     }
     if (pathname === '/api/auth/me' && method === 'GET') {
       await route.fulfill({ status: 200, json: user });
+      return;
+    }
+    if (pathname === '/api/notifications' && method === 'GET') {
+      await route.fulfill({ status: 200, json: { unread: [], history: [] } });
       return;
     }
     if (pathname === '/api/contact-lists' && method === 'GET') {
@@ -674,8 +682,23 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
       await page.getByTestId('button-create-campaign').click();
-      await page.getByTestId('panel-campaign-ai-assist').getByText('1 credits left', { exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('input-campaign-name').fill('AI assist credit test');
       await page.getByTestId('input-campaign-objective').fill('Introduce our new spring collection');
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('campaign-audience-summary').waitFor({ state: 'visible' });
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('panel-campaign-ai-assist').getByText('1 credits left', { exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-generate-campaign-ai-draft').click();
+      const brief = {
+        persona: 'Small business owners looking for seasonal products',
+        promotion: 'A new spring collection with practical everyday items',
+        goal: 'Introduce the collection to existing customers',
+        desiredAction: 'Browse the collection page',
+        guidance: 'Do not invent prices, discounts, or performance claims',
+      };
+      for (const [field, value] of Object.entries(brief)) {
+        await page.getByTestId(`input-campaign-ai-${field}`).fill(value);
+      }
 
       const draftResponse = page.waitForResponse(response =>
         response.url().includes('/api/campaigns/ai-assist') && response.request().method() === 'POST',
@@ -683,8 +706,10 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       const balanceRefresh = page.waitForResponse(response =>
         response.url().includes('/api/subscriptions/add-ons') && response.request().method() === 'GET',
       );
-      await page.getByTestId('button-generate-campaign-ai-draft').click();
-      assert.equal((await draftResponse).status(), 403);
+      await page.getByTestId('button-submit-campaign-ai-brief').click();
+      const response = await draftResponse;
+      assert.equal(response.status(), 403);
+      assert.equal(response.request().postDataJSON().maxWords, 100);
       assert.equal((await balanceRefresh).status(), 200);
 
       await page.getByTestId('panel-campaign-ai-assist').getByText('0 credits left', { exact: true }).waitFor({ state: 'visible' });

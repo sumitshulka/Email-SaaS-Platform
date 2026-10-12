@@ -8661,13 +8661,48 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     );
   }
 
-  async function draftRequest(account) {
+  async function draftRequest(account, overrides = {}) {
     return api("/campaigns/ai-assist", {
       method: "POST",
       cookie: account.cookie,
-      body: { objective: "Help customers plan their next project" },
+      body: {
+        objective: "Help customers plan their next project",
+        persona: "Small business owners planning an upcoming project",
+        promotion: "A project planning service with simple weekly check-ins",
+        goal: "Introduce the service and invite interested readers to learn more",
+        desiredAction: "Visit the service page to see how it works",
+        guidance: "Do not promise specific results or mention an unverified discount",
+        maxWords: 50,
+        ...overrides,
+      },
     });
   }
+
+  it("enforces the 50-word brief limit and selected generated-body limit", async () => {
+    const account = await loggedInUser({ username: "ai-assist-word-limits-user" });
+    const tooLong = await draftRequest(account, {
+      persona: Array.from({ length: 51 }, () => "audience").join(" "),
+    });
+    assert.equal(tooLong.response.status, 400);
+    assert.equal(tooLong.body.code, "AI_BRIEF_ANSWER_TOO_LONG");
+
+    const admin = await loggedInUser({
+      username: "ai-assist-word-limits-admin",
+      role: "SUPERADMIN",
+    });
+    const eligible = await createAccount("ai-assist-word-limits-eligible");
+    await configureProvider(admin);
+    const longDraft = {
+      ...validDraft,
+      body: Array.from({ length: 70 }, (_, index) => `benefit${index + 1}`).join(" "),
+    };
+    const result = await withAIProviderFetch(
+      async () => providerResponse(JSON.stringify(longDraft)),
+      () => draftRequest(eligible),
+    );
+    assert.equal(result.response.status, 200, JSON.stringify(result.body));
+    assert.ok(result.body.draft.body.split(/\s+/).filter(Boolean).length <= 50);
+  });
 
   it("releases credits after provider or draft-validation failures and consumes one on success", async () => {
     const admin = await loggedInUser({
