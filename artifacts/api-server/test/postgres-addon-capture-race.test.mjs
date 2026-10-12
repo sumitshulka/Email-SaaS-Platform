@@ -38,12 +38,17 @@ test(
     const { db, pool } = dbModule;
     const {
       addOnEntitlementsTable,
+      aiEmailAssistUsagesTable,
+      companyResearchJobsTable,
+      globalCompaniesTable,
       paymentsTable,
       razorpayConfigurationTable,
       razorpayRefundsTable,
       razorpayWebhookEventsTable,
       subscriptionPackagesTable,
+      tenantSendingConfigurationTable,
       userSubscriptionsTable,
+      userSessionsTable,
       usersTable,
     } = dbModule;
     const app = appModule.default;
@@ -89,6 +94,7 @@ test(
       mailboxes: 3,
     };
     let userId;
+    let researchCompanyId;
     let primaryPackageId;
     let addonPackageId;
     let paymentId;
@@ -144,6 +150,19 @@ test(
         })
         .returning({ id: usersTable.id });
       userId = user.id;
+      const sessionToken = randomUUID();
+      await db.insert(userSessionsTable).values({
+        userId,
+        tokenHash: createHash("sha256").update(sessionToken).digest("hex"),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      });
+      const sessionSignature = createHmac(
+        "sha256",
+        process.env.SESSION_SECRET,
+      )
+        .update(`session:${sessionToken}`)
+        .digest("base64url");
+      const sessionCookie = `mailflow_session=${sessionToken}.${sessionSignature}`;
 
       const [primaryPackage] = await db
         .insert(subscriptionPackagesTable)
@@ -155,6 +174,7 @@ test(
           periodDays: 30,
           contactLimit: 500,
           emailAccountLimit: 1,
+          researchAllowance: 0,
         })
         .returning();
       primaryPackageId = primaryPackage.id;
@@ -1177,6 +1197,200 @@ test(
         remaining: 1 + allowances.mailboxes,
         active: true,
       });
+
+      const [activeAddonEntitlement] = await db
+        .select()
+        .from(addOnEntitlementsTable)
+        .where(
+          eq(
+            addOnEntitlementsTable.paymentId,
+            acknowledgementRetryPaymentId,
+          ),
+        );
+      assert.ok(activeAddonEntitlement);
+      assert.equal(
+        activeAddonEntitlement.researchAllowance,
+        allowances.research,
+      );
+      assert.equal(
+        activeAddonEntitlement.aiEmailAssistAllowance,
+        allowances.emailAssist,
+      );
+      assert.equal(
+        activeAddonEntitlement.additionalMailboxCount,
+        allowances.mailboxes,
+      );
+
+      const researchModule = await import("../src/lib/company-intelligence.ts");
+      const [researchCompany] = await db
+        .insert(globalCompaniesTable)
+        .values({ companyName: `Fully refunded add-on ${testId}` })
+        .returning({ id: globalCompaniesTable.id });
+      researchCompanyId = researchCompany.id;
+      const researchInput = {
+        globalCompanyId: researchCompanyId,
+        userId,
+        tenantUserId: userId,
+        provider: "openai",
+        selectedModel: "test-model",
+        settings: { researchCreditCost: 1, preferredModel: "test-model" },
+        depth: 1,
+        overrideFresh: true,
+      };
+      for (let credit = 0; credit < allowances.research; credit += 1) {
+        const result = await researchModule.enqueueCompanyResearch(researchInput);
+        assert.equal(
+          result.kind,
+          "created",
+          `the separate active add-on should supply research credit ${credit + 1}`,
+        );
+        await db
+          .update(companyResearchJobsTable)
+          .set({ status: "failed", stage: "failed" })
+          .where(eq(companyResearchJobsTable.id, result.job.id));
+      }
+      assert.equal(
+        (await researchModule.enqueueCompanyResearch(researchInput)).kind,
+        "allowance_exhausted",
+        "the fully refunded purchase must not supply research credits after the active purchase is spent",
+      );
+      const [refundedResearchEntitlement] = await db
+        .select({ researchUsed: addOnEntitlementsTable.researchUsed })
+        .from(addOnEntitlementsTable)
+        .where(eq(addOnEntitlementsTable.paymentId, paymentId));
+      const [activeResearchEntitlement] = await db
+        .select({ researchUsed: addOnEntitlementsTable.researchUsed })
+        .from(addOnEntitlementsTable)
+        .where(
+          eq(
+            addOnEntitlementsTable.paymentId,
+            acknowledgementRetryPaymentId,
+          ),
+        );
+      assert.equal(refundedResearchEntitlement.researchUsed, 0);
+      assert.equal(
+        activeResearchEntitlement.researchUsed,
+        allowances.research,
+        "only the separate active add-on should supply the consumed research credits",
+      );
+
+      for (let credit = 0; credit < allowances.emailAssist; credit += 1) {
+        const reservation =
+          await entitlementModule.reserveAiEmailAssistCredit(userId);
+        assert.ok(
+          reservation,
+          `the separate active add-on should supply AI Email Assist credit ${credit + 1}`,
+        );
+        assert.equal(
+          reservation.entitlementId,
+          activeAddonEntitlement.id,
+          "AI Email Assist must reserve credits from the separate active add-on",
+        );
+        await entitlementModule.finishAiEmailAssistCredit(
+          userId,
+          reservation.id,
+          true,
+        );
+      }
+      assert.equal(
+        await entitlementModule.reserveAiEmailAssistCredit(userId),
+        null,
+        "the fully refunded purchase must not supply AI Email Assist credits after the active purchase is spent",
+      );
+      const assistUsage = await db
+        .select({
+          entitlementId: aiEmailAssistUsagesTable.entitlementId,
+          status: aiEmailAssistUsagesTable.status,
+        })
+        .from(aiEmailAssistUsagesTable)
+        .where(eq(aiEmailAssistUsagesTable.userId, userId));
+      assert.equal(assistUsage.length, allowances.emailAssist);
+      assert.ok(
+        assistUsage.every(
+          (usage) =>
+            usage.entitlementId === activeAddonEntitlement.id &&
+            usage.status === "consumed",
+        ),
+        "only the separate active add-on should supply consumed AI Email Assist credits",
+      );
+
+      for (
+        let accountNumber = 1;
+        accountNumber <= 1 + allowances.mailboxes;
+        accountNumber += 1
+      ) {
+        const response = await fetch(
+          `http://127.0.0.1:${server.address().port}/api/sending/accounts`,
+          {
+            method: "POST",
+            headers: {
+              cookie: sessionCookie,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              provider: "other",
+              host: `smtp.refund-${testId}-${accountNumber}.test`,
+              port: 587,
+              encryption: "tls",
+              username: `refund-sender-${testId}-${accountNumber}`,
+              password: `refund-sender-secret-${testId}-${accountNumber}`,
+              fromName: `Refund sender ${accountNumber}`,
+              fromEmail: `refund-sender-${accountNumber}@test.example`,
+            }),
+          },
+        );
+        assert.equal(
+          response.status,
+          201,
+          `the active add-on should permit sender account ${accountNumber}: ${await response.text()}`,
+        );
+      }
+      const accountLimitResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/sending/accounts`,
+        { headers: { cookie: sessionCookie } },
+      );
+      assert.equal(accountLimitResponse.status, 200);
+      const accountLimit = await accountLimitResponse.json();
+      assert.equal(
+        accountLimit.emailAccountLimit,
+        1 + allowances.mailboxes,
+        "the sender-account limit must include only the separate active add-on's slots",
+      );
+      assert.equal(accountLimit.configuredCount, 1 + allowances.mailboxes);
+      assert.equal(accountLimit.overLimit, false);
+
+      const blockedMailboxResponse = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/sending/accounts`,
+        {
+          method: "POST",
+          headers: {
+            cookie: sessionCookie,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            provider: "other",
+            host: `smtp.refund-${testId}-blocked.test`,
+            port: 587,
+            encryption: "tls",
+            username: `refund-sender-${testId}-blocked`,
+            password: `refund-sender-secret-${testId}-blocked`,
+            fromName: "Refund sender blocked",
+            fromEmail: `refund-sender-blocked-${testId}@test.example`,
+          }),
+        },
+      );
+      const blockedMailboxBody = await blockedMailboxResponse.json();
+      assert.equal(
+        blockedMailboxResponse.status,
+        409,
+        JSON.stringify(blockedMailboxBody),
+      );
+      assert.equal(blockedMailboxBody.code, "SENDER_ACCOUNT_LIMIT_REACHED");
+      assert.equal(
+        blockedMailboxBody.limit,
+        1 + allowances.mailboxes,
+        "the refunded purchase must not add mailbox slots beyond the active add-on",
+      );
     } finally {
       if (lockClient) {
         if (transactionLockHeld) {
@@ -1193,9 +1407,23 @@ test(
       }
 
       if (userId) {
+        if (researchCompanyId) {
+          await db
+            .delete(companyResearchJobsTable)
+            .where(eq(companyResearchJobsTable.globalCompanyId, researchCompanyId));
+          await db
+            .delete(globalCompaniesTable)
+            .where(eq(globalCompaniesTable.id, researchCompanyId));
+        }
         await db
           .delete(razorpayWebhookEventsTable)
           .where(inArray(razorpayWebhookEventsTable.eventId, eventIds));
+        await db
+          .delete(aiEmailAssistUsagesTable)
+          .where(eq(aiEmailAssistUsagesTable.userId, userId));
+        await db
+          .delete(tenantSendingConfigurationTable)
+          .where(eq(tenantSendingConfigurationTable.userId, userId));
         await db
           .delete(addOnEntitlementsTable)
           .where(eq(addOnEntitlementsTable.userId, userId));
