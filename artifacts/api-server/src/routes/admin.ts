@@ -60,7 +60,7 @@ import {
   getPlatformSettings,
   lockPlatformSettings,
 } from "../lib/platform-settings";
-import { findProhibitedCampaignKeywordMatchDetails } from "../lib/profanity-filter";
+import { findProhibitedCampaignFieldKeywordMatches } from "../lib/profanity-filter";
 import { getCurrentSubscriptionForUser } from "../lib/billing";
 import {
   getGoogleOAuthSettingsStatus,
@@ -649,8 +649,8 @@ router.post(
       return;
     }
 
-    const result = findProhibitedCampaignKeywordMatchDetails(
-      parsed.data.sampleText,
+    const result = findProhibitedCampaignFieldKeywordMatches(
+      parsed.data.sampleFields,
       parsed.data.prohibitedEmailKeywords,
     );
     res.json(PreviewBlockedTermsResponse.parse(result));

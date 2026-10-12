@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   findProhibitedCampaignKeywordMatchDetails,
   findProhibitedCampaignKeywordMatches,
+  findProhibitedCampaignFieldKeywordMatches,
   findProhibitedCampaignContent,
   normalizeProfanityText,
 } from "../src/lib/profanity-filter.ts";
@@ -79,6 +80,25 @@ describe("campaign profanity filter", () => {
       findProhibitedCampaignKeywordMatches("ordinary text", ["...", ""]),
       [],
     );
+  });
+
+  it("reports normalized matches independently for each campaign field", () => {
+    const result = findProhibitedCampaignFieldKeywordMatches({
+      subject: "Safe subject",
+      greeting: "B.A.D.word!",
+      body: "Safe body",
+      htmlBody: "<p>b&#97;dword</p>",
+      signature: "Objectionable phrase",
+    }, terms);
+
+    assert.deepEqual(result.subject.matchedKeywords, []);
+    assert.deepEqual(result.greeting.matchedKeywords, ["badword"]);
+    assert.deepEqual(result.body.matchedKeywords, []);
+    assert.deepEqual(result.htmlBody.matchedKeywords, ["badword"]);
+    assert.deepEqual(result.signature.matchedKeywords, ["objectionable phrase"]);
+    assert.deepEqual(result.htmlBody.matchRanges, [
+      { start: 3, end: 14, keywords: ["badword"] },
+    ]);
   });
 
   it("returns every original-text range for punctuation and confusable-character matches", () => {

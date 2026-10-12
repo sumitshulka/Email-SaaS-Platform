@@ -9944,7 +9944,7 @@ export const getPreviewBlockedTermsUrl = () => {
 }
 
 /**
- * @summary Preview blocked campaign terms against sample text
+ * @summary Preview blocked campaign terms against campaign fields
  */
 export const previewBlockedTerms = async (blockedTermPreviewInput: BlockedTermPreviewInput, options?: Parameters<typeof customFetch>[1]): Promise<BlockedTermPreviewResult> => {
 
@@ -10010,7 +10010,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PreviewBlockedTermsMutationVariables = {data: BodyType<BlockedTermPreviewInput>}
 
     /**
- * @summary Preview blocked campaign terms against sample text
+ * @summary Preview blocked campaign terms against campaign fields
  */
 export const usePreviewBlockedTerms = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewBlockedTerms>>, TError,PreviewBlockedTermsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

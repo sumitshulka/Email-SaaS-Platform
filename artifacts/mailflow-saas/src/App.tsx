@@ -840,13 +840,27 @@ const settingGroups: Array<{ title: string; description?: string; fields: Array<
   { title: 'Campaign content policy', description: 'Add blocked words or phrases one at a time. They are checked in subject lines, greetings, body text, HTML content, and signatures. Separators such as spaces, dots, brackets, and zero-width characters between letters do not bypass the check.', fields: [['prohibitedEmailKeywords','Blocked words and phrases','list']] },
   { title: 'Subscription rules', fields: [['allowUserWithoutSubscription','Allow accounts without subscription','boolean'],['gracePeriodDays','Grace period (days)','number'],['packageVisibility','Package visibility','select',['public','hidden']]] },
 ];
+const blockedTermPreviewFields = [
+  { key: 'subject', label: 'Campaign subject', rows: 2 },
+  { key: 'greeting', label: 'Greeting', rows: 2 },
+  { key: 'body', label: 'Body text', rows: 4 },
+  { key: 'htmlBody', label: 'HTML body', rows: 4 },
+  { key: 'signature', label: 'Signature', rows: 2 },
+] as const;
+type BlockedTermPreviewFields = { subject: string; greeting: string; body: string; htmlBody: string; signature: string };
 function SettingsGroup({ title, description, fields, values, setValues }: { title: string; description?: string; fields: Array<[keyof PlatformSettingsInput, string, 'text'|'number'|'boolean'|'list'|'select', string[]?]>; values: Fields; setValues: (v: Fields) => void }) {
   return <Panel className="p-5 md:p-6"><div className="mb-5"><h2 className="display text-[18px] font-bold">{title}</h2>{description && <p className="mt-1.5 max-w-3xl text-[12px] leading-5 text-[#687587]">{description}</p>}</div><div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">{fields.map(([key, label, type, options]) => <div key={key as string} className={key === 'prohibitedEmailKeywords' ? 'sm:col-span-2' : type === 'boolean' ? 'flex min-h-10 items-center justify-between gap-4 rounded-md border border-[#e4e8ec] px-3' : ''}>{type === 'boolean' ? <><span className="text-[12px] font-medium text-[#344154]">{label}</span><button type="button" data-testid={`toggle-setting-${String(key)}`} aria-pressed={!!values[key]} onClick={() => setValues({ ...values, [key]: !values[key] })} className={cn('relative h-[22px] w-10 rounded-full transition-colors', values[key] ? 'bg-[#245b9b]' : 'bg-[#c8ced5]')}><span className={cn('absolute top-[3px] h-4 w-4 rounded-full bg-white transition-transform', values[key] ? 'translate-x-[21px]' : 'translate-x-[3px]')}/></button></> : type === 'select' ? <SelectField label={label} value={String(values[key] ?? options?.[0] ?? '')} onChange={v => setValues({ ...values, [key]: v })} options={options || []} testId={`select-setting-${String(key)}`}/> : type === 'list' && key === 'prohibitedEmailKeywords' ? <BlockedWordsEditor label={label} words={Array.isArray(values[key]) ? values[key] as string[] : []} onChange={words => setValues({ ...values, [key]: words })}/> : <Field label={label} value={Array.isArray(values[key]) ? (values[key] as string[]).join(', ') : String(values[key] ?? '')} onChange={v => setValues({ ...values, [key]: type === 'number' ? (v === '' ? '' : Number(v)) : type === 'list' ? v.split(',').map(x => x.trim()).filter(Boolean) : v })} testId={`input-setting-${String(key)}`} type={type === 'number' ? 'number' : 'text'}/>}</div>)}</div></Panel>;
 }
 function BlockedWordsEditor({ label, words, onChange }: { label: string; words: string[]; onChange: (words: string[]) => void }) {
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
-  const [sampleText, setSampleText] = useState('');
+  const [sampleFields, setSampleFields] = useState<BlockedTermPreviewFields>({
+    subject: '',
+    greeting: '',
+    body: '',
+    htmlBody: '',
+    signature: '',
+  });
   const [previewResult, setPreviewResult] = useState<BlockedTermPreviewResult | null>(null);
   const [previewedInput, setPreviewedInput] = useState<string | null>(null);
   const preview = usePreviewBlockedTerms();
@@ -922,34 +936,41 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
     <div className="space-y-2 rounded-md border border-[#e4e8ec] bg-white p-3">
       <div>
         <h3 className="text-[12px] font-semibold text-[#344154]">Preview blocked-term matches</h3>
-        <p className="mt-1 text-[11px] leading-4 text-[#778392]">Test sample copy against the words currently in this form, including unsaved edits. Previewing does not save settings or send email.</p>
+        <p className="mt-1 text-[11px] leading-4 text-[#778392]">Enter sample campaign content to see which fields match the words currently in this form, including unsaved edits. Previewing does not save settings or send email.</p>
       </div>
-      <textarea
-        data-testid="input-blocked-term-preview"
-        aria-label="Sample campaign text"
-        value={sampleText}
-        maxLength={10000}
-        rows={4}
-        onChange={event => {
-          setSampleText(event.target.value);
-          clearPreview();
-        }}
-        placeholder="Paste or type sample campaign text"
-        className="min-h-24 w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        {blockedTermPreviewFields.map(field => (
+          <label key={field.key} className={field.key === 'body' || field.key === 'htmlBody' ? 'sm:col-span-2' : ''}>
+            <span className="mb-1 block text-[11px] font-medium text-[#344154]">{field.label}</span>
+            <textarea
+              data-testid={`input-blocked-term-preview-${field.key}`}
+              aria-label={field.label}
+              value={sampleFields[field.key]}
+              maxLength={10000}
+              rows={field.rows}
+              onChange={event => {
+                setSampleFields({ ...sampleFields, [field.key]: event.target.value });
+                clearPreview();
+              }}
+              placeholder={`Paste or type sample ${field.label.toLocaleLowerCase()}`}
+              className="min-h-16 w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"
+            />
+            <span className="mt-1 block text-right text-[10px] text-[#7d8794]">{sampleFields[field.key].length} / 10000 characters</span>
+          </label>
+        ))}
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[10px] text-[#7d8794]">{sampleText.length} / 10000 characters</span>
         <Button
           type="button"
           testId="button-preview-blocked-terms"
           variant="outline"
-          disabled={preview.isPending || words.length > 200 || sampleText.length > 10000}
+          disabled={preview.isPending || words.length > 200}
           onClick={() => {
-            const submittedInput = JSON.stringify([sampleText, words]);
+            const submittedInput = JSON.stringify([sampleFields, words]);
             setPreviewResult(null);
             setPreviewedInput(null);
             preview.mutate(
-              { data: { sampleText, prohibitedEmailKeywords: words } },
+              { data: { sampleFields, prohibitedEmailKeywords: words } },
               {
                 onSuccess: result => {
                   setPreviewResult(result);
@@ -963,28 +984,37 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
         </Button>
       </div>
       {preview.isError && <p role="alert" data-testid="error-blocked-term-preview" className="text-[11px] text-[#a95218]">{getError(preview.error)}</p>}
-      {previewResult && previewedInput === JSON.stringify([sampleText, words]) && <div role="status" aria-live="polite" data-testid="result-blocked-term-preview" className={`rounded-md border px-3 py-2 text-[11px] ${previewResult.matchedKeywords.length ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#dce9df] bg-[#f5faf6] text-[#416b4b]'}`}>
-        {previewResult.matchedKeywords.length
-          ? <><span className="font-semibold">Match found:</span> {previewResult.matchedKeywords.join(', ')}
-            <p className="mt-2 whitespace-pre-wrap break-words text-[#344154]" data-testid="preview-blocked-term-sample">
-              {(() => {
-                let cursor = 0;
-                const parts: ReactNode[] = [];
-                for (const [index, range] of previewResult.matchRanges.entries()) {
-                  if (range.start > cursor) parts.push(sampleText.slice(cursor, range.start));
-                  parts.push(<mark
-                    key={`${range.start}-${range.end}-${index}`}
-                    title={`Blocked term: ${range.keywords.join(', ')}`}
-                    className="rounded-sm bg-[#ffd8a8] px-0.5 text-[#783b13] underline decoration-[#b66320] decoration-2 underline-offset-2"
-                  >{sampleText.slice(range.start, range.end)}</mark>);
-                  cursor = range.end;
-                }
-                if (cursor < sampleText.length) parts.push(sampleText.slice(cursor));
-                return parts;
-              })()}
-            </p>
-          </>
-          : 'No blocked terms matched this sample.'}
+      {previewResult && previewedInput === JSON.stringify([sampleFields, words]) && <div role="status" aria-live="polite" data-testid="result-blocked-term-preview" className="space-y-2">
+        {blockedTermPreviewFields.map(field => {
+          const sampleText = sampleFields[field.key];
+          const fieldResult = previewResult[field.key];
+          const hasMatches = fieldResult.matchedKeywords.length > 0;
+          return <div key={field.key} data-testid={`result-blocked-term-preview-${field.key}`} className={`rounded-md border px-3 py-2 text-[11px] ${hasMatches ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#dce9df] bg-[#f5faf6] text-[#416b4b]'}`}>
+            <p className="font-semibold">{field.label}</p>
+            {hasMatches
+              ? <>
+                  <p>Blocked by: {fieldResult.matchedKeywords.join(', ')}</p>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-[#344154]" data-testid={`preview-blocked-term-sample-${field.key}`}>
+                    {(() => {
+                      let cursor = 0;
+                      const parts: ReactNode[] = [];
+                      for (const [index, range] of fieldResult.matchRanges.entries()) {
+                        if (range.start > cursor) parts.push(sampleText.slice(cursor, range.start));
+                        parts.push(<mark
+                          key={`${range.start}-${range.end}-${index}`}
+                          title={`Blocked term: ${range.keywords.join(', ')}`}
+                          className="rounded-sm bg-[#ffd8a8] px-0.5 text-[#783b13] underline decoration-[#b66320] decoration-2 underline-offset-2"
+                        >{sampleText.slice(range.start, range.end)}</mark>);
+                        cursor = range.end;
+                      }
+                      if (cursor < sampleText.length) parts.push(sampleText.slice(cursor));
+                      return parts;
+                    })()}
+                  </p>
+                </>
+              : <p>No blocked terms matched.</p>}
+          </div>;
+        })}
       </div>}
     </div>
   </div>;

@@ -2998,7 +2998,7 @@ paths:
     post:
       operationId: previewBlockedTerms
       tags: [settings]
-      summary: Preview blocked campaign terms against sample text
+      summary: Preview blocked campaign terms against campaign fields
       requestBody:
         required: true
         content:
@@ -3007,7 +3007,7 @@ paths:
               $ref: "#/components/schemas/BlockedTermPreviewInput"
       responses:
         "200":
-          description: Blocked terms found in the sample text
+          description: Blocked terms found in each campaign field
           content:
             application/json:
               schema:
@@ -5663,13 +5663,30 @@ components:
     BlockedTermPreviewInput:
       type: object
       properties:
-        sampleText: { type: string, maxLength: 10000 }
+        sampleFields:
+          type: object
+          properties:
+            subject: { type: string, maxLength: 10000 }
+            greeting: { type: string, maxLength: 10000 }
+            body: { type: string, maxLength: 10000 }
+            htmlBody: { type: string, maxLength: 10000 }
+            signature: { type: string, maxLength: 10000 }
+          required: [subject, greeting, body, htmlBody, signature]
         prohibitedEmailKeywords:
           type: array
           maxItems: 200
           items: { type: string, minLength: 1, maxLength: 100 }
-      required: [sampleText, prohibitedEmailKeywords]
+      required: [sampleFields, prohibitedEmailKeywords]
     BlockedTermPreviewResult:
+      type: object
+      properties:
+        subject: { $ref: "#/components/schemas/BlockedTermPreviewFieldMatches" }
+        greeting: { $ref: "#/components/schemas/BlockedTermPreviewFieldMatches" }
+        body: { $ref: "#/components/schemas/BlockedTermPreviewFieldMatches" }
+        htmlBody: { $ref: "#/components/schemas/BlockedTermPreviewFieldMatches" }
+        signature: { $ref: "#/components/schemas/BlockedTermPreviewFieldMatches" }
+      required: [subject, greeting, body, htmlBody, signature]
+    BlockedTermPreviewFieldMatches:
       type: object
       properties:
         matchedKeywords:

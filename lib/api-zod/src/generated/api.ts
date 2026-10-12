@@ -5940,9 +5940,17 @@ export const UpdateAdminSettingsResponse = zod.object({
 
 
 /**
- * @summary Preview blocked campaign terms against sample text
+ * @summary Preview blocked campaign terms against campaign fields
  */
-export const previewBlockedTermsBodySampleTextMax = 10000;
+export const previewBlockedTermsBodySampleFieldsSubjectMax = 10000;
+
+export const previewBlockedTermsBodySampleFieldsGreetingMax = 10000;
+
+export const previewBlockedTermsBodySampleFieldsBodyMax = 10000;
+
+export const previewBlockedTermsBodySampleFieldsHtmlBodyMax = 10000;
+
+export const previewBlockedTermsBodySampleFieldsSignatureMax = 10000;
 
 export const previewBlockedTermsBodyProhibitedEmailKeywordsItemMax = 100;
 
@@ -5951,22 +5959,74 @@ export const previewBlockedTermsBodyProhibitedEmailKeywordsMax = 200;
 
 
 export const PreviewBlockedTermsBody = zod.object({
-  "sampleText": zod.string().max(previewBlockedTermsBodySampleTextMax),
+  "sampleFields": zod.object({
+  "subject": zod.string().max(previewBlockedTermsBodySampleFieldsSubjectMax),
+  "greeting": zod.string().max(previewBlockedTermsBodySampleFieldsGreetingMax),
+  "body": zod.string().max(previewBlockedTermsBodySampleFieldsBodyMax),
+  "htmlBody": zod.string().max(previewBlockedTermsBodySampleFieldsHtmlBodyMax),
+  "signature": zod.string().max(previewBlockedTermsBodySampleFieldsSignatureMax)
+}),
   "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(previewBlockedTermsBodyProhibitedEmailKeywordsItemMax)).max(previewBlockedTermsBodyProhibitedEmailKeywordsMax)
 })
 
-export const previewBlockedTermsResponseMatchRangesItemStartMin = 0;
+export const previewBlockedTermsResponseSubjectMatchRangesItemStartMin = 0;
+
+
+export const previewBlockedTermsResponseGreetingMatchRangesItemStartMin = 0;
+
+
+export const previewBlockedTermsResponseBodyMatchRangesItemStartMin = 0;
+
+
+export const previewBlockedTermsResponseHtmlBodyMatchRangesItemStartMin = 0;
+
+
+export const previewBlockedTermsResponseSignatureMatchRangesItemStartMin = 0;
 
 
 
 
 export const PreviewBlockedTermsResponse = zod.object({
+  "subject": zod.object({
   "matchedKeywords": zod.array(zod.string()),
   "matchRanges": zod.array(zod.object({
-  "start": zod.number().int().min(previewBlockedTermsResponseMatchRangesItemStartMin),
+  "start": zod.number().int().min(previewBlockedTermsResponseSubjectMatchRangesItemStartMin),
   "end": zod.number().int().min(1),
   "keywords": zod.array(zod.string())
 })).describe('Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.')
+}),
+  "greeting": zod.object({
+  "matchedKeywords": zod.array(zod.string()),
+  "matchRanges": zod.array(zod.object({
+  "start": zod.number().int().min(previewBlockedTermsResponseGreetingMatchRangesItemStartMin),
+  "end": zod.number().int().min(1),
+  "keywords": zod.array(zod.string())
+})).describe('Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.')
+}),
+  "body": zod.object({
+  "matchedKeywords": zod.array(zod.string()),
+  "matchRanges": zod.array(zod.object({
+  "start": zod.number().int().min(previewBlockedTermsResponseBodyMatchRangesItemStartMin),
+  "end": zod.number().int().min(1),
+  "keywords": zod.array(zod.string())
+})).describe('Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.')
+}),
+  "htmlBody": zod.object({
+  "matchedKeywords": zod.array(zod.string()),
+  "matchRanges": zod.array(zod.object({
+  "start": zod.number().int().min(previewBlockedTermsResponseHtmlBodyMatchRangesItemStartMin),
+  "end": zod.number().int().min(1),
+  "keywords": zod.array(zod.string())
+})).describe('Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.')
+}),
+  "signature": zod.object({
+  "matchedKeywords": zod.array(zod.string()),
+  "matchRanges": zod.array(zod.object({
+  "start": zod.number().int().min(previewBlockedTermsResponseSignatureMatchRangesItemStartMin),
+  "end": zod.number().int().min(1),
+  "keywords": zod.array(zod.string())
+})).describe('Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.')
+})
 })
 
 

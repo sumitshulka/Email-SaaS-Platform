@@ -3692,9 +3692,21 @@ export interface PlatformSettingsInput {
   expectedSettingsVersion: string;
 }
 
-export interface BlockedTermPreviewInput {
+export type BlockedTermPreviewInputSampleFields = {
   /** @maxLength 10000 */
-  sampleText: string;
+  subject: string;
+  /** @maxLength 10000 */
+  greeting: string;
+  /** @maxLength 10000 */
+  body: string;
+  /** @maxLength 10000 */
+  htmlBody: string;
+  /** @maxLength 10000 */
+  signature: string;
+};
+
+export interface BlockedTermPreviewInput {
+  sampleFields: BlockedTermPreviewInputSampleFields;
   /**
      * @maxItems 200
      * @items.minLength 1
@@ -3703,7 +3715,7 @@ export interface BlockedTermPreviewInput {
   prohibitedEmailKeywords: string[];
 }
 
-export type BlockedTermPreviewResultMatchRangesItem = {
+export type BlockedTermPreviewFieldMatchesMatchRangesItem = {
   /** @minimum 0 */
   start: number;
   /** @minimum 1 */
@@ -3711,10 +3723,18 @@ export type BlockedTermPreviewResultMatchRangesItem = {
   keywords: string[];
 };
 
-export interface BlockedTermPreviewResult {
+export interface BlockedTermPreviewFieldMatches {
   matchedKeywords: string[];
   /** Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined. */
-  matchRanges: BlockedTermPreviewResultMatchRangesItem[];
+  matchRanges: BlockedTermPreviewFieldMatchesMatchRangesItem[];
+}
+
+export interface BlockedTermPreviewResult {
+  subject: BlockedTermPreviewFieldMatches;
+  greeting: BlockedTermPreviewFieldMatches;
+  body: BlockedTermPreviewFieldMatches;
+  htmlBody: BlockedTermPreviewFieldMatches;
+  signature: BlockedTermPreviewFieldMatches;
 }
 
 export type ApplicationEmailSettingsProvider = typeof ApplicationEmailSettingsProvider[keyof typeof ApplicationEmailSettingsProvider];

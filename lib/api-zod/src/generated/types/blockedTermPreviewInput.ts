@@ -5,10 +5,10 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { BlockedTermPreviewInputSampleFields } from './blockedTermPreviewInputSampleFields';
 
 export interface BlockedTermPreviewInput {
-  /** @maxLength 10000 */
-  sampleText: string;
+  sampleFields: BlockedTermPreviewInputSampleFields;
   /**
      * @maxItems 200
      * @items.minLength 1

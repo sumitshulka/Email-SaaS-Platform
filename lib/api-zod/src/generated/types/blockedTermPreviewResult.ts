@@ -5,10 +5,12 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
-import type { BlockedTermPreviewResultMatchRangesItem } from './blockedTermPreviewResultMatchRangesItem';
+import type { BlockedTermPreviewFieldMatches } from './blockedTermPreviewFieldMatches';
 
 export interface BlockedTermPreviewResult {
-  matchedKeywords: string[];
-  /** Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined. */
-  matchRanges: BlockedTermPreviewResultMatchRangesItem[];
+  subject: BlockedTermPreviewFieldMatches;
+  greeting: BlockedTermPreviewFieldMatches;
+  body: BlockedTermPreviewFieldMatches;
+  htmlBody: BlockedTermPreviewFieldMatches;
+  signature: BlockedTermPreviewFieldMatches;
 }

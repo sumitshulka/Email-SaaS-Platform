@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BlockedTermPreviewResultMatchRangesItem = {
+export type BlockedTermPreviewFieldMatchesMatchRangesItem = {
   /** @minimum 0 */
   start: number;
   /** @minimum 1 */

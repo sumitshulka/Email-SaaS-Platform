@@ -4,6 +4,13 @@ export type CampaignContentField =
   | "body"
   | "signature";
 
+export type CampaignPreviewField = CampaignContentField | "htmlBody";
+
+export type ProhibitedCampaignKeywordMatchDetails = {
+  matchedKeywords: string[];
+  matchRanges: ProhibitedCampaignKeywordMatchRange[];
+};
+
 export type CampaignContentValues = Partial<
   Record<CampaignContentField, string | string[] | null | undefined>
 > & {
@@ -204,10 +211,7 @@ export function findProhibitedCampaignKeywordMatches(
 export function findProhibitedCampaignKeywordMatchDetails(
   sampleText: string,
   prohibitedKeywords: readonly string[],
-): {
-  matchedKeywords: string[];
-  matchRanges: ProhibitedCampaignKeywordMatchRange[];
-} {
+): ProhibitedCampaignKeywordMatchDetails {
   const normalizedSample = normalizeCharactersWithSource(sampleText);
   if (normalizedSample.length === 0) return { matchedKeywords: [], matchRanges: [] };
 
@@ -247,6 +251,19 @@ export function findProhibitedCampaignKeywordMatchDetails(
     }
   }
   return { matchedKeywords, matchRanges };
+}
+
+export function findProhibitedCampaignFieldKeywordMatches(
+  sampleFields: Record<CampaignPreviewField, string>,
+  prohibitedKeywords: readonly string[],
+): Record<CampaignPreviewField, ProhibitedCampaignKeywordMatchDetails> {
+  return {
+    subject: findProhibitedCampaignKeywordMatchDetails(sampleFields.subject, prohibitedKeywords),
+    greeting: findProhibitedCampaignKeywordMatchDetails(sampleFields.greeting, prohibitedKeywords),
+    body: findProhibitedCampaignKeywordMatchDetails(sampleFields.body, prohibitedKeywords),
+    htmlBody: findProhibitedCampaignKeywordMatchDetails(sampleFields.htmlBody, prohibitedKeywords),
+    signature: findProhibitedCampaignKeywordMatchDetails(sampleFields.signature, prohibitedKeywords),
+  };
 }
 
 export function findProhibitedCampaignContent(
