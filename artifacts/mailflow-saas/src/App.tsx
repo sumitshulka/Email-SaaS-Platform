@@ -413,36 +413,36 @@ function WorkspaceGettingStarted({ user }: { user: AuthUser }) {
   if (query.data && completeCount === steps.length) return null;
 
   return (
-    <section aria-label="Getting started guide" data-testid="workspace-getting-started" className="mb-6 overflow-hidden rounded-xl border border-[#d7e2eb] bg-[#f7fafc] shadow-[0_8px_28px_rgba(30,55,75,.04)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4ebf0] px-4 py-4 sm:px-5">
+    <section aria-label="Getting started guide" data-testid="workspace-getting-started" className="mb-6 overflow-hidden rounded-xl border border-[#bfd7cd] border-l-4 border-l-[#438775] bg-[#eef6f2] shadow-[0_10px_30px_rgba(30,75,61,.08)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d4e5dc] bg-[#e5f0eb] px-4 py-4 sm:px-5">
         <div>
-          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#718398]">YOUR FIRST CAMPAIGN</div>
-          <h2 className="display mt-1 text-[17px] font-bold text-[#1b2d41]">Getting started</h2>
-          <p className="mt-1 text-[11px] text-[#687b8e]">{query.isError ? 'We could not refresh your progress.' : `${completeCount} of ${steps.length} steps completed`}</p>
+          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#4e7a6d]">YOUR FIRST CAMPAIGN</div>
+          <h2 className="display mt-1 text-[18px] font-bold text-[#183b32]">Getting started</h2>
+          <p className="mt-1 text-[11px] font-medium text-[#4c685e]">{query.isError ? 'We could not refresh your progress.' : `${completeCount} of ${steps.length} steps completed`}</p>
         </div>
         {query.data && <div className="flex items-center gap-2" aria-label={`${completeCount} of ${steps.length} onboarding steps complete`}>
-          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#dfe8ef]"><div className="h-full rounded-full bg-[#438775] transition-[width]" style={{ width: `${completeCount / steps.length * 100}%` }}/></div>
-          <span className="mono text-[11px] font-semibold text-[#345e54]">{Math.round(completeCount / steps.length * 100)}%</span>
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#cfe1d8]"><div className="h-full rounded-full bg-[#397d6c] transition-[width]" style={{ width: `${completeCount / steps.length * 100}%` }}/></div>
+          <span className="mono text-[11px] font-semibold text-[#2c5d50]">{Math.round(completeCount / steps.length * 100)}%</span>
         </div>}
       </div>
       {query.isError ? <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[11px] text-[#835a37] sm:px-5">
         <span>Progress is temporarily unavailable. Your setup is unchanged.</span>
         <button type="button" data-testid="button-retry-onboarding" onClick={() => void query.refetch()} className="rounded-md border border-[#e4c5a5] bg-white px-3 py-1.5 font-semibold text-[#89592f] hover:bg-[#fff8f1]">Retry</button>
-      </div> : <ol className="grid divide-y divide-[#e8edf1] sm:grid-cols-2 sm:divide-y-0 sm:divide-x lg:grid-cols-5">
-        {steps.map((step, index) => <li key={step.key} className="flex min-w-0 items-start gap-2.5 px-4 py-3 sm:px-3 lg:flex-col lg:gap-2 lg:border-r lg:border-[#e8edf1] lg:px-3 lg:py-4 last:lg:border-r-0">
-          <span className={cn('mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] font-semibold', step.done ? 'border-[#b9d9c9] bg-[#e5f2eb] text-[#39755c]' : 'border-[#d5dfe7] bg-white text-[#748598]')}>
+      </div> : <ol className="grid divide-y divide-[#d6e5de] sm:grid-cols-2 sm:divide-y-0 sm:divide-x">
+        {steps.map((step, index) => <li key={step.key} className="flex min-w-0 items-start gap-2.5 px-4 py-3 sm:border-[#d6e5de] sm:px-3 lg:flex-col lg:gap-2 lg:border-r lg:px-3 lg:py-4 last:lg:border-r-0">
+          <span className={cn('mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] font-semibold', step.done ? 'border-[#a9cdbb] bg-[#dceee4] text-[#316c52]' : 'border-[#bfd4ca] bg-[#fafffc] text-[#45695c]')}>
             {step.done ? <Check className="h-3.5 w-3.5"/> : index + 1}
           </span>
           <div className="min-w-0 flex-1 lg:w-full">
-            <div className={cn('text-[11px] font-semibold', step.done ? 'text-[#48685d]' : 'text-[#293d52]')}>{step.title}</div>
-            <p className="mt-1 text-[10px] leading-4 text-[#738496]">{step.detail}</p>
-            {!step.done && <button type="button" data-testid={`button-onboarding-${step.key}`} onClick={() => setLocation(step.href)} className="mt-2 inline-flex min-h-7 items-center gap-1 rounded-md border border-[#d3e0ea] bg-white px-2.5 text-[10px] font-semibold text-[#245b91] hover:bg-[#edf4fa]">
+            <div className={cn('text-[11px] font-semibold', step.done ? 'text-[#3e6354]' : 'text-[#243d33]')}>{step.title}</div>
+            <p className="mt-1 text-[10px] leading-4 text-[#536e62]">{step.detail}</p>
+            {!step.done && <button type="button" data-testid={`button-onboarding-${step.key}`} onClick={() => setLocation(step.href)} className="mt-2 inline-flex min-h-7 items-center gap-1 rounded-md border border-[#b8d0c5] bg-white px-2.5 text-[10px] font-semibold text-[#245b4b] hover:bg-[#e2f0e8]">
               {step.key === 'campaign' ? 'Open campaigns' : 'Continue'}<ArrowRight className="h-3 w-3"/>
             </button>}
           </div>
         </li>)}
       </ol>}
-      {user.role === 'USER' && <div className="border-t border-[#e4ebf0] bg-white/70 px-4 py-2 text-[10px] text-[#7a8997] sm:px-5">Complete all five steps to finish workspace setup. The guide closes after your first campaign is queued.</div>}
+      {user.role === 'USER' && <div className="border-t border-[#d4e5dc] bg-[#f7fbf9] px-4 py-2 text-[10px] text-[#536e62] sm:px-5">Complete all five steps to finish workspace setup. The guide closes after your first campaign is queued.</div>}
     </section>
   );
 }
