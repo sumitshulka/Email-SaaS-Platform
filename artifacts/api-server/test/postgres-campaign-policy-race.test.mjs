@@ -31,8 +31,12 @@ test(
     const { db, pool } = dbModule;
     const {
       contactListsTable,
+      contactListMembersTable,
+      contactsTable,
       emailCampaignsTable,
+      emailCampaignRecipientsTable,
       systemConfigurationTable,
+      tenantSendingConfigurationTable,
       usersTable,
     } = dbModule;
     const { defaultPlatformSettings } = settingsModule;
@@ -50,6 +54,9 @@ test(
     let originalSettings;
     let adminUpdateRequest;
     let createRequest;
+    let patchRequest;
+    let queueRequest;
+    let adminCookie;
 
     async function api(path, { method = "GET", body, cookie } = {}) {
       const response = await fetch(`${baseUrl}${path}`, {
@@ -126,6 +133,7 @@ test(
       assert.equal(adminLogin.response.status, 200, JSON.stringify(adminLogin.body));
       assert.ok(ownerLogin.cookie, "owner login should set a session cookie");
       assert.ok(adminLogin.cookie, "admin login should set a session cookie");
+      adminCookie = adminLogin.cookie;
       const currentSettings = await api("/admin/settings", {
         cookie: adminLogin.cookie,
       });
@@ -177,6 +185,114 @@ test(
         [],
         "rejected content must not persist a campaign",
       );
+
+      const [campaign] = await db
+        .insert(emailCampaignsTable)
+        .values({
+          userId,
+          name: "Concurrent policy edit",
+          objective: "Check policy synchronization.",
+          subject: "A clean subject",
+          textBody: "A clean message that can be edited.",
+          listId: list.id,
+          listIds: [list.id],
+          unsubscribeOrigin: "https://mailflow.test",
+        })
+        .returning();
+      const patchKeyword = `patch-race-${testId.replaceAll("-", "")}`;
+      patchRequest = await raceRequestAgainstPolicyUpdate(
+        patchKeyword,
+        async () =>
+          api(`/campaigns/${campaign.id}`, {
+            method: "PATCH",
+            cookie: ownerLogin.cookie,
+            body: { textBody: `This message contains ${patchKeyword}.` },
+          }),
+      );
+      assert.equal(patchRequest.response.status, 422, JSON.stringify(patchRequest.body));
+      assert.equal(patchRequest.body.code, "PROFANITY_BLOCKED");
+      assert.deepEqual(patchRequest.body.fields, ["body"]);
+      const [unchangedCampaign] = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(eq(emailCampaignsTable.id, campaign.id));
+      assert.equal(unchangedCampaign.status, "draft");
+      assert.equal(
+        unchangedCampaign.textBody,
+        "A clean message that can be edited.",
+        "a prohibited concurrent edit must leave the draft unchanged",
+      );
+
+      const queueKeyword = `queue-race-${testId.replaceAll("-", "")}`;
+      const [contact] = await db
+        .insert(contactsTable)
+        .values({
+          userId,
+          email: `campaign-policy-recipient-${testId}@example.test`,
+          firstName: "Policy",
+          lastName: "Recipient",
+        })
+        .returning();
+      await db.insert(contactListMembersTable).values({
+        userId,
+        listId: list.id,
+        contactId: contact.id,
+      });
+      const [sender] = await db
+        .insert(tenantSendingConfigurationTable)
+        .values({
+          userId,
+          isPrimary: true,
+          provider: "other",
+          host: "smtp.policy-race.invalid",
+          port: 2525,
+          encryption: "none",
+          usernameEncrypted: securityModule.encryptSecret("policy-race-user"),
+          passwordEncrypted: securityModule.encryptSecret("policy-race-password"),
+          fromName: "Policy Race Test",
+          fromEmail: `campaign-policy-sender-${testId}@example.test`,
+          verifiedAt: new Date(),
+        })
+        .returning();
+      const [queueCampaign] = await db
+        .insert(emailCampaignsTable)
+        .values({
+          userId,
+          senderAccountId: sender.id,
+          name: "Concurrent policy queue",
+          objective: "Check queue policy synchronization.",
+          subject: "A clean subject",
+          textBody: `This message contains ${queueKeyword}.`,
+          listId: list.id,
+          listIds: [list.id],
+          unsubscribeOrigin: "https://mailflow.test",
+        })
+        .returning();
+      queueRequest = await raceRequestAgainstPolicyUpdate(
+        queueKeyword,
+        async () =>
+          api(`/campaigns/${queueCampaign.id}/send`, {
+            method: "POST",
+            cookie: ownerLogin.cookie,
+            body: {},
+          }),
+      );
+      assert.equal(queueRequest.response.status, 422, JSON.stringify(queueRequest.body));
+      assert.equal(queueRequest.body.code, "PROFANITY_BLOCKED");
+      assert.deepEqual(queueRequest.body.fields, ["body"]);
+      const [unchangedQueueCampaign] = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(eq(emailCampaignsTable.id, queueCampaign.id));
+      assert.equal(unchangedQueueCampaign.status, "draft");
+      assert.deepEqual(
+        await db
+          .select()
+          .from(emailCampaignRecipientsTable)
+          .where(eq(emailCampaignRecipientsTable.campaignId, queueCampaign.id)),
+        [],
+        "a prohibited queue request must not create queued recipients",
+      );
     } finally {
       if (client) {
         await client.query("ROLLBACK").catch(() => {});
@@ -206,6 +322,45 @@ test(
         server.close((error) => (error ? reject(error) : resolve()));
       });
       await pool.end();
+    }
+
+    async function raceRequestAgainstPolicyUpdate(nextKeyword, makeRequest) {
+      const current = await api("/admin/settings", {
+        cookie: adminCookie,
+      });
+      assert.equal(current.response.status, 200, JSON.stringify(current.body));
+      const { updatedAt: _updatedAt, ...latestSettings } = current.body;
+
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT key FROM system_configuration WHERE key = 'platform' FOR UPDATE",
+      );
+      let adminSettled = false;
+      let requestSettled = false;
+      const policyUpdate = api("/admin/settings", {
+        method: "PUT",
+        cookie: adminCookie,
+        body: { ...latestSettings, prohibitedEmailKeywords: [nextKeyword] },
+      }).finally(() => {
+        adminSettled = true;
+      });
+      await waitForPolicyRowLock(client, () => adminSettled, 1);
+      const request = makeRequest().finally(() => {
+        requestSettled = true;
+      });
+      await waitForPolicyRowLock(
+        client,
+        () => adminSettled || requestSettled,
+        2,
+      );
+      await client.query("COMMIT");
+      const policyResult = await policyUpdate;
+      assert.equal(
+        policyResult.response.status,
+        200,
+        JSON.stringify(policyResult.body),
+      );
+      return request;
     }
   },
 );

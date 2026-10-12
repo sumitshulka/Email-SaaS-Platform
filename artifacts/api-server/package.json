@@ -12,6 +12,7 @@
     "test": "node --import tsx --test test/*.test.mjs",
     "test:postgres-ai-credit-recovery-race": "node --import tsx --test test/postgres-ai-credit-recovery-race.test.mjs",
     "test:postgres-addon-capture-race": "node --import tsx --test test/postgres-addon-capture-race.test.mjs",
+    "test:postgres-campaign-policy-race": "node --import tsx --test test/postgres-campaign-policy-race.test.mjs",
     "test:postgres-campaign-pause-race": "node --import tsx --test test/postgres-campaign-pause-race.test.mjs",
     "test:postgres-campaign-send-limits-race": "node --import tsx --test test/postgres-campaign-send-limits-race.test.mjs",
     "test:postgres-maintenance-race": "node --import tsx --test test/postgres-maintenance-race.test.mjs",
