@@ -1277,6 +1277,8 @@ export const listContactsResponseContactsItemOneEmailVerificationMethodMax = 120
 
 export const listContactsResponseContactsItemOneEmailVerificationSuggestedEmailMax = 254;
 
+export const listContactsResponseContactsItemTwoLastEmailOneEmailMax = 254;
+
 export const listContactsResponseContactsItemTwoLastEmailOneAttemptsMin = 0;
 
 export const listContactsResponseQuotaUsedMin = 0;
@@ -1371,6 +1373,7 @@ export const ListContactsResponse = zod.object({
   "campaignId": zod.string().uuid(),
   "campaignName": zod.string(),
   "campaignType": zod.union([zod.literal('follow_up'),zod.literal(null)]).nullable(),
+  "email": zod.string().email().max(listContactsResponseContactsItemTwoLastEmailOneEmailMax),
   "subject": zod.string(),
   "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
   "attempts": zod.number().int().min(listContactsResponseContactsItemTwoLastEmailOneAttemptsMin),
@@ -3947,6 +3950,8 @@ export const GetContactEmailHistoryParams = zod.object({
   "contactId": zod.coerce.string().uuid()
 })
 
+export const getContactEmailHistoryResponseEmailMax = 254;
+
 export const getContactEmailHistoryResponseAttemptsMin = 0;
 
 
@@ -3956,6 +3961,7 @@ export const GetContactEmailHistoryResponseItem = zod.object({
   "campaignId": zod.string().uuid(),
   "campaignName": zod.string(),
   "campaignType": zod.union([zod.literal('follow_up'),zod.literal(null)]).nullable(),
+  "email": zod.string().email().max(getContactEmailHistoryResponseEmailMax),
   "subject": zod.string(),
   "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
   "attempts": zod.number().int().min(getContactEmailHistoryResponseAttemptsMin),

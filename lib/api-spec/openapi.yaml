@@ -4803,6 +4803,7 @@ components:
         campaignId: { type: string, format: uuid }
         campaignName: { type: string }
         campaignType: { type: ["string", "null"], enum: [follow_up, null] }
+        email: { type: string, format: email, maxLength: 254 }
         subject: { type: string }
         status:
           type: string
@@ -4818,7 +4819,7 @@ components:
         lastError: { type: ["string", "null"] }
         messageId: { type: ["string", "null"] }
         smtpResponse: { type: ["string", "null"] }
-      required: [id, campaignId, campaignName, campaignType, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
+      required: [id, campaignId, campaignName, campaignType, email, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
     ContactLeadStatusUpdate:
       type: object
       properties:

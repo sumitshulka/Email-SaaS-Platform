@@ -17,6 +17,8 @@ export interface ContactEmailHistoryItem {
   campaignName: string;
   /** @nullable */
   campaignType: ContactEmailHistoryItemCampaignType;
+  /** @maxLength 254 */
+  email: string;
   subject: string;
   status: ContactEmailHistoryItemStatus;
   /** @minimum 0 */

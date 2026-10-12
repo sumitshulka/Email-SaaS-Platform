@@ -13612,6 +13612,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       contactsWithHistory.body.contacts.map((contact) => [contact.id, contact]),
     );
     assert.equal(contactById.get(deliveredRecipient.contactId).lastEmail.status, "delivered");
+    assert.equal(
+      contactById.get(deliveredRecipient.contactId).lastEmail.email,
+      deliveredRecipient.email,
+    );
     assert.equal(contactById.get(bouncedRecipient.contactId).lastEmail.status, "bounced");
     assert.ok(contactById.get(deliveredRecipient.contactId).lastEmail.lastAttemptAt);
     assert.equal(
@@ -13632,12 +13636,39 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(deliveredHistory.body.length, 1);
     assert.equal(deliveredHistory.body[0].status, "delivered");
     assert.equal(deliveredHistory.body[0].campaignName, "Owner campaign");
+    assert.equal(deliveredHistory.body[0].email, deliveredRecipient.email);
     assert.ok(deliveredHistory.body[0].lastAttemptAt);
     assert.equal(deliveredHistory.body[0].messageId, deliveredAttempt.messageId);
     assert.equal(
       deliveredHistory.body[0].smtpResponse,
       "250 2.0.0 SMTP accepted",
     );
+    const changedContactEmail = await api(
+      `/contacts/${deliveredRecipient.contactId}`,
+      {
+        method: "PATCH",
+        cookie: owner.cookie,
+        body: { email: "changed-after-campaign@owner.test" },
+      },
+    );
+    assert.equal(changedContactEmail.response.status, 200);
+    const historyAfterContactEmailChange = await api(
+      `/contacts/${deliveredRecipient.contactId}/email-history`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(
+      historyAfterContactEmailChange.body[0].email,
+      deliveredRecipient.email,
+    );
+    const restoredContactEmail = await api(
+      `/contacts/${deliveredRecipient.contactId}`,
+      {
+        method: "PATCH",
+        cookie: owner.cookie,
+        body: { email: deliveredRecipient.email },
+      },
+    );
+    assert.equal(restoredContactEmail.response.status, 200);
     const completedPrimary = await api(`/campaigns/${campaign.body.id}`, {
       cookie: owner.cookie,
     });

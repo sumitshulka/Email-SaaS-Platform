@@ -142,6 +142,7 @@ function ContactEmailHistorySection({ contactId, email }: { contactId: string; e
               <div className="min-w-0 flex-1">
                 <div data-testid={`text-email-history-campaign-${emailItem.id}`} className="text-[13px] font-semibold text-[#26364a]">{emailItem.campaignName}</div>
                 <div data-testid={`text-email-history-subject-${emailItem.id}`} className="mt-1 break-words text-[12px] text-[#697687]">{emailItem.subject}</div>
+                <div data-testid={`text-email-history-recipient-${emailItem.id}`} className="mt-1 break-words text-[11px] text-[#586778]">Sent to {emailItem.email}</div>
                 <Link href={`/campaigns/${encodeURIComponent(emailItem.campaignId)}`} data-testid={`link-email-history-campaign-${emailItem.id}`} className="mt-2 inline-flex text-[10px] font-semibold text-[#245b9b] underline decoration-[#b9cce0] underline-offset-2 hover:text-[#174f99]">View campaign</Link>
               </div>
               <span data-testid={`status-email-history-${emailItem.id}`} className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
