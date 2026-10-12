@@ -9,6 +9,12 @@ For PostgreSQL race tests, hold the target row lock in one transaction, confirm 
 
 **How to apply:** Prefer direct lock-conflict and callback-state assertions in real-database integration tests. Do not rely solely on `pg_stat_activity` to prove contention here.
 
+To test coordination between worker replicas, launch each worker in a separate Node process, assign each a different queued item, and rendezvous them immediately before the claim.
+
+**Why:** Process-local mutexes serialize concurrent calls inside one module instance and can make same-process tests pass without exercising PostgreSQL coordination between replicas.
+
+**How to apply:** Use separate-process race tests whenever the behavior depends on independent API server workers; use a narrowly scoped test-only candidate filter when workers must claim different rows.
+
 For tests that need a committed side effect followed by a failed webhook acknowledgement, use a per-event PostgreSQL trigger that rejects the `processed_at` update, then remove it before retrying the same event.
 
 **Why:** Polling and cancelling the acknowledgement query through `pg_stat_activity` was unreliable in the real PostgreSQL integration run, while a targeted trigger deterministically failed only the acknowledgement statement after activation committed.

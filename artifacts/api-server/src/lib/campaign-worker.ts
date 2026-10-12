@@ -50,6 +50,7 @@ const MAX_DELIVERIES_PER_TICK = 100;
 const STALE_DELIVERY_MINUTES = 10;
 let beforeDeliveryClaimForTests: (() => Promise<void>) | null = null;
 const tenantClaimQueues = new Map<string, Promise<void>>();
+let candidateRecipientIdsForTests: string[] | null = null;
 
 function prohibitedKeywordsFromSetting(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -87,6 +88,12 @@ export function setBeforeDeliveryClaimForTests(
   callback: (() => Promise<void>) | null,
 ): void {
   beforeDeliveryClaimForTests = callback;
+}
+
+export function setCandidateRecipientIdsForTests(
+  recipientIds: string[] | null,
+): void {
+  candidateRecipientIdsForTests = recipientIds;
 }
 
 type DeliveryClaim =
@@ -866,6 +873,9 @@ export async function processPendingCampaignDeliveries(
       and(
         eq(emailCampaignRecipientsTable.status, "queued"),
         lte(emailCampaignRecipientsTable.nextAttemptAt, now),
+        candidateRecipientIdsForTests
+          ? inArray(emailCampaignRecipientsTable.id, candidateRecipientIdsForTests)
+          : undefined,
         inArray(emailCampaignsTable.status, ["queued", "sending"]),
         isNull(emailCampaignsTable.pausedAt),
       ),
