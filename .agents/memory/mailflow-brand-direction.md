@@ -13,4 +13,8 @@ Public marketing should emphasize that users can send through an email address a
 
 **Why:** The user explicitly selected this audience, personality, color reference, logo, and typography, and asked to emphasize user-controlled email sending and simple automation.
 
+Keep product capabilities in their corresponding existing Features-page sections; do not add a separate generic updates section.
+
+**Why:** The user asked for feature updates to be managed in the relevant sections only.
+
 **How to apply:** Keep future Mailflow brand assets, prominent product branding, typography, and public positioning consistent with this direction. Be clear that provider quotas, policies, and deliverability still apply; don't imply SMTP acceptance confirms inbox placement.

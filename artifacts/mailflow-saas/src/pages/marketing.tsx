@@ -289,7 +289,7 @@ export function PublicFeaturesPage() {
           <div className="ft-section-copy">
             <SectionEyebrow>01 / YOUR AUDIENCE, IN CONTEXT</SectionEyebrow><h2>Know the people.<br/><em>Keep relationships private.</em></h2>
             <p>Organize contacts, custom fields, lead history and company profiles. Search, filter and export the records your team needs—without exposing your contact list to the global company catalog.</p>
-            <ul className="ft-check-list"><li><Check size={14}/> Contacts and list membership stay private to your workspace.</li><li><Check size={14}/> Keep companies private, or explicitly share a company profile with the Global Company DB.</li><li><Check size={14}/> Record lead-status changes with the reason, who changed it and when.</li></ul>
+            <ul className="ft-check-list"><li><Check size={14}/> Contacts and list membership stay private to your workspace.</li><li><Check size={14}/> Check an individual address without sending email; verification can be inconclusive.</li><li><Check size={14}/> Keep companies private, or explicitly share a company profile with the Global Company DB.</li><li><Check size={14}/> Record lead-status changes with the reason, who changed it and when.</li></ul>
             <div className="ft-audience-foot"><span className="ft-field-chip">CUSTOM FIELDS</span><span className="ft-field-chip">LEAD HISTORY</span><span className="ft-field-chip">PRIVATE CONTACTS</span></div>
           </div>
           <div className="ft-preview-stage"><div className="ft-preview-label"><span>WORKSPACE PREVIEW</span><span>CONTACTS / EXAMPLE</span></div><FeatureAudiencePreview/><div className="ft-history-note"><span className="ft-history-pin"><Clock3 size={13}/></span><span><b>Lead status updated</b><small>Reason, who changed it, and when are kept with the history.</small></span><ArrowUpRight size={13}/></div></div>
@@ -298,13 +298,13 @@ export function PublicFeaturesPage() {
 
       <section className="ft-campaign-section" id="features-workflow">
         <div className="mf-section-wrap">
-          <div className="ft-campaign-intro"><div><SectionEyebrow>02 / PLAN THE SEND</SectionEyebrow><h2>One campaign.<br/><em>A few clear decisions.</em></h2></div><p>Set an objective, choose prioritized lists and the SMTP sender, then review the audience and message before you queue or schedule.</p></div>
+          <div className="ft-campaign-intro"><div><SectionEyebrow>02 / PLAN THE SEND</SectionEyebrow><h2>One campaign.<br/><em>A few clear decisions.</em></h2></div><p>Set an objective, prioritize lists, select eligible contacts and choose the SMTP sender. Review the audience and message before you queue or schedule.</p></div>
           <div className="ft-campaign-layout"><FeatureCampaignPreview/><div className="ft-campaign-steps">
             <article><span>01</span><div><h3>Give it a purpose.</h3><p>Write down the campaign objective so your team knows what this send is for.</p></div></article>
-            <article><span>02</span><div><h3>Choose your audience and sender.</h3><p>Prioritize one or more contact lists, preview the deduplicated audience and pick the SMTP mailbox for this campaign.</p></div></article>
+            <article><span>02</span><div><h3>Choose your audience and sender.</h3><p>Prioritize lists, include or exclude eligible contacts from the draft, and choose its SMTP mailbox. Bounced contacts remain visible but cannot be selected.</p></div></article>
             <article><span>03</span><div><h3>Keep message variants consistent.</h3><p>Use subject, greeting and signature variants for recipient-level A/B testing. Each recipient keeps the same assigned version for the campaign.</p></div></article>
-            <article><span>04</span><div><h3>Review, opt out, then send.</h3><p>Every campaign includes an unsubscribe link. Preview the message and audience, then queue delivery or schedule it for later.</p></div></article>
-            <div className="ft-no-journeys"><span className="ft-no-journeys-dot"/><span><b>Straightforward by design</b><small>A clear campaign workflow—not a behavioral or drip-journey builder.</small></span></div>
+            <article><span>04</span><div><h3>Review, opt out, then send.</h3><p>Every campaign includes an unsubscribe link. Preview, queue or schedule it, pause when needed, and check the estimated remaining time.</p></div></article>
+            <div className="ft-no-journeys"><span className="ft-no-journeys-dot"/><span><b>Follow up, without drip complexity</b><small>Schedule a follow-up at least 24 hours after the primary campaign completes. Bounced and unsubscribed contacts stay excluded.</small></span></div>
           </div></div>
           <div className="ft-campaign-bottom"><span>MAKE THE DECISIONS THAT MATTER.</span><span>LEAVE THE REST OUT OF THE WAY.</span></div>
         </div>
@@ -318,7 +318,7 @@ export function PublicFeaturesPage() {
             <div className="ft-sender-identity"><div className="ft-sender-avatar"><Mail size={19}/></div><span><small>SENDER IDENTITY</small><b>hello@yourstudio.example</b><em>Your name · Reply-to set by you</em></span><Check size={16}/></div>
             <div className="ft-sender-fields"><div><small>SMTP HOST</small><b>smtp.your-provider.example</b></div><div><small>CONNECTION</small><b><span/> Ready to test</b></div></div>
             <div className="ft-sender-buttons"><span>Check connection</span><span>Send a test email <ArrowRight size={12}/></span></div>
-            <div className="ft-sender-multi"><span className="ft-multi-icon"><Layers3 size={15}/></span><span><b>More than one sender?</b><small>Set up multiple SMTP accounts within your subscription allowance, pick one per campaign and use each mailbox’s own platform sending limits.</small></span></div>
+            <div className="ft-sender-multi"><span className="ft-multi-icon"><Layers3 size={15}/></span><span><b>More than one sender?</b><small>Set up multiple SMTP accounts within your subscription allowance, pick one per campaign and use each mailbox’s own platform sending limits. Mailflow spaces sends by a randomized 5–15 minutes per mailbox; provider limits still apply.</small></span></div>
           </div>
         </div>
         <div className="mf-section-wrap ft-sending-boundary"><span className="ft-boundary-icon"><ShieldCheck size={16}/></span><p><b>A clear sending boundary.</b> Mailflow manages the audience and campaign workflow; your configured SMTP account sends. Provider rules, quotas and deliverability limits still apply. An SMTP server accepting a message does not confirm inbox placement.</p></div>
