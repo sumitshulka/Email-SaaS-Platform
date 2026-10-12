@@ -1,0 +1,43 @@
+Your finding is correct regarding Google Workspace (GWS) privacy behavior: **GWS does not publicly expose user directories or offer direct LDAP directory lookups to external senders.** Furthermore, GWS mail servers are specifically engineered to make external mailbox verification difficult.
+
+However, professional email verifiers achieve high accuracy (~98–99%) by relying on a **multi-layered detection pipeline** rather than relying on directory access.
+
+---
+
+### How Verifiers Work Around Directory Privacy
+
+#### 1. The SMTP Ping / Ping-and-Quit Method
+
+Verifiers communicate directly with Google Workspace mail servers (`smtp.gmail.com` or custom MX servers) using standard Simple Mail Transfer Protocol (SMTP):
+
+1. **Connect & Query:** The verifier initiates a connection and issues `HELO`, `MAIL FROM`, and `RCPT TO: <target@domain.com>`.
+2. **Observe Response:**
+* **`250 2.1.5 OK`**: The server confirms the specific recipient exists.
+* **`550 5.1.1 User unknown`**: The server indicates no such mailbox exists.
+
+
+3. **Terminate Immediately:** The verifier sends `RSET` or `QUIT` before issuing a `DATA` command, dropping the connection without delivering an actual message.
+
+#### 2. Cross-Referencing Historical & Signal Data
+
+GWS accounts often utilize catch-all policies, rate-limiting, or security defenses against brute-force directory harvesting. To bridge the gap when an SMTP check is ambiguous, verifiers layer proprietary datasets:
+
+* **Historical Engagement & Logs:** Large verification vendors retain petabytes of anonymized signals (e.g., whether that exact email interacted with transactional networks, opened marketing messages, or passed OAuth logins elsewhere).
+* **Catch-All Baseline Testing:** Verifiers test a dummy address like `random_fake_xyz123@domain.com`. If accepted, the domain is flagged as a "Catch-All / Accept-All". The tool then pivots to historical presence or flags the contact as "Risky" rather than guessing.
+* **Social & Profile Scraping:** Many tools query web/OAuth endpoint behavior (e.g., gravatar checks, Google profile picture assets, or public API footprints linked to that address).
+
+#### 3. IP Rotation and Distributed Proxies
+
+If you try SMTP probing from a single server IP, Google will quickly flag and block your IP (or respond with false positives/greylisting). Commercial verifiers maintain massive, reputational IP pools and residential proxy networks, mimicking diverse, legitimate mail server handshakes to bypass Google's defensive rate limits.
+
+---
+
+### How 99% Accuracy Is Calculated
+
+The claim of **99% accuracy** does not mean they successfully identify every single mailbox on demand. Rather, it reflects **bounce-prevention accuracy** on the addresses they mark as `"Deliverable"`:
+
+| Status Returned by Verifier | How It Handled Google Workspace Privacy |
+| --- | --- |
+| **Deliverable** | Explicitly responded with `250 OK` *or* verified through active historical deliverability data. ~99% of these won't bounce. |
+| **Invalid** | Server explicitly returned `550 User unknown`. |
+| **Risky / Accept-All** | Domain hides mailbox state behind a catch-all policy. Modern verifiers classify these separately so they don't lower their accuracy claims. |
