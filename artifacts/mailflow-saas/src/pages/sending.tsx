@@ -2134,6 +2134,13 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
                 </div>
               </div>
               <div data-testid="campaign-list-picker" className="max-h-40 space-y-0.5 overflow-y-auto p-1.5">
+                {listsQuery.isLoading && <p role="status" className="px-2 py-3 text-center text-[11px] text-[#687587]">Loading your contact lists…</p>}
+                {listsQuery.isError && <div role="alert" className="mx-1 my-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-2.5 py-2 text-[10px] leading-4 text-[#99501e]">
+                  <span>{lists.length ? 'Could not refresh your contact lists. Showing the last loaded list data.' : 'Could not load your contact lists. Retry before choosing an audience.'}</span>
+                  <Button type="button" variant="outline" testId="button-retry-campaign-lists" disabled={listsQuery.isFetching} onClick={() => void listsQuery.refetch()}>
+                    {listsQuery.isFetching && <LoaderCircle className="h-3 w-3 animate-spin"/>}Retry
+                  </Button>
+                </div>}
                 {filteredCampaignLists.map(list => {
                   const checked = form.listIds.includes(list.id);
                   return <label key={list.id} className={cx('flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-[11px] hover:bg-[#f5f8fb]', !list.active && !checked && 'cursor-not-allowed opacity-60')}>
@@ -2147,7 +2154,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
                   <span>Removed list is still selected.</span>
                   <Button variant="quiet" testId={`button-remove-removed-campaign-list-${listId}`} onClick={() => toggleCampaignList(listId, false)}>Remove</Button>
                 </div>)}
-                {!lists.length && <p className="px-2 py-2 text-[11px] text-[#788392]">Create a contact list before preparing a campaign.</p>}
+                {!listsQuery.isLoading && !listsQuery.isError && !lists.length && <p className="px-2 py-2 text-[11px] text-[#788392]">Create a contact list before preparing a campaign.</p>}
                 {lists.length > 0 && !filteredCampaignLists.length && <p className="px-2 py-3 text-center text-[11px] text-[#788392]">{showSelectedCampaignLists ? 'No selected lists match this search.' : 'No lists match this search.'}</p>}
               </div>
             </div>
