@@ -29,6 +29,8 @@ import {
   CreateContactSegmentResponse,
   CreateContactResponse,
   ExportContactsBody,
+  GetCampaignHistoryQueryParams,
+  GetCampaignHistoryResponse,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
   GetCampaignVariantLimitsResponse,
@@ -679,15 +681,42 @@ async function contactListPayloads(userId: string) {
   }));
 }
 
-async function campaignPayloads(userId: string) {
-  const campaigns = await db
-    .select()
-    .from(emailCampaignsTable)
-    .where(eq(emailCampaignsTable.userId, userId))
-    .orderBy(desc(emailCampaignsTable.createdAt));
+async function campaignPayloads(
+  userId: string,
+  selectedCampaigns?: (typeof emailCampaignsTable.$inferSelect)[],
+) {
+  const campaigns =
+    selectedCampaigns ??
+    (await db
+      .select()
+      .from(emailCampaignsTable)
+      .where(eq(emailCampaignsTable.userId, userId))
+      .orderBy(desc(emailCampaignsTable.createdAt)));
+  const forecastCampaigns = selectedCampaigns
+    ? await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(
+          and(
+            eq(emailCampaignsTable.userId, userId),
+            or(
+              eq(emailCampaignsTable.status, "queued"),
+              eq(emailCampaignsTable.status, "sending"),
+            ),
+          ),
+        )
+    : campaigns;
+  const calculationCampaigns = [
+    ...new Map(
+      [...campaigns, ...forecastCampaigns].map((campaign) => [
+        campaign.id,
+        campaign,
+      ]),
+    ).values(),
+  ];
   const senderAccountIds = [
     ...new Set(
-      campaigns
+      calculationCampaigns
         .map((campaign) => campaign.senderAccountId)
         .filter((senderAccountId): senderAccountId is string => senderAccountId !== null),
     ),
@@ -727,7 +756,17 @@ async function campaignPayloads(userId: string) {
         createdAt: emailCampaignRecipientsTable.createdAt,
       })
       .from(emailCampaignRecipientsTable)
-      .where(eq(emailCampaignRecipientsTable.userId, userId)),
+      .where(
+        selectedCampaigns
+          ? and(
+              eq(emailCampaignRecipientsTable.userId, userId),
+              inArray(
+                emailCampaignRecipientsTable.campaignId,
+                calculationCampaigns.map((campaign) => campaign.id),
+              ),
+            )
+          : eq(emailCampaignRecipientsTable.userId, userId),
+      ),
     draftListIds.length === 0
       ? Promise.resolve([])
       : db
@@ -754,7 +793,7 @@ async function campaignPayloads(userId: string) {
   ]);
   const estimateNow = new Date();
   const senderAccountByCampaign = new Map(
-    campaigns.map((campaign) => [campaign.id, campaign.senderAccountId]),
+    calculationCampaigns.map((campaign) => [campaign.id, campaign.senderAccountId]),
   );
   const recentAttempts = await db
     .select({
@@ -784,7 +823,7 @@ async function campaignPayloads(userId: string) {
     )
     .orderBy(asc(emailSendAttemptsTable.attemptedAt));
   const activeCampaignIds = new Set(
-    campaigns
+    forecastCampaigns
       .filter(
         (campaign) =>
           campaign.status === "queued" || campaign.status === "sending",
@@ -3766,6 +3805,266 @@ router.post("/public/unsubscribe", async (req, res): Promise<void> => {
 router.get("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.json(ListCampaignsResponse.parse(await campaignPayloads(req.authUser!.id)));
 });
+
+router.get(
+  "/campaigns/history",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = GetCampaignHistoryQueryParams.safeParse(req.query);
+    if (!parsed.success || (parsed.data.listId && !isContactFilterUuid(parsed.data.listId))) {
+      res.status(400).json({
+        error: "Enter valid campaign history filters.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const params = parsed.data;
+    const userId = req.authUser!.id;
+    const now = new Date();
+    const conditions = [eq(emailCampaignsTable.userId, userId)];
+    if (params.search?.trim()) {
+      const search = `%${params.search.trim().replace(/[\\%_]/g, "\\$&")}%`;
+      const matchingSenderAccounts = await db
+        .select({ id: tenantSendingConfigurationTable.id })
+        .from(tenantSendingConfigurationTable)
+        .where(
+          and(
+            eq(tenantSendingConfigurationTable.userId, userId),
+            ilike(tenantSendingConfigurationTable.fromEmail, search),
+          ),
+        );
+      const searchConditions = [
+        ilike(emailCampaignsTable.name, search),
+        ilike(emailCampaignsTable.objective, search),
+        ilike(emailCampaignsTable.subject, search),
+        ilike(emailCampaignsTable.senderEmail, search),
+      ];
+      if (matchingSenderAccounts.length) {
+        searchConditions.push(
+          inArray(
+            emailCampaignsTable.senderAccountId,
+            matchingSenderAccounts.map((account) => account.id),
+          ),
+        );
+      }
+      conditions.push(
+        or(...searchConditions)!,
+      );
+    }
+    if (params.campaignType === "primary") {
+      conditions.push(isNull(emailCampaignsTable.parentCampaignId));
+    } else if (params.campaignType === "follow_up") {
+      conditions.push(sql`${emailCampaignsTable.parentCampaignId} is not null`);
+    }
+    if (params.listId) {
+      conditions.push(
+        or(
+          eq(emailCampaignsTable.listId, params.listId),
+          sql`${emailCampaignsTable.listIds} @> ARRAY[${params.listId}::uuid]`,
+        )!,
+      );
+    }
+    if (params.createdWithinDays) {
+      conditions.push(
+        gte(
+          emailCampaignsTable.createdAt,
+          new Date(now.getTime() - params.createdWithinDays * 24 * 60 * 60 * 1000),
+        ),
+      );
+    }
+    switch (params.status) {
+      case "draft":
+        conditions.push(eq(emailCampaignsTable.status, "draft"));
+        break;
+      case "scheduled":
+        conditions.push(
+          and(
+            eq(emailCampaignsTable.status, "queued"),
+            gt(emailCampaignsTable.scheduledAt, now),
+          )!,
+        );
+        break;
+      case "paused":
+        conditions.push(sql`${emailCampaignsTable.pausedAt} is not null`);
+        break;
+      case "queued":
+        conditions.push(
+          and(
+            eq(emailCampaignsTable.status, "queued"),
+            isNull(emailCampaignsTable.pausedAt),
+            or(
+              isNull(emailCampaignsTable.scheduledAt),
+              lte(emailCampaignsTable.scheduledAt, now),
+            ),
+          )!,
+        );
+        break;
+      case "sending":
+      case "completed":
+        conditions.push(eq(emailCampaignsTable.status, params.status));
+        break;
+    }
+
+    const where = and(...conditions);
+    const page = params.page;
+    const pageSize = params.pageSize;
+    const [
+      totalResult,
+      pageCampaigns,
+      statusCounts,
+      deliverySummary,
+      activeCampaignRows,
+    ] =
+      await Promise.all([
+        db.select({ total: count() }).from(emailCampaignsTable).where(where),
+        db
+          .select()
+          .from(emailCampaignsTable)
+          .where(where)
+          .orderBy(desc(emailCampaignsTable.createdAt), desc(emailCampaignsTable.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        db
+          .select({
+            status: emailCampaignsTable.status,
+            count: count(),
+          })
+          .from(emailCampaignsTable)
+          .where(eq(emailCampaignsTable.userId, userId))
+          .groupBy(emailCampaignsTable.status),
+        db
+          .select({
+            status: emailCampaignRecipientsTable.status,
+            reportOutcome: emailCampaignRecipientsTable.reportOutcome,
+            count: count(),
+          })
+          .from(emailCampaignRecipientsTable)
+          .where(eq(emailCampaignRecipientsTable.userId, userId))
+          .groupBy(
+            emailCampaignRecipientsTable.status,
+            emailCampaignRecipientsTable.reportOutcome,
+          ),
+        db
+          .select()
+          .from(emailCampaignsTable)
+          .where(
+            and(
+              eq(emailCampaignsTable.userId, userId),
+              or(
+                eq(emailCampaignsTable.status, "queued"),
+                eq(emailCampaignsTable.status, "sending"),
+              ),
+            ),
+          ),
+      ]);
+
+    const includedCampaigns = new Map(
+      pageCampaigns.map((campaign) => [campaign.id, campaign]),
+    );
+    const contextCampaignIds = new Set<string>();
+    let pendingParentIds = [
+      ...new Set(
+        pageCampaigns
+          .map((campaign) => campaign.parentCampaignId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    while (pendingParentIds.length) {
+      const missingParentIds = pendingParentIds.filter(
+        (id) => !includedCampaigns.has(id),
+      );
+      if (!missingParentIds.length) break;
+      const parents = await db
+        .select()
+        .from(emailCampaignsTable)
+        .where(
+          and(
+            eq(emailCampaignsTable.userId, userId),
+            inArray(emailCampaignsTable.id, missingParentIds),
+          ),
+        );
+      for (const parent of parents) {
+        includedCampaigns.set(parent.id, parent);
+        contextCampaignIds.add(parent.id);
+      }
+      pendingParentIds = parents
+        .map((campaign) => campaign.parentCampaignId)
+        .filter((id): id is string => Boolean(id));
+    }
+
+    const visibleCampaignIds = new Set(includedCampaigns.keys());
+    const activeCampaignIds = new Set(
+      activeCampaignRows.map((campaign) => campaign.id),
+    );
+    const campaignSummaries = await campaignPayloads(
+      userId,
+      [
+        ...new Map(
+          [...includedCampaigns.values(), ...activeCampaignRows].map((campaign) => [
+            campaign.id,
+            campaign,
+          ]),
+        ).values(),
+      ],
+    );
+    const campaignSummaryById = new Map(
+      campaignSummaries.map((campaign) => [campaign.id, campaign]),
+    );
+    const activeCampaignFinishSeconds = activeCampaignRows.reduce(
+      (latest, campaign) =>
+        Math.max(
+          latest,
+          campaignSummaryById.get(campaign.id)?.estimatedDurationSeconds ?? 0,
+        ),
+      0,
+    );
+    const summaryCampaignCount = statusCounts.reduce(
+      (sum, row) => sum + row.count,
+      0,
+    );
+    res.json(
+      GetCampaignHistoryResponse.parse({
+        campaigns: campaignSummaries.filter((campaign) =>
+          visibleCampaignIds.has(campaign.id),
+        ),
+        contextCampaignIds: [...contextCampaignIds],
+        total: totalResult[0]?.total ?? 0,
+        page,
+        pageSize,
+        summary: {
+          campaignCount: summaryCampaignCount,
+          draftCount:
+            statusCounts.find((row) => row.status === "draft")?.count ?? 0,
+          nonDraftCount:
+            summaryCampaignCount -
+            (statusCounts.find((row) => row.status === "draft")?.count ?? 0),
+          delivered: deliverySummary
+            .filter((row) => row.status === "delivered")
+            .reduce((sum, row) => sum + row.count, 0),
+          bounced: deliverySummary
+            .filter(
+              (row) =>
+                row.status === "bounced" ||
+                row.reportOutcome === "bounced" ||
+                row.reportOutcome === "failed",
+            )
+            .reduce((sum, row) => sum + row.count, 0),
+          suppressed: deliverySummary
+            .filter((row) => row.status === "suppressed")
+            .reduce((sum, row) => sum + row.count, 0),
+          activeCampaignCount: activeCampaignRows.length,
+          activeCampaignFinishAt:
+            activeCampaignRows.length > 0
+              ? new Date(
+                  now.getTime() + activeCampaignFinishSeconds * 1000,
+                ).toISOString()
+              : null,
+        },
+      }),
+    );
+  },
+);
 
 router.patch(
   "/campaigns/:campaignId/pause",

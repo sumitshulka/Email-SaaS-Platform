@@ -20,13 +20,13 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
+  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useSetCampaignPaused,
-  useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
+  useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
   useUpdateContactList,
@@ -34,7 +34,7 @@ import {
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactEmailVerification, ContactList, ContactOption,
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
-  GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
+  CampaignHistory, GetCampaignHistoryParams, GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
   ListContactsQueryResult,
 } from '@workspace/api-client-react';
@@ -1520,7 +1520,34 @@ const blankCampaign: CampaignForm = {
 export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused?: boolean } = {}) {
   const [, setLocation] = useLocation();
   const subjectInputRef = useRef<HTMLInputElement>(null);
-  const campaignsQuery = useListCampaigns(); const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
+  const [campaignSearch, setCampaignSearch] = useState('');
+  const [debouncedCampaignSearch, setDebouncedCampaignSearch] = useState('');
+  const [campaignStatusFilter, setCampaignStatusFilter] = useState('all');
+  const [campaignTypeFilter, setCampaignTypeFilter] = useState('all');
+  const [campaignListFilter, setCampaignListFilter] = useState('all');
+  const [campaignDateFilter, setCampaignDateFilter] = useState('all');
+  const [campaignHistoryPage, setCampaignHistoryPage] = useState(1);
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedCampaignSearch(campaignSearch),
+      250,
+    );
+    return () => window.clearTimeout(timer);
+  }, [campaignSearch]);
+  const campaignHistoryParams: GetCampaignHistoryParams = {
+    page: campaignHistoryPage,
+    pageSize: 25,
+    search: debouncedCampaignSearch.trim() || undefined,
+    status: campaignStatusFilter as GetCampaignHistoryParams['status'],
+    campaignType: campaignTypeFilter as GetCampaignHistoryParams['campaignType'],
+    listId: campaignListFilter === 'all' ? undefined : campaignListFilter,
+    createdWithinDays:
+      campaignDateFilter === 'all'
+        ? undefined
+        : (Number(campaignDateFilter) as GetCampaignHistoryParams['createdWithinDays']),
+  };
+  const campaignsQuery = useGetCampaignHistory(campaignHistoryParams);
+  const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
   const variantLimitsQuery = useGetCampaignVariantLimits();
   const create = useCreateCampaign(); const createFollowUp = useCreateCampaignFollowUp(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign(); const pauseCampaign = useSetCampaignPaused();
   const previewCampaign = usePreviewCampaign();
@@ -1544,11 +1571,6 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const audienceActionInProgress = useRef(false);
   const [campaignListSearch, setCampaignListSearch] = useState('');
   const [showSelectedCampaignLists, setShowSelectedCampaignLists] = useState(false);
-  const [campaignSearch, setCampaignSearch] = useState('');
-  const [campaignStatusFilter, setCampaignStatusFilter] = useState('all');
-  const [campaignTypeFilter, setCampaignTypeFilter] = useState('all');
-  const [campaignListFilter, setCampaignListFilter] = useState('all');
-  const [campaignDateFilter, setCampaignDateFilter] = useState('all');
   const [collapsedCampaignIds, setCollapsedCampaignIds] = useState<Set<string>>(() => new Set());
   const [sampleContactId, setSampleContactId] = useState('');
   const [aiDraftPreview, setAiDraftPreview] = useState<{ subject: string; greeting: string; body: string; signature: string; remaining: number } | null>(null);
@@ -1562,7 +1584,15 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [queueStartError, setQueueStartError] = useState<string | null>(null);
   const [queuePolicyError, setQueuePolicyError] = useState<string | null>(null);
   const [pauseTarget, setPauseTarget] = useState<CampaignSummary | null>(null);
-  const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
+  const campaignHistory = campaignsQuery.data as CampaignHistory | undefined;
+  const campaigns = campaignHistory?.campaigns ?? [];
+  const activeCampaignFinishAt = campaignHistory?.summary.activeCampaignFinishAt
+    ? new Date(campaignHistory.summary.activeCampaignFinishAt)
+    : null;
+  const effectiveServerMinimumStartAt =
+    serverMinimumStartAt && activeCampaignFinishAt
+      ? new Date(Math.max(serverMinimumStartAt.getTime(), activeCampaignFinishAt.getTime()))
+      : serverMinimumStartAt ?? activeCampaignFinishAt;
   const lists = (listsQuery.data || []) as ContactList[];
   const campaignReviewParams = {
     page: campaignReviewPage,
@@ -1589,6 +1619,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     ? campaignReviewError.status
     : null;
   const campaignTree = useMemo(() => {
+    const contextIds = new Set(campaignHistory?.contextCampaignIds ?? []);
     const byId = new Map(campaigns.map(campaign => [campaign.id, campaign]));
     const children = new Map<string, CampaignSummary[]>();
     const roots: CampaignSummary[] = [];
@@ -1597,36 +1628,13 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       if (parent) children.set(parent.id, [...(children.get(parent.id) ?? []), campaign]);
       else roots.push(campaign);
     }
-    const newestFirst = (items: CampaignSummary[]) => items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const newestFirst = (items: CampaignSummary[]) => items.sort((a, b) => {
+      const createdAtOrder = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return createdAtOrder || b.id.localeCompare(a.id);
+    });
     newestFirst(roots);
     for (const items of children.values()) newestFirst(items);
-
-    const search = campaignSearch.trim().toLowerCase();
-    const cutoff = campaignDateFilter === 'all' ? null : Date.now() - Number(campaignDateFilter) * 24 * 60 * 60 * 1000;
-    const matches = new Set(campaigns.filter(campaign => {
-      const textMatches = !search || [campaign.name, campaign.objective, campaign.subject, campaign.senderEmail]
-        .some(value => value?.toLowerCase().includes(search));
-      const listIds = campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : [];
-      const listMatches = campaignListFilter === 'all' || listIds.includes(campaignListFilter);
-      const typeMatches = campaignTypeFilter === 'all' || campaign.campaignType === campaignTypeFilter;
-      const scheduled = campaign.status === 'queued' && Boolean(campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now());
-      const statusMatches = campaignStatusFilter === 'all'
-        || (campaignStatusFilter === 'paused' ? Boolean(campaign.pausedAt) : campaignStatusFilter === 'scheduled' ? scheduled : campaignStatusFilter === 'queued' ? campaign.status === 'queued' && !scheduled && !campaign.pausedAt : campaign.status === campaignStatusFilter);
-      const dateMatches = cutoff === null || new Date(campaign.createdAt).getTime() >= cutoff;
-      return textMatches && listMatches && typeMatches && statusMatches && dateMatches;
-    }).map(campaign => campaign.id));
-
-    // Keep parent rows visible as context whenever a matching follow-up is found.
-    const visible = new Set(matches);
-    for (const id of matches) {
-      let current = byId.get(id);
-      const seen = new Set<string>([id]);
-      while (current?.parentCampaignId && !seen.has(current.parentCampaignId)) {
-        seen.add(current.parentCampaignId);
-        visible.add(current.parentCampaignId);
-        current = byId.get(current.parentCampaignId);
-      }
-    }
+    const visible = new Set(campaigns.map(campaign => campaign.id));
     const rows: Array<{ campaign: CampaignSummary; depth: number; hasChildren: boolean; contextOnly: boolean }> = [];
     const parentIds = new Set<string>();
     const walk = (campaign: CampaignSummary, depth: number, path: Set<string>) => {
@@ -1634,7 +1642,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       const visibleChildren = (children.get(campaign.id) ?? []).filter(child => visible.has(child.id));
       const hasChildren = visibleChildren.length > 0;
       if (hasChildren) parentIds.add(campaign.id);
-      rows.push({ campaign, depth, hasChildren, contextOnly: !matches.has(campaign.id) });
+      rows.push({ campaign, depth, hasChildren, contextOnly: contextIds.has(campaign.id) });
       if (!hasChildren || collapsedCampaignIds.has(campaign.id)) return;
       const nextPath = new Set(path).add(campaign.id);
       for (const child of visibleChildren) walk(child, depth + 1, nextPath);
@@ -1642,8 +1650,8 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     for (const root of roots) walk(root, 0, new Set());
     // Include campaigns with missing parent records as top-level entries.
     for (const campaign of campaigns) if (!campaign.parentCampaignId && !rows.some(row => row.campaign.id === campaign.id)) walk(campaign, 0, new Set());
-    return { rows, matches, parentIds, matchCount: matches.size };
-  }, [campaigns, campaignDateFilter, campaignListFilter, campaignSearch, campaignStatusFilter, campaignTypeFilter, collapsedCampaignIds]);
+    return { rows, parentIds };
+  }, [campaigns, campaignHistory?.contextCampaignIds, collapsedCampaignIds]);
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const aiAssistBalance = addOnCreditsQuery.data?.balances.emailAssist;
   const aiAssistAvailable = Boolean(
@@ -1706,7 +1714,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     );
   }, [campaignListSearch, form.listIds, lists, showSelectedCampaignLists]);
   const matchingCampaignListsToAdd = filteredCampaignLists.filter(list => list.active && !form.listIds.includes(list.id));
-  const baseQueueMinimumStartAt = minimumCampaignStartAt(campaigns, serverMinimumStartAt);
+  const baseQueueMinimumStartAt = minimumCampaignStartAt(campaigns, effectiveServerMinimumStartAt);
   const followUpParent = pendingAction?.kind === 'queue' && pendingAction.campaign.parentCampaignId
     ? campaigns.find(campaign => campaign.id === pendingAction.campaign.parentCampaignId)
     : undefined;
@@ -1753,7 +1761,8 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     Number.isFinite(queueStartDate.getTime()) &&
     queueStartDate.getTime() >= queueMinimumStartAt.getTime(),
   );
-  const hasActiveCampaigns = campaigns.some(campaign => campaign.status === 'queued' || campaign.status === 'sending');
+  const hasActiveCampaigns = (campaignHistory?.summary.activeCampaignCount ?? 0) > 0 ||
+    campaigns.some(campaign => campaign.status === 'queued' || campaign.status === 'sending');
   const eligibleSampleContacts = useMemo(() => {
     const listPriority = new Map(form.listIds.map((listId, index) => [listId, index]));
     const eligible = contacts
@@ -1789,7 +1798,11 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subjectVariants, form.greetingVariants, form.signatureVariants, form.textBody, form.htmlBody]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
-  const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
+  const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil((campaignHistory?.total ?? 0) / 25));
+    if (campaignHistoryPage > lastPage) setCampaignHistoryPage(lastPage);
+  }, [campaignHistory?.total, campaignHistoryPage]);
   const closeCampaignEditor = () => { setEditing(undefined); setCampaignContentError(null); setCampaignStepError(''); };
   const continueCampaignStep = () => {
     setCampaignStepError('');
@@ -1981,7 +1994,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     setServerMinimumStartAt(null);
     setQueueStartError(null);
     setQueuePolicyError(null);
-    setQueueStartAt(dateTimeLocalValue(minimumCampaignStartAt(campaigns)));
+    setQueueStartAt(dateTimeLocalValue(minimumCampaignStartAt(campaigns, effectiveServerMinimumStartAt)));
     setPendingAction({ kind: 'queue', campaign });
   };
   const del = (campaign: CampaignSummary) => setPendingAction({ kind: 'delete', campaign });
@@ -2029,28 +2042,29 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     }
   };
   const statusTone = (status: CampaignSummary['status']) => status === 'completed' ? 'green' : status === 'queued' || status === 'sending' ? 'blue' : 'gray';
-  const totalDelivered = campaigns.reduce((sum, campaign) => sum + campaign.delivered, 0);
-  const totalBounced = campaigns.reduce((sum, campaign) => sum + campaign.bounced, 0);
+  const campaignSummary = campaignHistory?.summary;
+  const totalDelivered = campaignSummary?.delivered ?? 0;
+  const totalBounced = campaignSummary?.bounced ?? 0;
   return <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading || variantLimitsQuery.isLoading} error={campaignsQuery.isError || listsQuery.isError || variantLimitsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); void variantLimitsQuery.refetch(); }} label="campaigns"><>
     <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<Button testId="button-create-campaign" onClick={openNew} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     {!activeLists.length && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before creating a campaign. Drafts can only target active lists.</span></div>}
-        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Campaigns</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{campaigns.length}</div><div className="mt-1 text-[10px] text-[#6f8092]">{campaigns.filter(c => c.status === 'draft').length} drafts · {campaigns.filter(c => c.status !== 'draft').length} queued or sent</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">SMTP accepted</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{totalDelivered.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">Inbox delivery is not confirmed</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#fff5eb', borderColor: '#f0dfcb' }}><div className="text-[11px] text-[#8b6747]">Rejected / failed</div><div className="display mt-2 text-[26px] font-bold text-[#ae642c]">{totalBounced.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#816f5f]">Includes matched provider bounce or failure reports</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' }}><div className="text-[11px] text-[#677484]">Suppressed</div><div className="display mt-2 text-[26px] font-bold text-[#596675]">{campaigns.reduce((sum, campaign) => sum + campaign.suppressed, 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#738092]">Unsubscribed or removed before send</div></div></div>
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Campaigns</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{(campaignSummary?.campaignCount ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">{(campaignSummary?.draftCount ?? 0).toLocaleString()} drafts · {(campaignSummary?.nonDraftCount ?? 0).toLocaleString()} queued or sent</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">SMTP accepted</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{totalDelivered.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">Inbox delivery is not confirmed</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#fff5eb', borderColor: '#f0dfcb' }}><div className="text-[11px] text-[#8b6747]">Rejected / failed</div><div className="display mt-2 text-[26px] font-bold text-[#ae642c]">{totalBounced.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#816f5f]">Includes matched provider bounce or failure reports</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' }}><div className="text-[11px] text-[#677484]">Suppressed</div><div className="display mt-2 text-[26px] font-bold text-[#596675]">{(campaignSummary?.suppressed ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#738092]">Unsubscribed or removed before send</div></div></div>
         <section data-testid="campaign-filters" className={`${panelClass} mb-5 p-4 sm:p-5`}>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="display text-[16px] font-bold text-[#1b293a]">Find a campaign</h2><p className="mt-1 text-[11px] text-[#778393]">Search names, subjects, objectives, or senders; filter the tree without losing parent context.</p></div>
-            <Button variant="outline" testId="button-reset-campaign-filters" onClick={() => { setCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); }} disabled={!campaignSearch && campaignStatusFilter === 'all' && campaignTypeFilter === 'all' && campaignListFilter === 'all' && campaignDateFilter === 'all'}><X className="h-3.5 w-3.5"/>Reset filters</Button>
+            <Button variant="outline" testId="button-reset-campaign-filters" onClick={() => { setCampaignSearch(''); setDebouncedCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); setCampaignHistoryPage(1); }} disabled={!campaignSearch && campaignStatusFilter === 'all' && campaignTypeFilter === 'all' && campaignListFilter === 'all' && campaignDateFilter === 'all'}><X className="h-3.5 w-3.5"/>Reset filters</Button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,2fr)_repeat(4,minmax(140px,1fr))]">
-            <label><span className={labelClass}>Search campaigns</span><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8290a0]"/><input data-testid="input-campaign-search" className={`${inputClass} pl-9`} placeholder="Name, subject, objective, sender" value={campaignSearch} onChange={event => setCampaignSearch(event.target.value)}/></div></label>
-            <label><span className={labelClass}>Status</span><select data-testid="select-campaign-status-filter" className={inputClass} value={campaignStatusFilter} onChange={event => setCampaignStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="draft">Draft</option><option value="queued">Queued</option><option value="scheduled">Scheduled</option><option value="sending">Sending</option><option value="paused">Paused</option><option value="completed">Completed</option></select></label>
-            <label><span className={labelClass}>Campaign type</span><select data-testid="select-campaign-type-filter" className={inputClass} value={campaignTypeFilter} onChange={event => setCampaignTypeFilter(event.target.value)}><option value="all">Primary + follow-ups</option><option value="primary">Primary only</option><option value="follow_up">Follow-ups</option></select></label>
-            <label><span className={labelClass}>Audience list</span><select data-testid="select-campaign-list-filter" className={inputClass} value={campaignListFilter} onChange={event => setCampaignListFilter(event.target.value)}><option value="all">All lists</option>{lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}</select></label>
-            <label><span className={labelClass}>Created</span><select data-testid="select-campaign-date-filter" className={inputClass} value={campaignDateFilter} onChange={event => setCampaignDateFilter(event.target.value)}><option value="all">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
+            <label><span className={labelClass}>Search campaigns</span><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8290a0]"/><input data-testid="input-campaign-search" className={`${inputClass} pl-9`} placeholder="Name, subject, objective, sender" value={campaignSearch} onChange={event => { setCampaignSearch(event.target.value); setCampaignHistoryPage(1); }}/></div></label>
+            <label><span className={labelClass}>Status</span><select data-testid="select-campaign-status-filter" className={inputClass} value={campaignStatusFilter} onChange={event => { setCampaignStatusFilter(event.target.value); setCampaignHistoryPage(1); }}><option value="all">All statuses</option><option value="draft">Draft</option><option value="queued">Queued</option><option value="scheduled">Scheduled</option><option value="sending">Sending</option><option value="paused">Paused</option><option value="completed">Completed</option></select></label>
+            <label><span className={labelClass}>Campaign type</span><select data-testid="select-campaign-type-filter" className={inputClass} value={campaignTypeFilter} onChange={event => { setCampaignTypeFilter(event.target.value); setCampaignHistoryPage(1); }}><option value="all">Primary + follow-ups</option><option value="primary">Primary only</option><option value="follow_up">Follow-ups</option></select></label>
+            <label><span className={labelClass}>Audience list</span><select data-testid="select-campaign-list-filter" className={inputClass} value={campaignListFilter} onChange={event => { setCampaignListFilter(event.target.value); setCampaignHistoryPage(1); }}><option value="all">All lists</option>{lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}</select></label>
+            <label><span className={labelClass}>Created</span><select data-testid="select-campaign-date-filter" className={inputClass} value={campaignDateFilter} onChange={event => { setCampaignDateFilter(event.target.value); setCampaignHistoryPage(1); }}><option value="all">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label>
           </div>
         </section>
-     {campaigns.length ? campaignTree.rows.length ? <section className={panelClass}>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf0] px-4 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign tree</h2><p className="mt-1 text-[11px] text-[#788392]">{campaignTree.matchCount.toLocaleString()} matching campaigns · follow-ups are nested beneath their parent campaign.</p></div>{campaignTree.parentIds.size > 0 && <Button variant="outline" testId="button-toggle-campaign-tree" onClick={() => setCollapsedCampaignIds(current => [...campaignTree.parentIds].every(id => current.has(id)) ? new Set() : new Set(campaignTree.parentIds))}>{[...campaignTree.parentIds].every(id => collapsedCampaignIds.has(id)) ? 'Expand all' : 'Collapse all'}</Button>}</div>
+     {(campaignHistory?.total ?? 0) > 0 ? <section className={panelClass}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf0] px-4 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign tree</h2><p className="mt-1 text-[11px] text-[#788392]">{campaignHistory?.total.toLocaleString()} matching campaigns · page {campaignHistoryPage} of {Math.max(1, Math.ceil((campaignHistory?.total ?? 0) / 25))} · follow-ups include their parent context.</p></div>{campaignTree.parentIds.size > 0 && <Button variant="outline" testId="button-toggle-campaign-tree" onClick={() => setCollapsedCampaignIds(current => [...campaignTree.parentIds].every(id => current.has(id)) ? new Set() : new Set(campaignTree.parentIds))}>{[...campaignTree.parentIds].every(id => collapsedCampaignIds.has(id)) ? 'Expand all' : 'Collapse all'}</Button>}</div>
        <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Start / end</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaignTree.rows.map(({ campaign, depth, hasChildren, contextOnly }) => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
         <td className="max-w-[280px] px-5 py-4"><div className="flex min-w-0 items-start gap-1" style={{ paddingLeft: `${depth * 20}px` }}>{hasChildren ? <button type="button" aria-label={`${collapsedCampaignIds.has(campaign.id) ? 'Expand' : 'Collapse'} follow-ups for ${campaign.name}`} data-testid={`button-toggle-campaign-${campaign.id}`} className="mt-0.5 rounded p-1 text-[#63758a] hover:bg-[#eef3f8]" onClick={() => setCollapsedCampaignIds(current => { const next = new Set(current); if (next.has(campaign.id)) next.delete(campaign.id); else next.add(campaign.id); return next; })}>{collapsedCampaignIds.has(campaign.id) ? <ChevronRight className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}</button> : <span className="w-6 shrink-0"/>}<button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="min-w-0 text-left"><span className="flex flex-wrap items-center gap-1.5"><span className="truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span>{campaign.campaignType === 'follow_up' && <Status tone="blue">Follow-up</Status>}{contextOnly && <span className="text-[9px] text-[#7c8794]">parent context</span>}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></div></td>
         <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).map(listId => lists.find(list => list.id === listId)?.name || 'Removed list').join(' · ') || 'No target lists selected'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
@@ -2059,7 +2073,15 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]"><span className="block">Start {campaign.scheduledAt || campaign.queuedAt ? formatDate(campaign.scheduledAt || campaign.queuedAt) : '—'}</span><span className="block">End {campaign.completedAt ? formatDate(campaign.completedAt) : '—'}</span>{campaign.pausedAt && <span data-testid={`text-campaign-resume-at-${campaign.id}`} className="block font-semibold text-[#a95218]">{campaign.resumeAt ? `Resume ${formatDate(campaign.resumeAt)}` : 'No automatic resume'}</span>}</td>
           <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'completed') && <Button variant="quiet" testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><CirclePlus className="h-3.5 w-3.5"/>Follow-up</Button>}{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && (campaign.pausedAt ? <><Button variant="quiet" testId={`button-list-edit-resume-time-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}>Schedule</Button><Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><Play className="h-3.5 w-3.5"/>Resume</Button></> : <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}><Pause className="h-3.5 w-3.5"/>Pause</Button>)}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
        </tr>)}</tbody></table></div>
-     </section> : <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
+     </section> : (campaignSummary?.campaignCount ?? 0) > 0 ? <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setDebouncedCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); setCampaignHistoryPage(1); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
+    {(campaignHistory?.total ?? 0) > 0 && <nav aria-label="Campaign history pages" data-testid="campaign-history-pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e0e4e9] bg-white px-4 py-3">
+      <span className="text-[11px] text-[#687484]">Showing {((campaignHistoryPage - 1) * 25 + 1).toLocaleString()}–{Math.min(campaignHistoryPage * 25, campaignHistory?.total ?? 0).toLocaleString()} of {(campaignHistory?.total ?? 0).toLocaleString()} matching campaigns</span>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" testId="button-campaign-history-previous" disabled={campaignHistoryPage <= 1 || campaignsQuery.isFetching} onClick={() => setCampaignHistoryPage(page => Math.max(1, page - 1))}><ArrowLeft className="h-3.5 w-3.5"/>Previous</Button>
+        <span aria-live="polite" className="min-w-20 text-center text-[11px] font-medium text-[#536172]">Page {campaignHistoryPage} of {Math.max(1, Math.ceil((campaignHistory?.total ?? 0) / 25))}</span>
+        <Button variant="outline" testId="button-campaign-history-next" disabled={campaignHistoryPage >= Math.ceil((campaignHistory?.total ?? 0) / 25) || campaignsQuery.isFetching} onClick={() => setCampaignHistoryPage(page => page + 1)}>Next<ArrowRight className="h-3.5 w-3.5"/></Button>
+      </div>
+    </nav>}
     {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Build and review your campaign in four guided steps. Lists remain live until queueing; contact exclusions are preserved." close={closeCampaignEditor}>
       <form onSubmit={save} className="space-y-4">
         {campaignContentError && <div role="alert" data-testid="status-campaign-content-policy-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-5 text-[#99501e]">{campaignContentError}</div>}
@@ -2524,7 +2546,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         <div className="mb-5">
           <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
         </div>
-        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2"><Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2"><Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
         {(isUserPaused || isPausedForMaintenance) && <div role="status" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]">{isUserPaused && campaign.resumeAt ? `Delivery is paused and will resume automatically at ${formatDate(campaign.resumeAt)}. ` : ''}Queued messages are on hold. A message already being submitted to the SMTP server may finish; remaining messages will wait until delivery resumes.</div>}
         {pauseCampaign.isError && <div role="alert" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] text-[#895b2f]">Could not change the campaign pause state. Please try again.</div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -2640,6 +2662,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
           setPauseDialogOpen(false);
           void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) });
           void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() });
         },
         onError: () => { void query.refetch(); },
       })}

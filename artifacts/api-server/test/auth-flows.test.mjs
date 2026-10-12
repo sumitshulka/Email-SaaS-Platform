@@ -7858,6 +7858,88 @@ describe("authentication and account recovery", { concurrency: false }, () => {
         campaignSummary.body.find((campaign) => campaign.id === cleanCampaignId).status,
         "completed",
       );
+
+      const [followUp] = await db
+        .insert(dbModule.emailCampaignsTable)
+        .values({
+          userId: owner.user.id,
+          parentCampaignId: cleanCampaignId,
+          senderAccountId: sender.id,
+          name: "History page follow-up",
+          subject: "Follow-up subject",
+          textBody: "Follow-up body",
+          createdAt: new Date(Date.now() + 1000),
+        })
+        .returning();
+      const [activeCampaign] = await db
+        .insert(dbModule.emailCampaignsTable)
+        .values({
+          userId: owner.user.id,
+          senderAccountId: sender.id,
+          name: "Active history campaign",
+          subject: "Active subject",
+          textBody: "Active body",
+          status: "queued",
+          createdAt: new Date(Date.now() + 500),
+        })
+        .returning();
+      const firstHistoryPage = await api(
+        "/campaigns/history?page=1&pageSize=1",
+        { cookie: owner.cookie },
+      );
+      assert.equal(firstHistoryPage.response.status, 200, JSON.stringify(firstHistoryPage.body));
+      assert.equal(firstHistoryPage.body.page, 1);
+      assert.equal(firstHistoryPage.body.pageSize, 1);
+      assert.equal(firstHistoryPage.body.total, 4);
+      assert.equal(firstHistoryPage.body.campaigns[0].id, followUp.id);
+      assert.ok(firstHistoryPage.body.contextCampaignIds.includes(cleanCampaignId));
+      assert.ok(
+        firstHistoryPage.body.campaigns.some(
+          (campaign) => campaign.id === cleanCampaignId,
+        ),
+        "a follow-up page should include its parent even when it is outside the page",
+      );
+      assert.equal(firstHistoryPage.body.summary.campaignCount, 4);
+      assert.equal(firstHistoryPage.body.summary.draftCount, 1);
+      assert.equal(firstHistoryPage.body.summary.activeCampaignCount, 1);
+      assert.ok(firstHistoryPage.body.summary.activeCampaignFinishAt);
+      assert.equal(
+        firstHistoryPage.body.summary.delivered,
+        campaignSummary.body.reduce((sum, campaign) => sum + campaign.delivered, 0),
+      );
+      assert.equal(
+        firstHistoryPage.body.summary.bounced,
+        campaignSummary.body.reduce((sum, campaign) => sum + campaign.bounced, 0),
+      );
+      assert.equal(
+        firstHistoryPage.body.summary.suppressed,
+        campaignSummary.body.reduce((sum, campaign) => sum + campaign.suppressed, 0),
+      );
+
+      const filteredHistory = await api(
+        "/campaigns/history?search=History%20page%20follow-up&campaignType=follow_up",
+        { cookie: owner.cookie },
+      );
+      assert.equal(filteredHistory.response.status, 200, JSON.stringify(filteredHistory.body));
+      assert.equal(filteredHistory.body.total, 1);
+      assert.equal(filteredHistory.body.campaigns[0].id, followUp.id);
+      assert.ok(filteredHistory.body.contextCampaignIds.includes(cleanCampaignId));
+
+      const completedHistory = await api(
+        "/campaigns/history?status=completed&pageSize=10",
+        { cookie: owner.cookie },
+      );
+      assert.equal(completedHistory.response.status, 200);
+      assert.equal(completedHistory.body.total, 2);
+      assert.ok(completedHistory.body.campaigns.every((campaign) => campaign.status === "completed"));
+
+      const secondHistoryPage = await api(
+        "/campaigns/history?page=2&pageSize=1",
+        { cookie: owner.cookie },
+      );
+      assert.equal(secondHistoryPage.response.status, 200);
+      assert.equal(secondHistoryPage.body.campaigns[0].id, activeCampaign.id);
+      assert.equal(firstHistoryPage.body.campaigns[0].id, followUp.id);
     });
   });
 

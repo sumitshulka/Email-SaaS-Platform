@@ -4373,6 +4373,109 @@ export const CreateCampaignResponse = zod.object({
 
 
 /**
+ * @summary Return a filtered page of campaign history with parent context
+ */
+export const getCampaignHistoryQueryPageDefault = 1;
+
+export const getCampaignHistoryQueryPageSizeDefault = 25;
+export const getCampaignHistoryQueryPageSizeMax = 100;
+
+export const getCampaignHistoryQuerySearchMax = 200;
+
+export const getCampaignHistoryQueryStatusDefault = `all`;
+export const getCampaignHistoryQueryCampaignTypeDefault = `all`;
+
+export const GetCampaignHistoryQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(getCampaignHistoryQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(getCampaignHistoryQueryPageSizeMax).default(getCampaignHistoryQueryPageSizeDefault),
+  "search": zod.coerce.string().max(getCampaignHistoryQuerySearchMax).optional(),
+  "status": zod.enum(['all', 'draft', 'queued', 'scheduled', 'sending', 'paused', 'completed']).default(getCampaignHistoryQueryStatusDefault),
+  "campaignType": zod.enum(['all', 'primary', 'follow_up']).default(getCampaignHistoryQueryCampaignTypeDefault),
+  "listId": zod.coerce.string().uuid().optional(),
+  "createdWithinDays": zod.union([zod.literal(7),zod.literal(30),zod.literal(90)]).optional()
+})
+
+export const getCampaignHistoryResponseCampaignsItemObjectiveMax = 500;
+
+export const getCampaignHistoryResponseCampaignsItemSubjectVariantsItemMax = 200;
+
+export const getCampaignHistoryResponseCampaignsItemGreetingVariantsItemMax = 500;
+
+export const getCampaignHistoryResponseCampaignsItemSignatureVariantsItemMax = 4000;
+
+export const getCampaignHistoryResponseTotalMin = 0;
+
+
+export const getCampaignHistoryResponsePageSizeMax = 100;
+
+export const getCampaignHistoryResponseSummaryCampaignCountMin = 0;
+
+export const getCampaignHistoryResponseSummaryDraftCountMin = 0;
+
+export const getCampaignHistoryResponseSummaryNonDraftCountMin = 0;
+
+export const getCampaignHistoryResponseSummaryDeliveredMin = 0;
+
+export const getCampaignHistoryResponseSummaryBouncedMin = 0;
+
+export const getCampaignHistoryResponseSummarySuppressedMin = 0;
+
+export const getCampaignHistoryResponseSummaryActiveCampaignCountMin = 0;
+
+
+
+export const GetCampaignHistoryResponse = zod.object({
+  "campaigns": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "parentCampaignId": zod.string().uuid().nullable(),
+  "campaignType": zod.enum(['primary', 'follow_up']),
+  "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
+  "name": zod.string(),
+  "objective": zod.string().max(getCampaignHistoryResponseCampaignsItemObjectiveMax).optional(),
+  "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(getCampaignHistoryResponseCampaignsItemSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(getCampaignHistoryResponseCampaignsItemGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(getCampaignHistoryResponseCampaignsItemSignatureVariantsItemMax)),
+  "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
+  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
+  "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
+  "queued": zod.number().int(),
+  "delivered": zod.number().int(),
+  "bounced": zod.number().int(),
+  "suppressed": zod.number().int(),
+  "unknown": zod.number().int(),
+  "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "contextCampaignIds": zod.array(zod.string().uuid()).describe('Campaign IDs included only to show the parent chain for matching campaigns on this page.'),
+  "total": zod.number().int().min(getCampaignHistoryResponseTotalMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(getCampaignHistoryResponsePageSizeMax),
+  "summary": zod.object({
+  "campaignCount": zod.number().int().min(getCampaignHistoryResponseSummaryCampaignCountMin),
+  "draftCount": zod.number().int().min(getCampaignHistoryResponseSummaryDraftCountMin),
+  "nonDraftCount": zod.number().int().min(getCampaignHistoryResponseSummaryNonDraftCountMin),
+  "delivered": zod.number().int().min(getCampaignHistoryResponseSummaryDeliveredMin),
+  "bounced": zod.number().int().min(getCampaignHistoryResponseSummaryBouncedMin),
+  "suppressed": zod.number().int().min(getCampaignHistoryResponseSummarySuppressedMin),
+  "activeCampaignCount": zod.number().int().min(getCampaignHistoryResponseSummaryActiveCampaignCountMin),
+  "activeCampaignFinishAt": zod.coerce.date().nullable()
+})
+})
+
+
+/**
  * @summary Render unsaved campaign content for an eligible contact in its target list
  */
 export const previewCampaignBodySubjectMax = 200;

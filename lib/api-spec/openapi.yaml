@@ -2153,6 +2153,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/history:
+    get:
+      operationId: getCampaignHistory
+      tags: [sending]
+      summary: Return a filtered page of campaign history with parent context
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: search
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: status
+          schema: { type: string, enum: [all, draft, queued, scheduled, sending, paused, completed], default: all }
+        - in: query
+          name: campaignType
+          schema: { type: string, enum: [all, primary, follow_up], default: all }
+        - in: query
+          name: listId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: createdWithinDays
+          schema: { type: integer, enum: [7, 30, 90] }
+      responses:
+        "200":
+          description: Filtered campaign page and workspace-wide delivery totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignHistory"
+        "400":
+          description: Invalid campaign history filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns/preview:
     post:
       operationId: previewCampaign
@@ -5111,6 +5151,32 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, parentCampaignId, campaignType, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, excludedContactIds, status, pausedAt, resumeAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+    CampaignHistory:
+      type: object
+      properties:
+        campaigns:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignSummary" }
+        contextCampaignIds:
+          type: array
+          description: Campaign IDs included only to show the parent chain for matching campaigns on this page.
+          items: { type: string, format: uuid }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        summary:
+          type: object
+          properties:
+            campaignCount: { type: integer, minimum: 0 }
+            draftCount: { type: integer, minimum: 0 }
+            nonDraftCount: { type: integer, minimum: 0 }
+            delivered: { type: integer, minimum: 0 }
+            bounced: { type: integer, minimum: 0 }
+            suppressed: { type: integer, minimum: 0 }
+            activeCampaignCount: { type: integer, minimum: 0 }
+            activeCampaignFinishAt: { type: ["string", "null"], format: date-time }
+          required: [campaignCount, draftCount, nonDraftCount, delivered, bounced, suppressed, activeCampaignCount, activeCampaignFinishAt]
+      required: [campaigns, contextCampaignIds, total, page, pageSize, summary]
     CampaignPauseInput:
       type: object
       description: Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.

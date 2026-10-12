@@ -2874,6 +2874,41 @@ export interface CampaignSummary {
   updatedAt: string;
 }
 
+export type CampaignHistorySummary = {
+  /** @minimum 0 */
+  campaignCount: number;
+  /** @minimum 0 */
+  draftCount: number;
+  /** @minimum 0 */
+  nonDraftCount: number;
+  /** @minimum 0 */
+  delivered: number;
+  /** @minimum 0 */
+  bounced: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  activeCampaignCount: number;
+  /** @nullable */
+  activeCampaignFinishAt: string | null;
+};
+
+export interface CampaignHistory {
+  campaigns: CampaignSummary[];
+  /** Campaign IDs included only to show the parent chain for matching campaigns on this page. */
+  contextCampaignIds: string[];
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+  summary: CampaignHistorySummary;
+}
+
 /**
  * Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.
  */
@@ -4770,6 +4805,57 @@ listIds?: string[];
  */
 listId?: string;
 };
+
+export type GetCampaignHistoryParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+/**
+ * @maxLength 200
+ */
+search?: string;
+status?: GetCampaignHistoryStatus;
+campaignType?: GetCampaignHistoryCampaignType;
+listId?: string;
+createdWithinDays?: GetCampaignHistoryCreatedWithinDays;
+};
+
+export type GetCampaignHistoryStatus = typeof GetCampaignHistoryStatus[keyof typeof GetCampaignHistoryStatus];
+
+
+export const GetCampaignHistoryStatus = {
+  all: 'all',
+  draft: 'draft',
+  queued: 'queued',
+  scheduled: 'scheduled',
+  sending: 'sending',
+  paused: 'paused',
+  completed: 'completed',
+} as const;
+
+export type GetCampaignHistoryCampaignType = typeof GetCampaignHistoryCampaignType[keyof typeof GetCampaignHistoryCampaignType];
+
+
+export const GetCampaignHistoryCampaignType = {
+  all: 'all',
+  primary: 'primary',
+  follow_up: 'follow_up',
+} as const;
+
+export type GetCampaignHistoryCreatedWithinDays = typeof GetCampaignHistoryCreatedWithinDays[keyof typeof GetCampaignHistoryCreatedWithinDays];
+
+
+export const GetCampaignHistoryCreatedWithinDays = {
+  NUMBER_7: 7,
+  NUMBER_30: 30,
+  NUMBER_90: 90,
+} as const;
 
 export type GetCampaignRecipientSummaryParams = {
 /**
