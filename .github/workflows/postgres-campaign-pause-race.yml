@@ -1,0 +1,53 @@
+name: PostgreSQL campaign pause and resume regression
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  postgres-campaign-pause-race:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mailflow-test
+          POSTGRES_PASSWORD: mailflow-test
+          POSTGRES_DB: mailflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mailflow-test -d mailflow_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://mailflow-test:mailflow-test@localhost:5432/mailflow_test
+      CAMPAIGN_PAUSE_RACE_TEST_DATABASE_URL: postgresql://mailflow-test:mailflow-test@localhost:5432/mailflow_test
+      CAMPAIGN_PAUSE_RACE_TEST_REQUIRED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create the current database schema
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm'
+          pnpm --filter @workspace/db exec drizzle-kit export --config ./drizzle.config.ts > /tmp/mailflow-schema.sql
+          awk '/^ALTER TABLE .* ADD CONSTRAINT .* FOREIGN KEY / { foreign_keys[++count] = $0; next } { print } END { for (i = 1; i <= count; i++) print foreign_keys[i] }' /tmp/mailflow-schema.sql > /tmp/mailflow-schema-ordered.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f /tmp/mailflow-schema-ordered.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0011_campaign_scheduled_resume.sql
+
+      - name: Run PostgreSQL campaign pause and resume regression
+        run: pnpm --filter @workspace/api-server run test:postgres-campaign-pause-race

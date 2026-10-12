@@ -6,8 +6,14 @@ import { eq } from "drizzle-orm";
 
 const databaseUrl = process.env.CAMPAIGN_PAUSE_RACE_TEST_DATABASE_URL;
 
+if (process.env.CAMPAIGN_PAUSE_RACE_TEST_REQUIRED === "1" && !databaseUrl) {
+  throw new Error(
+    "CAMPAIGN_PAUSE_RACE_TEST_DATABASE_URL is required for this CI run.",
+  );
+}
+
 test(
-  "pausing a campaign wins a PostgreSQL race with a recipient claim",
+  "campaign pause wins a PostgreSQL claim race and due scheduled resumes do not send",
   {
     skip: databaseUrl
       ? false
@@ -231,7 +237,8 @@ test(
           userId: owner.id,
           name: "Completed campaign resume test",
           subject: "This campaign must stay completed",
-          textBody: "A due resume deadline must not reactivate a completed campaign.",
+          textBody:
+            "A due resume deadline must not reactivate a completed campaign.",
           status: "completed",
           pausedAt: new Date(),
           resumeAt: pastResumeAt,
@@ -243,21 +250,29 @@ test(
         .select()
         .from(emailCampaignsTable)
         .where(eq(emailCampaignsTable.id, campaign.id));
+      assert.equal(resumedCampaign.status, "queued");
       assert.equal(resumedCampaign.pausedAt, null);
       assert.equal(resumedCampaign.resumeAt, null);
+      assert.deepEqual(deliveredTo, []);
       const [stillScheduledCampaign] = await db
         .select()
         .from(emailCampaignsTable)
         .where(eq(emailCampaignsTable.id, futureCampaign.id));
       assert.ok(stillScheduledCampaign.pausedAt);
-      assert.equal(stillScheduledCampaign.resumeAt?.getTime(), futureResumeAt.getTime());
+      assert.equal(
+        stillScheduledCampaign.resumeAt?.getTime(),
+        futureResumeAt.getTime(),
+      );
       const [stillCompletedCampaign] = await db
         .select()
         .from(emailCampaignsTable)
         .where(eq(emailCampaignsTable.id, completedCampaign.id));
       assert.equal(stillCompletedCampaign.status, "completed");
       assert.ok(stillCompletedCampaign.pausedAt);
-      assert.equal(stillCompletedCampaign.resumeAt?.getTime(), pastResumeAt.getTime());
+      assert.equal(
+        stillCompletedCampaign.resumeAt?.getTime(),
+        pastResumeAt.getTime(),
+      );
       const [stillQueuedRecipient] = await db
         .select()
         .from(emailCampaignRecipientsTable)
