@@ -14223,6 +14223,105 @@ describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
     });
   });
 
+  it("reclaims an expired abandoned lease from its saved page without mixing tenants", async () => {
+    const owner = await loggedInUser({ username: "m365-abandoned-owner" });
+    const other = await loggedInUser({ username: "m365-abandoned-other" });
+    const ownerCandidate = await createMicrosoft365Candidate(owner.user.id, {
+      email: "abandoned-owner@example.test",
+      messageId: "<abandoned-owner@example.test>",
+    });
+    const otherCandidate = await createMicrosoft365Candidate(other.user.id, {
+      email: "abandoned-other@example.test",
+      messageId: "<abandoned-other@example.test>",
+    });
+    const savedPage =
+      "https://graph.microsoft.com/v1.0/admin/exchange/tracing/messageTraces?$skiptoken=abandoned-page";
+    const connection = await createMicrosoft365Connection(owner.user.id, {
+      pageNextLink: savedPage,
+      leaseExpiresAt: new Date(Date.now() + 60_000),
+    });
+    const traces = [
+      {
+        id: "abandoned-owner-trace",
+        messageId: ownerCandidate.attempt.messageId,
+        recipientAddress: ownerCandidate.recipient.email,
+        receivedDateTime: new Date(Date.now() - 60_000).toISOString(),
+        status: "Delivered",
+      },
+      {
+        id: "abandoned-other-trace",
+        messageId: otherCandidate.attempt.messageId,
+        recipientAddress: otherCandidate.recipient.email,
+        receivedDateTime: new Date(Date.now() - 60_000).toISOString(),
+        status: "Delivered",
+      },
+    ];
+    let listRequests = 0;
+
+    await withMicrosoft365Fetch(async (url) => {
+      if (url.hostname === "login.microsoftonline.com") {
+        return microsoftJson({ access_token: "m365-worker-test-token" });
+      }
+      if (url.pathname.includes("/getDetailsByRecipient(")) {
+        return microsoftJson({ value: [] });
+      }
+      listRequests += 1;
+      assert.equal(url.toString(), savedPage);
+      return microsoftJson({ value: traces });
+    }, async () => {
+      const beforeExpiry =
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.deepEqual(beforeExpiry, {
+        due: 0,
+        claimed: 0,
+        succeeded: 0,
+        failed: 0,
+      });
+      assert.equal(listRequests, 0);
+
+      await db
+        .update(dbModule.microsoft365TraceConnectionsTable)
+        .set({ leaseExpiresAt: new Date(Date.now() - 1) })
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      const [afterExpiry] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      assert.equal(afterExpiry.pageNextLink, savedPage);
+
+      const recoveredRun =
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.deepEqual(recoveredRun, {
+        due: 1,
+        claimed: 1,
+        succeeded: 1,
+        failed: 0,
+      });
+      assert.equal(listRequests, 1);
+
+      const savedTraces = await db
+        .select()
+        .from(dbModule.microsoft365MessageTracesTable)
+        .where(eq(dbModule.microsoft365MessageTracesTable.connectionId, connection.id));
+      assert.equal(savedTraces.length, 1);
+      assert.equal(savedTraces[0].userId, owner.user.id);
+      assert.equal(savedTraces[0].traceId, "abandoned-owner-trace");
+      assert.equal(
+        savedTraces.some(
+          (trace) => trace.traceId === "abandoned-other-trace",
+        ),
+        false,
+      );
+      const [afterRecovery] = await db
+        .select()
+        .from(dbModule.microsoft365TraceConnectionsTable)
+        .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+      assert.equal(afterRecovery.pageNextLink, null);
+      assert.equal(afterRecovery.leaseExpiresAt, null);
+      assert.equal(afterRecovery.syncStatus, "connected");
+    });
+  });
+
   it("bounds throttled and transient retries without hiding the last successful health state", async () => {
     const owner = await loggedInUser({ username: "m365-retry-owner" });
     const previousSuccess = new Date(Date.now() - 60 * 60_000);
