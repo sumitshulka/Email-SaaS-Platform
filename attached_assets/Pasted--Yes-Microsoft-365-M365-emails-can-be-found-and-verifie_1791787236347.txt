@@ -1,0 +1,48 @@
+**Yes, Microsoft 365 (M365) emails can be found and verified**, though the exact methods differ from Google Workspace.
+
+While M365 hides global address lists from outside organizations, Microsoft’s ecosystem leaks signals through alternative protocol endpoints that professional email verifiers and OSINT (open-source intelligence) tools exploit.
+
+---
+
+### How Verifiers Find and Validate Microsoft 365 Mailboxes
+
+#### 1. M365 Authentication & Login Endpoint Enumeration
+
+Unlike Google, Microsoft maintains unified single-sign-on (SSO) login interfaces (e.g., `login.microsoftonline.com`).
+
+* **User Realm & GetCredentialType API:** When you type an email into a Microsoft login box, the system queries background APIs (such as `GetCredentialType`) to determine if the account exists, if it's federated, or what authentication methods (password, MFA, SAML) are attached.
+* **Response Signals:** The API returns distinct JSON responses:
+* **Account Exists:** Returns tenant ID, key credential configurations, or proceeds to password/MFA prompts.
+* **Account Does Not Exist:** Returns an explicit `UsernameNotExist` or `404` error payload.
+
+
+* **Why this works:** Verifiers automate these lightweight API calls to detect whether a mailbox exists with near 100% certainty **without sending an email or triggering security alerts**.
+
+#### 2. Exchange Web Services (EWS) & Autodiscover Endpoints
+
+Microsoft Exchange infrastructure relies on Autodiscover services (e.g., `[https://autodiscover.domain.com/autodiscover/autodiscover.xml](https://autodiscover.domain.com/autodiscover/autodiscover.xml)`) to set up mail clients automatically.
+
+* When queried with a specific email address, Autodiscover returns distinct XML/JSON responses or HTTP status codes depending on whether the target mailbox exists in the Active Directory database.
+
+#### 3. Standard SMTP Handshakes (`RCPT TO`)
+
+Like Google Workspace, Microsoft Exchange Online servers (`domain-com.mail.protection.outlook.com`) process standard SMTP connections:
+
+1. The verifier opens an SMTP session with Microsoft Exchange servers.
+2. It executes `MAIL FROM: <test@verifier.com>` followed by `RCPT TO: <target@domain.com>`.
+3. If Microsoft returns `250 2.1.5 Recipient OK`, the mailbox exists. If it returns `550 5.1.10 Resolver.Rst.RecipientNotFound`, the address is invalid.
+4. The connection is terminated immediately (`QUIT`) before any body text is transmitted.
+
+#### 4. Microsoft Teams & Graph API Signals
+
+* **Teams Presence Probing:** Microsoft Teams allows federated (external) communications by default. By querying external tenant endpoints for Teams user lookups, verifiers can check whether a specific email address resolves to a live Teams account profile.
+
+---
+
+### Factors That Complicate M365 Verification
+
+| Feature | How It Affects Verification |
+| --- | --- |
+| **Catch-All / Exchange Rules** | If an admin routes all unallocated email to a catch-all mailbox, every SMTP check returns `250 OK`. Verifiers flag these as **"Risky / Catch-All"**. |
+| **Smart Hosts / Mail Gateways** | If a company uses a third-party security layer in front of M365 (e.g., Proofpoint, Mimecast, Barracuda), the MX records point to the gateway instead of Microsoft. The gateway may accept all mail initially, reducing instant verification accuracy. |
+| **Rate Limiting & IP Throttling** | Rapid automated queries trigger Microsoft Defender IP blocks. Verification services cycle their queries through large, clean IP pools. |
