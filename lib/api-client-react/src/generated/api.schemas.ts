@@ -2122,6 +2122,21 @@ export interface Contact {
   updatedAt: string;
 }
 
+export interface ContactNote {
+  id: string;
+  /** @maxLength 10000 */
+  body: string;
+  createdAt: string;
+}
+
+export interface ContactNoteInput {
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  body: string;
+}
+
 export interface ContactEmailVerification {
   status: ContactEmailVerificationStatus;
   checkedAt: string;

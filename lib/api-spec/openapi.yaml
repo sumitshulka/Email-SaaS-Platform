@@ -1942,6 +1942,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/notes:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: listContactNotes
+      tags: [sending]
+      summary: List dated notes for a tenant contact
+      responses:
+        "200":
+          description: Contact notes ordered newest to oldest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactNote"
+        "404":
+          description: Contact not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createContactNote
+      tags: [sending]
+      summary: Add a dated note to a tenant contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactNoteInput"
+      responses:
+        "201":
+          description: Saved contact note with server-assigned date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactNote"
+        "400":
+          description: Note content is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Contact not found in the authenticated tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contact-lists:
     get:
       operationId: listContactLists
@@ -4798,6 +4854,18 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
       required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, emailVerificationRiskFlags, emailVerificationSuggestedEmail, listIds, createdAt, updatedAt]
+    ContactNote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string, maxLength: 10000 }
+        createdAt: { type: string, format: date-time }
+      required: [id, body, createdAt]
+    ContactNoteInput:
+      type: object
+      properties:
+        body: { type: string, minLength: 1, maxLength: 10000 }
+      required: [body]
     ContactEmailVerification:
       type: object
       properties:

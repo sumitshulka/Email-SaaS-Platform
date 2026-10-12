@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'wouter';
-import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail, Plus, NotebookPen } from 'lucide-react';
 import {
+  getListContactNotesQueryKey,
   getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactLeadStatusUpdatesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
-  useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useUpdateContact,
+  useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact,
 } from '@workspace/api-client-react';
-import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate, ContactUpdate } from '@workspace/api-client-react';
+import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate, ContactNote, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
 import { ContactFieldSelect } from '@/components/contact-field-select';
 import { ContactReportEvidence } from '@/components/delivery-evidence';
@@ -216,6 +217,10 @@ export function ContactDetailPage() {
   const fieldOptionsQuery = useGetContactFieldOptions();
   const listsQuery = useListContactLists();
   const companiesQuery = useListCompanies();
+  const notesQuery = useListContactNotes(contactId, {
+    query: { enabled: !!contactId, queryKey: getListContactNotesQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
+  });
+  const createNote = useCreateContactNote();
   const update = useUpdateContact();
   const qc = useQueryClient();
   const [form, setForm] = useState<Editable | null>(null);
@@ -226,6 +231,8 @@ export function ContactDetailPage() {
   const [companyNotice, setCompanyNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [leadStatusChangeReason, setLeadStatusChangeReason] = useState('');
   const [leadStatusReasonError, setLeadStatusReasonError] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteError, setNoteError] = useState('');
   const contact = query.data as Contact | undefined;
 
   // Reinitialize when a contact is first loaded or the server returns a newer revision.
@@ -291,6 +298,22 @@ export function ContactDetailPage() {
   const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
   const selectedCompany = companiesQuery.data?.companies.find(item => item.id === companyChoice);
   const setString = (key: Exclude<keyof Editable, 'subscribed'>) => (value: string) => change(key, value);
+  const saveNote = (event: FormEvent) => {
+    event.preventDefault();
+    const body = noteDraft.trim();
+    if (!body) {
+      setNoteError('Write a note before saving.');
+      return;
+    }
+    createNote.mutate({ contactId, data: { body } }, {
+      onSuccess: () => {
+        setNoteDraft('');
+        setNoteError('');
+        void qc.invalidateQueries({ queryKey: getListContactNotesQueryKey(contactId) });
+      },
+      onError: error => setNoteError(errorText(error)),
+    });
+  };
   const leadStatusChanged = nullableValue(form.leadStatus) !== contact.leadStatus;
   const toggleProfileEdit = (key: NullableField) => setEditingProfiles(current => {
     const next = new Set(current);
@@ -391,7 +414,10 @@ export function ContactDetailPage() {
             <TextAreaField title="Goals" value={form.goals} onChange={setString('goals')} testId="input-detail-goals"/>
             <TextAreaField title="Pain points" value={form.painPoints} onChange={setString('painPoints')} testId="input-detail-pain-points"/>
             <div className="sm:col-span-2"><TextAreaField title="Personalization context" value={form.personalizationContext} onChange={setString('personalizationContext')} testId="input-detail-personalization"/></div>
-            <div className="sm:col-span-2"><TextAreaField title="Notes" value={form.notes} onChange={setString('notes')} testId="input-detail-notes"/></div>
+            <div className="sm:col-span-2">
+              <TextAreaField title="Imported note / contact context" value={form.notes} onChange={setString('notes')} testId="input-detail-notes"/>
+              <p className="mt-1 text-[10px] leading-4 text-[#8793a0]">Use the dated Contact notes section below to add notes to the contact’s activity sequence.</p>
+            </div>
           </div>
         </Section>
       </div>
@@ -461,6 +487,47 @@ export function ContactDetailPage() {
         </div>
       </div>
     </form>
+    <div className="mt-5">
+      <Section title="Contact notes" eyebrow="DATED CONTACT HISTORY" testId="section-contact-notes">
+        <p className="mb-4 text-[11px] leading-5 text-[#7c8794]">Add a note whenever needed. Mailflow records its date and keeps the entries in newest-first order.</p>
+        <form onSubmit={saveNote} className="mb-5">
+          <label className="block">
+            <span className={label}>New note</span>
+            <textarea
+              data-testid="textarea-new-contact-note"
+              maxLength={10000}
+              rows={3}
+              value={noteDraft}
+              onChange={event => { setNoteDraft(event.target.value); setNoteError(''); }}
+              placeholder="Add a dated note about this contact…"
+              className="w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]"
+            />
+          </label>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] text-[#8793a0]">{noteDraft.length.toLocaleString()} / 10,000 characters</span>
+            <button type="submit" data-testid="button-add-contact-note" disabled={!noteDraft.trim() || createNote.isPending} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#174f99] bg-[#174f99] px-3 text-[11px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
+              {createNote.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Plus className="h-3.5 w-3.5"/>}
+              {createNote.isPending ? 'Saving…' : 'Add note'}
+            </button>
+          </div>
+          {noteError && <p role="alert" data-testid="error-contact-note" className="mt-2 text-[11px] text-[#a95218]">{noteError}</p>}
+        </form>
+        {notesQuery.isLoading ? <div aria-label="Loading contact notes" data-testid="loading-contact-notes" className="space-y-3">{[0, 1].map(item => <div key={item} className="h-20 animate-pulse rounded-lg border border-[#e8ecef] bg-[#f6f8f9]"/>)}</div>
+          : notesQuery.isError && !notesQuery.data ? <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4 text-[11px] text-[#99501e]">Contact notes could not be loaded. <button type="button" onClick={() => void notesQuery.refetch()} className="ml-1 font-semibold underline">Retry</button></div>
+            : notesQuery.data?.length ? <ol data-testid="list-contact-notes" className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
+              {notesQuery.data.map((item: ContactNote) => <li key={item.id} data-testid={`item-contact-note-${item.id}`} className="rounded-lg border border-[#e5e9ed] bg-[#fbfcfd] p-4">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.08em] text-[#718196]"><NotebookPen className="h-3.5 w-3.5"/>Contact note</span>
+                  <time dateTime={item.createdAt} data-testid={`date-contact-note-${item.id}`} className="text-[10px] text-[#758293]">{date(item.createdAt)}</time>
+                </div>
+                <p data-testid={`text-contact-note-${item.id}`} className="whitespace-pre-wrap break-words text-[12px] leading-5 text-[#344154]">{item.body}</p>
+              </li>)}
+            </ol> : <div data-testid="empty-contact-notes" className="rounded-lg border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-7 text-center">
+              <div className="text-[12px] font-semibold text-[#26364a]">No dated notes yet</div>
+              <p className="mt-1 text-[11px] text-[#738091]">New notes will appear here with their saved date.</p>
+            </div>}
+      </Section>
+    </div>
     <div className="mt-5">
       <ContactLeadStatusUpdatesSection contactId={contact.id}/>
     </div>

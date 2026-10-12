@@ -101,6 +101,8 @@ import type {
   ContactList,
   ContactListInput,
   ContactListUpdate,
+  ContactNote,
+  ContactNoteInput,
   ContactOptionsResponse,
   ContactUpdate,
   CreateSubscriptionOrderInput,
@@ -6686,6 +6688,172 @@ export function useListContactLeadStatusUpdates<TData = Awaited<ReturnType<typeo
 
 
 
+
+export const getListContactNotesUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/notes`
+}
+
+/**
+ * @summary List dated notes for a tenant contact
+ */
+export const listContactNotes = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContactNote[]> => {
+
+  return customFetch<ContactNote[]>(getListContactNotesUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactNotesQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/notes`
+    ] as const;
+    }
+
+
+export const getListContactNotesQueryOptions = <TData = Awaited<ReturnType<typeof listContactNotes>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactNotesQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactNotes>>> = ({ signal }) => listContactNotes(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactNotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listContactNotes>>>
+export type ListContactNotesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List dated notes for a tenant contact
+ */
+
+export function useListContactNotes<TData = Awaited<ReturnType<typeof listContactNotes>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactNotesQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactNoteUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/notes`
+}
+
+/**
+ * @summary Add a dated note to a tenant contact
+ */
+export const createContactNote = async (contactId: string,
+    contactNoteInput: ContactNoteInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactNote> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactNote>(getCreateContactNoteUrl(contactId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactNoteInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactNoteMutationKey = () => ['createContactNote'] as const;
+
+export const getCreateContactNoteMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactNote>>, TError,CreateContactNoteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContactNote>>, TError,CreateContactNoteMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactNoteMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContactNote>>, CreateContactNoteMutationVariables> = (props) => {
+          const {contactId,data} = props ?? {};
+
+          return  createContactNote(contactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createContactNote>>>
+    export type CreateContactNoteMutationBody = BodyType<ContactNoteInput>
+    export type CreateContactNoteMutationError = ErrorType<ApiError>
+    export type CreateContactNoteMutationVariables = {contactId: string;data: BodyType<ContactNoteInput>}
+
+    /**
+ * @summary Add a dated note to a tenant contact
+ */
+export const useCreateContactNote = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactNote>>, TError,CreateContactNoteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContactNote>>,
+        TError,
+        CreateContactNoteMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactNoteMutationOptions(options));
+    }
 
 export const getListContactListsUrl = () => {
 

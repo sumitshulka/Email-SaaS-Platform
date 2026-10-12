@@ -174,6 +174,8 @@ export * from './contactLeadStatusUpdate';
 export * from './contactList';
 export * from './contactListInput';
 export * from './contactListUpdate';
+export * from './contactNote';
+export * from './contactNoteInput';
 export * from './contactOption';
 export * from './contactOptionsResponse';
 export * from './contactQuota';

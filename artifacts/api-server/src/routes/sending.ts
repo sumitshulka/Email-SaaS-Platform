@@ -46,6 +46,11 @@ import {
   GetContactEmailHistoryResponse,
   ListContactLeadStatusUpdatesParams,
   ListContactLeadStatusUpdatesResponse,
+  ListContactNotesParams,
+  ListContactNotesResponse,
+  CreateContactNoteParams,
+  CreateContactNoteBody,
+  CreateContactNoteResponse,
   GetContactFilterOptionsResponse,
   DeleteCampaignParams,
   DeleteCampaignResponse,
@@ -104,6 +109,7 @@ import {
   contactFieldKeys,
   contactFieldOptionsTable,
   contactLeadStatusUpdatesTable,
+  contactNotesTable,
   contactListMembersTable,
   contactListsTable,
   contactSegmentsTable,
@@ -2590,6 +2596,71 @@ router.get(
         desc(contactLeadStatusUpdatesTable.id),
       );
     res.json(ListContactLeadStatusUpdatesResponse.parse(updates));
+  },
+);
+
+router.get(
+  "/contacts/:contactId/notes",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = ListContactNotesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid contact identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [contact] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(and(eq(contactsTable.id, params.data.contactId), eq(contactsTable.userId, userId)))
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
+      return;
+    }
+    const notes = await db
+      .select({
+        id: contactNotesTable.id,
+        body: contactNotesTable.body,
+        createdAt: contactNotesTable.createdAt,
+      })
+      .from(contactNotesTable)
+      .where(and(eq(contactNotesTable.contactId, contact.id), eq(contactNotesTable.userId, userId)))
+      .orderBy(desc(contactNotesTable.createdAt), desc(contactNotesTable.id));
+    res.json(ListContactNotesResponse.parse(notes));
+  },
+);
+
+router.post(
+  "/contacts/:contactId/notes",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = CreateContactNoteParams.safeParse(req.params);
+    const parsed = CreateContactNoteBody.safeParse(req.body);
+    const body = parsed.success ? parsed.data.body.trim() : "";
+    if (!params.success || !parsed.success || !body) {
+      res.status(400).json({ error: "Enter a note before saving.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [contact] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(and(eq(contactsTable.id, params.data.contactId), eq(contactsTable.userId, userId)))
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
+      return;
+    }
+    const [note] = await db
+      .insert(contactNotesTable)
+      .values({ userId, contactId: contact.id, body })
+      .returning({
+        id: contactNotesTable.id,
+        body: contactNotesTable.body,
+        createdAt: contactNotesTable.createdAt,
+      });
+    res.status(201).json(CreateContactNoteResponse.parse(note));
   },
 );
 

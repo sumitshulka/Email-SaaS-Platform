@@ -4075,6 +4075,51 @@ export const ListContactLeadStatusUpdatesResponse = zod.array(ListContactLeadSta
 
 
 /**
+ * @summary List dated notes for a tenant contact
+ */
+export const ListContactNotesParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const listContactNotesResponseBodyMax = 10000;
+
+
+
+export const ListContactNotesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "body": zod.string().max(listContactNotesResponseBodyMax),
+  "createdAt": zod.coerce.date()
+})
+export const ListContactNotesResponse = zod.array(ListContactNotesResponseItem)
+
+
+/**
+ * @summary Add a dated note to a tenant contact
+ */
+export const CreateContactNoteParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const createContactNoteBodyBodyMax = 10000;
+
+
+
+export const CreateContactNoteBody = zod.object({
+  "body": zod.string().min(1).max(createContactNoteBodyBodyMax)
+})
+
+export const createContactNoteResponseBodyMax = 10000;
+
+
+
+export const CreateContactNoteResponse = zod.object({
+  "id": zod.string().uuid(),
+  "body": zod.string().max(createContactNoteResponseBodyMax),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List contact lists belonging to the authenticated tenant
  */
 export const ListContactListsResponseItem = zod.object({
