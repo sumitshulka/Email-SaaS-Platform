@@ -27,6 +27,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
 import { MailflowBrand } from '@/components/brand';
+import { TaskoneAttributionFooter } from '@/components/taskone-footer';
 import AdminBillingPage, { AdminPackagesPage } from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
@@ -511,7 +512,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
           </Button>
         </div>
       </aside>
-      <div className="md:pl-[246px]">
+      <div className="md:pl-[246px] flex min-h-[100dvh] flex-col">
         <header className="sticky top-0 z-20 flex h-[69px] items-center justify-between border-b border-[#e3e7eb] bg-white/95 px-5 backdrop-blur md:px-9">
           <div className="flex items-center gap-3">
             <button data-testid="button-open-navigation" aria-label="Open navigation" className="rounded-md p-2 text-[#66717e] hover:bg-[#f2f4f6] md:hidden" onClick={() => setNavOpen(v => !v)}>
@@ -540,10 +541,11 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
             </button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-8 md:px-9 md:py-10">
           {!admin && user.role === 'USER' && !user.mustChangeCredentials && <WorkspaceGettingStarted user={user}/>}
           {children}
         </main>
+        <TaskoneAttributionFooter/>
       </div>
     </div>
   );
@@ -1612,10 +1614,19 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
     (blockedAuthPath || (!user && location !== '/login'))
   ) {
     if (!blockedAuthPath && currentUserQuery.isLoading) {
-      return <MaintenanceStatusLoading/>;
+      return <><MaintenanceStatusLoading/>{location !== '/login' && <TaskoneAttributionFooter/>}</>;
     }
-    return <MaintenancePage/>;
+    return <><MaintenancePage/><TaskoneAttributionFooter/></>;
   }
+
+  const path = location.split('?')[0] ?? location;
+  const hasExistingFooter = path === '/'
+    || ['/features', '/pricing', '/terms-and-conditions', '/privacy-policy', '/shipping-refund'].includes(path)
+    || path.startsWith('/package-checkout')
+    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile'].some(
+      route => path === route || path.startsWith(`${route}/`),
+    );
+  const showStandaloneFooter = path !== '/login' && !hasExistingFooter;
 
   return (
     <>
@@ -1626,6 +1637,7 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
         </div>
       )}
       {children}
+      {showStandaloneFooter && <TaskoneAttributionFooter/>}
       {noticeOpen && maintenanceOn && user && !unsubscribePage && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#101b2a]/55 px-4 py-6" role="presentation">
           <section

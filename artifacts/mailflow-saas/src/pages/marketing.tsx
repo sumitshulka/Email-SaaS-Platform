@@ -11,6 +11,7 @@ import {
   useRequestPackageCheckoutCode, useVerifyPackageCheckoutCode,
 } from '@workspace/api-client-react';
 import { MailflowBrand } from '@/components/brand';
+import { TaskoneAttribution } from '@/components/taskone-footer';
 import type { SubscriptionPackage, SubscriptionPackageList } from '@workspace/api-client-react';
 import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/lib/public-page-meta';
 import { trackMarketingSignupCta, trackPackageCheckoutSelection, trackPackageCheckoutVerification } from '@/lib/analytics';
@@ -108,7 +109,7 @@ function Footer({ marketingPage }: { marketingPage?: 'home' | 'features' | 'pric
           <div><span className="mf-footer-label">Your workspace</span><Link href="/register" data-testid="footer-register" onClick={() => { if (marketingPage) trackMarketingSignupCta(marketingPage, 'footer'); }}>Create an account</Link><Link href="/login" data-testid="footer-login">Log in</Link><a href="https://www.taskone.world/contact.html" data-testid="footer-contact" target="_blank" rel="noreferrer">Contact Us</a></div>
         </div>
       </div>
-      <div className="mf-footer-bottom"><span>Mailflow</span><span>Mailflow is a product of Taskone Solutions Pvt Ltd.</span><a href="#top" data-testid="link-back-to-top">Back to top <ArrowDown size={13}/></a></div>
+       <div className="mf-footer-bottom"><span>Mailflow</span><span><TaskoneAttribution/></span><a href="#top" data-testid="link-back-to-top">Back to top <ArrowDown size={13}/></a></div>
     </footer>
   );
 }
