@@ -10,6 +10,13 @@ import type { ContactEmailVerificationStatus } from './contactEmailVerificationS
 export interface ContactEmailVerification {
   status: ContactEmailVerificationStatus;
   checkedAt: Date;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  providerName: string | null;
+  /** @maxLength 120 */
+  verificationMethod: string;
   /** @nullable */
   mailServer: string | null;
   /** @nullable */

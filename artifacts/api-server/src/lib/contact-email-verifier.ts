@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 export type ContactEmailVerification = {
   status: "accepted" | "rejected" | "catch_all" | "no_mail_server" | "inconclusive";
   checkedAt: string;
+  providerName: string | null;
+  verificationMethod: string;
   mailServer: string | null;
   catchAll: boolean | null;
   noReplyStyle: boolean;
@@ -14,6 +16,78 @@ export type ContactEmailVerification = {
 
 const SMTP_TIMEOUT_MS = 4_000;
 const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+type ProviderProfile = {
+  name: string;
+  method: string;
+  matches: (host: string) => boolean;
+};
+
+const PROVIDER_PROFILES: ProviderProfile[] = [
+  {
+    name: "Google Workspace",
+    method: "Google MX SMTP recipient and catch-all probe",
+    matches: (host) =>
+      host === "googlemail.com" ||
+      host === "aspmx.l.google.com" ||
+      /^alt\d+\.aspmx\.l\.google\.com$/.test(host) ||
+      host.endsWith(".google.com"),
+  },
+  {
+    name: "Microsoft 365",
+    method: "Microsoft 365 MX SMTP recipient and catch-all probe",
+    matches: (host) =>
+      host.endsWith(".mail.protection.outlook.com") ||
+      host === "mail.protection.outlook.com",
+  },
+  {
+    name: "Yahoo Mail",
+    method: "Yahoo MX SMTP recipient and catch-all probe",
+    matches: (host) => host.endsWith(".yahoodns.net"),
+  },
+  {
+    name: "Zoho Mail",
+    method: "Zoho MX SMTP recipient and catch-all probe",
+    matches: (host) => /^mx\d?\.zoho\.(com|eu|in)$/.test(host),
+  },
+  {
+    name: "Proton Mail",
+    method: "Proton Mail MX SMTP recipient and catch-all probe",
+    matches: (host) =>
+      host === "mail.protonmail.ch" || host === "mailsec.protonmail.ch",
+  },
+  {
+    name: "Fastmail",
+    method: "Fastmail MX SMTP recipient and catch-all probe",
+    matches: (host) => host.endsWith(".messagingengine.com"),
+  },
+  {
+    name: "iCloud Mail",
+    method: "iCloud MX SMTP recipient and catch-all probe",
+    matches: (host) => /^mx\d+\.mail\.icloud\.com$/.test(host),
+  },
+];
+
+export function identifyMailProvider(hosts: string[], domain: string): ProviderProfile & { name: string } {
+  const normalizedHosts = hosts.map((host) => host.toLowerCase().replace(/\.$/, ""));
+  const profile = PROVIDER_PROFILES.find(({ matches }) =>
+    normalizedHosts.some(matches),
+  );
+  if (profile) {
+    if (profile.name === "Google Workspace" &&
+        (domain === "gmail.com" || domain === "googlemail.com")) {
+      return { ...profile, name: "Gmail" };
+    }
+    return profile;
+  }
+  return {
+    name: hosts.length ? "Other mail provider" : "Unknown mail provider",
+    method: hosts.length
+      ? "MX-directed SMTP recipient and catch-all probe"
+      : "DNS mail-routing lookup",
+    matches: () => true,
+  };
+}
 
 function isPublicAddress(address: string): boolean {
   const family = net.isIP(address);
@@ -90,7 +164,7 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
   const domain = domainToASCII(rawDomain ?? "").toLowerCase();
   const noReplyStyle = noReplyAddress(localPart ?? "");
   if (extra !== undefined || !EMAIL_SHAPE.test(email.trim()) || !domain || domain.length > 253 || domain.endsWith(".local")) {
-    return { status: "inconclusive", checkedAt, mailServer: null, catchAll: null, noReplyStyle, message: "The stored address is not in a verifiable email format." };
+    return { status: "inconclusive", checkedAt, providerName: null, verificationMethod: "Email format check", mailServer: null, catchAll: null, noReplyStyle, message: "The stored address is not in a verifiable email format." };
   }
 
   let hosts: string[];
@@ -101,7 +175,7 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
       await lookup(domain);
       hosts = [domain]; // RFC implicit MX fallback.
     } catch {
-      return { status: "no_mail_server", checkedAt, mailServer: null, catchAll: false, noReplyStyle, message: "This domain does not currently resolve to a mail server." };
+      return { status: "no_mail_server", checkedAt, providerName: null, verificationMethod: "DNS mail-routing lookup", mailServer: null, catchAll: false, noReplyStyle, message: "This domain does not currently resolve to a mail server." };
     }
   }
   if (!hosts.length) {
@@ -109,12 +183,15 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
       await lookup(domain);
       hosts = [domain];
     } catch {
-      return { status: "no_mail_server", checkedAt, mailServer: null, catchAll: false, noReplyStyle, message: "This domain does not currently resolve to a mail server." };
+      return { status: "no_mail_server", checkedAt, providerName: null, verificationMethod: "DNS mail-routing lookup", mailServer: null, catchAll: false, noReplyStyle, message: "This domain does not currently resolve to a mail server." };
     }
   }
 
+  const provider = identifyMailProvider(hosts, domain);
+  const providerHosts = hosts.filter((host) => provider.matches(host));
+  const probeHosts = providerHosts.length ? providerHosts : hosts;
   let lastHost: string | null = null;
-  for (const host of hosts.slice(0, 2)) {
+  for (const host of probeHosts.slice(0, 2)) {
     try {
       const addresses = await lookup(host, { all: true, verbatim: true });
       const publicAddress = addresses.find(address => isPublicAddress(address.address));
@@ -125,13 +202,13 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
       const rejected = result.recipient.code >= 500 && result.recipient.code < 600;
       const catchAll = result.catchAll.code >= 200 && result.catchAll.code < 300;
       if (catchAll) {
-        return { status: "catch_all", checkedAt, mailServer: host, catchAll: true, noReplyStyle, message: "The server accepts a randomly generated address too, so mailbox existence cannot be confirmed." };
+        return { status: "catch_all", checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: host, catchAll: true, noReplyStyle, message: `${provider.name} accepts a randomly generated address too, so mailbox existence cannot be confirmed.` };
       }
       if (accepted) {
-        return { status: "accepted", checkedAt, mailServer: host, catchAll: false, noReplyStyle, message: "The mail server accepted this recipient during an SMTP check. This is not proof of inbox delivery or future acceptance." };
+        return { status: "accepted", checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: host, catchAll: false, noReplyStyle, message: `${provider.name} accepted this recipient during an SMTP check. This is not proof of inbox delivery or future acceptance.` };
       }
       if (rejected) {
-        return { status: "rejected", checkedAt, mailServer: host, catchAll: false, noReplyStyle, message: "The mail server explicitly rejected this recipient during the SMTP check." };
+        return { status: "rejected", checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: host, catchAll: false, noReplyStyle, message: `${provider.name} explicitly rejected this recipient during the SMTP check.` };
       }
     } catch {
       // Continue to the next advertised MX. Do not log or return remote server text.
@@ -140,9 +217,11 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
   return {
     status: "inconclusive",
     checkedAt,
+    providerName: provider.name,
+    verificationMethod: provider.method,
     mailServer: lastHost,
     catchAll: null,
     noReplyStyle,
-    message: "The mail server did not provide a conclusive recipient answer. No message was sent.",
+    message: `${provider.name} did not provide a conclusive recipient answer. No message was sent.`,
   };
 }

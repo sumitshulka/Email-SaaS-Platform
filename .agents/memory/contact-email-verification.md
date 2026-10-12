@@ -7,4 +7,4 @@ Offer verification only for an individually selected contact. The no-message SMT
 
 **Why:** The user requested contact-level verification without actual emails and approved a per-contact SMTP probe after being informed that catch-all and privacy-protecting servers can make existence inconclusive.
 
-**How to apply:** Do not add this to contact imports or bulk actions. Keep inconclusive and catch-all outcomes explicit; never change subscription, bounce, or unsubscribe status based on a probe.
+**How to apply:** Do not add this to contact imports or bulk actions. Keep inconclusive and catch-all outcomes explicit; never change subscription, bounce, or unsubscribe status based on a probe. Detect provider from MX records and probe its advertised hosts without requesting mailbox-directory permissions. The user chose consent-free checks; do not add Microsoft Graph directory scopes unless they explicitly revisit that choice.

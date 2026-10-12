@@ -180,6 +180,16 @@ export interface Contact {
   emailVerificationStatus: ContactEmailVerificationStatus;
   /** @nullable */
   emailVerificationCheckedAt: Date | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  emailVerificationProvider: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  emailVerificationMethod: string | null;
   listIds: string[];
   createdAt: Date;
   updatedAt: Date;

@@ -990,6 +990,11 @@ export function ContactsPage() {
               <Status tone={emailVerification.result.status === 'accepted' ? 'green' : emailVerification.result.status === 'catch_all' || emailVerification.result.status === 'inconclusive' ? 'orange' : 'gray'}>{emailVerification.result.status?.replaceAll('_', ' ') ?? 'inconclusive'}</Status>
               <span className="text-[10px] text-[#788596]">Checked {formatDate(emailVerification.result.checkedAt)}</span>
             </div>
+            <div className="grid gap-2 rounded-lg border border-[#e3e8ee] bg-[#f8fafc] p-4 text-[12px] text-[#435267]">
+              <p><span className="font-semibold text-[#24364a]">Detected provider:</span> {emailVerification.result.providerName ?? 'Not identified from DNS'}</p>
+              <p><span className="font-semibold text-[#24364a]">Check performed:</span> {emailVerification.result.verificationMethod}</p>
+              {emailVerification.result.mailServer && <p><span className="font-semibold text-[#24364a]">Mail server checked:</span> {emailVerification.result.mailServer}</p>}
+            </div>
             <p role="status" data-testid="status-contact-email-verification-result" className="rounded-lg border border-[#e3e8ee] bg-[#f8fafc] p-4 text-[13px] leading-6 text-[#435267]">{emailVerification.result.message}</p>
             {emailVerification.result.noReplyStyle && <p className="rounded-md bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">The address name resembles a no-reply alias. This is only a naming hint; reply behavior cannot be checked without sending a message.</p>}
             <p className="text-[10px] leading-5 text-[#788596]">SMTP checks are best-effort, not proof of inbox delivery or future sendability. Catch-all servers may accept addresses that do not exist.</p>
@@ -1121,11 +1126,15 @@ export function ContactsPage() {
                   : verificationStatus === 'catch_all' || verificationStatus === 'inconclusive'
                     ? 'Email check inconclusive'
                     : 'Verify email without sending';
+              const savedCheckDetails = [
+                contact.emailVerificationProvider,
+                contact.emailVerificationCheckedAt ? `checked ${formatDate(contact.emailVerificationCheckedAt)}` : null,
+              ].filter(Boolean).join(' · ');
               return <>
                 <span className="inline-flex h-9 w-10 shrink-0 items-center justify-center">
                   {linkedinHref && <a data-testid={`link-contact-linkedin-${contact.id}`} href={linkedinHref} target="_blank" rel="noopener noreferrer" aria-label={`Open LinkedIn profile for ${contactName}`} title="Open LinkedIn profile" className="inline-flex h-9 w-10 shrink-0 items-center justify-center rounded-md text-[#245b9b] transition hover:bg-[#edf4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dbe8f7]"><Linkedin aria-hidden="true" className="h-4 w-4"/></a>}
                 </span>
-                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`${verificationTitle}: ${contactName}`} title={verificationTitle} disabled={verifyEmail.isPending} onClick={() => {
+                <Button variant="quiet" testId={`button-verify-contact-email-${contact.id}`} ariaLabel={`${verificationTitle}: ${contactName}`} disabled={verifyEmail.isPending} onClick={() => {
                   setEmailVerificationByContact(previous => {
                     const next = { ...previous };
                     delete next[contact.id];
@@ -1143,7 +1152,7 @@ export function ContactsPage() {
                     },
                     onError: error => setEmailVerification({ contact, error: mutationError(error) }),
                   });
-                }}><ContactEmailIcon status={verificationStatus}/></Button>
+                }} title={savedCheckDetails ? `${verificationTitle} · ${savedCheckDetails}` : verificationTitle}><ContactEmailIcon status={verificationStatus}/></Button>
                 <Button variant="quiet" testId={`button-contact-history-${contact.id}`} ariaLabel={`Email history for ${contactName}`} title="Email history" onClick={() => setHistoryContact(contact)}><Clock3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-edit-contact-${contact.id}`} ariaLabel={`Edit ${contactName}`} title="Edit contact" onClick={() => openEdit(contact)}><Edit3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-delete-contact-${contact.id}`} ariaLabel={`Delete ${contactName}`} title="Delete contact" disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 aria-hidden="true" className="h-4 w-4 text-[#b85b20]"/></Button>

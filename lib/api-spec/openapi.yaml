@@ -4715,10 +4715,12 @@ components:
         emailVerificationCheckedAt:
           type: ["string", "null"]
           format: date-time
+        emailVerificationProvider: { type: ["string", "null"], maxLength: 80 }
+        emailVerificationMethod: { type: ["string", "null"], maxLength: 120 }
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, listIds, createdAt, updatedAt]
     ContactEmailVerification:
       type: object
       properties:
@@ -4726,11 +4728,13 @@ components:
           type: string
           enum: [accepted, rejected, catch_all, no_mail_server, inconclusive]
         checkedAt: { type: string, format: date-time }
+        providerName: { type: ["string", "null"], maxLength: 80 }
+        verificationMethod: { type: string, maxLength: 120 }
         mailServer: { type: ["string", "null"] }
         catchAll: { type: ["boolean", "null"] }
         noReplyStyle: { type: boolean }
         message: { type: string }
-      required: [status, checkedAt, mailServer, catchAll, noReplyStyle, message]
+      required: [status, checkedAt, providerName, verificationMethod, mailServer, catchAll, noReplyStyle, message]
     ContactEmailHistoryItem:
       type: object
       properties:

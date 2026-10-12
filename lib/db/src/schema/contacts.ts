@@ -68,6 +68,12 @@ export const contactsTable = pgTable(
     emailVerificationCheckedAt: timestamp("email_verification_checked_at", {
       withTimezone: true,
     }),
+    emailVerificationProvider: varchar("email_verification_provider", {
+      length: 80,
+    }),
+    emailVerificationMethod: varchar("email_verification_method", {
+      length: 120,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

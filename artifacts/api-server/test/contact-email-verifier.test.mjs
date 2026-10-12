@@ -1,10 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { verifyContactEmail } from "../src/lib/contact-email-verifier.ts";
+import {
+  identifyMailProvider,
+  verifyContactEmail,
+} from "../src/lib/contact-email-verifier.ts";
+
+test("identifies common mailbox providers from their published MX hosts", () => {
+  assert.equal(
+    identifyMailProvider(["aspmx.l.google.com"], "workspace.example").name,
+    "Google Workspace",
+  );
+  assert.equal(
+    identifyMailProvider(["alt1.aspmx.l.google.com"], "gmail.com").name,
+    "Gmail",
+  );
+  assert.equal(
+    identifyMailProvider(["tenant.mail.protection.outlook.com"], "example.com").name,
+    "Microsoft 365",
+  );
+  assert.equal(
+    identifyMailProvider(["mx.zoho.com"], "example.com").name,
+    "Zoho Mail",
+  );
+  assert.match(
+    identifyMailProvider(["tenant.mail.protection.outlook.com"], "example.com").method,
+    /Microsoft 365 MX SMTP/,
+  );
+});
 
 test("rejects malformed stored addresses without contacting a mail server", async () => {
   const result = await verifyContactEmail("not-an-email");
   assert.equal(result.status, "inconclusive");
+  assert.equal(result.providerName, null);
+  assert.equal(result.verificationMethod, "Email format check");
   assert.equal(result.mailServer, null);
   assert.match(result.message, /not in a verifiable email format/i);
 });

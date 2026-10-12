@@ -1271,6 +1271,10 @@ export const listContactsResponseContactsItemOneCompanyLinkedinUrlMax = 2048;
 
 export const listContactsResponseContactsItemOneCompanyLocationMax = 200;
 
+export const listContactsResponseContactsItemOneEmailVerificationProviderMax = 80;
+
+export const listContactsResponseContactsItemOneEmailVerificationMethodMax = 120;
+
 export const listContactsResponseContactsItemTwoLastEmailOneAttemptsMin = 0;
 
 export const listContactsResponseQuotaUsedMin = 0;
@@ -1352,6 +1356,8 @@ export const ListContactsResponse = zod.object({
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
+  "emailVerificationProvider": zod.string().max(listContactsResponseContactsItemOneEmailVerificationProviderMax).nullable(),
+  "emailVerificationMethod": zod.string().max(listContactsResponseContactsItemOneEmailVerificationMethodMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1595,6 +1601,10 @@ export const createContactResponseCompanyLinkedinUrlMax = 2048;
 
 export const createContactResponseCompanyLocationMax = 200;
 
+export const createContactResponseEmailVerificationProviderMax = 80;
+
+export const createContactResponseEmailVerificationMethodMax = 120;
+
 
 
 export const CreateContactResponse = zod.object({
@@ -1655,6 +1665,8 @@ export const CreateContactResponse = zod.object({
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
+  "emailVerificationProvider": zod.string().max(createContactResponseEmailVerificationProviderMax).nullable(),
+  "emailVerificationMethod": zod.string().max(createContactResponseEmailVerificationMethodMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3520,6 +3532,10 @@ export const getContactResponseCompanyLinkedinUrlMax = 2048;
 
 export const getContactResponseCompanyLocationMax = 200;
 
+export const getContactResponseEmailVerificationProviderMax = 80;
+
+export const getContactResponseEmailVerificationMethodMax = 120;
+
 
 
 export const GetContactResponse = zod.object({
@@ -3580,6 +3596,8 @@ export const GetContactResponse = zod.object({
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
+  "emailVerificationProvider": zod.string().max(getContactResponseEmailVerificationProviderMax).nullable(),
+  "emailVerificationMethod": zod.string().max(getContactResponseEmailVerificationMethodMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3794,6 +3812,10 @@ export const updateContactResponseCompanyLinkedinUrlMax = 2048;
 
 export const updateContactResponseCompanyLocationMax = 200;
 
+export const updateContactResponseEmailVerificationProviderMax = 80;
+
+export const updateContactResponseEmailVerificationMethodMax = 120;
+
 
 
 export const UpdateContactResponse = zod.object({
@@ -3854,6 +3876,8 @@ export const UpdateContactResponse = zod.object({
   "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
   "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
+  "emailVerificationProvider": zod.string().max(updateContactResponseEmailVerificationProviderMax).nullable(),
+  "emailVerificationMethod": zod.string().max(updateContactResponseEmailVerificationMethodMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3878,9 +3902,17 @@ export const VerifyContactEmailParams = zod.object({
   "contactId": zod.coerce.string().uuid()
 })
 
+export const verifyContactEmailResponseProviderNameMax = 80;
+
+export const verifyContactEmailResponseVerificationMethodMax = 120;
+
+
+
 export const VerifyContactEmailResponse = zod.object({
   "status": zod.enum(['accepted', 'rejected', 'catch_all', 'no_mail_server', 'inconclusive']),
   "checkedAt": zod.coerce.date(),
+  "providerName": zod.string().max(verifyContactEmailResponseProviderNameMax).nullable(),
+  "verificationMethod": zod.string().max(verifyContactEmailResponseVerificationMethodMax),
   "mailServer": zod.string().nullable(),
   "catchAll": zod.boolean().nullable(),
   "noReplyStyle": zod.boolean(),

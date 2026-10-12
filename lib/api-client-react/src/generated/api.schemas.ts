@@ -2047,6 +2047,16 @@ export interface Contact {
   emailVerificationStatus: ContactEmailVerificationStatus;
   /** @nullable */
   emailVerificationCheckedAt: string | null;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  emailVerificationProvider: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  emailVerificationMethod: string | null;
   listIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -2055,6 +2065,13 @@ export interface Contact {
 export interface ContactEmailVerification {
   status: ContactEmailVerificationStatus;
   checkedAt: string;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  providerName: string | null;
+  /** @maxLength 120 */
+  verificationMethod: string;
   /** @nullable */
   mailServer: string | null;
   /** @nullable */

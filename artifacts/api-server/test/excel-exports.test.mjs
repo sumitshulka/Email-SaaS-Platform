@@ -61,6 +61,8 @@ memory.public.none(`
     subscribed boolean NOT NULL DEFAULT true,
     email_verification_status varchar(24),
     email_verification_checked_at timestamptz,
+    email_verification_provider varchar(80),
+    email_verification_method varchar(120),
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now()
   );

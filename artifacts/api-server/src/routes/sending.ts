@@ -2476,6 +2476,8 @@ router.post(
       .set({
         emailVerificationStatus: result.status,
         emailVerificationCheckedAt: new Date(result.checkedAt),
+        emailVerificationProvider: result.providerName,
+        emailVerificationMethod: result.verificationMethod,
         updatedAt: new Date(),
       })
       .where(
@@ -3207,6 +3209,8 @@ router.patch(
             ? {
                 emailVerificationStatus: null,
                 emailVerificationCheckedAt: null,
+                emailVerificationProvider: null,
+                emailVerificationMethod: null,
               }
             : {}),
           firstName,
