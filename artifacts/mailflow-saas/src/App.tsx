@@ -17,6 +17,7 @@ import {
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
   usePreviewBlockedTerms, useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
+  useListAvailableSubscriptionPackages,
 } from '@workspace/api-client-react';
 import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, BlockedTermPreviewResult, PlatformSettingsInput } from '@workspace/api-client-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -180,12 +181,35 @@ function LoginPage() {
 function RegisterPage() {
   const register = useRegister(); const [, setLocation] = useLocation();
   const passwordRequirement = usePasswordRequirement();
+  const packagesQuery = useListAvailableSubscriptionPackages();
   const checkoutPackageId = new URLSearchParams(window.location.search).get('packageId');
   const verifiedCheckout = getVerifiedPackageCheckout(checkoutPackageId);
   const checkoutTerms = getPackageCheckoutTerms(checkoutPackageId);
   const [values, setValues] = useState({ firstName: '', lastName: '', email: verifiedCheckout?.email ?? '', password: '' });
-  const onSubmit = (e: FormEvent) => {
+  const [checkoutPlanIssue, setCheckoutPlanIssue] = useState<'check_failed' | null>(null);
+  const [checkingCheckoutPlan, setCheckingCheckoutPlan] = useState(false);
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (verifiedCheckout && checkoutPackageId) {
+      setCheckoutPlanIssue(null);
+      setCheckingCheckoutPlan(true);
+      try {
+        const currentPackages = await packagesQuery.refetch();
+        if (currentPackages.isError || !currentPackages.data) {
+          setCheckoutPlanIssue('check_failed');
+          return;
+        }
+        if (!currentPackages.data.packages.some(item => item.id === checkoutPackageId)) {
+          setLocation(`/package-checkout?packageId=${encodeURIComponent(checkoutPackageId)}&recoverPlan=1`);
+          return;
+        }
+      } catch {
+        setCheckoutPlanIssue('check_failed');
+        return;
+      } finally {
+        setCheckingCheckoutPlan(false);
+      }
+    }
     register.mutate(
       { data: { ...values, ...(verifiedCheckout ? { emailVerificationProof: verifiedCheckout.proof } : {}) } },
       { onSuccess: () => {
@@ -211,9 +235,10 @@ function RegisterPage() {
         </div>
         <Field label="Work email" value={values.email} onChange={email => setValues(v => ({ ...v, email }))} testId="input-register-email" type="email" placeholder="name@company.com" required autoComplete="email" disabled={Boolean(verifiedCheckout)} hint={verifiedCheckout ? 'Verified for the selected plan.' : undefined} />
         <Field label="Password" value={values.password} onChange={password => setValues(v => ({ ...v, password }))} testId="input-register-password" type="password" required minLength={passwordRequirement.minimumLength} hint={passwordRequirement.hint} autoComplete="new-password" />
+        {checkoutPlanIssue === 'check_failed' && <p role="alert" data-testid="status-register-plan-check-failed" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">We couldn’t confirm that plan is still available, so your account was not created. Please try again.</p>}
         <FormError message={register.isError ? getError(register.error) : undefined} />
-        <Button type="submit" testId="button-create-account" disabled={register.isPending} className="auth-submit w-full">
-          {register.isPending ? 'Creating account…' : 'Create account'}
+        <Button type="submit" testId="button-create-account" disabled={register.isPending || checkingCheckoutPlan} className="auth-submit w-full">
+          {checkingCheckoutPlan ? 'Checking plan…' : register.isPending ? 'Creating account…' : 'Create account'}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </form>

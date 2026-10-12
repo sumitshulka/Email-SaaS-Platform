@@ -16,6 +16,7 @@ import { canonicalUrl, PUBLIC_PAGE_METADATA, type PublicPageMetadata } from '@/l
 import { trackMarketingSignupCta, trackPackageCheckoutSelection, trackPackageCheckoutVerification } from '@/lib/analytics';
 import {
   clearPackageCheckoutCredentials,
+  getVerifiedPackageCheckout,
   isAmbiguousPackageCheckoutSlug,
   packageCheckoutPath,
   packageCheckoutSlugFromUrl,
@@ -470,16 +471,24 @@ export function PackageCheckoutPage() {
   const [, setLocation] = useLocation();
   const queryParams = new URLSearchParams(window.location.search);
   const packageIdQuery = queryParams.get('packageId');
+  const restoringUnavailablePlan = queryParams.get('recoverPlan') === '1';
   const requestedSlug = packageCheckoutSlugFromUrl(window.location.pathname, window.location.search);
   const packagesQuery = useListAvailableSubscriptionPackages();
   const requestCode = useRequestPackageCheckoutCode();
   const verifyCode = useVerifyPackageCheckoutCode();
   const login = useLogin();
-  const [step, setStep] = useState<'email' | 'code' | 'login' | 'replacement'>('email');
-  const [email, setEmail] = useState('');
+  const restoredVerifiedCheckout = restoringUnavailablePlan
+    ? getVerifiedPackageCheckout(packageIdQuery)
+    : null;
+  const [step, setStep] = useState<'email' | 'code' | 'login' | 'replacement'>(
+    restoredVerifiedCheckout ? 'replacement' : 'email',
+  );
+  const [email, setEmail] = useState(restoredVerifiedCheckout?.email ?? '');
   const [code, setCode] = useState('');
-  const [verifiedPackageId, setVerifiedPackageId] = useState<string | null>(null);
-  const [planAvailability, setPlanAvailability] = useState<'available' | 'unavailable' | 'check_failed' | null>(null);
+  const [verifiedPackageId, setVerifiedPackageId] = useState<string | null>(restoredVerifiedCheckout ? packageIdQuery : null);
+  const [planAvailability, setPlanAvailability] = useState<'available' | 'unavailable' | 'check_failed' | null>(
+    restoredVerifiedCheckout ? 'unavailable' : null,
+  );
   const [replacementError, setReplacementError] = useState<string | null>(null);
   const [isSelectingReplacement, setIsSelectingReplacement] = useState(false);
   const packages = packagesQuery.data?.packages ?? [];
@@ -679,7 +688,7 @@ export function PackageCheckoutPage() {
       </section> : replacementSelection ? <section className="rounded-xl border border-[#d5e0e8] bg-white p-5 shadow-[0_14px_38px_-34px_rgba(21,48,77,.6)] md:p-7" data-testid="package-checkout-replacements">
         <div className="mono text-[10px] uppercase tracking-[.16em] text-[#667b90]">PLAN AVAILABILITY</div>
         <h2 className="display mt-3 text-[25px] font-bold text-[#1b2e43]">{planAvailability === 'check_failed' ? 'We couldn’t confirm the current plans.' : 'Choose a current plan.'}</h2>
-        <p className="mt-2 max-w-[680px] text-[13px] leading-6 text-[#526276]">{planAvailability === 'check_failed' ? 'Your email is verified and your proof is saved securely for this session. Check availability again to continue without repeating verification.' : 'The plan you selected is no longer available. Your email is verified, so choose one of the plans below to continue without another code.'}</p>
+        <p className="mt-2 max-w-[680px] text-[13px] leading-6 text-[#526276]">{planAvailability === 'check_failed' ? 'Your email is verified and your proof is saved securely for this session. Check availability again to continue without repeating verification.' : 'The plan you selected is no longer available. Your email is verified, so choose one of the current plans below to continue without another code.'}</p>
         {replacementError && <p role="alert" data-testid="status-replacement-plan-error" className="mt-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-relaxed text-[#99501e]">{replacementError}</p>}
         {planAvailability === 'check_failed' || packagesQuery.isError
           ? <button type="button" data-testid="button-retry-plan-availability" onClick={() => void retryPlanAvailability()} disabled={packagesQuery.isFetching} className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:opacity-55">{packagesQuery.isFetching ? 'Checking plans…' : 'Check plans again'} <ArrowRight size={15}/></button>

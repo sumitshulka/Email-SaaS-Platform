@@ -33,6 +33,11 @@ const freePackage = {
   description: 'A free package used to verify activation without payment.',
   amountMinor: 0,
 };
+const fallbackFreePackage = {
+  ...freePackage,
+  id: '48169af3-fcf0-46da-9d4a-ae1b9783fab2',
+  name: 'Basic plan',
+};
 const order = {
   paymentId: '56b83116-e2ae-4bb4-9f89-86faece8f8fb',
   orderId: 'order_checkout_handoff_test',
@@ -531,6 +536,83 @@ describe('package checkout account and payment handoff', { concurrency: false },
       }
     });
   }
+
+  it('returns a verified signup to current plan choices when its replacement is withdrawn before registration', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const state = await installCheckoutFixtures(context, {
+      accountExists: false,
+      packages: [freePackage, paidPackage, fallbackFreePackage],
+      unavailablePackageIdOnVerify: freePackage.id,
+    });
+    const page = await context.newPage();
+    const email = 'replacement-withdrawn@example.test';
+    const proof = 'private-registration-proof-token';
+    try {
+      await page.goto(`${baseUrl}/pricing`);
+      await page.getByTestId(`package-cta-${freePackage.id}`).click();
+      await page.waitForURL(url => url.pathname.startsWith('/package-checkout/'));
+      await page.getByTestId('input-package-checkout-email').fill(email);
+      await page.getByTestId('button-package-checkout-continue').click();
+      await page.getByTestId('input-package-checkout-code').waitFor();
+      await page.getByTestId('input-package-checkout-code').fill('123456');
+      await page.getByTestId('button-package-checkout-continue').click();
+
+      await page.getByTestId('package-checkout-replacements').waitFor();
+      await page.getByTestId(`button-select-replacement-${paidPackage.id}`).click();
+      await page.waitForURL(url => url.pathname === '/register');
+      await page.getByTestId('input-first-name').fill('Replacement');
+      await page.getByTestId('input-last-name').fill('Customer');
+      await page.getByTestId('input-register-password').fill('replacement-plan-password-2026');
+
+      state.packages = state.packages.filter(pkg => pkg.id !== paidPackage.id);
+      await page.getByTestId('button-create-account').click();
+
+      await page.waitForURL(url => url.pathname === '/package-checkout');
+      assert.equal(new URL(page.url()).searchParams.get('packageId'), paidPackage.id);
+      await page.getByTestId('package-checkout-replacements').waitFor();
+      assert.match(await page.getByTestId('package-checkout-replacements').innerText(), /no longer available/i);
+      assert.equal(await page.getByTestId(`card-package-${fallbackFreePackage.id}`).count(), 1);
+      assert.deepEqual(
+        state.requestBodies.filter(item => item.pathname === '/api/auth/register'),
+        [],
+        'registration is blocked until the customer chooses a current plan',
+      );
+      assert.deepEqual(state.orderAttempts, [], 'no order is created for the withdrawn replacement');
+      assert.deepEqual(state.freeActivationAttempts, [], 'no plan is activated before a current plan is chosen');
+      assert.equal(
+        state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length,
+        1,
+        'the saved verification proof avoids another email code',
+      );
+
+      await page.getByTestId(`button-select-replacement-${fallbackFreePackage.id}`).click();
+      await page.waitForURL(url => url.pathname === '/register');
+      await page.getByTestId('input-first-name').fill('Replacement');
+      await page.getByTestId('input-last-name').fill('Customer');
+      await page.getByTestId('input-register-password').fill('replacement-plan-password-2026');
+      await page.getByTestId('button-create-account').click();
+      await page.waitForURL(url => url.pathname === '/plans');
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+
+      assert.equal(state.authenticated, true);
+      assert.equal(state.user.email, email);
+      assert.deepEqual(state.orderAttempts, [], 'the withdrawn paid plan never creates an order');
+      assert.deepEqual(state.freeActivationAttempts, [{
+        authenticated: true,
+        body: { packageId: fallbackFreePackage.id },
+      }], 'only the current free plan is activated');
+      assert.equal(
+        state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length,
+        1,
+      );
+      assert.equal(
+        state.requestBodies.find(item => item.pathname === '/api/auth/register')?.body.emailVerificationProof,
+        proof,
+      );
+    } finally {
+      await context.close();
+    }
+  });
 
   it('recovers verified signup after current-plan lookups fail, without repeating email verification', async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
