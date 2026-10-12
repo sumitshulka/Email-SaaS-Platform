@@ -27,6 +27,41 @@ const MICROSOFT_TRACE_RESOURCE = 'https://learn.microsoft.com/en-us/graph/api/re
 
 type MicrosoftTraceConnectGuidance = { title: string; detail: string; nextSteps: string[] };
 
+type MicrosoftTraceSyncGuidance = { title: string; detail: string };
+
+function microsoftTraceSyncGuidance(error: string): MicrosoftTraceSyncGuidance {
+  const normalized = error.toLowerCase();
+
+  if (/throttl|too many requests|429/.test(normalized)) {
+    return {
+      title: 'Microsoft is limiting trace requests',
+      detail: 'Mailflow will retry automatically at the time shown above. Avoid repeated manual sync requests while Microsoft is throttling this tenant.',
+    };
+  }
+  if (/did not authorize|unauthori[sz]ed|forbidden|access denied|permission|admin consent|403|\b401\b/.test(normalized)) {
+    return {
+      title: 'Check the tenant’s trace permissions',
+      detail: 'Confirm ExchangeMessageTrace.Read.All is granted as a Microsoft Graph Application permission with tenant admin consent, and that Microsoft’s Exchange trace service principal is provisioned. Mailflow will retry automatically at the time shown above.',
+    };
+  }
+  if (/invalid_client|client secret|credentials|identity request failed with status 400|tenant.*(invalid|not found)|7000215|7000222/.test(normalized)) {
+    return {
+      title: 'Check the Microsoft sign-in details',
+      detail: 'Verify the tenant ID and app registration client ID, then check that the saved client secret Value (not its Secret ID) is correct and has not expired. Mailflow will retry automatically at the time shown above.',
+    };
+  }
+  if (/could not reach|temporar|unavailable|service.*(down|error)|\b5\d\d\b|timed? ?out|invalid response/.test(normalized)) {
+    return {
+      title: 'Microsoft trace service could not be reached',
+      detail: 'This may be temporary. Mailflow will retry automatically at the time shown above; check Microsoft service health if the failures continue.',
+    };
+  }
+  return {
+    title: 'Mailflow will retry the trace sync',
+    detail: 'The saved error is shown below for diagnosis. Check the connection settings if the next automatic retry also fails.',
+  };
+}
+
 function microsoftTraceConnectGuidance(error: unknown): MicrosoftTraceConnectGuidance {
   const value = error && typeof error === 'object' ? error as { status?: unknown; data?: unknown } : {};
   const status = typeof value.status === 'number' ? value.status : null;
@@ -228,6 +263,7 @@ export function Microsoft365TraceSettingsPanel() {
   const [connectError, setConnectError] = useState<MicrosoftTraceConnectGuidance | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const connection = connectionQuery.data;
+  const syncGuidance = connection?.lastError ? microsoftTraceSyncGuidance(connection.lastError) : null;
   const busy = connect.isPending || disconnect.isPending || sync.isPending || backfill.isPending;
   const nextSyncAt = connection?.nextSyncAt ?? null;
   const nextSyncTimestamp = nextSyncAt ? Date.parse(nextSyncAt) : Number.NaN;
@@ -310,7 +346,10 @@ export function Microsoft365TraceSettingsPanel() {
         <p>The scheduled trace check or retry was due <time dateTime={nextSyncAt!}>{new Date(nextSyncAt!).toLocaleString()}</time> and is overdue. Request a check now to resume trace collection.</p>
         <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>
       </div>}
-      {connection.lastError && <div role="status" data-testid="text-microsoft365-sync-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{connection.lastError}</div>}
+      {connection.lastError && syncGuidance && <div role="status" data-testid="text-microsoft365-sync-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
+        <p className="font-semibold">{syncGuidance.title}</p><p className="mt-1">{syncGuidance.detail}</p>
+        <p className="mt-2 border-t border-[#f0d5bd] pt-2"><span className="font-semibold">Saved Microsoft error:</span> <span data-testid="text-microsoft365-saved-sync-error" className="break-words">{connection.lastError}</span></p>
+      </div>}
       <div className="flex flex-wrap items-center gap-2">
         {!isSyncOverdue && <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>}
         <label className="flex items-center gap-2 text-[11px] text-[#5c6877]">Backfill

@@ -330,6 +330,55 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
         overdue: false,
         error: true,
         label: /Next automatic retry/,
+        guidance: /Mailflow will retry the trace sync/,
+      },
+      {
+        name: 'permission failure',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          lastError: 'Microsoft did not authorize Exchange message-trace access. Check the tenant admin consent and Exchange trace service-principal setup.',
+        },
+        overdue: false,
+        error: true,
+        label: /Next automatic retry/,
+        guidance: /ExchangeMessageTrace\.Read\.All.*Application permission with tenant admin consent.*service principal is provisioned/s,
+      },
+      {
+        name: 'credential failure',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          lastError: 'Microsoft identity request failed with status 400.',
+        },
+        overdue: false,
+        error: true,
+        label: /Next automatic retry/,
+        guidance: /Verify the tenant ID and app registration client ID.*client secret Value.*has not expired/,
+      },
+      {
+        name: 'throttled request',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          lastError: 'Microsoft is throttling message-trace requests.',
+        },
+        overdue: false,
+        error: true,
+        label: /Next automatic retry/,
+        guidance: /limiting trace requests.*retry automatically.*Avoid repeated manual sync requests/s,
+      },
+      {
+        name: 'temporary service failure',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'error',
+          lastError: "Could not reach Microsoft's identity service.",
+        },
+        overdue: false,
+        error: true,
+        label: /Next automatic retry/,
+        guidance: /may be temporary.*retry automatically.*check Microsoft service health/s,
       },
       {
         name: 'overdue retry after failure',
@@ -342,6 +391,7 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
         overdue: true,
         error: true,
         label: /Next automatic retry/,
+        guidance: /Mailflow will retry the trace sync/,
       },
     ];
 
@@ -370,7 +420,14 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
           assert.equal(await warning.getByTestId('button-sync-microsoft365-now').isVisible(), true);
         }
         if (testCase.error) {
-          assert.match(await page.getByTestId('text-microsoft365-sync-error').innerText(), /will retry/i);
+          const syncError = page.getByTestId('text-microsoft365-sync-error');
+          assert.match(await syncError.innerText(), /will retry/i);
+          assert.match(await syncError.innerText(), testCase.guidance, `${testCase.name} recovery guidance`);
+          assert.equal(
+            await page.getByTestId('text-microsoft365-saved-sync-error').innerText(),
+            testCase.connection.lastError,
+            `${testCase.name} preserves the original saved error`,
+          );
           assert.equal(
             await page.getByTestId('alert-microsoft365-trace-overdue').count(),
             testCase.overdue ? 1 : 0,
