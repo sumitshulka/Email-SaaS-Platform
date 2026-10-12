@@ -159,6 +159,9 @@ export const microsoft365TraceConnectionsTable = pgTable(
       .notNull()
       .default("connected"),
     backfillStartAt: timestamp("backfill_start_at", { withTimezone: true }),
+    backfillProgressStartAt: timestamp("backfill_progress_start_at", {
+      withTimezone: true,
+    }),
     backfillEndAt: timestamp("backfill_end_at", { withTimezone: true }),
     pageNextLink: text("page_next_link"),
     backfillCompletedAt: timestamp("backfill_completed_at", {

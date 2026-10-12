@@ -261,6 +261,8 @@ export * from './loginInput';
 export * from './maintenanceStatus';
 export * from './messageResponse';
 export * from './microsoft365TraceBackfillInput';
+export * from './microsoft365TraceBackfillProgress';
+export * from './microsoft365TraceBackfillProgressStatus';
 export * from './microsoft365TraceConnectInput';
 export * from './microsoft365TraceConnection';
 export * from './microsoft365TraceConnectionEvidenceVerification';

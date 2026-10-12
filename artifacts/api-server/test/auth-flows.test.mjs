@@ -604,6 +604,7 @@ memory.public.none(`
     client_secret_encrypted text NOT NULL,
     sync_status varchar(32) NOT NULL DEFAULT 'connected',
     backfill_start_at timestamptz,
+    backfill_progress_start_at timestamptz,
     backfill_end_at timestamptz,
     page_next_link text,
     backfill_completed_at timestamptz,
@@ -15165,6 +15166,75 @@ describe("provider delivery reports after an address correction", { concurrency:
 });
 
 describe("Microsoft 365 trace polling worker", { concurrency: false }, () => {
+  it("exposes safe progress for active, completed, and legacy backfills", async () => {
+    const owner = await loggedInUser({ username: "m365-progress-owner" });
+    const now = new Date();
+    const originalStartAt = new Date(now.getTime() - 90 * 24 * 60 * 60_000);
+    const currentStartAt = new Date(now.getTime() - 50 * 24 * 60 * 60_000);
+    const connection = await createMicrosoft365Connection(owner.user.id, {
+      backfillStartAt: currentStartAt,
+      backfillProgressStartAt: originalStartAt,
+      backfillEndAt: now,
+      pageNextLink:
+        "https://graph.microsoft.com/v1.0/admin/exchange/tracing/messageTraces?$skiptoken=private-page",
+    });
+
+    const active = await api("/sending/microsoft-365/connection", {
+      cookie: owner.cookie,
+    });
+    assert.equal(active.response.status, 200);
+    assert.deepEqual(active.body.backfillProgress, {
+      status: "active",
+      percentComplete: 44,
+      daysProcessed: 40,
+      totalDays: 90,
+      daysRemaining: 50,
+    });
+    assert.equal("pageNextLink" in active.body, false);
+    assert.equal(
+      JSON.stringify(active.body).includes("private-page"),
+      false,
+      "provider page URLs must not be exposed",
+    );
+
+    await db
+      .update(dbModule.microsoft365TraceConnectionsTable)
+      .set({
+        backfillStartAt: null,
+        backfillCompletedAt: now,
+      })
+      .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+    const completed = await api("/sending/microsoft-365/connection", {
+      cookie: owner.cookie,
+    });
+    assert.deepEqual(completed.body.backfillProgress, {
+      status: "completed",
+      percentComplete: 100,
+      daysProcessed: 90,
+      totalDays: 90,
+      daysRemaining: 0,
+    });
+
+    await db
+      .update(dbModule.microsoft365TraceConnectionsTable)
+      .set({
+        backfillStartAt: currentStartAt,
+        backfillProgressStartAt: null,
+        backfillCompletedAt: null,
+      })
+      .where(eq(dbModule.microsoft365TraceConnectionsTable.id, connection.id));
+    const unavailable = await api("/sending/microsoft-365/connection", {
+      cookie: owner.cookie,
+    });
+    assert.deepEqual(unavailable.body.backfillProgress, {
+      status: "unavailable",
+      percentComplete: null,
+      daysProcessed: null,
+      totalDays: null,
+      daysRemaining: null,
+    });
+  });
+
   it("preserves a failed backfill page checkpoint and deduplicates replayed traces", async () => {
     const owner = await loggedInUser({ username: "m365-checkpoint-owner" });
     const candidate = await createMicrosoft365Candidate(owner.user.id, {

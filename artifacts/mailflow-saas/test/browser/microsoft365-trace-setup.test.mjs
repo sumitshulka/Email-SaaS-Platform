@@ -119,6 +119,7 @@ async function openEmailSetupPage(gmailConnection = {
   backfillStartAt: null,
   backfillEndAt: null,
   backfillCompletedAt: null,
+  backfillProgress: null,
   lastSyncAt: null,
   lastSuccessAt: null,
   nextSyncAt: null,
@@ -438,6 +439,100 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
       } finally {
         await context.close();
       }
+    }
+  });
+
+  it('shows active, completed, and unavailable Microsoft 365 backfill progress', async () => {
+    const now = Date.now();
+    const baseConnection = {
+      configured: true,
+      connected: true,
+      tenantId,
+      syncStatus: 'connected',
+      source: 'microsoft_365_graph',
+      evidenceVerification: 'microsoft365_authorized',
+      permission: 'ExchangeMessageTrace.Read.All',
+      tenantAdminConsentRequired: true,
+      exchangeTraceServicePrincipalAppId: '8bd644d1-64a1-4d4b-ae52-2e0cbf64e373',
+      backfillStartAt: new Date(now - 50 * 24 * 60 * 60_000).toISOString(),
+      backfillEndAt: new Date(now).toISOString(),
+      backfillCompletedAt: null,
+      backfillProgress: {
+        status: 'active',
+        percentComplete: 44,
+        daysProcessed: 40,
+        totalDays: 90,
+        daysRemaining: 50,
+      },
+      lastSyncAt: new Date(now - 60_000).toISOString(),
+      lastSuccessAt: new Date(now - 60_000).toISOString(),
+      nextSyncAt: new Date(now + 60_000).toISOString(),
+      lastError: null,
+      pollIntervalSeconds: 300,
+      maxHistoryDays: 90,
+      maxQueryWindowDays: 10,
+      maxPageSize: 5000,
+      requestsPerFiveMinutes: 100,
+    };
+
+    const { context: activeContext, page: activePage } =
+      await openEmailSetupPage(undefined, {}, baseConnection);
+    try {
+      const progress = activePage.getByTestId('panel-microsoft365-backfill-progress');
+      await progress.waitFor();
+      assert.match(await progress.innerText(), /44% complete/);
+      assert.match(await progress.innerText(), /40 of 90 days processed/);
+      assert.match(await progress.innerText(), /50 days remaining/);
+      assert.equal(
+        await progress.getByRole('progressbar').getAttribute('aria-valuenow'),
+        '44',
+      );
+    } finally {
+      await activeContext.close();
+    }
+
+    const completedConnection = {
+      ...baseConnection,
+      backfillStartAt: null,
+      backfillCompletedAt: new Date(now - 60_000).toISOString(),
+      backfillProgress: {
+        status: 'completed',
+        percentComplete: 100,
+        daysProcessed: 90,
+        totalDays: 90,
+        daysRemaining: 0,
+      },
+    };
+    const { context: completedContext, page: completedPage } =
+      await openEmailSetupPage(undefined, {}, completedConnection);
+    try {
+      const progress = completedPage.getByTestId('panel-microsoft365-backfill-progress');
+      await progress.waitFor();
+      assert.match(await progress.innerText(), /Initial trace backfill complete/);
+      assert.equal(await progress.getByRole('progressbar').count(), 0);
+    } finally {
+      await completedContext.close();
+    }
+
+    const unavailableConnection = {
+      ...baseConnection,
+      backfillProgress: {
+        status: 'unavailable',
+        percentComplete: null,
+        daysProcessed: null,
+        totalDays: null,
+        daysRemaining: null,
+      },
+    };
+    const { context: unavailableContext, page: unavailablePage } =
+      await openEmailSetupPage(undefined, {}, unavailableConnection);
+    try {
+      const progress = unavailablePage.getByTestId('panel-microsoft365-backfill-progress');
+      await progress.waitFor();
+      assert.match(await progress.innerText(), /Progress is unavailable for this backfill/);
+      assert.equal(await progress.getByRole('progressbar').count(), 0);
+    } finally {
+      await unavailableContext.close();
     }
   });
 

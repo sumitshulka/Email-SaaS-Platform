@@ -4084,6 +4084,10 @@ components:
         backfillStartAt: { type: ["string", "null"], format: date-time }
         backfillEndAt: { type: ["string", "null"], format: date-time }
         backfillCompletedAt: { type: ["string", "null"], format: date-time }
+        backfillProgress:
+          oneOf:
+            - $ref: "#/components/schemas/Microsoft365TraceBackfillProgress"
+            - type: "null"
         lastSyncAt: { type: ["string", "null"], format: date-time }
         lastSuccessAt: { type: ["string", "null"], format: date-time }
         nextSyncAt: { type: ["string", "null"], format: date-time }
@@ -4093,7 +4097,16 @@ components:
         maxQueryWindowDays: { type: integer, enum: [10] }
         maxPageSize: { type: integer, enum: [5000] }
         requestsPerFiveMinutes: { type: integer, enum: [100] }
-      required: [configured, connected, tenantId, syncStatus, source, evidenceVerification, permission, tenantAdminConsentRequired, exchangeTraceServicePrincipalAppId, backfillStartAt, backfillEndAt, backfillCompletedAt, lastSyncAt, lastSuccessAt, nextSyncAt, lastError, pollIntervalSeconds, maxHistoryDays, maxQueryWindowDays, maxPageSize, requestsPerFiveMinutes]
+      required: [configured, connected, tenantId, syncStatus, source, evidenceVerification, permission, tenantAdminConsentRequired, exchangeTraceServicePrincipalAppId, backfillStartAt, backfillEndAt, backfillCompletedAt, backfillProgress, lastSyncAt, lastSuccessAt, nextSyncAt, lastError, pollIntervalSeconds, maxHistoryDays, maxQueryWindowDays, maxPageSize, requestsPerFiveMinutes]
+    Microsoft365TraceBackfillProgress:
+      type: object
+      properties:
+        status: { type: string, enum: [active, completed, unavailable] }
+        percentComplete: { type: ["integer", "null"], minimum: 0, maximum: 100 }
+        daysProcessed: { type: ["integer", "null"], minimum: 0 }
+        totalDays: { type: ["integer", "null"], minimum: 1 }
+        daysRemaining: { type: ["integer", "null"], minimum: 0 }
+      required: [status, percentComplete, daysProcessed, totalDays, daysRemaining]
     TenantSendingTestInput:
       type: object
       properties:

@@ -342,6 +342,29 @@ export function Microsoft365TraceSettingsPanel() {
         </div>
         <div><span className="font-semibold text-[#344154]">Backfill:</span> {connection.backfillStartAt ? `Working from ${new Date(connection.backfillStartAt).toLocaleDateString()} through ${connection.backfillEndAt ? new Date(connection.backfillEndAt).toLocaleDateString() : 'now'}` : connection.backfillCompletedAt ? `Complete · ${new Date(connection.backfillCompletedAt).toLocaleString()}` : 'Incremental sync is active'}</div>
       </div>
+      {connection.backfillProgress?.status === 'active' && connection.backfillProgress.percentComplete !== null && <div data-testid="panel-microsoft365-backfill-progress" className="rounded-md border border-[#d9e5f2] bg-[#f5f9fd] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p data-testid="text-microsoft365-backfill-progress" className="text-[11px] font-semibold text-[#344154]">Initial trace backfill · {connection.backfillProgress.percentComplete}% complete</p>
+          <span className="text-[10px] text-[#5c6877]">{connection.backfillProgress.daysRemaining} days remaining</span>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Microsoft 365 initial trace backfill"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={connection.backfillProgress.percentComplete}
+          className="mt-2 h-2 overflow-hidden rounded-full bg-[#e1e8f0]"
+        >
+          <div className="h-full rounded-full bg-[#4382c4] transition-[width]" style={{ width: `${connection.backfillProgress.percentComplete}%` }}/>
+        </div>
+        <p className="mt-1.5 text-[10px] text-[#788392]">{connection.backfillProgress.daysProcessed} of {connection.backfillProgress.totalDays} days processed. Progress refreshes with the trace status.</p>
+      </div>}
+      {connection.backfillProgress?.status === 'completed' && <div role="status" data-testid="panel-microsoft365-backfill-progress" className="flex items-center gap-2 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] font-semibold text-[#397050]">
+        <CheckCircle2 className="h-4 w-4 shrink-0"/>Initial trace backfill complete.
+      </div>}
+      {connection.backfillProgress?.status === 'unavailable' && <div role="status" data-testid="panel-microsoft365-backfill-progress" className="rounded-md border border-[#e5e9ed] bg-[#fbfcfd] p-3 text-[11px] text-[#5c6877]">
+        Progress is unavailable for this backfill. Its start date was not recorded, so Mailflow cannot calculate how much history remains.
+      </div>}
       {isSyncOverdue && <div role="alert" data-testid="alert-microsoft365-trace-overdue" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
         <p>The scheduled trace check or retry was due <time dateTime={nextSyncAt!}>{new Date(nextSyncAt!).toLocaleString()}</time> and is overdue. Request a check now to resume trace collection.</p>
         <button type="button" data-testid="button-sync-microsoft365-now" className={outlineBtn} disabled={busy} onClick={runSync}><RefreshCw className="h-3.5 w-3.5"/>Sync now</button>

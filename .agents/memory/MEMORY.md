@@ -46,3 +46,4 @@
 - [Contact bounce consent](contact-bounce-consent.md) — a bounced address is suppressed but not unsubscribed; only the recipient’s unsubscribe action records an unsubscribe.
 - [Contact email verification](contact-email-verification.md) — verify one contact with no-message SMTP probes; label limitations honestly and keep this out of bulk import.
 - [M365 trace scheduled runner](m365-trace-scheduled-runner.md) — execute trace polling as a one-shot Scheduled Deployment, not in the Autoscale API process.
+- [Trace backfill progress](m365-trace-backfill-progress.md) — report date-range advancement; Microsoft’s opaque paging links do not expose a trustworthy total.

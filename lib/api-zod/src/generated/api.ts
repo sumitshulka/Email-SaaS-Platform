@@ -997,6 +997,14 @@ export const CompleteGmailMailboxConnectionResponse = zod.void()
 /**
  * @summary Get tenant-authorized Microsoft 365 trace connection and sync health
  */
+export const getMicrosoft365TraceConnectionResponseBackfillProgressOnePercentCompleteMin = 0;
+export const getMicrosoft365TraceConnectionResponseBackfillProgressOnePercentCompleteMax = 100;
+
+export const getMicrosoft365TraceConnectionResponseBackfillProgressOneDaysProcessedMin = 0;
+
+
+export const getMicrosoft365TraceConnectionResponseBackfillProgressOneDaysRemainingMin = 0;
+
 export const getMicrosoft365TraceConnectionResponsePollIntervalSecondsMin = 30;
 
 
@@ -1014,6 +1022,13 @@ export const GetMicrosoft365TraceConnectionResponse = zod.object({
   "backfillStartAt": zod.coerce.date().nullable(),
   "backfillEndAt": zod.coerce.date().nullable(),
   "backfillCompletedAt": zod.coerce.date().nullable(),
+  "backfillProgress": zod.union([zod.object({
+  "status": zod.enum(['active', 'completed', 'unavailable']),
+  "percentComplete": zod.number().int().min(getMicrosoft365TraceConnectionResponseBackfillProgressOnePercentCompleteMin).max(getMicrosoft365TraceConnectionResponseBackfillProgressOnePercentCompleteMax).nullable(),
+  "daysProcessed": zod.number().int().min(getMicrosoft365TraceConnectionResponseBackfillProgressOneDaysProcessedMin).nullable(),
+  "totalDays": zod.number().int().min(1).nullable(),
+  "daysRemaining": zod.number().int().min(getMicrosoft365TraceConnectionResponseBackfillProgressOneDaysRemainingMin).nullable()
+}),zod.null()]),
   "lastSyncAt": zod.coerce.date().nullable(),
   "lastSuccessAt": zod.coerce.date().nullable(),
   "nextSyncAt": zod.coerce.date().nullable(),
@@ -1048,6 +1063,14 @@ export const ConnectMicrosoft365TraceBody = zod.object({
   "adminConsentConfirmed": zod.literal(true)
 }).describe('Credentials are submitted over the authenticated application connection and stored encrypted. SMTP credentials are not used for trace access.')
 
+export const connectMicrosoft365TraceResponseBackfillProgressOnePercentCompleteMin = 0;
+export const connectMicrosoft365TraceResponseBackfillProgressOnePercentCompleteMax = 100;
+
+export const connectMicrosoft365TraceResponseBackfillProgressOneDaysProcessedMin = 0;
+
+
+export const connectMicrosoft365TraceResponseBackfillProgressOneDaysRemainingMin = 0;
+
 export const connectMicrosoft365TraceResponsePollIntervalSecondsMin = 30;
 
 
@@ -1065,6 +1088,13 @@ export const ConnectMicrosoft365TraceResponse = zod.object({
   "backfillStartAt": zod.coerce.date().nullable(),
   "backfillEndAt": zod.coerce.date().nullable(),
   "backfillCompletedAt": zod.coerce.date().nullable(),
+  "backfillProgress": zod.union([zod.object({
+  "status": zod.enum(['active', 'completed', 'unavailable']),
+  "percentComplete": zod.number().int().min(connectMicrosoft365TraceResponseBackfillProgressOnePercentCompleteMin).max(connectMicrosoft365TraceResponseBackfillProgressOnePercentCompleteMax).nullable(),
+  "daysProcessed": zod.number().int().min(connectMicrosoft365TraceResponseBackfillProgressOneDaysProcessedMin).nullable(),
+  "totalDays": zod.number().int().min(1).nullable(),
+  "daysRemaining": zod.number().int().min(connectMicrosoft365TraceResponseBackfillProgressOneDaysRemainingMin).nullable()
+}),zod.null()]),
   "lastSyncAt": zod.coerce.date().nullable(),
   "lastSuccessAt": zod.coerce.date().nullable(),
   "nextSyncAt": zod.coerce.date().nullable(),
@@ -1080,6 +1110,14 @@ export const ConnectMicrosoft365TraceResponse = zod.object({
 /**
  * @summary Schedule an immediate Microsoft 365 trace sync
  */
+export const triggerMicrosoft365TraceSyncResponseBackfillProgressOnePercentCompleteMin = 0;
+export const triggerMicrosoft365TraceSyncResponseBackfillProgressOnePercentCompleteMax = 100;
+
+export const triggerMicrosoft365TraceSyncResponseBackfillProgressOneDaysProcessedMin = 0;
+
+
+export const triggerMicrosoft365TraceSyncResponseBackfillProgressOneDaysRemainingMin = 0;
+
 export const triggerMicrosoft365TraceSyncResponsePollIntervalSecondsMin = 30;
 
 
@@ -1097,6 +1135,13 @@ export const TriggerMicrosoft365TraceSyncResponse = zod.object({
   "backfillStartAt": zod.coerce.date().nullable(),
   "backfillEndAt": zod.coerce.date().nullable(),
   "backfillCompletedAt": zod.coerce.date().nullable(),
+  "backfillProgress": zod.union([zod.object({
+  "status": zod.enum(['active', 'completed', 'unavailable']),
+  "percentComplete": zod.number().int().min(triggerMicrosoft365TraceSyncResponseBackfillProgressOnePercentCompleteMin).max(triggerMicrosoft365TraceSyncResponseBackfillProgressOnePercentCompleteMax).nullable(),
+  "daysProcessed": zod.number().int().min(triggerMicrosoft365TraceSyncResponseBackfillProgressOneDaysProcessedMin).nullable(),
+  "totalDays": zod.number().int().min(1).nullable(),
+  "daysRemaining": zod.number().int().min(triggerMicrosoft365TraceSyncResponseBackfillProgressOneDaysRemainingMin).nullable()
+}),zod.null()]),
   "lastSyncAt": zod.coerce.date().nullable(),
   "lastSuccessAt": zod.coerce.date().nullable(),
   "nextSyncAt": zod.coerce.date().nullable(),
@@ -1122,6 +1167,14 @@ export const BackfillMicrosoft365TracesBody = zod.object({
   "days": zod.number().int().min(1).max(backfillMicrosoft365TracesBodyDaysMax).default(backfillMicrosoft365TracesBodyDaysDefault)
 })
 
+export const backfillMicrosoft365TracesResponseBackfillProgressOnePercentCompleteMin = 0;
+export const backfillMicrosoft365TracesResponseBackfillProgressOnePercentCompleteMax = 100;
+
+export const backfillMicrosoft365TracesResponseBackfillProgressOneDaysProcessedMin = 0;
+
+
+export const backfillMicrosoft365TracesResponseBackfillProgressOneDaysRemainingMin = 0;
+
 export const backfillMicrosoft365TracesResponsePollIntervalSecondsMin = 30;
 
 
@@ -1139,6 +1192,13 @@ export const BackfillMicrosoft365TracesResponse = zod.object({
   "backfillStartAt": zod.coerce.date().nullable(),
   "backfillEndAt": zod.coerce.date().nullable(),
   "backfillCompletedAt": zod.coerce.date().nullable(),
+  "backfillProgress": zod.union([zod.object({
+  "status": zod.enum(['active', 'completed', 'unavailable']),
+  "percentComplete": zod.number().int().min(backfillMicrosoft365TracesResponseBackfillProgressOnePercentCompleteMin).max(backfillMicrosoft365TracesResponseBackfillProgressOnePercentCompleteMax).nullable(),
+  "daysProcessed": zod.number().int().min(backfillMicrosoft365TracesResponseBackfillProgressOneDaysProcessedMin).nullable(),
+  "totalDays": zod.number().int().min(1).nullable(),
+  "daysRemaining": zod.number().int().min(backfillMicrosoft365TracesResponseBackfillProgressOneDaysRemainingMin).nullable()
+}),zod.null()]),
   "lastSyncAt": zod.coerce.date().nullable(),
   "lastSuccessAt": zod.coerce.date().nullable(),
   "nextSyncAt": zod.coerce.date().nullable(),

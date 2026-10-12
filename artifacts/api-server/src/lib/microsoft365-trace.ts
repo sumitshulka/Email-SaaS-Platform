@@ -58,6 +58,7 @@ type SafeConnection = Pick<
   | "clientSecretEncrypted"
   | "syncStatus"
   | "backfillStartAt"
+  | "backfillProgressStartAt"
   | "backfillEndAt"
   | "pageNextLink"
   | "backfillCompletedAt"
@@ -67,6 +68,74 @@ type SafeConnection = Pick<
   | "leaseExpiresAt"
   | "lastError"
 >;
+
+const DAY_MS = 24 * 60 * 60_000;
+
+function backfillProgress(connection: SafeConnection | null) {
+  if (!connection) return null;
+  if (connection.backfillCompletedAt) {
+    const totalDays =
+      connection.backfillProgressStartAt && connection.backfillEndAt
+        ? Math.max(
+            1,
+            Math.ceil(
+              (connection.backfillEndAt.getTime() -
+                connection.backfillProgressStartAt.getTime()) /
+                DAY_MS,
+            ),
+          )
+        : null;
+    return {
+      status: "completed" as const,
+      percentComplete: 100,
+      daysProcessed: totalDays,
+      totalDays,
+      daysRemaining: 0,
+    };
+  }
+
+  if (!connection.backfillStartAt) return null;
+  const { backfillProgressStartAt, backfillEndAt } = connection;
+  if (
+    !backfillProgressStartAt ||
+    !backfillEndAt ||
+    backfillEndAt <= backfillProgressStartAt
+  ) {
+    return {
+      status: "unavailable" as const,
+      percentComplete: null,
+      daysProcessed: null,
+      totalDays: null,
+      daysRemaining: null,
+    };
+  }
+
+  const totalMs =
+    backfillEndAt.getTime() - backfillProgressStartAt.getTime();
+  const totalDays = Math.max(1, Math.ceil(totalMs / DAY_MS));
+  const processedMs = Math.min(
+    totalMs,
+    Math.max(
+      0,
+      connection.backfillStartAt.getTime() -
+        backfillProgressStartAt.getTime(),
+    ),
+  );
+  const daysProcessed = Math.min(
+    totalDays,
+    Math.floor(processedMs / DAY_MS),
+  );
+  return {
+    status: "active" as const,
+    percentComplete: Math.min(
+      99,
+      Math.floor((processedMs / totalMs) * 100),
+    ),
+    daysProcessed,
+    totalDays,
+    daysRemaining: totalDays - daysProcessed,
+  };
+}
 
 function connectionResponse(connection: SafeConnection | null) {
   return {
@@ -83,6 +152,7 @@ function connectionResponse(connection: SafeConnection | null) {
     backfillStartAt: connection?.backfillStartAt ?? null,
     backfillEndAt: connection?.backfillEndAt ?? null,
     backfillCompletedAt: connection?.backfillCompletedAt ?? null,
+    backfillProgress: backfillProgress(connection),
     lastSyncAt: connection?.lastSyncAt ?? null,
     lastSuccessAt: connection?.lastSuccessAt ?? null,
     nextSyncAt: connection?.nextSyncAt ?? null,
@@ -206,6 +276,7 @@ router.post(
           clientSecretEncrypted,
           syncStatus: "connected",
           backfillStartAt,
+          backfillProgressStartAt: backfillStartAt,
           backfillEndAt,
           backfillCompletedAt: null,
           pageNextLink: null,
@@ -224,6 +295,7 @@ router.post(
             clientSecretEncrypted,
             syncStatus: "connected",
             backfillStartAt,
+            backfillProgressStartAt: backfillStartAt,
             backfillEndAt,
             backfillCompletedAt: null,
             pageNextLink: null,
@@ -339,8 +411,9 @@ router.post(
     const [connection] = await db
       .update(microsoft365TraceConnectionsTable)
       .set({
-        backfillStartAt: new Date(
-          now.getTime() - parsed.data.days * 24 * 60 * 60_000,
+        backfillStartAt: new Date(now.getTime() - parsed.data.days * DAY_MS),
+        backfillProgressStartAt: new Date(
+          now.getTime() - parsed.data.days * DAY_MS,
         ),
         backfillEndAt: now,
         backfillCompletedAt: null,

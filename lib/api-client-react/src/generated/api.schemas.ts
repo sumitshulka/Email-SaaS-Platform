@@ -789,6 +789,40 @@ export const Microsoft365TraceConnectionRequestsPerFiveMinutes = {
   NUMBER_100: 100,
 } as const;
 
+export type Microsoft365TraceBackfillProgressStatus = typeof Microsoft365TraceBackfillProgressStatus[keyof typeof Microsoft365TraceBackfillProgressStatus];
+
+
+export const Microsoft365TraceBackfillProgressStatus = {
+  active: 'active',
+  completed: 'completed',
+  unavailable: 'unavailable',
+} as const;
+
+export interface Microsoft365TraceBackfillProgress {
+  status: Microsoft365TraceBackfillProgressStatus;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  percentComplete: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  daysProcessed: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  totalDays: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  daysRemaining: number | null;
+}
+
 export interface Microsoft365TraceConnection {
   configured: boolean;
   connected: boolean;
@@ -806,6 +840,7 @@ export interface Microsoft365TraceConnection {
   backfillEndAt: string | null;
   /** @nullable */
   backfillCompletedAt: string | null;
+  backfillProgress: Microsoft365TraceBackfillProgress | null;
   /** @nullable */
   lastSyncAt: string | null;
   /** @nullable */

@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { Microsoft365TraceBackfillProgress } from './microsoft365TraceBackfillProgress';
 import type { Microsoft365TraceConnectionEvidenceVerification } from './microsoft365TraceConnectionEvidenceVerification';
 import type { Microsoft365TraceConnectionMaxHistoryDays } from './microsoft365TraceConnectionMaxHistoryDays';
 import type { Microsoft365TraceConnectionMaxPageSize } from './microsoft365TraceConnectionMaxPageSize';
@@ -31,6 +32,7 @@ export interface Microsoft365TraceConnection {
   backfillEndAt: Date | null;
   /** @nullable */
   backfillCompletedAt: Date | null;
+  backfillProgress: Microsoft365TraceBackfillProgress | null;
   /** @nullable */
   lastSyncAt: Date | null;
   /** @nullable */
