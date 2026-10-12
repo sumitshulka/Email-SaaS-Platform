@@ -548,6 +548,7 @@ export function SendingSettingsPage() {
                   <span>Last sync attempt: <strong className="text-[#26364a]">{formatDate(gmailConnection.data.lastSyncAt)}</strong></span>
                 </div>
                 {gmailConnection.data.lastSuccessAt && <p className="mt-2 text-[11px] text-[#718091]">Last successful sync: {formatDate(gmailConnection.data.lastSuccessAt)} · Next check: {formatDate(gmailConnection.data.nextSyncAt)}</p>}
+                {gmailConnection.data.syncStatus === 'error' && gmailConnection.data.nextSyncAt && <p data-testid="text-gmail-sync-retry" className="mt-2 text-[11px] leading-5 text-[#687484]">Next automatic retry scheduled for <time dateTime={gmailConnection.data.nextSyncAt}>{formatDate(gmailConnection.data.nextSyncAt)}</time>.</p>}
                 {gmailSyncOverdue && <div data-testid="alert-gmail-sync-overdue" role="alert" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
                   <p className="font-semibold">Gmail bounce polling is overdue.</p>
                   <p className="mt-1">The scheduled check was {formatDate(gmailConnection.data.nextSyncAt)}. Run a sync now; if a notice may have been missed, rescan recent messages below. Reconnect Google if syncing continues to fail.</p>

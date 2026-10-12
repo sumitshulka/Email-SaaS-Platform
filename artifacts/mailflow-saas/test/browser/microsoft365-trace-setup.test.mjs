@@ -372,6 +372,7 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
         connection: {
           ...baseConnection,
           syncStatus: 'error',
+          lastSuccessAt: null,
           lastSyncDiagnostics: {
             messagesChecked: null,
             dsnCandidates: null,
@@ -380,10 +381,54 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
             warnings: null,
             outcome: 'gmail_api_error',
           },
+          nextSyncAt: new Date(now + 120_000).toISOString(),
           lastError: 'Gmail sync failed; Mailflow will retry.',
         },
         expectOverdue: false,
         expectFailure: true,
+        expectRetry: true,
+      },
+      {
+        name: 'expired Gmail history',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'history_expired',
+          lastSyncDiagnostics: {
+            messagesChecked: null,
+            dsnCandidates: null,
+            importedReports: null,
+            unmatchedReports: null,
+            warnings: null,
+            outcome: 'history_expired',
+          },
+          nextSyncAt: null,
+          lastError: 'Gmail history expired. Reconnect the mailbox.',
+        },
+        expectOverdue: false,
+        expectFailure: true,
+        expectRetry: false,
+        expectReconnect: true,
+      },
+      {
+        name: 'expired Google authorization',
+        connection: {
+          ...baseConnection,
+          syncStatus: 'reauthorization_required',
+          lastSyncDiagnostics: {
+            messagesChecked: null,
+            dsnCandidates: null,
+            importedReports: null,
+            unmatchedReports: null,
+            warnings: null,
+            outcome: 'reauthorization_required',
+          },
+          nextSyncAt: null,
+          lastError: 'Google authorization expired. Reconnect the mailbox.',
+        },
+        expectOverdue: false,
+        expectFailure: true,
+        expectRetry: false,
+        expectReconnect: true,
       },
     ];
 
@@ -402,6 +447,11 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
           testCase.expectFailure ? 1 : 0,
           `${testCase.name} failure message`,
         );
+        assert.equal(
+          await page.getByTestId('text-gmail-sync-retry').count(),
+          testCase.expectRetry ? 1 : 0,
+          `${testCase.name} retry schedule`,
+        );
         if (testCase.expectOverdue) {
           const warning = page.getByTestId('alert-gmail-sync-overdue');
           assert.match(await warning.innerText(), /run a sync now/i);
@@ -412,11 +462,29 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
           await page.getByTestId('button-connect-gmail').waitFor();
         }
         if (testCase.expectFailure) {
-          assert.match(await page.getByTestId('text-gmail-sync-error').innerText(), /will retry/i);
+          assert.match(
+            await page.getByTestId('text-gmail-sync-error').innerText(),
+            testCase.expectReconnect ? /reconnect/i : /will retry/i,
+          );
           assert.match(
             await page.getByTestId('text-gmail-sync-diagnostic-outcome').innerText(),
-            /Gmail could not finish the sync/i,
+            testCase.expectReconnect
+              ? /Reconnect Gmail|Gmail history expired/i
+              : /Gmail could not finish the sync/i,
           );
+        }
+        if (testCase.expectRetry) {
+          const retry = page.getByTestId('text-gmail-sync-retry');
+          assert.match(await retry.innerText(), /next automatic retry scheduled for/i);
+          assert.equal(
+            await retry.locator('time').getAttribute('datetime'),
+            testCase.connection.nextSyncAt,
+          );
+          assert.equal(testCase.connection.lastSuccessAt, null, 'the first failed sync must still show its retry time');
+        }
+        if (testCase.expectReconnect) {
+          assert.equal(await page.getByTestId('text-gmail-sync-retry').count(), 0);
+          assert.match(await page.getByTestId('text-gmail-sync-error').innerText(), /reconnect/i);
         }
       } finally {
         await context.close();

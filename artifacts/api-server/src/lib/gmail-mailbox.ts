@@ -402,7 +402,11 @@ export function createGmailMailboxRouter(): IRouter {
       lastSyncAt: connection?.lastSyncAt?.toISOString() ?? null,
       lastSuccessAt: connection?.lastSuccessAt?.toISOString() ?? null,
       lastSyncDiagnostics: connection?.lastSyncDiagnostics ?? null,
-      nextSyncAt: connection?.nextSyncAt?.toISOString() ?? null,
+      nextSyncAt:
+        connection &&
+        (connection.syncStatus === "connected" || connection.syncStatus === "error")
+          ? connection.nextSyncAt.toISOString()
+          : null,
       lastError: connection?.lastError ?? null,
       pollIntervalSeconds: POLL_INTERVAL_MS / 1000,
     });
