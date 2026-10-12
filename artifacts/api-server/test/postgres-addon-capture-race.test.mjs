@@ -528,6 +528,28 @@ test(
           body,
         });
       };
+      const sendCumulativePaymentRefund = (
+        eventId,
+        totalRefundedAmountMinor,
+      ) => {
+        const body = JSON.stringify({
+          event: "payment.refunded",
+          payload: {
+            payment: {
+              entity: {
+                id: providerPaymentId,
+                order_id: orderId,
+                amount: amountMinor,
+                amount_refunded: totalRefundedAmountMinor,
+                currency: "INR",
+                status: "refunded",
+                captured: true,
+              },
+            },
+          },
+        });
+        return sendWebhook(body, eventId);
+      };
 
       // Each partial refund omits the provider's cumulative amount_refunded,
       // so both callbacks must add their distinct refund amounts to the latest
@@ -1140,16 +1162,9 @@ test(
         );
       assert.ok(completedPrimaryAcknowledgementEvent.processedAt);
 
-      const [paymentBeforeFullRefund] = await db
-        .select()
-        .from(paymentsTable)
-        .where(eq(paymentsTable.id, paymentId));
-      const remainingRefundAmount =
-        amountMinor - paymentBeforeFullRefund.refundedAmountMinor;
-      assert.ok(remainingRefundAmount > 0);
-      const fullRefundResponse = await sendRefund(
+      const fullRefundResponse = await sendCumulativePaymentRefund(
         fullRefundEventId,
-        remainingRefundAmount,
+        amountMinor,
       );
       const fullRefundResponseBody = await fullRefundResponse.json();
       assert.equal(
