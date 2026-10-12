@@ -63,6 +63,7 @@ export * from './authUser';
 export * from './authUserRole';
 export * from './blockedTermPreviewInput';
 export * from './blockedTermPreviewResult';
+export * from './blockedTermPreviewResultMatchRangesItem';
 export * from './campaignAudienceSummary';
 export * from './campaignDashboard';
 export * from './campaignDeliveryReport';

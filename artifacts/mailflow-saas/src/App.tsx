@@ -18,7 +18,7 @@ import {
   usePreviewBlockedTerms, useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
 } from '@workspace/api-client-react';
-import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, PlatformSettingsInput } from '@workspace/api-client-react';
+import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, BlockedTermPreviewResult, PlatformSettingsInput } from '@workspace/api-client-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
@@ -847,7 +847,7 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
   const [sampleText, setSampleText] = useState('');
-  const [previewResult, setPreviewResult] = useState<string[] | null>(null);
+  const [previewResult, setPreviewResult] = useState<BlockedTermPreviewResult | null>(null);
   const [previewedInput, setPreviewedInput] = useState<string | null>(null);
   const preview = usePreviewBlockedTerms();
 
@@ -952,7 +952,7 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
               { data: { sampleText, prohibitedEmailKeywords: words } },
               {
                 onSuccess: result => {
-                  setPreviewResult(result.matchedKeywords);
+                  setPreviewResult(result);
                   setPreviewedInput(submittedInput);
                 },
               },
@@ -963,9 +963,27 @@ function BlockedWordsEditor({ label, words, onChange }: { label: string; words: 
         </Button>
       </div>
       {preview.isError && <p role="alert" data-testid="error-blocked-term-preview" className="text-[11px] text-[#a95218]">{getError(preview.error)}</p>}
-      {previewResult && previewedInput === JSON.stringify([sampleText, words]) && <div role="status" aria-live="polite" data-testid="result-blocked-term-preview" className={`rounded-md border px-3 py-2 text-[11px] ${previewResult.length ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#dce9df] bg-[#f5faf6] text-[#416b4b]'}`}>
-        {previewResult.length
-          ? <><span className="font-semibold">Match found:</span> {previewResult.join(', ')}</>
+      {previewResult && previewedInput === JSON.stringify([sampleText, words]) && <div role="status" aria-live="polite" data-testid="result-blocked-term-preview" className={`rounded-md border px-3 py-2 text-[11px] ${previewResult.matchedKeywords.length ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#dce9df] bg-[#f5faf6] text-[#416b4b]'}`}>
+        {previewResult.matchedKeywords.length
+          ? <><span className="font-semibold">Match found:</span> {previewResult.matchedKeywords.join(', ')}
+            <p className="mt-2 whitespace-pre-wrap break-words text-[#344154]" data-testid="preview-blocked-term-sample">
+              {(() => {
+                let cursor = 0;
+                const parts: ReactNode[] = [];
+                for (const [index, range] of previewResult.matchRanges.entries()) {
+                  if (range.start > cursor) parts.push(sampleText.slice(cursor, range.start));
+                  parts.push(<mark
+                    key={`${range.start}-${range.end}-${index}`}
+                    title={`Blocked term: ${range.keywords.join(', ')}`}
+                    className="rounded-sm bg-[#ffd8a8] px-0.5 text-[#783b13] underline decoration-[#b66320] decoration-2 underline-offset-2"
+                  >{sampleText.slice(range.start, range.end)}</mark>);
+                  cursor = range.end;
+                }
+                if (cursor < sampleText.length) parts.push(sampleText.slice(cursor));
+                return parts;
+              })()}
+            </p>
+          </>
           : 'No blocked terms matched this sample.'}
       </div>}
     </div>

@@ -5675,7 +5675,19 @@ components:
         matchedKeywords:
           type: array
           items: { type: string }
-      required: [matchedKeywords]
+        matchRanges:
+          type: array
+          description: Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.
+          items:
+            type: object
+            properties:
+              start: { type: integer, minimum: 0 }
+              end: { type: integer, minimum: 1 }
+              keywords:
+                type: array
+                items: { type: string }
+            required: [start, end, keywords]
+      required: [matchedKeywords, matchRanges]
     ApplicationEmailSettings:
       type: object
       properties:

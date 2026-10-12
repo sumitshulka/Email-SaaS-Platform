@@ -5939,8 +5939,18 @@ export const PreviewBlockedTermsBody = zod.object({
   "prohibitedEmailKeywords": zod.array(zod.string().min(1).max(previewBlockedTermsBodyProhibitedEmailKeywordsItemMax)).max(previewBlockedTermsBodyProhibitedEmailKeywordsMax)
 })
 
+export const previewBlockedTermsResponseMatchRangesItemStartMin = 0;
+
+
+
+
 export const PreviewBlockedTermsResponse = zod.object({
-  "matchedKeywords": zod.array(zod.string())
+  "matchedKeywords": zod.array(zod.string()),
+  "matchRanges": zod.array(zod.object({
+  "start": zod.number().int().min(previewBlockedTermsResponseMatchRangesItemStartMin),
+  "end": zod.number().int().min(1),
+  "keywords": zod.array(zod.string())
+})).describe('Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined.')
 })
 
 

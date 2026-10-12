@@ -3703,8 +3703,18 @@ export interface BlockedTermPreviewInput {
   prohibitedEmailKeywords: string[];
 }
 
+export type BlockedTermPreviewResultMatchRangesItem = {
+  /** @minimum 0 */
+  start: number;
+  /** @minimum 1 */
+  end: number;
+  keywords: string[];
+};
+
 export interface BlockedTermPreviewResult {
   matchedKeywords: string[];
+  /** Zero-based UTF-16 source ranges, with end exclusive, for each matched sample portion. Overlapping portions are combined. */
+  matchRanges: BlockedTermPreviewResultMatchRangesItem[];
 }
 
 export type ApplicationEmailSettingsProvider = typeof ApplicationEmailSettingsProvider[keyof typeof ApplicationEmailSettingsProvider];

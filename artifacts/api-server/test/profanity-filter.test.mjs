@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  findProhibitedCampaignKeywordMatchDetails,
   findProhibitedCampaignKeywordMatches,
   findProhibitedCampaignContent,
   normalizeProfanityText,
@@ -77,6 +78,43 @@ describe("campaign profanity filter", () => {
     assert.deepEqual(
       findProhibitedCampaignKeywordMatches("ordinary text", ["...", ""]),
       [],
+    );
+  });
+
+  it("returns every original-text range for punctuation and confusable-character matches", () => {
+    assert.deepEqual(
+      findProhibitedCampaignKeywordMatchDetails(
+        "A badword, bаd.word; badword",
+        ["badword"],
+      ),
+      {
+        matchedKeywords: ["badword"],
+        matchRanges: [
+          { start: 2, end: 9, keywords: ["badword"] },
+          { start: 11, end: 19, keywords: ["badword"] },
+          { start: 21, end: 28, keywords: ["badword"] },
+        ],
+      },
+    );
+  });
+
+  it("maps decoded entities to their full source spelling and combines overlapping terms", () => {
+    assert.deepEqual(
+      findProhibitedCampaignKeywordMatchDetails("b&#97;d.word", ["bad", "badword"]),
+      {
+        matchedKeywords: ["bad", "badword"],
+        matchRanges: [{ start: 0, end: 12, keywords: ["bad", "badword"] }],
+      },
+    );
+  });
+
+  it("keeps source offsets correct around markup, accents, and supplementary Unicode", () => {
+    assert.deepEqual(
+      findProhibitedCampaignKeywordMatchDetails("😀 <i>b</i>ádword!", ["badword"]),
+      {
+        matchedKeywords: ["badword"],
+        matchRanges: [{ start: 6, end: 17, keywords: ["badword"] }],
+      },
     );
   });
 

@@ -10,6 +10,18 @@ export type CampaignContentValues = Partial<
   htmlBody?: string | null;
 };
 
+export type ProhibitedCampaignKeywordMatchRange = {
+  start: number;
+  end: number;
+  keywords: string[];
+};
+
+type SourceCharacter = {
+  value: string;
+  start: number;
+  end: number;
+};
+
 const CONFUSABLE_LETTERS: Record<string, string> = {
   // Greek letters with common Latin look-alikes.
   α: "a",
@@ -35,33 +47,131 @@ const CONFUSABLE_LETTERS: Record<string, string> = {
   у: "y",
 };
 
-function decodeHtmlNumericEntities(value: string): string {
-  return value.replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?/giu, (entity, hex, decimal) => {
-    const codePoint = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
-    if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
-      return entity;
+function charactersFromSource(value: string, sourceStart = 0): SourceCharacter[] {
+  const characters: SourceCharacter[] = [];
+  let offset = sourceStart;
+  for (const character of value) {
+    characters.push({ value: character, start: offset, end: offset + character.length });
+    offset += character.length;
+  }
+  return characters;
+}
+
+function decodeHtmlEntitiesWithSource(value: string): SourceCharacter[] {
+  const entities = /&(?:#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));?|(?:nbsp|thinsp|ensp|emsp|hairsp);)/giu;
+  const characters: SourceCharacter[] = [];
+  let lastIndex = 0;
+  for (const match of value.matchAll(entities)) {
+    const start = match.index!;
+    characters.push(...charactersFromSource(value.slice(lastIndex, start), lastIndex));
+    let decoded: string | null = null;
+    if (match[1] !== undefined || match[2] !== undefined) {
+      const codePoint = Number.parseInt(match[1] ?? match[2], match[1] ? 16 : 10);
+      if (Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff) {
+        try {
+          decoded = String.fromCodePoint(codePoint);
+        } catch {
+          decoded = null;
+        }
+      }
+    } else {
+      decoded = " ";
     }
-    try {
-      return String.fromCodePoint(codePoint);
-    } catch {
-      return entity;
+    if (decoded === null) {
+      characters.push(...charactersFromSource(match[0], start));
+    } else {
+      characters.push(
+        ...Array.from(decoded, (character) => ({
+          value: character,
+          start,
+          end: start + match[0].length,
+        })),
+      );
     }
+    lastIndex = start + match[0].length;
+  }
+  characters.push(...charactersFromSource(value.slice(lastIndex), lastIndex));
+  return characters;
+}
+
+function removeMarkupWithSource(characters: SourceCharacter[]): SourceCharacter[] {
+  const value = characters.map(({ value }) => value).join("");
+  const removedRanges = [...value.matchAll(/<[^>]*>/gsu)].map((match) => ({
+    start: match.index!,
+    end: match.index! + match[0].length,
+  }));
+  if (removedRanges.length === 0) return characters;
+
+  let offset = 0;
+  let rangeIndex = 0;
+  return characters.filter(({ value: character }) => {
+    const start = offset;
+    const end = start + character.length;
+    offset = end;
+    while (rangeIndex < removedRanges.length && removedRanges[rangeIndex].end <= start) {
+      rangeIndex += 1;
+    }
+    const range = removedRanges[rangeIndex];
+    return !range || end <= range.start || start >= range.end;
   });
 }
 
-export function normalizeProfanityText(value: string): string {
-  return decodeHtmlNumericEntities(value)
-    .replace(/&(?:nbsp|thinsp|ensp|emsp|hairsp);/giu, " ")
-    .replace(/<[^>]*>/gsu, "")
-    .normalize("NFKD")
-    .toLocaleLowerCase("en-US")
-    .replace(/\p{M}/gu, "")
-    .replace(/[αεικορτυχаеіјкморсху]/gu, (character) =>
-      CONFUSABLE_LETTERS[character] ?? character,
-    )
+function normalizeCharactersWithSource(value: string): SourceCharacter[] {
+  const withoutMarkup = removeMarkupWithSource(decodeHtmlEntitiesWithSource(value));
+  const decomposed = withoutMarkup.flatMap(({ value: character, start, end }) =>
+    Array.from(character.normalize("NFKD"), (decomposedCharacter) => ({
+      value: decomposedCharacter,
+      start,
+      end,
+    })),
+  );
+  const lowercasedText = decomposed.map(({ value: character }) => character).join("")
+    .toLocaleLowerCase("en-US");
+  const loweredValues = Array.from(lowercasedText);
+  const sourceForLoweredCharacters: SourceCharacter[] = [];
+  let loweredOffset = 0;
+  for (const sourceCharacter of decomposed) {
+    const lowercaseLength = Array.from(
+      sourceCharacter.value.toLocaleLowerCase("en-US"),
+    ).length;
+    for (let index = 0; index < lowercaseLength; index += 1) {
+      const loweredCharacter = loweredValues[loweredOffset++];
+      if (loweredCharacter === undefined) break;
+      sourceForLoweredCharacters.push({
+        value: loweredCharacter,
+        start: sourceCharacter.start,
+        end: sourceCharacter.end,
+      });
+    }
+  }
+  // Context-sensitive casing can change a character without changing its source
+  // position; if a future Unicode rule changes output length, keep source indexes safe.
+  while (loweredOffset < loweredValues.length) {
+    const lastSource = decomposed.at(-1);
+    if (!lastSource) break;
+    sourceForLoweredCharacters.push({
+      value: loweredValues[loweredOffset++],
+      start: lastSource.start,
+      end: lastSource.end,
+    });
+  }
+
+  return sourceForLoweredCharacters
+    .filter(({ value: character }) => !/\p{M}/u.test(character))
+    .map(({ value: character, start, end }) => ({
+      value: CONFUSABLE_LETTERS[character] ?? character,
+      start,
+      end,
+    }))
     // Ignore punctuation, spaces, brackets, format controls, and markup.
     // This makes "w.o.r.d", "w (o) r d", and zero-width separators equivalent.
-    .replace(/[^\p{L}\p{N}]/gu, "");
+    .filter(({ value: character }) => /[\p{L}\p{N}]/u.test(character));
+}
+
+export function normalizeProfanityText(value: string): string {
+  return normalizeCharactersWithSource(value)
+    .map(({ value: character }) => character)
+    .join("");
 }
 
 function getNormalizedProhibitedKeywords(
@@ -87,12 +197,56 @@ export function findProhibitedCampaignKeywordMatches(
   sampleText: string,
   prohibitedKeywords: readonly string[],
 ): string[] {
-  const normalizedSample = normalizeProfanityText(sampleText);
-  if (!normalizedSample) return [];
+  return findProhibitedCampaignKeywordMatchDetails(sampleText, prohibitedKeywords)
+    .matchedKeywords;
+}
 
-  return getNormalizedProhibitedKeywords(prohibitedKeywords)
-    .filter(({ normalized }) => containsProhibitedKeyword(normalizedSample, normalized))
-    .map(({ keyword }) => keyword);
+export function findProhibitedCampaignKeywordMatchDetails(
+  sampleText: string,
+  prohibitedKeywords: readonly string[],
+): {
+  matchedKeywords: string[];
+  matchRanges: ProhibitedCampaignKeywordMatchRange[];
+} {
+  const normalizedSample = normalizeCharactersWithSource(sampleText);
+  if (normalizedSample.length === 0) return { matchedKeywords: [], matchRanges: [] };
+
+  const matchedKeywords: string[] = [];
+  const occurrences: ProhibitedCampaignKeywordMatchRange[] = [];
+  for (const { keyword, normalized } of getNormalizedProhibitedKeywords(prohibitedKeywords)) {
+    const normalizedKeyword = Array.from(normalized);
+    if (normalizedKeyword.length === 0 || normalizedKeyword.length > normalizedSample.length) continue;
+    let keywordMatched = false;
+    for (let startIndex = 0; startIndex <= normalizedSample.length - normalizedKeyword.length; startIndex += 1) {
+      const matchesAtIndex = normalizedKeyword.every(
+        (character, keywordIndex) =>
+          normalizedSample[startIndex + keywordIndex].value === character,
+      );
+      if (!matchesAtIndex) continue;
+      keywordMatched = true;
+      occurrences.push({
+        start: normalizedSample[startIndex].start,
+        end: normalizedSample[startIndex + normalizedKeyword.length - 1].end,
+        keywords: [keyword],
+      });
+    }
+    if (keywordMatched) matchedKeywords.push(keyword);
+  }
+
+  occurrences.sort((left, right) => left.start - right.start || left.end - right.end);
+  const matchRanges: ProhibitedCampaignKeywordMatchRange[] = [];
+  for (const occurrence of occurrences) {
+    const overlapping = matchRanges.at(-1);
+    if (!overlapping || occurrence.start >= overlapping.end) {
+      matchRanges.push(occurrence);
+      continue;
+    }
+    overlapping.end = Math.max(overlapping.end, occurrence.end);
+    for (const keyword of occurrence.keywords) {
+      if (!overlapping.keywords.includes(keyword)) overlapping.keywords.push(keyword);
+    }
+  }
+  return { matchedKeywords, matchRanges };
 }
 
 export function findProhibitedCampaignContent(
