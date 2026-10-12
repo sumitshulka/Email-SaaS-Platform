@@ -779,4 +779,145 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await context.close();
     }
   });
+
+  it('filters campaign trees without hiding follow-ups or losing parent context', async () => {
+    const now = Date.now();
+    const originalCampaigns = campaigns.slice();
+    const originalLists = lists.slice();
+    const daysAgo = days => new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+    const parent = {
+      ...campaign('filter-parent', 'Spring launch', [listOneId]),
+      objective: 'Spring product launch',
+      status: 'completed',
+      campaignType: 'primary',
+      parentCampaignId: null,
+      createdAt: daysAgo(45),
+      completedAt: daysAgo(40),
+    };
+    const matchingFollowUp = {
+      ...campaign('filter-follow-up', 'Re-engagement sequence', [listTwoId]),
+      objective: 'Winback inactive customers',
+      status: 'completed',
+      campaignType: 'follow_up',
+      parentCampaignId: parent.id,
+      createdAt: daysAgo(2),
+      completedAt: daysAgo(1),
+    };
+    const olderFollowUp = {
+      ...campaign('filter-older-follow-up', 'Dormant audience reminder', [listOneId]),
+      objective: 'Reminder for dormant audience',
+      status: 'draft',
+      campaignType: 'follow_up',
+      parentCampaignId: parent.id,
+      createdAt: daysAgo(80),
+    };
+    const recentPrimary = {
+      ...campaign('filter-recent-primary', 'Weekly customer digest', [listTwoId]),
+      objective: 'Weekly product updates',
+      status: 'draft',
+      campaignType: 'primary',
+      parentCampaignId: null,
+      createdAt: daysAgo(1),
+    };
+    campaigns.splice(0, campaigns.length, parent, matchingFollowUp, olderFollowUp, recentPrimary);
+    lists.splice(0, lists.length,
+      { id: listOneId, name: 'Launch audience', active: true, contactCount: 2, createdAt: date, updatedAt: date },
+      { id: listTwoId, name: 'Customer updates', active: true, contactCount: 1, createdAt: date, updatedAt: date },
+    );
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
+
+      const row = id => page.getByTestId(`row-campaign-${id}`);
+      const rowIds = async () => page.locator('[data-testid^="row-campaign-"]').evaluateAll(rows =>
+        rows.map(element => element.getAttribute('data-testid').replace('row-campaign-', '')),
+      );
+      const waitForRows = expectedIds => page.waitForFunction(expected => {
+        const rows = [...document.querySelectorAll('[data-testid^="row-campaign-"]')]
+          .map(element => element.getAttribute('data-testid').replace('row-campaign-', ''));
+        return JSON.stringify(rows) === JSON.stringify(expected);
+      }, expectedIds);
+      const allRows = [recentPrimary.id, parent.id, matchingFollowUp.id, olderFollowUp.id];
+
+      await waitForRows(allRows);
+      await page.getByTestId('input-campaign-search').fill('winback');
+      await waitForRows([parent.id, matchingFollowUp.id]);
+      assert.equal(await row(parent.id).getByText('parent context', { exact: true }).count(), 1);
+      await page.getByTestId('input-campaign-search').fill('');
+      await waitForRows(allRows);
+
+      await page.getByTestId('select-campaign-status-filter').selectOption('completed');
+      await waitForRows([parent.id, matchingFollowUp.id]);
+      await page.getByTestId('select-campaign-status-filter').selectOption('draft');
+      await waitForRows([recentPrimary.id, parent.id, olderFollowUp.id]);
+      await page.getByTestId('select-campaign-status-filter').selectOption('all');
+      await waitForRows(allRows);
+
+      await page.getByTestId('select-campaign-type-filter').selectOption('primary');
+      await waitForRows([recentPrimary.id, parent.id]);
+      await page.getByTestId('select-campaign-type-filter').selectOption('follow_up');
+      await waitForRows([parent.id, matchingFollowUp.id, olderFollowUp.id]);
+      assert.equal(await row(parent.id).getByText('parent context', { exact: true }).count(), 1);
+      await page.getByTestId('select-campaign-type-filter').selectOption('all');
+      await waitForRows(allRows);
+
+      await page.getByTestId('select-campaign-list-filter').selectOption(listTwoId);
+      await waitForRows([recentPrimary.id, parent.id, matchingFollowUp.id]);
+      assert.equal(await row(parent.id).getByText('parent context', { exact: true }).count(), 1);
+      await page.getByTestId('select-campaign-list-filter').selectOption('all');
+      await waitForRows(allRows);
+
+      await page.getByTestId('select-campaign-date-filter').selectOption('7');
+      await waitForRows([recentPrimary.id, parent.id, matchingFollowUp.id]);
+      await page.getByTestId('select-campaign-date-filter').selectOption('all');
+      await waitForRows(allRows);
+
+      await page.getByTestId('input-campaign-search').fill('winback');
+      await page.getByTestId('select-campaign-status-filter').selectOption('completed');
+      await page.getByTestId('select-campaign-type-filter').selectOption('follow_up');
+      await page.getByTestId('select-campaign-list-filter').selectOption(listTwoId);
+      await page.getByTestId('select-campaign-date-filter').selectOption('30');
+      await waitForRows([parent.id, matchingFollowUp.id]);
+      assert.equal(await row(parent.id).getByText('parent context', { exact: true }).count(), 1);
+      assert.equal(await page.getByText('1 matching campaigns', { exact: false }).count(), 1);
+
+      await page.getByTestId('button-reset-campaign-filters').click();
+      await waitForRows(allRows);
+      assert.equal(await page.getByTestId('input-campaign-search').inputValue(), '');
+      for (const testId of [
+        'select-campaign-status-filter',
+        'select-campaign-type-filter',
+        'select-campaign-list-filter',
+        'select-campaign-date-filter',
+      ]) {
+        assert.equal(await page.getByTestId(testId).inputValue(), 'all');
+      }
+
+      await page.getByTestId('button-toggle-campaign-tree').click();
+      await waitForRows([recentPrimary.id, parent.id]);
+      await page.getByTestId('button-toggle-campaign-tree').click();
+      await waitForRows(allRows);
+      await page.getByTestId(`button-toggle-campaign-${parent.id}`).click();
+      await waitForRows([recentPrimary.id, parent.id]);
+      await page.getByTestId(`button-toggle-campaign-${parent.id}`).click();
+      await waitForRows(allRows);
+
+      await page.getByTestId('input-campaign-search').fill('no such campaign');
+      await page.getByTestId('button-clear-campaign-filters').click();
+      await waitForRows(allRows);
+      assert.equal(await page.getByTestId('input-campaign-search').inputValue(), '');
+      assert.deepEqual(await rowIds(), allRows);
+      assert.deepEqual(pageErrors, [], 'filtering and expanding the campaign tree should not cause browser errors');
+    } finally {
+      await context.close();
+      campaigns.splice(0, campaigns.length, ...originalCampaigns);
+      lists.splice(0, lists.length, ...originalLists);
+    }
+  });
 });
