@@ -1,16 +1,19 @@
 export function TaskoneAttribution() {
   return (
     <span data-testid="taskone-attribution">
-      Mailflow is a product of Taskone Solutions Pvt Ltd. Visit{' '}
-      <a
-        href="https://www.taskone.world"
-        target="_blank"
-        rel="noreferrer"
-        className="font-semibold underline underline-offset-2"
-      >
-        Taskone
-      </a>{' '}
-      for details.
+      Mailflow is a product of Taskone Solutions Pvt Ltd.{' '}
+      <span className="inline-flex whitespace-nowrap gap-1">
+        Visit{' '}
+        <a
+          href="https://www.taskone.world"
+          target="_blank"
+          rel="noreferrer"
+          className="font-semibold underline underline-offset-2"
+        >
+          Taskone
+        </a>{' '}
+        for details.
+      </span>
     </span>
   );
 }
