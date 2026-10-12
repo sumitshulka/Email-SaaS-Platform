@@ -5166,6 +5166,19 @@ router.post(
         return { error: "concurrency_limit" as const };
       }
 
+      const bouncedEmails = tx
+        .select({ email: sql<string>`lower(${contactsTable.email})` })
+        .from(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.userId, userId),
+            eq(contactsTable.emailStatus, "bounced"),
+          ),
+        );
+      const notBouncedAddress = notInArray(
+        sql`lower(${contactsTable.email})`,
+        bouncedEmails,
+      );
       const memberships = campaign.parentCampaignId
         ? await tx
         .select({
@@ -5182,6 +5195,7 @@ router.post(
           eq(contactsTable.userId, userId),
           eq(contactsTable.subscribed, true),
           or(isNull(contactsTable.emailStatus), ne(contactsTable.emailStatus, "bounced")),
+          notBouncedAddress,
         ))
         .where(and(
           eq(emailCampaignRecipientsTable.userId, userId),
@@ -5209,6 +5223,7 @@ router.post(
             eq(contactsTable.userId, userId),
             eq(contactsTable.subscribed, true),
             or(isNull(contactsTable.emailStatus), ne(contactsTable.emailStatus, "bounced")),
+            notBouncedAddress,
           ),
         )
         .orderBy(asc(contactsTable.createdAt));

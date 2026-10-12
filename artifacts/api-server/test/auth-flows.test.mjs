@@ -6047,6 +6047,135 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     }]);
   });
 
+  it("suppresses bounced addresses across duplicate contacts without crossing workspaces or changing unsubscribe status", async () => {
+    const owner = await loggedInUser({ username: "duplicate-bounce-owner" });
+    const other = await loggedInUser({ username: "duplicate-bounce-other" });
+    const [ownerBounced] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      email: "shared-bounce@duplicate.test",
+      subscribed: false,
+      emailStatus: "bounced",
+    }).returning();
+    const [ownerDuplicate] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      email: "SHARED-BOUNCE@DUPLICATE.TEST",
+      subscribed: true,
+      emailStatus: "subscribed",
+    }).returning();
+    const [ownerOtherAddress] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      email: "foreign-bounce@duplicate.test",
+      subscribed: true,
+      emailStatus: "subscribed",
+    }).returning();
+    const [otherBounced] = await db.insert(dbModule.contactsTable).values({
+      userId: other.user.id,
+      email: "FOREIGN-BOUNCE@DUPLICATE.TEST",
+      subscribed: false,
+      emailStatus: "bounced",
+    }).returning();
+    const [otherDuplicate] = await db.insert(dbModule.contactsTable).values({
+      userId: other.user.id,
+      email: "shared-bounce@duplicate.test",
+      subscribed: true,
+      emailStatus: "subscribed",
+    }).returning();
+
+    const createCampaignSetup = async (user, members, suffix) => {
+      const [list] = await db.insert(dbModule.contactListsTable).values({
+        userId: user.user.id,
+        name: `Duplicate bounce ${suffix}`,
+      }).returning();
+      await db.insert(dbModule.contactListMembersTable).values(
+        members.map((contact) => ({
+          userId: user.user.id,
+          listId: list.id,
+          contactId: contact.id,
+        })),
+      );
+      const [sender] = await db.insert(dbModule.tenantSendingConfigurationTable).values({
+        userId: user.user.id,
+        isPrimary: true,
+        provider: "other",
+        host: `smtp.${suffix}.invalid`,
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret(`${suffix}-user`),
+        passwordEncrypted: securityModule.encryptSecret(`${suffix}-password`),
+        fromName: "Duplicate Bounce Test",
+        fromEmail: `${suffix}@example.test`,
+        verifiedAt: new Date(),
+      }).returning();
+      const campaign = await api("/campaigns", {
+        method: "POST",
+        cookie: user.cookie,
+        body: {
+          name: `Duplicate bounce ${suffix}`,
+          subject: "A useful update",
+          textBody: "A clean campaign message.",
+          listIds: [list.id],
+          senderAccountId: sender.id,
+        },
+      });
+      assert.equal(campaign.response.status, 201, JSON.stringify(campaign.body));
+      const queued = await api(`/campaigns/${campaign.body.id}/send`, {
+        method: "POST",
+        cookie: user.cookie,
+        body: {},
+      });
+      assert.equal(queued.response.status, 202, JSON.stringify(queued.body));
+      const recipients = await db
+        .select({
+          contactId: dbModule.emailCampaignRecipientsTable.contactId,
+          email: dbModule.emailCampaignRecipientsTable.email,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(
+          dbModule.emailCampaignRecipientsTable.campaignId,
+          campaign.body.id,
+        ));
+      return recipients;
+    };
+
+    const ownerRecipients = await createCampaignSetup(
+      owner,
+      [ownerBounced, ownerDuplicate, ownerOtherAddress],
+      "owner-duplicate-bounce",
+    );
+    assert.deepEqual(ownerRecipients, [{
+      contactId: ownerOtherAddress.id,
+      email: ownerOtherAddress.email,
+    }]);
+
+    const otherRecipients = await createCampaignSetup(
+      other,
+      [otherBounced, otherDuplicate],
+      "other-duplicate-bounce",
+    );
+    assert.deepEqual(otherRecipients, [{
+      contactId: otherDuplicate.id,
+      email: otherDuplicate.email,
+    }]);
+
+    const [ownerBounceState, ownerDuplicateState, otherBounceState] = await Promise.all([
+      db.select({
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      }).from(dbModule.contactsTable).where(eq(dbModule.contactsTable.id, ownerBounced.id)),
+      db.select({
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      }).from(dbModule.contactsTable).where(eq(dbModule.contactsTable.id, ownerDuplicate.id)),
+      db.select({
+        subscribed: dbModule.contactsTable.subscribed,
+        emailStatus: dbModule.contactsTable.emailStatus,
+      }).from(dbModule.contactsTable).where(eq(dbModule.contactsTable.id, otherBounced.id)),
+    ]);
+    assert.deepEqual(ownerBounceState[0], { subscribed: false, emailStatus: "bounced" });
+    assert.deepEqual(ownerDuplicateState[0], { subscribed: true, emailStatus: "subscribed" });
+    assert.deepEqual(otherBounceState[0], { subscribed: false, emailStatus: "bounced" });
+  });
+
   it("lists only each workspace's companies and counts only its contacts", async () => {
     const owner = await loggedInUser({
       username: "company-list-owner",
