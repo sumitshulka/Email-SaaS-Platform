@@ -9,6 +9,12 @@ Validate native provider report semantics before equating a logged event or time
 
 **How to apply:** Before adding an automatic adapter or broadening CSV support, verify native samples against current official documentation. Never use Microsoft initial-receipt timestamps as final-outcome times or treat transmission as proof of mailbox delivery. Do not infer inbox placement or reading from Workspace ELS exports.
 
+Microsoft Graph `FAIL` events are projected as generic `failed` evidence, not automatically as bounced-address evidence. Keep bounce suppression tied to reports explicitly classified as `bounced`.
+
+**Why:** A trace failure does not by itself establish that a recipient address permanently bounced; treating all failures as bounces would suppress contacts without sufficient evidence.
+
+**How to apply:** When testing or extending Microsoft trace ingestion, preserve the `failed` versus `bounced` distinction unless a separately validated provider signal supports bounce classification.
+
 Campaign summaries may count a matched, latest provider-reported `bounced` or `failed` outcome in Rejected / failed while retaining SMTP acceptance as a separate transport metric.
 
 **Why:** A provider bounce can arrive after SMTP accepted the message, so both facts remain true. Adding report outcomes to the summary must not erase transport history or make recipient progress exceed the audience size.

@@ -1341,6 +1341,81 @@ async function createMicrosoft365Candidate(userId, { email, messageId }) {
   return { campaign, recipient, attempt };
 }
 
+async function createCorrectedAddressProviderScenario(userId, label) {
+  const oldEmail = `old-${label}-${randomUUID()}@owner.test`;
+  const correctedEmail = `corrected-${label}-${randomUUID()}@owner.test`;
+  const [contact] = await db
+    .insert(dbModule.contactsTable)
+    .values({
+      userId,
+      email: correctedEmail,
+      firstName: "Corrected",
+      subscribed: true,
+      emailStatus: "subscribed",
+    })
+    .returning();
+  const createCampaignRecipient = async (name, email) => {
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId,
+        name,
+        subject: "Address correction test",
+        textBody: "This campaign should remain eligible.",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId,
+        contactId: contact.id,
+        email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    return { campaign, recipient };
+  };
+  const oldAddress = await createCampaignRecipient(
+    `Old address ${label}`,
+    oldEmail,
+  );
+  const correctedAddress = await createCampaignRecipient(
+    `Corrected address ${label}`,
+    correctedEmail,
+  );
+  const attemptedAt = new Date(Date.now() - 2 * 60_000);
+  const [attempt] = await db
+    .insert(dbModule.emailSendAttemptsTable)
+    .values({
+      userId,
+      recipientId: oldAddress.recipient.id,
+      messageId: `<${label}-${randomUUID()}@mailflow.local>`,
+      outcome: "smtp_accepted",
+      smtpCode: 250,
+      dsnRequested: true,
+      attemptedAt,
+    })
+    .returning();
+  await db
+    .update(dbModule.emailCampaignRecipientsTable)
+    .set({ attempts: 1 })
+    .where(eq(dbModule.emailCampaignRecipientsTable.id, oldAddress.recipient.id));
+
+  return {
+    contact,
+    oldEmail,
+    correctedEmail,
+    oldAddress,
+    correctedAddress,
+    attempt,
+  };
+}
+
 async function getEmailCode() {
   const email = emails.at(-1);
   assert.ok(email, "expected a verification email to be captured");
@@ -14884,6 +14959,208 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       { method: "DELETE", cookie: owner.cookie },
     );
     assert.equal(deletedSender.response.status, 404);
+  });
+});
+
+describe("provider delivery reports after an address correction", { concurrency: false }, () => {
+  it("suppresses only the old address when Gmail sync imports its bounce DSN", async () => {
+    await withGmailOAuthConfig(async () => {
+      const owner = await loggedInUser({ username: "gmail-corrected-bounce-owner" });
+      const scenario = await createCorrectedAddressProviderScenario(
+        owner.user.id,
+        "gmail",
+      );
+      const connection = await dbModule.db
+        .insert(dbModule.gmailMailboxConnectionsTable)
+        .values({
+          userId: owner.user.id,
+          emailAddress: owner.user.email,
+          refreshTokenEncrypted: securityModule.encryptSecret(
+            "gmail-corrected-bounce-refresh-token",
+          ),
+          historyId: "gmail-corrected-bounce-before",
+          syncStatus: "connected",
+          nextSyncAt: new Date(Date.now() - 60_000),
+        })
+        .returning()
+        .then(([row]) => row);
+      const bounceDsn = [
+        `Original-Message-ID: ${scenario.attempt.messageId}`,
+        `Final-Recipient: rfc822; ${scenario.oldEmail}`,
+        "Action: failed",
+        "Status: 5.1.1",
+        "Diagnostic-Code: smtp; 550 5.1.1 recipient not found",
+        `Last-Attempt-Date: ${new Date(scenario.attempt.attemptedAt.getTime() + 1000).toUTCString()}`,
+      ].join("\r\n");
+
+      await withGoogleFetch(async (url, init) => {
+        if (url.hostname === "oauth2.googleapis.com" && url.pathname === "/token") {
+          return googleJson({ access_token: "gmail-corrected-bounce-access-token" });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/history")
+        ) {
+          assert.equal(
+            url.searchParams.get("startHistoryId"),
+            "gmail-corrected-bounce-before",
+          );
+          return googleJson({
+            historyId: "gmail-corrected-bounce-after",
+            history: [
+              { messagesAdded: [{ message: { id: "gmail-corrected-bounce-report" } }] },
+            ],
+          });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/messages/gmail-corrected-bounce-report") &&
+          url.searchParams.get("format") === "metadata"
+        ) {
+          return googleJson({
+            payload: {
+              headers: [{
+                name: "Content-Type",
+                value: 'multipart/report; boundary="dsn"; report-type="delivery-status"',
+              }],
+            },
+          });
+        }
+        if (
+          url.hostname === "gmail.googleapis.com" &&
+          url.pathname.endsWith("/messages/gmail-corrected-bounce-report") &&
+          url.searchParams.get("format") === "raw"
+        ) {
+          return googleJson({ raw: Buffer.from(bounceDsn).toString("base64url") });
+        }
+        throw new Error(`Unexpected corrected-address Gmail request: ${url}`);
+      }, async () => {
+        const sync = await gmailMailboxModule.syncDueGmailMailboxes({
+          userId: owner.user.id,
+          force: true,
+        });
+        assert.equal(sync.succeeded, 1);
+        assert.equal(sync.failed, 0);
+        assert.equal(sync.importedReports, 1);
+      });
+
+      const [oldRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, scenario.oldAddress.recipient.id));
+      const [correctedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, scenario.correctedAddress.recipient.id));
+      assert.equal(oldRecipient.status, "suppressed");
+      assert.equal(oldRecipient.email, scenario.oldEmail);
+      assert.equal(oldRecipient.lastError, "Recipient address bounced.");
+      assert.equal(oldRecipient.reportOutcome, "bounced");
+      assert.equal(oldRecipient.reportEvidenceVerification, "gmail_authorized");
+      assert.equal(correctedRecipient.status, "queued");
+      assert.equal(correctedRecipient.email, scenario.correctedEmail);
+
+      const [contactAfterSync] = await db
+        .select({
+          email: dbModule.contactsTable.email,
+          subscribed: dbModule.contactsTable.subscribed,
+          emailStatus: dbModule.contactsTable.emailStatus,
+        })
+        .from(dbModule.contactsTable)
+        .where(eq(dbModule.contactsTable.id, scenario.contact.id));
+      assert.deepEqual(contactAfterSync, {
+        email: scenario.correctedEmail,
+        subscribed: true,
+        emailStatus: "subscribed",
+      });
+      const [storedReport] = await db
+        .select()
+        .from(dbModule.emailDeliveryReportsTable)
+        .where(eq(dbModule.emailDeliveryReportsTable.recipientId, oldRecipient.id));
+      assert.equal(storedReport.source, "dsn");
+      assert.equal(storedReport.evidenceVerification, "gmail_authorized");
+      assert.equal(storedReport.gmailMailboxConnectionId, connection.id);
+
+      const emailHistory = await api(
+        `/contacts/${scenario.contact.id}/email-history`,
+        { cookie: owner.cookie },
+      );
+      const oldAddressHistory = emailHistory.body.find(
+        (entry) => entry.id === oldRecipient.id,
+      );
+      assert.ok(oldAddressHistory);
+      assert.equal(oldAddressHistory.status, "suppressed");
+      assert.equal(oldAddressHistory.email, scenario.oldEmail);
+      assert.equal(oldAddressHistory.reportOutcome, "bounced");
+      assert.equal(oldAddressHistory.reportEvidenceVerification, "gmail_authorized");
+    });
+  });
+
+  it("keeps a corrected campaign eligible when Microsoft 365 reports a failure for the old address", async () => {
+    const owner = await loggedInUser({ username: "m365-corrected-address-owner" });
+    const scenario = await createCorrectedAddressProviderScenario(
+      owner.user.id,
+      "m365",
+    );
+    const connection = await createMicrosoft365Connection(owner.user.id);
+    const occurredAt = new Date(scenario.attempt.attemptedAt.getTime() + 1000);
+
+    await withMicrosoft365Fetch(async (url) => {
+      if (url.hostname === "login.microsoftonline.com") {
+        return microsoftJson({ access_token: "m365-corrected-address-access-token" });
+      }
+      if (url.pathname.includes("/getDetailsByRecipient(")) {
+        return microsoftJson({
+          value: [
+            {
+              messageId: scenario.attempt.messageId,
+              event: "FAIL",
+              dateTime: occurredAt.toISOString(),
+              description: "550 5.1.1 recipient not found",
+            },
+          ],
+        });
+      }
+      return microsoftJson({
+        value: [
+          {
+            id: "m365-corrected-address-failure",
+            messageId: scenario.attempt.messageId,
+            recipientAddress: scenario.oldEmail,
+            receivedDateTime: scenario.attempt.attemptedAt.toISOString(),
+            status: "Failed",
+          },
+        ],
+      });
+    }, async () => {
+      const sync =
+        await microsoft365TraceModule.syncDueMicrosoft365TraceConnections();
+      assert.equal(sync.succeeded, 1);
+      assert.equal(sync.failed, 0);
+    });
+
+    const [oldRecipient] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, scenario.oldAddress.recipient.id));
+    const [correctedRecipient] = await db
+      .select()
+      .from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, scenario.correctedAddress.recipient.id));
+    assert.equal(oldRecipient.status, "queued");
+    assert.equal(oldRecipient.email, scenario.oldEmail);
+    assert.equal(oldRecipient.reportOutcome, "failed");
+    assert.equal(oldRecipient.reportEvidenceVerification, "microsoft365_authorized");
+    assert.equal(correctedRecipient.status, "queued");
+    assert.equal(correctedRecipient.email, scenario.correctedEmail);
+
+    const [storedReport] = await db
+      .select()
+      .from(dbModule.emailDeliveryReportsTable)
+      .where(eq(dbModule.emailDeliveryReportsTable.recipientId, oldRecipient.id));
+    assert.equal(storedReport.source, "microsoft_365_graph");
+    assert.equal(storedReport.evidenceVerification, "microsoft365_authorized");
+    assert.equal(storedReport.microsoft365TraceConnectionId, connection.id);
   });
 });
 
