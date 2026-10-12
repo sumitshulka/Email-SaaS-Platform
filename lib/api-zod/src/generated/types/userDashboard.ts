@@ -8,6 +8,7 @@
 import type { DashboardAmountByCurrency } from './dashboardAmountByCurrency';
 import type { DashboardCampaign } from './dashboardCampaign';
 import type { DashboardContactSegment } from './dashboardContactSegment';
+import type { UserDashboardSetupChecklist } from './userDashboardSetupChecklist';
 import type { UserDashboardSubscriptionStatus } from './userDashboardSubscriptionStatus';
 
 export interface UserDashboard {
@@ -21,6 +22,7 @@ export interface UserDashboard {
   /** @minimum 0 */
   campaignCount: number;
   campaigns: DashboardCampaign[];
+  setupChecklist: UserDashboardSetupChecklist;
   setupStepsCompleted: number;
   setupStepsTotal: number;
 }

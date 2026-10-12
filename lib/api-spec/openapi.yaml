@@ -3815,9 +3815,18 @@ components:
         campaigns:
           type: array
           items: { $ref: "#/components/schemas/DashboardCampaign" }
+        setupChecklist:
+          type: object
+          properties:
+            profile: { type: boolean }
+            emailSetup: { type: boolean }
+            contact: { type: boolean }
+            list: { type: boolean }
+            campaignQueued: { type: boolean }
+          required: [profile, emailSetup, contact, list, campaignQueued]
         setupStepsCompleted: { type: integer }
         setupStepsTotal: { type: integer }
-      required: [subscriptionStatus, contacts, companies, activeLists, amountSpentByCurrency, lifecycleStages, leadStatuses, campaignCount, campaigns, setupStepsCompleted, setupStepsTotal]
+      required: [subscriptionStatus, contacts, companies, activeLists, amountSpentByCurrency, lifecycleStages, leadStatuses, campaignCount, campaigns, setupChecklist, setupStepsCompleted, setupStepsTotal]
     UserNotification:
       type: object
       properties:

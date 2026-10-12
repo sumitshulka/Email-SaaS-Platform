@@ -427,8 +427,15 @@ async function installApiFixtures(context) {
           lifecycleStages: [],
           leadStatuses: [],
           campaigns: [],
+          setupChecklist: {
+            profile: true,
+            emailSetup: false,
+            contact: false,
+            list: false,
+            campaignQueued: false,
+          },
           setupStepsCompleted: 1,
-          setupStepsTotal: 4,
+          setupStepsTotal: 5,
         },
       });
       return;

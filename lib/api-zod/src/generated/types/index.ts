@@ -349,6 +349,7 @@ export * from './testRazorpayConnectionInput';
 export * from './unlinkedCompanyProfile';
 export * from './unlinkedCompanyProfileCollection';
 export * from './userDashboard';
+export * from './userDashboardSetupChecklist';
 export * from './userDashboardSubscriptionStatus';
 export * from './userNotification';
 export * from './userNotificationReadResponse';

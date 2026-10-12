@@ -356,6 +356,13 @@ export const GetUserDashboardResponse = zod.object({
   "completedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date()
 })),
+  "setupChecklist": zod.object({
+  "profile": zod.boolean(),
+  "emailSetup": zod.boolean(),
+  "contact": zod.boolean(),
+  "list": zod.boolean(),
+  "campaignQueued": zod.boolean()
+}),
   "setupStepsCompleted": zod.number().int(),
   "setupStepsTotal": zod.number().int()
 })

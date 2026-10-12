@@ -282,6 +282,14 @@ export const UserDashboardSubscriptionStatus = {
   expired: 'expired',
 } as const;
 
+export type UserDashboardSetupChecklist = {
+  profile: boolean;
+  emailSetup: boolean;
+  contact: boolean;
+  list: boolean;
+  campaignQueued: boolean;
+};
+
 export interface DashboardAmountByCurrency {
   /**
      * @minLength 3
@@ -348,6 +356,7 @@ export interface UserDashboard {
   /** @minimum 0 */
   campaignCount: number;
   campaigns: DashboardCampaign[];
+  setupChecklist: UserDashboardSetupChecklist;
   setupStepsCompleted: number;
   setupStepsTotal: number;
 }

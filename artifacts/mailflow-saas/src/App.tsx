@@ -387,6 +387,65 @@ function UserNotificationsHeaderAction() {
   );
 }
 
+function WorkspaceGettingStarted({ user }: { user: AuthUser }) {
+  const query = useGetUserDashboard({
+    query: {
+      queryKey: getGetUserDashboardQueryKey(),
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+      refetchInterval: 30_000,
+    },
+  });
+  const [location, setLocation] = useLocation();
+  useEffect(() => {
+    void query.refetch();
+  }, [location, query.refetch]);
+
+  const steps = [
+    { key: 'profile', title: 'Confirm your profile', detail: 'Check your name, email, and account details.', href: '/profile', done: query.data?.setupChecklist.profile ?? false },
+    { key: 'email', title: 'Set up your email', detail: 'Add and verify an SMTP sender account.', href: '/sending-settings', done: query.data?.setupChecklist.emailSetup ?? false },
+    { key: 'contact', title: 'Add a contact', detail: 'Create your first contact in the workspace.', href: '/contacts', done: query.data?.setupChecklist.contact ?? false },
+    { key: 'list', title: 'Create and manage a list', detail: 'Create an active list for your campaign audience.', href: '/lists', done: query.data?.setupChecklist.list ?? false },
+    { key: 'campaign', title: 'Create your first campaign', detail: 'Prepare and queue a campaign when you’re ready.', href: '/campaigns', done: query.data?.setupChecklist.campaignQueued ?? false },
+  ];
+  const completeCount = steps.filter(step => step.done).length;
+  if (query.data && completeCount === steps.length) return null;
+
+  return (
+    <section aria-label="Getting started guide" data-testid="workspace-getting-started" className="mb-6 overflow-hidden rounded-xl border border-[#d7e2eb] bg-[#f7fafc] shadow-[0_8px_28px_rgba(30,55,75,.04)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4ebf0] px-4 py-4 sm:px-5">
+        <div>
+          <div className="mono text-[9px] uppercase tracking-[.16em] text-[#718398]">YOUR FIRST CAMPAIGN</div>
+          <h2 className="display mt-1 text-[17px] font-bold text-[#1b2d41]">Getting started</h2>
+          <p className="mt-1 text-[11px] text-[#687b8e]">{query.isError ? 'We could not refresh your progress.' : `${completeCount} of ${steps.length} steps completed`}</p>
+        </div>
+        {query.data && <div className="flex items-center gap-2" aria-label={`${completeCount} of ${steps.length} onboarding steps complete`}>
+          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#dfe8ef]"><div className="h-full rounded-full bg-[#438775] transition-[width]" style={{ width: `${completeCount / steps.length * 100}%` }}/></div>
+          <span className="mono text-[11px] font-semibold text-[#345e54]">{Math.round(completeCount / steps.length * 100)}%</span>
+        </div>}
+      </div>
+      {query.isError ? <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[11px] text-[#835a37] sm:px-5">
+        <span>Progress is temporarily unavailable. Your setup is unchanged.</span>
+        <button type="button" data-testid="button-retry-onboarding" onClick={() => void query.refetch()} className="rounded-md border border-[#e4c5a5] bg-white px-3 py-1.5 font-semibold text-[#89592f] hover:bg-[#fff8f1]">Retry</button>
+      </div> : <ol className="grid divide-y divide-[#e8edf1] sm:grid-cols-2 sm:divide-y-0 sm:divide-x lg:grid-cols-5">
+        {steps.map((step, index) => <li key={step.key} className="flex min-w-0 items-start gap-2.5 px-4 py-3 sm:px-3 lg:flex-col lg:gap-2 lg:border-r lg:border-[#e8edf1] lg:px-3 lg:py-4 last:lg:border-r-0">
+          <span className={cn('mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[10px] font-semibold', step.done ? 'border-[#b9d9c9] bg-[#e5f2eb] text-[#39755c]' : 'border-[#d5dfe7] bg-white text-[#748598]')}>
+            {step.done ? <Check className="h-3.5 w-3.5"/> : index + 1}
+          </span>
+          <div className="min-w-0 flex-1 lg:w-full">
+            <div className={cn('text-[11px] font-semibold', step.done ? 'text-[#48685d]' : 'text-[#293d52]')}>{step.title}</div>
+            <p className="mt-1 text-[10px] leading-4 text-[#738496]">{step.detail}</p>
+            {!step.done && <button type="button" data-testid={`button-onboarding-${step.key}`} onClick={() => setLocation(step.href)} className="mt-2 inline-flex min-h-7 items-center gap-1 rounded-md border border-[#d3e0ea] bg-white px-2.5 text-[10px] font-semibold text-[#245b91] hover:bg-[#edf4fa]">
+              {step.key === 'campaign' ? 'Open campaigns' : 'Continue'}<ArrowRight className="h-3 w-3"/>
+            </button>}
+          </div>
+        </li>)}
+      </ol>}
+      {user.role === 'USER' && <div className="border-t border-[#e4ebf0] bg-white/70 px-4 py-2 text-[10px] text-[#7a8997] sm:px-5">Complete all five steps to finish workspace setup. The guide closes after your first campaign is queued.</div>}
+    </section>
+  );
+}
+
 function AppShell({ user, children, admin = false }: { user: AuthUser; children: ReactNode; admin?: boolean }) {
   const [location, setLocation] = useLocation();
   const logout = useLogout();
@@ -481,7 +540,10 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
             </button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">{children}</main>
+        <main className="mx-auto max-w-[1440px] px-5 py-8 md:px-9 md:py-10">
+          {!admin && user.role === 'USER' && !user.mustChangeCredentials && <WorkspaceGettingStarted user={user}/>}
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -523,7 +585,6 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
   if (query.isError || !data) return <QueryProblem retry={() => void query.refetch()}/>;
   const stages = normalizeSegments(data.lifecycleStages);
   const leads = normalizeSegments(data.leadStatuses);
-  const setupPct = data.setupStepsTotal > 0 ? Math.min(100, Math.round(data.setupStepsCompleted / data.setupStepsTotal * 100)) : 0;
   const money = (minor: number, currency: string) => {
     const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency });
     const minorUnitDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
@@ -600,15 +661,10 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
       <div className="border-t border-[#e8ece8] bg-[#fbfcfa] px-5 py-3 text-[10px] leading-5 text-[#7f8992] sm:px-6">SMTP accepted means the sending server accepted the message, not that it reached the inbox. Hourly estimates appear for queued or sending campaigns only; the cap is shared, so estimates are not additive.</div>
     </Panel>
 
-    <section className="grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
+    <section>
       <Panel className="flex flex-col justify-between gap-5 bg-[#f1f6fa] p-5 sm:flex-row sm:items-center sm:p-6">
         <div><div className="mono text-[10px] uppercase tracking-[.15em] text-[#6f8295]">SENDING WORKSPACE</div><h2 className="display mt-2 text-xl font-bold text-[#1c3044]">Your tools, one workspace.</h2><p className="mt-2 max-w-xl text-[12px] leading-5 text-[#637487]">Contacts, lists, sender settings, and campaign results stay within your tenant workspace.</p></div>
         <div className="flex shrink-0 flex-wrap gap-2"><Link href="/sending-settings" data-testid="link-workspace-sender" className="inline-flex items-center gap-2 rounded-md bg-[#174f99] px-3.5 py-2.5 text-[11px] font-semibold text-white no-underline hover:bg-[#103f7e]">Email Setup <ArrowRight className="h-3.5 w-3.5"/></Link><Link href="/campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#cad7e2] bg-white/75 px-3.5 py-2.5 text-[11px] font-semibold text-[#355571] no-underline hover:bg-white">Campaigns <ArrowRight className="h-3.5 w-3.5"/></Link></div>
-      </Panel>
-      <Panel className="p-5 sm:p-6">
-        <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">GETTING STARTED</div><div className="mt-2 flex items-end justify-between gap-3"><div><h2 className="display text-xl font-bold">Workspace setup</h2><p className="mt-1 text-[11px] text-[#778291]">{data.setupStepsCompleted} of {data.setupStepsTotal} steps completed</p></div><span className="mono text-[15px] font-semibold text-[#245b9b]">{setupPct}%</span></div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf0f3]"><div className="h-full rounded-full bg-[#4d897e] transition-all" style={{ width: `${setupPct}%` }}/></div>
-        <div className="mt-4 grid gap-2.5 text-[11px]"><div className="flex items-center justify-between"><span className="text-[#647182]">Email verified</span><StatusPill tone={user.emailVerified ? 'blue' : 'orange'}>{user.emailVerified ? 'Done' : 'Needed'}</StatusPill></div><div className="flex items-center justify-between"><span className="text-[#647182]">Sender identity</span><Link href="/sending-settings" className="font-semibold text-[#245b9b] no-underline">Configure</Link></div><div className="flex items-center justify-between"><span className="text-[#647182]">Audience</span><div className="flex gap-3"><Link href="/contacts" className="font-semibold text-[#245b9b] no-underline">Contacts</Link><Link href="/lists" className="font-semibold text-[#245b9b] no-underline">Lists</Link></div></div><div className="flex items-center justify-between border-t border-[#edf0f2] pt-2.5"><span className="text-[#647182]">Plan</span><Link href="/plans" className="font-semibold capitalize text-[#245b9b] no-underline">{data.subscriptionStatus} · View billing</Link></div></div>
       </Panel>
     </section>
     <div className="flex flex-wrap gap-2"><Link href="/contacts" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Contacts</Link><Link href="/companies" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Companies</Link><Link href="/lists" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Lists</Link><Link href="/plans" data-testid="link-workspace-plans" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Plans & billing</Link><Link href="/profile" data-testid="link-workspace-profile" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Profile & security</Link></div>
@@ -1331,6 +1387,7 @@ function ProfilePage({ user }: { user: AuthUser }) {
         onSuccess: data => {
           qc.setQueryData(getGetCurrentUserQueryKey(), data);
           qc.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
           if (user.emailVerified && !data.emailVerified) {
             sessionStorage.setItem('mailflow-verification-email', data.email);
             setLocation('/verify-email');

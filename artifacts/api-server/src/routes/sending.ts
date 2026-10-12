@@ -8,6 +8,7 @@ import {
   gt,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lte,
   lt,
@@ -5385,6 +5386,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     leadStatusRows,
     contactFieldOptions,
     [campaignCountRow],
+    [queuedCampaignCountRow],
     campaignRows,
   ] = await Promise.all([
     getCurrentSubscriptionForUser(userId),
@@ -5467,6 +5469,15 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       .select({ value: count() })
       .from(emailCampaignsTable)
       .where(eq(emailCampaignsTable.userId, userId)),
+    db
+      .select({ value: count() })
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          isNotNull(emailCampaignsTable.queuedAt),
+        ),
+      ),
     db
       .select({
         id: emailCampaignsTable.id,
@@ -5635,11 +5646,19 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     }
     return Array.from(counts, ([value, count]) => ({ value, count }));
   };
-  const setupStepsCompleted =
-    Number(req.authUser!.emailVerified) +
-    Number(Boolean(sender?.verifiedAt)) +
-    Number(contacts > 0) +
-    Number(activeLists > 0);
+  const setupChecklist = {
+    profile: Boolean(
+      req.authUser!.emailVerified &&
+      req.authUser!.firstName.trim() &&
+      req.authUser!.lastName.trim() &&
+      req.authUser!.username.trim(),
+    ),
+    emailSetup: Boolean(sender?.verifiedAt),
+    contact: contacts > 0,
+    list: activeLists > 0,
+    campaignQueued: Number(queuedCampaignCountRow?.value ?? 0) > 0,
+  };
+  const setupStepsCompleted = Object.values(setupChecklist).filter(Boolean).length;
   res.json(GetUserDashboardResponse.parse({
     subscriptionStatus:
       subscription?.status === "active"
@@ -5661,8 +5680,9 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     leadStatuses: buildContactSegments(leadStatusRows, "leadStatus"),
     campaignCount: Number(campaignCountRow?.value ?? 0),
     campaigns: dashboardCampaigns,
+    setupChecklist,
     setupStepsCompleted,
-    setupStepsTotal: 4,
+    setupStepsTotal: 5,
   }));
 });
 
