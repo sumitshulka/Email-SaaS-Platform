@@ -107,6 +107,42 @@ function noReplyAddress(localPart: string): boolean {
 }
 
 type SmtpReply = { code: number; text: string };
+type SmtpProbeEvidence = {
+  recipientCode: number;
+  catchAllCode: number;
+  mailServer: string;
+};
+
+export function classifySmtpProbeEvidence(
+  results: SmtpProbeEvidence[],
+  incompleteHostCount: number,
+): "accepted" | "rejected" | "catch_all" | "inconclusive" {
+  if (results.some(({ catchAllCode }) => catchAllCode >= 200 && catchAllCode < 300)) {
+    return "catch_all";
+  }
+  if (results.some(({ recipientCode, catchAllCode }) =>
+    recipientCode >= 200 &&
+    recipientCode < 300 &&
+    catchAllCode >= 500 &&
+    catchAllCode < 600
+  )) {
+    return "accepted";
+  }
+  if (
+    results.length > 0 &&
+    incompleteHostCount === 0 &&
+    results.every(({ recipientCode, catchAllCode }) =>
+      recipientCode >= 500 &&
+      recipientCode < 600 &&
+      catchAllCode >= 500 &&
+      catchAllCode < 600
+    )
+  ) {
+    return "rejected";
+  }
+  return "inconclusive";
+}
+
 async function probeServer(host: string, address: string, domain: string, recipient: string): Promise<{ recipient: SmtpReply; catchAll: SmtpReply }> {
   const socket = net.createConnection({ host: address, port: 25 });
   socket.setTimeout(SMTP_TIMEOUT_MS);
@@ -191,37 +227,49 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
   const providerHosts = hosts.filter((host) => provider.matches(host));
   const probeHosts = providerHosts.length ? providerHosts : hosts;
   let lastHost: string | null = null;
+  let incompleteHostCount = 0;
+  const evidence: SmtpProbeEvidence[] = [];
   for (const host of probeHosts.slice(0, 2)) {
     try {
       const addresses = await lookup(host, { all: true, verbatim: true });
       const publicAddress = addresses.find(address => isPublicAddress(address.address));
-      if (!publicAddress) continue;
+      if (!publicAddress) {
+        incompleteHostCount += 1;
+        continue;
+      }
       lastHost = host;
       const result = await probeServer(host, publicAddress.address, domain, email.trim());
-      const accepted = result.recipient.code >= 200 && result.recipient.code < 300;
-      const rejected = result.recipient.code >= 500 && result.recipient.code < 600;
-      const catchAll = result.catchAll.code >= 200 && result.catchAll.code < 300;
-      if (catchAll) {
-        return { status: "catch_all", checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: host, catchAll: true, noReplyStyle, message: `${provider.name} accepts a randomly generated address too, so mailbox existence cannot be confirmed.` };
-      }
-      if (accepted) {
-        return { status: "accepted", checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: host, catchAll: false, noReplyStyle, message: `${provider.name} accepted this recipient during an SMTP check. This is not proof of inbox delivery or future acceptance.` };
-      }
-      if (rejected) {
-        return { status: "rejected", checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: host, catchAll: false, noReplyStyle, message: `${provider.name} explicitly rejected this recipient during the SMTP check.` };
-      }
+      evidence.push({
+        recipientCode: result.recipient.code,
+        catchAllCode: result.catchAll.code,
+        mailServer: host,
+      });
     } catch {
-      // Continue to the next advertised MX. Do not log or return remote server text.
+      incompleteHostCount += 1;
     }
   }
+  const classification = classifySmtpProbeEvidence(evidence, incompleteHostCount);
+  if (classification === "catch_all") {
+    const outcomeHost = evidence.find(({ catchAllCode }) => catchAllCode >= 200 && catchAllCode < 300)?.mailServer ?? lastHost;
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: true, noReplyStyle, message: `${provider.name} accepts a randomly generated address too, so mailbox existence cannot be confirmed.` };
+  }
+  if (classification === "accepted") {
+    const outcomeHost = evidence.find(({ recipientCode, catchAllCode }) =>
+      recipientCode >= 200 && recipientCode < 300 && catchAllCode >= 500 && catchAllCode < 600
+    )?.mailServer ?? lastHost;
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: false, noReplyStyle, message: `${provider.name} accepted this recipient and rejected the random control address during an SMTP check. This is not proof of inbox delivery or future acceptance.` };
+  }
+  if (classification === "rejected") {
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: lastHost, catchAll: false, noReplyStyle, message: `${provider.name} rejected both the recipient and random control address on each reachable mail server checked.` };
+  }
   return {
-    status: "inconclusive",
+    status: classification,
     checkedAt,
     providerName: provider.name,
     verificationMethod: provider.method,
     mailServer: lastHost,
     catchAll: null,
     noReplyStyle,
-    message: `${provider.name} did not provide a conclusive recipient answer. No message was sent.`,
+    message: `${provider.name} did not provide consistent, conclusive recipient answers across the mail servers checked. No message was sent.`,
   };
 }

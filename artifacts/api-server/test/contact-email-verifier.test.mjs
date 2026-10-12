@@ -1,9 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifySmtpProbeEvidence,
   identifyMailProvider,
   verifyContactEmail,
 } from "../src/lib/contact-email-verifier.ts";
+
+test("requires consistent replies before calling a mailbox rejected", () => {
+  const rejection = { recipientCode: 550, catchAllCode: 550, mailServer: "mx.example" };
+  assert.equal(classifySmtpProbeEvidence([rejection], 0), "rejected");
+  assert.equal(classifySmtpProbeEvidence([rejection], 1), "inconclusive");
+  assert.equal(classifySmtpProbeEvidence([rejection, {
+    recipientCode: 451,
+    catchAllCode: 550,
+    mailServer: "mx2.example",
+  }], 0), "inconclusive");
+  assert.equal(classifySmtpProbeEvidence([{
+    recipientCode: 250,
+    catchAllCode: 550,
+    mailServer: "mx.example",
+  }], 1), "accepted");
+  assert.equal(classifySmtpProbeEvidence([{
+    recipientCode: 550,
+    catchAllCode: 250,
+    mailServer: "mx.example",
+  }], 0), "catch_all");
+});
 
 test("identifies common mailbox providers from their published MX hosts", () => {
   assert.equal(

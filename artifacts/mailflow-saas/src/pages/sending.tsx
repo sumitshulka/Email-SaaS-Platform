@@ -995,6 +995,7 @@ export function ContactsPage() {
               <p><span className="font-semibold text-[#24364a]">Check performed:</span> {emailVerification.result.verificationMethod}</p>
               {emailVerification.result.mailServer && <p><span className="font-semibold text-[#24364a]">Mail server checked:</span> {emailVerification.result.mailServer}</p>}
             </div>
+            <p className="text-[11px] leading-5 text-[#718094]">This consent-free check uses public DNS and SMTP responses only. It does not sign in to the provider or query a private mailbox directory, and it never sends a message.</p>
             <p role="status" data-testid="status-contact-email-verification-result" className="rounded-lg border border-[#e3e8ee] bg-[#f8fafc] p-4 text-[13px] leading-6 text-[#435267]">{emailVerification.result.message}</p>
             {emailVerification.result.noReplyStyle && <p className="rounded-md bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">The address name resembles a no-reply alias. This is only a naming hint; reply behavior cannot be checked without sending a message.</p>}
             <p className="text-[10px] leading-5 text-[#788596]">SMTP checks are best-effort, not proof of inbox delivery or future sendability. Catch-all servers may accept addresses that do not exist.</p>
