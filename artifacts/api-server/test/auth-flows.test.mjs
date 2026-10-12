@@ -10827,6 +10827,145 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("keeps a scheduled campaign pause in effect until its resume time", async () => {
+    const owner = await loggedInUser({
+      username: "scheduled-campaign-resume-owner",
+    });
+    const [contact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: owner.user.id,
+        email: "scheduled@campaign-resume.test",
+        firstName: "Scheduled",
+        subscribed: true,
+      })
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.campaign-resume.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("campaign-resume-user"),
+        passwordEncrypted: securityModule.encryptSecret("campaign-resume-password"),
+        fromName: "Campaign Resume Test",
+        fromEmail: "sender@campaign-resume.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Scheduled campaign resume",
+        subject: "A scheduled update",
+        textBody: "This message waits for the scheduled resume.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    const [recipient] = await db
+      .insert(dbModule.emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })
+      .returning();
+    const resumeAt = new Date(Date.now() + 60_000);
+    const pauseResponse = await api(`/campaigns/${campaign.id}/pause`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { paused: true, resumeAt: resumeAt.toISOString() },
+    });
+    assert.equal(pauseResponse.response.status, 200, JSON.stringify(pauseResponse.body));
+    assert.equal(pauseResponse.body.paused, true);
+    assert.equal(
+      new Date(pauseResponse.body.resumeAt).getTime(),
+      resumeAt.getTime(),
+    );
+
+    const deliveredTo = [];
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      return { accepted: true };
+    });
+
+    try {
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        0,
+      );
+      assert.deepEqual(deliveredTo, []);
+      const [pausedCampaign] = await db
+        .select({
+          pausedAt: dbModule.emailCampaignsTable.pausedAt,
+          resumeAt: dbModule.emailCampaignsTable.resumeAt,
+        })
+        .from(dbModule.emailCampaignsTable)
+        .where(eq(dbModule.emailCampaignsTable.id, campaign.id));
+      assert.ok(pausedCampaign.pausedAt);
+      assert.equal(pausedCampaign.resumeAt.getTime(), resumeAt.getTime());
+      const [queuedRecipient] = await db
+        .select({
+          status: dbModule.emailCampaignRecipientsTable.status,
+          attempts: dbModule.emailCampaignRecipientsTable.attempts,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(queuedRecipient.status, "queued");
+      assert.equal(queuedRecipient.attempts, 0);
+      const earlyAttempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id));
+      assert.equal(earlyAttempts.length, 0);
+
+      // Move the persisted resume time into the past to represent that the
+      // scheduled time has arrived without making the test wait on a timer.
+      await db
+        .update(dbModule.emailCampaignsTable)
+        .set({ resumeAt: new Date(Date.now() - 1000) })
+        .where(eq(dbModule.emailCampaignsTable.id, campaign.id));
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        1,
+      );
+      assert.deepEqual(deliveredTo, [recipient.email]);
+      const [resumedCampaign] = await db
+        .select({
+          pausedAt: dbModule.emailCampaignsTable.pausedAt,
+          resumeAt: dbModule.emailCampaignsTable.resumeAt,
+        })
+        .from(dbModule.emailCampaignsTable)
+        .where(eq(dbModule.emailCampaignsTable.id, campaign.id));
+      assert.equal(resumedCampaign.pausedAt, null);
+      assert.equal(resumedCampaign.resumeAt, null);
+      const [deliveredRecipient] = await db
+        .select({
+          status: dbModule.emailCampaignRecipientsTable.status,
+          attempts: dbModule.emailCampaignRecipientsTable.attempts,
+        })
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+      assert.equal(deliveredRecipient.status, "delivered");
+      assert.equal(deliveredRecipient.attempts, 1);
+    } finally {
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
   it("does not claim a recipient when maintenance starts after the worker check", async () => {
     const owner = await loggedInUser({
       username: "maintenance-claim-race-owner",
