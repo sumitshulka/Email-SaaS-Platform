@@ -516,6 +516,7 @@ export function PackageCheckoutPage() {
     const currentPackages = await packagesQuery.refetch();
     if (currentPackages.isError || !currentPackages.data) {
       setPlanAvailability('check_failed');
+      setReplacementError('We could not confirm the current plans. Please try again.');
       return;
     }
     const selectedStillAvailable = currentPackages.data.packages.some(item => item.id === verifiedPackageId);

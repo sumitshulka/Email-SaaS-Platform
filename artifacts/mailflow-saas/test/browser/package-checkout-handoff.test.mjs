@@ -133,6 +133,7 @@ async function installCheckoutFixtures(context, {
   packages,
   unavailablePackageIdOnVerify,
   packageChangesOnVerify,
+  packageLookupFailuresAfterVerification = 0,
   initialUser = null,
   scheduledSubscription = null,
 }) {
@@ -143,6 +144,8 @@ async function installCheckoutFixtures(context, {
     scheduledSubscription,
     packages: [...packages],
     requestBodies: [],
+    verificationCompleted: false,
+    packageLookupFailuresRemaining: packageLookupFailuresAfterVerification,
     orderAttempts: [],
     freeActivationAttempts: [],
   };
@@ -180,6 +183,10 @@ async function installCheckoutFixtures(context, {
     }
     if (pathname === '/api/auth/password-policy') return respond(200, { passwordMinimumLength: 12 });
     if (pathname === '/api/subscriptions/packages' && method === 'GET') {
+      if (state.verificationCompleted && state.packageLookupFailuresRemaining > 0) {
+        state.packageLookupFailuresRemaining -= 1;
+        return respond(503, { error: 'Current plans are temporarily unavailable.' });
+      }
       return respond(200, {
         packages: state.packages,
         sendingLimits: { emailsPerHourPerSmtp: 100, emailsPerDayPerSmtp: 1000 },
@@ -199,6 +206,7 @@ async function installCheckoutFixtures(context, {
       if (unavailablePackageIdOnVerify) {
         state.packages = state.packages.filter(pkg => pkg.id !== unavailablePackageIdOnVerify);
       }
+      state.verificationCompleted = true;
       return respond(200, accountExists
         ? { accountExists: true }
         : { accountExists: false, registrationProofToken: 'private-registration-proof-token' });
@@ -523,6 +531,61 @@ describe('package checkout account and payment handoff', { concurrency: false },
       }
     });
   }
+
+  it('recovers verified signup after current-plan lookups fail, without repeating email verification', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const state = await installCheckoutFixtures(context, {
+      accountExists: false,
+      packages: [freePackage],
+      // TanStack Query retries each failed lookup once. Fail both the post-verification
+      // lookup and the first explicit retry, then allow the next retry to succeed.
+      packageLookupFailuresAfterVerification: 4,
+    });
+    const page = await context.newPage();
+    const email = 'verified-plan-retry@example.test';
+    try {
+      await page.goto(`${baseUrl}/pricing`);
+      await page.getByTestId(`package-cta-${freePackage.id}`).click();
+      await page.waitForURL(url => url.pathname.startsWith('/package-checkout/'));
+      await page.getByTestId('input-package-checkout-email').fill(email);
+      await page.getByTestId('button-package-checkout-continue').click();
+      await page.getByTestId('input-package-checkout-code').waitFor();
+      await page.getByTestId('input-package-checkout-code').fill('123456');
+      await page.getByTestId('button-package-checkout-continue').click();
+
+      const retryButton = page.getByTestId('button-retry-plan-availability');
+      await retryButton.waitFor();
+      assert.equal(await page.locator('[data-testid="input-package-checkout-code"]').count(), 0);
+      assert.equal(await page.locator('[data-testid="input-package-checkout-email"]').count(), 0);
+      assert.equal(await page.getByTestId('input-first-name').count(), 0, 'registration stays blocked until plans are confirmed');
+
+      await retryButton.click();
+      await page.getByTestId('status-replacement-plan-error').waitFor();
+      assert.equal(await page.getByTestId('input-first-name').count(), 0, 'a failed retry must not unlock registration');
+      assert.equal(await retryButton.isVisible(), true, 'the customer can clearly retry the plan check');
+      assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/request-code').length, 1);
+      assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length, 1);
+
+      await retryButton.click();
+      await page.waitForURL(url => url.pathname === '/register');
+      assert.equal(new URL(page.url()).searchParams.get('packageId'), freePackage.id);
+      assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/request-code').length, 1);
+      assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length, 1);
+
+      await page.getByTestId('input-first-name').fill('Verified');
+      await page.getByTestId('input-last-name').fill('Customer');
+      await page.getByTestId('input-register-password').fill('verified-plan-retry-password');
+      await page.getByTestId('button-create-account').click();
+      await page.waitForURL(url => url.pathname === '/plans');
+      assert.equal(state.authenticated, true);
+      assert.equal(state.user.email, email);
+      assert.equal(state.requestBodies.filter(item => item.pathname === '/api/auth/package-checkout/verify-code').length, 1);
+      assert.equal(state.requestBodies.find(item => item.pathname === '/api/auth/register')?.body.emailVerificationProof, 'private-registration-proof-token');
+      await page.getByTestId('status-payment').getByText('Subscription active').waitFor();
+    } finally {
+      await context.close();
+    }
+  });
 
   it('authenticates the existing account before routing the selected paid package to Razorpay and preserves it on dismissal', async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
