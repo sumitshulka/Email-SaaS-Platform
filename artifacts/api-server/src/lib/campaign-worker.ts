@@ -42,6 +42,7 @@ import { findProhibitedCampaignContent } from "./profanity-filter";
 import { logger } from "./logger";
 import {
   defaultPlatformSettings,
+  getCampaignEmailSpacingSeconds,
   getMinimumEmailSpacingSeconds,
   getPlatformSettings,
 } from "./platform-settings";
@@ -51,6 +52,14 @@ const STALE_DELIVERY_MINUTES = 10;
 let beforeDeliveryClaimForTests: (() => Promise<void>) | null = null;
 const tenantClaimQueues = new Map<string, Promise<void>>();
 let candidateRecipientIdsForTests: string[] | null = null;
+
+let emailSpacingWindowForTests: { minimumSeconds: number; maximumSeconds: number } | null = null;
+
+export function setCampaignEmailSpacingWindowForTests(
+  window: { minimumSeconds: number; maximumSeconds: number } | null,
+): void {
+  emailSpacingWindowForTests = window;
+}
 
 function prohibitedKeywordsFromSetting(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -363,7 +372,12 @@ async function rateLimitDelay(
 
   let allowedAt: Date | null = null;
   const [latestAttempt] = await tx
-    .select({ attemptedAt: emailSendAttemptsTable.attemptedAt })
+    .select({
+      id: emailSendAttemptsTable.id,
+      attemptedAt: emailSendAttemptsTable.attemptedAt,
+      completedAt: emailSendAttemptsTable.completedAt,
+      outcome: emailSendAttemptsTable.outcome,
+    })
     .from(emailSendAttemptsTable)
     .leftJoin(
       emailCampaignRecipientsTable,
@@ -380,14 +394,26 @@ async function rateLimitDelay(
     .orderBy(desc(emailSendAttemptsTable.attemptedAt))
     .limit(1);
   if (latestAttempt) {
-    const spacingSeconds = getMinimumEmailSpacingSeconds({
-      defaultEmailsPerHour: hourlyLimit,
-      queuePollingSeconds,
-    });
-    const pacedAllowedAt = new Date(
-      latestAttempt.attemptedAt.getTime() + spacingSeconds * 1000,
-    );
-    if (pacedAllowedAt > now) allowedAt = pacedAllowedAt;
+    if (latestAttempt.outcome === "pending" && !latestAttempt.completedAt) {
+      allowedAt = new Date(
+        now.getTime() + Math.max(1, queuePollingSeconds) * 1000,
+      );
+    } else {
+      const previousSendFinishedAt =
+        latestAttempt.completedAt ?? latestAttempt.attemptedAt;
+      const spacingSeconds = getCampaignEmailSpacingSeconds(
+        latestAttempt.id,
+        {
+          defaultEmailsPerHour: hourlyLimit,
+          queuePollingSeconds,
+        },
+        emailSpacingWindowForTests,
+      );
+      const pacedAllowedAt = new Date(
+        previousSendFinishedAt.getTime() + spacingSeconds * 1000,
+      );
+      if (pacedAllowedAt > now) allowedAt = pacedAllowedAt;
+    }
   }
 
   if ((hourly?.value ?? 0) >= hourlyLimit) {

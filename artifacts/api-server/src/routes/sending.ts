@@ -799,6 +799,7 @@ async function campaignPayloads(
     .select({
       senderAccountId: sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId})`,
       attemptedAt: emailSendAttemptsTable.attemptedAt,
+      completedAt: emailSendAttemptsTable.completedAt,
     })
     .from(emailSendAttemptsTable)
     .leftJoin(
@@ -5071,6 +5072,7 @@ router.post(
               .select({
                 senderAccountId: sql<string | null>`coalesce(${emailSendAttemptsTable.senderAccountId}, ${emailCampaignsTable.senderAccountId})`,
                 attemptedAt: emailSendAttemptsTable.attemptedAt,
+                completedAt: emailSendAttemptsTable.completedAt,
               })
               .from(emailSendAttemptsTable)
               .leftJoin(

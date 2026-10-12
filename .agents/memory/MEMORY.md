@@ -35,6 +35,7 @@
 - [Paid plan change expiry](paid-upgrade-expiry.md) — validate the original active plan and expiry at capture; schedule lower-limit plans at that exact expiry.
 - [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
 - [Campaign claim atomicity](campaign-claim-atomicity.md) — win the conditional queued-to-sending transition before recording an attempt or calling SMTP.
+- [Campaign mailbox pacing](campaign-mailbox-pacing.md) — space all sends through one SMTP mailbox by a randomized 5–15 minutes, across campaigns, while retaining stricter caps.
 - [Campaign audience exclusions](campaign-audience-exclusions.md) — draft list membership stays live, with saved contact-level exclusions; queueing rechecks current eligibility.
 - [Global company privacy](global-company-privacy.md) — keep the global catalog profile-only; contacts stay tenant-private while linked company profiles sync.
 - [Company intelligence policy](company-intelligence-policy.md) — explicit reusable research, cited evidence and dated signals; no master overwrite, private-contact research or user-facing internal costs.

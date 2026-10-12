@@ -97,6 +97,48 @@ export function getMinimumEmailSpacingSeconds(
   return Math.max(pollingSeconds, Math.ceil(3600 / hourlyCap));
 }
 
+export const CAMPAIGN_EMAIL_GAP_MIN_SECONDS = 5 * 60;
+export const CAMPAIGN_EMAIL_GAP_MAX_SECONDS = 15 * 60;
+export const CAMPAIGN_EMAIL_GAP_AVERAGE_SECONDS =
+  (CAMPAIGN_EMAIL_GAP_MIN_SECONDS + CAMPAIGN_EMAIL_GAP_MAX_SECONDS) / 2;
+
+export function getCampaignEmailGapSeconds(
+  attemptId: string,
+  minimumSeconds = CAMPAIGN_EMAIL_GAP_MIN_SECONDS,
+  maximumSeconds = CAMPAIGN_EMAIL_GAP_MAX_SECONDS,
+): number {
+  const parsedBits = Number.parseInt(
+    attemptId.replaceAll("-", "").slice(-8),
+    16,
+  );
+  const randomBits = Number.isFinite(parsedBits)
+    ? parsedBits
+    : Array.from(attemptId).reduce(
+        (hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0,
+        0,
+      );
+  const range = maximumSeconds - minimumSeconds + 1;
+  return minimumSeconds + (randomBits % range);
+}
+
+export function getCampaignEmailSpacingSeconds(
+  attemptId: string,
+  settings: Pick<
+    PlatformSettingsInput,
+    "defaultEmailsPerHour" | "queuePollingSeconds"
+  >,
+  window?: { minimumSeconds: number; maximumSeconds: number } | null,
+): number {
+  return Math.max(
+    getCampaignEmailGapSeconds(
+      attemptId,
+      window?.minimumSeconds ?? CAMPAIGN_EMAIL_GAP_MIN_SECONDS,
+      window?.maximumSeconds ?? CAMPAIGN_EMAIL_GAP_MAX_SECONDS,
+    ),
+    getMinimumEmailSpacingSeconds(settings),
+  );
+}
+
 export type CampaignQueueEstimateRecipient = {
   campaignId: string;
   senderAccountId: string | null;
@@ -107,6 +149,7 @@ export type CampaignQueueEstimateRecipient = {
 export type CampaignQueueEstimateAttempt = {
   senderAccountId: string | null;
   attemptedAt: Date;
+  completedAt?: Date | null;
 };
 
 type DeliveryForecastState = {
@@ -132,7 +175,10 @@ function scheduleForecastAttempt(
   >,
   nowMs: number,
 ): number {
-  const spacing = getMinimumEmailSpacingSeconds(settings);
+  const spacing = Math.max(
+    CAMPAIGN_EMAIL_GAP_AVERAGE_SECONDS,
+    getMinimumEmailSpacingSeconds(settings),
+  );
   const hourlyLimit = Math.max(1, settings.defaultEmailsPerHour);
   const dailyLimit = Math.max(1, settings.maxEmailsPerDay);
   const pollingMs = Math.max(1, settings.queuePollingSeconds) * 1000;
@@ -249,7 +295,10 @@ export function estimateCampaignQueueDeliverySeconds(
     if (attempt.attemptedAt.getTime() > nowMs) continue;
     const attempts =
       historicalAttemptsBySender.get(attempt.senderAccountId) ?? [];
-    attempts.push(attempt.attemptedAt);
+    attempts.push(
+      attempt.completedAt ??
+        new Date(Math.max(attempt.attemptedAt.getTime(), nowMs)),
+    );
     historicalAttemptsBySender.set(attempt.senderAccountId, attempts);
   }
   const statesBySender = new Map<string | null, DeliveryForecastState>();

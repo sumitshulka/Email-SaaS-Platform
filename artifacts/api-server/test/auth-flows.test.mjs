@@ -737,6 +737,11 @@ const [
   import("../src/lib/microsoft365-trace.ts"),
 ]);
 
+campaignWorkerModule.setCampaignEmailSpacingWindowForTests({
+  minimumSeconds: 0,
+  maximumSeconds: 0,
+});
+
 const {
   db,
   usersTable,
@@ -11002,6 +11007,133 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       assert.ok(attempts[0].completedAt);
     } finally {
       releaseTransport();
+      emailModule.setTenantEmailTransportForTests(async (message) => {
+        tenantDeliveries.push(message);
+        return { accepted: true };
+      });
+    }
+  });
+
+  it("randomizes the gap between sends on the same SMTP mailbox from five to fifteen minutes", async () => {
+    const owner = await loggedInUser({ username: "randomized-mailbox-gap-owner" });
+    const contacts = await db
+      .insert(dbModule.contactsTable)
+      .values([
+        {
+          userId: owner.user.id,
+          email: "first@randomized-gap.test",
+          firstName: "First",
+          subscribed: true,
+        },
+        {
+          userId: owner.user.id,
+          email: "second@randomized-gap.test",
+          firstName: "Second",
+          subscribed: true,
+        },
+      ])
+      .returning();
+    const [sender] = await db
+      .insert(dbModule.tenantSendingConfigurationTable)
+      .values({
+        userId: owner.user.id,
+        host: "smtp.randomized-gap.test",
+        port: 2525,
+        encryption: "none",
+        usernameEncrypted: securityModule.encryptSecret("randomized-gap-user"),
+        passwordEncrypted: securityModule.encryptSecret("randomized-gap-password"),
+        fromName: "Randomized Gap Test",
+        fromEmail: "sender@randomized-gap.test",
+        verifiedAt: new Date(),
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(dbModule.emailCampaignsTable)
+      .values({
+        userId: owner.user.id,
+        senderAccountId: sender.id,
+        name: "Randomized mailbox gap",
+        subject: "A campaign update",
+        textBody: "This campaign uses randomized mailbox pacing.",
+        unsubscribeOrigin: "https://app.mailflow.test",
+        status: "queued",
+      })
+      .returning();
+    await db.insert(dbModule.emailCampaignRecipientsTable).values(
+      contacts.map((contact) => ({
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date(Date.now() - 1_000),
+      })),
+    );
+    await db
+      .insert(dbModule.systemConfigurationTable)
+      .values({
+        key: "platform",
+        value: {
+          maintenanceMode: false,
+          defaultEmailsPerHour: 100,
+          maxEmailsPerDay: 100,
+          queuePollingSeconds: 1,
+          deliveryTrackingEnabled: true,
+        },
+      })
+      .onConflictDoUpdate({
+        target: dbModule.systemConfigurationTable.key,
+        set: {
+          value: {
+            maintenanceMode: false,
+            defaultEmailsPerHour: 100,
+            maxEmailsPerDay: 100,
+            queuePollingSeconds: 1,
+            deliveryTrackingEnabled: true,
+          },
+        },
+      });
+
+    const deliveredTo = [];
+    campaignWorkerModule.setCampaignEmailSpacingWindowForTests({
+      minimumSeconds: 5 * 60,
+      maximumSeconds: 15 * 60,
+    });
+    emailModule.setTenantEmailTransportForTests(async (message) => {
+      tenantDeliveries.push(message);
+      deliveredTo.push(message.to);
+      return { accepted: true, smtpResponse: "250 2.0.0 SMTP accepted", smtpCode: 250 };
+    });
+
+    try {
+      assert.equal(await campaignWorkerModule.processPendingCampaignDeliveries(10), 1);
+      assert.equal(deliveredTo.length, 1);
+      const attempts = await db
+        .select()
+        .from(dbModule.emailSendAttemptsTable)
+        .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
+      const [queuedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(
+          and(
+            eq(dbModule.emailCampaignRecipientsTable.campaignId, campaign.id),
+            eq(dbModule.emailCampaignRecipientsTable.status, "queued"),
+          ),
+        );
+      assert.equal(attempts.length, 1);
+      assert.ok(attempts[0].completedAt);
+      assert.ok(queuedRecipient);
+      const gapMs =
+        queuedRecipient.nextAttemptAt.getTime() - attempts[0].completedAt.getTime();
+      assert.ok(gapMs >= 5 * 60_000 && gapMs <= 15 * 60_000);
+    } finally {
+      campaignWorkerModule.setCampaignEmailSpacingWindowForTests({
+        minimumSeconds: 0,
+        maximumSeconds: 0,
+      });
       emailModule.setTenantEmailTransportForTests(async (message) => {
         tenantDeliveries.push(message);
         return { accepted: true };
