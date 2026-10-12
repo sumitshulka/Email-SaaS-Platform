@@ -1584,6 +1584,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     },
   });
   const campaignReviewContacts = campaignReviewContactsQuery.data?.contacts ?? [];
+  const campaignReviewError = campaignReviewContactsQuery.error;
+  const campaignReviewErrorStatus = campaignReviewError && typeof campaignReviewError === 'object' && 'status' in campaignReviewError && typeof campaignReviewError.status === 'number'
+    ? campaignReviewError.status
+    : null;
   const campaignTree = useMemo(() => {
     const byId = new Map(campaigns.map(campaign => [campaign.id, campaign]));
     const children = new Map<string, CampaignSummary[]>();
@@ -2205,7 +2209,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
             <label><span className={labelClass}>Review contacts in list</span><select className={inputClass} value={campaignReviewListId} onChange={event => { setCampaignReviewListId(event.target.value); setCampaignReviewPage(1); }}><option value="">Choose selected list</option>{form.listIds.map(id => <option key={id} value={id}>{lists.find(list => list.id === id)?.name ?? 'Selected list'}</option>)}</select></label>
             <label><span className={labelClass}>Search contacts</span><input type="search" className={inputClass} value={campaignReviewSearch} onChange={event => { setCampaignReviewSearch(event.target.value); setCampaignReviewPage(1); }} placeholder="Name or email"/></label>
           </div>
-          {!campaignReviewListId ? <p className="rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#6f7b88]">Choose a list to review its contacts.</p> : campaignReviewContactsQuery.isLoading ? <p className="p-3 text-[11px] text-[#6f7b88]">Loading contacts…</p> : campaignReviewContactsQuery.isError ? <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">Could not load these contacts. Retry before continuing.<Button variant="outline" testId="button-retry-campaign-contacts" onClick={() => void campaignReviewContactsQuery.refetch()}>Retry</Button></div> : <div className="overflow-hidden rounded-md border border-[#e3e8ed]">
+          {!campaignReviewListId ? <p className="rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#6f7b88]">Choose a list to review its contacts.</p> : campaignReviewContactsQuery.isLoading ? <p role="status" className="p-3 text-[11px] text-[#6f7b88]">Loading contacts from {lists.find(list => list.id === campaignReviewListId)?.name ?? 'the selected list'}…</p> : campaignReviewContactsQuery.isError ? <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">
+            <div className="flex flex-wrap items-center justify-between gap-2"><span>Could not load contacts{campaignReviewErrorStatus ? ` (HTTP ${campaignReviewErrorStatus})` : ''}. Retry before continuing.</span><Button type="button" variant="outline" testId="button-retry-campaign-contacts" onClick={() => void campaignReviewContactsQuery.refetch()}>Retry</Button></div>
+            {campaignReviewError instanceof Error && <p className="mt-1 break-words text-[10px] leading-4">{campaignReviewError.message}</p>}
+          </div> : <div className="overflow-hidden rounded-md border border-[#e3e8ed]">
             <div className="max-h-72 overflow-auto">
               <table className="w-full min-w-[650px] text-left text-[11px]">
                 <thead className="sticky top-0 bg-[#f6f8fa] text-[9px] uppercase tracking-wide text-[#718091]"><tr><th className="px-3 py-2">Include</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Verification</th><th className="px-3 py-2">Subscription</th></tr></thead>
