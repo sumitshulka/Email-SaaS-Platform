@@ -2391,7 +2391,7 @@ paths:
     patch:
       operationId: setCampaignPaused
       tags: [sending]
-      summary: Pause or resume delivery for an active campaign
+      summary: Pause, resume, or update the automatic resume time for an active campaign
       requestBody:
         required: true
         content:
@@ -5107,6 +5107,7 @@ components:
       required: [id, parentCampaignId, campaignType, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, excludedContactIds, status, pausedAt, resumeAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignPauseInput:
       type: object
+      description: Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.
       properties:
         paused: { type: boolean }
         resumeAt: { type: ["string", "null"], format: date-time }

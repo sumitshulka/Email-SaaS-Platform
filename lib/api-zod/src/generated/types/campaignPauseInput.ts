@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.
+ */
 export interface CampaignPauseInput {
   paused: boolean;
   /** @nullable */

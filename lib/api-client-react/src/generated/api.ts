@@ -8254,7 +8254,7 @@ export const getSetCampaignPausedUrl = (campaignId: string,) => {
 }
 
 /**
- * @summary Pause or resume delivery for an active campaign
+ * @summary Pause, resume, or update the automatic resume time for an active campaign
  */
 export const setCampaignPaused = async (campaignId: string,
     campaignPauseInput: CampaignPauseInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignPauseResponse> => {
@@ -8321,7 +8321,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SetCampaignPausedMutationVariables = {campaignId: string;data: BodyType<CampaignPauseInput>}
 
     /**
- * @summary Pause or resume delivery for an active campaign
+ * @summary Pause, resume, or update the automatic resume time for an active campaign
  */
 export const useSetCampaignPaused = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setCampaignPaused>>, TError,SetCampaignPausedMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

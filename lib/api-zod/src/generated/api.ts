@@ -4842,7 +4842,7 @@ export const DeleteCampaignResponse = zod.void()
 
 
 /**
- * @summary Pause or resume delivery for an active campaign
+ * @summary Pause, resume, or update the automatic resume time for an active campaign
  */
 export const SetCampaignPausedParams = zod.object({
   "campaignId": zod.coerce.string().uuid()
@@ -4851,7 +4851,7 @@ export const SetCampaignPausedParams = zod.object({
 export const SetCampaignPausedBody = zod.object({
   "paused": zod.boolean(),
   "resumeAt": zod.coerce.date().nullish()
-})
+}).describe('Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.')
 
 export const SetCampaignPausedResponse = zod.object({
   "campaignId": zod.string().uuid(),
