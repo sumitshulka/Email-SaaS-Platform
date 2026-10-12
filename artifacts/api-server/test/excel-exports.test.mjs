@@ -59,6 +59,7 @@ memory.public.none(`
     company_linkedin_url varchar(2048),
     company_location varchar(200),
     subscribed boolean NOT NULL DEFAULT true,
+    email_status varchar(20),
     email_verification_status varchar(24),
     email_verification_checked_at timestamptz,
     email_verification_provider varchar(80),

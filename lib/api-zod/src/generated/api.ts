@@ -4265,6 +4265,7 @@ export const ListCampaignsResponseItem = zod.object({
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
   "resumeAt": zod.coerce.date().nullable(),
@@ -4322,6 +4323,7 @@ export const CreateCampaignBody = zod.object({
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).optional().describe('Contact IDs deselected from the live list audience.'),
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
 })
 
@@ -4351,6 +4353,7 @@ export const CreateCampaignResponse = zod.object({
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
   "resumeAt": zod.coerce.date().nullable(),
@@ -4602,6 +4605,7 @@ export const GetCampaignDashboardResponse = zod.object({
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
   "resumeAt": zod.coerce.date().nullable(),
@@ -4717,6 +4721,7 @@ export const CreateCampaignFollowUpResponse = zod.object({
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
   "resumeAt": zod.coerce.date().nullable(),
@@ -4777,6 +4782,7 @@ export const UpdateCampaignBody = zod.object({
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
   "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).optional().describe('Contact IDs deselected from the live list audience.'),
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
 })
 
@@ -4806,6 +4812,7 @@ export const UpdateCampaignResponse = zod.object({
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
   "resumeAt": zod.coerce.date().nullable(),
@@ -5008,6 +5015,7 @@ export const SendCampaignResponse = zod.object({
   "htmlBody": zod.string().nullable(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
   "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
   "pausedAt": zod.coerce.date().nullable(),
   "resumeAt": zod.coerce.date().nullable(),

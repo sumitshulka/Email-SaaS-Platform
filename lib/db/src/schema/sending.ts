@@ -308,6 +308,10 @@ export const emailCampaignsTable = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::uuid[]`),
+    excludedContactIds: uuid("excluded_contact_ids")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::uuid[]`),
     name: varchar("name", { length: 160 }).notNull(),
     objective: text("objective").notNull().default(""),
     subject: varchar("subject", { length: 200 }).notNull(),

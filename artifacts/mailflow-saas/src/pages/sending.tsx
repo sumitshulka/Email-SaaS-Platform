@@ -1501,6 +1501,7 @@ type CampaignForm = {
   htmlBody: string;
   listIds: string[];
   senderAccountId: string;
+  excludedContactIds: string[];
 };
 type CampaignVariantField = 'subjectVariants' | 'greetingVariants' | 'signatureVariants';
 const blankCampaign: CampaignForm = {
@@ -1513,6 +1514,7 @@ const blankCampaign: CampaignForm = {
   htmlBody: '',
   listIds: [],
   senderAccountId: '',
+  excludedContactIds: [],
 };
 
 export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused?: boolean } = {}) {
@@ -1525,6 +1527,11 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const aiAssist = useGenerateCampaignEmailDraft();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
+  const [campaignStep, setCampaignStep] = useState(0);
+  const [campaignStepError, setCampaignStepError] = useState('');
+  const [campaignReviewListId, setCampaignReviewListId] = useState('');
+  const [campaignReviewPage, setCampaignReviewPage] = useState(1);
+  const [campaignReviewSearch, setCampaignReviewSearch] = useState('');
   const [campaignContentError, setCampaignContentError] = useState<string | null>(null);
   const addOnCreditsQuery = useGetSubscriptionAddOns({
     query: {
@@ -1557,6 +1564,26 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [pauseTarget, setPauseTarget] = useState<CampaignSummary | null>(null);
   const campaigns = (campaignsQuery.data || []) as CampaignSummary[];
   const lists = (listsQuery.data || []) as ContactList[];
+  const campaignReviewParams = {
+    page: campaignReviewPage,
+    pageSize: 25,
+    includeHistory: false,
+    search: campaignReviewSearch,
+    status: 'all' as const,
+    listId: campaignReviewListId || 'all',
+    companyId: 'all',
+    lifecycleStage: 'all',
+    leadStatus: 'all',
+    leadSource: 'all',
+    addedWithin: 'any' as const,
+  };
+  const campaignReviewContactsQuery = useListContacts(campaignReviewParams, {
+    query: {
+      queryKey: getListContactsQueryKey(campaignReviewParams),
+      enabled: editing !== undefined && campaignStep === 1 && Boolean(campaignReviewListId),
+    },
+  });
+  const campaignReviewContacts = campaignReviewContactsQuery.data?.contacts ?? [];
   const campaignTree = useMemo(() => {
     const byId = new Map(campaigns.map(campaign => [campaign.id, campaign]));
     const children = new Map<string, CampaignSummary[]>();
@@ -1726,7 +1753,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const eligibleSampleContacts = useMemo(() => {
     const listPriority = new Map(form.listIds.map((listId, index) => [listId, index]));
     const eligible = contacts
-      .filter(contact => contact.subscribed && contact.listIds.some(listId => listPriority.has(listId)))
+      .filter(contact => contact.subscribed && !form.excludedContactIds.includes(contact.id) && contact.listIds.some(listId => listPriority.has(listId)))
       .sort((left, right) => {
         const priority = (contact: ContactOption) => Math.min(
           ...contact.listIds.map(listId => listPriority.get(listId) ?? Number.MAX_SAFE_INTEGER),
@@ -1744,19 +1771,44 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       seenEmails.add(email);
       return true;
     });
-  }, [contacts, form.listIds]);
+  }, [contacts, form.excludedContactIds, form.listIds]);
   useEffect(() => {
     if (sampleContactId && !eligibleSampleContacts.some(contact => contact.id === sampleContactId)) {
       setSampleContactId('');
     }
   }, [eligibleSampleContacts, sampleContactId]);
+  useEffect(() => {
+    if (campaignReviewListId && form.listIds.includes(campaignReviewListId)) return;
+    setCampaignReviewListId(form.listIds[0] ?? '');
+    setCampaignReviewPage(1);
+  }, [campaignReviewListId, form.listIds]);
   const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subjectVariants, form.greetingVariants, form.signatureVariants, form.textBody, form.htmlBody]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const closeCampaignEditor = () => { setEditing(undefined); setCampaignContentError(null); };
-  const openNew = () => { dismiss(); setCampaignContentError(null); setEditing(null); setForm({ ...blankCampaign, listIds: activeLists[0]?.id ? [activeLists[0].id] : [], senderAccountId: primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
-  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setEditing(campaign); setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds: campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : [], senderAccountId: campaign.senderAccountId ?? primarySenderAccountId }); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
+  const closeCampaignEditor = () => { setEditing(undefined); setCampaignContentError(null); setCampaignStepError(''); };
+  const continueCampaignStep = () => {
+    setCampaignStepError('');
+    if (campaignStep === 0 && !form.name.trim()) return setCampaignStepError('Enter an internal campaign name to continue.');
+    if (campaignStep === 1) {
+      if (!form.listIds.length) return setCampaignStepError('Select at least one active list.');
+      if (!audienceCheckReady) return setCampaignStepError('Wait for the audience check to finish, or retry it before continuing.');
+    }
+    if (campaignStep === 2 && (!form.subjectVariants.some(value => value.trim()) || !form.textBody.trim())) {
+      return setCampaignStepError('Add at least one subject line and a message body before continuing.');
+    }
+    setCampaignStep(step => Math.min(3, step + 1));
+  };
+  const toggleCampaignContact = (contactId: string, include: boolean) => {
+    setForm(current => ({
+      ...current,
+      excludedContactIds: include
+        ? current.excludedContactIds.filter(id => id !== contactId)
+        : current.excludedContactIds.includes(contactId) ? current.excludedContactIds : [...current.excludedContactIds, contactId],
+    }));
+  };
+  const openNew = () => { dismiss(); setCampaignContentError(null); setCampaignStepError(''); setCampaignStep(0); setEditing(null); const listIds = activeLists[0]?.id ? [activeLists[0].id] : []; setForm({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
+  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -1894,6 +1946,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       textBody: form.textBody.trim(),
       htmlBody: form.htmlBody.trim(),
       listIds: [...form.listIds],
+      excludedContactIds: [...form.excludedContactIds],
       senderAccountId: form.senderAccountId || null,
     };
     try {
@@ -2003,26 +2056,34 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'completed') && <Button variant="quiet" testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><CirclePlus className="h-3.5 w-3.5"/>Follow-up</Button>}{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => campaign.pausedAt ? pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) }) : setPauseTarget(campaign)}>{campaign.pausedAt ? <><Play className="h-3.5 w-3.5"/>Resume</> : <><Pause className="h-3.5 w-3.5"/>Pause</>}</Button>}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
        </tr>)}</tbody></table></div>
      </section> : <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
-    {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Only draft campaigns can be edited. Each selected list is processed in the order shown; overlapping addresses receive one email." close={closeCampaignEditor}>
+    {editing !== undefined && <Modal wide title={editing ? 'Edit campaign draft' : 'New campaign draft'} subtitle="Build and review your campaign in four guided steps. Lists remain live until queueing; contact exclusions are preserved." close={closeCampaignEditor}>
       <form onSubmit={save} className="space-y-4">
         {campaignContentError && <div role="alert" data-testid="status-campaign-content-policy-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] leading-5 text-[#99501e]">{campaignContentError}</div>}
+        <ol aria-label="Campaign setup progress" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {['Campaign basics', 'Audience', 'Email content', 'Review'].map((label, index) => <li key={label} aria-current={campaignStep === index ? 'step' : undefined}>
+            <button type="button" onClick={() => { if (index <= campaignStep) { setCampaignStep(index); setCampaignStepError(''); } }} className={cx('flex min-h-10 w-full items-center gap-2 rounded-md border px-2.5 text-left text-[11px] font-semibold transition', campaignStep === index ? 'border-[#245b9b] bg-[#edf4fc] text-[#1c4f86]' : campaignStep > index ? 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]' : 'border-[#e3e8ed] bg-white text-[#798492]')}>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px]">{index + 1}</span>{label}
+            </button>
+          </li>)}
+        </ol>
+        {campaignStepError && <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{campaignStepError}</div>}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="min-w-0 space-y-3">
-            <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>
-            <label className="block min-w-0">
+            {campaignStep === 0 && <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>}
+            {campaignStep === 0 && <label className="block min-w-0">
               <span className={labelClass}>SMTP sender account</span>
               <select data-testid="select-campaign-sender-account" className={inputClass} value={form.senderAccountId} onChange={event => setForm(current => ({ ...current, senderAccountId: event.target.value }))} disabled={senderAccountsQuery.isLoading}>
                 <option value="">Use the default account</option>
                 {senderAccounts.map(account => <option key={account.id} value={account.id}>{account.fromEmail}{account.isPrimary ? ' · default' : ''}{account.verified ? '' : ' · not verified'}</option>)}
               </select>
               <span className="mt-1 block text-[10px] leading-4 text-[#808a97]">{senderAccounts.length ? 'The chosen account sends this campaign. The default account is used when no account is selected.' : 'No SMTP account is configured. Add and verify one in Email Setup before queueing this campaign.'}</span>
-            </label>
-            <label className="block min-w-0">
+            </label>}
+            {campaignStep === 0 && <label className="block min-w-0">
               <span className={labelClass}>Campaign objective</span>
               <textarea data-testid="input-campaign-objective" rows={3} maxLength={500} value={form.objective} onChange={event => setForm(current => ({ ...current, objective: event.target.value }))} placeholder="What should this campaign achieve?" className="w-full resize-y rounded-md border border-[#d8dde4] bg-white px-3 py-2 text-[12px] leading-5 text-[#182333] outline-none placeholder:text-[#a0a8b3] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/>
               <span className="mt-1 block text-[10px] leading-4 text-[#808a97]">Internal note only; it won’t be included in the email. {form.objective.length}/500</span>
-            </label>
-            <section data-testid="panel-campaign-ai-assist" className="rounded-md border border-[#dce5ed] bg-[#f5f9fc] p-3">
+            </label>}
+            {campaignStep === 2 && <section data-testid="panel-campaign-ai-assist" className="rounded-md border border-[#dce5ed] bg-[#f5f9fc] p-3 sm:col-span-2">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div><h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[#344b62]"><Sparkles className="h-3.5 w-3.5 text-[#4276a2]"/>AI Email Assist</h3><p className="mt-1 text-[10px] leading-4 text-[#65788a]">Create a suggested subject, greeting, body, and signature from your campaign objective. This will not send the campaign.</p></div>
                 {aiAssistBalance && <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[9px] font-semibold text-[#536a80]">{aiAssistBalance.remaining} credits left</span>}
@@ -2047,9 +2108,9 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
                 <div><span className="text-[9px] font-semibold uppercase tracking-wide text-[#7b8793]">Signature</span><p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] text-[#405366]">{aiDraftPreview.signature}</p></div>
                 <Button testId="button-use-campaign-ai-draft" onClick={applyAiDraft}>Use this draft</Button>
               </div>}
-            </section>
+            </section>}
           </div>
-          <fieldset className="min-w-0">
+          {campaignStep === 1 && <fieldset className="min-w-0 sm:col-span-2">
             <legend className={labelClass}>Target lists</legend>
             <div className="overflow-hidden rounded-md border border-[#d8dde4] bg-white">
               <div className="border-b border-[#e9edf0] bg-[#fbfcfd] p-2">
@@ -2091,9 +2152,9 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
               </div>
             </div>
             <p className="mt-1.5 text-[10px] leading-4 text-[#808a97]">Choose one or more lists. Inactive lists can’t be newly selected or queued.</p>
-          </fieldset>
+          </fieldset>}
         </div>
-        <section className="rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-3" aria-label="Campaign list processing order">
+        {campaignStep === 1 && <section className="rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-3" aria-label="Campaign list processing order">
           <div><h3 className="text-[11px] font-semibold text-[#344154]">Processing order</h3><p className="mt-1 text-[10px] leading-4 text-[#788392]">If an email address appears in more than one list, the first list containing it determines the entry used. That address still receives only one email.</p></div>
           {form.listIds.length ? <ol data-testid="campaign-list-order" className="mt-2 max-h-36 space-y-1 overflow-y-auto pr-1">
             {form.listIds.map((listId, index) => {
@@ -2108,8 +2169,8 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
               </li>;
             })}
           </ol> : <p className="mt-2 text-[11px] text-[#8a5a31]">Select at least one list. You can change the order here.</p>}
-        </section>
-        {form.listIds.length > 0 && <div data-testid="campaign-audience-summary" className={cx('flex items-start gap-2 rounded-md border px-3 py-2.5 text-[11px] leading-5', campaignAudienceQuery.isError ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : campaignAudienceQuery.data?.overlappingRecipients ? 'border-[#efd9bd] bg-[#fff8ef] text-[#895b2f]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]')}>
+        </section>}
+        {campaignStep === 1 && form.listIds.length > 0 && <div data-testid="campaign-audience-summary" className={cx('flex items-start gap-2 rounded-md border px-3 py-2.5 text-[11px] leading-5', campaignAudienceQuery.isError ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : campaignAudienceQuery.data?.overlappingRecipients ? 'border-[#efd9bd] bg-[#fff8ef] text-[#895b2f]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]')}>
           {campaignAudienceQuery.isError ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/> : <Users className="mt-0.5 h-4 w-4 shrink-0"/>}
           <div className="min-w-0 flex-1">
             {campaignAudienceQuery.isFetching && <p>Checking subscribed contacts and list overlap…</p>}
@@ -2131,11 +2192,38 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
             {campaignAudienceQuery.isError ? 'Retry audience' : 'Refresh audience'}
           </Button>
         </div>}
-         <section data-testid="campaign-subject-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
+        {campaignStep === 1 && <section aria-label="Contact selection" className="space-y-3 rounded-lg border border-[#dce4e9] bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Review contacts</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Selected lists stay live until queueing. Uncheck contacts to exclude them. Bounced and unsubscribed contacts stay visible but cannot be selected.</p></div><span className="rounded-full bg-[#edf4fc] px-2.5 py-1 text-[10px] font-semibold text-[#245b9b]">{form.excludedContactIds.length} excluded</span></div>
+          <div className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_minmax(180px,2fr)]">
+            <label><span className={labelClass}>Review contacts in list</span><select className={inputClass} value={campaignReviewListId} onChange={event => { setCampaignReviewListId(event.target.value); setCampaignReviewPage(1); }}><option value="">Choose selected list</option>{form.listIds.map(id => <option key={id} value={id}>{lists.find(list => list.id === id)?.name ?? 'Selected list'}</option>)}</select></label>
+            <label><span className={labelClass}>Search contacts</span><input type="search" className={inputClass} value={campaignReviewSearch} onChange={event => { setCampaignReviewSearch(event.target.value); setCampaignReviewPage(1); }} placeholder="Name or email"/></label>
+          </div>
+          {!campaignReviewListId ? <p className="rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#6f7b88]">Choose a list to review its contacts.</p> : campaignReviewContactsQuery.isLoading ? <p className="p-3 text-[11px] text-[#6f7b88]">Loading contacts…</p> : campaignReviewContactsQuery.isError ? <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">Could not load these contacts. Retry before continuing.<Button variant="outline" testId="button-retry-campaign-contacts" onClick={() => void campaignReviewContactsQuery.refetch()}>Retry</Button></div> : <div className="overflow-hidden rounded-md border border-[#e3e8ed]">
+            <div className="max-h-72 overflow-auto">
+              <table className="w-full min-w-[650px] text-left text-[11px]">
+                <thead className="sticky top-0 bg-[#f6f8fa] text-[9px] uppercase tracking-wide text-[#718091]"><tr><th className="px-3 py-2">Include</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Verification</th><th className="px-3 py-2">Subscription</th></tr></thead>
+                <tbody className="divide-y divide-[#edf0f3]">{campaignReviewContacts.map(contact => {
+                  const bounced = contact.emailStatus === 'bounced';
+                  const eligible = contact.subscribed && !bounced && contact.emailStatus !== 'unsubscribed';
+                  const included = eligible && !form.excludedContactIds.includes(contact.id);
+                  return <tr key={contact.id} className={cx(!eligible && 'bg-[#fafbfc] text-[#8993a0]')}>
+                    <td className="px-3 py-2"><input aria-label={`Include ${contact.email}`} type="checkbox" checked={included} disabled={!eligible} onChange={event => toggleCampaignContact(contact.id, event.target.checked)} className="h-4 w-4 accent-[#245b9b]"/></td>
+                    <td className="px-3 py-2 font-medium">{[contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || '—'}</td>
+                    <td className="px-3 py-2">{contact.email}</td>
+                    <td className="px-3 py-2">{contact.emailVerificationStatus ? `${contact.emailVerificationStatus}${contact.emailVerificationProvider ? ` · ${contact.emailVerificationProvider}` : ''}` : 'Not checked'}</td>
+                    <td className="px-3 py-2">{bounced ? 'Bounced · excluded' : contact.subscribed ? 'Subscribed' : contact.emailStatus === 'unsubscribed' ? 'Unsubscribed · excluded' : 'Not subscribed · excluded'}</td>
+                  </tr>;
+                })}{!campaignReviewContacts.length && <tr><td colSpan={5} className="px-3 py-8 text-center text-[#788392]">No contacts match this list and search.</td></tr>}</tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-[#e8edf1] bg-[#fbfcfd] px-3 py-2 text-[10px] text-[#687587]"><span>Page {campaignReviewContactsQuery.data?.page ?? campaignReviewPage} of {campaignReviewContactsQuery.data?.pageCount ?? 1} · {campaignReviewContactsQuery.data?.total ?? campaignReviewContacts.length} contacts</span><span className="flex gap-1"><Button variant="quiet" testId="button-campaign-contacts-previous" disabled={campaignReviewPage <= 1} onClick={() => setCampaignReviewPage(page => Math.max(1, page - 1))}>Previous</Button><Button variant="quiet" testId="button-campaign-contacts-next" disabled={campaignReviewPage >= (campaignReviewContactsQuery.data?.pageCount ?? 1)} onClick={() => setCampaignReviewPage(page => page + 1)}>Next</Button></span></div>
+          </div>}
+        </section>}
+         <section hidden={campaignStep !== 2} data-testid="campaign-subject-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
            <div><h3 className="text-[12px] font-semibold text-[#344154]">Subject line variants</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Create alternative subject lines for a recipient-level test. Placeholders such as a contact’s first name are supported.</p></div>
            <div className="space-y-2">
              {form.subjectVariants.map((value, index) => <div key={`subject-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-               <label className="block"><span className={labelClass}>Subject option {index + 1}{index === 0 ? ' · required' : ''}</span><input ref={index === 0 ? subjectInputRef : undefined} data-testid={index === 0 ? 'input-campaign-subject' : `input-campaign-subject-variant-${index + 1}`} className={inputClass} value={value} onFocus={() => setPlaceholderTarget({ field: 'subjectVariants', index })} onChange={event => updateVariant('subjectVariants', index, event.target.value)} placeholder="A concise subject your audience will recognize" required={index === 0} maxLength={200}/></label>
+                <label className="block"><span className={labelClass}>Subject option {index + 1}{index === 0 ? ' · required' : ''}</span><input ref={index === 0 ? subjectInputRef : undefined} data-testid={index === 0 ? 'input-campaign-subject' : `input-campaign-subject-variant-${index + 1}`} className={inputClass} value={value} onFocus={() => setPlaceholderTarget({ field: 'subjectVariants', index })} onChange={event => updateVariant('subjectVariants', index, event.target.value)} placeholder="A concise subject your audience will recognize" required={campaignStep === 2 && index === 0} maxLength={200}/></label>
                <button type="button" data-testid={`button-remove-subject-variant-${index + 1}`} aria-label={`Remove subject option ${index + 1}`} onClick={() => removeVariant('subjectVariants', index)} disabled={form.subjectVariants.length === 1} className="min-h-10 rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] font-medium text-[#536172] hover:bg-[#f5f8fb] disabled:opacity-40">Remove</button>
              </div>)}
            </div>
@@ -2144,7 +2232,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
              <button type="button" data-testid="button-add-subject-variant" onClick={() => addVariant('subjectVariants')} disabled={form.subjectVariants.length >= variantLimits.subject.maximum} className="min-h-9 rounded-md border border-[#c9d7e5] bg-white px-3 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc] disabled:cursor-not-allowed disabled:opacity-45">Add subject option</button>
            </div>
          </section>
-         <section data-testid="campaign-greeting-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
+          <section hidden={campaignStep !== 2} data-testid="campaign-greeting-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
            <div><h3 className="text-[12px] font-semibold text-[#344154]">Greeting line variants <span className="font-normal text-[#7e8996]">(optional)</span></h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">A greeting is added above the message body. Leave all options blank to omit it.</p></div>
            <div className="space-y-2">
              {form.greetingVariants.map((value, index) => <div key={`greeting-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -2157,7 +2245,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
              <button type="button" data-testid="button-add-greeting-variant" onClick={() => addVariant('greetingVariants')} disabled={form.greetingVariants.length >= variantLimits.greeting.maximum} className="min-h-9 rounded-md border border-[#c9d7e5] bg-white px-3 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc] disabled:cursor-not-allowed disabled:opacity-45">Add greeting option</button>
            </div>
          </section>
-         <section data-testid="campaign-signature-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
+          <section hidden={campaignStep !== 2} data-testid="campaign-signature-variants" className="space-y-3 rounded-lg border border-[#dce4e9] bg-[#f8fafc] p-4">
            <div><h3 className="text-[12px] font-semibold text-[#344154]">Signature variants <span className="font-normal text-[#7e8996]">(optional)</span></h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">A signature is added after the message body. Placeholders are supported; leave all options blank to omit it.</p></div>
            <div className="space-y-2">
              {form.signatureVariants.map((value, index) => <div key={`signature-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -2170,12 +2258,12 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
              <button type="button" data-testid="button-add-signature-variant" onClick={() => addVariant('signatureVariants')} disabled={form.signatureVariants.length >= variantLimits.signature.maximum} className="min-h-9 rounded-md border border-[#c9d7e5] bg-white px-3 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc] disabled:cursor-not-allowed disabled:opacity-45">Add signature option</button>
            </div>
          </section>
-         <section className="rounded-md border border-[#e4e9ef] bg-white p-3" aria-label="Insert a contact placeholder">
+          <section hidden={campaignStep !== 2} className="rounded-md border border-[#e4e9ef] bg-white p-3" aria-label="Insert a contact placeholder">
            <p className="mb-2 text-[10px] leading-4 text-[#687587]">Insert a contact field into the last focused subject, greeting, or signature option.</p>
            <div className="flex flex-wrap gap-1.5">{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
          </section>
-         <label className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
-         <section className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
+          <label hidden={campaignStep !== 2} className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
+          <section hidden={campaignStep !== 3} className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
             <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the first subject, greeting, and signature options with a subscribed contact. Queued recipients receive their fixed test assignments.</p></div>
            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                <label className="min-w-0 flex-1"><span className={labelClass}>Sample contact</span><select data-testid="select-campaign-preview-contact" className={inputClass} value={sampleContactId} onChange={e => setSampleContactId(e.target.value)} disabled={!form.listIds.length || contactsQuery.isLoading}>
@@ -2197,7 +2285,21 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
            </div>}
          </section>
          <div className="flex items-start gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] leading-5 text-[#607186]"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/><span>Only subscribed contacts are eligible. Duplicate email addresses are removed when queued. Each test assignment stays fixed for that recipient throughout the campaign; an unsubscribe link is included automatically.</span></div>
-         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-campaign" onClick={closeCampaignEditor}>Cancel</Button><Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button></div>
+         {campaignStep === 3 && <section className="rounded-lg border border-[#cfe0ef] bg-[#f4f8fc] p-3" aria-label="Campaign confirmation">
+           <h3 className="text-[12px] font-semibold text-[#294e72]">Confirm campaign setup</h3>
+           <div className="mt-2 grid gap-2 text-[11px] text-[#4d6073] sm:grid-cols-2">
+             <p><strong>Name:</strong> {form.name || 'Not entered'}</p><p><strong>Sender:</strong> {senderAccounts.find(account => account.id === form.senderAccountId)?.fromEmail ?? 'Default sender'}</p>
+             <p><strong>Lists:</strong> {form.listIds.map(id => lists.find(list => list.id === id)?.name ?? 'Removed list').join(', ') || 'None selected'}</p><p><strong>Contact exclusions:</strong> {form.excludedContactIds.length}</p>
+             <p><strong>Subject options:</strong> {form.subjectVariants.filter(value => value.trim()).length}</p><p><strong>Greeting / signature options:</strong> {form.greetingVariants.filter(value => value.trim()).length} / {form.signatureVariants.filter(value => value.trim()).length}</p>
+           </div>
+           <p className="mt-2 border-t border-[#dce7f1] pt-2 text-[10px] leading-4 text-[#586d80]">Bounced, unsubscribed, and otherwise ineligible contacts are suppressed again when the campaign is queued. An unsubscribe link is included automatically.</p>
+         </section>}
+         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf0f2] pt-4">
+           <Button variant="outline" testId="button-cancel-campaign" onClick={closeCampaignEditor}>Cancel</Button>
+           <div className="flex gap-2">{campaignStep > 0 && <Button variant="outline" testId="button-campaign-step-back" onClick={() => { setCampaignStepError(''); setCampaignStep(step => Math.max(0, step - 1)); }}>Back</Button>}
+             {campaignStep < 3 ? <Button type="button" testId="button-campaign-step-next" onClick={continueCampaignStep}>Continue</Button> : <Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
+           </div>
+         </div>
       </form>
     </Modal>}
      {pauseTarget && <CampaignPauseDialog

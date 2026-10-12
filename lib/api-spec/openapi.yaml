@@ -5085,6 +5085,10 @@ components:
           type: array
           description: Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.
           items: { type: string, format: uuid }
+        excludedContactIds:
+          type: array
+          description: Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.
+          items: { type: string, format: uuid }
         status: { type: string, enum: [draft, queued, sending, completed] }
         pausedAt: { type: ["string", "null"], format: date-time }
         resumeAt: { type: ["string", "null"], format: date-time }
@@ -5100,7 +5104,7 @@ components:
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, parentCampaignId, campaignType, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, status, pausedAt, resumeAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
+      required: [id, parentCampaignId, campaignType, senderAccountId, senderEmail, name, subject, subjectVariants, greetingVariants, signatureVariants, textBody, htmlBody, listId, listIds, excludedContactIds, status, pausedAt, resumeAt, recipients, estimatedDurationSeconds, queued, delivered, bounced, suppressed, unknown, queuedAt, scheduledAt, completedAt, createdAt, updatedAt]
     CampaignPauseInput:
       type: object
       properties:
@@ -5294,6 +5298,10 @@ components:
           type: array
           description: Ordered target lists. The first matching list wins for overlapping email addresses.
           items: { type: string, format: uuid }
+        excludedContactIds:
+          type: array
+          description: Contact IDs deselected from the live list audience.
+          items: { type: string, format: uuid }
         listId:
           type: string
           format: uuid
@@ -5325,6 +5333,10 @@ components:
         listIds:
           type: array
           description: Ordered target lists. The first matching list wins for overlapping email addresses.
+          items: { type: string, format: uuid }
+        excludedContactIds:
+          type: array
+          description: Contact IDs deselected from the live list audience.
           items: { type: string, format: uuid }
         listId:
           type: string

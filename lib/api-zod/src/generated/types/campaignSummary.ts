@@ -41,6 +41,8 @@ export interface CampaignSummary {
   listId: string | null;
   /** Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses. */
   listIds: string[];
+  /** Tenant contact IDs explicitly deselected while the campaign keeps its list audience live. */
+  excludedContactIds: string[];
   status: CampaignSummaryStatus;
   /** @nullable */
   pausedAt: Date | null;

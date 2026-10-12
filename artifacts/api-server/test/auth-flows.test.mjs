@@ -513,6 +513,7 @@ memory.public.none(`
     sender_email varchar(254),
     list_id uuid REFERENCES contact_lists(id) ON DELETE SET NULL,
     list_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
+    excluded_contact_ids uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
     name varchar(160) NOT NULL,
     objective text NOT NULL DEFAULT '',
     subject varchar(200) NOT NULL,

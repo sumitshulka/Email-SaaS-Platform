@@ -47,6 +47,8 @@ export interface CampaignInput {
   htmlBody?: string;
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
   listIds?: string[];
+  /** Contact IDs deselected from the live list audience. */
+  excludedContactIds?: string[];
   /**
      * Legacy single-list input; use listIds.
      * @deprecated

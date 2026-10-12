@@ -2850,6 +2850,8 @@ export interface CampaignSummary {
   listId: string | null;
   /** Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses. */
   listIds: string[];
+  /** Tenant contact IDs explicitly deselected while the campaign keeps its list audience live. */
+  excludedContactIds: string[];
   status: CampaignSummaryStatus;
   /** @nullable */
   pausedAt: string | null;
@@ -3185,6 +3187,8 @@ export interface CampaignInput {
   htmlBody?: string;
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
   listIds?: string[];
+  /** Contact IDs deselected from the live list audience. */
+  excludedContactIds?: string[];
   /**
      * Legacy single-list input; use listIds.
      * @deprecated
@@ -3233,6 +3237,8 @@ export interface CampaignUpdate {
   htmlBody?: string;
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
   listIds?: string[];
+  /** Contact IDs deselected from the live list audience. */
+  excludedContactIds?: string[];
   /**
      * Legacy single-list input; use listIds.
      * @deprecated

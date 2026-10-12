@@ -4257,6 +4257,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
         senderAccountId: parsed.data.senderAccountId ?? null,
         listId: listIds[0],
         listIds,
+        excludedContactIds: parsed.data.excludedContactIds ?? [],
         name: parsed.data.name.trim(),
         objective: parsed.data.objective?.trim() ?? "",
         subject: variants.subject[0]!,
@@ -4499,6 +4500,9 @@ router.patch(
                 listId: requestedListIds[0] ?? null,
                 listIds: requestedListIds,
               }
+            : {}),
+          ...(parsed.data.excludedContactIds !== undefined
+            ? { excludedContactIds: parsed.data.excludedContactIds }
             : {}),
           updatedAt: new Date(),
         })
@@ -4878,6 +4882,7 @@ router.post(
           eq(contactsTable.id, emailCampaignRecipientsTable.contactId),
           eq(contactsTable.userId, userId),
           eq(contactsTable.subscribed, true),
+          or(isNull(contactsTable.emailStatus), ne(contactsTable.emailStatus, "bounced")),
         ))
         .where(and(
           eq(emailCampaignRecipientsTable.userId, userId),
@@ -4904,14 +4909,19 @@ router.post(
             inArray(contactListMembersTable.listId, listIds),
             eq(contactsTable.userId, userId),
             eq(contactsTable.subscribed, true),
+            or(isNull(contactsTable.emailStatus), ne(contactsTable.emailStatus, "bounced")),
           ),
         )
         .orderBy(asc(contactsTable.createdAt));
-      const recipients = campaign.parentCampaignId
+      const excludedContactIds = new Set(campaign.excludedContactIds ?? []);
+      const eligibleMemberships = campaign.parentCampaignId
         ? memberships
-        : uniqueCampaignRecipients(memberships, listIds);
-      if (recipients.length === 0) return { error: "empty_list" as const };
-      if (recipients.length > settings.maxCampaignSize) {
+        : memberships.filter((recipient) => !excludedContactIds.has(recipient.id));
+      const eligibleRecipients = campaign.parentCampaignId
+        ? eligibleMemberships
+        : uniqueCampaignRecipients(eligibleMemberships, listIds);
+      if (eligibleRecipients.length === 0) return { error: "empty_list" as const };
+      if (eligibleRecipients.length > settings.maxCampaignSize) {
         return { error: "campaign_size_limit" as const };
       }
 
@@ -4937,7 +4947,7 @@ router.post(
       if (!queuedCampaign) return { error: "not_draft" as const };
 
       await tx.insert(emailCampaignRecipientsTable).values(
-        recipients.map((recipient) => ({
+        eligibleRecipients.map((recipient) => ({
           campaignId: campaign.id,
           userId,
           contactId: recipient.id,
