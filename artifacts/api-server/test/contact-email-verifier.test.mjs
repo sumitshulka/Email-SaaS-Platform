@@ -8,22 +8,41 @@ import {
 } from "../src/lib/contact-email-verifier.ts";
 
 test("requires consistent replies before calling a mailbox rejected", () => {
-  const rejection = { recipientCode: 550, catchAllCode: 550, mailServer: "mx.example" };
+  const rejection = {
+    recipientCode: 550,
+    recipientText: "550 5.1.1 Recipient not found",
+    catchAllCode: 550,
+    catchAllText: "550 5.1.1 Recipient not found",
+    mailServer: "mx.example",
+  };
   assert.equal(classifySmtpProbeEvidence([rejection], 0), "rejected");
   assert.equal(classifySmtpProbeEvidence([rejection], 1), "inconclusive");
   assert.equal(classifySmtpProbeEvidence([rejection, {
     recipientCode: 451,
+    recipientText: "451 4.7.0 Please try again later",
     catchAllCode: 550,
+    catchAllText: "550 5.1.1 Recipient not found",
     mailServer: "mx2.example",
   }], 0), "inconclusive");
   assert.equal(classifySmtpProbeEvidence([{
-    recipientCode: 250,
+    recipientCode: 550,
+    recipientText: "550 5.7.1 Access denied by policy",
     catchAllCode: 550,
+    catchAllText: "550 5.7.1 Access denied by policy",
+    mailServer: "mx.example",
+  }], 0), "inconclusive");
+  assert.equal(classifySmtpProbeEvidence([{
+    recipientCode: 250,
+    recipientText: "250 2.1.5 Recipient OK",
+    catchAllCode: 550,
+    catchAllText: "550 5.1.1 Recipient not found",
     mailServer: "mx.example",
   }], 1), "accepted");
   assert.equal(classifySmtpProbeEvidence([{
     recipientCode: 550,
+    recipientText: "550 5.1.1 Recipient not found",
     catchAllCode: 250,
+    catchAllText: "250 2.1.5 Recipient OK",
     mailServer: "mx.example",
   }], 0), "catch_all");
 });

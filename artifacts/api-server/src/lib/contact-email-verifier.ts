@@ -193,9 +193,17 @@ export function assessEmailRisks(email: string): {
 type SmtpReply = { code: number; text: string };
 type SmtpProbeEvidence = {
   recipientCode: number;
+  recipientText: string;
   catchAllCode: number;
+  catchAllText: string;
   mailServer: string;
 };
+
+function isDefinitiveMissingRecipient(code: number, text: string): boolean {
+  if (code < 500 || code >= 600) return false;
+  if (!/\b5\.1\.(?:1|10)\b/i.test(text)) return false;
+  return !/\b(?:access denied|policy|blocked|not permitted|not authorized|authentication required|relay denied|rate limit)\b/i.test(text);
+}
 
 export function classifySmtpProbeEvidence(
   results: SmtpProbeEvidence[],
@@ -204,22 +212,19 @@ export function classifySmtpProbeEvidence(
   if (results.some(({ catchAllCode }) => catchAllCode >= 200 && catchAllCode < 300)) {
     return "catch_all";
   }
-  if (results.some(({ recipientCode, catchAllCode }) =>
+  if (results.some(({ recipientCode, catchAllCode, catchAllText }) =>
     recipientCode >= 200 &&
     recipientCode < 300 &&
-    catchAllCode >= 500 &&
-    catchAllCode < 600
+    isDefinitiveMissingRecipient(catchAllCode, catchAllText)
   )) {
     return "accepted";
   }
   if (
     results.length > 0 &&
     incompleteHostCount === 0 &&
-    results.every(({ recipientCode, catchAllCode }) =>
-      recipientCode >= 500 &&
-      recipientCode < 600 &&
-      catchAllCode >= 500 &&
-      catchAllCode < 600
+    results.every(({ recipientCode, recipientText, catchAllCode, catchAllText }) =>
+      isDefinitiveMissingRecipient(recipientCode, recipientText) &&
+      isDefinitiveMissingRecipient(catchAllCode, catchAllText)
     )
   ) {
     return "rejected";
@@ -326,7 +331,9 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
       const result = await probeServer(host, publicAddress.address, domain, email.trim());
       evidence.push({
         recipientCode: result.recipient.code,
+        recipientText: result.recipient.text,
         catchAllCode: result.catchAll.code,
+        catchAllText: result.catchAll.text,
         mailServer: host,
       });
     } catch {
@@ -339,10 +346,10 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
     return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: true, noReplyStyle, ...emailRisks, message: `${provider.name} accepts a randomly generated address too, so mailbox existence cannot be confirmed.` };
   }
   if (classification === "accepted") {
-    const outcomeHost = evidence.find(({ recipientCode, catchAllCode }) =>
-      recipientCode >= 200 && recipientCode < 300 && catchAllCode >= 500 && catchAllCode < 600
+    const outcomeHost = evidence.find(({ recipientCode, catchAllCode, catchAllText }) =>
+      recipientCode >= 200 && recipientCode < 300 && isDefinitiveMissingRecipient(catchAllCode, catchAllText)
     )?.mailServer ?? lastHost;
-    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: false, noReplyStyle, ...emailRisks, message: `${provider.name} accepted this recipient and rejected the random control address during an SMTP check. This is not proof of inbox delivery or future acceptance.` };
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: false, noReplyStyle, ...emailRisks, message: `${provider.name} accepted this recipient and explicitly identified the random control as a missing mailbox. This is only best-effort SMTP evidence, not proof of inbox delivery or future acceptance.` };
   }
   if (classification === "rejected") {
     return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: lastHost, catchAll: false, noReplyStyle, ...emailRisks, message: `${provider.name} rejected both the recipient and random control address on each reachable mail server checked.` };
@@ -356,6 +363,11 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
     catchAll: null,
     noReplyStyle,
     ...emailRisks,
-    message: `${provider.name} did not provide consistent, conclusive recipient answers across the mail servers checked. No message was sent.`,
+    message: evidence.some(({ recipientCode, recipientText, catchAllCode, catchAllText }) =>
+      (recipientCode >= 500 || catchAllCode >= 500) &&
+      !(isDefinitiveMissingRecipient(recipientCode, recipientText) || isDefinitiveMissingRecipient(catchAllCode, catchAllText))
+    )
+      ? `${provider.name} refused or restricted SMTP recipient probing. This does not establish that the address is invalid; the result is inconclusive. No message was sent.`
+      : `${provider.name} did not provide consistent, conclusive recipient answers across the mail servers checked. No message was sent.`,
   };
 }
