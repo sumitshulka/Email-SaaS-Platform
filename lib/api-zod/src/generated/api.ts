@@ -1275,6 +1275,8 @@ export const listContactsResponseContactsItemOneEmailVerificationProviderMax = 8
 
 export const listContactsResponseContactsItemOneEmailVerificationMethodMax = 120;
 
+export const listContactsResponseContactsItemOneEmailVerificationSuggestedEmailMax = 254;
+
 export const listContactsResponseContactsItemTwoLastEmailOneAttemptsMin = 0;
 
 export const listContactsResponseQuotaUsedMin = 0;
@@ -1358,6 +1360,8 @@ export const ListContactsResponse = zod.object({
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "emailVerificationProvider": zod.string().max(listContactsResponseContactsItemOneEmailVerificationProviderMax).nullable(),
   "emailVerificationMethod": zod.string().max(listContactsResponseContactsItemOneEmailVerificationMethodMax).nullable(),
+  "emailVerificationRiskFlags": zod.array(zod.enum(['disposable_domain', 'role_based_address', 'likely_domain_typo'])).nullable(),
+  "emailVerificationSuggestedEmail": zod.string().email().max(listContactsResponseContactsItemOneEmailVerificationSuggestedEmailMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1605,6 +1609,8 @@ export const createContactResponseEmailVerificationProviderMax = 80;
 
 export const createContactResponseEmailVerificationMethodMax = 120;
 
+export const createContactResponseEmailVerificationSuggestedEmailMax = 254;
+
 
 
 export const CreateContactResponse = zod.object({
@@ -1667,6 +1673,8 @@ export const CreateContactResponse = zod.object({
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "emailVerificationProvider": zod.string().max(createContactResponseEmailVerificationProviderMax).nullable(),
   "emailVerificationMethod": zod.string().max(createContactResponseEmailVerificationMethodMax).nullable(),
+  "emailVerificationRiskFlags": zod.array(zod.enum(['disposable_domain', 'role_based_address', 'likely_domain_typo'])).nullable(),
+  "emailVerificationSuggestedEmail": zod.string().email().max(createContactResponseEmailVerificationSuggestedEmailMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3536,6 +3544,8 @@ export const getContactResponseEmailVerificationProviderMax = 80;
 
 export const getContactResponseEmailVerificationMethodMax = 120;
 
+export const getContactResponseEmailVerificationSuggestedEmailMax = 254;
+
 
 
 export const GetContactResponse = zod.object({
@@ -3598,6 +3608,8 @@ export const GetContactResponse = zod.object({
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "emailVerificationProvider": zod.string().max(getContactResponseEmailVerificationProviderMax).nullable(),
   "emailVerificationMethod": zod.string().max(getContactResponseEmailVerificationMethodMax).nullable(),
+  "emailVerificationRiskFlags": zod.array(zod.enum(['disposable_domain', 'role_based_address', 'likely_domain_typo'])).nullable(),
+  "emailVerificationSuggestedEmail": zod.string().email().max(getContactResponseEmailVerificationSuggestedEmailMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3816,6 +3828,8 @@ export const updateContactResponseEmailVerificationProviderMax = 80;
 
 export const updateContactResponseEmailVerificationMethodMax = 120;
 
+export const updateContactResponseEmailVerificationSuggestedEmailMax = 254;
+
 
 
 export const UpdateContactResponse = zod.object({
@@ -3878,6 +3892,8 @@ export const UpdateContactResponse = zod.object({
   "emailVerificationCheckedAt": zod.coerce.date().nullable(),
   "emailVerificationProvider": zod.string().max(updateContactResponseEmailVerificationProviderMax).nullable(),
   "emailVerificationMethod": zod.string().max(updateContactResponseEmailVerificationMethodMax).nullable(),
+  "emailVerificationRiskFlags": zod.array(zod.enum(['disposable_domain', 'role_based_address', 'likely_domain_typo'])).nullable(),
+  "emailVerificationSuggestedEmail": zod.string().email().max(updateContactResponseEmailVerificationSuggestedEmailMax).nullable(),
   "listIds": zod.array(zod.string().uuid()),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -3906,6 +3922,8 @@ export const verifyContactEmailResponseProviderNameMax = 80;
 
 export const verifyContactEmailResponseVerificationMethodMax = 120;
 
+export const verifyContactEmailResponseSuggestedEmailMax = 254;
+
 
 
 export const VerifyContactEmailResponse = zod.object({
@@ -3916,6 +3934,8 @@ export const VerifyContactEmailResponse = zod.object({
   "mailServer": zod.string().nullable(),
   "catchAll": zod.boolean().nullable(),
   "noReplyStyle": zod.boolean(),
+  "riskFlags": zod.array(zod.enum(['disposable_domain', 'role_based_address', 'likely_domain_typo'])),
+  "suggestedEmail": zod.string().email().max(verifyContactEmailResponseSuggestedEmailMax).nullable(),
   "message": zod.string()
 })
 

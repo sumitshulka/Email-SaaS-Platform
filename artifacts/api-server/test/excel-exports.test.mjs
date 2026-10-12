@@ -63,6 +63,8 @@ memory.public.none(`
     email_verification_checked_at timestamptz,
     email_verification_provider varchar(80),
     email_verification_method varchar(120),
+    email_verification_risk_flags jsonb,
+    email_verification_suggested_email varchar(254),
     created_at timestamptz NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now()
   );

@@ -447,6 +447,8 @@ memory.public.none(`
     email_verification_checked_at timestamptz,
     email_verification_provider varchar(80),
     email_verification_method varchar(120),
+    email_verification_risk_flags jsonb,
+    email_verification_suggested_email varchar(254),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, email),
@@ -11903,6 +11905,8 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         checkedAt: dbModule.contactsTable.emailVerificationCheckedAt,
         provider: dbModule.contactsTable.emailVerificationProvider,
         method: dbModule.contactsTable.emailVerificationMethod,
+        riskFlags: dbModule.contactsTable.emailVerificationRiskFlags,
+        suggestedEmail: dbModule.contactsTable.emailVerificationSuggestedEmail,
       })
       .from(dbModule.contactsTable)
       .where(eq(dbModule.contactsTable.id, ownerContacts[0].body.id));
@@ -11910,6 +11914,8 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.ok(persistedVerification.checkedAt instanceof Date);
     assert.equal(persistedVerification.provider, emailVerification.body.providerName);
     assert.equal(persistedVerification.method, emailVerification.body.verificationMethod);
+    assert.deepEqual(persistedVerification.riskFlags, emailVerification.body.riskFlags);
+    assert.equal(persistedVerification.suggestedEmail, emailVerification.body.suggestedEmail);
 
     const isolatedContacts = await api("/contacts", { cookie: owner.cookie });
     assert.equal(isolatedContacts.response.status, 200);

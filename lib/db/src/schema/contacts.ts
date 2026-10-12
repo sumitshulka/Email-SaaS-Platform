@@ -3,6 +3,7 @@ import {
   boolean,
   foreignKey,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -74,6 +75,13 @@ export const contactsTable = pgTable(
     emailVerificationMethod: varchar("email_verification_method", {
       length: 120,
     }),
+    emailVerificationRiskFlags: jsonb("email_verification_risk_flags").$type<
+      Array<"disposable_domain" | "role_based_address" | "likely_domain_typo">
+    >(),
+    emailVerificationSuggestedEmail: varchar(
+      "email_verification_suggested_email",
+      { length: 254 },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

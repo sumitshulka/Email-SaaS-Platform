@@ -4717,10 +4717,19 @@ components:
           format: date-time
         emailVerificationProvider: { type: ["string", "null"], maxLength: 80 }
         emailVerificationMethod: { type: ["string", "null"], maxLength: 120 }
+        emailVerificationRiskFlags:
+          type: ["array", "null"]
+          items:
+            type: string
+            enum: [disposable_domain, role_based_address, likely_domain_typo]
+        emailVerificationSuggestedEmail:
+          type: ["string", "null"]
+          format: email
+          maxLength: 254
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, emailVerificationRiskFlags, emailVerificationSuggestedEmail, listIds, createdAt, updatedAt]
     ContactEmailVerification:
       type: object
       properties:
@@ -4733,8 +4742,14 @@ components:
         mailServer: { type: ["string", "null"] }
         catchAll: { type: ["boolean", "null"] }
         noReplyStyle: { type: boolean }
+        riskFlags:
+          type: array
+          items:
+            type: string
+            enum: [disposable_domain, role_based_address, likely_domain_typo]
+        suggestedEmail: { type: ["string", "null"], format: email, maxLength: 254 }
         message: { type: string }
-      required: [status, checkedAt, providerName, verificationMethod, mailServer, catchAll, noReplyStyle, message]
+      required: [status, checkedAt, providerName, verificationMethod, mailServer, catchAll, noReplyStyle, riskFlags, suggestedEmail, message]
     ContactEmailHistoryItem:
       type: object
       properties:

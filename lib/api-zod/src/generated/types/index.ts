@@ -143,6 +143,7 @@ export * from './contactEmailHistoryItemReportSource';
 export * from './contactEmailHistoryItemStatus';
 export * from './contactEmailStatus';
 export * from './contactEmailVerification';
+export * from './contactEmailVerificationRiskFlagsItem';
 export * from './contactEmailVerificationStatus';
 export * from './contactExportColumn';
 export * from './contactExportFilters';

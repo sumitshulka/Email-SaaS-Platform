@@ -95,12 +95,12 @@ function Status({ children, tone = 'gray' }: { children: ReactNode; tone?: 'blue
   const color = { blue: 'bg-[#edf4fc] text-[#245b9b]', green: 'bg-[#edf7f0] text-[#397050]', orange: 'bg-[#fff3e8] text-[#a95218]', gray: 'bg-[#f0f2f4] text-[#66717e]' }[tone];
   return <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize', color)}><span className={cx('h-1.5 w-1.5 rounded-full', tone === 'green' ? 'bg-[#4c9668]' : tone === 'orange' ? 'bg-[#e78b3b]' : tone === 'blue' ? 'bg-[#4382c4]' : 'bg-[#929ba6]')}/>{children}</span>;
 }
-function ContactEmailIcon({ status }: { status: ContactEmailVerification['status'] | null }) {
+function ContactEmailIcon({ status, hasRiskWarnings = false }: { status: ContactEmailVerification['status'] | null; hasRiskWarnings?: boolean }) {
   return <span className="relative inline-flex" aria-hidden="true">
     <Mail className="h-4 w-4"/>
-    {status === 'accepted' && <Check className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#26834a]"/>}
+    {status === 'accepted' && !hasRiskWarnings && <Check className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#26834a]"/>}
     {(status === 'rejected' || status === 'no_mail_server') && <X className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#c34343]"/>}
-    {(status === 'catch_all' || status === 'inconclusive') && <AlertCircle className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#d47a19]"/>}
+    {(status === 'catch_all' || status === 'inconclusive' || hasRiskWarnings) && <AlertCircle className="absolute -right-1.5 -top-1.5 h-3.5 w-3.5 rounded-full border border-white bg-white text-[#d47a19]"/>}
   </span>;
 }
 function formatDate(date: string | null | undefined) {
@@ -799,7 +799,7 @@ export function ContactsPage() {
   const [segmentToDelete, setSegmentToDelete] = useState<ContactAudienceSegment | null>(null);
   const [editing, setEditing] = useState<Contact | null | undefined>(undefined); const [form, setForm] = useState<ContactForm>(emptyContact); const [importing, setImporting] = useState(false);
   const [historyContact, setHistoryContact] = useState<ContactDirectoryItem | null>(null);
-  const [emailVerificationByContact, setEmailVerificationByContact] = useState<Record<string, { email: string; status: ContactEmailVerification['status'] }>>({});
+  const [emailVerificationByContact, setEmailVerificationByContact] = useState<Record<string, { email: string; status: ContactEmailVerification['status']; riskFlags: ContactEmailVerification['riskFlags'] }>>({});
   const [emailVerification, setEmailVerification] = useState<{
     contact: ContactDirectoryItem;
     result?: ContactEmailVerification;
@@ -997,6 +997,15 @@ export function ContactsPage() {
             </div>
             <p className="text-[11px] leading-5 text-[#718094]">This consent-free check uses public DNS and SMTP responses only. It does not sign in to the provider or query a private mailbox directory, and it never sends a message.</p>
             <p role="status" data-testid="status-contact-email-verification-result" className="rounded-lg border border-[#e3e8ee] bg-[#f8fafc] p-4 text-[13px] leading-6 text-[#435267]">{emailVerification.result.message}</p>
+            {emailVerification.result.riskFlags.length > 0 && <section data-testid="contact-email-risk-warnings" className="rounded-lg border border-[#f0ddb6] bg-[#fffaf0] p-4 text-[12px] text-[#765421]">
+              <h3 className="font-semibold">Address cautions</h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {emailVerification.result.riskFlags.includes('disposable_domain') && <li>This domain is listed as disposable or temporary. Domain lists can be outdated, so confirm before acting on this warning.</li>}
+                {emailVerification.result.riskFlags.includes('role_based_address') && <li>This appears to be a shared or role-based address rather than an individual mailbox.</li>}
+                {emailVerification.result.riskFlags.includes('likely_domain_typo') && <li>The domain looks similar to a common email-provider domain.</li>}
+              </ul>
+              {emailVerification.result.suggestedEmail && <p className="mt-2">Possible correction: <span className="font-semibold">{emailVerification.result.suggestedEmail}</span>. Mailflow has not changed the saved address.</p>}
+            </section>}
             {emailVerification.result.noReplyStyle && <p className="rounded-md bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">The address name resembles a no-reply alias. This is only a naming hint; reply behavior cannot be checked without sending a message.</p>}
             <p className="text-[10px] leading-5 text-[#788596]">SMTP checks are best-effort, not proof of inbox delivery or future sendability. Catch-all servers may accept addresses that do not exist.</p>
           </>
@@ -1120,6 +1129,10 @@ export function ContactsPage() {
               const verificationStatus = savedVerification?.email.toLowerCase() === contact.email.toLowerCase()
                 ? savedVerification.status
                 : contact.emailVerificationStatus;
+              const riskFlags = savedVerification?.email.toLowerCase() === contact.email.toLowerCase()
+                ? savedVerification.riskFlags
+                : contact.emailVerificationRiskFlags ?? [];
+              const hasRiskWarnings = riskFlags.length > 0;
               const verificationTitle = verificationStatus === 'accepted'
                 ? 'Mail server accepted this address; this does not prove inbox delivery'
                 : verificationStatus === 'rejected' || verificationStatus === 'no_mail_server'
@@ -1127,9 +1140,15 @@ export function ContactsPage() {
                   : verificationStatus === 'catch_all' || verificationStatus === 'inconclusive'
                     ? 'Email check inconclusive'
                     : 'Verify email without sending';
+              const savedRiskLabels = riskFlags.map(flag => ({
+                disposable_domain: 'disposable domain',
+                role_based_address: 'role-based address',
+                likely_domain_typo: 'possible domain typo',
+              }[flag] ?? flag));
               const savedCheckDetails = [
                 contact.emailVerificationProvider,
                 contact.emailVerificationCheckedAt ? `checked ${formatDate(contact.emailVerificationCheckedAt)}` : null,
+                savedRiskLabels.length ? `warnings: ${savedRiskLabels.join(', ')}` : null,
               ].filter(Boolean).join(' · ');
               return <>
                 <span className="inline-flex h-9 w-10 shrink-0 items-center justify-center">
@@ -1147,13 +1166,13 @@ export function ContactsPage() {
                       setEmailVerification({ contact, result });
                       setEmailVerificationByContact(previous => ({
                         ...previous,
-                        [contact.id]: { email: contact.email, status: result.status },
+                        [contact.id]: { email: contact.email, status: result.status, riskFlags: result.riskFlags },
                       }));
                       void contactsQuery.refetch();
                     },
                     onError: error => setEmailVerification({ contact, error: mutationError(error) }),
                   });
-                }} title={savedCheckDetails ? `${verificationTitle} · ${savedCheckDetails}` : verificationTitle}><ContactEmailIcon status={verificationStatus}/></Button>
+                }} title={savedCheckDetails ? `${verificationTitle} · ${savedCheckDetails}` : verificationTitle}><ContactEmailIcon status={verificationStatus} hasRiskWarnings={hasRiskWarnings}/></Button>
                 <Button variant="quiet" testId={`button-contact-history-${contact.id}`} ariaLabel={`Email history for ${contactName}`} title="Email history" onClick={() => setHistoryContact(contact)}><Clock3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-edit-contact-${contact.id}`} ariaLabel={`Edit ${contactName}`} title="Edit contact" onClick={() => openEdit(contact)}><Edit3 aria-hidden="true" className="h-4 w-4"/></Button>
                 <Button variant="quiet" testId={`button-delete-contact-${contact.id}`} ariaLabel={`Delete ${contactName}`} title="Delete contact" disabled={remove.isPending} onClick={() => setContactToDelete(contact)}><Trash2 aria-hidden="true" className="h-4 w-4 text-[#b85b20]"/></Button>

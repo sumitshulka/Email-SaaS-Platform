@@ -2478,6 +2478,8 @@ router.post(
         emailVerificationCheckedAt: new Date(result.checkedAt),
         emailVerificationProvider: result.providerName,
         emailVerificationMethod: result.verificationMethod,
+        emailVerificationRiskFlags: result.riskFlags,
+        emailVerificationSuggestedEmail: result.suggestedEmail,
         updatedAt: new Date(),
       })
       .where(
@@ -3211,6 +3213,8 @@ router.patch(
                 emailVerificationCheckedAt: null,
                 emailVerificationProvider: null,
                 emailVerificationMethod: null,
+                emailVerificationRiskFlags: null,
+                emailVerificationSuggestedEmail: null,
               }
             : {}),
           firstName,

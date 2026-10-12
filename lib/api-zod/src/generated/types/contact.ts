@@ -7,6 +7,7 @@
  */
 import type { Company } from './company';
 import type { ContactEmailStatus } from './contactEmailStatus';
+import type { ContactEmailVerificationRiskFlagsItem } from './contactEmailVerificationRiskFlagsItem';
 import type { ContactEmailVerificationStatus } from './contactEmailVerificationStatus';
 
 export interface Contact {
@@ -190,6 +191,13 @@ export interface Contact {
      * @nullable
      */
   emailVerificationMethod: string | null;
+  /** @nullable */
+  emailVerificationRiskFlags: ContactEmailVerificationRiskFlagsItem[] | null;
+  /**
+     * @maxLength 254
+     * @nullable
+     */
+  emailVerificationSuggestedEmail: string | null;
   listIds: string[];
   createdAt: Date;
   updatedAt: Date;

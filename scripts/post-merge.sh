@@ -10,3 +10,4 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0010_campaign_user_
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0011_campaign_scheduled_resume.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0012_contact_email_verification_result.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0013_contact_email_verification_provider.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/db/migrations/0014_contact_email_verification_risks.sql

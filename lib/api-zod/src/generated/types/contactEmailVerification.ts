@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { ContactEmailVerificationRiskFlagsItem } from './contactEmailVerificationRiskFlagsItem';
 import type { ContactEmailVerificationStatus } from './contactEmailVerificationStatus';
 
 export interface ContactEmailVerification {
@@ -22,5 +23,11 @@ export interface ContactEmailVerification {
   /** @nullable */
   catchAll: boolean | null;
   noReplyStyle: boolean;
+  riskFlags: ContactEmailVerificationRiskFlagsItem[];
+  /**
+     * @maxLength 254
+     * @nullable
+     */
+  suggestedEmail: string | null;
   message: string;
 }

@@ -2,6 +2,7 @@ import { domainToASCII } from "node:url";
 import { lookup, resolveMx } from "node:dns/promises";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
+import disposableDomainList from "disposable-email-domains" with { type: "json" };
 
 export type ContactEmailVerification = {
   status: "accepted" | "rejected" | "catch_all" | "no_mail_server" | "inconclusive";
@@ -11,11 +12,25 @@ export type ContactEmailVerification = {
   mailServer: string | null;
   catchAll: boolean | null;
   noReplyStyle: boolean;
+  riskFlags: Array<"disposable_domain" | "role_based_address" | "likely_domain_typo">;
+  suggestedEmail: string | null;
   message: string;
 };
 
 const SMTP_TIMEOUT_MS = 4_000;
 const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const DISPOSABLE_DOMAINS = new Set((disposableDomainList as string[]).map(domain => domain.toLowerCase()));
+const COMMON_EMAIL_DOMAINS = [
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "outlook.com",
+  "hotmail.com", "live.com", "icloud.com", "me.com", "aol.com", "proton.me",
+  "protonmail.com", "fastmail.com", "gmx.com", "mail.com",
+];
+const ROLE_ADDRESS_TOKENS = new Set([
+  "abuse", "admin", "billing", "careers", "contact", "customerservice",
+  "feedback", "help", "hello", "info", "jobs", "marketing", "office",
+  "postmaster", "press", "privacy", "sales", "security", "service",
+  "support", "team", "webmaster",
+]);
 
 type ProviderProfile = {
   name: string;
@@ -104,6 +119,75 @@ function isPublicAddress(address: string): boolean {
 
 function noReplyAddress(localPart: string): boolean {
   return /(?:^|[._+-])(?:no[\W_]*reply|do[\W_]*not[\W_]*reply)(?:$|[._+-])/i.test(localPart);
+}
+
+function isDisposableDomain(domain: string): boolean {
+  const labels = domain.toLowerCase().split(".");
+  for (let index = 0; index < labels.length - 1; index += 1) {
+    if (DISPOSABLE_DOMAINS.has(labels.slice(index).join("."))) return true;
+  }
+  return false;
+}
+
+function domainDistance(left: string, right: string): number {
+  const matrix = Array.from({ length: left.length + 1 }, () =>
+    Array<number>(right.length + 1).fill(0),
+  );
+  for (let i = 0; i <= left.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= right.length; j += 1) matrix[0][j] = j;
+  for (let i = 1; i <= left.length; i += 1) {
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      );
+      if (i > 1 && j > 1 && left[i - 1] === right[j - 2] && left[i - 2] === right[j - 1]) {
+        matrix[i][j] = Math.min(matrix[i][j], matrix[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return matrix[left.length][right.length];
+}
+
+function suggestCommonDomain(domain: string): string | null {
+  let bestDistance = 3;
+  let suggestion: string | null = null;
+  let tied = false;
+  for (const candidate of COMMON_EMAIL_DOMAINS) {
+    const distance = domainDistance(domain, candidate);
+    if (distance === 0 || distance > 2) continue;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      suggestion = candidate;
+      tied = false;
+    } else if (distance === bestDistance) {
+      tied = true;
+    }
+  }
+  return tied ? null : suggestion;
+}
+
+export function assessEmailRisks(email: string): {
+  riskFlags: ContactEmailVerification["riskFlags"];
+  suggestedEmail: string | null;
+} {
+  const [localPart = "", rawDomain = ""] = email.trim().split("@");
+  const domain = domainToASCII(rawDomain).toLowerCase();
+  const normalizedLocalPart = localPart.split("+", 1)[0].toLowerCase();
+  const roleTokens = normalizedLocalPart.split(/[._+-]+/).filter(Boolean);
+  const hasRoleAddress = roleTokens.some(token => ROLE_ADDRESS_TOKENS.has(token));
+  const roleBased = hasRoleAddress || noReplyAddress(localPart);
+  const suggestion = suggestCommonDomain(domain);
+  const riskFlags: ContactEmailVerification["riskFlags"] = [];
+  if (domain && isDisposableDomain(domain)) riskFlags.push("disposable_domain");
+  if (roleBased) riskFlags.push("role_based_address");
+  if (suggestion) riskFlags.push("likely_domain_typo");
+  return {
+    riskFlags,
+    suggestedEmail: suggestion ? `${localPart}@${suggestion}` : null,
+  };
 }
 
 type SmtpReply = { code: number; text: string };
@@ -199,8 +283,9 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
   const [localPart, rawDomain, extra] = email.trim().split("@");
   const domain = domainToASCII(rawDomain ?? "").toLowerCase();
   const noReplyStyle = noReplyAddress(localPart ?? "");
+  const emailRisks = assessEmailRisks(email);
   if (extra !== undefined || !EMAIL_SHAPE.test(email.trim()) || !domain || domain.length > 253 || domain.endsWith(".local")) {
-    return { status: "inconclusive", checkedAt, providerName: null, verificationMethod: "Email format check", mailServer: null, catchAll: null, noReplyStyle, message: "The stored address is not in a verifiable email format." };
+    return { status: "inconclusive", checkedAt, providerName: null, verificationMethod: "Email format check", mailServer: null, catchAll: null, noReplyStyle, ...emailRisks, message: "The stored address is not in a verifiable email format." };
   }
 
   let hosts: string[];
@@ -211,7 +296,7 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
       await lookup(domain);
       hosts = [domain]; // RFC implicit MX fallback.
     } catch {
-      return { status: "no_mail_server", checkedAt, providerName: null, verificationMethod: "DNS mail-routing lookup", mailServer: null, catchAll: false, noReplyStyle, message: "This domain does not currently resolve to a mail server." };
+      return { status: "no_mail_server", checkedAt, providerName: null, verificationMethod: "DNS mail-routing lookup", mailServer: null, catchAll: false, noReplyStyle, ...emailRisks, message: "This domain does not currently resolve to a mail server." };
     }
   }
   if (!hosts.length) {
@@ -219,7 +304,7 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
       await lookup(domain);
       hosts = [domain];
     } catch {
-      return { status: "no_mail_server", checkedAt, providerName: null, verificationMethod: "DNS mail-routing lookup", mailServer: null, catchAll: false, noReplyStyle, message: "This domain does not currently resolve to a mail server." };
+      return { status: "no_mail_server", checkedAt, providerName: null, verificationMethod: "DNS mail-routing lookup", mailServer: null, catchAll: false, noReplyStyle, ...emailRisks, message: "This domain does not currently resolve to a mail server." };
     }
   }
 
@@ -251,16 +336,16 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
   const classification = classifySmtpProbeEvidence(evidence, incompleteHostCount);
   if (classification === "catch_all") {
     const outcomeHost = evidence.find(({ catchAllCode }) => catchAllCode >= 200 && catchAllCode < 300)?.mailServer ?? lastHost;
-    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: true, noReplyStyle, message: `${provider.name} accepts a randomly generated address too, so mailbox existence cannot be confirmed.` };
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: true, noReplyStyle, ...emailRisks, message: `${provider.name} accepts a randomly generated address too, so mailbox existence cannot be confirmed.` };
   }
   if (classification === "accepted") {
     const outcomeHost = evidence.find(({ recipientCode, catchAllCode }) =>
       recipientCode >= 200 && recipientCode < 300 && catchAllCode >= 500 && catchAllCode < 600
     )?.mailServer ?? lastHost;
-    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: false, noReplyStyle, message: `${provider.name} accepted this recipient and rejected the random control address during an SMTP check. This is not proof of inbox delivery or future acceptance.` };
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: outcomeHost, catchAll: false, noReplyStyle, ...emailRisks, message: `${provider.name} accepted this recipient and rejected the random control address during an SMTP check. This is not proof of inbox delivery or future acceptance.` };
   }
   if (classification === "rejected") {
-    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: lastHost, catchAll: false, noReplyStyle, message: `${provider.name} rejected both the recipient and random control address on each reachable mail server checked.` };
+    return { status: classification, checkedAt, providerName: provider.name, verificationMethod: provider.method, mailServer: lastHost, catchAll: false, noReplyStyle, ...emailRisks, message: `${provider.name} rejected both the recipient and random control address on each reachable mail server checked.` };
   }
   return {
     status: classification,
@@ -270,6 +355,7 @@ export async function verifyContactEmail(email: string): Promise<ContactEmailVer
     mailServer: lastHost,
     catchAll: null,
     noReplyStyle,
+    ...emailRisks,
     message: `${provider.name} did not provide consistent, conclusive recipient answers across the mail servers checked. No message was sent.`,
   };
 }

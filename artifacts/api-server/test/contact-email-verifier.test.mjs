@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assessEmailRisks,
   classifySmtpProbeEvidence,
   identifyMailProvider,
   verifyContactEmail,
@@ -47,6 +48,29 @@ test("identifies common mailbox providers from their published MX hosts", () => 
   assert.match(
     identifyMailProvider(["tenant.mail.protection.outlook.com"], "example.com").method,
     /Microsoft 365 MX SMTP/,
+  );
+});
+
+test("flags disposable domains, role addresses, and likely provider typos without changing the address", () => {
+  assert.deepEqual(
+    assessEmailRisks("Jamie@mailinator.com").riskFlags,
+    ["disposable_domain"],
+  );
+  assert.deepEqual(
+    assessEmailRisks("support+campaign@example.com").riskFlags,
+    ["role_based_address"],
+  );
+  assert.deepEqual(assessEmailRisks("person@gmial.com"), {
+    riskFlags: ["likely_domain_typo"],
+    suggestedEmail: "person@gmail.com",
+  });
+  assert.equal(
+    assessEmailRisks("person@hotmial.com").suggestedEmail,
+    "person@hotmail.com",
+  );
+  assert.equal(
+    assessEmailRisks("person@custom-company.example").suggestedEmail,
+    null,
   );
 });
 

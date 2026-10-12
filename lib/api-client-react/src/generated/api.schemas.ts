@@ -1876,6 +1876,15 @@ export const ContactEmailVerificationStatus = {
   inconclusive: 'inconclusive',
 } as const;
 
+export type ContactEmailVerificationRiskFlagsItem = typeof ContactEmailVerificationRiskFlagsItem[keyof typeof ContactEmailVerificationRiskFlagsItem];
+
+
+export const ContactEmailVerificationRiskFlagsItem = {
+  disposable_domain: 'disposable_domain',
+  role_based_address: 'role_based_address',
+  likely_domain_typo: 'likely_domain_typo',
+} as const;
+
 export interface Contact {
   id: string;
   email: string;
@@ -2057,6 +2066,13 @@ export interface Contact {
      * @nullable
      */
   emailVerificationMethod: string | null;
+  /** @nullable */
+  emailVerificationRiskFlags: ContactEmailVerificationRiskFlagsItem[] | null;
+  /**
+     * @maxLength 254
+     * @nullable
+     */
+  emailVerificationSuggestedEmail: string | null;
   listIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -2077,6 +2093,12 @@ export interface ContactEmailVerification {
   /** @nullable */
   catchAll: boolean | null;
   noReplyStyle: boolean;
+  riskFlags: ContactEmailVerificationRiskFlagsItem[];
+  /**
+     * @maxLength 254
+     * @nullable
+     */
+  suggestedEmail: string | null;
   message: string;
 }
 
