@@ -80,6 +80,44 @@ test(
         dailyLimit: 2,
         priorAttemptAgeMs: 2 * 60 * 60 * 1000,
       });
+
+      await assertIndependentMailboxAllowance({
+        db,
+        tables: {
+          contactsTable,
+          emailCampaignRecipientsTable,
+          emailCampaignsTable,
+          emailSendAttemptsTable,
+          systemConfigurationTable,
+          tenantSendingConfigurationTable,
+          usersTable,
+        },
+        securityModule,
+        defaultPlatformSettings,
+        cap: "hourly",
+        hourlyLimit: 2,
+        dailyLimit: 10,
+        priorAttemptAgeMs: 5 * 60 * 1000,
+      });
+
+      await assertIndependentMailboxAllowance({
+        db,
+        tables: {
+          contactsTable,
+          emailCampaignRecipientsTable,
+          emailCampaignsTable,
+          emailSendAttemptsTable,
+          systemConfigurationTable,
+          tenantSendingConfigurationTable,
+          usersTable,
+        },
+        securityModule,
+        defaultPlatformSettings,
+        cap: "daily",
+        hourlyLimit: 10,
+        dailyLimit: 2,
+        priorAttemptAgeMs: 2 * 60 * 60 * 1000,
+      });
     } finally {
       if (originalPlatformRows[0]) {
         await db
@@ -155,7 +193,7 @@ async function assertConcurrentMailboxCap({
     const [owner] = await db
       .insert(usersTable)
       .values({
-        username: `send-limit-${cap}-${testId}`,
+        username: `sr-${cap}-${testId}`,
         firstName: "Send Limit",
         lastName: "Race",
         email: ownerEmail,
@@ -313,7 +351,293 @@ async function assertConcurrentMailboxCap({
     assert.ok(hourlyAttempts.length <= hourlyLimit);
     assert.ok(dailyAttempts.length <= dailyLimit);
     assert.equal(hourlyAttempts.length, cap === "hourly" ? hourlyLimit : 1);
-    assert.equal(dailyAttempts.length, dailyLimit);
+    assert.equal(
+      dailyAttempts.length,
+      cap === "daily" ? dailyLimit : hourlyLimit,
+    );
+  } finally {
+    if (ownerId) {
+      await db.delete(usersTable).where(eq(usersTable.id, ownerId));
+    }
+  }
+}
+
+async function assertIndependentMailboxAllowance({
+  db,
+  tables,
+  securityModule,
+  defaultPlatformSettings,
+  cap,
+  hourlyLimit,
+  dailyLimit,
+  priorAttemptAgeMs,
+}) {
+  const {
+    contactsTable,
+    emailCampaignRecipientsTable,
+    emailCampaignsTable,
+    emailSendAttemptsTable,
+    systemConfigurationTable,
+    tenantSendingConfigurationTable,
+    usersTable,
+  } = tables;
+  const testId = randomUUID();
+  const now = new Date();
+  const priorAttemptAt = new Date(now.getTime() - priorAttemptAgeMs);
+  const availablePriorAttemptAt = new Date(
+    now.getTime() - Math.max(priorAttemptAgeMs, 45 * 60 * 1000),
+  );
+  const allowance = cap === "hourly" ? hourlyLimit : dailyLimit;
+  let ownerId;
+
+  await db
+    .insert(systemConfigurationTable)
+    .values({
+      key: "platform",
+      value: {
+        ...defaultPlatformSettings,
+        maintenanceMode: false,
+        defaultEmailsPerHour: hourlyLimit,
+        maxEmailsPerDay: dailyLimit,
+        queuePollingSeconds: 1,
+      },
+    })
+    .onConflictDoUpdate({
+      target: systemConfigurationTable.key,
+      set: {
+        value: {
+          ...defaultPlatformSettings,
+          maintenanceMode: false,
+          defaultEmailsPerHour: hourlyLimit,
+          maxEmailsPerDay: dailyLimit,
+          queuePollingSeconds: 1,
+        },
+        updatedAt: now,
+      },
+    });
+
+  try {
+    const [owner] = await db
+      .insert(usersTable)
+      .values({
+        username: `mi-${cap}-${testId}`,
+        firstName: "Mailbox Isolation",
+        lastName: "Race",
+        email: `mailbox-isolation-${cap}-${testId}@example.test`,
+        passwordHash: "postgres-campaign-send-limit-race-test",
+      })
+      .returning();
+    ownerId = owner.id;
+
+    const senders = [];
+    for (const mailbox of ["busy", "available"]) {
+      const [sender] = await db
+        .insert(tenantSendingConfigurationTable)
+        .values({
+          userId: owner.id,
+          host: "smtp.send-limit-race.test",
+          port: 2525,
+          encryption: "none",
+          usernameEncrypted: securityModule.encryptSecret(
+            `send-limit-${mailbox}-user`,
+          ),
+          passwordEncrypted: securityModule.encryptSecret(
+            `send-limit-${mailbox}-password`,
+          ),
+          fromName: "Mailbox Isolation Race Test",
+          fromEmail: `${mailbox}-${cap}-${testId}@send-limit-race.test`,
+          verifiedAt: now,
+        })
+        .returning();
+      senders.push(sender);
+    }
+
+    const campaigns = [];
+    for (const [index, sender] of senders.entries()) {
+      const [campaign] = await db
+        .insert(emailCampaignsTable)
+        .values({
+          userId: owner.id,
+          senderAccountId: sender.id,
+          name: `${cap} mailbox isolation ${index}`,
+          subject: "Independent mailbox allowance test",
+          textBody: "A real PostgreSQL transaction controls this delivery.",
+          unsubscribeOrigin: "https://app.mailflow.test",
+          status: "queued",
+        })
+        .returning();
+      campaigns.push(campaign);
+    }
+
+    const priorRecipients = [];
+    for (let index = 0; index < allowance; index += 1) {
+      const contact = await createContact(
+        db,
+        contactsTable,
+        owner.id,
+        `busy-history-${index}`,
+        testId,
+      );
+      const [recipient] = await db
+        .insert(emailCampaignRecipientsTable)
+        .values({
+          campaignId: campaigns[0].id,
+          userId: owner.id,
+          contactId: contact.id,
+          email: contact.email,
+          firstName: contact.firstName,
+          status: "delivered",
+          attempts: 1,
+          nextAttemptAt: priorAttemptAt,
+        })
+        .returning();
+      priorRecipients.push(recipient);
+      await db.insert(emailSendAttemptsTable).values({
+        userId: owner.id,
+        senderAccountId: senders[0].id,
+        recipientId: recipient.id,
+        messageId: `<busy-${index}-${testId}@mailflow.local>`,
+        outcome: "delivered",
+        smtpCode: 250,
+        attemptedAt: priorAttemptAt,
+        completedAt: priorAttemptAt,
+      });
+    }
+
+    const availablePriorContact = await createContact(
+      db,
+      contactsTable,
+      owner.id,
+      "available-history",
+      testId,
+    );
+    const [availablePriorRecipient] = await db
+      .insert(emailCampaignRecipientsTable)
+      .values({
+        campaignId: campaigns[1].id,
+        userId: owner.id,
+        contactId: availablePriorContact.id,
+        email: availablePriorContact.email,
+        firstName: availablePriorContact.firstName,
+        status: "delivered",
+        attempts: 1,
+        nextAttemptAt: availablePriorAttemptAt,
+      })
+      .returning();
+    await db.insert(emailSendAttemptsTable).values({
+      userId: owner.id,
+      senderAccountId: senders[1].id,
+      recipientId: availablePriorRecipient.id,
+      messageId: `<available-prior-${testId}@mailflow.local>`,
+      outcome: "delivered",
+      smtpCode: 250,
+      attemptedAt: availablePriorAttemptAt,
+      completedAt: availablePriorAttemptAt,
+    });
+
+    const queuedByMailbox = [[], []];
+    for (const mailboxIndex of [0, 1]) {
+      const recipientCount = mailboxIndex === 0 ? 2 : allowance;
+      for (let index = 0; index < recipientCount; index += 1) {
+        const contact = await createContact(
+          db,
+          contactsTable,
+          owner.id,
+          `${mailboxIndex}-${index}`,
+          testId,
+        );
+        const [recipient] = await db
+          .insert(emailCampaignRecipientsTable)
+          .values({
+            campaignId: campaigns[mailboxIndex].id,
+            userId: owner.id,
+            contactId: contact.id,
+            email: contact.email,
+            firstName: contact.firstName,
+            status: "queued",
+            attempts: 0,
+            nextAttemptAt: new Date(Date.now() - 1000),
+          })
+          .returning();
+        queuedByMailbox[mailboxIndex].push(recipient);
+      }
+    }
+
+    const queuedRecipients = queuedByMailbox.flat();
+    const workerResults = await runConcurrentWorkers(
+      queuedRecipients.map((recipient) => recipient.id),
+    );
+    assert.equal(
+      workerResults.reduce((total, result) => total + result.processed, 0),
+      1,
+      `the available mailbox should use its remaining ${cap} slot despite the busy mailbox`,
+    );
+
+    const freshRecipients = await db
+      .select()
+      .from(emailCampaignRecipientsTable)
+      .where(inArray(
+        emailCampaignRecipientsTable.id,
+        queuedRecipients.map((recipient) => recipient.id),
+      ));
+    const byId = new Map(freshRecipients.map((recipient) => [recipient.id, recipient]));
+    const busyQueued = queuedByMailbox[0].map((recipient) => byId.get(recipient.id));
+    const availableQueued = queuedByMailbox[1].map((recipient) => byId.get(recipient.id));
+    assert.ok(busyQueued.every((recipient) => recipient.status === "queued"));
+    assert.equal(
+      availableQueued.filter((recipient) => recipient.status === "delivered").length,
+      1,
+    );
+    assert.equal(
+      availableQueued.filter((recipient) => recipient.status === "queued").length,
+      allowance - 1,
+    );
+
+    const deferredRecipients = [
+      ...busyQueued,
+      ...availableQueued.filter((recipient) => recipient.status === "queued"),
+    ];
+    for (const recipient of deferredRecipients) {
+      assert.equal(recipient.attempts, 0);
+      assert.ok(recipient.rateLimitDeferredAt);
+    }
+    for (const recipient of availableQueued.filter(
+      (recipient) => recipient.status === "delivered",
+    )) {
+      assert.equal(recipient.attempts, 1);
+    }
+
+    const allAttempts = await db
+      .select()
+      .from(emailSendAttemptsTable)
+      .where(eq(emailSendAttemptsTable.userId, owner.id));
+    const attemptsByRecipient = new Map(
+      allAttempts.map((attempt) => [attempt.recipientId, attempt]),
+    );
+    assert.equal(allAttempts.length, allowance + 2);
+    assert.equal(
+      allAttempts.filter((attempt) => attempt.senderAccountId === senders[0].id).length,
+      allowance,
+      "only the seeded history is recorded for the mailbox at its cap",
+    );
+    assert.equal(
+      allAttempts.filter((attempt) => attempt.senderAccountId === senders[1].id).length,
+      2,
+      "the other mailbox records its prior send and independent remaining send",
+    );
+    for (const recipient of priorRecipients) {
+      assert.equal(attemptsByRecipient.get(recipient.id)?.senderAccountId, senders[0].id);
+    }
+    assert.equal(
+      attemptsByRecipient.get(availablePriorRecipient.id)?.senderAccountId,
+      senders[1].id,
+    );
+    for (const recipient of deferredRecipients) {
+      assert.ok(
+        !attemptsByRecipient.has(recipient.id),
+        "deferred recipients remain queued without attempt rows",
+      );
+    }
   } finally {
     if (ownerId) {
       await db.delete(usersTable).where(eq(usersTable.id, ownerId));

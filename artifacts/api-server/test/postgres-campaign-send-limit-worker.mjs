@@ -22,6 +22,10 @@ try {
   }
 
   workerModule.setCandidateRecipientIdsForTests([runRequest.recipientId]);
+  workerModule.setCampaignEmailSpacingWindowForTests({
+    minimumSeconds: 0,
+    maximumSeconds: 0,
+  });
   workerModule.setBeforeDeliveryClaimForTests(
     () =>
       new Promise((resolve) => {
@@ -40,6 +44,7 @@ try {
   const processed = await workerModule.processPendingCampaignDeliveries(1);
   workerModule.setBeforeDeliveryClaimForTests(null);
   workerModule.setCandidateRecipientIdsForTests(null);
+  workerModule.setCampaignEmailSpacingWindowForTests(null);
   emailModule.setTenantEmailTransportForTests(null);
   await dbModule.pool.end();
   process.send({ type: "result", processed });
@@ -47,6 +52,7 @@ try {
 } catch (error) {
   workerModule?.setBeforeDeliveryClaimForTests(null);
   workerModule?.setCandidateRecipientIdsForTests(null);
+  workerModule?.setCampaignEmailSpacingWindowForTests(null);
   emailModule?.setTenantEmailTransportForTests(null);
   await dbModule?.pool.end().catch(() => {});
   process.send?.({
