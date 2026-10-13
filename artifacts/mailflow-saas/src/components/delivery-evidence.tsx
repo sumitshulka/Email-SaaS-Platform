@@ -427,7 +427,14 @@ export function Microsoft365TraceSettingsPanel() {
         <input data-testid="input-microsoft365-client-secret" className={cx(inputCls, 'h-9 mono')} type="password" autoComplete="new-password" spellCheck={false} required minLength={8} maxLength={4096} value={clientSecret} onChange={e => { setClientSecret(e.target.value); setConnectError(null); }} placeholder="Secret Value (not the Secret ID)"/>
         <span className="mt-1 block text-[10px] leading-4 text-[#788392]">This field is masked and cleared when verification starts. Mailflow stores the secret encrypted and does not return it in connection details.</span>
       </label>
-      <label className="flex items-start gap-2 text-[11px] leading-5 text-[#5f6c7c]"><input data-testid="checkbox-microsoft365-admin-consent" type="checkbox" required checked={adminConsentConfirmed} onChange={e => { setAdminConsentConfirmed(e.target.checked); setConnectError(null); }} className="mt-1 accent-[#174f99]"/>A tenant administrator has granted the <span className="mono">ExchangeMessageTrace.Read.All</span> application permission and completed the trace service-principal setup.</label>
+      <label className="flex items-start gap-2 text-[11px] leading-5 text-[#5f6c7c]">
+        <input data-testid="checkbox-microsoft365-admin-consent" type="checkbox" required checked={adminConsentConfirmed} onChange={e => { setAdminConsentConfirmed(e.target.checked); setConnectError(null); }} className="mt-1 shrink-0 accent-[#174f99]"/>
+        <span className="min-w-0 flex-1">
+          I confirm that a Microsoft 365 administrator granted Mailflow the Microsoft Graph application permission
+          <code className="mx-1 break-all rounded bg-[#f0f3f6] px-1 font-mono">ExchangeMessageTrace.Read.All</code>
+          with admin consent, and completed the separate Exchange trace service-principal setup. This allows Mailflow to read message-trace status only, not mailbox contents. Checking this box confirms those steps; it does not grant permission.
+        </span>
+      </label>
       {connectError && <div role="alert" data-testid="error-microsoft365-connect" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
         <p className="font-semibold">{connectError.title}</p><p className="mt-1">{connectError.detail}</p>
         <ul className="mt-1 list-disc space-y-1 pl-5">{connectError.nextSteps.map((step, i) => <li key={i}>{step}</li>)}</ul>
