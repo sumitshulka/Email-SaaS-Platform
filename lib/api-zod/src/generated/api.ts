@@ -743,6 +743,16 @@ export const UpdateTenantSendingAccountResponse = zod.object({
 
 
 /**
+ * @summary Delete an SMTP sender account not used by an active campaign
+ */
+export const DeleteTenantSendingAccountParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const DeleteTenantSendingAccountResponse = zod.void()
+
+
+/**
  * @summary Check a sender mailbox for bounce reports and campaign replies using IMAP
  */
 export const CheckSenderMailboxParams = zod.object({
@@ -775,16 +785,6 @@ export const CheckSenderMailboxResponse = zod.object({
 })),
   "checkedAt": zod.coerce.date()
 })
-
-
-/**
- * @summary Delete an SMTP sender account not used by an active campaign
- */
-export const DeleteTenantSendingAccountParams = zod.object({
-  "accountId": zod.coerce.string().uuid()
-})
-
-export const DeleteTenantSendingAccountResponse = zod.void()
 
 
 /**

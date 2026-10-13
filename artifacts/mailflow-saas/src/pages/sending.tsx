@@ -191,6 +191,7 @@ export function SendingSettingsPage() {
   const [gmailSyncNowResult, setGmailSyncNowResult] = useState<GmailMailboxSyncNowResult | null>(null);
   const [imapHost, setImapHost] = useState('');
   const [inboxCheckResult, setInboxCheckResult] = useState<SenderInboxCheckResult | null>(null);
+  const [inboxCheckError, setInboxCheckError] = useState<string | null>(null);
   const [form, setForm] = useState(blankSettings);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [initialized, setInitialized] = useState(false);
@@ -343,6 +344,7 @@ export function SendingSettingsPage() {
   );
   const runInboxCheck = () => {
     setInboxCheckResult(null);
+    setInboxCheckError(null);
     if (!selectedAccountId) {
       setNotice({ kind: 'error', text: 'Save this sender account before checking its inbox.' });
       return;
@@ -357,12 +359,17 @@ export function SendingSettingsPage() {
     }, {
       onSuccess: result => {
         setInboxCheckResult(result);
+        setInboxCheckError(null);
         setNotice({
           kind: 'success',
           text: `Inbox check complete: ${result.bounceReportsApplied} bounce report(s) applied and ${result.repliesFound} campaign reply/replies matched.`,
         });
       },
-      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+      onError: error => {
+        const message = mutationError(error);
+        setInboxCheckError(message);
+        setNotice({ kind: 'error', text: message });
+      },
     });
   };
   const runConnectionTest = () => {
@@ -584,6 +591,10 @@ export function SendingSettingsPage() {
               {inboxCheckResult.replyMatches.map((reply, index) => <li key={`${reply.campaignName}-${reply.recipientEmail}-${index}`}>{reply.recipientEmail} replied to “{reply.campaignName}” (sent {formatDate(reply.sentAt)}).</li>)}
             </ul>}
           </div>}
+          {inboxCheckError && <div role="alert" data-testid="text-inbox-check-error" className="mt-4 max-w-3xl rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
+            Inbox connection failed: {inboxCheckError}
+          </div>}
+          {!settings?.credentialsConfigured && <p className="mt-3 max-w-3xl text-[11px] leading-5 text-[#99501e]">Save the sender’s SMTP username and password before checking its inbox. The inbox check uses those saved credentials.</p>}
         </section>
         <DeliveryCapabilityNotes/>
       </TabsContent>

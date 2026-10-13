@@ -570,6 +570,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteTenantSendingAccount
+      tags: [sending]
+      summary: Delete an SMTP sender account not used by an active campaign
+      responses:
+        "204":
+          description: SMTP sender account deleted
+        "404":
+          description: SMTP sender account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: SMTP sender account is still used by an active campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /sending/accounts/{accountId}/inbox-check:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
     post:
       operationId: checkSenderMailbox
       tags: [sending]
@@ -595,25 +622,6 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Sender account not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-    delete:
-      operationId: deleteTenantSendingAccount
-      tags: [sending]
-      summary: Delete an SMTP sender account not used by an active campaign
-      responses:
-        "204":
-          description: SMTP sender account deleted
-        "404":
-          description: SMTP sender account not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: SMTP sender account is still used by an active campaign
           content:
             application/json:
               schema:

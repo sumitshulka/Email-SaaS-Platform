@@ -2390,12 +2390,86 @@ export const useUpdateTenantSendingAccount = <TError = ErrorType<ApiError>,
       return useMutation(getUpdateTenantSendingAccountMutationOptions(options));
     }
 
-export const getCheckSenderMailboxUrl = (accountId: string,) => {
+export const getDeleteTenantSendingAccountUrl = (accountId: string,) => {
 
 
 
 
   return `/api/sending/accounts/${accountId}`
+}
+
+/**
+ * @summary Delete an SMTP sender account not used by an active campaign
+ */
+export const deleteTenantSendingAccount = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteTenantSendingAccountUrl(accountId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTenantSendingAccountMutationKey = () => ['deleteTenantSendingAccount'] as const;
+
+export const getDeleteTenantSendingAccountMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTenantSendingAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, DeleteTenantSendingAccountMutationVariables> = (props) => {
+          const {accountId} = props ?? {};
+
+          return  deleteTenantSendingAccount(accountId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTenantSendingAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTenantSendingAccount>>>
+
+    export type DeleteTenantSendingAccountMutationError = ErrorType<ApiError>
+    export type DeleteTenantSendingAccountMutationVariables = {accountId: string}
+
+    /**
+ * @summary Delete an SMTP sender account not used by an active campaign
+ */
+export const useDeleteTenantSendingAccount = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTenantSendingAccount>>,
+        TError,
+        DeleteTenantSendingAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTenantSendingAccountMutationOptions(options));
+    }
+
+export const getCheckSenderMailboxUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}/inbox-check`
 }
 
 /**
@@ -2477,80 +2551,6 @@ export const useCheckSenderMailbox = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCheckSenderMailboxMutationOptions(options));
-    }
-
-export const getDeleteTenantSendingAccountUrl = (accountId: string,) => {
-
-
-
-
-  return `/api/sending/accounts/${accountId}`
-}
-
-/**
- * @summary Delete an SMTP sender account not used by an active campaign
- */
-export const deleteTenantSendingAccount = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
-
-  return customFetch<void>(getDeleteTenantSendingAccountUrl(accountId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-
-
-export const getDeleteTenantSendingAccountMutationKey = () => ['deleteTenantSendingAccount'] as const;
-
-export const getDeleteTenantSendingAccountMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext> => {
-
-const mutationKey = getDeleteTenantSendingAccountMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, DeleteTenantSendingAccountMutationVariables> = (props) => {
-          const {accountId} = props ?? {};
-
-          return  deleteTenantSendingAccount(accountId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteTenantSendingAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTenantSendingAccount>>>
-
-    export type DeleteTenantSendingAccountMutationError = ErrorType<ApiError>
-    export type DeleteTenantSendingAccountMutationVariables = {accountId: string}
-
-    /**
- * @summary Delete an SMTP sender account not used by an active campaign
- */
-export const useDeleteTenantSendingAccount = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantSendingAccount>>, TError,DeleteTenantSendingAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteTenantSendingAccount>>,
-        TError,
-        DeleteTenantSendingAccountMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteTenantSendingAccountMutationOptions(options));
     }
 
 export const getSetPrimaryTenantSendingAccountUrl = (accountId: string,) => {
