@@ -2080,11 +2080,34 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const campaignSummary = campaignHistory?.summary;
   const totalDelivered = campaignSummary?.delivered ?? 0;
   const totalBounced = campaignSummary?.bounced ?? 0;
+  const campaignBestPractices = [
+    { title: 'Keep the campaign small', detail: 'Start with a focused segment and increase gradually within your mailbox sending limits.' },
+    { title: 'Research the message before setup', detail: 'Check facts, claims, links, and the offer so every part is relevant and accurate.' },
+    { title: 'Match contacts to the persona', detail: 'Choose people whose role, needs, and context fit what the campaign is about.' },
+    { title: 'Set a precise objective', detail: 'Choose one clear outcome and make the message and call to action support it.' },
+    { title: 'Make follow-ups meaningfully different', detail: 'Use new research and prior engagement to add useful context instead of repeating the first email.' },
+    { title: 'Respect consent and suppression', detail: 'Send only to eligible subscribed contacts; honor unsubscribes and suppress confirmed bounces.' },
+    { title: 'Personalize with verified context', detail: 'Use accurate details that help the recipient; avoid guesses and generic name-only personalization.' },
+    { title: 'Preview and test before queueing', detail: 'Check a sample contact, placeholders, sender, links, and the unsubscribe option.' },
+    { title: 'Schedule thoughtfully and review replies', detail: 'Use reasonable timing, watch responses and bounce evidence, and pause to investigate unexpected issues.' },
+  ];
   return <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading || variantLimitsQuery.isLoading} error={campaignsQuery.isError || listsQuery.isError || variantLimitsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); void variantLimitsQuery.refetch(); }} label="campaigns"><>
     <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<Button testId="button-create-campaign" onClick={openNew} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     {!activeLists.length && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before creating a campaign. Drafts can only target active lists.</span></div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Campaigns</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{(campaignSummary?.campaignCount ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">{(campaignSummary?.draftCount ?? 0).toLocaleString()} drafts · {(campaignSummary?.nonDraftCount ?? 0).toLocaleString()} queued or sent</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">SMTP accepted</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{totalDelivered.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">Inbox delivery is not confirmed</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#fff5eb', borderColor: '#f0dfcb' }}><div className="text-[11px] text-[#8b6747]">Rejected / failed</div><div className="display mt-2 text-[26px] font-bold text-[#ae642c]">{totalBounced.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#816f5f]">Includes matched provider bounce or failure reports</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' }}><div className="text-[11px] text-[#677484]">Suppressed</div><div className="display mt-2 text-[26px] font-bold text-[#596675]">{(campaignSummary?.suppressed ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#738092]">Unsubscribed or removed before send</div></div></div>
+         <section aria-labelledby="campaign-best-practices-heading" data-testid="campaign-best-practices" className={`${panelClass} mb-5 overflow-hidden bg-[#f7f9fc]`}>
+           <div className="border-b border-[#e1e6ed] px-4 py-3 sm:px-5">
+             <h2 id="campaign-best-practices-heading" className="display text-[16px] font-bold text-[#243247]">Campaign best practices</h2>
+             <p className="mt-1 text-[12px] leading-5 text-[#46556a]">A few practical checks for relevant, respectful campaigns and clearer results.</p>
+           </div>
+           <ul className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4 2xl:grid-cols-3">
+             {campaignBestPractices.map((item, index) => <li key={item.title} className="flex gap-2.5 rounded-md border border-[#e4e8ee] bg-white p-3">
+               <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#eaf1fa] text-[10px] font-bold text-[#245b9b]">{index + 1}</span>
+               <span><strong className="block text-[12px] font-semibold leading-5 text-[#27364a]">{item.title}</strong><span className="mt-0.5 block text-[12px] leading-[1.55] text-[#46556a]">{item.detail}</span></span>
+             </li>)}
+           </ul>
+         </section>
         <section data-testid="campaign-filters" className={`${panelClass} mb-5 p-4 sm:p-5`}>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="display text-[16px] font-bold text-[#1b293a]">Find a campaign</h2><p className="mt-1 text-[11px] text-[#778393]">Search names, subjects, objectives, or senders; filter the tree without losing parent context.</p></div>
