@@ -500,6 +500,10 @@ export interface TenantSendingSettings {
   /** @nullable */
   connectionCheckAt: string | null;
   /** @nullable */
+  inboxHost: string | null;
+  /** @nullable */
+  inboxConnectedAt: string | null;
+  /** @nullable */
   updatedAt: string | null;
 }
 
@@ -587,18 +591,25 @@ export interface SenderInboxCheckInput {
      * @minLength 1
      * @maxLength 255
      */
-  imapHost: string;
+  imapHost?: string;
   /**
      * @minimum 1
      * @maximum 65535
      */
-  imapPort: number;
+  imapPort?: number;
+  campaignId?: string;
+  storeReplyContent?: boolean;
 }
 
 export type SenderInboxCheckResultReplyMatchesItem = {
   campaignName: string;
   recipientEmail: string;
   sentAt: string;
+  /** @nullable */
+  contactId: string | null;
+  contactName: string;
+  receivedAt: string;
+  contentStored: boolean;
 };
 
 export interface SenderInboxCheckResult {
@@ -2365,6 +2376,25 @@ export interface ContactEmailHistoryItem {
   messageId: string | null;
   /** @nullable */
   smtpResponse: string | null;
+}
+
+export interface CampaignReply {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  recipientId: string;
+  /** @nullable */
+  contactId: string | null;
+  contactName: string;
+  recipientEmail: string;
+  /** @nullable */
+  fromEmail: string | null;
+  /** @nullable */
+  subject: string | null;
+  receivedAt: string;
+  /** @nullable */
+  bodyText: string | null;
+  contentStored: boolean;
 }
 
 export interface ContactLeadStatusUpdate {

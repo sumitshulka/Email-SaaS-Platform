@@ -5,7 +5,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, Shiel
 import {
   getListContactNotesQueryKey,
   getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactLeadStatusUpdatesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
-  useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact,
+  getListContactCampaignRepliesQueryKey, useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCampaignReplies, useListContactCampaignReplies, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate, ContactNote, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
@@ -166,6 +166,14 @@ function ContactEmailHistorySection({ contactId, email }: { contactId: string; e
         <p className="mt-1 text-[12px] text-[#738091]">No campaign email attempts have been recorded for this contact.</p>
       </div>
     </div>}
+  </Section>;
+}
+
+function ContactRepliesSection({ contactId }: { contactId: string }) {
+  const query = useListContactCampaignReplies(contactId, { query: { queryKey: getListContactCampaignRepliesQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' } });
+  return <Section title="Replies" eyebrow="CAMPAIGN REPLY HISTORY" testId="section-contact-replies">
+    <p className="mb-4 text-[11px] leading-5 text-[#7c8794]">Replies are matched to campaign emails by message headers. Message text is stored only when the user selected that option during a scan.</p>
+    {query.isLoading ? <div data-testid="loading-contact-replies" className="h-20 animate-pulse rounded-lg bg-[#f1f3f5]"/> : query.isError ? <div role="alert" className="text-[11px] text-[#99501e]">Couldn’t load replies. <button type="button" onClick={() => void query.refetch()} className="font-semibold underline">Retry</button></div> : query.data?.length ? <ol data-testid="list-contact-replies" className="space-y-3">{query.data.map(reply => <li key={reply.id} className="rounded-lg border border-[#e5e9ed] p-4"><div className="flex flex-wrap justify-between gap-2"><div><div className="text-[12px] font-semibold text-[#344154]">{reply.campaignName}</div><div className="mt-1 text-[10px] text-[#7c8794]">From {reply.fromEmail || reply.recipientEmail}</div></div><time dateTime={reply.receivedAt} className="text-[10px] text-[#758293]">{date(reply.receivedAt)}</time></div>{reply.bodyText ? <details className="mt-3 border-t border-[#edf0f2] pt-3"><summary className="cursor-pointer text-[11px] font-semibold text-[#245b9b]">View stored reply</summary><p className="mt-2 whitespace-pre-wrap break-words text-[12px] leading-5 text-[#4e5d6e]">{reply.bodyText}</p></details> : <p className="mt-3 border-t border-[#edf0f2] pt-3 text-[10px] text-[#8993a0]">Reply text was not stored.</p>}</li>)}</ol> : <div data-testid="empty-contact-replies" className="rounded-lg border border-dashed border-[#d9dfe6] px-5 py-7 text-center text-[11px] text-[#738091]">No replies matched to this contact yet.</div>}
   </Section>;
 }
 
@@ -535,6 +543,9 @@ export function ContactDetailPage() {
     </div>
     <div className="mt-5">
       <ContactEmailHistorySection contactId={contact.id} email={contact.email}/>
+    </div>
+    <div className="mt-5">
+      <ContactRepliesSection contactId={contact.id}/>
     </div>
   </div>;
 }

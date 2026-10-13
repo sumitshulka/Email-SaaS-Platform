@@ -11,10 +11,12 @@ export interface SenderInboxCheckInput {
      * @minLength 1
      * @maxLength 255
      */
-  imapHost: string;
+  imapHost?: string;
   /**
      * @minimum 1
      * @maximum 65535
      */
-  imapPort: number;
+  imapPort?: number;
+  campaignId?: string;
+  storeReplyContent?: boolean;
 }

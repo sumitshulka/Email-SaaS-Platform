@@ -530,6 +530,8 @@ export const GetTenantSendingSettingsResponse = zod.object({
   "verifiedAt": zod.coerce.date().nullable(),
   "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
   "connectionCheckAt": zod.coerce.date().nullable(),
+  "inboxHost": zod.string().nullable(),
+  "inboxConnectedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -575,6 +577,8 @@ export const UpdateTenantSendingSettingsResponse = zod.object({
   "verifiedAt": zod.coerce.date().nullable(),
   "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
   "connectionCheckAt": zod.coerce.date().nullable(),
+  "inboxHost": zod.string().nullable(),
+  "inboxConnectedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -607,6 +611,8 @@ export const ListTenantSendingAccountsResponse = zod.object({
   "verifiedAt": zod.coerce.date().nullable(),
   "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
   "connectionCheckAt": zod.coerce.date().nullable(),
+  "inboxHost": zod.string().nullable(),
+  "inboxConnectedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 }).and(zod.object({
   "id": zod.string().uuid(),
@@ -672,6 +678,8 @@ export const CreateTenantSendingAccountResponse = zod.object({
   "verifiedAt": zod.coerce.date().nullable(),
   "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
   "connectionCheckAt": zod.coerce.date().nullable(),
+  "inboxHost": zod.string().nullable(),
+  "inboxConnectedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 }).and(zod.object({
   "id": zod.string().uuid(),
@@ -732,6 +740,8 @@ export const UpdateTenantSendingAccountResponse = zod.object({
   "verifiedAt": zod.coerce.date().nullable(),
   "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
   "connectionCheckAt": zod.coerce.date().nullable(),
+  "inboxHost": zod.string().nullable(),
+  "inboxConnectedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 }).and(zod.object({
   "id": zod.string().uuid(),
@@ -764,11 +774,13 @@ export const checkSenderMailboxBodyImapHostMax = 255;
 export const checkSenderMailboxBodyImapPortDefault = 993;
 export const checkSenderMailboxBodyImapPortMax = 65535;
 
-
+export const checkSenderMailboxBodyStoreReplyContentDefault = false;
 
 export const CheckSenderMailboxBody = zod.object({
-  "imapHost": zod.string().min(1).max(checkSenderMailboxBodyImapHostMax),
-  "imapPort": zod.number().int().min(1).max(checkSenderMailboxBodyImapPortMax).default(checkSenderMailboxBodyImapPortDefault)
+  "imapHost": zod.string().min(1).max(checkSenderMailboxBodyImapHostMax).optional(),
+  "imapPort": zod.number().int().min(1).max(checkSenderMailboxBodyImapPortMax).default(checkSenderMailboxBodyImapPortDefault),
+  "campaignId": zod.string().uuid().optional(),
+  "storeReplyContent": zod.boolean().default(checkSenderMailboxBodyStoreReplyContentDefault)
 })
 
 export const CheckSenderMailboxResponse = zod.object({
@@ -781,7 +793,11 @@ export const CheckSenderMailboxResponse = zod.object({
   "replyMatches": zod.array(zod.object({
   "campaignName": zod.string(),
   "recipientEmail": zod.string().email(),
-  "sentAt": zod.coerce.date()
+  "sentAt": zod.coerce.date(),
+  "contactId": zod.string().uuid().nullable(),
+  "contactName": zod.string(),
+  "receivedAt": zod.coerce.date(),
+  "contentStored": zod.boolean()
 })),
   "checkedAt": zod.coerce.date()
 })
@@ -813,6 +829,8 @@ export const SetPrimaryTenantSendingAccountResponse = zod.object({
   "verifiedAt": zod.coerce.date().nullable(),
   "connectionCheckStatus": zod.union([zod.literal('success'),zod.literal('failure'),zod.literal(null)]).nullable(),
   "connectionCheckAt": zod.coerce.date().nullable(),
+  "inboxHost": zod.string().nullable(),
+  "inboxConnectedAt": zod.coerce.date().nullable(),
   "updatedAt": zod.coerce.date().nullable()
 }).and(zod.object({
   "id": zod.string().uuid(),
@@ -4207,6 +4225,30 @@ export const GetContactEmailHistoryResponse = zod.array(GetContactEmailHistoryRe
 
 
 /**
+ * @summary List saved campaign replies for a tenant contact
+ */
+export const ListContactCampaignRepliesParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const ListContactCampaignRepliesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "campaignId": zod.string().uuid(),
+  "campaignName": zod.string(),
+  "recipientId": zod.string().uuid(),
+  "contactId": zod.string().uuid().nullable(),
+  "contactName": zod.string(),
+  "recipientEmail": zod.string().email(),
+  "fromEmail": zod.string().email().nullable(),
+  "subject": zod.string().nullable(),
+  "receivedAt": zod.coerce.date(),
+  "bodyText": zod.string().nullable(),
+  "contentStored": zod.boolean()
+})
+export const ListContactCampaignRepliesResponse = zod.array(ListContactCampaignRepliesResponseItem)
+
+
+/**
  * @summary List lead status changes for a tenant contact
  */
 export const ListContactLeadStatusUpdatesParams = zod.object({
@@ -5148,6 +5190,30 @@ export const GetCampaignDashboardResponse = zod.object({
 })
 })
 })
+
+
+/**
+ * @summary List saved replies matched to a campaign
+ */
+export const ListCampaignRepliesParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const ListCampaignRepliesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "campaignId": zod.string().uuid(),
+  "campaignName": zod.string(),
+  "recipientId": zod.string().uuid(),
+  "contactId": zod.string().uuid().nullable(),
+  "contactName": zod.string(),
+  "recipientEmail": zod.string().email(),
+  "fromEmail": zod.string().email().nullable(),
+  "subject": zod.string().nullable(),
+  "receivedAt": zod.coerce.date(),
+  "bodyText": zod.string().nullable(),
+  "contentStored": zod.boolean()
+})
+export const ListCampaignRepliesResponse = zod.array(ListCampaignRepliesResponseItem)
 
 
 /**

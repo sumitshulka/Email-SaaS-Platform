@@ -72,6 +72,8 @@ export const tenantSendingConfigurationTable = pgTable(
     fromName: varchar("from_name", { length: 120 }).notNull(),
     fromEmail: varchar("from_email", { length: 254 }).notNull(),
     replyTo: varchar("reply_to", { length: 254 }),
+    inboxHost: varchar("inbox_host", { length: 255 }),
+    inboxConnectedAt: timestamp("inbox_connected_at", { withTimezone: true }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     connectionCheckStatus: varchar("connection_check_status", { length: 16 }),
     connectionCheckAt: timestamp("connection_check_at", { withTimezone: true }),
@@ -526,6 +528,29 @@ export const emailDeliveryReportsTable = pgTable(
       table.userId,
       table.attemptId,
     ),
+  ],
+);
+
+export const emailCampaignRepliesTable = pgTable(
+  "email_campaign_replies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id").notNull().references(() => emailCampaignsTable.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id").notNull().references(() => emailCampaignRecipientsTable.id, { onDelete: "cascade" }),
+    senderAccountId: uuid("sender_account_id").references(() => tenantSendingConfigurationTable.id, { onDelete: "set null" }),
+    incomingMessageId: varchar("incoming_message_id", { length: 512 }).notNull(),
+    fromEmail: varchar("from_email", { length: 254 }),
+    subject: varchar("subject", { length: 998 }),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    bodyText: text("body_text"),
+    bodyStoredAt: timestamp("body_stored_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("email_campaign_replies_user_message_unique").on(table.userId, table.incomingMessageId),
+    index("email_campaign_replies_campaign_time_idx").on(table.userId, table.campaignId, table.receivedAt),
+    index("email_campaign_replies_recipient_time_idx").on(table.userId, table.recipientId, table.receivedAt),
   ],
 );
 

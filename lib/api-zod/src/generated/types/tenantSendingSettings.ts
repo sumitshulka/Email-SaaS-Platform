@@ -34,5 +34,9 @@ export interface TenantSendingSettings {
   /** @nullable */
   connectionCheckAt: Date | null;
   /** @nullable */
+  inboxHost: string | null;
+  /** @nullable */
+  inboxConnectedAt: Date | null;
+  /** @nullable */
   updatedAt: Date | null;
 }

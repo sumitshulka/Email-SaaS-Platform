@@ -44,6 +44,10 @@ import {
   GetContactResponse,
   GetContactEmailHistoryParams,
   GetContactEmailHistoryResponse,
+  ListCampaignRepliesParams,
+  ListCampaignRepliesResponse,
+  ListContactCampaignRepliesParams,
+  ListContactCampaignRepliesResponse,
   ListContactLeadStatusUpdatesParams,
   ListContactLeadStatusUpdatesResponse,
   ListContactNotesParams,
@@ -119,6 +123,7 @@ import {
   contactsTable,
   db,
   emailCampaignRecipientsTable,
+  emailCampaignRepliesTable,
   emailCampaignsTable,
   emailSendAttemptsTable,
   paymentsTable,
@@ -129,6 +134,7 @@ import {
 } from "@workspace/db";
 import ExcelJS from "exceljs";
 import { ImapFlow } from "imapflow";
+import { simpleParser } from "mailparser";
 import { lookup } from "node:dns/promises";
 import type { ContactFieldKey } from "@workspace/db";
 import {
@@ -430,6 +436,8 @@ function sendingSettingsResponse(
     verifiedAt: config?.verifiedAt ?? null,
     connectionCheckStatus: config?.connectionCheckStatus ?? null,
     connectionCheckAt: config?.connectionCheckAt ?? null,
+    inboxHost: config?.inboxHost ?? null,
+    inboxConnectedAt: config?.inboxConnectedAt ?? null,
     updatedAt: config?.updatedAt ?? null,
   };
 }
@@ -1265,6 +1273,7 @@ router.patch("/sending/accounts/:accountId", requireUserRole, async (req, res): 
       verifiedAt: null,
       connectionCheckStatus: null,
       connectionCheckAt: null,
+      inboxConnectedAt: null,
       updatedAt: new Date(),
     })
     .where(
@@ -1301,7 +1310,7 @@ router.post(
   async (req, res): Promise<void> => {
     const params = UpdateTenantSendingAccountParams.safeParse(req.params);
     const parsed = CheckSenderMailboxBody.safeParse(req.body);
-    if (!params.success || !parsed.success || parsed.data.imapPort !== 993) {
+    if (!params.success || !parsed.success || (parsed.data.imapPort !== undefined && parsed.data.imapPort !== 993)) {
       res.status(400).json({
         error: "Use a valid IMAP host and secure IMAP port 993.",
         code: "INVALID_IMAP_SETTINGS",
@@ -1327,7 +1336,21 @@ router.post(
       return;
     }
 
-    const hostname = parsed.data.imapHost.trim().toLowerCase().replace(/\.$/, "");
+    const hostname = (parsed.data.imapHost ?? sender.inboxHost ?? "").trim().toLowerCase().replace(/\.$/, "");
+    if (!hostname) {
+      res.status(400).json({ error: "Connect this sender’s inbox first by entering its IMAP host.", code: "INBOX_NOT_CONNECTED" });
+      return;
+    }
+    if (parsed.data.campaignId) {
+      const [campaign] = await db.select({ id: emailCampaignsTable.id, senderAccountId: emailCampaignsTable.senderAccountId, status: emailCampaignsTable.status })
+        .from(emailCampaignsTable)
+        .where(and(eq(emailCampaignsTable.id, parsed.data.campaignId), eq(emailCampaignsTable.userId, userId)))
+        .limit(1);
+      if (!campaign || campaign.senderAccountId !== sender.id || campaign.status === "draft") {
+        res.status(409).json({ error: "This campaign is not linked to the connected sender account.", code: "CAMPAIGN_SENDER_MISMATCH" });
+        return;
+      }
+    }
     if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)) {
       res.status(400).json({
         error: "Enter the public server hostname supplied by your email provider.",
@@ -1367,9 +1390,14 @@ router.post(
       campaignName: string;
       recipientEmail: string;
       sentAt: string;
+      contactId: string | null;
+      contactName: string;
+      receivedAt: string;
+      contentStored: boolean;
     }> = [];
     const reports = [];
     const replyRefs = new Set<string>();
+    const replyMessages: Array<{ uid: number; messageId: string; references: string[]; fromEmail: string | null; subject: string | null; receivedAt: Date }> = [];
     try {
       await client.connect();
       lock = await client.getMailboxLock("INBOX");
@@ -1412,6 +1440,18 @@ router.post(
             replyRefs.add(id.trim().toLowerCase());
           }
         }
+        const references = [...headers.matchAll(/^(?:In-Reply-To|References):\s*(.+)$/gim)].flatMap(match => match[1]!.match(/<[^>]+>/g) ?? []).map(id => id.trim().toLowerCase());
+        const incomingId = headers.match(/^Message-ID:\s*(<[^>]+>)/im)?.[1]?.trim().toLowerCase();
+        if (incomingId && references.length) {
+          replyMessages.push({
+            uid,
+            messageId: incomingId,
+            references,
+            fromEmail: message.envelope?.from?.[0]?.address?.toLowerCase() ?? null,
+            subject: message.envelope?.subject ?? null,
+            receivedAt: message.internalDate ? new Date(message.internalDate) : new Date(),
+          });
+        }
       }
       if (replyRefs.size) {
         const attempts = await db
@@ -1419,7 +1459,12 @@ router.post(
             messageId: emailSendAttemptsTable.messageId,
             attemptedAt: emailSendAttemptsTable.attemptedAt,
             campaignName: emailCampaignsTable.name,
+            campaignId: emailCampaignsTable.id,
+            recipientId: emailCampaignRecipientsTable.id,
             recipientEmail: emailCampaignRecipientsTable.email,
+            contactId: emailCampaignRecipientsTable.contactId,
+            firstName: emailCampaignRecipientsTable.firstName,
+            lastName: emailCampaignRecipientsTable.lastName,
           })
           .from(emailSendAttemptsTable)
           .innerJoin(
@@ -1436,6 +1481,7 @@ router.post(
               eq(emailCampaignRecipientsTable.userId, userId),
               eq(emailCampaignsTable.userId, userId),
               eq(emailSendAttemptsTable.senderAccountId, sender.id),
+              ...(parsed.data.campaignId ? [eq(emailCampaignsTable.id, parsed.data.campaignId)] : []),
               inArray(
                 emailSendAttemptsTable.messageId,
                 [...replyRefs].slice(0, 100),
@@ -1449,19 +1495,41 @@ router.post(
             matchedByMessageId.set(messageId, attempt);
           }
         }
-        repliesFound = matchedByMessageId.size;
-        replyMatches.push(
-          ...[...matchedByMessageId.values()].map((attempt) => ({
-            campaignName: attempt.campaignName,
-            recipientEmail: attempt.recipientEmail,
-            sentAt: attempt.attemptedAt.toISOString(),
-          })),
-        );
+        for (const incoming of replyMessages) {
+          const matched = incoming.references.map(ref => matchedByMessageId.get(ref)).find(Boolean);
+          if (!matched) continue;
+          let bodyText: string | null = null;
+          if (parsed.data.storeReplyContent) {
+            const full = await client.fetchOne(incoming.uid, { source: true }, { uid: true });
+            if (typeof full === "object" && full !== null && full.source) bodyText = (await simpleParser(Buffer.from(full.source))).text?.slice(0, 30000) ?? null;
+          }
+          const [savedReply] = await db.insert(emailCampaignRepliesTable).values({
+            userId, campaignId: matched.campaignId, recipientId: matched.recipientId, senderAccountId: sender.id,
+            incomingMessageId: incoming.messageId, fromEmail: incoming.fromEmail, subject: incoming.subject,
+            receivedAt: incoming.receivedAt, bodyText, bodyStoredAt: bodyText ? new Date() : null,
+          }).onConflictDoUpdate({
+            target: [emailCampaignRepliesTable.userId, emailCampaignRepliesTable.incomingMessageId],
+            set: {
+              ...(bodyText ? { bodyText, bodyStoredAt: new Date() } : {}),
+              receivedAt: incoming.receivedAt,
+            },
+          }).returning({ id: emailCampaignRepliesTable.id, bodyText: emailCampaignRepliesTable.bodyText });
+          repliesFound += 1;
+          replyMatches.push({
+            campaignName: matched.campaignName, recipientEmail: matched.recipientEmail,
+            sentAt: matched.attemptedAt.toISOString(), contactId: matched.contactId,
+            contactName: `${matched.firstName} ${matched.lastName}`.trim() || matched.recipientEmail,
+            receivedAt: incoming.receivedAt.toISOString(), contentStored: Boolean(savedReply?.bodyText),
+          });
+        }
       }
+      await db.update(tenantSendingConfigurationTable).set({ inboxHost: hostname, inboxConnectedAt: new Date() })
+        .where(and(eq(tenantSendingConfigurationTable.id, sender.id), eq(tenantSendingConfigurationTable.userId, userId)));
       const ingestion = reports.length
         ? await ingestDeliveryReports({
             userId,
             reports,
+            ...(parsed.data.campaignId ? { campaignId: parsed.data.campaignId } : {}),
             verification: "user_imported",
           })
         : { imported: 0 };
@@ -1478,6 +1546,8 @@ router.post(
         }),
       );
     } catch (error) {
+      await db.update(tenantSendingConfigurationTable).set({ inboxConnectedAt: null })
+        .where(and(eq(tenantSendingConfigurationTable.id, sender.id), eq(tenantSendingConfigurationTable.userId, userId)));
       req.log.warn(
         {
           userId,
@@ -1651,6 +1721,7 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
       verifiedAt: null,
       connectionCheckStatus: null,
       connectionCheckAt: null,
+      inboxConnectedAt: null,
       updatedAt: new Date(),
     };
     if (existing) {
@@ -2944,6 +3015,57 @@ router.get(
     );
   },
 );
+
+async function getSavedCampaignReplies(userId: string, campaignId?: string, contactId?: string) {
+  const rows = await db.select({
+    id: emailCampaignRepliesTable.id,
+    campaignId: emailCampaignRepliesTable.campaignId,
+    campaignName: emailCampaignsTable.name,
+    recipientId: emailCampaignRepliesTable.recipientId,
+    contactId: emailCampaignRecipientsTable.contactId,
+    firstName: emailCampaignRecipientsTable.firstName,
+    lastName: emailCampaignRecipientsTable.lastName,
+    recipientEmail: emailCampaignRecipientsTable.email,
+    fromEmail: emailCampaignRepliesTable.fromEmail,
+    subject: emailCampaignRepliesTable.subject,
+    receivedAt: emailCampaignRepliesTable.receivedAt,
+    bodyText: emailCampaignRepliesTable.bodyText,
+  }).from(emailCampaignRepliesTable)
+    .innerJoin(emailCampaignsTable, eq(emailCampaignsTable.id, emailCampaignRepliesTable.campaignId))
+    .innerJoin(emailCampaignRecipientsTable, eq(emailCampaignRecipientsTable.id, emailCampaignRepliesTable.recipientId))
+    .where(and(
+      eq(emailCampaignRepliesTable.userId, userId),
+      ...(campaignId ? [eq(emailCampaignRepliesTable.campaignId, campaignId)] : []),
+      ...(contactId ? [eq(emailCampaignRecipientsTable.contactId, contactId)] : []),
+    ))
+    .orderBy(desc(emailCampaignRepliesTable.receivedAt))
+    .limit(500);
+  return rows.map(row => ({
+    ...row,
+    contactName: `${row.firstName} ${row.lastName}`.trim() || row.recipientEmail,
+    contentStored: row.bodyText !== null,
+  }));
+}
+
+router.get("/campaigns/:campaignId/replies", requireUserRole, async (req, res): Promise<void> => {
+  const params = ListCampaignRepliesParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid campaign identifier.", code: "INVALID_INPUT" }); return; }
+  const userId = req.authUser!.id;
+  const [campaign] = await db.select({ id: emailCampaignsTable.id }).from(emailCampaignsTable)
+    .where(and(eq(emailCampaignsTable.id, params.data.campaignId), eq(emailCampaignsTable.userId, userId))).limit(1);
+  if (!campaign) { res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" }); return; }
+  res.json(ListCampaignRepliesResponse.parse(await getSavedCampaignReplies(userId, campaign.id)));
+});
+
+router.get("/contacts/:contactId/replies", requireUserRole, async (req, res): Promise<void> => {
+  const params = ListContactCampaignRepliesParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid contact identifier.", code: "INVALID_INPUT" }); return; }
+  const userId = req.authUser!.id;
+  const [contact] = await db.select({ id: contactsTable.id }).from(contactsTable)
+    .where(and(eq(contactsTable.id, params.data.contactId), eq(contactsTable.userId, userId))).limit(1);
+  if (!contact) { res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" }); return; }
+  res.json(ListContactCampaignRepliesResponse.parse(await getSavedCampaignReplies(userId, undefined, contact.id)));
+});
 
 router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
   const parsed = CreateContactBody.safeParse(normalizedContactInput(req.body));

@@ -10,4 +10,9 @@ export type SenderInboxCheckResultReplyMatchesItem = {
   campaignName: string;
   recipientEmail: string;
   sentAt: Date;
+  /** @nullable */
+  contactId: string | null;
+  contactName: string;
+  receivedAt: Date;
+  contentStored: boolean;
 };

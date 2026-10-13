@@ -84,6 +84,7 @@ export * from './campaignPauseInput';
 export * from './campaignPauseResponse';
 export * from './campaignPreviewInput';
 export * from './campaignQueueInput';
+export * from './campaignReply';
 export * from './campaignSummary';
 export * from './campaignSummaryCampaignType';
 export * from './campaignSummaryStatus';

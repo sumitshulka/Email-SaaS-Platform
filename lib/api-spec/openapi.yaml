@@ -2062,6 +2062,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/replies:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listContactCampaignReplies
+      tags: [sending]
+      summary: List saved campaign replies for a tenant contact
+      responses:
+        "200":
+          description: Replies ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CampaignReply" }
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /contacts/{contactId}/lead-status-updates:
     parameters:
       - name: contactId
@@ -2627,6 +2650,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/replies:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listCampaignReplies
+      tags: [sending]
+      summary: List saved replies matched to a campaign
+      responses:
+        "200":
+          description: Replies ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CampaignReply" }
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /campaigns/{campaignId}/follow-ups:
     parameters:
       - name: campaignId
@@ -4232,8 +4278,10 @@ components:
         verifiedAt: { type: ["string", "null"], format: date-time }
         connectionCheckStatus: { type: ["string", "null"], enum: [success, failure, null] }
         connectionCheckAt: { type: ["string", "null"], format: date-time }
+        inboxHost: { type: ["string", "null"] }
+        inboxConnectedAt: { type: ["string", "null"], format: date-time }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [provider, host, port, encryption, username, credentialsConfigured, fromName, fromEmail, replyTo, verified, verifiedAt, connectionCheckStatus, connectionCheckAt, updatedAt]
+      required: [provider, host, port, encryption, username, credentialsConfigured, fromName, fromEmail, replyTo, verified, verifiedAt, connectionCheckStatus, connectionCheckAt, inboxHost, inboxConnectedAt, updatedAt]
     TenantSendingAccount:
       allOf:
         - $ref: "#/components/schemas/TenantSendingSettings"
@@ -4289,7 +4337,8 @@ components:
       properties:
         imapHost: { type: string, minLength: 1, maxLength: 255 }
         imapPort: { type: integer, minimum: 1, maximum: 65535, default: 993 }
-      required: [imapHost, imapPort]
+        campaignId: { type: string, format: uuid }
+        storeReplyContent: { type: boolean, default: false }
     SenderInboxCheckResult:
       type: object
       properties:
@@ -4307,7 +4356,11 @@ components:
               campaignName: { type: string }
               recipientEmail: { type: string, format: email }
               sentAt: { type: string, format: date-time }
-            required: [campaignName, recipientEmail, sentAt]
+              contactId: { type: ["string", "null"], format: uuid }
+              contactName: { type: string }
+              receivedAt: { type: string, format: date-time }
+              contentStored: { type: boolean }
+            required: [campaignName, recipientEmail, sentAt, contactId, contactName, receivedAt, contentStored]
         checkedAt: { type: string, format: date-time }
       required: [provider, mailbox, messagesChecked, bounceReportsFound, bounceReportsApplied, repliesFound, replyMatches, checkedAt]
     GmailMailboxConnection:
@@ -5226,6 +5279,22 @@ components:
         messageId: { type: ["string", "null"] }
         smtpResponse: { type: ["string", "null"] }
       required: [id, campaignId, campaignName, campaignType, email, subject, status, attempts, lastAttemptAt, deliveredAt, reportOutcome, reportSource, reportDiagnostic, reportAt, reportEvidenceVerification, lastError, messageId, smtpResponse]
+    CampaignReply:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        campaignId: { type: string, format: uuid }
+        campaignName: { type: string }
+        recipientId: { type: string, format: uuid }
+        contactId: { type: ["string", "null"], format: uuid }
+        contactName: { type: string }
+        recipientEmail: { type: string, format: email }
+        fromEmail: { type: ["string", "null"], format: email }
+        subject: { type: ["string", "null"] }
+        receivedAt: { type: string, format: date-time }
+        bodyText: { type: ["string", "null"] }
+        contentStored: { type: boolean }
+      required: [id, campaignId, campaignName, recipientId, contactId, contactName, recipientEmail, fromEmail, subject, receivedAt, bodyText, contentStored]
     ContactLeadStatusUpdate:
       type: object
       properties:

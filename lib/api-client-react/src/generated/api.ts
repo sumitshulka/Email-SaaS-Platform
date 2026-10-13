@@ -59,6 +59,7 @@ import type {
   CampaignPauseResponse,
   CampaignPreviewInput,
   CampaignQueueInput,
+  CampaignReply,
   CampaignSummary,
   CampaignTemplatePreview,
   CampaignUnsubscribeResult,
@@ -7135,6 +7136,83 @@ export function useGetContactEmailHistory<TData = Awaited<ReturnType<typeof getC
 
 
 
+export const getListContactCampaignRepliesUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/replies`
+}
+
+/**
+ * @summary List saved campaign replies for a tenant contact
+ */
+export const listContactCampaignReplies = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignReply[]> => {
+
+  return customFetch<CampaignReply[]>(getListContactCampaignRepliesUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactCampaignRepliesQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/replies`
+    ] as const;
+    }
+
+
+export const getListContactCampaignRepliesQueryOptions = <TData = Awaited<ReturnType<typeof listContactCampaignReplies>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactCampaignReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactCampaignRepliesQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactCampaignReplies>>> = ({ signal }) => listContactCampaignReplies(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactCampaignReplies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactCampaignRepliesQueryResult = NonNullable<Awaited<ReturnType<typeof listContactCampaignReplies>>>
+export type ListContactCampaignRepliesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List saved campaign replies for a tenant contact
+ */
+
+export function useListContactCampaignReplies<TData = Awaited<ReturnType<typeof listContactCampaignReplies>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactCampaignReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactCampaignRepliesQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListContactLeadStatusUpdatesUrl = (contactId: string,) => {
 
 
@@ -9104,6 +9182,83 @@ export function useGetCampaignDashboard<TData = Awaited<ReturnType<typeof getCam
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCampaignDashboardQueryOptions(campaignId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListCampaignRepliesUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/replies`
+}
+
+/**
+ * @summary List saved replies matched to a campaign
+ */
+export const listCampaignReplies = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignReply[]> => {
+
+  return customFetch<CampaignReply[]>(getListCampaignRepliesUrl(campaignId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCampaignRepliesQueryKey = (campaignId: string,) => {
+    return [
+    `/api/campaigns/${campaignId}/replies`
+    ] as const;
+    }
+
+
+export const getListCampaignRepliesQueryOptions = <TData = Awaited<ReturnType<typeof listCampaignReplies>>, TError = ErrorType<ApiError>>(campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCampaignReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCampaignRepliesQueryKey(campaignId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCampaignReplies>>> = ({ signal }) => listCampaignReplies(campaignId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: campaignId !== null && campaignId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCampaignReplies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCampaignRepliesQueryResult = NonNullable<Awaited<ReturnType<typeof listCampaignReplies>>>
+export type ListCampaignRepliesQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List saved replies matched to a campaign
+ */
+
+export function useListCampaignReplies<TData = Awaited<ReturnType<typeof listCampaignReplies>>, TError = ErrorType<ApiError>>(
+ campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCampaignReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCampaignRepliesQueryOptions(campaignId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

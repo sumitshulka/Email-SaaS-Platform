@@ -20,12 +20,12 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
+  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useSetCampaignPaused,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useListCampaignReplies, useSetCampaignPaused,
   useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
@@ -360,6 +360,7 @@ export function SendingSettingsPage() {
       onSuccess: result => {
         setInboxCheckResult(result);
         setInboxCheckError(null);
+        refreshSenderAccounts();
         setNotice({
           kind: 'success',
           text: `Inbox check complete: ${result.bounceReportsApplied} bounce report(s) applied and ${result.repliesFound} campaign reply/replies matched.`,
@@ -2682,6 +2683,10 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const pauseCampaign = useSetCampaignPaused();
+  const senderAccountsQuery = useListTenantSendingAccounts();
+  const repliesQuery = useListCampaignReplies(campaignId, { query: { queryKey: getListCampaignRepliesQueryKey(campaignId), staleTime: 0, refetchOnMount: 'always' } });
+  const scanInbox = useCheckSenderMailbox();
+  const [storeReplyContent, setStoreReplyContent] = useState(false);
   const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const query = useGetCampaignDashboard(campaignId, {
@@ -2700,6 +2705,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => { void query.refetch(); }} label="campaign dashboard">
     {dashboard && (() => {
       const { campaign, targetLists, pacing } = dashboard;
+      const inboxConnected = Boolean(senderAccountsQuery.data?.accounts.some(account => account.id === campaign.senderAccountId && account.inboxConnectedAt));
       const removedTargetListCount = Math.max(0, campaign.listIds.length - targetLists.length);
       const resolved = campaign.status === 'draft' ? 0 : Math.max(0, campaign.recipients - campaign.queued);
       const progress = campaign.recipients > 0 ? Math.min(100, Math.round((resolved / campaign.recipients) * 100)) : 0;
@@ -2776,6 +2782,20 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
               {[['SMTP accepted', campaign.delivered, '#397050'], ['Rejected / failed', campaign.bounced, '#ae642c'], ['Suppressed', campaign.suppressed, '#66717e'], ['Outcome unknown', campaign.unknown, '#8a65a2']].map(([label, value, color]) => <div key={label} className="flex items-center justify-between text-[11px]"><span className="text-[#778291]">{label}</span><span className="font-semibold" style={{ color: String(color) }}>{Number(value).toLocaleString()}</span></div>)}
             </div>
           </div>
+        </section>
+
+        <section data-testid="section-campaign-replies" className={`${panelClass} mb-5 p-5`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="display text-[17px] font-bold text-[#1b293a]">Bounce and reply scan</h2><p className="mt-1 text-[11px] leading-5 text-[#788392]">Scan the connected sender inbox for bounce reports and replies to this campaign.</p></div>
+            <Button testId="button-scan-campaign-inbox" disabled={!inboxConnected || scanInbox.isPending || !campaign.senderAccountId} onClick={() => { if (!campaign.senderAccountId) return; scanInbox.reset(); scanInbox.mutate({ accountId: campaign.senderAccountId, data: { campaignId, storeReplyContent } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getListCampaignRepliesQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() }); }, onError: () => { void repliesQuery.refetch(); } }); }}>
+              {scanInbox.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}{scanInbox.isPending ? 'Scanning inbox…' : 'Scan inbox now'}
+            </Button>
+          </div>
+          {!inboxConnected && <p className="mt-3 rounded-md bg-[#f5f8fb] p-3 text-[11px] text-[#687587]">Connect this campaign’s sender inbox in Sender settings before scanning.</p>}
+          <label className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-[#586778]"><input type="checkbox" checked={storeReplyContent} onChange={event => setStoreReplyContent(event.target.checked)} className="mt-1 accent-[#174f99]"/><span>Retrieve and store reply text for future analysis. Off by default; no message text is stored unless selected.</span></label>
+          {scanInbox.isSuccess && scanInbox.data && <p role="status" data-testid="text-campaign-inbox-scan-result" className="mt-3 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] leading-5 text-[#31674b]">Scanned {scanInbox.data.messagesChecked} messages. Found {scanInbox.data.bounceReportsFound} bounce report(s), applied {scanInbox.data.bounceReportsApplied}, and matched {scanInbox.data.repliesFound} reply/replies.</p>}
+          {scanInbox.isError && <p role="alert" className="mt-3 rounded-md bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">Inbox scan failed. Confirm the sender inbox connection and retry.</p>}
+          {repliesQuery.isLoading ? <p className="mt-4 text-[11px] text-[#8993a0]">Loading reply history…</p> : repliesQuery.isError ? <button type="button" onClick={() => void repliesQuery.refetch()} className="mt-4 text-[11px] font-semibold text-[#245b9b] underline">Couldn’t load saved replies. Retry</button> : repliesQuery.data?.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[560px] text-left text-[11px]"><thead><tr className="border-b text-[#788392]"><th className="py-2 pr-3">Contact</th><th className="py-2 pr-3">Email</th><th className="py-2 pr-3">Reply received</th><th className="py-2">Content</th></tr></thead><tbody>{repliesQuery.data.map(reply => <tr key={reply.id} className="border-b border-[#edf0f2]"><td className="py-3 pr-3 font-semibold text-[#344154]">{reply.contactName}</td><td className="py-3 pr-3">{reply.recipientEmail}</td><td className="py-3 pr-3">{formatDate(reply.receivedAt)}</td><td className="max-w-sm py-3">{reply.bodyText ? <details><summary className="cursor-pointer font-semibold text-[#245b9b]">View stored reply</summary><p className="mt-2 whitespace-pre-wrap break-words text-[#586778]">{reply.bodyText}</p></details> : <span className="text-[#8993a0]">Not stored</span>}</td></tr>)}</tbody></table></div> : <p className="mt-4 text-[11px] text-[#8993a0]">No campaign replies have been matched yet.</p>}
         </section>
 
         <section className={`${panelClass} mb-5 p-5`}>
