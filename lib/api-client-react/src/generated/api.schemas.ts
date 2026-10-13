@@ -1803,6 +1803,59 @@ export interface CompanyExportInput {
   filters?: CompanyExportFilters;
 }
 
+export type CompanyBulkImportInputRowsItemCompany = CompanyInput & {
+  shareWithGlobal?: boolean;
+};
+
+export type CompanyBulkImportInputRowsItem = {
+  /** @minimum 2 */
+  rowNumber: number;
+  company: CompanyBulkImportInputRowsItemCompany;
+};
+
+export interface CompanyBulkImportInput {
+  templateId: string;
+  importSessionId: string;
+  isFinalBatch: boolean;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  rows: CompanyBulkImportInputRowsItem[];
+}
+
+export type CompanyBulkImportResultRowsItemStatus = typeof CompanyBulkImportResultRowsItemStatus[keyof typeof CompanyBulkImportResultRowsItemStatus];
+
+
+export const CompanyBulkImportResultRowsItemStatus = {
+  created: 'created',
+  shared: 'shared',
+  duplicate: 'duplicate',
+  rejected: 'rejected',
+} as const;
+
+export type CompanyBulkImportResultRowsItem = {
+  rowNumber: number;
+  status: CompanyBulkImportResultRowsItemStatus;
+  message: string;
+};
+
+export interface CompanyBulkImportResult {
+  importSessionId: string;
+  /** @minimum 0 */
+  processed: number;
+  complete: boolean;
+  /** @minimum 0 */
+  created: number;
+  /** @minimum 0 */
+  shared: number;
+  /** @minimum 0 */
+  duplicates: number;
+  /** @minimum 0 */
+  rejected: number;
+  rows: CompanyBulkImportResultRowsItem[];
+}
+
 export interface CompanyUpdate {
   /**
      * @minLength 1

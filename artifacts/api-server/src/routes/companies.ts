@@ -14,6 +14,8 @@ import {
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
+  BulkImportCompaniesBody,
+  BulkImportCompaniesResponse,
   BackfillCompanyProfilesResponse,
   CreateCompanyBody,
   CreateCompanyResponse,
@@ -34,9 +36,11 @@ import {
   contactsTable,
   db,
   globalCompaniesTable,
+  companyImportTemplatesTable,
   usersTable,
 } from "@workspace/db";
 import ExcelJS from "exceljs";
+import { randomUUID } from "node:crypto";
 import {
   companyDomainKey,
   companyProfileFrom,
@@ -54,6 +58,58 @@ const COMPANY_EXPORT_BATCH_SIZE = 250;
 const EXCEL_MAX_DATA_ROWS = 1_048_575;
 const XLSX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+router.get("/companies/import-template", requireUserRole, async (req, res): Promise<void> => {
+  const templateId = randomUUID();
+  await db.insert(companyImportTemplatesTable).values({ id: templateId, userId: req.authUser!.id })
+    .onConflictDoUpdate({ target: companyImportTemplatesTable.userId, set: { id: templateId, importSessionId: null, issuedAt: new Date(), consumedAt: null } });
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Mailflow";
+  const sheet = workbook.addWorksheet("Companies");
+  const headers = ["Company Name", "Website URL", "Domain", "Industry", "Company size", "Revenue range", "Location", "Phone number", "LinkedIn URL", "Description"];
+  sheet.addRow(headers);
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174F99" } };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.columns = headers.map(header => ({ width: header === "Description" ? 44 : 24 }));
+  res.setHeader("Content-Type", XLSX_CONTENT_TYPE);
+  res.setHeader("Content-Disposition", `attachment; filename="mailflow-workspace-companies-template-${templateId}.xlsx"`);
+  res.send(Buffer.from(await workbook.xlsx.writeBuffer()));
+});
+
+router.post("/companies/bulk-import", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = BulkImportCompaniesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Review the company rows and try again.", code: "INVALID_INPUT" }); return; }
+  const userId = req.authUser!.id;
+  const result = await db.transaction(async tx => {
+    const [template] = await tx.select().from(companyImportTemplatesTable).where(and(eq(companyImportTemplatesTable.userId, userId), eq(companyImportTemplatesTable.id, parsed.data.templateId))).limit(1).for("update");
+    if (!template || template.consumedAt) return { error: "This company template is no longer active. Download a fresh template.", code: "TEMPLATE_EXPIRED" as const };
+    if (template.importSessionId && template.importSessionId !== parsed.data.importSessionId) return { error: "This template is already in use by another import.", code: "IMPORT_SESSION_MISMATCH" as const };
+    await tx.update(companyImportTemplatesTable).set({ importSessionId: parsed.data.importSessionId }).where(eq(companyImportTemplatesTable.id, template.id));
+    const outcomes: Array<{rowNumber:number;status:"created"|"shared"|"duplicate"|"rejected";message:string}> = [];
+    for (const row of parsed.data.rows) {
+      const profile = cleanCompanyInput(row.company as Record<string, unknown>);
+      const domainKey = companyDomainKey(profile);
+      const companyName = profile.companyName;
+      if (!companyName || !validDomain(profile)) { outcomes.push({rowNumber:row.rowNumber,status:"rejected",message:"Enter a company name and valid domain."}); continue; }
+      const [duplicate] = await tx.select({id:companiesTable.id}).from(companiesTable).where(and(eq(companiesTable.userId,userId),eq(companiesTable.companyDomainKey,domainKey ?? ""))).limit(1);
+      if (domainKey && duplicate) { outcomes.push({rowNumber:row.rowNumber,status:"duplicate",message:"This domain already exists in your workspace."}); continue; }
+      let globalCompanyId: string | null = null;
+      if (row.company.shareWithGlobal) {
+        const [global] = await tx.insert(globalCompaniesTable).values({...profile,companyName,companyDomainKey:domainKey})
+          .onConflictDoNothing().returning({id:globalCompaniesTable.id});
+        if (!global) { outcomes.push({rowNumber:row.rowNumber,status:"rejected",message:"This domain is already public. Add it from the Global Company DB instead."}); continue; }
+        globalCompanyId = global.id;
+      }
+      await tx.insert(companiesTable).values({userId,...profile,companyName,companyDomainKey:domainKey,globalCompanyId});
+      outcomes.push({rowNumber:row.rowNumber,status:row.company.shareWithGlobal?"shared":"created",message:row.company.shareWithGlobal?"Created and shared; contacts remain private.":"Created privately in your workspace."});
+    }
+    if (parsed.data.isFinalBatch) await tx.update(companyImportTemplatesTable).set({consumedAt:new Date()}).where(eq(companyImportTemplatesTable.id,template.id));
+    return {importSessionId:parsed.data.importSessionId,processed:outcomes.length,complete:parsed.data.isFinalBatch,created:outcomes.filter(x=>x.status==="created").length,shared:outcomes.filter(x=>x.status==="shared").length,duplicates:outcomes.filter(x=>x.status==="duplicate").length,rejected:outcomes.filter(x=>x.status==="rejected").length,rows:outcomes};
+  });
+  if ("error" in result) { res.status(409).json({error:result.error,code:result.code}); return; }
+  res.json(BulkImportCompaniesResponse.parse(result));
+});
 
 function presentCompany(company: typeof companiesTable.$inferSelect) {
   const {

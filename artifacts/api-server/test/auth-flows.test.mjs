@@ -351,6 +351,13 @@ memory.public.none(`
     issued_at timestamptz NOT NULL DEFAULT now(),
     consumed_at timestamptz
   );
+  CREATE TABLE company_import_templates (
+    id uuid PRIMARY KEY,
+    user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    import_session_id uuid,
+    issued_at timestamptz NOT NULL DEFAULT now(),
+    consumed_at timestamptz
+  );
   CREATE TABLE company_research_jobs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     global_company_id uuid NOT NULL REFERENCES global_companies(id) ON DELETE CASCADE,
@@ -6922,6 +6929,25 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     assert.equal(sharedCompany.response.status, 201, JSON.stringify(sharedCompany.body));
     assert.ok(sharedCompany.body.globalCompanyId);
+
+    const template = await apiBinary("/companies/import-template", { method: "GET", cookie: owner.cookie });
+    assert.equal(template.response.status, 200);
+    const templateId = template.response.headers.get("content-disposition")?.match(/template-([0-9a-f-]{36})\.xlsx/i)?.[1];
+    assert.ok(templateId);
+    const bulk = await api("/companies/bulk-import", { method: "POST", cookie: owner.cookie, body: {
+      templateId, importSessionId: "b2c9ca58-7179-44a0-9dc0-a6893e1eb32e", isFinalBatch: true,
+      rows: [
+        { rowNumber: 2, company: { companyName: "Bulk Private Company", companyDomain: "bulk-private-company.test", shareWithGlobal: false } },
+        { rowNumber: 3, company: { companyName: "Bulk Shared Company", companyDomain: "bulk-shared-company.test", shareWithGlobal: true } },
+      ],
+    } });
+    assert.equal(bulk.response.status, 200, JSON.stringify(bulk.body));
+    assert.equal(bulk.body.created, 1);
+    assert.equal(bulk.body.shared, 1);
+    const privateBulkSearch = await api("/admin/global-companies?search=bulk-private-company", { cookie: admin.cookie });
+    const sharedBulkSearch = await api("/admin/global-companies?search=bulk-shared-company", { cookie: admin.cookie });
+    assert.equal(privateBulkSearch.body.total, 0);
+    assert.equal(sharedBulkSearch.body.total, 1);
 
     const adminCatalogSearch = await api(
       "/admin/global-companies?search=opted-in-workspace-company",

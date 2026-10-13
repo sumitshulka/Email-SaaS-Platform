@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { ArrowUpRight, Building2, Check, CircleAlert, Download, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, Building2, Check, CircleAlert, Download, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 import {
   exportCompanies, getGetCompanyQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey, getSearchGlobalCompaniesQueryKey,
   useBackfillCompanyProfiles, useCreateCompany, useListCompanies, useListUnlinkedCompanyProfiles, useUpdateCompany,
@@ -10,6 +10,7 @@ import type { Company, CompanyExportInput, CompanyInput, CompanyUpdate, Unlinked
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
 import { downloadWorkbook } from '@/lib/download-workbook';
 import { GlobalCompanyDirectoryPage } from '@/pages/global-company-directory';
+import { CompanyImportDialog } from '@/components/company-import-dialog';
 
 const card = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -103,6 +104,7 @@ export function CompaniesPage() {
   const [page, setPage] = useState(1);
   const [companyFilters, setCompanyFilters] = useState<CompanyDirectoryFilters>(emptyCompanyDirectoryFilters);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ linkedContacts: number; createdCompanies: number; skippedContacts: number } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -176,9 +178,11 @@ export function CompaniesPage() {
       <div className="flex flex-wrap gap-2">
         <button type="button" data-testid="button-global-company-catalog" onClick={() => setCatalogOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#cfe1d7] bg-[#eff7f2] px-3.5 text-[12px] font-semibold text-[#347765] hover:bg-[#e6f2eb]"><Building2 className="h-4 w-4"/>Browse global catalog</button>
         <button type="button" data-testid="button-download-companies" disabled={listQuery.isFetching || backfillRunning} onClick={() => setDownloadOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#d7dce3] bg-white px-3.5 text-[12px] font-semibold text-[#283545] hover:bg-[#f7f9fb] disabled:opacity-55"><Download className="h-4 w-4"/>Download companies</button>
+        <button type="button" data-testid="button-upload-companies" onClick={() => setImportOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#d7dce3] bg-white px-3.5 text-[12px] font-semibold text-[#283545] hover:bg-[#f7f9fb]"><Upload className="h-4 w-4"/>Bulk upload</button>
         <button type="button" data-testid="button-add-company" onClick={() => setEditor('new')} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#174f99] bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>Add company</button>
       </div>
     </div>
+    {importOpen && <CompanyImportDialog onClose={() => setImportOpen(false)} onChanged={() => { void listQuery.refetch(); void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() }); }}/>}
     {downloadOpen && <DownloadListDialog title="Download companies" description="Choose the rows and company fields to include in your Excel workbook." entityLabel="companies" currentCount={filtered.length} allCount={companies.length} hasActiveFilters={hasCompanySearchOrFilters} filterSummary={companyFilterSummary} defaultScope={hasCompanySearchOrFilters ? 'filtered' : 'all'} columns={companyDownloadColumns} defaultColumns={['companyName', 'companyDomain', 'companyLocation', 'contactCount']} onDownload={downloadCompanies} onClose={() => setDownloadOpen(false)}/>}
     {backfillResult && <div role="status" data-testid="status-company-backfill" className="mb-5 flex flex-col gap-3 rounded-lg border border-[#d8e5df] bg-[#f4f9f6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#43825e]"/><div><div className="text-[12px] font-semibold text-[#2c6547]">Legacy company profiles checked</div><p className="mt-1 text-[11px] leading-5 text-[#617c6d]">{backfillResult.linkedContacts} contacts linked · {backfillResult.createdCompanies} shared {backfillResult.createdCompanies === 1 ? 'company created' : 'companies created'} · {backfillResult.skippedContacts} contacts stayed unlinked</p></div></div><span className="text-[10px] text-[#789080]">Only safe matches are linked.</span></div>}
     {backfillRunning && <div className="mb-5 flex items-center gap-2 rounded-lg border border-[#dce5ec] bg-[#f7fafc] px-4 py-3 text-[11px] text-[#64768b]"><RefreshCw className="h-3.5 w-3.5 animate-spin"/>Checking legacy company profiles…</div>}

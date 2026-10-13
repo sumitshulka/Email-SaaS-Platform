@@ -32,6 +32,7 @@ export * from "./contact-intent";
 export * from "./contact-field-options";
 export * from "./contact-import-templates";
 export * from "./global-company-import-templates";
+export * from "./company-import-templates";
 export * from "./contact-segments";
 export * from "./sending";
 export * from "./notifications";

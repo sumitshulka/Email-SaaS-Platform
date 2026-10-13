@@ -1894,6 +1894,94 @@ export const ExportCompaniesResponse = zod.unknown()
 
 
 /**
+ * @summary Download the authenticated workspace's latest one-use company XLSX template
+ */
+export const DownloadCompanyImportTemplateResponse = zod.unknown()
+
+
+/**
+ * Each row contains an explicit shareWithGlobal choice; sharing is opt-in and never shares contacts.
+ * @summary Import reviewed company profiles into the authenticated workspace
+ */
+export const bulkImportCompaniesBodyRowsItemRowNumberMin = 2;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyNameMax = 200;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyWebsiteUrlMax = 2048;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyDomainMax = 255;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyIndustryMax = 120;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanySizeMax = 80;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyRevenueRangeMax = 80;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyDescriptionMax = 10000;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyPhoneNumberMax = 40;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyLinkedinUrlMax = 2048;
+
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyLocationMax = 200;
+
+export const bulkImportCompaniesBodyRowsMax = 100;
+
+
+
+export const BulkImportCompaniesBody = zod.object({
+  "templateId": zod.string().uuid(),
+  "importSessionId": zod.string().uuid(),
+  "isFinalBatch": zod.boolean(),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().int().min(bulkImportCompaniesBodyRowsItemRowNumberMin),
+  "company": zod.object({
+  "companyName": zod.string().min(1).max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyWebsiteUrlMax).optional(),
+  "companyDomain": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyDomainMax).optional(),
+  "companyIndustry": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyIndustryMax).optional(),
+  "companySize": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanySizeMax).optional(),
+  "companyRevenueRange": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyRevenueRangeMax).optional(),
+  "companyDescription": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyDescriptionMax).optional(),
+  "companyPhoneNumber": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyPhoneNumberMax).optional(),
+  "companyLinkedinUrl": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyLinkedinUrlMax).optional(),
+  "companyLocation": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyLocationMax).optional(),
+  "shareWithGlobal": zod.boolean().optional().describe('Explicitly add this company profile to the global catalog; contacts remain private')
+}).and(zod.object({
+  "shareWithGlobal": zod.boolean().optional()
+}))
+})).min(1).max(bulkImportCompaniesBodyRowsMax)
+})
+
+export const bulkImportCompaniesResponseProcessedMin = 0;
+
+export const bulkImportCompaniesResponseCreatedMin = 0;
+
+export const bulkImportCompaniesResponseSharedMin = 0;
+
+export const bulkImportCompaniesResponseDuplicatesMin = 0;
+
+export const bulkImportCompaniesResponseRejectedMin = 0;
+
+
+
+export const BulkImportCompaniesResponse = zod.object({
+  "importSessionId": zod.string().uuid(),
+  "processed": zod.number().int().min(bulkImportCompaniesResponseProcessedMin),
+  "complete": zod.boolean(),
+  "created": zod.number().int().min(bulkImportCompaniesResponseCreatedMin),
+  "shared": zod.number().int().min(bulkImportCompaniesResponseSharedMin),
+  "duplicates": zod.number().int().min(bulkImportCompaniesResponseDuplicatesMin),
+  "rejected": zod.number().int().min(bulkImportCompaniesResponseRejectedMin),
+  "rows": zod.array(zod.object({
+  "rowNumber": zod.number().int(),
+  "status": zod.enum(['created', 'shared', 'duplicate', 'rejected']),
+  "message": zod.string()
+}))
+})
+
+
+/**
  * @summary Get the authenticated customer's company research allowance for the active term
  */
 export const getCompanyResearchAllowanceResponseAllowanceOneLimitMin = 0;
