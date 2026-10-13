@@ -3908,6 +3908,9 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       username: "addon-gift-gifted-primary-user",
     });
     const freeUser = await loggedInUser({ username: "addon-gift-free-user" });
+    const freeGiftUser = await loggedInUser({
+      username: "admin-gift-free-primary-user",
+    });
     const noPlanUser = await loggedInUser({ username: "addon-gift-no-plan-user" });
     const changingEligibilityUser = await loggedInUser({
       username: "addon-gift-changing-eligibility-user",
@@ -3985,6 +3988,12 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         ...activeTerm,
       },
       {
+        userId: freeGiftUser.user.id,
+        packageId: freePrimary.body.id,
+        paymentId: null,
+        ...activeTerm,
+      },
+      {
         userId: changingEligibilityUser.user.id,
         packageId: paidPrimary.body.id,
         paymentId: null,
@@ -4002,6 +4011,76 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     assert.equal(primaryGift.response.status, 201, JSON.stringify(primaryGift.body));
     assert.equal(primaryGift.body.kind, "primary");
+    assert.equal(
+      Math.abs(
+        new Date(primaryGift.body.subscription.startsAt).getTime() -
+          Date.now(),
+      ) < 5_000,
+      true,
+      "a recipient with no active subscription starts the gift immediately",
+    );
+
+    const paidPrimaryGift = await api("/admin/billing/subscriptions/gift", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        userId: paidUser.user.id,
+        packageId: paidPrimary.body.id,
+      },
+    });
+    assert.equal(
+      paidPrimaryGift.response.status,
+      201,
+      JSON.stringify(paidPrimaryGift.body),
+    );
+    assert.equal(
+      new Date(paidPrimaryGift.body.subscription.startsAt).toISOString(),
+      activeTerm.endsAt.toISOString(),
+      "a recipient with an active paid plan keeps that term before the gift starts",
+    );
+
+    const freeGiftStartedAt = Date.now();
+    const freePrimaryGift = await api("/admin/billing/subscriptions/gift", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        userId: freeGiftUser.user.id,
+        packageId: paidPrimary.body.id,
+      },
+    });
+    assert.equal(
+      freePrimaryGift.response.status,
+      201,
+      JSON.stringify(freePrimaryGift.body),
+    );
+    assert.equal(freePrimaryGift.body.kind, "primary");
+    assert.ok(
+      Math.abs(
+        new Date(freePrimaryGift.body.subscription.startsAt).getTime() -
+          freeGiftStartedAt,
+      ) < 5_000,
+      "a gifted primary plan must start immediately for a Free-plan recipient",
+    );
+    const freeGiftCurrent = await api("/subscriptions/current", {
+      cookie: freeGiftUser.cookie,
+    });
+    assert.equal(
+      freeGiftCurrent.body.subscription.package.id,
+      paidPrimary.body.id,
+    );
+    assert.equal(freeGiftCurrent.body.scheduledSubscription, null);
+    const freeGiftTerms = await db
+      .select()
+      .from(dbModule.userSubscriptionsTable)
+      .where(eq(dbModule.userSubscriptionsTable.userId, freeGiftUser.user.id));
+    assert.ok(
+      freeGiftTerms.some(
+        (term) =>
+          term.packageId === freePrimary.body.id &&
+          term.status === "superseded",
+      ),
+      "the replaced Free term must no longer remain active",
+    );
 
     const recipientSearch = await api(
       "/admin/users?search=addon-gift-&status=all&page=1&pageSize=20",

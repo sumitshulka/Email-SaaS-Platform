@@ -456,7 +456,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
             <span className="block text-[10px] leading-4 text-[#85909c]">
               {giftIsAddon
                 ? 'Add-on gifts require an active paid-priced Primary plan. A previously gifted paid plan qualifies; free Primary plans do not.'
-                : 'Hidden Primary packages can also be gifted. The configured term and contact limit apply; a new term starts after any current active term.'}
+                : 'Hidden Primary packages can also be gifted. For a recipient on a Free plan, the gift starts immediately and replaces the remaining Free term. For a paid plan, it starts after the paid term ends.'}
             </span>
           </label>
         </div>
@@ -468,7 +468,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
           <span>
             {giftIsAddon
               ? `I confirm adding this add-on's allowances to ${giftRecipient.email}. They pause if paid-Primary access ends and resume when paid access returns.`
-              : `I confirm granting this package to ${giftRecipient.email}. Any current subscription term will finish first.`}
+              : `I confirm granting this package to ${giftRecipient.email}. It starts immediately for a Free-plan recipient; a paid-plan recipient keeps their paid term until it ends.`}
           </span>
         </label>}
         {giftNotice && <p data-testid="status-gift-subscription" role={giftNotice.bad ? 'alert' : 'status'} className={`rounded-md border px-3 py-2.5 text-[11px] ${giftNotice.bad ? 'border-[#efd8c7] bg-[#fff8f2] text-[#985120]' : 'border-[#d8e9df] bg-[#f2f8f4] text-[#3e7252]'}`}>{giftNotice.text}</p>}

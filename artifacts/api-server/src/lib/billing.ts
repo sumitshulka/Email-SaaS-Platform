@@ -839,7 +839,7 @@ export async function grantAdminGiftSubscription(input: {
     }
     if (pkg.packageType !== "primary") return null;
 
-    const [latestActive] = await tx
+    const activeTerms = await tx
       .select()
       .from(userSubscriptionsTable)
       .where(
@@ -850,11 +850,35 @@ export async function grantAdminGiftSubscription(input: {
         ),
       )
       .orderBy(desc(userSubscriptionsTable.endsAt))
-      .limit(1)
       .for("update");
+    const latestActive = activeTerms[0];
+    const currentTerm = activeTerms.find(
+      (subscription) => subscription.startsAt <= now,
+    );
+    const [currentPackage] = currentTerm
+      ? await tx
+          .select({
+            packageType: subscriptionPackagesTable.packageType,
+            amountMinor: subscriptionPackagesTable.amountMinor,
+          })
+          .from(subscriptionPackagesTable)
+          .where(eq(subscriptionPackagesTable.id, currentTerm.packageId))
+          .limit(1)
+      : [];
+    const currentFreeTerm =
+      currentTerm && currentPackage?.packageType === "primary" &&
+      currentPackage.amountMinor === 0
+        ? currentTerm
+        : null;
+    if (currentFreeTerm) {
+      await tx
+        .update(userSubscriptionsTable)
+        .set({ status: "superseded" })
+        .where(eq(userSubscriptionsTable.id, currentFreeTerm.id));
+    }
     const { startsAt, endsAt } = getSubscriptionTerm(
       pkg.periodDays,
-      latestActive?.endsAt,
+      currentFreeTerm ? undefined : latestActive?.endsAt,
       now,
     );
 
