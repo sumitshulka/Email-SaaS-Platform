@@ -172,6 +172,8 @@ import type {
   ResetPasswordInput,
   SearchCompaniesParams,
   SearchGlobalCompaniesParams,
+  SenderInboxCheckInput,
+  SenderInboxCheckResult,
   SetActiveRazorpayEnvironmentInput,
   SubscriptionAddOnsDashboard,
   SubscriptionGiftInput,
@@ -2386,6 +2388,95 @@ export const useUpdateTenantSendingAccount = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getUpdateTenantSendingAccountMutationOptions(options));
+    }
+
+export const getCheckSenderMailboxUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}`
+}
+
+/**
+ * @summary Check a sender mailbox for bounce reports and campaign replies using IMAP
+ */
+export const checkSenderMailbox = async (accountId: string,
+    senderInboxCheckInput: SenderInboxCheckInput, options?: Parameters<typeof customFetch>[1]): Promise<SenderInboxCheckResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SenderInboxCheckResult>(getCheckSenderMailboxUrl(accountId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(senderInboxCheckInput)
+  }
+);}
+
+
+
+
+
+export const getCheckSenderMailboxMutationKey = () => ['checkSenderMailbox'] as const;
+
+export const getCheckSenderMailboxMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkSenderMailbox>>, TError,CheckSenderMailboxMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkSenderMailbox>>, TError,CheckSenderMailboxMutationVariables, TContext> => {
+
+const mutationKey = getCheckSenderMailboxMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkSenderMailbox>>, CheckSenderMailboxMutationVariables> = (props) => {
+          const {accountId,data} = props ?? {};
+
+          return  checkSenderMailbox(accountId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckSenderMailboxMutationResult = NonNullable<Awaited<ReturnType<typeof checkSenderMailbox>>>
+    export type CheckSenderMailboxMutationBody = BodyType<SenderInboxCheckInput>
+    export type CheckSenderMailboxMutationError = ErrorType<ApiError>
+    export type CheckSenderMailboxMutationVariables = {accountId: string;data: BodyType<SenderInboxCheckInput>}
+
+    /**
+ * @summary Check a sender mailbox for bounce reports and campaign replies using IMAP
+ */
+export const useCheckSenderMailbox = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkSenderMailbox>>, TError,CheckSenderMailboxMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof checkSenderMailbox>>,
+        TError,
+        CheckSenderMailboxMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckSenderMailboxMutationOptions(options));
     }
 
 export const getDeleteTenantSendingAccountUrl = (accountId: string,) => {

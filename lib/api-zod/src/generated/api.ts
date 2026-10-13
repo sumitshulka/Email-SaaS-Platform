@@ -743,6 +743,41 @@ export const UpdateTenantSendingAccountResponse = zod.object({
 
 
 /**
+ * @summary Check a sender mailbox for bounce reports and campaign replies using IMAP
+ */
+export const CheckSenderMailboxParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const checkSenderMailboxBodyImapHostMax = 255;
+
+export const checkSenderMailboxBodyImapPortDefault = 993;
+export const checkSenderMailboxBodyImapPortMax = 65535;
+
+
+
+export const CheckSenderMailboxBody = zod.object({
+  "imapHost": zod.string().min(1).max(checkSenderMailboxBodyImapHostMax),
+  "imapPort": zod.number().int().min(1).max(checkSenderMailboxBodyImapPortMax).default(checkSenderMailboxBodyImapPortDefault)
+})
+
+export const CheckSenderMailboxResponse = zod.object({
+  "provider": zod.string(),
+  "mailbox": zod.string().email(),
+  "messagesChecked": zod.number().int(),
+  "bounceReportsFound": zod.number().int(),
+  "bounceReportsApplied": zod.number().int(),
+  "repliesFound": zod.number().int(),
+  "replyMatches": zod.array(zod.object({
+  "campaignName": zod.string(),
+  "recipientEmail": zod.string().email(),
+  "sentAt": zod.coerce.date()
+})),
+  "checkedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete an SMTP sender account not used by an active campaign
  */
 export const DeleteTenantSendingAccountParams = zod.object({

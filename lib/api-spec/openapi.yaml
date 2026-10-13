@@ -570,6 +570,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: checkSenderMailbox
+      tags: [sending]
+      summary: Check a sender mailbox for bounce reports and campaign replies using IMAP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SenderInboxCheckInput"
+      responses:
+        "200":
+          description: Mailbox scan summary; message content is not retained
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SenderInboxCheckResult"
+        "400":
+          description: Invalid IMAP settings or unsupported authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Sender account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     delete:
       operationId: deleteTenantSendingAccount
       tags: [sending]
@@ -4247,6 +4276,32 @@ components:
         fromEmail: { type: string, format: email }
         replyTo: { type: string, format: email }
       required: [provider, host, port, encryption, fromName, fromEmail]
+    SenderInboxCheckInput:
+      type: object
+      properties:
+        imapHost: { type: string, minLength: 1, maxLength: 255 }
+        imapPort: { type: integer, minimum: 1, maximum: 65535, default: 993 }
+      required: [imapHost, imapPort]
+    SenderInboxCheckResult:
+      type: object
+      properties:
+        provider: { type: string }
+        mailbox: { type: string, format: email }
+        messagesChecked: { type: integer }
+        bounceReportsFound: { type: integer }
+        bounceReportsApplied: { type: integer }
+        repliesFound: { type: integer }
+        replyMatches:
+          type: array
+          items:
+            type: object
+            properties:
+              campaignName: { type: string }
+              recipientEmail: { type: string, format: email }
+              sentAt: { type: string, format: date-time }
+            required: [campaignName, recipientEmail, sentAt]
+        checkedAt: { type: string, format: date-time }
+      required: [provider, mailbox, messagesChecked, bounceReportsFound, bounceReportsApplied, repliesFound, replyMatches, checkedAt]
     GmailMailboxConnection:
       type: object
       properties:

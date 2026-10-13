@@ -102,6 +102,8 @@ import {
   SetPrimaryTenantSendingAccountResponse,
   UpdateTenantSendingAccountParams,
   UpdateTenantSendingAccountResponse,
+  CheckSenderMailboxBody,
+  CheckSenderMailboxResponse,
 } from "@workspace/api-zod";
 import type { TenantSendingSettingsInput } from "@workspace/api-zod";
 import {
@@ -126,6 +128,8 @@ import {
   usersTable,
 } from "@workspace/db";
 import ExcelJS from "exceljs";
+import { ImapFlow } from "imapflow";
+import { lookup } from "node:dns/promises";
 import type { ContactFieldKey } from "@workspace/db";
 import {
   sendTenantEmail,
@@ -141,6 +145,8 @@ import {
   uniqueCampaignRecipients,
 } from "../lib/campaign-audience";
 import { decryptSecret, encryptSecret } from "../lib/security";
+import { parseDeliveryReports } from "../lib/delivery-report-parser";
+import { ingestDeliveryReports } from "../lib/delivery-report-ingestion";
 import {
   estimateCampaignDeliveryAfterQueueSeconds,
   estimateCampaignQueueDeliverySeconds,
@@ -1274,6 +1280,223 @@ router.patch("/sending/accounts/:accountId", requireUserRole, async (req, res): 
     }),
   );
 });
+
+function isPublicIpv4(address: string): boolean {
+  const octets = address.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = octets;
+  return !(
+    a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b! >= 16 && b! <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b! >= 64 && b! <= 127) ||
+    (a === 198 && (b === 18 || b === 19))
+  );
+}
+
+router.post(
+  "/sending/accounts/:accountId/inbox-check",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = UpdateTenantSendingAccountParams.safeParse(req.params);
+    const parsed = CheckSenderMailboxBody.safeParse(req.body);
+    if (!params.success || !parsed.success || parsed.data.imapPort !== 993) {
+      res.status(400).json({
+        error: "Use a valid IMAP host and secure IMAP port 993.",
+        code: "INVALID_IMAP_SETTINGS",
+      });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [sender] = await db
+      .select()
+      .from(tenantSendingConfigurationTable)
+      .where(
+        and(
+          eq(tenantSendingConfigurationTable.id, params.data.accountId),
+          eq(tenantSendingConfigurationTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!sender) {
+      res.status(404).json({
+        error: "SMTP sender account not found.",
+        code: "SENDER_ACCOUNT_NOT_FOUND",
+      });
+      return;
+    }
+
+    const hostname = parsed.data.imapHost.trim().toLowerCase().replace(/\.$/, "");
+    if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)) {
+      res.status(400).json({
+        error: "Enter the public server hostname supplied by your email provider.",
+        code: "INVALID_IMAP_HOST",
+      });
+      return;
+    }
+    const resolved = (await lookup(hostname, { all: true, verbatim: true }).catch(
+      () => [],
+    )) as Array<{ address: string; family: number }>;
+    const target = resolved.find((record) => record.family === 4 && isPublicIpv4(record.address));
+    if (!target) {
+      res.status(400).json({
+        error: "This IMAP server does not resolve to a public IPv4 address.",
+        code: "INVALID_IMAP_HOST",
+      });
+      return;
+    }
+
+    const client = new ImapFlow({
+      host: target.address,
+      port: 993,
+      secure: true,
+      tls: { servername: hostname },
+      auth: {
+        user: decryptSecret(sender.usernameEncrypted),
+        pass: decryptSecret(sender.passwordEncrypted),
+      },
+      logger: false,
+      socketTimeout: 20_000,
+    });
+    let lock: Awaited<ReturnType<typeof client.getMailboxLock>> | undefined;
+    let messagesChecked = 0;
+    let bounceReportsFound = 0;
+    let repliesFound = 0;
+    const replyMatches: Array<{
+      campaignName: string;
+      recipientEmail: string;
+      sentAt: string;
+    }> = [];
+    const reports = [];
+    const replyRefs = new Set<string>();
+    try {
+      await client.connect();
+      lock = await client.getMailboxLock("INBOX");
+      const searchedUids = await client.search(
+        { since: new Date(Date.now() - 14 * 24 * 60 * 60_000) },
+        { uid: true },
+      );
+      const uids = Array.isArray(searchedUids) ? searchedUids : [];
+      const recentUids = uids.slice(-100);
+      for (const uid of recentUids) {
+        const message = await client.fetchOne(
+          uid,
+          { headers: true, envelope: true, internalDate: true },
+          { uid: true },
+        );
+        if (!message || !message.headers) continue;
+        messagesChecked += 1;
+        const headers = Buffer.from(message.headers).toString("utf8");
+        if (/content-type:[\s\S]{0,300}?report-type\s*=\s*"?delivery-status/i.test(headers)) {
+          const dsnMessage = await client.fetchOne(
+            uid,
+            { source: true },
+            { uid: true },
+          );
+          if (dsnMessage && dsnMessage.source) {
+            try {
+              const parsedReport = parseDeliveryReports(
+                "dsn",
+                Buffer.from(dsnMessage.source).toString("utf8"),
+              );
+              bounceReportsFound += parsedReport.reports.length;
+              reports.push(...parsedReport.reports);
+            } catch {
+              // Invalid DSNs are ignored; raw messages are never stored.
+            }
+          }
+        }
+        for (const match of headers.matchAll(/^(?:In-Reply-To|References):\s*(.+)$/gim)) {
+          for (const id of match[1]!.match(/<[^>]+>/g) ?? []) {
+            replyRefs.add(id.trim().toLowerCase());
+          }
+        }
+      }
+      if (replyRefs.size) {
+        const attempts = await db
+          .select({
+            messageId: emailSendAttemptsTable.messageId,
+            attemptedAt: emailSendAttemptsTable.attemptedAt,
+            campaignName: emailCampaignsTable.name,
+            recipientEmail: emailCampaignRecipientsTable.email,
+          })
+          .from(emailSendAttemptsTable)
+          .innerJoin(
+            emailCampaignRecipientsTable,
+            eq(emailCampaignRecipientsTable.id, emailSendAttemptsTable.recipientId),
+          )
+          .innerJoin(
+            emailCampaignsTable,
+            eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId),
+          )
+          .where(
+            and(
+              eq(emailSendAttemptsTable.userId, userId),
+              eq(emailCampaignRecipientsTable.userId, userId),
+              eq(emailCampaignsTable.userId, userId),
+              eq(emailSendAttemptsTable.senderAccountId, sender.id),
+              inArray(
+                emailSendAttemptsTable.messageId,
+                [...replyRefs].slice(0, 100),
+              ),
+            ),
+          );
+        const matchedByMessageId = new Map<string, (typeof attempts)[number]>();
+        for (const attempt of attempts) {
+          const messageId = attempt.messageId?.trim().toLowerCase();
+          if (messageId && !matchedByMessageId.has(messageId)) {
+            matchedByMessageId.set(messageId, attempt);
+          }
+        }
+        repliesFound = matchedByMessageId.size;
+        replyMatches.push(
+          ...[...matchedByMessageId.values()].map((attempt) => ({
+            campaignName: attempt.campaignName,
+            recipientEmail: attempt.recipientEmail,
+            sentAt: attempt.attemptedAt.toISOString(),
+          })),
+        );
+      }
+      const ingestion = reports.length
+        ? await ingestDeliveryReports({
+            userId,
+            reports,
+            verification: "user_imported",
+          })
+        : { imported: 0 };
+      res.json(
+        CheckSenderMailboxResponse.parse({
+          provider: sender.provider,
+          mailbox: sender.fromEmail,
+          messagesChecked,
+          bounceReportsFound,
+          bounceReportsApplied: ingestion.imported,
+          repliesFound,
+          replyMatches,
+          checkedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      req.log.warn(
+        {
+          userId,
+          accountId: sender.id,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+        "Sender mailbox check failed",
+      );
+      res.status(502).json({
+        error:
+          "Mailflow could not sign in to this inbox. Confirm IMAP is enabled and use an app password or provider-approved authentication.",
+        code: "IMAP_CONNECTION_FAILED",
+      });
+    } finally {
+      lock?.release();
+      if (client.usable) await client.logout().catch(() => undefined);
+    }
+  },
+);
 
 router.delete("/sending/accounts/:accountId", requireUserRole, async (req, res): Promise<void> => {
   const params = DeleteTenantSendingAccountParams.safeParse(req.params);

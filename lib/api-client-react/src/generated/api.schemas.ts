@@ -582,6 +582,36 @@ export interface TenantSendingSettingsInput {
   replyTo?: string;
 }
 
+export interface SenderInboxCheckInput {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  imapHost: string;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  imapPort: number;
+}
+
+export type SenderInboxCheckResultReplyMatchesItem = {
+  campaignName: string;
+  recipientEmail: string;
+  sentAt: string;
+};
+
+export interface SenderInboxCheckResult {
+  provider: string;
+  mailbox: string;
+  messagesChecked: number;
+  bounceReportsFound: number;
+  bounceReportsApplied: number;
+  repliesFound: number;
+  replyMatches: SenderInboxCheckResultReplyMatchesItem[];
+  checkedAt: string;
+}
+
 export type GmailMailboxConnectionSyncStatus = typeof GmailMailboxConnectionSyncStatus[keyof typeof GmailMailboxConnectionSyncStatus];
 
 

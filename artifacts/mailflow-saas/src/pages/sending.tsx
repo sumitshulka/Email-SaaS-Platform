@@ -23,7 +23,7 @@ import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
-  useSyncGmailMailboxNow,
+  useSyncGmailMailboxNow, useCheckSenderMailbox,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useSetCampaignPaused,
   useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
@@ -36,6 +36,7 @@ import type {
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
   CampaignHistory, GetCampaignHistoryParams, GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
+  SenderInboxCheckResult,
   ListContactsQueryResult,
 } from '@workspace/api-client-react';
 import {
@@ -181,12 +182,15 @@ export function SendingSettingsPage() {
   const disconnectGmailConnection = useDisconnectGmailMailbox();
   const recentGmailRescan = useRescanRecentGmailMessages();
   const immediateGmailSync = useSyncGmailMailboxNow();
+  const checkSenderMailbox = useCheckSenderMailbox();
   const qc = useQueryClient();
   const { notice, setNotice, dismiss } = useNotice();
   const [recentRescanResult, setRecentRescanResult] = useState<GmailRecentRescanResult | null>(null);
   const [recentRescanError, setRecentRescanError] = useState<string | null>(null);
   const [recentRescanWindowDays, setRecentRescanWindowDays] = useState<GmailRecentRescanInput['windowDays']>(14);
   const [gmailSyncNowResult, setGmailSyncNowResult] = useState<GmailMailboxSyncNowResult | null>(null);
+  const [imapHost, setImapHost] = useState('');
+  const [inboxCheckResult, setInboxCheckResult] = useState<SenderInboxCheckResult | null>(null);
   const [form, setForm] = useState(blankSettings);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [initialized, setInitialized] = useState(false);
@@ -215,6 +219,7 @@ export function SendingSettingsPage() {
     const initial = accounts.find(account => account.isPrimary) ?? accounts[0];
     setSelectedAccountId(initial?.id ?? '');
     setForm(formForAccount(initial));
+    setImapHost(initial?.provider === 'microsoft_365' ? 'outlook.office365.com' : initial?.provider === 'gmail' || initial?.provider === 'google_workspace' ? 'imap.gmail.com' : '');
     setInitialized(true);
   }, [query.data, accounts, initialized]);
   useEffect(() => {
@@ -274,6 +279,7 @@ export function SendingSettingsPage() {
       port: preset?.port ?? '587',
       encryption: preset?.encryption ?? 'tls',
     }));
+    setImapHost(provider === 'microsoft_365' ? 'outlook.office365.com' : provider === 'gmail' || provider === 'google_workspace' ? 'imap.gmail.com' : '');
   };
   const refreshSenderAccounts = () => {
     void qc.invalidateQueries({ queryKey: getListTenantSendingAccountsQueryKey() });
@@ -282,8 +288,11 @@ export function SendingSettingsPage() {
   };
   const selectAccount = (accountId: string) => {
     setSelectedAccountId(accountId);
-    setForm(formForAccount(accounts.find(account => account.id === accountId)));
+    const account = accounts.find(account => account.id === accountId);
+    setForm(formForAccount(account));
+    setImapHost(account?.provider === 'microsoft_365' ? 'outlook.office365.com' : account?.provider === 'gmail' || account?.provider === 'google_workspace' ? 'imap.gmail.com' : '');
     setConnectionResult(null);
+    setInboxCheckResult(null);
   };
   const addAccount = () => {
     setSelectedAccountId('');
@@ -323,7 +332,7 @@ export function SendingSettingsPage() {
   const currentSendingSettings = (): TenantSendingSettingsInput => ({
       provider: form.provider, host: form.host.trim(), port: Number(form.port), encryption: form.encryption,
       ...(form.username.trim() ? { username: form.username.trim() } : {}), ...(form.password ? { password: form.password } : {}),
-      fromName: form.fromName.trim(), fromEmail: form.fromEmail.trim(), ...(form.replyTo.trim() ? { replyTo: form.replyTo.trim() } : {}),
+      fromName: form.fromName.trim(), fromEmail: form.fromEmail.trim(),
   });
   const canTestSmtp = Boolean(
     form.host.trim() &&
@@ -332,6 +341,30 @@ export function SendingSettingsPage() {
     form.fromEmail.trim() &&
     (settings?.credentialsConfigured || (form.username.trim() && form.password)),
   );
+  const runInboxCheck = () => {
+    setInboxCheckResult(null);
+    if (!selectedAccountId) {
+      setNotice({ kind: 'error', text: 'Save this sender account before checking its inbox.' });
+      return;
+    }
+    if (!imapHost.trim()) {
+      setNotice({ kind: 'error', text: 'Enter the incoming-mail server from your email provider.' });
+      return;
+    }
+    checkSenderMailbox.mutate({
+      accountId: selectedAccountId,
+      data: { imapHost: imapHost.trim(), imapPort: 993 },
+    }, {
+      onSuccess: result => {
+        setInboxCheckResult(result);
+        setNotice({
+          kind: 'success',
+          text: `Inbox check complete: ${result.bounceReportsApplied} bounce report(s) applied and ${result.repliesFound} campaign reply/replies matched.`,
+        });
+      },
+      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+    });
+  };
   const runConnectionTest = () => {
     setConnectionResult(null);
     connectionTest.mutate({ data: { ...(selectedAccountId ? { accountId: selectedAccountId } : {}), settings: currentSendingSettings() } }, {
@@ -497,7 +530,7 @@ export function SendingSettingsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="From name" value={form.fromName} onChange={v => change('fromName', v)} placeholder="Customer care" required testId="input-from-name"/>
               <Field label="From email" value={form.fromEmail} onChange={v => change('fromEmail', v)} type="email" placeholder="hello@example.com" required testId="input-from-email"/>
-              <div className="sm:col-span-2"><Field label="Reply-to address" value={form.replyTo} onChange={v => change('replyTo', v)} type="email" placeholder="Optional — defaults to from address" testId="input-reply-to"/></div>
+              <div className="sm:col-span-2"><div className="block"><span className={labelClass}>Reply-to address</span><div data-testid="text-smtp-reply-to" className="flex min-h-10 items-center rounded-md border border-[#d8dfe6] bg-[#f5f7f9] px-3 text-[13px] text-[#526276]">{form.fromEmail || 'Set the From email address above'}</div><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Campaign replies always return to the mailbox used to send them.</span></div></div>
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0f2] pt-5"><span className="flex items-center gap-2 text-[11px] text-[#7b8694]"><ShieldCheck className="h-4 w-4 text-[#598166]"/>Credentials are never displayed after saving.</span><Button type="submit" testId="button-save-sending-settings" disabled={updateAccount.isPending || createAccount.isPending}>{(updateAccount.isPending || createAccount.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{(updateAccount.isPending || createAccount.isPending) ? 'Saving settings' : selectedAccountId ? 'Save sender settings' : 'Add sender account'}</Button></div>
           </form>
@@ -519,6 +552,39 @@ export function SendingSettingsPage() {
             </form>
           </div>
         </div>
+        <section className={`${panelClass} mt-5 p-5`} data-testid="section-imap-inbox-check">
+          <div className="max-w-3xl">
+            <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">INBOX MONITORING</div>
+            <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">Check this sender’s inbox</h2>
+            <p className="mt-2 text-[12px] leading-5 text-[#687484]">
+              Scans up to 100 messages from the last 14 days. Bounce reports update campaign delivery history; replies are matched against messages sent from this account. The mailbox password is the saved SMTP password.
+            </p>
+          </div>
+          <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <Field
+              label="Incoming server (IMAP)"
+              value={imapHost}
+              onChange={setImapHost}
+              placeholder={form.provider === 'microsoft_365' ? 'outlook.office365.com' : form.provider === 'gmail' || form.provider === 'google_workspace' ? 'imap.gmail.com' : 'imap.your-email-provider.com'}
+              testId="input-imap-host"
+              hint="Secure IMAP port 993 is used. For Google, OAuth monitoring is recommended. Microsoft and some providers require IMAP to be enabled and an app password; OAuth-only sign-in is not supported by this password-based check."
+            />
+            <Button
+              testId="button-check-sender-inbox"
+              onClick={runInboxCheck}
+              disabled={!selectedAccountId || !settings?.credentialsConfigured || !imapHost.trim() || checkSenderMailbox.isPending}
+            >
+              {checkSenderMailbox.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}
+              {checkSenderMailbox.isPending ? 'Checking inbox…' : 'Check inbox now'}
+            </Button>
+          </div>
+          {inboxCheckResult && <div role="status" data-testid="text-inbox-check-result" className="mt-4 max-w-3xl rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] leading-5 text-[#31674b]">
+            Checked {inboxCheckResult.mailbox} at {formatDate(inboxCheckResult.checkedAt)}. Scanned {inboxCheckResult.messagesChecked} messages; found {inboxCheckResult.bounceReportsFound} bounce report(s), applied {inboxCheckResult.bounceReportsApplied}, and matched {inboxCheckResult.repliesFound} campaign reply/replies.
+            {inboxCheckResult.replyMatches.length > 0 && <ul className="mt-2 space-y-1 border-t border-[#cfe4d8] pt-2">
+              {inboxCheckResult.replyMatches.map((reply, index) => <li key={`${reply.campaignName}-${reply.recipientEmail}-${index}`}>{reply.recipientEmail} replied to “{reply.campaignName}” (sent {formatDate(reply.sentAt)}).</li>)}
+            </ul>}
+          </div>}
+        </section>
         <DeliveryCapabilityNotes/>
       </TabsContent>
       <TabsContent value="gmail-monitoring" className="mt-0">
