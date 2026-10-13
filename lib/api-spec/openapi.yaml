@@ -1634,12 +1634,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/import-template:
+    get:
+      operationId: downloadContactImportTemplate
+      tags: [sending]
+      summary: Download a tenant-specific one-time XLSX contact template
+      description: Issues the latest template for the authenticated tenant; configured contact-field lists are embedded as dropdowns.
+      responses:
+        "200":
+          description: XLSX template
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /contacts/import:
     post:
       operationId: importContacts
       tags: [sending]
       summary: Import contacts for the authenticated tenant
-      description: Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
+      description: Accepts corrected JSON batches only when they belong to the authenticated tenant's latest one-time XLSX template.
       parameters:
         - name: listIds
           in: query
@@ -1667,9 +1684,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ContactImportInput"
-          text/csv:
-            schema:
-              $ref: "#/components/schemas/ContactCsvInput"
       responses:
         "200":
           description: Import results for the submitted JSON batch or CSV file
@@ -5176,12 +5190,15 @@ components:
     ContactImportInput:
       type: object
       properties:
+        templateId: { type: string, format: uuid }
+        importSessionId: { type: string, format: uuid }
+        finalBatch: { type: boolean }
         contacts:
           type: array
           minItems: 1
           maxItems: 200
           items: { $ref: "#/components/schemas/ContactImportRow" }
-      required: [contacts]
+      required: [templateId, importSessionId, finalBatch, contacts]
     ContactImportIssue:
       type: object
       properties:

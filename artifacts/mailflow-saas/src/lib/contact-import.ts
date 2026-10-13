@@ -24,7 +24,7 @@ export type ParsedRow = {
 export type RowError = { rowNumber: number; reason: string };
 export type ParsedImport = {
   fileName: string; kind: 'csv' | 'xlsx'; sheetNote: string;
-  valid: ParsedRow[]; errors: RowError[]; totalRows: number; ignoredHeaders: string[]; warnings: string[];
+  valid: ParsedRow[]; allRows: ParsedRow[]; errors: RowError[]; totalRows: number; ignoredHeaders: string[]; warnings: string[];
 };
 
 const ALIASES: Record<ImportField, string[]> = {
@@ -184,7 +184,7 @@ function mapHeaders(header: string[]) {
 function buildRows(records: string[][], fileName: string, kind: 'csv' | 'xlsx', sheetNote: string, extraWarnings: string[], unsafeRows = new Set<number>()): ParsedImport {
   if (!records.length) throw new ImportFileError('The file is empty.');
   const { mapping, ignored } = mapHeaders(records[0]);
-  const valid: ParsedRow[] = []; const errors: RowError[] = [];
+  const valid: ParsedRow[] = []; const allRows: ParsedRow[] = []; const errors: RowError[] = [];
   let total = 0;
   const seenEmails = new Map<string, number>();
   for (let i = 1; i < records.length; i++) {
@@ -196,9 +196,9 @@ function buildRows(records: string[][], fileName: string, kind: 'csv' | 'xlsx', 
     if (kind === 'csv') {
       const width = records[0].length;
       const lastFilled = rec.reduce((n, c, k) => (c.trim() ? k + 1 : n), 0);
-      if (lastFilled > width) { errors.push({ rowNumber, reason: `Row has ${lastFilled} filled columns but the header has ${width}; check for an unquoted delimiter or shifted data` }); continue; }
+      if (lastFilled > width) { errors.push({ rowNumber, reason: `Row has ${lastFilled} filled columns but the header has ${width}; check for an unquoted delimiter or shifted data` }); }
       const need = Math.max(...REQUIRED.map(f => (mapping.get(f) ?? 0) + 1));
-      if (rec.length < need) { errors.push({ rowNumber, reason: `Malformed row: only ${rec.length} columns, but required fields need ${need}` }); continue; }
+      if (rec.length < need) errors.push({ rowNumber, reason: `Malformed row: only ${rec.length} columns, but required fields need ${need}` });
     }
     const get = (f: ImportField) => { const idx = mapping.get(f); return idx === undefined ? '' : (rec[idx] ?? '').trim(); };
     const problems: string[] = [];
@@ -216,14 +216,16 @@ function buildRows(records: string[][], fileName: string, kind: 'csv' | 'xlsx', 
       const first = seenEmails.get(key);
       if (first) problems.push(`Duplicate of row ${first} in this file`); else seenEmails.set(key, rowNumber);
     }
-    if (problems.length) { errors.push({ rowNumber, reason: problems.join('; ') }); continue; }
     const enrichment = Object.fromEntries(
       OPTIONAL_IMPORT_FIELDS.map(field => [field, get(field) || null]),
     ) as Partial<Record<OptionalImportField, string | null>>;
-    valid.push({ rowNumber, email, firstName: get('firstName'), lastName: get('lastName'), ...enrichment });
+    const row = { rowNumber, email, firstName: get('firstName'), lastName: get('lastName'), ...enrichment };
+    allRows.push(row);
+    if (problems.length) errors.push({ rowNumber, reason: problems.join('; ') });
+    else valid.push(row);
   }
   if (!total) throw new ImportFileError('The file has headers but no contact rows.');
-  return { fileName, kind, sheetNote, valid, errors, totalRows: total, ignoredHeaders: ignored, warnings: extraWarnings };
+  return { fileName, kind, sheetNote, valid, allRows, errors, totalRows: total, ignoredHeaders: ignored, warnings: extraWarnings };
 }
 
 export async function parseContactFile(file: File): Promise<ParsedImport> {

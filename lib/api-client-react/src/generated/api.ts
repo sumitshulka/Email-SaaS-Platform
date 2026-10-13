@@ -85,7 +85,6 @@ import type {
   ContactAudienceSegmentInput,
   ContactAudienceSegmentUpdate,
   ContactCollection,
-  ContactCsvInput,
   ContactEmailHistoryItem,
   ContactEmailVerification,
   ContactExportInput,
@@ -5896,6 +5895,84 @@ export const useDeleteCompany = <TError = ErrorType<ApiError>,
       return useMutation(getDeleteCompanyMutationOptions(options));
     }
 
+export const getDownloadContactImportTemplateUrl = () => {
+
+
+
+
+  return `/api/contacts/import-template`
+}
+
+/**
+ * Issues the latest template for the authenticated tenant; configured contact-field lists are embedded as dropdowns.
+ * @summary Download a tenant-specific one-time XLSX contact template
+ */
+export const downloadContactImportTemplate = async ( options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadContactImportTemplateUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadContactImportTemplateQueryKey = () => {
+    return [
+    `/api/contacts/import-template`
+    ] as const;
+    }
+
+
+export const getDownloadContactImportTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadContactImportTemplate>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadContactImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadContactImportTemplateQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadContactImportTemplate>>> = ({ signal }) => downloadContactImportTemplate({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadContactImportTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadContactImportTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadContactImportTemplate>>>
+export type DownloadContactImportTemplateQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Download a tenant-specific one-time XLSX contact template
+ */
+
+export function useDownloadContactImportTemplate<TData = Awaited<ReturnType<typeof downloadContactImportTemplate>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadContactImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadContactImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getImportContactsUrl = (params?: ImportContactsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -5920,18 +5997,32 @@ export const getImportContactsUrl = (params?: ImportContactsParams,) => {
 }
 
 /**
- * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
+ * Accepts corrected JSON batches only when they belong to the authenticated tenant's latest one-time XLSX template.
  * @summary Import contacts for the authenticated tenant
  */
-export const importContacts = async (importContactsBody: ContactImportInput | ContactCsvInput,
+export const importContacts = async (contactImportInput: ContactImportInput,
     params?: ImportContactsParams, options?: Parameters<typeof customFetch>[1]): Promise<ContactImportResult | ContactImportResponse> => {
 
-  return customFetch<ContactImportResult | ContactImportResponse>(getImportContactsUrl(params),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactImportResult | ContactImportResponse>(getImportContactsUrl(params),
   {
     ...options,
-    method: 'POST'
-    ,
-    body: JSON.stringify(importContactsBody)
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactImportInput)
   }
 );}
 
@@ -5969,9 +6060,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ImportContactsMutationResult = NonNullable<Awaited<ReturnType<typeof importContacts>>>
-    export type ImportContactsMutationBody = BodyType<ContactImportInput | ContactCsvInput>
+    export type ImportContactsMutationBody = BodyType<ContactImportInput>
     export type ImportContactsMutationError = ErrorType<ApiError>
-    export type ImportContactsMutationVariables = {data: BodyType<ContactImportInput | ContactCsvInput>;params?: ImportContactsParams}
+    export type ImportContactsMutationVariables = {data: BodyType<ContactImportInput>;params?: ImportContactsParams}
 
     /**
  * @summary Import contacts for the authenticated tenant

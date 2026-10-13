@@ -3345,7 +3345,14 @@ export const DeleteCompanyResponse = zod.void()
 
 
 /**
- * Accepts validated JSON contact rows or a UTF-8 CSV file; reports invalid, duplicate, and over-quota rows.
+ * Issues the latest template for the authenticated tenant; configured contact-field lists are embedded as dropdowns.
+ * @summary Download a tenant-specific one-time XLSX contact template
+ */
+export const DownloadContactImportTemplateResponse = zod.unknown()
+
+
+/**
+ * Accepts corrected JSON batches only when they belong to the authenticated tenant's latest one-time XLSX template.
  * @summary Import contacts for the authenticated tenant
  */
 export const importContactsQueryListIdsMax = 100;
@@ -3364,6 +3371,9 @@ export const importContactsBodyContactsMax = 200;
 
 
 export const ImportContactsBody = zod.object({
+  "templateId": zod.string().uuid(),
+  "importSessionId": zod.string().uuid(),
+  "finalBatch": zod.boolean(),
   "contacts": zod.array(zod.object({
   "rowNumber": zod.number().int().min(importContactsBodyContactsItemRowNumberMin),
   "email": zod.string().optional(),

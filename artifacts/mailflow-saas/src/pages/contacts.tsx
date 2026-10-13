@@ -1,10 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, CircleAlert, ContactRound, Download, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, CircleAlert, ContactRound, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link } from "wouter";
 import {
-  customFetch,
   getGetUserDashboardQueryKey,
   getListContactsQueryKey,
   getListContactListsQueryKey,
@@ -14,7 +13,7 @@ import {
   useListContactLists,
   useListContacts,
 } from "@workspace/api-client-react";
-import type { ContactFieldKey, ContactImportResponse, ContactInput } from "@workspace/api-client-react";
+import type { ContactFieldKey, ContactInput } from "@workspace/api-client-react";
 import {
   Form,
   FormControl,
@@ -24,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { ContactFieldSelect } from "@/components/contact-field-select";
+import { ContactImportDialog } from "@/components/contact-import-dialog";
 
 const MAX_IMPORT_LISTS = 100;
 type ContactProfileField = ContactFieldKey | "timeZone";
@@ -39,18 +39,6 @@ function requestError(error: unknown): string {
   return "The request could not be completed. Please try again.";
 }
 
-function downloadRejectedContactsCsv(csv: string) {
-  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `rejected-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export default function ContactsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -62,34 +50,10 @@ export default function ContactsPage() {
   const contactFieldOptionsQuery = useGetContactFieldOptions();
   const createContact = useCreateContact();
   const deleteContact = useDeleteContact();
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [contactProfile, setContactProfile] = useState<Record<ContactProfileField, string>>({
     jobTitle: "", preferredLanguage: "", timeZone: "", lifecycleStage: "", leadStatus: "", leadSource: "",
-  });
-  const importContacts = useMutation<
-    ContactImportResponse,
-    Error,
-    { csvText: string; listIds: string[] }
-  >({
-    mutationFn: ({ csvText, listIds }) => {
-      const query = new URLSearchParams();
-      listIds.forEach((listId) => query.append("listIds", listId));
-      const queryString = query.toString();
-      return customFetch<ContactImportResponse>(
-        `/api/contacts/import${queryString ? `?${queryString}` : ""}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "text/csv" },
-          body: csvText,
-        },
-      );
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: getListContactListsQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
-    },
   });
   const form = useForm<ContactInput>({
     defaultValues: { firstName: "", lastName: "", email: "" },
@@ -107,43 +71,9 @@ export default function ContactsPage() {
   const progress = data && data.quota.limit > 0
     ? Math.min(100, (data.quota.used / data.quota.limit) * 100)
     : 0;
-  const allowedFileTypes = (data?.uploadSettings.allowedFileTypes ?? []).map((type) =>
-    type.trim().toLowerCase().replace(/^\./, ""),
-  );
-  const csvImportEnabled = allowedFileTypes.includes("csv");
-
   useEffect(() => {
     if (data && page > data.pageCount && data.pageCount > 0) setPage(data.pageCount);
   }, [data, page]);
-
-  const selectCsv = (file?: File) => {
-    setUploadError(null);
-    importContacts.reset();
-    if (!file) return;
-    if (selectedListIds.length === 0) {
-      setUploadError("Choose at least one contact list before importing contacts.");
-      return;
-    }
-    if (!csvImportEnabled || !/\.csv$/i.test(file.name)) {
-      setUploadError("Choose a CSV file allowed by your workspace settings.");
-      return;
-    }
-    const maxBytes = (data?.uploadSettings.maxFileSizeMb ?? 0) * 1024 * 1024;
-    if (file.size > maxBytes) {
-      setUploadError(
-        `This file is too large. The maximum size is ${data?.uploadSettings.maxFileSizeMb} MB.`,
-      );
-      return;
-    }
-    if (file.size === 0) {
-      setUploadError("Choose a non-empty CSV file.");
-      return;
-    }
-    void file
-      .text()
-      .then((csvText) => importContacts.mutate({ csvText, listIds: selectedListIds }))
-      .catch(() => setUploadError("The selected file could not be read."));
-  };
 
   const submit = (values: ContactInput) => {
     const selectedProfile = Object.fromEntries(
@@ -442,152 +372,27 @@ export default function ContactsPage() {
 
       <section className="rounded-lg border border-[#e1e6eb] bg-white p-5 md:p-6" data-testid="contact-csv-import">
         <div className="flex items-start gap-3">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]">
-            <Upload className="h-4 w-4" />
-          </span>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><Upload className="h-4 w-4" /></span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[14px] font-bold text-[#1d2d40]">Import contacts from CSV</h2>
-            <p className="mt-1 text-[11px] leading-5 text-[#788696]">
-              Use columns named <span className="font-medium text-[#526579]">email</span> and{" "}
-              <span className="font-medium text-[#526579]">name</span>, or{" "}
-              <span className="font-medium text-[#526579]">first_name</span> and{" "}
-              <span className="font-medium text-[#526579]">last_name</span>. Maximum file size:{" "}
-              {data.uploadSettings.maxFileSizeMb} MB. Duplicate, invalid, and over-quota rows will be listed below.
-            </p>
-            <p className="mt-1 text-[11px] leading-5 text-[#788696]">
-              Optional CRM columns can include any contact or company detail field, such as{" "}
-              <span className="font-medium text-[#526579]">job_title</span>,{" "}
-              <span className="font-medium text-[#526579]">linkedin_url</span>,{" "}
-              <span className="font-medium text-[#526579]">company_domain</span>, and{" "}
-              <span className="font-medium text-[#526579]">company_linkedin_url</span>. Headers also accept spaces or camelCase.
-            </p>
-            <p className="mt-1 text-[11px] leading-5 text-[#788696]">
-              Lifecycle stage, lead status, lead source, job title, and preferred language must use configured values.{" "}
-              <Link href="/contact-field-settings" className="font-semibold text-[#174f99] underline">
-                Manage contact field settings
-              </Link>
-              . Time zones must use standard zone names.
-            </p>
+            <h2 className="text-[14px] font-bold text-[#1d2d40]">Import contacts from a reviewed template</h2>
+            <p className="mt-1 text-[11px] leading-5 text-[#667789]">Download the latest XLSX template, fill it in, review and correct every row, then import. Choose the list or lists that should receive the contacts.</p>
+            <p className="mt-1 text-[11px] leading-5 text-[#667789]">List-backed fields are included only when you have saved values in Contact Fields. <Link href="/contact-field-settings" className="font-semibold text-[#174f99] underline">Manage Contact Fields</Link>.</p>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-start gap-3">
-          <fieldset
-            data-testid="select-contact-import-lists"
-            disabled={contactListsQuery.isLoading || contactLists.length === 0 || importContacts.isPending}
-            className="min-w-56"
-          >
-            <legend className="mb-1 text-[11px] font-semibold text-[#53677b]">
-              Add imported contacts to
-            </legend>
+        <div className="mt-4 flex flex-wrap items-end gap-4">
+          <fieldset data-testid="select-contact-import-lists" disabled={contactListsQuery.isLoading || contactLists.length === 0} className="min-w-56">
+            <legend className="mb-1 text-[11px] font-semibold text-[#53677b]">Add imported contacts to</legend>
             <div className="max-h-40 min-w-56 space-y-1 overflow-y-auto rounded-md border border-[#cbd8e3] bg-white p-2">
-              {contactLists.map((list) => (
-                <label key={list.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-[12px] text-[#26374a] hover:bg-[#f4f8fb]">
-                  <input
-                    type="checkbox"
-                    aria-label={`Add imported contacts to ${list.name}`}
-                    data-testid={`checkbox-contact-import-list-${list.id}`}
-                    checked={selectedListIds.includes(list.id)}
-                    disabled={
-                      !selectedListIds.includes(list.id) &&
-                      selectedListIds.length >= MAX_IMPORT_LISTS
-                    }
-                    onChange={(event) => {
-                      const checked = event.currentTarget.checked;
-                      setSelectedListIds((current) =>
-                        checked
-                          ? [...current, list.id]
-                          : current.filter((selectedId) => selectedId !== list.id),
-                      );
-                      setUploadError(null);
-                      importContacts.reset();
-                    }}
-                    className="accent-[#174f99]"
-                  />
-                  <span className="truncate">{list.name}</span>
-                </label>
-              ))}
-              {contactLists.length === 0 && !contactListsQuery.isLoading && (
-                <p className="px-1 py-1 text-[11px] text-[#788696]">No contact lists available.</p>
-              )}
+              {contactLists.map(list => <label key={list.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-[12px] text-[#26374a] hover:bg-[#f4f8fb]"><input type="checkbox" aria-label={`Add imported contacts to ${list.name}`} data-testid={`checkbox-contact-import-list-${list.id}`} checked={selectedListIds.includes(list.id)} disabled={!selectedListIds.includes(list.id) && selectedListIds.length >= MAX_IMPORT_LISTS} onChange={event => { const checked=event.currentTarget.checked; setSelectedListIds(current=>checked?[...current,list.id]:current.filter(id=>id!==list.id)); }} className="accent-[#174f99]"/><span className="truncate">{list.name}</span></label>)}
+              {contactLists.length === 0 && !contactListsQuery.isLoading && <p className="px-1 py-1 text-[11px] text-[#788696]">No contact lists available.</p>}
             </div>
-            <p className="mt-1 text-[10px] text-[#788696]">
-              {selectedListIds.length === 0
-                ? `Select one or more lists (up to ${MAX_IMPORT_LISTS}).`
-                : `${selectedListIds.length} list${selectedListIds.length === 1 ? "" : "s"} selected${selectedListIds.length >= MAX_IMPORT_LISTS ? " · maximum reached" : ""}`}
-            </p>
+            <p className="mt-1 text-[10px] text-[#788696]">{selectedListIds.length===0?`Select one or more lists (up to ${MAX_IMPORT_LISTS}).`:`${selectedListIds.length} list${selectedListIds.length===1?"":"s"} selected`}</p>
           </fieldset>
-          <input
-            type="file"
-            accept={allowedFileTypes.map((type) => `.${type}`).join(",")}
-            aria-label="Choose a CSV file to import contacts"
-            data-testid="input-contact-csv"
-            disabled={!quota.canAdd || !csvImportEnabled || selectedListIds.length === 0 || importContacts.isPending}
-            onChange={(event) => {
-              selectCsv(event.currentTarget.files?.[0]);
-              event.currentTarget.value = "";
-            }}
-            className="max-w-full text-[12px] text-[#53677b] file:mr-3 file:rounded-md file:border-0 file:bg-[#174f99] file:px-3 file:py-2.5 file:text-[11px] file:font-semibold file:text-white disabled:opacity-50"
-          />
-          {importContacts.isPending && (
-            <span role="status" className="inline-flex items-center gap-2 text-[11px] text-[#53677b]">
-              <LoaderCircle className="h-4 w-4 animate-spin" /> Importing contacts…
-            </span>
-          )}
-          {!csvImportEnabled && (
-            <p className="text-[11px] text-[#965323]">
-              CSV imports are disabled by your workspace file type settings.
-            </p>
-          )}
-          {!contactListsQuery.isLoading && contactLists.length === 0 && (
-            <p className="text-[11px] text-[#965323]">
-              Create a contact list on the{" "}
-              <Link href="/lists" className="font-semibold text-[#174f99] underline">
-                Lists page
-              </Link>{" "}
-              before importing contacts.
-            </p>
-          )}
-          {contactListsQuery.isError && (
-            <p role="alert" className="text-[11px] text-[#a84926]">
-              Contact lists could not be loaded. {requestError(contactListsQuery.error)}
-            </p>
-          )}
+          <button type="button" data-testid="button-open-contact-import" disabled={!quota.canAdd || selectedListIds.length===0 || contactListsQuery.isError} onClick={()=>setImportDialogOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"><Upload className="h-4 w-4"/>Open import workflow</button>
+          {contactListsQuery.isError && <p role="alert" className="text-[11px] text-[#a84926]">Contact lists could not be loaded. {requestError(contactListsQuery.error)}</p>}
         </div>
-        {(uploadError || importContacts.isError) && (
-          <p role="alert" data-testid="status-contact-import-error" className="mt-3 text-[12px] text-[#a84926]">
-            {uploadError ?? requestError(importContacts.error)}
-          </p>
-        )}
-        {importContacts.data && (
-          <div role="status" data-testid="status-contact-import-result" className="mt-4 rounded-md border border-[#dfe7ed] bg-[#f8fafc] p-4">
-            <p className="text-[12px] font-semibold text-[#26374a]">
-              Imported {importContacts.data.imported.toLocaleString()} contact{importContacts.data.imported === 1 ? "" : "s"}.
-              {importContacts.data.rejected.length > 0 && ` ${importContacts.data.rejected.length.toLocaleString()} row${importContacts.data.rejected.length === 1 ? " was" : "s were"} not imported.`}
-            </p>
-            {importContacts.data.rejected.length > 0 && (
-              <>
-                <button
-                  type="button"
-                  data-testid="button-download-rejected-contacts"
-                  onClick={() => downloadRejectedContactsCsv(importContacts.data.rejectedCsv)}
-                  className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-md border border-[#cbd8e3] bg-white px-3 text-[11px] font-semibold text-[#174f99] hover:bg-[#f4f8fb]"
-                >
-                  <Download className="h-4 w-4" />
-                  Download rejected rows
-                </button>
-                <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto border-t border-[#e6ebef] pt-3 text-[11px] text-[#6f7f8f]">
-                  {importContacts.data.rejected.map((row) => (
-                    <li key={`${row.rowNumber}-${row.email ?? "blank"}`} className="break-words">
-                      <span className="font-semibold text-[#465b70]">Row {row.rowNumber}</span>
-                      {row.email ? ` · ${row.email}` : ""} — {row.reason}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        )}
       </section>
+      {importDialogOpen && <ContactImportDialog listIds={selectedListIds} onClose={()=>setImportDialogOpen(false)} onChanged={()=>{void queryClient.invalidateQueries({queryKey:getListContactsQueryKey()});void queryClient.invalidateQueries({queryKey:getListContactListsQueryKey()});void queryClient.invalidateQueries({queryKey:getGetUserDashboardQueryKey()});}}/>}
     </div>
   );
 }

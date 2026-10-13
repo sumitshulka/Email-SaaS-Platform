@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
 import { and, count, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import express, {
   Router,
@@ -17,6 +19,7 @@ import {
   contactListMembersTable,
   contactListsTable,
   contactFieldOptionsTable,
+  contactImportTemplatesTable,
   contactsTable,
   db,
   subscriptionPackagesTable,
@@ -35,6 +38,67 @@ import {
 
 const router: IRouter = Router();
 export const contactImportRouter: IRouter = Router();
+
+contactImportRouter.get("/contacts/import-template", requireUserRole, async (req, res): Promise<void> => {
+  const userId = req.authUser!.id;
+  const configured = await db
+    .select({ field: contactFieldOptionsTable.fieldKey, value: contactFieldOptionsTable.value })
+    .from(contactFieldOptionsTable)
+    .where(eq(contactFieldOptionsTable.userId, userId));
+  const choices = new Map<string, string[]>();
+  for (const option of configured) {
+    const values = choices.get(option.field) ?? [];
+    values.push(option.value);
+    choices.set(option.field, values);
+  }
+  const fields = managedContactFieldLabels.filter(({ key }) => (choices.get(key)?.length ?? 0) > 0);
+  const templateId = randomUUID();
+  await db.insert(contactImportTemplatesTable).values({ id: templateId, userId })
+    .onConflictDoUpdate({
+      target: contactImportTemplatesTable.userId,
+      set: { id: templateId, importSessionId: null, issuedAt: new Date(), consumedAt: null },
+    });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Mailflow";
+  const sheet = workbook.addWorksheet("Contacts");
+  const labels: Record<string, string> = {
+    firstName: "First Name", lastName: "Last Name", email: "Email",
+    jobTitle: "Job Title", preferredLanguage: "Preferred Language",
+    lifecycleStage: "Lifecycle Stage", leadStatus: "Lead Status", leadSource: "Lead Source",
+  };
+  const fieldKeys = ["firstName", "lastName", "email", ...fields.map(({ key }) => key)];
+  sheet.addRow(fieldKeys.map((field) => labels[field]));
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174F99" } };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.columns = fieldKeys.map((field) => ({ width: field === "email" ? 34 : 24 }));
+  const lookup = workbook.addWorksheet("Allowed values");
+  lookup.state = "veryHidden";
+  fields.forEach(({ key }, fieldIndex) => {
+    const column = fieldIndex + 1;
+    const values = choices.get(key) ?? [];
+    values.forEach((value, index) => lookup.getCell(index + 1, column).value = value);
+    const colLetter = lookup.getColumn(column).letter;
+    const columnLetter = sheet.getColumn(fieldKeys.indexOf(key) + 1).letter;
+    const validations = (sheet as unknown as { dataValidations: { add: (address: string, rule: {
+      type: "list"; allowBlank: boolean; formulae: string[]; showErrorMessage: boolean;
+      errorTitle: string; error: string;
+    }) => void } }).dataValidations;
+    validations.add(`${columnLetter}2:${columnLetter}10001`, {
+      type: "list",
+      allowBlank: true,
+      formulae: [`'Allowed values'!$${colLetter}$1:$${colLetter}$${values.length}`],
+      showErrorMessage: true,
+      errorTitle: "Choose a saved value",
+      error: "Select a value from the dropdown.",
+    });
+  });
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="mailflow-contacts-template-${templateId}.xlsx"`);
+  res.send(Buffer.from(buffer));
+});
 
 const contactCsvEnrichmentFields = [
   { key: "companyName", label: "Company name", aliases: ["companyname", "company", "organization", "organisation", "employer"], maxLength: 200 },
@@ -308,47 +372,14 @@ contactImportRouter.post(
   "/contacts/import",
   requireUserRole,
   async (req, res, next): Promise<void> => {
-    if (!req.is("text/csv")) {
-      next();
-      return;
-    }
-
-    const settings = await getPlatformSettings();
-    const allowedTypes = settings.allowedContactFileTypes.map((type) =>
-      type.trim().toLowerCase().replace(/^\./, ""),
-    );
-    if (!allowedTypes.includes("csv")) {
+    if (req.is("text/csv")) {
       res.status(415).json({
-        error: "CSV imports are disabled by the platform file type settings.",
-        code: "FILE_TYPE_NOT_ALLOWED",
+        error: "CSV imports are disabled. Download and use the latest Mailflow XLSX template.",
+        code: "XLSX_TEMPLATE_REQUIRED",
       });
       return;
     }
-
-    const parseBody = express.raw({
-      type: "text/csv",
-      limit: settings.maxUploadFileSizeMb * 1024 * 1024,
-    });
-    parseBody(req, res, (error) => {
-      if (error) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "type" in error &&
-          error.type === "entity.too.large"
-        ) {
-          res.status(413).json({
-            error: `The CSV exceeds the ${settings.maxUploadFileSizeMb} MB upload limit.`,
-            code: "FILE_TOO_LARGE",
-          });
-          return;
-        }
-        next(error);
-        return;
-      }
-
-      void importContactCsv(req, res, settings).catch(next);
-    });
+    next();
   },
 );
 

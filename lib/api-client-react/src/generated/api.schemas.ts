@@ -2691,6 +2691,9 @@ export interface ContactImportRow {
 }
 
 export interface ContactImportInput {
+  templateId: string;
+  importSessionId: string;
+  finalBatch: boolean;
   /**
      * @minItems 1
      * @maxItems 200

@@ -108,6 +108,7 @@ import {
   companiesTable,
   contactFieldKeys,
   contactFieldOptionsTable,
+  contactImportTemplatesTable,
   contactLeadStatusUpdatesTable,
   contactNotesTable,
   contactListMembersTable,
@@ -2915,6 +2916,14 @@ router.post(
           };
     });
     const userId = req.authUser!.id;
+    const controls = requestBody as Record<string, unknown>;
+    const templateId = typeof controls.templateId === "string" ? controls.templateId : "";
+    const importSessionId = typeof controls.importSessionId === "string" ? controls.importSessionId : "";
+    const finalBatch = controls.finalBatch === true;
+    if (!templateId || !importSessionId) {
+      res.status(400).json({ error: "Download the latest Mailflow XLSX template and use it for this import.", code: "IMPORT_TEMPLATE_REQUIRED" });
+      return;
+    }
     const settings = await getPlatformSettings();
     const result = await db.transaction(async (tx) => {
       const [lockedUser] = await tx
@@ -2924,6 +2933,22 @@ router.post(
         .limit(1)
         .for("update");
       if (!lockedUser) return { kind: "user_missing" as const };
+      const [template] = await tx.select().from(contactImportTemplatesTable)
+        .where(eq(contactImportTemplatesTable.userId, userId)).limit(1).for("update");
+      if (!template || template.id !== templateId || template.consumedAt) {
+        return { kind: "template_invalid" as const };
+      }
+      if (template.importSessionId && template.importSessionId !== importSessionId) {
+        return { kind: "template_invalid" as const };
+      }
+      if (!template.importSessionId || finalBatch) {
+        await tx.update(contactImportTemplatesTable)
+          .set({
+            importSessionId,
+            ...(finalBatch ? { consumedAt: new Date() } : {}),
+          })
+          .where(eq(contactImportTemplatesTable.userId, userId));
+      }
       const optionSet = await getTenantContactOptionSet(tx, userId);
 
       const now = new Date();
@@ -3110,6 +3135,10 @@ router.post(
         error: "An active subscription is required to add contacts.",
         code: "SUBSCRIPTION_REQUIRED",
       });
+      return;
+    }
+    if (result.kind === "template_invalid") {
+      res.status(409).json({ error: "This template is expired, already used, or was replaced by a newer download. Download a fresh template and try again.", code: "IMPORT_TEMPLATE_EXPIRED" });
       return;
     }
     res.json(
