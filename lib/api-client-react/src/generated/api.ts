@@ -4846,6 +4846,84 @@ export const useCreateGlobalCompany = <TError = ErrorType<ApiError>,
       return useMutation(getCreateGlobalCompanyMutationOptions(options));
     }
 
+export const getDownloadGlobalCompanyImportTemplateUrl = () => {
+
+
+
+
+  return `/api/admin/global-companies/import-template`
+}
+
+/**
+ * Issues the latest template to the authenticated superadmin; downloading again invalidates the previous template.
+ * @summary Download the latest one-time XLSX global-company template
+ */
+export const downloadGlobalCompanyImportTemplate = async ( options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadGlobalCompanyImportTemplateUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadGlobalCompanyImportTemplateQueryKey = () => {
+    return [
+    `/api/admin/global-companies/import-template`
+    ] as const;
+    }
+
+
+export const getDownloadGlobalCompanyImportTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadGlobalCompanyImportTemplateQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>> = ({ signal }) => downloadGlobalCompanyImportTemplate({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadGlobalCompanyImportTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>>
+export type DownloadGlobalCompanyImportTemplateQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Download the latest one-time XLSX global-company template
+ */
+
+export function useDownloadGlobalCompanyImportTemplate<TData = Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadGlobalCompanyImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadGlobalCompanyImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getBulkImportGlobalCompaniesUrl = () => {
 
 
@@ -5997,7 +6075,7 @@ export const getImportContactsUrl = (params?: ImportContactsParams,) => {
 }
 
 /**
- * Accepts corrected JSON batches only when they belong to the authenticated tenant's latest one-time XLSX template.
+ * Accepts reviewed JSON batches only when they belong to the authenticated superadmin's latest one-time XLSX template.
  * @summary Import contacts for the authenticated tenant
  */
 export const importContacts = async (contactImportInput: ContactImportInput,

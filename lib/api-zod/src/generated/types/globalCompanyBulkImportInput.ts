@@ -8,6 +8,9 @@
 import type { GlobalCompanyBulkImportRowInput } from './globalCompanyBulkImportRowInput';
 
 export interface GlobalCompanyBulkImportInput {
+  templateId: string;
+  importSessionId: string;
+  finalBatch: boolean;
   /**
      * @minItems 1
      * @maxItems 25

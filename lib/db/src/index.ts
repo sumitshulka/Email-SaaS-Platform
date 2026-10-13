@@ -30,3 +30,4 @@ export function setTestDatabase(testDatabase: typeof productionDb): void {
 
 export * from "./schema";
 export { contactImportTemplatesTable } from "./schema/contact-import-templates";
+export { globalCompanyImportTemplatesTable } from "./schema/global-company-import-templates";

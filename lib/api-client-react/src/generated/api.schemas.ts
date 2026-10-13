@@ -1516,6 +1516,9 @@ export interface GlobalCompanyBulkImportRowInput {
 }
 
 export interface GlobalCompanyBulkImportInput {
+  templateId: string;
+  importSessionId: string;
+  finalBatch: boolean;
   /**
      * @minItems 1
      * @maxItems 25

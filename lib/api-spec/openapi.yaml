@@ -1321,6 +1321,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/global-companies/import-template:
+    get:
+      operationId: downloadGlobalCompanyImportTemplate
+      tags: [admin]
+      summary: Download the latest one-time XLSX global-company template
+      description: Issues the latest template to the authenticated superadmin; downloading again invalidates the previous template.
+      responses:
+        "200":
+          description: XLSX template
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403":
+          description: Superadmin access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /admin/global-companies/bulk-import:
     post:
       operationId: bulkImportGlobalCompanies
@@ -1656,7 +1678,7 @@ paths:
       operationId: importContacts
       tags: [sending]
       summary: Import contacts for the authenticated tenant
-      description: Accepts corrected JSON batches only when they belong to the authenticated tenant's latest one-time XLSX template.
+      description: Accepts reviewed JSON batches only when they belong to the authenticated superadmin's latest one-time XLSX template.
       parameters:
         - name: listIds
           in: query
@@ -4684,13 +4706,16 @@ components:
     GlobalCompanyBulkImportInput:
       type: object
       properties:
+        templateId: { type: string, format: uuid }
+        importSessionId: { type: string, format: uuid }
+        finalBatch: { type: boolean }
         rows:
           type: array
           minItems: 1
           maxItems: 25
           items:
             $ref: "#/components/schemas/GlobalCompanyBulkImportRowInput"
-      required: [rows]
+      required: [templateId, importSessionId, finalBatch, rows]
     GlobalCompanyBulkImportRowResult:
       type: object
       properties:

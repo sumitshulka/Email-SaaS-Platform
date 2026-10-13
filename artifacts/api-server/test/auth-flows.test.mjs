@@ -344,6 +344,13 @@ memory.public.none(`
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (company_domain_key)
   );
+  CREATE TABLE global_company_import_templates (
+    id uuid PRIMARY KEY,
+    user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    import_session_id uuid,
+    issued_at timestamptz NOT NULL DEFAULT now(),
+    consumed_at timestamptz
+  );
   CREATE TABLE company_research_jobs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     global_company_id uuid NOT NULL REFERENCES global_companies(id) ON DELETE CASCADE,
@@ -6800,6 +6807,17 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     assert.equal(customer.response.status, 403);
 
+    const template = await apiBinary("/admin/global-companies/import-template", {
+      method: "GET",
+      cookie: admin.cookie,
+    });
+    assert.equal(template.response.status, 200);
+    const templateId = template.response.headers.get("content-disposition").match(/template-([0-9a-f-]{36})\.xlsx/i)?.[1];
+    assert.ok(templateId);
+    const sessionId = randomUUID();
+    batch.templateId = templateId;
+    batch.importSessionId = sessionId;
+    batch.finalBatch = true;
     const imported = await api("/admin/global-companies/bulk-import", {
       method: "POST",
       cookie: admin.cookie,
@@ -6809,6 +6827,12 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(imported.body.imported, 1);
     assert.equal(imported.body.duplicates, 2);
     assert.equal(imported.body.invalid, 1);
+    const reused = await api("/admin/global-companies/bulk-import", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: { ...batch, rows: [batch.rows[0]] },
+    });
+    assert.equal(reused.response.status, 409);
     assert.deepEqual(
       imported.body.rows.map(({ rowNumber, status }) => ({ rowNumber, status })),
       [

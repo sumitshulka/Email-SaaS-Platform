@@ -1,4 +1,3 @@
-import Papa from 'papaparse';
 import { readSheet } from 'read-excel-file/browser';
 import type { GlobalCompanyBulkImportRowInput, GlobalCompanyInput } from '@workspace/api-client-react';
 
@@ -27,6 +26,8 @@ export type ParsedGlobalCompanyImport = {
   kind: 'csv' | 'xlsx';
   sheetNote: string;
   valid: ParsedCompanyRow[];
+  allRows: ParsedCompanyRow[];
+  unsafeRows: number[];
   errors: GlobalCompanyImportIssue[];
   totalRows: number;
   ignoredHeaders: string[];
@@ -34,6 +35,40 @@ export type ParsedGlobalCompanyImport = {
 };
 
 export class GlobalCompanyImportFileError extends Error {}
+
+export function revalidateGlobalCompanyRows(rows: ParsedCompanyRow[], unsafeRows: number[] = []) {
+  const errors: GlobalCompanyImportIssue[] = [];
+  const valid: ParsedCompanyRow[] = [];
+  const seen = new Map<string, number>();
+  for (const row of rows) {
+    const company = row.company;
+    const problems: string[] = [];
+    if (unsafeRows.includes(row.rowNumber)) problems.push("Unsupported spreadsheet cell type; edit this row to replace it with text");
+    if (!company.companyName.trim()) problems.push("Company Name is required");
+    for (const field of FIELDS) {
+      const value = String(company[field.key] ?? "").trim();
+      if (value.length > field.max) problems.push(`${field.label} exceeds ${field.max.toLocaleString()} characters`);
+    }
+    for (const key of ["companyDomain", "companyWebsiteUrl"] as const) {
+      const value = String(company[key] ?? "").trim();
+      if (value && !normalizedDomain(value)) problems.push(`${FIELDS.find(field => field.key === key)!.label} is not a valid domain or URL`);
+    }
+    const domainKey = normalizedDomain(String(company.companyDomain ?? "")) ?? normalizedDomain(String(company.companyWebsiteUrl ?? ""));
+    if (domainKey) {
+      const first = seen.get(domainKey);
+      if (first !== undefined) problems.push(`Duplicate domain from row ${first} in this file`);
+      else seen.set(domainKey, row.rowNumber);
+    }
+    if (problems.length) errors.push({
+      rowNumber: row.rowNumber,
+      companyName: company.companyName || "(blank company name)",
+      reason: problems.join("; "),
+      status: problems.some(problem => problem.startsWith("Duplicate domain")) ? "duplicate" : "invalid",
+    });
+    else valid.push(row);
+  }
+  return { valid, errors };
+}
 
 const normalizeHeader = (value: string) => value.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -79,6 +114,7 @@ function buildRows(
   if (!records.length) throw new GlobalCompanyImportFileError('The file is empty.');
   const { mapping, ignored } = mapHeaders(records[0]);
   const valid: ParsedCompanyRow[] = [];
+  const allRows: ParsedCompanyRow[] = [];
   const errors: GlobalCompanyImportIssue[] = [];
   const seenDomains = new Map<string, number>();
   let totalRows = 0;
@@ -125,6 +161,13 @@ function buildRows(
       if (firstRow !== undefined) problems.push(`Duplicate domain from row ${firstRow} in this file`);
       else seenDomains.set(domainKey, rowNumber);
     }
+    const company = Object.fromEntries(
+      FIELDS.flatMap(field => {
+        const value = values.get(field.key);
+        return value ? [[field.key, value]] : field.key === "companyName" ? [[field.key, ""]] : [];
+      }),
+    ) as unknown as GlobalCompanyInput;
+    allRows.push({ rowNumber, company });
     if (problems.length) {
       errors.push({
         rowNumber,
@@ -135,23 +178,18 @@ function buildRows(
       continue;
     }
 
-    const company = Object.fromEntries(
-      FIELDS.flatMap(field => {
-        const value = values.get(field.key);
-        return value ? [[field.key, value]] : [];
-      }),
-    ) as unknown as GlobalCompanyInput;
     valid.push({ rowNumber, company });
   }
 
   if (!totalRows) throw new GlobalCompanyImportFileError('The file has headers but no company rows.');
-  return { fileName, kind, sheetNote, valid, errors, totalRows, ignoredHeaders: ignored, warnings };
+  return { fileName, kind, sheetNote, valid, allRows, unsafeRows: [...unsafeRows], errors, totalRows, ignoredHeaders: ignored, warnings };
 }
 
 export async function parseGlobalCompanyFile(file: File): Promise<ParsedGlobalCompanyImport> {
   const lowerName = file.name.toLowerCase();
   if (file.size > GLOBAL_COMPANY_IMPORT_MAX_FILE_BYTES) throw new GlobalCompanyImportFileError('This file is larger than 5 MB. Split it into smaller files.');
   if (file.size === 0) throw new GlobalCompanyImportFileError('The file is empty.');
+  if (!lowerName.endsWith('.xlsx')) throw new GlobalCompanyImportFileError('Only the latest XLSX template downloaded from this page can be imported.');
   if (lowerName.endsWith('.xls')) throw new GlobalCompanyImportFileError('Legacy .xls files are not supported. Save the sheet as .xlsx or .csv and try again.');
 
   if (lowerName.endsWith('.xlsx')) {
@@ -181,21 +219,7 @@ export async function parseGlobalCompanyFile(file: File): Promise<ParsedGlobalCo
     );
   }
 
-  if (!lowerName.endsWith('.csv')) throw new GlobalCompanyImportFileError('Choose a .csv or .xlsx file.');
-  const text = (await file.text()).replace(/^\uFEFF/, '');
-  const result = Papa.parse<string[]>(text, {
-    delimitersToGuess: [',', ';', '\t', '|'],
-    skipEmptyLines: false,
-  });
-  const fatal = result.errors.find(error => error.type === 'Quotes');
-  if (fatal) throw new GlobalCompanyImportFileError(`The CSV has a quoting problem near row ${(fatal.row ?? 0) + 1}: ${fatal.message}.`);
-  return buildRows(
-    result.data.map(row => row.map(cell => String(cell ?? ''))),
-    file.name,
-    'csv',
-    'CSV file',
-    [],
-  );
+  throw new GlobalCompanyImportFileError('Choose the latest XLSX template downloaded from this page.');
 }
 
 export function globalCompanyImportTemplateCsv() {

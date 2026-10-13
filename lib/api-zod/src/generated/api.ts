@@ -2667,6 +2667,13 @@ export const CreateGlobalCompanyResponse = zod.object({
 
 
 /**
+ * Issues the latest template to the authenticated superadmin; downloading again invalidates the previous template.
+ * @summary Download the latest one-time XLSX global-company template
+ */
+export const DownloadGlobalCompanyImportTemplateResponse = zod.unknown()
+
+
+/**
  * @summary Import a bounded batch of company profiles into the global catalog
  */
 export const bulkImportGlobalCompaniesBodyRowsItemRowNumberMin = 2;
@@ -2697,6 +2704,9 @@ export const bulkImportGlobalCompaniesBodyRowsMax = 25;
 
 
 export const BulkImportGlobalCompaniesBody = zod.object({
+  "templateId": zod.string().uuid(),
+  "importSessionId": zod.string().uuid(),
+  "finalBatch": zod.boolean(),
   "rows": zod.array(zod.object({
   "rowNumber": zod.number().int().min(bulkImportGlobalCompaniesBodyRowsItemRowNumberMin).max(bulkImportGlobalCompaniesBodyRowsItemRowNumberMax),
   "company": zod.object({
@@ -3352,7 +3362,7 @@ export const DownloadContactImportTemplateResponse = zod.unknown()
 
 
 /**
- * Accepts corrected JSON batches only when they belong to the authenticated tenant's latest one-time XLSX template.
+ * Accepts reviewed JSON batches only when they belong to the authenticated superadmin's latest one-time XLSX template.
  * @summary Import contacts for the authenticated tenant
  */
 export const importContactsQueryListIdsMax = 100;

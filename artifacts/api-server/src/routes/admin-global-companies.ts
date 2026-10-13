@@ -12,6 +12,8 @@ import {
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { alias } from "drizzle-orm/pg-core";
+import { randomUUID } from "node:crypto";
+import ExcelJS from "exceljs";
 import {
   BulkImportGlobalCompaniesBody,
   BulkImportGlobalCompaniesResponse,
@@ -21,7 +23,7 @@ import {
   UpdateGlobalCompanyBody,
   UpdateGlobalCompanyParams,
 } from "@workspace/api-zod";
-import { companiesTable, db, globalCompaniesTable } from "@workspace/db";
+import { companiesTable, db, globalCompaniesTable, globalCompanyImportTemplatesTable } from "@workspace/db";
 import { writeAuditLog } from "../lib/audit";
 import {
   companyDomainKey,
@@ -73,6 +75,28 @@ function presentGlobalCompany(
   const { companyDomainKey: _companyDomainKey, ...publicCompany } = company;
   return publicCompany;
 }
+
+router.get("/admin/global-companies/import-template", requireSuperadmin, async (req, res): Promise<void> => {
+  const templateId = randomUUID();
+  await db.insert(globalCompanyImportTemplatesTable).values({ id: templateId, userId: req.authUser!.id })
+    .onConflictDoUpdate({
+      target: globalCompanyImportTemplatesTable.userId,
+      set: { id: templateId, importSessionId: null, issuedAt: new Date(), consumedAt: null },
+    });
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Mailflow";
+  const sheet = workbook.addWorksheet("Companies");
+  const headers = ["Company Name", "Website URL", "Domain", "Industry", "Company size", "Revenue range", "Location", "Phone number", "LinkedIn URL", "Description"];
+  sheet.addRow(headers);
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF286D5B" } };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.columns = headers.map((header) => ({ width: header === "Description" ? 44 : 24 }));
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="mailflow-global-companies-template-${templateId}.xlsx"`);
+  res.send(Buffer.from(buffer));
+});
 
 router.get(
   "/admin/global-companies",
@@ -141,6 +165,23 @@ router.post(
         error: "Each imported file row must have a unique row number.",
         code: "INVALID_INPUT",
       });
+      return;
+    }
+    const { templateId, importSessionId, finalBatch } = parsed.data;
+    const templateAccepted = await db.transaction(async (tx) => {
+      const [template] = await tx.select().from(globalCompanyImportTemplatesTable)
+        .where(eq(globalCompanyImportTemplatesTable.userId, req.authUser!.id)).limit(1).for("update");
+      if (!template || template.id !== templateId || template.consumedAt) return false;
+      if (template.importSessionId && template.importSessionId !== importSessionId) return false;
+      if (!template.importSessionId) {
+        await tx.update(globalCompanyImportTemplatesTable)
+          .set({ importSessionId })
+          .where(eq(globalCompanyImportTemplatesTable.userId, req.authUser!.id));
+      }
+      return true;
+    });
+    if (!templateAccepted) {
+      res.status(409).json({ error: "This template is no longer current or has already been used. Download a fresh template.", code: "IMPORT_TEMPLATE_INVALID" });
       return;
     }
 
@@ -259,6 +300,11 @@ router.post(
         });
       }
     });
+    if (finalBatch) {
+      await db.update(globalCompanyImportTemplatesTable)
+        .set({ consumedAt: new Date() })
+        .where(eq(globalCompanyImportTemplatesTable.userId, req.authUser!.id));
+    }
 
     const responseRows = parsed.data.rows.map((row) => results.get(row.rowNumber)!);
     const response = BulkImportGlobalCompaniesResponse.parse({
