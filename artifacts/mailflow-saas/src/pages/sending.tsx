@@ -217,7 +217,8 @@ export function SendingSettingsPage() {
   }) : blankSettings;
   useEffect(() => {
     if (!query.data || initialized) return;
-    const initial = accounts.find(account => account.isPrimary) ?? accounts[0];
+    const requestedAccountId = new URLSearchParams(window.location.search).get('accountId');
+    const initial = accounts.find(account => account.id === requestedAccountId) ?? accounts.find(account => account.isPrimary) ?? accounts[0];
     setSelectedAccountId(initial?.id ?? '');
     setForm(formForAccount(initial));
     setImapHost(initial?.provider === 'microsoft_365' ? 'outlook.office365.com' : initial?.provider === 'gmail' || initial?.provider === 'google_workspace' ? 'imap.gmail.com' : '');
@@ -2791,7 +2792,9 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
               {scanInbox.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}{scanInbox.isPending ? 'Scanning inbox…' : 'Scan inbox now'}
             </Button>
           </div>
-          {!inboxConnected && <p className="mt-3 rounded-md bg-[#f5f8fb] p-3 text-[11px] text-[#687587]">Connect this campaign’s sender inbox in Sender settings before scanning.</p>}
+          {!senderAccountsQuery.isLoading && !inboxConnected && <div className="mt-3 rounded-md bg-[#f5f8fb] p-3 text-[11px] leading-5 text-[#687587]">
+            {campaign.senderAccountId ? <>To connect it, open <Link href={`/sending-settings?accountId=${encodeURIComponent(campaign.senderAccountId)}`} data-testid="link-campaign-sender-inbox-settings" className="font-semibold text-[#245b9b] underline">Email Setup</Link>. The campaign’s sender will be selected. Under <b>Check this sender’s inbox</b>, enter the incoming IMAP server (for example, <span className="font-mono">imap.gmail.com</span> or <span className="font-mono">outlook.office365.com</span>), then click <b>Check inbox now</b>. This uses the saved sender username and password over secure IMAP port 993. Once the check succeeds, return here and scan the campaign.</> : <>This campaign has no sender account linked, so it cannot be scanned. Edit the campaign to select a sender account first.</>}
+          </div>}
           <label className="mt-3 flex items-start gap-2 text-[11px] leading-5 text-[#586778]"><input type="checkbox" checked={storeReplyContent} onChange={event => setStoreReplyContent(event.target.checked)} className="mt-1 accent-[#174f99]"/><span>Retrieve and store reply text for future analysis. Off by default; no message text is stored unless selected.</span></label>
           {scanInbox.isSuccess && scanInbox.data && <p role="status" data-testid="text-campaign-inbox-scan-result" className="mt-3 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] p-3 text-[11px] leading-5 text-[#31674b]">Scanned {scanInbox.data.messagesChecked} messages. Found {scanInbox.data.bounceReportsFound} bounce report(s), applied {scanInbox.data.bounceReportsApplied}, and matched {scanInbox.data.repliesFound} reply/replies.</p>}
           {scanInbox.isError && <p role="alert" className="mt-3 rounded-md bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">Inbox scan failed. Confirm the sender inbox connection and retry.</p>}
