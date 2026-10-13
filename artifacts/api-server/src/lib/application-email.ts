@@ -161,7 +161,9 @@ export async function sendTenantEmail(
     const info = await transport.sendMail({
       from: { name: configuration.fromName, address: configuration.fromEmail },
       to,
-      replyTo: configuration.replyTo ?? undefined,
+      // Campaign replies must return to the mailbox that sent the message so
+      // inbox monitoring can associate replies with this sender account.
+      replyTo: configuration.fromEmail,
       subject,
       text,
       ...(html ? { html } : {}),

@@ -1358,7 +1358,13 @@ function AdminSettingsPage() {
           />
           <Field label="From name" value={smtp.fromName || ''} onChange={value => setSmtp(state => ({ ...state, fromName: value }))} testId="input-smtp-from-name" required/>
           <Field label="From email" value={smtp.fromEmail || ''} onChange={value => setSmtp(state => ({ ...state, fromEmail: value }))} testId="input-smtp-from-email" type="email" required/>
-          <Field label="Reply-to address" value={smtp.replyTo || ''} onChange={value => setSmtp(state => ({ ...state, replyTo: value }))} testId="input-smtp-reply-to" type="email"/>
+          <div className="space-y-1.5">
+            <label className="block text-[12px] font-medium text-[#334155]">Reply-to address</label>
+            <div data-testid="text-smtp-reply-to" className="flex min-h-10 items-center rounded-md border border-[#d8dfe6] bg-[#f5f7f9] px-3 text-[13px] text-[#526276]">
+              {smtp.fromEmail || 'Set a From email address'}
+            </div>
+            <p className="text-[10px] leading-4 text-[#657487]">Campaign replies go to the same mailbox used to send.</p>
+          </div>
           <div className="sm:col-span-2">
             <FormError message={saveEmail.isError ? getError(saveEmail.error) : undefined}/>
             <div className="mt-3 flex justify-end">

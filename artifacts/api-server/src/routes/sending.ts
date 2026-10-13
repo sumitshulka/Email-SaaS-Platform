@@ -1200,7 +1200,7 @@ router.post("/sending/accounts", requireUserRole, async (req, res): Promise<void
         passwordEncrypted: encryptSecret(suppliedPassword),
         fromName: parsed.data.fromName.trim(),
         fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
-        replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
+        replyTo: parsed.data.fromEmail.trim().toLowerCase(),
       })
       .returning();
     return { account: created! };
@@ -1255,7 +1255,7 @@ router.patch("/sending/accounts/:accountId", requireUserRole, async (req, res): 
       passwordEncrypted: suppliedPassword ? encryptSecret(suppliedPassword) : existing.passwordEncrypted,
       fromName: parsed.data.fromName.trim(),
       fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
-      replyTo: parsed.data.replyTo?.trim().toLowerCase() ?? null,
+      replyTo: parsed.data.fromEmail.trim().toLowerCase(),
       verifiedAt: null,
       connectionCheckStatus: null,
       connectionCheckAt: null,
