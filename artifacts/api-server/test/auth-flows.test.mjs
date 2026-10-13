@@ -6854,6 +6854,21 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal("contacts" in catalog.body.globalCompanies[0], false);
     assert.equal("contactCount" in catalog.body.globalCompanies[0], false);
 
+    const deniedExport = await apiBinary("/admin/global-companies/export", {
+      cookie: owner.cookie,
+      body: { columns: ["companyName"] },
+    });
+    assert.equal(deniedExport.response.status, 403);
+    const exported = await apiBinary("/admin/global-companies/export", {
+      cookie: admin.cookie,
+      body: { search: "new-bulk-company", columns: ["companyName", "companyDomain"] },
+    });
+    assert.equal(exported.response.status, 200);
+    assert.match(exported.response.headers.get("content-type"), /spreadsheetml\.sheet/);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.bytes);
+    assert.equal(workbook.getWorksheet("Global companies").getRow(2).getCell(1).value, "New Bulk Company");
+
     const customerDirectory = await api(
       "/companies/global/search?search=new-bulk-company",
       { cookie: owner.cookie },

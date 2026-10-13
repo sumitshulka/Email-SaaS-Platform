@@ -1526,6 +1526,35 @@ export interface GlobalCompanyBulkImportInput {
   rows: GlobalCompanyBulkImportRowInput[];
 }
 
+export type AdminGlobalCompanyExportInputColumnsItem = typeof AdminGlobalCompanyExportInputColumnsItem[keyof typeof AdminGlobalCompanyExportInputColumnsItem];
+
+
+export const AdminGlobalCompanyExportInputColumnsItem = {
+  id: 'id',
+  companyName: 'companyName',
+  companyDomain: 'companyDomain',
+  companyWebsiteUrl: 'companyWebsiteUrl',
+  companyIndustry: 'companyIndustry',
+  companySize: 'companySize',
+  companyRevenueRange: 'companyRevenueRange',
+  companyLocation: 'companyLocation',
+  companyPhoneNumber: 'companyPhoneNumber',
+  companyLinkedinUrl: 'companyLinkedinUrl',
+  companyDescription: 'companyDescription',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+} as const;
+
+export interface AdminGlobalCompanyExportInput {
+  /** @maxLength 200 */
+  search?: string;
+  /**
+     * @minItems 1
+     * @maxItems 13
+     */
+  columns: AdminGlobalCompanyExportInputColumnsItem[];
+}
+
 export type GlobalCompanyBulkImportRowResultStatus = typeof GlobalCompanyBulkImportRowResultStatus[keyof typeof GlobalCompanyBulkImportRowResultStatus];
 
 

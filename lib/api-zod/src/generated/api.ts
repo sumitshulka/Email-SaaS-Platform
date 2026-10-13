@@ -2674,6 +2674,23 @@ export const DownloadGlobalCompanyImportTemplateResponse = zod.unknown()
 
 
 /**
+ * @summary Stream the filtered global company catalog as Excel
+ */
+export const exportAdminGlobalCompaniesBodySearchMax = 200;
+
+export const exportAdminGlobalCompaniesBodyColumnsMax = 13;
+
+
+
+export const ExportAdminGlobalCompaniesBody = zod.object({
+  "search": zod.string().max(exportAdminGlobalCompaniesBodySearchMax).optional(),
+  "columns": zod.array(zod.enum(['id', 'companyName', 'companyDomain', 'companyWebsiteUrl', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyLocation', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyDescription', 'createdAt', 'updatedAt'])).min(1).max(exportAdminGlobalCompaniesBodyColumnsMax)
+})
+
+export const ExportAdminGlobalCompaniesResponse = zod.unknown()
+
+
+/**
  * @summary Import a bounded batch of company profiles into the global catalog
  */
 export const bulkImportGlobalCompaniesBodyRowsItemRowNumberMin = 2;

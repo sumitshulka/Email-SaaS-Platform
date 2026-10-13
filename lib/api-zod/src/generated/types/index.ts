@@ -30,6 +30,8 @@ export * from './adminFinancePaymentPage';
 export * from './adminFinancePaymentStatus';
 export * from './adminFinanceSubscription';
 export * from './adminFinanceSubscriptionStatus';
+export * from './adminGlobalCompanyExportInput';
+export * from './adminGlobalCompanyExportInputColumnsItem';
 export * from './adminNotification';
 export * from './adminNotificationInput';
 export * from './adminNotificationsResponse';

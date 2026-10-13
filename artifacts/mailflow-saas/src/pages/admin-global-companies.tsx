@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Building2, Check, CircleAlert, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Building2, Check, CircleAlert, Download, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import {
   getListAdminGlobalCompaniesQueryKey, useCreateGlobalCompany, useDeleteGlobalCompany,
   useListAdminGlobalCompanies, useUpdateGlobalCompany,
@@ -75,11 +75,37 @@ export function AdminGlobalCompaniesPage() {
   const [deleteRecord, setDeleteRecord] = useState<GlobalCompany | null>(null);
   const [notice, setNotice] = useState('');
   const [intelRecord, setIntelRecord] = useState<GlobalCompany | null>(null);
+  const [exporting, setExporting] = useState(false);
   const params = useMemo<ListAdminGlobalCompaniesParams>(() => ({ search: search.trim() || undefined, page, pageSize: 10 }), [search, page]);
   const query = useListAdminGlobalCompanies(params, { query: { queryKey: getListAdminGlobalCompaniesQueryKey(params), placeholderData: previous => previous } });
   const remove = useDeleteGlobalCompany();
   const rows = query.data?.globalCompanies ?? [];
   const pages = Math.max(1, Math.ceil((query.data?.total ?? 0) / 10));
+  const downloadGlobalCompanies = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const response = await fetch('/api/admin/global-companies/export', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          search: search.trim(),
+          columns: ['companyName', 'companyDomain', 'companyWebsiteUrl', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyLocation', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyDescription', 'createdAt', 'updatedAt'],
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error || 'The company export could not be generated.');
+      }
+      const blob = await response.blob();
+      const name = response.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/i)?.[1] ?? 'global-companies.xlsx';
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The company export could not be generated.');
+    } finally { setExporting(false); }
+  };
   const deleteCurrent = () => {
     if (!deleteRecord) return;
     remove.mutate({ globalCompanyId: deleteRecord.id }, {
@@ -90,7 +116,7 @@ export function AdminGlobalCompaniesPage() {
   if (query.isLoading && !query.data) return <div aria-label="Loading global catalog" className="space-y-5"><div className="h-8 w-64 animate-pulse rounded bg-[#e7efea]"/><div className="h-20 animate-pulse rounded-xl bg-[#eaf1ed]"/><div className="h-80 animate-pulse rounded-xl bg-[#eaf1ed]"/></div>;
   if (query.isError && !query.data) return <section className={`${panel} p-7`} role="alert"><div className="flex items-center gap-2 text-sm font-bold text-[#29443b]"><CircleAlert className="h-4 w-4 text-[#bf7043]"/>Global catalog could not be loaded</div><p className="mt-2 text-xs text-[#718078]">No catalog records were changed.</p><button type="button" onClick={() => void query.refetch()} className="mt-4 rounded-md border border-[#cad8d0] px-3 py-2 text-xs font-semibold text-[#315c4e]">Retry</button></section>;
   return <main className="fade-in mx-auto max-w-[1180px]">
-     <header className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><div className="mono mb-2 text-[9px] uppercase tracking-[.18em] text-[#598274]">PLATFORM / COMPANY CATALOG</div><h1 className="display text-[30px] font-extrabold leading-tight tracking-[-.04em] text-[#1c3832]">Global companies</h1><p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#687c73]">Maintain trusted company profiles customers can add to their own workspaces.</p></div><div className="flex flex-wrap gap-2"><Link href="/admin/company-intelligence" data-testid="link-company-intelligence" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#cddbd3] bg-white px-4 text-[11px] font-bold text-[#416b5b] no-underline hover:bg-[#f5f9f6]"><Sparkles className="h-4 w-4"/>Intelligence monitoring</Link><button type="button" onClick={() => { setNotice(''); setImportOpen(true); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#cddbd3] bg-white px-4 text-[11px] font-bold text-[#416b5b] hover:bg-[#f5f9f6]"><Upload className="h-4 w-4"/>Bulk upload</button><button type="button" onClick={() => { setNotice(''); setFormRecord('new'); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#286d5b] px-4 text-[11px] font-bold text-white hover:bg-[#205a4b]"><Plus className="h-4 w-4"/>New company</button></div></header>
+      <header className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><div className="mono mb-2 text-[9px] uppercase tracking-[.18em] text-[#598274]">PLATFORM / COMPANY CATALOG</div><h1 className="display text-[30px] font-extrabold leading-tight tracking-[-.04em] text-[#1c3832]">Global companies</h1><p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#687c73]">Maintain trusted company profiles customers can add to their own workspaces.</p></div><div className="flex flex-wrap gap-2"><Link href="/admin/company-intelligence" data-testid="link-company-intelligence" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#cddbd3] bg-white px-4 text-[11px] font-bold text-[#416b5b] no-underline hover:bg-[#f5f9f6]"><Sparkles className="h-4 w-4"/>Intelligence monitoring</Link><button type="button" onClick={() => void downloadGlobalCompanies()} disabled={exporting} data-testid="button-download-global-companies" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#cddbd3] bg-white px-4 text-[11px] font-bold text-[#416b5b] hover:bg-[#f5f9f6] disabled:opacity-55"><Download className="h-4 w-4"/>{exporting ? 'Preparing…' : 'Download companies'}</button><button type="button" onClick={() => { setNotice(''); setImportOpen(true); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#cddbd3] bg-white px-4 text-[11px] font-bold text-[#416b5b] hover:bg-[#f5f9f6]"><Upload className="h-4 w-4"/>Bulk upload</button><button type="button" onClick={() => { setNotice(''); setFormRecord('new'); }} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#286d5b] px-4 text-[11px] font-bold text-white hover:bg-[#205a4b]"><Plus className="h-4 w-4"/>New company</button></div></header>
     {notice && <div role="status" className="mb-4 rounded-lg border border-[#d3e5dc] bg-[#eff7f2] px-4 py-3 text-[11px] text-[#456e5e]">{notice}<button type="button" aria-label="Dismiss notice" onClick={() => setNotice('')} className="float-right font-bold">Dismiss</button></div>}
     <section className={`${panel} overflow-hidden`}>
       <div className="flex flex-col gap-3 border-b border-[#e5ede8] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h2 className="text-[13px] font-bold text-[#29443b]">Catalog records</h2><p className="mt-1 text-[10px] text-[#819088]">{(query.data?.total ?? 0).toLocaleString()} profiles · no workspace contact data</p></div><label className="relative block w-full sm:max-w-[320px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#80938a]"/><input aria-label="Search global company catalog" value={search} onChange={event => { setSearch(event.target.value); setPage(1); setNotice(''); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-lg border border-[#d7e3dc] bg-[#f8fbf9] pl-9 pr-3 text-[11px] text-[#29443b] outline-none focus:border-[#488875]"/></label></div>

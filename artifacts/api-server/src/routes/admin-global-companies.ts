@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   inArray,
   ilike,
   isNull,
@@ -17,6 +18,7 @@ import ExcelJS from "exceljs";
 import {
   BulkImportGlobalCompaniesBody,
   BulkImportGlobalCompaniesResponse,
+  ExportAdminGlobalCompaniesBody,
   CreateGlobalCompanyBody,
   DeleteGlobalCompanyParams,
   ListAdminGlobalCompaniesQueryParams,
@@ -145,6 +147,99 @@ router.get(
     });
   },
 );
+
+const globalCompanyExportHeaders = {
+  id: "Company ID",
+  companyName: "Company name",
+  companyDomain: "Domain",
+  companyWebsiteUrl: "Website",
+  companyIndustry: "Industry",
+  companySize: "Company size",
+  companyRevenueRange: "Revenue range",
+  companyLocation: "Location",
+  companyPhoneNumber: "Phone",
+  companyLinkedinUrl: "LinkedIn URL",
+  companyDescription: "Description",
+  createdAt: "Date added",
+  updatedAt: "Last updated",
+} as const;
+
+router.post("/admin/global-companies/export", requireSuperadmin, async (req, res): Promise<void> => {
+  const parsed = ExportAdminGlobalCompaniesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Choose at least one valid company field to export.", code: "INVALID_INPUT" });
+    return;
+  }
+  const columns = parsed.data.columns;
+  const conditions = [];
+  for (const term of (parsed.data.search ?? "").trim().split(/\s+/).filter(Boolean)) {
+    const pattern = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
+    conditions.push(or(
+      ilike(globalCompaniesTable.companyName, pattern),
+      ilike(globalCompaniesTable.companyDomain, pattern),
+      ilike(globalCompaniesTable.companyWebsiteUrl, pattern),
+      ilike(globalCompaniesTable.companyIndustry, pattern),
+      ilike(globalCompaniesTable.companyLocation, pattern),
+    )!);
+  }
+  type Column = typeof columns[number];
+  const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: true, useSharedStrings: false });
+  let sheetNumber = 1;
+  let sheet = workbook.addWorksheet("Global companies", { views: [{ state: "frozen", ySplit: 1 }] });
+  sheet.columns = columns.map(key => ({ header: globalCompanyExportHeaders[key], key, width: key === "companyDescription" ? 48 : 24 }));
+  sheet.getRow(1).font = { bold: true, color: { argb: "FF1E3B32" } };
+  sheet.getRow(1).commit();
+  try {
+    res.status(200).set({
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="global-companies-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+      "Cache-Control": "private, no-store",
+    });
+    let cursor: { companyName: string; id: string } | null = null;
+    let worksheetRows = 0;
+    while (true) {
+      const where = [...conditions];
+      if (cursor) where.push(or(
+        gt(globalCompaniesTable.companyName, cursor.companyName),
+        and(eq(globalCompaniesTable.companyName, cursor.companyName), gt(globalCompaniesTable.id, cursor.id))!,
+      )!);
+      const batch = await db.select().from(globalCompaniesTable).where(where.length ? and(...where) : undefined)
+        .orderBy(asc(globalCompaniesTable.companyName), asc(globalCompaniesTable.id)).limit(500);
+      if (!batch.length) break;
+      for (const company of batch) {
+        const values = {
+          id: company.id, companyName: company.companyName, companyDomain: company.companyDomain,
+          companyWebsiteUrl: company.companyWebsiteUrl, companyIndustry: company.companyIndustry,
+          companySize: company.companySize, companyRevenueRange: company.companyRevenueRange,
+          companyLocation: company.companyLocation, companyPhoneNumber: company.companyPhoneNumber,
+          companyLinkedinUrl: company.companyLinkedinUrl, companyDescription: company.companyDescription,
+          createdAt: company.createdAt, updatedAt: company.updatedAt,
+        };
+        const row: Record<Column, unknown> = Object.fromEntries(columns.map(key => [key, values[key]])) as Record<Column, unknown>;
+        sheet.addRow(row).commit();
+        worksheetRows++;
+        if (worksheetRows >= 1_048_575) {
+          sheet.commit();
+          sheetNumber += 1;
+          sheet = workbook.addWorksheet(`Global companies ${sheetNumber}`, { views: [{ state: "frozen", ySplit: 1 }] });
+          sheet.columns = columns.map(key => ({ header: globalCompanyExportHeaders[key], key, width: key === "companyDescription" ? 48 : 24 }));
+          sheet.getRow(1).font = { bold: true, color: { argb: "FF1E3B32" } };
+          sheet.getRow(1).commit();
+          worksheetRows = 0;
+        }
+      }
+      const last = batch[batch.length - 1]!;
+      cursor = { companyName: last.companyName, id: last.id };
+      if (batch.length < 500) break;
+    }
+    sheet.commit();
+    await workbook.commit();
+  } catch (error) {
+    req.log.error({ errorName: error instanceof Error ? error.name : "UnknownError" }, "Global company workbook export failed");
+    if (!res.headersSent) res.status(500).json({ error: "The global company workbook could not be created. Try again.", code: "EXPORT_FAILED" });
+    else res.destroy(error instanceof Error ? error : new Error("Global company export failed"));
+  }
+});
 
 router.post(
   "/admin/global-companies/bulk-import",
