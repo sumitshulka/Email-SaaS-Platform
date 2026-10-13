@@ -338,20 +338,38 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
 const platformNavigationGroups: SidebarNavigationGroup[] = [
   {
     title: null,
+    items: [{ href: '/admin', label: 'Overview', icon: Gauge }],
+  },
+  {
+    title: 'Accounts & intelligence',
     items: [
-      { href: '/admin', label: 'Overview', icon: Gauge },
       { href: '/admin/users', label: 'Accounts', icon: Users },
-      { href: '/admin/notifications', label: 'Notifications', icon: Bell },
-      { href: '/admin/support', label: 'Support inbox', icon: LifeBuoy },
+      { href: '/admin/global-companies', label: 'Global companies', icon: Building2 },
+      { href: '/admin/company-intelligence', label: 'Company intelligence', icon: BrainCircuit },
+    ],
+  },
+  {
+    title: 'Billing & plans',
+    items: [
       { href: '/admin/billing', label: 'Billing & PG setup', icon: CreditCard },
       { href: '/admin/packages', label: 'Packages', icon: Package },
       { href: '/admin/finance', label: 'Finance', icon: ReceiptText },
+    ],
+  },
+  {
+    title: 'Notifications & support',
+    items: [
+      { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { href: '/admin/support', label: 'Support inbox', icon: LifeBuoy },
+    ],
+  },
+  {
+    title: 'Platform configuration',
+    items: [
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
       { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
       { href: '/admin/ai-provider', label: 'AI integration', icon: BrainCircuit },
       { href: '/admin/contact-intent', label: 'Intent questionnaire', icon: BrainCircuit },
-      { href: '/admin/global-companies', label: 'Global companies', icon: Building2 },
-      { href: '/admin/company-intelligence', label: 'Company intelligence', icon: BrainCircuit },
     ],
   },
 ];
