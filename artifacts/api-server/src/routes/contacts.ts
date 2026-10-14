@@ -51,7 +51,25 @@ contactImportRouter.get("/contacts/import-template", requireUserRole, async (req
     values.push(option.value);
     choices.set(option.field, values);
   }
-  const fields = managedContactFieldLabels.filter(({ key }) => (choices.get(key)?.length ?? 0) > 0);
+  const availableFields = managedContactFieldLabels.filter(({ key }) => (choices.get(key)?.length ?? 0) > 0);
+  const requestedFields = req.query.fields;
+  let selectedFields: Set<string>;
+  if (requestedFields === undefined) {
+    selectedFields = new Set(availableFields.map(({ key }) => key));
+  } else if (typeof requestedFields === "string") {
+    selectedFields = new Set(requestedFields.split(",").map((field) => field.trim()).filter(Boolean));
+    const invalidFields = [...selectedFields].filter(
+      (field) => !availableFields.some(({ key }) => key === field),
+    );
+    if (invalidFields.length) {
+      res.status(400).json({ error: "Choose only contact fields with saved values." });
+      return;
+    }
+  } else {
+    res.status(400).json({ error: "Choose contact fields from the available list." });
+    return;
+  }
+  const fields = availableFields.filter(({ key }) => selectedFields.has(key));
   const templateId = randomUUID();
   await db.insert(contactImportTemplatesTable).values({ id: templateId, userId })
     .onConflictDoUpdate({
@@ -64,10 +82,11 @@ contactImportRouter.get("/contacts/import-template", requireUserRole, async (req
   const sheet = workbook.addWorksheet("Contacts");
   const labels: Record<string, string> = {
     firstName: "First Name", lastName: "Last Name", email: "Email",
+    phoneNumber: "Phone Number", mobilePhone: "Mobile Number",
     jobTitle: "Job Title", preferredLanguage: "Preferred Language",
     lifecycleStage: "Lifecycle Stage", leadStatus: "Lead Status", leadSource: "Lead Source",
   };
-  const fieldKeys = ["firstName", "lastName", "email", ...fields.map(({ key }) => key)];
+  const fieldKeys = ["firstName", "lastName", "email", "phoneNumber", "mobilePhone", ...fields.map(({ key }) => key)];
   sheet.addRow(fieldKeys.map((field) => labels[field]));
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174F99" } };

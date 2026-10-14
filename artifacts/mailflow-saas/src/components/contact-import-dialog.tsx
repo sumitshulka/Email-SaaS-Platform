@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, LoaderCircle, Upload, X } from 'lucide-react';
 import { useGetContactFieldOptions, useImportContacts } from '@workspace/api-client-react';
 import type { ContactImportInput } from '@workspace/api-client-react';
 import {
-  BATCH_SIZE, ImportFileError, MAX_ROWS, OPTIONAL_IMPORT_FIELDS, parseContactFile,
-  type ParsedImport, type RowError,
+  BATCH_SIZE, ImportFileError, IMPORT_FIELD_LABELS, MAX_ROWS, OPTIONAL_IMPORT_FIELDS, parseContactFile,
+  type ImportField, type ParsedImport, type RowError,
 } from '@/lib/contact-import';
 
 type Report = { imported: number; duplicate: number; invalid: number; limitReached: number; notSubmitted: number; unconfirmed: number; issues: RowError[]; quotaText: string; failure: string | null };
@@ -32,6 +32,14 @@ export function ContactImportDialog({ onClose, onChanged, listIds = [] }: { onCl
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [report, setReport] = useState<Report | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
+  const [selectedTemplateFields, setSelectedTemplateFields] = useState<string[] | null>(null);
+  const availableTemplateFields = [...new Set((fieldOptionsQuery.data?.options ?? []).map(option => option.field))];
+
+  useEffect(() => {
+    if (fieldOptionsQuery.data && selectedTemplateFields === null) {
+      setSelectedTemplateFields(availableTemplateFields);
+    }
+  }, [fieldOptionsQuery.data, selectedTemplateFields]);
 
   const reset = () => { if (running || reading) return; setParsed(null); setTemplateId(null); setFileError(null); setReport(null); setSubscribed(false); setPreviewPage(0); if (fileRef.current) fileRef.current.value = ''; };
   const close = () => { if (!running && !reading) onClose(); };
@@ -97,7 +105,8 @@ export function ContactImportDialog({ onClose, onChanged, listIds = [] }: { onCl
   const downloadTemplate = async () => {
     setFileError(null);
     try {
-      const response = await fetch('/api/contacts/import-template', { credentials: 'include' });
+      const query = new URLSearchParams({ fields: (selectedTemplateFields ?? availableTemplateFields).join(',') });
+      const response = await fetch(`/api/contacts/import-template?${query.toString()}`, { credentials: 'include' });
       if (!response.ok) throw new Error('The template could not be downloaded. Please try again.');
       const blob = await response.blob();
       const name = response.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/i)?.[1] ?? 'mailflow-contacts-template.xlsx';
@@ -177,9 +186,26 @@ export function ContactImportDialog({ onClose, onChanged, listIds = [] }: { onCl
 
       {!report && <>
         <div className="rounded-md border border-[#e3e7eb] bg-[#fafbfc] p-4 text-[12px] leading-5 text-[#5f6e7f]">
-          <p>Required columns: <b>First Name, Last Name, Email</b>. The template includes only contact fields with saved list values; those columns have dropdowns in Excel.</p>
+          <p>Every template includes <b>First Name, Last Name, Email, Phone Number, and Mobile Number</b>. Choose any additional fields with saved values to include as dropdown columns.</p>
+          {fieldOptionsQuery.isLoading && <p className="mt-2 text-[#788392]">Loading available contact fields…</p>}
+          {fieldOptionsQuery.isError && <p role="alert" className="mt-2 text-[#99501e]">Could not load available fields. <button type="button" onClick={() => void fieldOptionsQuery.refetch()} className="font-semibold underline">Retry</button> the field list before downloading.</p>}
+          {availableTemplateFields.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {availableTemplateFields.map(field => <label key={field} className="flex items-center gap-2 text-[11px] text-[#445267]">
+              <input
+                type="checkbox"
+                data-testid={`checkbox-template-field-${field}`}
+                checked={(selectedTemplateFields ?? availableTemplateFields).includes(field)}
+                onChange={event => setSelectedTemplateFields(current => {
+                  const selected = current ?? availableTemplateFields;
+                  return event.target.checked ? [...new Set([...selected, field])] : selected.filter(item => item !== field);
+                })}
+                className="accent-[#174f99]"
+              />
+              {IMPORT_FIELD_LABELS[field as ImportField] ?? field}
+            </label>)}
+          </div>}
           <p className="mt-1">Download a fresh template for each import. A new download replaces the previous one, and each template can be imported once. Limits: 5 MB and {MAX_ROWS.toLocaleString()} rows. Keep the downloaded filename unchanged.</p>
-          <button type="button" data-testid="button-download-template" onClick={() => void downloadTemplate()} className="mt-2 inline-flex items-center gap-1.5 font-semibold text-[#245b9b] hover:underline"><Download className="h-3.5 w-3.5"/>Download XLSX template</button>
+          <button type="button" data-testid="button-download-template" disabled={fieldOptionsQuery.isLoading || fieldOptionsQuery.isError} onClick={() => void downloadTemplate()} className="mt-2 inline-flex items-center gap-1.5 font-semibold text-[#245b9b] hover:underline disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-3.5 w-3.5"/>Download XLSX template</button>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input ref={fileRef} data-testid="input-import-file" type="file" accept=".xlsx" disabled={running || reading} onChange={e => void pick(e.target.files?.[0])} className="sr-only" id="contact-import-file"/>
@@ -194,7 +220,47 @@ export function ContactImportDialog({ onClose, onChanged, listIds = [] }: { onCl
         <div className="grid grid-cols-3 gap-3"><Stat id="text-preview-total" label="Rows found" value={parsed.totalRows}/><Stat id="text-preview-valid" label="Ready to import" value={parsed.valid.length} tone="#397050"/><Stat id="text-preview-errors" label="Rows with errors" value={parsed.errors.length} tone="#a95218"/></div>
         {parsed.warnings.map(w => <p key={w} className="rounded-md bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{w}</p>)}
         {parsed.ignoredHeaders.length > 0 && <p className="text-[11px] text-[#788392]">Ignored columns: {parsed.ignoredHeaders.join(', ')}</p>}
-        {parsed.allRows.length > 0 && <div className="overflow-x-auto rounded-md border border-[#e3e7eb]"><table className="w-full min-w-[760px] text-left text-[11px]"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.1em] text-[#647184]"><tr><th className="px-2 py-2">Row</th><th className="px-2 py-2">First name</th><th className="px-2 py-2">Last name</th><th className="px-2 py-2">Email</th>{(fieldOptionsQuery.data?.options ?? []).filter((item,index,arr)=>arr.findIndex(other=>other.field===item.field)===index).map(option=><th className="px-2 py-2" key={option.field}>{option.field}</th>)}<th className="px-2 py-2">Review</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{parsed.allRows.slice(previewPage * 100, previewPage * 100 + 100).map(row => { const issue=parsed.errors.find(error=>error.rowNumber===row.rowNumber); return <tr key={row.rowNumber} className={issue?'bg-[#fffaf5]':''}><td className="px-2 py-2 text-[#788392]">{row.rowNumber}</td>{(['firstName','lastName','email'] as const).map(field=><td key={field} className="px-1 py-1"><input aria-label={`${field} row ${row.rowNumber}`} value={row[field] ?? ''} onChange={e=>editRow(row.rowNumber,field,e.target.value)} className="w-full min-w-[130px] rounded border border-[#d9e0e7] px-2 py-1.5"/></td>)}{(fieldOptionsQuery.data?.options ?? []).filter((item,index,arr)=>arr.findIndex(other=>other.field===item.field)===index).map(option=>{const options=(fieldOptionsQuery.data?.options ?? []).filter(item=>item.field===option.field); const value=row[option.field as keyof typeof row]; return <td key={option.field} className="px-1 py-1"><select aria-label={`${option.field} row ${row.rowNumber}`} value={typeof value==='string'?value:''} onChange={e=>editRow(row.rowNumber,option.field,e.target.value)} className="min-w-[145px] rounded border border-[#d9e0e7] bg-white px-2 py-1.5"><option value="">—</option>{typeof value==='string'&&value&&!options.some(item=>item.value===value)&&<option value={value}>Invalid: {value}</option>}{options.map(item=><option key={item.id} value={item.value}>{item.value}</option>)}</select></td>})}<td className={`max-w-[260px] px-2 py-2 ${issue?'font-medium text-[#99501e]':'text-[#397050]'}`}>{issue?.reason ?? 'Ready'}</td></tr>})}</tbody></table><div className="flex items-center justify-between border-t border-[#e3e7eb] px-3 py-2 text-[11px] text-[#657386]"><span>Rows {previewPage*100+1}–{Math.min((previewPage+1)*100,parsed.totalRows)} of {parsed.totalRows}</span><div className="flex gap-2"><button type="button" disabled={previewPage===0} onClick={()=>setPreviewPage(page=>page-1)} className="rounded border px-2 py-1 disabled:opacity-40">Previous</button><button type="button" disabled={(previewPage+1)*100>=parsed.allRows.length} onClick={()=>setPreviewPage(page=>page+1)} className="rounded border px-2 py-1 disabled:opacity-40">Next</button></div></div></div>}
+        {parsed.allRows.length > 0 && <div className="overflow-x-auto rounded-md border border-[#e3e7eb]">
+          <table className="w-full min-w-[760px] text-left text-[11px]">
+            <thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.1em] text-[#647184]">
+              <tr>
+                <th className="px-2 py-2">Row</th>
+                {(['firstName', 'lastName', 'email'] as const).map(field => <th className="px-2 py-2" key={field}>{IMPORT_FIELD_LABELS[field]}</th>)}
+                {parsed.importFields.filter(field => !(['firstName', 'lastName', 'email'] as ImportField[]).includes(field)).map(field => <th className="px-2 py-2" key={field}>{IMPORT_FIELD_LABELS[field]}</th>)}
+                <th className="px-2 py-2">Review</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#edf0f2]">
+              {parsed.allRows.slice(previewPage * 100, previewPage * 100 + 100).map(row => {
+                const issue = parsed.errors.find(error => error.rowNumber === row.rowNumber);
+                const optionalFields = parsed.importFields.filter(field => !(['firstName', 'lastName', 'email'] as ImportField[]).includes(field));
+                return <tr key={row.rowNumber} className={issue ? 'bg-[#fffaf5]' : ''}>
+                  <td className="px-2 py-2 text-[#788392]">{row.rowNumber}</td>
+                  {(['firstName', 'lastName', 'email'] as const).map(field => <td key={field} className="px-1 py-1"><input aria-label={`${field} row ${row.rowNumber}`} value={row[field] ?? ''} onChange={event => editRow(row.rowNumber, field, event.target.value)} className="w-full min-w-[130px] rounded border border-[#d9e0e7] px-2 py-1.5"/></td>)}
+                  {optionalFields.map(field => {
+                    const options = (fieldOptionsQuery.data?.options ?? []).filter(option => option.field === field);
+                    const value = row[field as keyof typeof row];
+                    return <td key={field} className="px-1 py-1">
+                      {options.length > 0 ? <select aria-label={`${field} row ${row.rowNumber}`} value={typeof value === 'string' ? value : ''} onChange={event => editRow(row.rowNumber, field, event.target.value)} className="min-w-[145px] rounded border border-[#d9e0e7] bg-white px-2 py-1.5">
+                        <option value="">—</option>
+                        {typeof value === 'string' && value && !options.some(option => option.value === value) && <option value={value}>Invalid: {value}</option>}
+                        {options.map(option => <option key={option.id} value={option.value}>{option.value}</option>)}
+                      </select> : <input aria-label={`${field} row ${row.rowNumber}`} value={typeof value === 'string' ? value : ''} onChange={event => editRow(row.rowNumber, field, event.target.value)} className="w-full min-w-[130px] rounded border border-[#d9e0e7] px-2 py-1.5"/>}
+                    </td>;
+                  })}
+                  <td className={`max-w-[260px] px-2 py-2 ${issue ? 'font-medium text-[#99501e]' : 'text-[#397050]'}`}>{issue?.reason ?? 'Ready'}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+          <div className="flex items-center justify-between border-t border-[#e3e7eb] px-3 py-2 text-[11px] text-[#657386]">
+            <span>Rows {previewPage * 100 + 1}–{Math.min((previewPage + 1) * 100, parsed.totalRows)} of {parsed.totalRows}</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={previewPage === 0} onClick={() => setPreviewPage(page => page - 1)} className="rounded border px-2 py-1 disabled:opacity-40">Previous</button>
+              <button type="button" disabled={(previewPage + 1) * 100 >= parsed.allRows.length} onClick={() => setPreviewPage(page => page + 1)} className="rounded border px-2 py-1 disabled:opacity-40">Next</button>
+            </div>
+          </div>
+        </div>}
         <label className="flex items-start gap-2 rounded-md border border-[#e3e7eb] p-3 text-[12px] text-[#445267]"><input data-testid="checkbox-import-subscribed" type="checkbox" checked={subscribed} disabled={running} onChange={e => setSubscribed(e.target.checked)} className="mt-0.5 accent-[#174f99]"/><span>These contacts have opted in to receive email. If unchecked, they are imported as unsubscribed and will not receive campaigns.</span></label>
         {running && <div role="status" data-testid="status-import-progress" className="flex items-center gap-2 text-[12px] text-[#245b9b]"><LoaderCircle className="h-4 w-4 animate-spin"/>Importing {progress.done.toLocaleString()} of {progress.total.toLocaleString()} rows. Keep this window open.</div>}
       </div>}

@@ -23,7 +23,7 @@ export type ParsedRow = {
 } & Partial<Record<OptionalImportField, string | null>>;
 export type RowError = { rowNumber: number; reason: string };
 export type ParsedImport = {
-  fileName: string; kind: 'csv' | 'xlsx'; sheetNote: string;
+  fileName: string; kind: 'csv' | 'xlsx'; sheetNote: string; importFields: ImportField[];
   valid: ParsedRow[]; allRows: ParsedRow[]; errors: RowError[]; totalRows: number; ignoredHeaders: string[]; warnings: string[];
 };
 
@@ -65,7 +65,7 @@ const ALIASES: Record<ImportField, string[]> = {
 };
 const FIELD_LOOKUP = new Map<string, ImportField>();
 (Object.keys(ALIASES) as ImportField[]).forEach(f => ALIASES[f].forEach(a => FIELD_LOOKUP.set(a, f)));
-const LABELS: Record<ImportField, string> = {
+export const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
   firstName: 'First Name',
   lastName: 'Last Name',
   email: 'Email',
@@ -101,6 +101,7 @@ const LABELS: Record<ImportField, string> = {
   companyLinkedinUrl: 'Company LinkedIn URL',
   companyLocation: 'Company Location',
 };
+const LABELS = IMPORT_FIELD_LABELS;
 const REQUIRED: ImportField[] = ['firstName', 'lastName', 'email'];
 const LIMITS: Record<ImportField, number> = {
   firstName: 100, lastName: 100, email: 254, companyName: 200, linkedinUrl: 2048,
@@ -225,7 +226,7 @@ function buildRows(records: string[][], fileName: string, kind: 'csv' | 'xlsx', 
     else valid.push(row);
   }
   if (!total) throw new ImportFileError('The file has headers but no contact rows.');
-  return { fileName, kind, sheetNote, valid, allRows, errors, totalRows: total, ignoredHeaders: ignored, warnings: extraWarnings };
+  return { fileName, kind, sheetNote, importFields: [...mapping.keys()], valid, allRows, errors, totalRows: total, ignoredHeaders: ignored, warnings: extraWarnings };
 }
 
 export async function parseContactFile(file: File): Promise<ParsedImport> {
