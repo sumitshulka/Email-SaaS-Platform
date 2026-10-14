@@ -3186,6 +3186,13 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Some contact details are invalid.", code: "INVALID_INPUT" });
     return;
   }
+  if (parsed.data.companyName?.trim() && !parsed.data.companyId) {
+    res.status(400).json({
+      error: "Choose a company from your workspace instead of entering a company name.",
+      code: "COMPANY_SELECTION_REQUIRED",
+    });
+    return;
+  }
   const userId = req.authUser!.id;
   const listIds = parsed.data.listIds ?? [];
   const firstName = parsed.data.firstName;
@@ -3216,6 +3223,13 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
       optionSet,
     );
     if (optionIssue) return { kind: "invalid_contact_field" as const, issue: optionIssue };
+    const [selectedCompany] = parsed.data.companyId
+      ? await tx.select({ id: companiesTable.id, companyName: companiesTable.companyName })
+          .from(companiesTable)
+          .where(and(eq(companiesTable.id, parsed.data.companyId), eq(companiesTable.userId, userId)))
+          .limit(1)
+      : [];
+    if (parsed.data.companyId && !selectedCompany) return { kind: "invalid_company" as const };
 
     const now = new Date();
     const [activeSubscription] = await tx
@@ -3270,7 +3284,8 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
         email,
         firstName,
         lastName,
-        companyName: optionalContactValue(parsed.data.companyName),
+        companyId: selectedCompany?.id ?? null,
+        companyName: selectedCompany?.companyName ?? optionalContactValue(parsed.data.companyName),
         linkedinUrl: optionalContactValue(parsed.data.linkedinUrl),
         phoneNumber: optionalContactValue(parsed.data.phoneNumber),
         ...contactEnrichmentPatch(parsed.data),
@@ -3305,6 +3320,13 @@ router.post("/contacts", requireUserRole, async (req, res): Promise<void> => {
       error: result.issue.message,
       code: "INVALID_CONTACT_FIELD_VALUE",
       field: result.issue.field,
+    });
+    return;
+  }
+  if (result.kind === "invalid_company") {
+    res.status(400).json({
+      error: "Choose a company from your workspace.",
+      code: "INVALID_COMPANY",
     });
     return;
   }

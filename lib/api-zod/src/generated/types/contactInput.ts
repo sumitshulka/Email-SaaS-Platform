@@ -24,6 +24,7 @@ export interface ContactInput {
      * @maxLength 100
      */
   lastName: string;
+  companyId?: string;
   /** @maxLength 200 */
   companyName?: string;
   /** @maxLength 2048 */

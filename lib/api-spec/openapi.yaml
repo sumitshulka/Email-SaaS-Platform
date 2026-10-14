@@ -5500,6 +5500,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         firstName: { type: string, minLength: 1, maxLength: 100 }
         lastName: { type: string, minLength: 1, maxLength: 100 }
+        companyId: { type: string, format: uuid }
         companyName: { type: string, maxLength: 200 }
         linkedinUrl: { type: string, maxLength: 2048 }
         phoneNumber: { type: string, maxLength: 40 }

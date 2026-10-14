@@ -24,7 +24,7 @@ import {
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
-  getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment,
+  getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useListCampaignReplies, useSetCampaignPaused,
   useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
@@ -861,6 +861,7 @@ export function ContactsPage() {
     },
   });
   const listsQuery = useListContactLists();
+  const companiesQuery = useListCompanies();
   const filterOptionsQuery = useGetContactFilterOptions({
     query: { queryKey: getGetContactFilterOptionsQueryKey(), staleTime: 60_000 },
   });
@@ -874,6 +875,7 @@ export function ContactsPage() {
   const removeSegment = useDeleteContactSegment();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
   const [selectedSegmentId, setSelectedSegmentId] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [segmentEditor, setSegmentEditor] = useState<{ mode: 'save' | 'rename'; segment?: ContactAudienceSegment } | null>(null);
   const [segmentName, setSegmentName] = useState('');
   const [segmentToDelete, setSegmentToDelete] = useState<ContactAudienceSegment | null>(null);
@@ -945,7 +947,7 @@ export function ContactsPage() {
     downloadWorkbook(workbook, 'contacts');
   };
   const reload = () => { void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
-  const openNew = () => { setEditing(null); setForm(emptyContact); };
+  const openNew = () => { setEditing(null); setForm(emptyContact); setSelectedCompanyId(''); };
   const openEdit = (contact: Contact) => { setEditing(contact); setForm({ email: contact.email, firstName: contact.firstName, lastName: contact.lastName, companyName: contact.companyName ?? '', linkedinUrl: contact.linkedinUrl ?? '', phoneNumber: contact.phoneNumber ?? '', subscribed: contact.subscribed, listIds: [...contact.listIds] }); };
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -957,7 +959,7 @@ export function ContactsPage() {
       setNotice({ kind: 'error', text: 'This address bounced. Enter a corrected email address before marking the contact subscribed.' });
       return;
     }
-    const done = () => { reload(); setEditing(undefined); setNotice({ kind: 'success', text: editing ? 'Contact changes saved.' : 'Contact added to your audience.' }); };
+    const done = () => { reload(); setEditing(undefined); setSelectedCompanyId(''); setNotice({ kind: 'success', text: editing ? 'Contact changes saved.' : 'Contact added to your audience.' }); };
     const failed = (error: unknown) => setNotice({ kind: 'error', text: mutationError(error) });
     const companyName = form.companyName.trim(); const linkedinUrl = form.linkedinUrl.trim(); const phoneNumber = form.phoneNumber.trim();
     if (editing) {
@@ -979,7 +981,7 @@ export function ContactsPage() {
         },
       );
     } else {
-      create.mutate({ data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, ...(companyName ? { companyName } : {}), ...(linkedinUrl ? { linkedinUrl } : {}), ...(phoneNumber ? { phoneNumber } : {}) } }, { onSuccess: done, onError: failed });
+      create.mutate({ data: { email, firstName, lastName, subscribed: form.subscribed, listIds: form.listIds, ...(selectedCompanyId ? { companyId: selectedCompanyId } : {}), ...(linkedinUrl ? { linkedinUrl } : {}), ...(phoneNumber ? { phoneNumber } : {}) } }, { onSuccess: done, onError: failed });
     }
   };
   const confirmDeleteContact = () => {
@@ -1300,7 +1302,20 @@ export function ContactsPage() {
          {editing?.emailStatus === 'bounced' && <div role="note" className="rounded-md border border-[#efd5c5] bg-[#fff6ef] px-3 py-2.5 text-[11px] leading-5 text-[#94501f]">This address bounced. To restore campaign eligibility, enter a corrected email address and check the subscription box. The bounced address must change; previously suppressed sends stay suppressed.</div>}
         <Field label="Email address" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} type="email" placeholder="person@company.com" required maxLength={254} testId="input-contact-email"/>
         <div className="grid gap-3 sm:grid-cols-2"><Field label="First name" value={form.firstName} onChange={v => setForm(f => ({ ...f, firstName: v }))} required maxLength={100} testId="input-contact-first-name"/><Field label="Last name" value={form.lastName} onChange={v => setForm(f => ({ ...f, lastName: v }))} required maxLength={100} testId="input-contact-last-name"/></div>
-        <Field label="Company name" value={form.companyName} onChange={v => setForm(f => ({ ...f, companyName: v }))} maxLength={200} placeholder="Optional" testId="input-contact-company"/>
+         {editing ? (
+           <Field label="Company name" value={form.companyName} onChange={v => setForm(f => ({ ...f, companyName: v }))} maxLength={200} placeholder="Optional" testId="input-contact-company"/>
+         ) : (
+           <label className="block">
+             <span className="mb-1.5 block text-[11px] font-semibold text-[#465568]">Company</span>
+             <select data-testid="select-contact-company" value={selectedCompanyId} onChange={event => setSelectedCompanyId(event.target.value)} disabled={companiesQuery.isLoading || companiesQuery.isError} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] text-[#344154] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] disabled:cursor-not-allowed disabled:bg-[#f4f6f8]">
+               <option value="">No company</option>
+               {(companiesQuery.data?.companies ?? []).map(company => <option key={company.id} value={company.id}>{company.companyName}</option>)}
+             </select>
+             {companiesQuery.isLoading && <span className="mt-1 block text-[10px] text-[#788696]">Loading workspace companies…</span>}
+             {companiesQuery.isError && <span role="alert" className="mt-1 block text-[10px] text-[#a45335]">Companies could not be loaded. <button type="button" data-testid="button-retry-contact-companies" disabled={companiesQuery.isFetching} onClick={() => void companiesQuery.refetch()} className="font-semibold underline disabled:opacity-50">Retry</button></span>}
+             {!companiesQuery.isLoading && !companiesQuery.isError && !companiesQuery.data?.companies.length && <span className="mt-1 block text-[10px] text-[#788696]">No companies added yet. <Link href="/companies" className="font-semibold text-[#315879] underline">Add a company</Link> first.</span>}
+           </label>
+         )}
         <div className="grid gap-3 sm:grid-cols-2"><Field label="LinkedIn URL" value={form.linkedinUrl} onChange={v => setForm(f => ({ ...f, linkedinUrl: v }))} maxLength={2048} placeholder="Optional" testId="input-contact-linkedin"/><Field label="Phone number" value={form.phoneNumber} onChange={v => setForm(f => ({ ...f, phoneNumber: v }))} maxLength={40} placeholder="Optional" testId="input-contact-phone"/></div>
         <div className="rounded-md border border-[#e3e7eb] p-3"><div className="mb-2 text-[12px] font-semibold text-[#344154]">List memberships</div>{lists.length ? <div className="max-h-36 space-y-2 overflow-y-auto">{lists.map(list => <label key={list.id} className="flex items-center gap-2 text-[12px] text-[#536172]"><input data-testid={`checkbox-contact-list-${list.id}`} type="checkbox" checked={form.listIds.includes(list.id)} onChange={e => setForm(f => ({ ...f, listIds: e.target.checked ? [...f.listIds, list.id] : f.listIds.filter(id => id !== list.id) }))} className="accent-[#174f99]"/>{list.name}{!list.active && <span className="text-[10px] text-[#a0a8b3]">inactive</span>}</label>)}</div> : <p className="text-[11px] text-[#818d9a]">Create a list first to organize contacts.</p>}</div>
         <label className="flex items-center gap-2 text-[12px] font-medium text-[#445267]"><input data-testid="checkbox-contact-subscribed" type="checkbox" checked={form.subscribed} onChange={e => setForm(f => ({ ...f, subscribed: e.target.checked }))} className="accent-[#174f99]"/>Contact is subscribed and eligible for campaigns</label>

@@ -1657,6 +1657,7 @@ export const CreateContactBody = zod.object({
   "name": zod.string().min(1).max(createContactBodyNameMax).optional(),
   "firstName": zod.string().min(1).max(createContactBodyFirstNameMax),
   "lastName": zod.string().min(1).max(createContactBodyLastNameMax),
+  "companyId": zod.string().uuid().optional(),
   "companyName": zod.string().max(createContactBodyCompanyNameMax).optional(),
   "linkedinUrl": zod.string().max(createContactBodyLinkedinUrlMax).optional(),
   "phoneNumber": zod.string().max(createContactBodyPhoneNumberMax).optional(),
