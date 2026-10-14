@@ -1272,6 +1272,47 @@ export const BackfillMicrosoft365TracesResponse = zod.object({
 
 
 /**
+ * @summary Return contacts with their five latest successful email send dates
+ */
+export const getContactReportQueryContactNameMax = 120;
+
+export const getContactReportQueryCompanyNameMax = 200;
+
+export const getContactReportQueryPageDefault = 1;
+
+export const getContactReportQueryPageSizeDefault = 50;
+export const getContactReportQueryPageSizeMax = 100;
+
+
+
+export const GetContactReportQueryParams = zod.object({
+  "contactName": zod.coerce.string().max(getContactReportQueryContactNameMax).optional(),
+  "companyName": zod.coerce.string().max(getContactReportQueryCompanyNameMax).optional(),
+  "fromDate": zod.date().optional(),
+  "toDate": zod.date().optional(),
+  "page": zod.coerce.number().int().min(1).default(getContactReportQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(getContactReportQueryPageSizeMax).default(getContactReportQueryPageSizeDefault)
+})
+
+export const getContactReportResponseContactsItemSentDatesMax = 5;
+
+
+
+export const GetContactReportResponse = zod.object({
+  "contacts": zod.array(zod.object({
+  "contactId": zod.string().uuid(),
+  "contactName": zod.string(),
+  "email": zod.string().email(),
+  "companyName": zod.string().nullable(),
+  "sentDates": zod.array(zod.coerce.date()).max(getContactReportResponseContactsItemSentDatesMax)
+})),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "total": zod.number().int()
+})
+
+
+/**
  * @summary Return a filtered page of contacts and quota for the authenticated tenant
  */
 export const listContactsQueryPageDefault = 1;

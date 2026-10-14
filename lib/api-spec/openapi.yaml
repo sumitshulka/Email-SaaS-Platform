@@ -970,6 +970,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contact-report:
+    get:
+      operationId: getContactReport
+      tags: [contacts]
+      summary: Return contacts with their five latest successful email send dates
+      parameters:
+        - name: contactName
+          in: query
+          schema: { type: string, maxLength: 120 }
+        - name: companyName
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - name: fromDate
+          in: query
+          schema: { type: string, format: date }
+        - name: toDate
+          in: query
+          schema: { type: string, format: date }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: A page of contacts and their latest successful send dates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactReportResponse" }
+        "400":
+          description: Invalid report filters
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /contacts:
     get:
       operationId: listContacts
@@ -5249,6 +5284,28 @@ components:
           type: array
           items: { $ref: "#/components/schemas/UnlinkedCompanyProfile" }
       required: [profiles]
+    ContactReportRow:
+      type: object
+      properties:
+        contactId: { type: string, format: uuid }
+        contactName: { type: string }
+        email: { type: string, format: email }
+        companyName: { type: ["string", "null"] }
+        sentDates:
+          type: array
+          maxItems: 5
+          items: { type: string, format: date-time }
+      required: [contactId, contactName, email, companyName, sentDates]
+    ContactReportResponse:
+      type: object
+      properties:
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/ContactReportRow" }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+      required: [contacts, page, pageSize, total]
     Contact:
       type: object
       properties:

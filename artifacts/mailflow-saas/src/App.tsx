@@ -45,6 +45,7 @@ import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
 import { clearPackageCheckoutCredentials, getPackageCheckoutTerms, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
+import ContactReportPage from '@/pages/contact-report';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
 import { AdminGlobalCompanyDetailPage } from '@/pages/admin-global-company-detail';
@@ -314,6 +315,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     items: [
       { href: '/companies', label: 'Companies', icon: Building2 },
       { href: '/contacts', label: 'Contacts', icon: Users },
+      { href: '/contact-report', label: 'Contact Report', icon: Activity },
       { href: '/contact-field-settings', label: 'Contact Fields', icon: Settings2 },
     ],
   },
@@ -1534,6 +1536,7 @@ function Routes() {
     <Route path="/sending-settings">{() => <RouteGate>{() => <SendingSettingsPage/>}</RouteGate>}</Route>
     <Route path="/contact-field-settings">{() => <RouteGate>{u => u.role === 'USER' ? <ContactFieldSettingsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/contact-report">{() => <RouteGate>{u => u.role === 'USER' ? <ContactReportPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts/:contactId">{params => <RouteGate>{u => u.role === 'USER' ? <ContactDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/companies">{() => <RouteGate>{u => u.role === 'USER' ? <CompaniesPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : u.role === 'SUPERADMIN' ? <AdminGlobalCompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>

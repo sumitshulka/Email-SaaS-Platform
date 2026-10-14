@@ -111,6 +111,7 @@ import type {
   ContactNote,
   ContactNoteInput,
   ContactOptionsResponse,
+  ContactReportResponse,
   ContactUpdate,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
@@ -125,6 +126,7 @@ import type {
   GetCompanyResearchUsageParams,
   GetContactIntentQuestions200,
   GetContactIntentReadiness200,
+  GetContactReportParams,
   GlobalCompany,
   GlobalCompanyAdminCollection,
   GlobalCompanyBulkImportInput,
@@ -3679,6 +3681,90 @@ export const useBackfillMicrosoft365Traces = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getBackfillMicrosoft365TracesMutationOptions(options));
     }
+
+export const getGetContactReportUrl = (params?: GetContactReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/contact-report?${stringifiedParams}` : `/api/contact-report`
+}
+
+/**
+ * @summary Return contacts with their five latest successful email send dates
+ */
+export const getContactReport = async (params?: GetContactReportParams, options?: Parameters<typeof customFetch>[1]): Promise<ContactReportResponse> => {
+
+  return customFetch<ContactReportResponse>(getGetContactReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactReportQueryKey = (params?: GetContactReportParams,) => {
+    return [
+    `/api/contact-report`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetContactReportQueryOptions = <TData = Awaited<ReturnType<typeof getContactReport>>, TError = ErrorType<ApiError>>(params?: GetContactReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactReport>>> = ({ signal }) => getContactReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactReportQueryResult = NonNullable<Awaited<ReturnType<typeof getContactReport>>>
+export type GetContactReportQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Return contacts with their five latest successful email send dates
+ */
+
+export function useGetContactReport<TData = Awaited<ReturnType<typeof getContactReport>>, TError = ErrorType<ApiError>>(
+ params?: GetContactReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListContactsUrl = (params?: ListContactsParams,) => {
   const normalizedParams = new URLSearchParams();

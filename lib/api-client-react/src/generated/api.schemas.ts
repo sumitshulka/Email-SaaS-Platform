@@ -2099,6 +2099,23 @@ export interface UnlinkedCompanyProfileCollection {
   profiles: UnlinkedCompanyProfile[];
 }
 
+export interface ContactReportRow {
+  contactId: string;
+  contactName: string;
+  email: string;
+  /** @nullable */
+  companyName: string | null;
+  /** @maxItems 5 */
+  sentDates: string[];
+}
+
+export interface ContactReportResponse {
+  contacts: ContactReportRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 /**
  * @nullable
  */
@@ -5028,6 +5045,28 @@ export type CompleteGmailMailboxConnectionParams = {
 code?: string;
 state?: string;
 error?: string;
+};
+
+export type GetContactReportParams = {
+/**
+ * @maxLength 120
+ */
+contactName?: string;
+/**
+ * @maxLength 200
+ */
+companyName?: string;
+fromDate?: string;
+toDate?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
 };
 
 export type ListContactsParams = {

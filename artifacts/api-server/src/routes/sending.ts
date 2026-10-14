@@ -41,6 +41,8 @@ import {
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
+  GetContactReportQueryParams,
+  GetContactReportResponse,
   GetContactResponse,
   GetContactEmailHistoryParams,
   GetContactEmailHistoryResponse,
@@ -2328,6 +2330,117 @@ router.post(
     }
   },
 );
+
+router.get("/contact-report", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = GetContactReportQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter valid contact report filters.", code: "INVALID_INPUT" });
+    return;
+  }
+
+  const { contactName, companyName, fromDate, toDate, page, pageSize } = parsed.data;
+  if (fromDate && toDate && fromDate > toDate) {
+    res.status(400).json({ error: "The start date must be on or before the end date.", code: "INVALID_INPUT" });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const until = toDate ? new Date(toDate) : undefined;
+  if (until) until.setUTCDate(until.getUTCDate() + 1);
+  const conditions = [
+    eq(emailSendAttemptsTable.userId, userId),
+    eq(emailSendAttemptsTable.outcome, "smtp_accepted"),
+    eq(emailCampaignRecipientsTable.userId, userId),
+    eq(emailCampaignsTable.userId, userId),
+    eq(contactsTable.userId, userId),
+    ...(contactName?.trim() ? [ilike(contactsTable.name, `%${contactName.trim()}%`)] : []),
+    ...(companyName?.trim()
+      ? [or(
+          ilike(companiesTable.companyName, `%${companyName.trim()}%`),
+          ilike(contactsTable.companyName, `%${companyName.trim()}%`),
+        )!]
+      : []),
+    ...(fromDate ? [gte(emailSendAttemptsTable.attemptedAt, fromDate)] : []),
+    ...(until ? [lt(emailSendAttemptsTable.attemptedAt, until)] : []),
+  ];
+  const joins = (query: any) => query
+    .innerJoin(emailCampaignRecipientsTable, eq(emailCampaignRecipientsTable.id, emailSendAttemptsTable.recipientId))
+    .innerJoin(emailCampaignsTable, eq(emailCampaignsTable.id, emailCampaignRecipientsTable.campaignId))
+    .innerJoin(contactsTable, eq(contactsTable.id, emailCampaignRecipientsTable.contactId))
+    .leftJoin(companiesTable, and(
+      eq(companiesTable.id, contactsTable.companyId),
+      eq(companiesTable.userId, userId),
+    ));
+  const [countResult] = await joins(db.select({
+    total: sql<number>`count(distinct ${contactsTable.id})`,
+  }).from(emailSendAttemptsTable)).where(and(...conditions));
+  const total = Number(countResult?.total ?? 0);
+
+  const maxSentAt = max(emailSendAttemptsTable.attemptedAt);
+  const rows: Array<{
+    id: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    companyName: string | null;
+  }> = await joins(db.select({
+    id: contactsTable.id,
+    name: contactsTable.name,
+    firstName: contactsTable.firstName,
+    lastName: contactsTable.lastName,
+    email: contactsTable.email,
+    companyName: sql<string | null>`coalesce(${companiesTable.companyName}, ${contactsTable.companyName})`,
+    latestSentAt: maxSentAt,
+  }).from(emailSendAttemptsTable))
+    .where(and(...conditions))
+    .groupBy(
+      contactsTable.id,
+      contactsTable.name,
+      contactsTable.firstName,
+      contactsTable.lastName,
+      contactsTable.email,
+      companiesTable.companyName,
+      contactsTable.companyName,
+    )
+    .orderBy(desc(maxSentAt), asc(contactsTable.name), asc(contactsTable.id))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  let sentDatesByContact = new Map<string, Date[]>();
+  if (rows.length) {
+    const ranked = joins(db.select({
+      contactId: contactsTable.id,
+      sentAt: emailSendAttemptsTable.attemptedAt,
+      rowNumber: sql<number>`row_number() over (partition by ${contactsTable.id} order by ${emailSendAttemptsTable.attemptedAt} desc, ${emailSendAttemptsTable.id} desc)`.as("row_number"),
+    }).from(emailSendAttemptsTable))
+      .where(and(...conditions, inArray(contactsTable.id, rows.map(row => row.id))))
+      .as("contact_report_ranked");
+    const dates = await db.select({
+      contactId: ranked.contactId,
+      sentAt: ranked.sentAt,
+    }).from(ranked).where(lte(ranked.rowNumber, 5))
+      .orderBy(asc(ranked.contactId), desc(ranked.sentAt));
+    sentDatesByContact = new Map();
+    for (const item of dates) {
+      const current = sentDatesByContact.get(item.contactId) ?? [];
+      current.push(item.sentAt);
+      sentDatesByContact.set(item.contactId, current);
+    }
+  }
+
+  res.json(GetContactReportResponse.parse({
+    contacts: rows.map(row => ({
+      contactId: row.id,
+      contactName: row.name.trim() || [row.firstName, row.lastName].filter(Boolean).join(" ") || row.email,
+      email: row.email,
+      companyName: row.companyName,
+      sentDates: sentDatesByContact.get(row.id) ?? [],
+    })),
+    page,
+    pageSize,
+    total,
+  }));
+});
 
 router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   try {
