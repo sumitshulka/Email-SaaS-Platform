@@ -29,7 +29,7 @@ const fromRecord = (record?: GlobalCompany): FormValues => record ? ({
 const errorText = (error: unknown) => error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Please try again.';
 const dateText = (value: Date | string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-function GlobalCompanyForm({ record, onClose, onSaved, businessAreas }: { record?: GlobalCompany; onClose: () => void; onSaved: () => void; businessAreas: string[] }) {
+export function GlobalCompanyForm({ record, onClose, onSaved, businessAreas }: { record?: GlobalCompany; onClose: () => void; onSaved: () => void; businessAreas: string[] }) {
   const qc = useQueryClient();
   const create = useCreateGlobalCompany();
   const update = useUpdateGlobalCompany();

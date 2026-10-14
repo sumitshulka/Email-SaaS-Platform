@@ -7,11 +7,17 @@ Company intelligence is an explicitly requested, confirmed, reusable company-lev
 
 Keep researched intelligence separate from company master fields; a failed refresh must preserve the last successful profile and successful versions must remain available. Private companies must not become global through research.
 
+The superadmin Global Company profile details view should retain the company intelligence panel and an edit action for the master profile; it is not a read-only summary.
+
 Every factual claim needs source provenance; technology adoption cannot be guessed, current signals need real dates, and AI opportunities must be identified as inference. Do not include key people or tenant contact data. Users must not receive internal cost or requester metadata.
 
 **Why:** The supplied specification prioritizes reusable intelligence, explicit research resource use, auditable evidence, and preservation of existing company/contact privacy.
 
 **How to apply:** Require a new confirmed action for each research job, retain successful history, and separate global company evidence from tenant-owned relationship/contact information when extending AI workflows.
+
+**Why:** The user expects intelligence research and profile updates to remain available from the superadmin company details page.
+
+**How to apply:** Keep the global company detail route connected to the existing intelligence panel and master-profile edit flow without exposing tenant contacts or campaign data.
 
 Backup analysis should reuse the already collected evidence rather than repeat web discovery.
 
