@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { db, systemConfigurationTable } from "@workspace/db";
 import {
   ListCompanyBusinessAreasResponse,
@@ -11,6 +11,10 @@ import { requireSuperadmin, requireUserRole } from "../lib/session";
 const router: IRouter = Router();
 const SETTINGS_KEY = "company_business_areas";
 const DEFAULT_VALUES = ["Manufacturing", "Education", "Textiles", "Service Industry"];
+const requireBusinessAreaViewer: RequestHandler = (req, res, next) =>
+  req.authUser?.role === "SUPERADMIN"
+    ? requireSuperadmin(req, res, next)
+    : requireUserRole(req, res, next);
 
 async function getValues(): Promise<string[]> {
   const [row] = await db.select({ value: systemConfigurationTable.value })
@@ -21,7 +25,7 @@ async function getValues(): Promise<string[]> {
     : DEFAULT_VALUES;
 }
 
-router.get("/company-business-areas", requireUserRole, async (_req, res): Promise<void> => {
+router.get("/company-business-areas", requireBusinessAreaViewer, async (_req, res): Promise<void> => {
   res.json(ListCompanyBusinessAreasResponse.parse({ values: await getValues() }));
 });
 
