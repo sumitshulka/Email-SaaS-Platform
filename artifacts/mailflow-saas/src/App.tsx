@@ -9,7 +9,7 @@ import {
   Trash2, UserRound, Users, Building2, LifeBuoy, X,
 } from 'lucide-react';
 import {
-  getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey,
+  AUTH_SESSION_EXPIRED_EVENT, getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey,
   getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
   getGetUserNotificationsQueryKey, useGetUserNotifications, useMarkUserNotificationRead,
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetPasswordPolicy, useGetUserDashboard,
@@ -574,14 +574,24 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
   );
 }
 function Gate({ children, admin = false }: { children: (user: AuthUser) => ReactNode; admin?: boolean }) {
-  const auth = useGetCurrentUser(); const [location, setLocation] = useLocation();
+  const auth = useGetCurrentUser({
+    query: {
+      queryKey: getGetCurrentUserQueryKey(),
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: 'always',
+    },
+  });
+  const [location, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   useEffect(() => {
     if (!auth.isError) return;
     const url = new URL(window.location.href);
     const ticketId = url.pathname === '/support' ? url.searchParams.get('ticketId') : null;
     if (ticketId) sessionStorage.setItem(SUPPORT_TICKET_RETURN_KEY, ticketId);
+    queryClient.clear();
     setLocation('/login');
-  }, [auth.isError, setLocation]);
+  }, [auth.isError, queryClient, setLocation]);
   useEffect(() => {
     if (!auth.data) return;
     if (auth.data.mustChangeCredentials && location !== '/profile') setLocation('/profile?rotate=1');
@@ -591,6 +601,31 @@ function Gate({ children, admin = false }: { children: (user: AuthUser) => React
   if (auth.isLoading || !auth.data) return <div className="min-h-[100dvh] bg-white p-8"><div className="mx-auto max-w-5xl space-y-5 pt-20"><div className="h-8 w-56 animate-pulse rounded bg-[#edf0f3]"/><div className="h-36 animate-pulse rounded-lg bg-[#f1f3f5]"/></div></div>;
   if ((auth.data.mustChangeCredentials && location !== '/profile') || (admin && auth.data.role !== 'SUPERADMIN') || (!admin && auth.data.role === 'SUPERADMIN' && location === '/dashboard')) return null;
   return <AppShell user={auth.data} admin={auth.data.role === 'SUPERADMIN'}>{children(auth.data)}</AppShell>;
+}
+function SessionExpiryRedirect() {
+  const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
+  const redirecting = useRef(false);
+
+  useEffect(() => {
+    if (location === '/login') redirecting.current = false;
+  }, [location]);
+
+  useEffect(() => {
+    const redirectToLogin = () => {
+      if (redirecting.current || !queryClient.getQueryData<AuthUser>(getGetCurrentUserQueryKey())) return;
+      redirecting.current = true;
+      const url = new URL(window.location.href);
+      const ticketId = url.pathname === '/support' ? url.searchParams.get('ticketId') : null;
+      if (ticketId) sessionStorage.setItem(SUPPORT_TICKET_RETURN_KEY, ticketId);
+      queryClient.clear();
+      setLocation('/login');
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, redirectToLogin);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, redirectToLogin);
+  }, [queryClient, setLocation]);
+
+  return null;
 }
 function Metric({ label, value, sub, icon: Icon, accent = 'blue' }: { label: string; value: string | number; sub?: string; icon: typeof Send; accent?: 'blue' | 'orange' }) {
   return <Panel className="p-5"><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#6d7886]">{label}</span><span className={cn('grid h-8 w-8 place-items-center rounded-md', accent === 'blue' ? 'bg-[#edf4fc] text-[#245b9b]' : 'bg-[#fff2e6] text-[#bc6829]')}><Icon className="h-4 w-4"/></span></div><div className="mt-3 display text-[27px] font-bold leading-none tracking-[-.04em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div>{sub && <div className="mt-2 text-[11px] text-[#7e8894]">{sub}</div>}</Panel>;
@@ -1703,6 +1738,6 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
   );
 }
 function App() {
-  return <QueryClientProvider client={client}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><MaintenanceBoundary><Routes/></MaintenanceBoundary></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={client}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><SessionExpiryRedirect/><MaintenanceBoundary><Routes/></MaintenanceBoundary></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>;
 }
 export default App;

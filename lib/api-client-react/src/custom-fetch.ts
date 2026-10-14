@@ -10,6 +10,12 @@ export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
+export const AUTH_SESSION_EXPIRED_EVENT = "mailflow:session-expired";
+
+function isUnauthenticatedError(value: unknown): boolean {
+  return typeof value === "object" && value !== null && "code" in value &&
+    value.code === "UNAUTHENTICATED";
+}
 
 // ---------------------------------------------------------------------------
 // Module-level configuration
@@ -364,6 +370,13 @@ export async function customFetch<T = unknown>(
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
+    if (
+      response.status === 401 &&
+      isUnauthenticatedError(errorData) &&
+      typeof window !== "undefined"
+    ) {
+      window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+    }
     throw new ApiError(response, errorData, requestInfo);
   }
 
