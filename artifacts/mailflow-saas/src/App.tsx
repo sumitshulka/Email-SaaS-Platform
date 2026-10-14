@@ -55,6 +55,31 @@ import './index.css';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 20_000, refetchOnWindowFocus: false } } });
 const SUPPORT_TICKET_RETURN_KEY = 'mailflow-support-ticket-return';
+const USER_INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
+const ACTIVITY_STORAGE_SYNC_MS = 5_000;
+const userActivityStorageKey = (userId: string) => `mailflow:last-activity:${userId}`;
+function readUserActivity(userId: string): number | null {
+  try {
+    const value = Number(window.localStorage.getItem(userActivityStorageKey(userId)));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+function writeUserActivity(userId: string, at: number): void {
+  try {
+    window.localStorage.setItem(userActivityStorageKey(userId), String(at));
+  } catch {
+    // The in-tab timer still works when browser storage is unavailable.
+  }
+}
+function clearUserActivity(userId: string): void {
+  try {
+    window.localStorage.removeItem(userActivityStorageKey(userId));
+  } catch {
+    // Storage cleanup is best-effort.
+  }
+}
 
 type Fields = Record<string, string | number | boolean | string[]>;
 const cn = (...s: Array<string | false | undefined>) => s.filter(Boolean).join(' ');
@@ -144,6 +169,7 @@ function LoginPage() {
   const login = useLogin(); const qc = useQueryClient(); const [, setLocation] = useLocation();
   const submit = form.handleSubmit(values => login.mutate({ data: values }, { onSuccess: res => {
     qc.setQueryData(getGetCurrentUserQueryKey(), res.user);
+    writeUserActivity(res.user.id, Date.now());
     const supportReturnPath = res.user.role === 'USER' ? getSupportTicketReturnPath() : undefined;
     if (res.user.role !== 'USER' || !res.user.mustChangeCredentials) sessionStorage.removeItem(SUPPORT_TICKET_RETURN_KEY);
     setLocation(res.user.mustChangeCredentials ? '/profile?rotate=1' : supportReturnPath || (res.user.role === 'SUPERADMIN' ? '/admin' : '/dashboard'));
@@ -476,7 +502,62 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
   const [navOpen, setNavOpen] = useState(false);
   const qc = useQueryClient();
   const navGroups = admin ? platformNavigationGroups : workspaceNavigationGroups;
-  const leave = () => logout.mutate(undefined, { onSuccess: () => { qc.clear(); setLocation('/'); } });
+  const leave = () => logout.mutate(undefined, { onSuccess: () => { clearUserActivity(user.id); qc.clear(); setLocation('/'); } });
+
+  useEffect(() => {
+    const storageKey = userActivityStorageKey(user.id);
+    const storedActivityAt = readUserActivity(user.id);
+    const now = Date.now();
+    let lastActivityAt = storedActivityAt !== null && storedActivityAt <= now ? storedActivityAt : now;
+    let lastStorageSyncAt = lastActivityAt;
+    let loggingOut = false;
+    if (storedActivityAt === null || storedActivityAt > now) writeUserActivity(user.id, lastActivityAt);
+
+    const endSession = () => {
+      if (loggingOut) return;
+      loggingOut = true;
+      const url = new URL(window.location.href);
+      const ticketId = url.pathname === '/support' ? url.searchParams.get('ticketId') : null;
+      if (ticketId) sessionStorage.setItem(SUPPORT_TICKET_RETURN_KEY, ticketId);
+      logout.mutate(undefined, {
+        onSettled: () => {
+          clearUserActivity(user.id);
+          qc.clear();
+          setLocation('/login');
+        },
+      });
+    };
+    const recordActivity = () => {
+      if (loggingOut) return;
+      const now = Date.now();
+      lastActivityAt = now;
+      if (now - lastStorageSyncAt >= ACTIVITY_STORAGE_SYNC_MS) {
+        writeUserActivity(user.id, now);
+        lastStorageSyncAt = now;
+      }
+    };
+    const checkInactivity = () => {
+      const storedActivity = readUserActivity(user.id);
+      if (storedActivity !== null && storedActivity > lastActivityAt) lastActivityAt = storedActivity;
+      if (Date.now() - lastActivityAt >= USER_INACTIVITY_TIMEOUT_MS) endSession();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey || !event.newValue) return;
+      const timestamp = Number(event.newValue);
+      if (Number.isFinite(timestamp) && timestamp > lastActivityAt) lastActivityAt = timestamp;
+    };
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'scroll', 'wheel'];
+    for (const eventName of activityEvents) window.addEventListener(eventName, recordActivity, { passive: true });
+    window.addEventListener('storage', handleStorage);
+    const interval = window.setInterval(checkInactivity, 1_000);
+    checkInactivity();
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('storage', handleStorage);
+      for (const eventName of activityEvents) window.removeEventListener(eventName, recordActivity);
+    };
+  }, [logout.mutate, qc, setLocation, user.id]);
 
   return (
     <div className="min-h-[100dvh] bg-white text-[#182333]">
