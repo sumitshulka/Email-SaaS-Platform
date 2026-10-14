@@ -5,10 +5,12 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { SimilarCompanyCandidate } from './similarCompanyCandidate';
 
 export interface ApiError {
   error: string;
   code?: string;
+  similarCompanies?: SimilarCompanyCandidate[];
   /** @nullable */
   earliestStartAt?: Date | null;
 }

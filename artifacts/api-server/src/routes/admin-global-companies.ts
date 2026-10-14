@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { alias } from "drizzle-orm/pg-core";
+import { findSimilarCompanies } from "../lib/company-similarity";
 import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
 import {
@@ -285,7 +286,7 @@ router.post(
       {
         rowNumber: number;
         companyName: string;
-        status: "imported" | "duplicate" | "invalid";
+        status: "imported" | "duplicate" | "similar" | "invalid";
         reason: string | null;
       }
     >();
@@ -330,6 +331,25 @@ router.post(
         continue;
       }
       if (domainKey) seenDomains.set(domainKey, row.rowNumber);
+      const similar = await findSimilarCompanies(companyName, { globalOnly: true });
+      if (domainKey && similar.some(candidate => candidate.domain === domainKey)) {
+        results.set(row.rowNumber, {
+          rowNumber: row.rowNumber,
+          companyName,
+          status: "duplicate",
+          reason: "A global company already uses this website domain.",
+        });
+        continue;
+      }
+      if (similar.length && !row.company.allowSimilarCompany) {
+        results.set(row.rowNumber, {
+          rowNumber: row.rowNumber,
+          companyName,
+          status: "similar",
+          reason: `Possible match: ${similar.map(candidate => candidate.companyName).join(", ")}. Review before allowing this row.`,
+        });
+        continue;
+      }
       candidates.push({ rowNumber: row.rowNumber, profile, companyName, domainKey });
     }
 
@@ -343,8 +363,12 @@ router.post(
             .from(globalCompaniesTable)
             .where(inArray(globalCompaniesTable.companyDomainKey, domainKeys))
         : [];
+      const tenantExisting = domainKeys.length
+        ? await tx.select({ companyDomainKey: companiesTable.companyDomainKey })
+            .from(companiesTable).where(inArray(companiesTable.companyDomainKey, domainKeys))
+        : [];
       const existingKeys = new Set(
-        existing.flatMap((row) =>
+        [...existing, ...tenantExisting].flatMap((row) =>
           row.companyDomainKey ? [row.companyDomainKey] : [],
         ),
       );
@@ -395,16 +419,17 @@ router.post(
         });
       }
     });
-    if (finalBatch) {
+    const responseRows = parsed.data.rows.map((row) => results.get(row.rowNumber)!);
+    const hasSimilar = responseRows.some((row) => row.status === "similar");
+    if (finalBatch && !hasSimilar) {
       await db.update(globalCompanyImportTemplatesTable)
         .set({ consumedAt: new Date() })
         .where(eq(globalCompanyImportTemplatesTable.userId, req.authUser!.id));
     }
-
-    const responseRows = parsed.data.rows.map((row) => results.get(row.rowNumber)!);
     const response = BulkImportGlobalCompaniesResponse.parse({
       imported: responseRows.filter((row) => row.status === "imported").length,
       duplicates: responseRows.filter((row) => row.status === "duplicate").length,
+      similar: responseRows.filter((row) => row.status === "similar").length,
       invalid: responseRows.filter((row) => row.status === "invalid").length,
       rows: responseRows,
     });
@@ -445,6 +470,36 @@ router.post(
         code: "INVALID_INPUT",
       });
       return;
+    }
+    if (!parsed.data.allowSimilarCompany) {
+      const similarCompanies = await findSimilarCompanies(companyName, { globalOnly: true });
+      if (domainKey && similarCompanies.some(candidate => candidate.domain === domainKey)) {
+        res.status(409).json({
+          error: "A global company already uses this website domain.",
+          code: "GLOBAL_COMPANY_DOMAIN_EXISTS",
+        });
+        return;
+      }
+      if (similarCompanies.length) {
+        const names = similarCompanies.map(candidate => candidate.companyName).join(", ");
+        res.status(409).json({
+          error: `A similarly named global company already exists (${names}). Review the match before creating this company.`,
+          code: "COMPANY_SIMILAR_NAME_WARNING",
+          similarCompanies,
+        });
+        return;
+      }
+    }
+    if (domainKey) {
+      const [tenantDuplicate] = await db.select({ id: companiesTable.id })
+        .from(companiesTable).where(eq(companiesTable.companyDomainKey, domainKey)).limit(1);
+      if (tenantDuplicate) {
+        res.status(409).json({
+          error: "A workspace company already uses this website domain.",
+          code: "COMPANY_DOMAIN_EXISTS",
+        });
+        return;
+      }
     }
     try {
       const [created] = await db

@@ -3981,10 +3981,22 @@ components:
           type: string
         code:
           type: string
+        similarCompanies:
+          type: array
+          items: { $ref: "#/components/schemas/SimilarCompanyCandidate" }
         earliestStartAt:
           type: ["string", "null"]
           format: date-time
       required: [error]
+    SimilarCompanyCandidate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        companyName: { type: string }
+        websiteUrl: { type: ["string", "null"] }
+        domain: { type: ["string", "null"] }
+        similarity: { type: number, minimum: 0, maximum: 1 }
+      required: [id, companyName, websiteUrl, domain, similarity]
     SupportTicketStatus:
       type: string
       enum: [open, in_progress, waiting_on_customer, resolved, closed]
@@ -4938,6 +4950,7 @@ components:
         companyPhoneNumber: { type: string, maxLength: 40 }
         companyLinkedinUrl: { type: string, maxLength: 2048 }
         companyLocation: { type: string, maxLength: 200 }
+        allowSimilarCompany: { type: boolean, description: Confirm creating a company despite similar-name warnings }
       required: [companyName]
     GlobalCompanyBulkImportRowInput:
       type: object
@@ -4979,7 +4992,7 @@ components:
         companyName: { type: string }
         status:
           type: string
-          enum: [imported, duplicate, invalid]
+          enum: [imported, duplicate, similar, invalid]
         reason: { type: ["string", "null"] }
       required: [rowNumber, companyName, status, reason]
     GlobalCompanyBulkImportResult:
@@ -4987,12 +5000,13 @@ components:
       properties:
         imported: { type: integer, minimum: 0 }
         duplicates: { type: integer, minimum: 0 }
+        similar: { type: integer, minimum: 0 }
         invalid: { type: integer, minimum: 0 }
         rows:
           type: array
           items:
             $ref: "#/components/schemas/GlobalCompanyBulkImportRowResult"
-      required: [imported, duplicates, invalid, rows]
+      required: [imported, duplicates, similar, invalid, rows]
     GlobalCompanyUpdate:
       type: object
       properties:
@@ -5007,6 +5021,7 @@ components:
         companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
         companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         companyLocation: { type: ["string", "null"], maxLength: 200 }
+        allowSimilarCompany: { type: boolean, description: Confirm updating despite similar-name warnings }
     CompanyListItem:
       allOf:
         - $ref: "#/components/schemas/Company"
@@ -5098,6 +5113,7 @@ components:
         companyLinkedinUrl: { type: string, maxLength: 2048 }
         companyLocation: { type: string, maxLength: 200 }
         shareWithGlobal: { type: boolean, description: Explicitly add this company profile to the global catalog; contacts remain private }
+        allowSimilarCompany: { type: boolean, description: Confirm creating a company despite similar-name warnings }
       required: [companyName]
     CompanyExportColumn:
       type: string
@@ -5153,6 +5169,7 @@ components:
         created: { type: integer, minimum: 0 }
         shared: { type: integer, minimum: 0 }
         duplicates: { type: integer, minimum: 0 }
+        similar: { type: integer, minimum: 0 }
         rejected: { type: integer, minimum: 0 }
         rows:
           type: array
@@ -5160,10 +5177,10 @@ components:
             type: object
             properties:
               rowNumber: { type: integer }
-              status: { type: string, enum: [created, shared, duplicate, rejected] }
+              status: { type: string, enum: [created, shared, duplicate, similar, rejected] }
               message: { type: string }
             required: [rowNumber, status, message]
-      required: [importSessionId, processed, complete, created, shared, duplicates, rejected, rows]
+      required: [importSessionId, processed, complete, created, shared, duplicates, similar, rejected, rows]
     CompanyUpdate:
       type: object
       properties:
@@ -5178,6 +5195,7 @@ components:
         companyPhoneNumber: { type: ["string", "null"], maxLength: 40 }
         companyLinkedinUrl: { type: ["string", "null"], maxLength: 2048 }
         companyLocation: { type: ["string", "null"], maxLength: 200 }
+        allowSimilarCompany: { type: boolean, description: Confirm updating despite similar-name warnings }
     CompanyBackfillResult:
       type: object
       properties:

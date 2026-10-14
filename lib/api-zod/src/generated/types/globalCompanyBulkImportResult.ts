@@ -13,6 +13,8 @@ export interface GlobalCompanyBulkImportResult {
   /** @minimum 0 */
   duplicates: number;
   /** @minimum 0 */
+  similar: number;
+  /** @minimum 0 */
   invalid: number;
   rows: GlobalCompanyBulkImportRowResult[];
 }

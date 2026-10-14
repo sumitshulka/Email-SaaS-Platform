@@ -13,9 +13,24 @@ export interface MaintenanceStatus {
   maintenanceMode: boolean;
 }
 
+export interface SimilarCompanyCandidate {
+  id: string;
+  companyName: string;
+  /** @nullable */
+  websiteUrl: string | null;
+  /** @nullable */
+  domain: string | null;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  similarity: number;
+}
+
 export interface ApiError {
   error: string;
   code?: string;
+  similarCompanies?: SimilarCompanyCandidate[];
   /** @nullable */
   earliestStartAt?: string | null;
 }
@@ -1577,6 +1592,8 @@ export interface GlobalCompanyInput {
   companyLinkedinUrl?: string;
   /** @maxLength 200 */
   companyLocation?: string;
+  /** Confirm creating a company despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }
 
 export interface GlobalCompanyBulkImportRowInput {
@@ -1634,6 +1651,7 @@ export type GlobalCompanyBulkImportRowResultStatus = typeof GlobalCompanyBulkImp
 export const GlobalCompanyBulkImportRowResultStatus = {
   imported: 'imported',
   duplicate: 'duplicate',
+  similar: 'similar',
   invalid: 'invalid',
 } as const;
 
@@ -1654,6 +1672,8 @@ export interface GlobalCompanyBulkImportResult {
   imported: number;
   /** @minimum 0 */
   duplicates: number;
+  /** @minimum 0 */
+  similar: number;
   /** @minimum 0 */
   invalid: number;
   rows: GlobalCompanyBulkImportRowResult[];
@@ -1715,6 +1735,8 @@ export interface GlobalCompanyUpdate {
      * @nullable
      */
   companyLocation?: string | null;
+  /** Confirm updating despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }
 
 export type CompanyListItem = Company & {
@@ -1830,6 +1852,8 @@ export interface CompanyInput {
   companyLocation?: string;
   /** Explicitly add this company profile to the global catalog; contacts remain private */
   shareWithGlobal?: boolean;
+  /** Confirm creating a company despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }
 
 export type CompanyExportColumn = typeof CompanyExportColumn[keyof typeof CompanyExportColumn];
@@ -1912,6 +1936,7 @@ export const CompanyBulkImportResultRowsItemStatus = {
   created: 'created',
   shared: 'shared',
   duplicate: 'duplicate',
+  similar: 'similar',
   rejected: 'rejected',
 } as const;
 
@@ -1932,6 +1957,8 @@ export interface CompanyBulkImportResult {
   shared: number;
   /** @minimum 0 */
   duplicates: number;
+  /** @minimum 0 */
+  similar: number;
   /** @minimum 0 */
   rejected: number;
   rows: CompanyBulkImportResultRowsItem[];
@@ -1993,6 +2020,8 @@ export interface CompanyUpdate {
      * @nullable
      */
   companyLocation?: string | null;
+  /** Confirm updating despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }
 
 export interface CompanyBackfillResult {

@@ -13,6 +13,7 @@ import {
   or,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
+import { findSimilarCompanies } from "../lib/company-similarity";
 import {
   BulkImportCompaniesBody,
   BulkImportCompaniesResponse,
@@ -86,7 +87,7 @@ router.post("/companies/bulk-import", requireUserRole, async (req, res): Promise
     if (!template || template.consumedAt) return { error: "This company template is no longer active. Download a fresh template.", code: "TEMPLATE_EXPIRED" as const };
     if (template.importSessionId && template.importSessionId !== parsed.data.importSessionId) return { error: "This template is already in use by another import.", code: "IMPORT_SESSION_MISMATCH" as const };
     await tx.update(companyImportTemplatesTable).set({ importSessionId: parsed.data.importSessionId }).where(eq(companyImportTemplatesTable.id, template.id));
-    const outcomes: Array<{rowNumber:number;status:"created"|"shared"|"duplicate"|"rejected";message:string}> = [];
+    const outcomes: Array<{rowNumber:number;status:"created"|"shared"|"duplicate"|"similar"|"rejected";message:string}> = [];
     for (const row of parsed.data.rows) {
       const profile = cleanCompanyInput(row.company as Record<string, unknown>);
       const domainKey = companyDomainKey(profile);
@@ -94,6 +95,19 @@ router.post("/companies/bulk-import", requireUserRole, async (req, res): Promise
       if (!companyName || !validDomain(profile)) { outcomes.push({rowNumber:row.rowNumber,status:"rejected",message:"Enter a company name and valid domain."}); continue; }
       const [duplicate] = await tx.select({id:companiesTable.id}).from(companiesTable).where(and(eq(companiesTable.userId,userId),eq(companiesTable.companyDomainKey,domainKey ?? ""))).limit(1);
       if (domainKey && duplicate) { outcomes.push({rowNumber:row.rowNumber,status:"duplicate",message:"This domain already exists in your workspace."}); continue; }
+       if (domainKey) {
+         const [globalDuplicate] = await tx.select({id:globalCompaniesTable.id}).from(globalCompaniesTable).where(eq(globalCompaniesTable.companyDomainKey,domainKey)).limit(1);
+         if (globalDuplicate) { outcomes.push({rowNumber:row.rowNumber,status:"duplicate",message:"This website domain already exists in the Global Company DB."}); continue; }
+       }
+       const similar = await findSimilarCompanies(companyName, { userId });
+       if (domainKey && similar.some(candidate => candidate.domain === domainKey)) {
+         outcomes.push({rowNumber:row.rowNumber,status:"duplicate",message:"A company with this website domain is already present."});
+         continue;
+       }
+       if (similar.length && !row.company.allowSimilarCompany) {
+         outcomes.push({rowNumber:row.rowNumber,status:"similar",message:`Possible match: ${similar.map(candidate => candidate.companyName).join(", ")}. Review before allowing this row.`});
+         continue;
+       }
       let globalCompanyId: string | null = null;
       if (row.company.shareWithGlobal) {
         const [global] = await tx.insert(globalCompaniesTable).values({...profile,companyName,companyDomainKey:domainKey})
@@ -104,8 +118,10 @@ router.post("/companies/bulk-import", requireUserRole, async (req, res): Promise
       await tx.insert(companiesTable).values({userId,...profile,companyName,companyDomainKey:domainKey,globalCompanyId});
       outcomes.push({rowNumber:row.rowNumber,status:row.company.shareWithGlobal?"shared":"created",message:row.company.shareWithGlobal?"Created and shared; contacts remain private.":"Created privately in your workspace."});
     }
-    if (parsed.data.isFinalBatch) await tx.update(companyImportTemplatesTable).set({consumedAt:new Date()}).where(eq(companyImportTemplatesTable.id,template.id));
-    return {importSessionId:parsed.data.importSessionId,processed:outcomes.length,complete:parsed.data.isFinalBatch,created:outcomes.filter(x=>x.status==="created").length,shared:outcomes.filter(x=>x.status==="shared").length,duplicates:outcomes.filter(x=>x.status==="duplicate").length,rejected:outcomes.filter(x=>x.status==="rejected").length,rows:outcomes};
+    const hasSimilar = outcomes.some(outcome => outcome.status === "similar");
+    const complete = parsed.data.isFinalBatch && !hasSimilar;
+    if (complete) await tx.update(companyImportTemplatesTable).set({consumedAt:new Date()}).where(eq(companyImportTemplatesTable.id,template.id));
+    return {importSessionId:parsed.data.importSessionId,processed:outcomes.length,complete,created:outcomes.filter(x=>x.status==="created").length,shared:outcomes.filter(x=>x.status==="shared").length,duplicates:outcomes.filter(x=>x.status==="duplicate").length,similar:outcomes.filter(x=>x.status==="similar").length,rejected:outcomes.filter(x=>x.status==="rejected").length,rows:outcomes};
   });
   if ("error" in result) { res.status(409).json({error:result.error,code:result.code}); return; }
   res.json(BulkImportCompaniesResponse.parse(result));
@@ -497,6 +513,36 @@ router.post("/companies", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.authUser!.id;
+  if (domainKey) {
+    const [globalDuplicate] = await db.select({ id: globalCompaniesTable.id })
+      .from(globalCompaniesTable).where(eq(globalCompaniesTable.companyDomainKey, domainKey)).limit(1);
+    if (globalDuplicate) {
+      res.status(409).json({
+        error: "A company with this website domain is already in the Global Company DB. Add the existing company instead.",
+        code: "GLOBAL_COMPANY_DOMAIN_EXISTS",
+      });
+      return;
+    }
+  }
+  if (!parsed.data.allowSimilarCompany) {
+    const similarCompanies = await findSimilarCompanies(companyName, { userId });
+    if (domainKey && similarCompanies.some(candidate => candidate.domain === domainKey)) {
+      res.status(409).json({
+        error: "A company with this website domain is already present. Add the existing company instead.",
+        code: "COMPANY_DOMAIN_EXISTS",
+      });
+      return;
+    }
+    if (similarCompanies.length) {
+      const names = similarCompanies.map(candidate => candidate.companyName).join(", ");
+      res.status(409).json({
+        error: `A similarly named company already exists (${names}). Review the matches before creating this company.`,
+        code: "COMPANY_SIMILAR_NAME_WARNING",
+        similarCompanies,
+      });
+      return;
+    }
+  }
   const result = await db.transaction(async (tx) => {
     const [user] = await tx
       .select({ id: usersTable.id })

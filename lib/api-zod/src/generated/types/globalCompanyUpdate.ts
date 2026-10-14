@@ -62,4 +62,6 @@ export interface GlobalCompanyUpdate {
      * @nullable
      */
   companyLocation?: string | null;
+  /** Confirm updating despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }

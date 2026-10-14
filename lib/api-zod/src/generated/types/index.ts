@@ -323,6 +323,7 @@ export * from './senderInboxCheckInput';
 export * from './senderInboxCheckResult';
 export * from './senderInboxCheckResultReplyMatchesItem';
 export * from './setActiveRazorpayEnvironmentInput';
+export * from './similarCompanyCandidate';
 export * from './smtpSendingLimits';
 export * from './subscriptionAddOnBalances';
 export * from './subscriptionAddOnMailboxMetric';

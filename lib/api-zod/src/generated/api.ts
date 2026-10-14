@@ -2011,7 +2011,8 @@ export const BulkImportCompaniesBody = zod.object({
   "companyPhoneNumber": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyPhoneNumberMax).optional(),
   "companyLinkedinUrl": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyLinkedinUrlMax).optional(),
   "companyLocation": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyLocationMax).optional(),
-  "shareWithGlobal": zod.boolean().optional().describe('Explicitly add this company profile to the global catalog; contacts remain private')
+  "shareWithGlobal": zod.boolean().optional().describe('Explicitly add this company profile to the global catalog; contacts remain private'),
+  "allowSimilarCompany": zod.boolean().optional().describe('Confirm creating a company despite similar-name warnings')
 }).and(zod.object({
   "shareWithGlobal": zod.boolean().optional()
 }))
@@ -2026,6 +2027,8 @@ export const bulkImportCompaniesResponseSharedMin = 0;
 
 export const bulkImportCompaniesResponseDuplicatesMin = 0;
 
+export const bulkImportCompaniesResponseSimilarMin = 0;
+
 export const bulkImportCompaniesResponseRejectedMin = 0;
 
 
@@ -2037,10 +2040,11 @@ export const BulkImportCompaniesResponse = zod.object({
   "created": zod.number().int().min(bulkImportCompaniesResponseCreatedMin),
   "shared": zod.number().int().min(bulkImportCompaniesResponseSharedMin),
   "duplicates": zod.number().int().min(bulkImportCompaniesResponseDuplicatesMin),
+  "similar": zod.number().int().min(bulkImportCompaniesResponseSimilarMin),
   "rejected": zod.number().int().min(bulkImportCompaniesResponseRejectedMin),
   "rows": zod.array(zod.object({
   "rowNumber": zod.number().int(),
-  "status": zod.enum(['created', 'shared', 'duplicate', 'rejected']),
+  "status": zod.enum(['created', 'shared', 'duplicate', 'similar', 'rejected']),
   "message": zod.string()
 }))
 })
@@ -2813,7 +2817,8 @@ export const CreateGlobalCompanyBody = zod.object({
   "companyDescription": zod.string().max(createGlobalCompanyBodyCompanyDescriptionMax).optional(),
   "companyPhoneNumber": zod.string().max(createGlobalCompanyBodyCompanyPhoneNumberMax).optional(),
   "companyLinkedinUrl": zod.string().max(createGlobalCompanyBodyCompanyLinkedinUrlMax).optional(),
-  "companyLocation": zod.string().max(createGlobalCompanyBodyCompanyLocationMax).optional()
+  "companyLocation": zod.string().max(createGlobalCompanyBodyCompanyLocationMax).optional(),
+  "allowSimilarCompany": zod.boolean().optional().describe('Confirm creating a company despite similar-name warnings')
 })
 
 export const createGlobalCompanyResponseCompanyNameMax = 200;
@@ -2939,7 +2944,8 @@ export const BulkImportGlobalCompaniesBody = zod.object({
   "companyDescription": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDescriptionMax).optional(),
   "companyPhoneNumber": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyPhoneNumberMax).optional(),
   "companyLinkedinUrl": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLinkedinUrlMax).optional(),
-  "companyLocation": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLocationMax).optional()
+  "companyLocation": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyLocationMax).optional(),
+  "allowSimilarCompany": zod.boolean().optional().describe('Confirm creating a company despite similar-name warnings')
 })
 })).min(1).max(bulkImportGlobalCompaniesBodyRowsMax)
 })
@@ -2947,6 +2953,8 @@ export const BulkImportGlobalCompaniesBody = zod.object({
 export const bulkImportGlobalCompaniesResponseImportedMin = 0;
 
 export const bulkImportGlobalCompaniesResponseDuplicatesMin = 0;
+
+export const bulkImportGlobalCompaniesResponseSimilarMin = 0;
 
 export const bulkImportGlobalCompaniesResponseInvalidMin = 0;
 
@@ -2958,11 +2966,12 @@ export const bulkImportGlobalCompaniesResponseRowsItemRowNumberMax = 10001;
 export const BulkImportGlobalCompaniesResponse = zod.object({
   "imported": zod.number().int().min(bulkImportGlobalCompaniesResponseImportedMin),
   "duplicates": zod.number().int().min(bulkImportGlobalCompaniesResponseDuplicatesMin),
+  "similar": zod.number().int().min(bulkImportGlobalCompaniesResponseSimilarMin),
   "invalid": zod.number().int().min(bulkImportGlobalCompaniesResponseInvalidMin),
   "rows": zod.array(zod.object({
   "rowNumber": zod.number().int().min(bulkImportGlobalCompaniesResponseRowsItemRowNumberMin).max(bulkImportGlobalCompaniesResponseRowsItemRowNumberMax),
   "companyName": zod.string(),
-  "status": zod.enum(['imported', 'duplicate', 'invalid']),
+  "status": zod.enum(['imported', 'duplicate', 'similar', 'invalid']),
   "reason": zod.string().nullable()
 }))
 })
@@ -3010,7 +3019,8 @@ export const UpdateGlobalCompanyBody = zod.object({
   "companyDescription": zod.string().max(updateGlobalCompanyBodyCompanyDescriptionMax).nullish(),
   "companyPhoneNumber": zod.string().max(updateGlobalCompanyBodyCompanyPhoneNumberMax).nullish(),
   "companyLinkedinUrl": zod.string().max(updateGlobalCompanyBodyCompanyLinkedinUrlMax).nullish(),
-  "companyLocation": zod.string().max(updateGlobalCompanyBodyCompanyLocationMax).nullish()
+  "companyLocation": zod.string().max(updateGlobalCompanyBodyCompanyLocationMax).nullish(),
+  "allowSimilarCompany": zod.boolean().optional().describe('Confirm updating despite similar-name warnings')
 })
 
 export const updateGlobalCompanyResponseCompanyNameMax = 200;
@@ -3296,7 +3306,8 @@ export const CreateCompanyBody = zod.object({
   "companyPhoneNumber": zod.string().max(createCompanyBodyCompanyPhoneNumberMax).optional(),
   "companyLinkedinUrl": zod.string().max(createCompanyBodyCompanyLinkedinUrlMax).optional(),
   "companyLocation": zod.string().max(createCompanyBodyCompanyLocationMax).optional(),
-  "shareWithGlobal": zod.boolean().optional().describe('Explicitly add this company profile to the global catalog; contacts remain private')
+  "shareWithGlobal": zod.boolean().optional().describe('Explicitly add this company profile to the global catalog; contacts remain private'),
+  "allowSimilarCompany": zod.boolean().optional().describe('Confirm creating a company despite similar-name warnings')
 })
 
 export const createCompanyResponseCompanyNameMax = 200;
@@ -3551,7 +3562,8 @@ export const UpdateCompanyBody = zod.object({
   "companyDescription": zod.string().max(updateCompanyBodyCompanyDescriptionMax).nullish(),
   "companyPhoneNumber": zod.string().max(updateCompanyBodyCompanyPhoneNumberMax).nullish(),
   "companyLinkedinUrl": zod.string().max(updateCompanyBodyCompanyLinkedinUrlMax).nullish(),
-  "companyLocation": zod.string().max(updateCompanyBodyCompanyLocationMax).nullish()
+  "companyLocation": zod.string().max(updateCompanyBodyCompanyLocationMax).nullish(),
+  "allowSimilarCompany": zod.boolean().optional().describe('Confirm updating despite similar-name warnings')
 })
 
 export const updateCompanyResponseCompanyNameMax = 200;

@@ -11,8 +11,12 @@ From a company details page, offer only currently unlinked contacts for direct a
 
 When legacy company details conflict with a selected shared company, offer replacement after an explicit confirmation. Explain that confirming permanently removes the legacy profile and uses the selected shared company instead. Cancelling must leave both records unchanged.
 
+For company creation and import, treat the same normalized website host/domain as a hard duplicate even when URL paths differ. Similar company names are warnings only; they never create or link records automatically. Let users explicitly approve a different company, and hold similar-name import rows for individual approval while unaffected rows proceed.
+
 **Why:** The user chose confirmed replacement rather than permanently blocking links to a different company. Ordinary linking must still preserve legacy details or reject conflicts; the replacement decision must never be inferred from a normal contact save.
 
 **Why:** Domain-only matching avoids guessing between similarly named organizations. Preserving profile data on unlink prevents data loss, and not moving already-linked contacts implicitly protects existing relationships.
 
-**How to apply:** Keep backfill rules, contact association behavior, and the Companies UI consistent with these constraints. Do not weaken matching to company names, silently replace conflicting values, or silently move an existing company link.
+**Why:** The user confirmed that URLs on the same host are duplicates, even when paths differ, and chose individual approval for similar-name rows during imports.
+
+**How to apply:** Keep backfill rules, contact association behavior, and the Companies UI consistent with these constraints. Do not weaken matching to company names, silently replace conflicting values, or silently move an existing company link. For company creation/import, enforce host duplicates independently of the fuzzy-name warning; never auto-link on a name match.

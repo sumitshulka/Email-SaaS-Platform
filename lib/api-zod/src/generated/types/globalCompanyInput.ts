@@ -32,4 +32,6 @@ export interface GlobalCompanyInput {
   companyLinkedinUrl?: string;
   /** @maxLength 200 */
   companyLocation?: string;
+  /** Confirm creating a company despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }

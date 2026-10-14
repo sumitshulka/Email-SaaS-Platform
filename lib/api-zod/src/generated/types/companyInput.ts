@@ -34,4 +34,6 @@ export interface CompanyInput {
   companyLocation?: string;
   /** Explicitly add this company profile to the global catalog; contacts remain private */
   shareWithGlobal?: boolean;
+  /** Confirm creating a company despite similar-name warnings */
+  allowSimilarCompany?: boolean;
 }

@@ -15,7 +15,7 @@ const fields = [
 ] as const;
 type Field = typeof fields[number][0];
 type Issue = { rowNumber: number; companyName: string; status: string; reason: string };
-type Report = { imported: number; duplicates: number; invalid: number; unconfirmed: number; notSubmitted: number; issues: Issue[]; failure: string | null };
+type Report = { imported: number; duplicates: number; similar: number; invalid: number; unconfirmed: number; notSubmitted: number; issues: Issue[]; failure: string | null };
 const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-55';
 const primary = `${button} border-[#286d5b] bg-[#286d5b] text-white hover:bg-[#205a4b]`;
 const outline = `${button} border-[#d5e1da] bg-white text-[#506b5f] hover:bg-[#f5f9f6]`;
@@ -35,8 +35,10 @@ export function GlobalCompanyImportDialog({ onClose, onChanged }: { onClose: () 
   const [page, setPage] = useState(0);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [report, setReport] = useState<Report | null>(null);
+  const [sessionId, setSessionId] = useState('');
+  const [approvedSimilarRows, setApprovedSimilarRows] = useState<Record<number, boolean>>({});
   const close = () => { if (!running && !reading) onClose(); };
-  const reset = () => { if (running || reading) return; setParsed(null); setTemplateId(null); setFileError(null); setReport(null); setPage(0); if (fileRef.current) fileRef.current.value = ''; };
+  const reset = () => { if (running || reading) return; setParsed(null); setTemplateId(null); setFileError(null); setReport(null); setPage(0); setSessionId(''); setApprovedSimilarRows({}); if (fileRef.current) fileRef.current.value = ''; };
   const downloadTemplate = async () => {
     setFileError(null);
     try {
@@ -46,12 +48,12 @@ export function GlobalCompanyImportDialog({ onClose, onChanged }: { onClose: () 
       const name = response.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/i)?.[1] ?? 'mailflow-global-companies-template.xlsx';
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
-      setParsed(null); setTemplateId(null); setReport(null); setPage(0); if (fileRef.current) fileRef.current.value = '';
+      setParsed(null); setTemplateId(null); setReport(null); setPage(0); setSessionId(''); setApprovedSimilarRows({}); if (fileRef.current) fileRef.current.value = '';
     } catch (error) { setFileError(error instanceof Error ? error.message : 'Could not download the template.'); }
   };
   const pick = async (file?: File) => {
     if (!file || running) return;
-    setParsed(null); setTemplateId(null); setReport(null); setFileError(null); setReading(true);
+    setParsed(null); setTemplateId(null); setReport(null); setFileError(null); setSessionId(''); setApprovedSimilarRows({}); setReading(true);
     try {
       const match = file.name.match(/^mailflow-global-companies-template-([0-9a-f-]{36})\.xlsx$/i);
       if (!match) throw new GlobalCompanyImportFileError('Only the latest XLSX template downloaded from this page can be imported.');
@@ -71,21 +73,34 @@ export function GlobalCompanyImportDialog({ onClose, onChanged }: { onClose: () 
     const unsafeRows = parsed.unsafeRows.filter(rowNumber => rowNumber !== row.rowNumber);
     setParsed({ ...parsed, allRows, unsafeRows, ...revalidateGlobalCompanyRows(allRows, unsafeRows) });
   };
-  const run = async () => {
+  const run = async (retrySimilar = false) => {
     if (!parsed || !templateId || parsed.errors.length || !parsed.valid.length || submitting.current) return;
     submitting.current = true; setRunning(true);
-    const sessionId = crypto.randomUUID();
-    const result: Report = { imported: 0, duplicates: 0, invalid: 0, unconfirmed: 0, notSubmitted: 0, issues: [], failure: null };
-    setProgress({ done: 0, total: parsed.valid.length });
-    for (let index = 0; index < parsed.valid.length; index += GLOBAL_COMPANY_IMPORT_BATCH_SIZE) {
-      const batch = parsed.valid.slice(index, index + GLOBAL_COMPANY_IMPORT_BATCH_SIZE);
+    const session = sessionId || crypto.randomUUID();
+    setSessionId(session);
+    const result: Report = retrySimilar && report
+      ? { ...report, issues: [], failure: null }
+      : { imported: 0, duplicates: 0, similar: 0, invalid: 0, unconfirmed: 0, notSubmitted: 0, issues: [], failure: null };
+    const selected = retrySimilar
+      ? parsed.valid.filter(row => approvedSimilarRows[row.rowNumber] && report?.issues.some(issue => issue.rowNumber === row.rowNumber && issue.status === 'similar'))
+      : parsed.valid;
+    if (!selected.length) { setRunning(false); submitting.current = false; return; }
+    setProgress({ done: 0, total: selected.length });
+    let hasEarlierSimilar = false;
+    const processedRowNumbers: number[] = [];
+    for (let index = 0; index < selected.length; index += GLOBAL_COMPANY_IMPORT_BATCH_SIZE) {
+      const batch = selected.slice(index, index + GLOBAL_COMPANY_IMPORT_BATCH_SIZE);
+      const finalBatch = index + batch.length >= selected.length;
       try {
         const response = await importer.mutateAsync({ data: {
-          templateId, importSessionId: sessionId, finalBatch: index + batch.length >= parsed.valid.length, rows: batch,
+          templateId, importSessionId: session, finalBatch: retrySimilar ? finalBatch : finalBatch && !hasEarlierSimilar,
+          rows: batch.map(row => ({ ...row, company: { ...row.company, allowSimilarCompany: retrySimilar && approvedSimilarRows[row.rowNumber] === true } })),
         } });
-        result.imported += response.imported; result.duplicates += response.duplicates; result.invalid += response.invalid;
+        result.imported += response.imported; result.duplicates += response.duplicates; result.similar += response.similar ?? 0; result.invalid += response.invalid;
         result.issues.push(...response.rows.filter(row => row.status !== 'imported').map(issueText));
-        setProgress({ done: index + batch.length, total: parsed.valid.length }); onChanged();
+        processedRowNumbers.push(...response.rows.map(row => row.rowNumber));
+        hasEarlierSimilar ||= (response.similar ?? 0) > 0;
+        setProgress({ done: index + batch.length, total: selected.length }); onChanged();
       } catch (error) {
         const later = parsed.valid.slice(index + batch.length);
         result.unconfirmed = batch.length; result.notSubmitted = later.length;
@@ -96,7 +111,11 @@ export function GlobalCompanyImportDialog({ onClose, onChanged }: { onClose: () 
       }
     }
     result.issues.sort((a,b) => a.rowNumber - b.rowNumber);
-    setReport(result); setRunning(false); submitting.current = false;
+    if (retrySimilar && report) {
+      const processed = new Set(processedRowNumbers);
+      setReport({ ...result, similar: Math.max(0, report.similar - selected.length) + result.similar - report.similar, issues: [...report.issues.filter(issue => !processed.has(issue.rowNumber)), ...result.issues].sort((a,b) => a.rowNumber-b.rowNumber) });
+    } else setReport(result);
+    setRunning(false); submitting.current = false;
   };
   const visibleRows = parsed?.allRows.slice(page * 100, page * 100 + 100) ?? [];
   const pages = Math.max(1, Math.ceil((parsed?.allRows.length ?? 0) / 100));
@@ -121,7 +140,7 @@ export function GlobalCompanyImportDialog({ onClose, onChanged }: { onClose: () 
         <div className="flex items-center justify-between text-[11px] text-[#71847a]"><span>Rows {(page * 100) + 1}–{Math.min((page + 1) * 100, parsed.allRows.length)} of {parsed.allRows.length}</span><div className="flex gap-2"><button type="button" disabled={page === 0} onClick={() => setPage(page - 1)} className="rounded border px-3 py-1 disabled:opacity-40">Previous</button><span className="px-2 py-1">{page + 1} / {pages}</span><button type="button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)} className="rounded border px-3 py-1 disabled:opacity-40">Next</button></div></div>
         {running && <div role="status" className="flex items-center gap-2 text-[12px] text-[#286d5b]"><LoaderCircle className="h-4 w-4 animate-spin"/>Importing {progress.done} of {progress.total}. Keep this window open.</div>}
       </div>}
-      {report && <div className="space-y-4"><div role="status" className={`rounded-lg border px-3 py-2.5 text-[12px] ${report.failure ? 'border-[#ead2c2] bg-[#fff8f2] text-[#945b37]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{report.failure ?? 'Upload finished.'}</div><div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{[['Imported',report.imported],['Duplicates',report.duplicates],['Invalid',report.invalid],['Unconfirmed',report.unconfirmed],['Not submitted',report.notSubmitted]].map(([label,value]) => <div key={label} className="rounded-lg border bg-white p-3 text-xs">{label}: <b>{value}</b></div>)}</div>{report.issues.length > 0 && <><button type="button" onClick={downloadIssues} className="text-xs font-semibold text-[#286d5b] underline">Download issue report</button><ul className="max-h-48 overflow-auto rounded border bg-white text-xs">{report.issues.map(issue => <li key={`${issue.rowNumber}-${issue.status}`} className="border-b p-2">Row {issue.rowNumber} · {issue.companyName} · {issue.status}: {issue.reason}</li>)}</ul></>}</div>}
+       {report && <div className="space-y-4"><div role="status" className={`rounded-lg border px-3 py-2.5 text-[12px] ${report.failure ? 'border-[#ead2c2] bg-[#fff8f2] text-[#945b37]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{report.failure ?? 'Upload finished.'}</div><div className="grid grid-cols-2 gap-3 sm:grid-cols-6">{[['Imported',report.imported],['Duplicates',report.duplicates],['Similar names',report.similar],['Invalid',report.invalid],['Unconfirmed',report.unconfirmed],['Not submitted',report.notSubmitted]].map(([label,value]) => <div key={label} className="rounded-lg border bg-white p-3 text-xs">{label}: <b>{value}</b></div>)}</div>{report.issues.length > 0 && <><button type="button" onClick={downloadIssues} className="text-xs font-semibold text-[#286d5b] underline">Download issue report</button><ul className="max-h-48 overflow-auto rounded border bg-white text-xs">{report.issues.map(issue => <li key={`${issue.rowNumber}-${issue.status}`} className="flex items-center gap-2 border-b p-2">{issue.status==='similar'&&<input aria-label={`Approve similar company row ${issue.rowNumber}`} type="checkbox" checked={approvedSimilarRows[issue.rowNumber]===true} onChange={event=>setApprovedSimilarRows(current=>({...current,[issue.rowNumber]:event.target.checked}))}/>}<span>Row {issue.rowNumber} · {issue.companyName} · {issue.status}: {issue.reason}</span></li>)}</ul>{report.issues.some(issue=>issue.status==='similar')&&<button type="button" onClick={()=>void run(true)} disabled={running||!Object.values(approvedSimilarRows).some(Boolean)} className={primary}>Create approved similar-name rows</button>}</>}</div>}
       <footer className="mt-6 flex flex-col-reverse justify-between gap-2 border-t border-[#e5ede8] pt-4 sm:flex-row"><button type="button" onClick={reset} disabled={running || reading || !report} className={outline}>Start another import</button><div className="flex justify-end gap-2"><button type="button" onClick={close} disabled={running || reading} className={outline}>{report ? 'Close' : 'Cancel'}</button>{parsed && !report && <button type="button" disabled={running || parsed.errors.length > 0 || !parsed.valid.length} onClick={() => void run()} className={primary}>{running ? 'Importing…' : `Import ${parsed.valid.length.toLocaleString()} companies`}</button>}</div></footer>
     </section>
   </div>;

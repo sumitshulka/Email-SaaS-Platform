@@ -12,5 +12,6 @@ export type GlobalCompanyBulkImportRowResultStatus = typeof GlobalCompanyBulkImp
 export const GlobalCompanyBulkImportRowResultStatus = {
   imported: 'imported',
   duplicate: 'duplicate',
+  similar: 'similar',
   invalid: 'invalid',
 } as const;

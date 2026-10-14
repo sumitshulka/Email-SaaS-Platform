@@ -19,6 +19,8 @@ export interface CompanyBulkImportResult {
   /** @minimum 0 */
   duplicates: number;
   /** @minimum 0 */
+  similar: number;
+  /** @minimum 0 */
   rejected: number;
   rows: CompanyBulkImportResultRowsItem[];
 }

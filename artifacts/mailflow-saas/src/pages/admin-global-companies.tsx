@@ -35,16 +35,17 @@ function GlobalCompanyForm({ record, onClose, onSaved, businessAreas }: { record
   const update = useUpdateGlobalCompany();
   const [form, setForm] = useState(() => fromRecord(record));
   const [error, setError] = useState('');
+  const [allowSimilarCompany, setAllowSimilarCompany] = useState(false);
   const saving = create.isPending || update.isPending;
-  const set = (key: keyof FormValues, value: string) => setForm(current => ({ ...current, [key]: value }));
+  const set = (key: keyof FormValues, value: string) => { setForm(current => ({ ...current, [key]: value })); if (allowSimilarCompany) setAllowSimilarCompany(false); };
   const submit = (event: FormEvent) => {
     event.preventDefault(); setError('');
     if (record) {
       const data: GlobalCompanyUpdate = { companyName: form.companyName.trim(), companyBusinessArea: form.companyBusinessArea || null, ...Object.fromEntries(fields.map(([key]) => [key, form[key].trim() || null])), companyDescription: form.companyDescription.trim() || null } as GlobalCompanyUpdate;
       update.mutate({ globalCompanyId: record.id, data }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getListAdminGlobalCompaniesQueryKey() }); onSaved(); }, onError: error => setError(domainError(error)) });
     } else {
-      const data: GlobalCompanyInput = { companyName: form.companyName.trim(), companyBusinessArea: form.companyBusinessArea || undefined, ...Object.fromEntries(fields.map(([key]) => [key, form[key].trim() || undefined])), companyDescription: form.companyDescription.trim() || undefined } as GlobalCompanyInput;
-      create.mutate({ data }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getListAdminGlobalCompaniesQueryKey() }); onSaved(); }, onError: error => setError(domainError(error)) });
+      const data: GlobalCompanyInput = { companyName: form.companyName.trim(), companyBusinessArea: form.companyBusinessArea || undefined, ...Object.fromEntries(fields.map(([key]) => [key, form[key].trim() || undefined])), companyDescription: form.companyDescription.trim() || undefined, allowSimilarCompany } as GlobalCompanyInput;
+      create.mutate({ data }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getListAdminGlobalCompaniesQueryKey() }); onSaved(); }, onError: error => { const message = errorText(error); if (message.includes('similarly named')) { setAllowSimilarCompany(true); setError(`${message} If these are different companies, submit again to confirm creation.`); } else setError(domainError(error)); } });
     }
   };
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#1b352e]/35 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose(); }}>
@@ -55,7 +56,7 @@ function GlobalCompanyForm({ record, onClose, onSaved, businessAreas }: { record
         <div className="grid gap-3 sm:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="block"><span className="mb-1.5 block text-[10px] font-bold text-[#47645a]">{label}</span>{type === 'select' ? <select value={form[key]} onChange={event => set(key, event.target.value)} className="h-10 w-full rounded-lg border border-[#d5e1da] bg-white px-3 text-[12px] text-[#29443b]"><option value="">Select a business area</option>{businessAreas.map(area => <option key={area} value={area}>{area}</option>)}</select> : <input type={type} value={form[key]} onChange={event => set(key, event.target.value)} className="h-10 w-full rounded-lg border border-[#d5e1da] bg-white px-3 text-[12px] text-[#29443b] outline-none focus:border-[#438674] focus:ring-2 focus:ring-[#dcece5]"/>}</label>)}</div>
         <label className="block"><span className="mb-1.5 block text-[10px] font-bold text-[#47645a]">Description</span><textarea maxLength={10000} value={form.companyDescription} onChange={event => set('companyDescription', event.target.value)} className="min-h-[96px] w-full rounded-lg border border-[#d5e1da] bg-white px-3 py-2 text-[12px] leading-5 text-[#29443b] outline-none focus:border-[#438674] focus:ring-2 focus:ring-[#dcece5]"/></label>
         {error && <div role="alert" className="rounded-lg border border-[#ead2c2] bg-[#fff8f2] px-3 py-2.5 text-[11px] leading-5 text-[#945b37]">{error}</div>}
-        <div className="flex flex-col-reverse gap-2 border-t border-[#e5ede8] pt-4 sm:flex-row sm:justify-end"><button type="button" disabled={saving} onClick={onClose} className="min-h-10 rounded-lg border border-[#d5e1da] bg-white px-4 text-[11px] font-bold text-[#506b5f]">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#286d5b] px-4 text-[11px] font-bold text-white hover:bg-[#205a4b] disabled:opacity-55">{saving ? 'Saving…' : <><Check className="h-4 w-4"/>{record ? 'Save changes' : 'Create profile'}</>}</button></div>
+        <div className="flex flex-col-reverse gap-2 border-t border-[#e5ede8] pt-4 sm:flex-row sm:justify-end"><button type="button" disabled={saving} onClick={onClose} className="min-h-10 rounded-lg border border-[#d5e1da] bg-white px-4 text-[11px] font-bold text-[#506b5f]">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#286d5b] px-4 text-[11px] font-bold text-white hover:bg-[#205a4b] disabled:opacity-55">{saving ? 'Saving…' : <><Check className="h-4 w-4"/>{allowSimilarCompany ? 'Create anyway' : record ? 'Save changes' : 'Create profile'}</>}</button></div>
       </form>
     </section>
   </div>;

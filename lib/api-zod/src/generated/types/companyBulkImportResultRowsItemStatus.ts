@@ -13,5 +13,6 @@ export const CompanyBulkImportResultRowsItemStatus = {
   created: 'created',
   shared: 'shared',
   duplicate: 'duplicate',
+  similar: 'similar',
   rejected: 'rejected',
 } as const;
