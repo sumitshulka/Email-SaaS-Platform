@@ -28,6 +28,7 @@ export const companiesTable = pgTable(
     companyWebsiteUrl: varchar("company_website_url", { length: 2048 }),
     companyDomain: varchar("company_domain", { length: 255 }),
     companyDomainKey: varchar("company_domain_key", { length: 255 }),
+    companyBusinessArea: varchar("company_business_area", { length: 120 }),
     companyIndustry: varchar("company_industry", { length: 120 }),
     companySize: varchar("company_size", { length: 80 }),
     companyRevenueRange: varchar("company_revenue_range", { length: 80 }),

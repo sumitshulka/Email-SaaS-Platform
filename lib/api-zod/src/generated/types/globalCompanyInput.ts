@@ -17,6 +17,8 @@ export interface GlobalCompanyInput {
   /** @maxLength 255 */
   companyDomain?: string;
   /** @maxLength 120 */
+  companyBusinessArea?: string;
+  /** @maxLength 120 */
   companyIndustry?: string;
   /** @maxLength 80 */
   companySize?: string;

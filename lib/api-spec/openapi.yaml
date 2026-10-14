@@ -1372,6 +1372,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/company-business-areas:
+    put:
+      operationId: updateCompanyBusinessAreas
+      tags: [admin]
+      summary: Replace the platform-wide company business-area choices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyBusinessAreasInput" }
+      responses:
+        "200":
+          description: Saved business-area choices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyBusinessAreas" }
+        "400":
+          description: Invalid business-area choices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /company-business-areas:
+    get:
+      operationId: listCompanyBusinessAreas
+      tags: [contacts]
+      summary: List platform-wide company business-area choices
+      responses:
+        "200":
+          description: Available business-area choices
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyBusinessAreas" }
     post:
       operationId: createGlobalCompany
       tags: [admin]
@@ -4527,6 +4559,7 @@ components:
         companyName: { type: string, maxLength: 200 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyBusinessArea: { type: ["string", "null"], maxLength: 120 }
         companyIndustry: { type: ["string", "null"], maxLength: 120 }
         companySize: { type: ["string", "null"], maxLength: 80 }
         companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
@@ -4536,7 +4569,25 @@ components:
         companyLocation: { type: ["string", "null"], maxLength: 200 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, globalCompanyId, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+      required: [id, globalCompanyId, companyName, companyWebsiteUrl, companyDomain, companyBusinessArea, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+    CompanyBusinessAreas:
+      type: object
+      properties:
+        values:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 120 }
+      required: [values]
+    CompanyBusinessAreasInput:
+      type: object
+      properties:
+        values:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 120 }
+      required: [values]
     GlobalCompany:
       type: object
       properties:
@@ -4544,6 +4595,7 @@ components:
         companyName: { type: string, maxLength: 200 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyBusinessArea: { type: ["string", "null"], maxLength: 120 }
         companyIndustry: { type: ["string", "null"], maxLength: 120 }
         companySize: { type: ["string", "null"], maxLength: 80 }
         companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
@@ -4554,7 +4606,7 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         researchSummary: { $ref: "#/components/schemas/CompanyResearchSummary" }
-      required: [id, companyName, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+      required: [id, companyName, companyWebsiteUrl, companyDomain, companyBusinessArea, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
     CompanyResearchInput:
       type: object
       properties:
@@ -4878,6 +4930,7 @@ components:
         companyName: { type: string, minLength: 1, maxLength: 200 }
         companyWebsiteUrl: { type: string, maxLength: 2048 }
         companyDomain: { type: string, maxLength: 255 }
+        companyBusinessArea: { type: string, maxLength: 120 }
         companyIndustry: { type: string, maxLength: 120 }
         companySize: { type: string, maxLength: 80 }
         companyRevenueRange: { type: string, maxLength: 80 }
@@ -4946,6 +4999,7 @@ components:
         companyName: { type: string, minLength: 1, maxLength: 200 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyBusinessArea: { type: ["string", "null"], maxLength: 120 }
         companyIndustry: { type: ["string", "null"], maxLength: 120 }
         companySize: { type: ["string", "null"], maxLength: 80 }
         companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
@@ -5035,6 +5089,7 @@ components:
         companyName: { type: string, minLength: 1, maxLength: 200 }
         companyWebsiteUrl: { type: string, maxLength: 2048 }
         companyDomain: { type: string, maxLength: 255 }
+        companyBusinessArea: { type: string, maxLength: 120 }
         companyIndustry: { type: string, maxLength: 120 }
         companySize: { type: string, maxLength: 80 }
         companyRevenueRange: { type: string, maxLength: 80 }
@@ -5046,7 +5101,7 @@ components:
       required: [companyName]
     CompanyExportColumn:
       type: string
-      enum: [id, companyName, companyDomain, companyWebsiteUrl, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, contactCount, createdAt, updatedAt]
+      enum: [id, companyName, companyDomain, companyBusinessArea, companyWebsiteUrl, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, contactCount, createdAt, updatedAt]
     CompanyExportFilters:
       type: object
       properties:
@@ -5115,6 +5170,7 @@ components:
         companyName: { type: string, minLength: 1, maxLength: 200 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyBusinessArea: { type: ["string", "null"], maxLength: 120 }
         companyIndustry: { type: ["string", "null"], maxLength: 120 }
         companySize: { type: ["string", "null"], maxLength: 80 }
         companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
@@ -5138,6 +5194,7 @@ components:
         companyName: { type: ["string", "null"], maxLength: 200 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyBusinessArea: { type: ["string", "null"], maxLength: 120 }
         companyIndustry: { type: ["string", "null"], maxLength: 120 }
         companySize: { type: ["string", "null"], maxLength: 80 }
         companyRevenueRange: { type: ["string", "null"], maxLength: 80 }
@@ -5222,7 +5279,7 @@ components:
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, emailVerificationRiskFlags, emailVerificationSuggestedEmail, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyBusinessArea, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, emailVerificationRiskFlags, emailVerificationSuggestedEmail, listIds, createdAt, updatedAt]
     ContactNote:
       type: object
       properties:
@@ -5372,6 +5429,7 @@ components:
         notes: { type: string, maxLength: 10000 }
         companyWebsiteUrl: { type: string, maxLength: 2048 }
         companyDomain: { type: string, maxLength: 255 }
+        companyBusinessArea: { type: string, maxLength: 120 }
         companyIndustry: { type: string, maxLength: 120 }
         companySize: { type: string, maxLength: 80 }
         companyRevenueRange: { type: string, maxLength: 80 }
@@ -5421,6 +5479,7 @@ components:
         notes: { type: ["string", "null"], maxLength: 10000 }
         companyWebsiteUrl: { type: ["string", "null"], maxLength: 2048 }
         companyDomain: { type: ["string", "null"], maxLength: 255 }
+        companyBusinessArea: { type: ["string", "null"], maxLength: 120 }
         companyIndustry: { type: ["string", "null"], maxLength: 120 }
         companySize: { type: ["string", "null"], maxLength: 80 }
         companyRevenueRange: { type: ["string", "null"], maxLength: 80 }

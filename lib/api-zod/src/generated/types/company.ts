@@ -26,6 +26,11 @@ export interface Company {
      * @maxLength 120
      * @nullable
      */
+  companyBusinessArea: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
   companyIndustry: string | null;
   /**
      * @maxLength 80

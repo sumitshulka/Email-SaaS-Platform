@@ -13,6 +13,7 @@ export const CompanyExportColumn = {
   id: 'id',
   companyName: 'companyName',
   companyDomain: 'companyDomain',
+  companyBusinessArea: 'companyBusinessArea',
   companyWebsiteUrl: 'companyWebsiteUrl',
   companyIndustry: 'companyIndustry',
   companySize: 'companySize',

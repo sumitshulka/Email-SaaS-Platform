@@ -404,6 +404,7 @@ router.post(
             id: company.id,
             companyName: company.companyName,
             companyDomain: company.companyDomain,
+            companyBusinessArea: company.companyBusinessArea,
             companyWebsiteUrl: company.companyWebsiteUrl,
             companyIndustry: company.companyIndustry,
             companySize: company.companySize,

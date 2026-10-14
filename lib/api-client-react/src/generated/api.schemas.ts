@@ -957,6 +957,11 @@ export interface Company {
      * @maxLength 120
      * @nullable
      */
+  companyBusinessArea: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
   companyIndustry: string | null;
   /**
      * @maxLength 80
@@ -990,6 +995,26 @@ export interface Company {
   companyLocation: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CompanyBusinessAreas {
+  /**
+     * @minItems 1
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  values: string[];
+}
+
+export interface CompanyBusinessAreasInput {
+  /**
+     * @minItems 1
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  values: string[];
 }
 
 export type CompanyResearchSummaryStatus = typeof CompanyResearchSummaryStatus[keyof typeof CompanyResearchSummaryStatus];
@@ -1037,6 +1062,11 @@ export interface GlobalCompany {
      * @nullable
      */
   companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyBusinessArea: string | null;
   /**
      * @maxLength 120
      * @nullable
@@ -1532,6 +1562,8 @@ export interface GlobalCompanyInput {
   /** @maxLength 255 */
   companyDomain?: string;
   /** @maxLength 120 */
+  companyBusinessArea?: string;
+  /** @maxLength 120 */
   companyIndustry?: string;
   /** @maxLength 80 */
   companySize?: string;
@@ -1643,6 +1675,11 @@ export interface GlobalCompanyUpdate {
      * @nullable
      */
   companyDomain?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyBusinessArea?: string | null;
   /**
      * @maxLength 120
      * @nullable
@@ -1776,6 +1813,8 @@ export interface CompanyInput {
   /** @maxLength 255 */
   companyDomain?: string;
   /** @maxLength 120 */
+  companyBusinessArea?: string;
+  /** @maxLength 120 */
   companyIndustry?: string;
   /** @maxLength 80 */
   companySize?: string;
@@ -1800,6 +1839,7 @@ export const CompanyExportColumn = {
   id: 'id',
   companyName: 'companyName',
   companyDomain: 'companyDomain',
+  companyBusinessArea: 'companyBusinessArea',
   companyWebsiteUrl: 'companyWebsiteUrl',
   companyIndustry: 'companyIndustry',
   companySize: 'companySize',
@@ -1917,6 +1957,11 @@ export interface CompanyUpdate {
      * @maxLength 120
      * @nullable
      */
+  companyBusinessArea?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
   companyIndustry?: string | null;
   /**
      * @maxLength 80
@@ -1978,6 +2023,11 @@ export interface UnlinkedCompanyProfile {
      * @nullable
      */
   companyDomain: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyBusinessArea?: string | null;
   /**
      * @maxLength 120
      * @nullable
@@ -2418,7 +2468,11 @@ export interface ContactLeadStatusUpdate {
 
 export type ContactDirectoryItem = Contact & ({
   lastEmail: ContactEmailHistoryItem | null;
-});
+}) & Required<Pick<Contact & ({
+  lastEmail: ContactEmailHistoryItem | null;
+}), Extract<keyof (Contact & ({
+  lastEmail: ContactEmailHistoryItem | null;
+})), 'companyBusinessArea'>>>;
 
 export type ContactExportColumn = typeof ContactExportColumn[keyof typeof ContactExportColumn];
 
@@ -2585,6 +2639,8 @@ export interface ContactInput {
   /** @maxLength 255 */
   companyDomain?: string;
   /** @maxLength 120 */
+  companyBusinessArea?: string;
+  /** @maxLength 120 */
   companyIndustry?: string;
   /** @maxLength 80 */
   companySize?: string;
@@ -2750,6 +2806,11 @@ export interface ContactUpdate {
      * @nullable
      */
   companyDomain?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  companyBusinessArea?: string | null;
   /**
      * @maxLength 120
      * @nullable

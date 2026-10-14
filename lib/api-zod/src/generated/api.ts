@@ -1315,6 +1315,8 @@ export const listContactsResponseContactsItemOneCompanyOneCompanyWebsiteUrlMax =
 
 export const listContactsResponseContactsItemOneCompanyOneCompanyDomainMax = 255;
 
+export const listContactsResponseContactsItemOneCompanyOneCompanyBusinessAreaMax = 120;
+
 export const listContactsResponseContactsItemOneCompanyOneCompanyIndustryMax = 120;
 
 export const listContactsResponseContactsItemOneCompanyOneCompanySizeMax = 80;
@@ -1435,6 +1437,7 @@ export const ListContactsResponse = zod.object({
   "companyName": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(listContactsResponseContactsItemOneCompanyOneCompanyRevenueRangeMax).nullable(),
@@ -1588,6 +1591,8 @@ export const createContactBodyCompanyWebsiteUrlMax = 2048;
 
 export const createContactBodyCompanyDomainMax = 255;
 
+export const createContactBodyCompanyBusinessAreaMax = 120;
+
 export const createContactBodyCompanyIndustryMax = 120;
 
 export const createContactBodyCompanySizeMax = 80;
@@ -1635,6 +1640,7 @@ export const CreateContactBody = zod.object({
   "notes": zod.string().max(createContactBodyNotesMax).optional(),
   "companyWebsiteUrl": zod.string().max(createContactBodyCompanyWebsiteUrlMax).optional(),
   "companyDomain": zod.string().max(createContactBodyCompanyDomainMax).optional(),
+  "companyBusinessArea": zod.string().max(createContactBodyCompanyBusinessAreaMax).optional(),
   "companyIndustry": zod.string().max(createContactBodyCompanyIndustryMax).optional(),
   "companySize": zod.string().max(createContactBodyCompanySizeMax).optional(),
   "companyRevenueRange": zod.string().max(createContactBodyCompanyRevenueRangeMax).optional(),
@@ -1651,6 +1657,8 @@ export const createContactResponseCompanyOneCompanyNameMax = 200;
 export const createContactResponseCompanyOneCompanyWebsiteUrlMax = 2048;
 
 export const createContactResponseCompanyOneCompanyDomainMax = 255;
+
+export const createContactResponseCompanyOneCompanyBusinessAreaMax = 120;
 
 export const createContactResponseCompanyOneCompanyIndustryMax = 120;
 
@@ -1749,6 +1757,7 @@ export const CreateContactResponse = zod.object({
   "companyName": zod.string().max(createContactResponseCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createContactResponseCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(createContactResponseCompanyOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(createContactResponseCompanyOneCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(createContactResponseCompanyOneCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(createContactResponseCompanyOneCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(createContactResponseCompanyOneCompanyRevenueRangeMax).nullable(),
@@ -1933,7 +1942,7 @@ export const exportCompaniesBodyFiltersLocationMax = 200;
 
 export const ExportCompaniesBody = zod.object({
   "scope": zod.enum(['filtered', 'all']),
-  "columns": zod.array(zod.enum(['id', 'companyName', 'companyDomain', 'companyWebsiteUrl', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyDescription', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyLocation', 'contactCount', 'createdAt', 'updatedAt'])).min(1).max(exportCompaniesBodyColumnsMax),
+  "columns": zod.array(zod.enum(['id', 'companyName', 'companyDomain', 'companyBusinessArea', 'companyWebsiteUrl', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyDescription', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyLocation', 'contactCount', 'createdAt', 'updatedAt'])).min(1).max(exportCompaniesBodyColumnsMax),
   "filters": zod.object({
   "search": zod.string().max(exportCompaniesBodyFiltersSearchMax).optional(),
   "industry": zod.string().max(exportCompaniesBodyFiltersIndustryMax).optional(),
@@ -1964,6 +1973,8 @@ export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyWebsiteUrlMax = 204
 
 export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyDomainMax = 255;
 
+export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyBusinessAreaMax = 120;
+
 export const bulkImportCompaniesBodyRowsItemCompanyOneCompanyIndustryMax = 120;
 
 export const bulkImportCompaniesBodyRowsItemCompanyOneCompanySizeMax = 80;
@@ -1992,6 +2003,7 @@ export const BulkImportCompaniesBody = zod.object({
   "companyName": zod.string().min(1).max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyWebsiteUrlMax).optional(),
   "companyDomain": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyDomainMax).optional(),
+  "companyBusinessArea": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyBusinessAreaMax).optional(),
   "companyIndustry": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyIndustryMax).optional(),
   "companySize": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanySizeMax).optional(),
   "companyRevenueRange": zod.string().max(bulkImportCompaniesBodyRowsItemCompanyOneCompanyRevenueRangeMax).optional(),
@@ -2671,6 +2683,8 @@ export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyWebsiteUr
 
 export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyDomainMax = 255;
 
+export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyBusinessAreaMax = 120;
+
 export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyIndustryMax = 120;
 
 export const listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanySizeMax = 80;
@@ -2700,6 +2714,7 @@ export const ListAdminGlobalCompaniesResponse = zod.object({
   "companyName": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(listAdminGlobalCompaniesResponseGlobalCompaniesItemCompanyRevenueRangeMax).nullable(),
@@ -2723,6 +2738,44 @@ export const ListAdminGlobalCompaniesResponse = zod.object({
 
 
 /**
+ * @summary Replace the platform-wide company business-area choices
+ */
+export const updateCompanyBusinessAreasBodyValuesItemMax = 120;
+
+export const updateCompanyBusinessAreasBodyValuesMax = 100;
+
+
+
+export const UpdateCompanyBusinessAreasBody = zod.object({
+  "values": zod.array(zod.string().min(1).max(updateCompanyBusinessAreasBodyValuesItemMax)).min(1).max(updateCompanyBusinessAreasBodyValuesMax)
+})
+
+export const updateCompanyBusinessAreasResponseValuesItemMax = 120;
+
+export const updateCompanyBusinessAreasResponseValuesMax = 100;
+
+
+
+export const UpdateCompanyBusinessAreasResponse = zod.object({
+  "values": zod.array(zod.string().min(1).max(updateCompanyBusinessAreasResponseValuesItemMax)).min(1).max(updateCompanyBusinessAreasResponseValuesMax)
+})
+
+
+/**
+ * @summary List platform-wide company business-area choices
+ */
+export const listCompanyBusinessAreasResponseValuesItemMax = 120;
+
+export const listCompanyBusinessAreasResponseValuesMax = 100;
+
+
+
+export const ListCompanyBusinessAreasResponse = zod.object({
+  "values": zod.array(zod.string().min(1).max(listCompanyBusinessAreasResponseValuesItemMax)).min(1).max(listCompanyBusinessAreasResponseValuesMax)
+})
+
+
+/**
  * @summary Add a company profile to the global catalog
  */
 export const createGlobalCompanyBodyCompanyNameMax = 200;
@@ -2730,6 +2783,8 @@ export const createGlobalCompanyBodyCompanyNameMax = 200;
 export const createGlobalCompanyBodyCompanyWebsiteUrlMax = 2048;
 
 export const createGlobalCompanyBodyCompanyDomainMax = 255;
+
+export const createGlobalCompanyBodyCompanyBusinessAreaMax = 120;
 
 export const createGlobalCompanyBodyCompanyIndustryMax = 120;
 
@@ -2751,6 +2806,7 @@ export const CreateGlobalCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(createGlobalCompanyBodyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createGlobalCompanyBodyCompanyWebsiteUrlMax).optional(),
   "companyDomain": zod.string().max(createGlobalCompanyBodyCompanyDomainMax).optional(),
+  "companyBusinessArea": zod.string().max(createGlobalCompanyBodyCompanyBusinessAreaMax).optional(),
   "companyIndustry": zod.string().max(createGlobalCompanyBodyCompanyIndustryMax).optional(),
   "companySize": zod.string().max(createGlobalCompanyBodyCompanySizeMax).optional(),
   "companyRevenueRange": zod.string().max(createGlobalCompanyBodyCompanyRevenueRangeMax).optional(),
@@ -2765,6 +2821,8 @@ export const createGlobalCompanyResponseCompanyNameMax = 200;
 export const createGlobalCompanyResponseCompanyWebsiteUrlMax = 2048;
 
 export const createGlobalCompanyResponseCompanyDomainMax = 255;
+
+export const createGlobalCompanyResponseCompanyBusinessAreaMax = 120;
 
 export const createGlobalCompanyResponseCompanyIndustryMax = 120;
 
@@ -2789,6 +2847,7 @@ export const CreateGlobalCompanyResponse = zod.object({
   "companyName": zod.string().max(createGlobalCompanyResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createGlobalCompanyResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(createGlobalCompanyResponseCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(createGlobalCompanyResponseCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(createGlobalCompanyResponseCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(createGlobalCompanyResponseCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(createGlobalCompanyResponseCompanyRevenueRangeMax).nullable(),
@@ -2843,6 +2902,8 @@ export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyWebsiteUrlMax = 
 
 export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDomainMax = 255;
 
+export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyBusinessAreaMax = 120;
+
 export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyIndustryMax = 120;
 
 export const bulkImportGlobalCompaniesBodyRowsItemCompanyCompanySizeMax = 80;
@@ -2871,6 +2932,7 @@ export const BulkImportGlobalCompaniesBody = zod.object({
   "companyName": zod.string().min(1).max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyWebsiteUrlMax).optional(),
   "companyDomain": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyDomainMax).optional(),
+  "companyBusinessArea": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyBusinessAreaMax).optional(),
   "companyIndustry": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyIndustryMax).optional(),
   "companySize": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanySizeMax).optional(),
   "companyRevenueRange": zod.string().max(bulkImportGlobalCompaniesBodyRowsItemCompanyCompanyRevenueRangeMax).optional(),
@@ -2919,6 +2981,8 @@ export const updateGlobalCompanyBodyCompanyWebsiteUrlMax = 2048;
 
 export const updateGlobalCompanyBodyCompanyDomainMax = 255;
 
+export const updateGlobalCompanyBodyCompanyBusinessAreaMax = 120;
+
 export const updateGlobalCompanyBodyCompanyIndustryMax = 120;
 
 export const updateGlobalCompanyBodyCompanySizeMax = 80;
@@ -2939,6 +3003,7 @@ export const UpdateGlobalCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(updateGlobalCompanyBodyCompanyNameMax).optional(),
   "companyWebsiteUrl": zod.string().max(updateGlobalCompanyBodyCompanyWebsiteUrlMax).nullish(),
   "companyDomain": zod.string().max(updateGlobalCompanyBodyCompanyDomainMax).nullish(),
+  "companyBusinessArea": zod.string().max(updateGlobalCompanyBodyCompanyBusinessAreaMax).nullish(),
   "companyIndustry": zod.string().max(updateGlobalCompanyBodyCompanyIndustryMax).nullish(),
   "companySize": zod.string().max(updateGlobalCompanyBodyCompanySizeMax).nullish(),
   "companyRevenueRange": zod.string().max(updateGlobalCompanyBodyCompanyRevenueRangeMax).nullish(),
@@ -2953,6 +3018,8 @@ export const updateGlobalCompanyResponseCompanyNameMax = 200;
 export const updateGlobalCompanyResponseCompanyWebsiteUrlMax = 2048;
 
 export const updateGlobalCompanyResponseCompanyDomainMax = 255;
+
+export const updateGlobalCompanyResponseCompanyBusinessAreaMax = 120;
 
 export const updateGlobalCompanyResponseCompanyIndustryMax = 120;
 
@@ -2977,6 +3044,7 @@ export const UpdateGlobalCompanyResponse = zod.object({
   "companyName": zod.string().max(updateGlobalCompanyResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(updateGlobalCompanyResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(updateGlobalCompanyResponseCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(updateGlobalCompanyResponseCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(updateGlobalCompanyResponseCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(updateGlobalCompanyResponseCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(updateGlobalCompanyResponseCompanyRevenueRangeMax).nullable(),
@@ -3031,6 +3099,8 @@ export const searchGlobalCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax =
 
 export const searchGlobalCompaniesResponseCompaniesItemOneCompanyDomainMax = 255;
 
+export const searchGlobalCompaniesResponseCompaniesItemOneCompanyBusinessAreaMax = 120;
+
 export const searchGlobalCompaniesResponseCompaniesItemOneCompanyIndustryMax = 120;
 
 export const searchGlobalCompaniesResponseCompaniesItemOneCompanySizeMax = 80;
@@ -3060,6 +3130,7 @@ export const SearchGlobalCompaniesResponse = zod.object({
   "companyName": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(searchGlobalCompaniesResponseCompaniesItemOneCompanyRevenueRangeMax).nullable(),
@@ -3097,6 +3168,8 @@ export const addGlobalCompanyToWorkspaceResponseCompanyWebsiteUrlMax = 2048;
 
 export const addGlobalCompanyToWorkspaceResponseCompanyDomainMax = 255;
 
+export const addGlobalCompanyToWorkspaceResponseCompanyBusinessAreaMax = 120;
+
 export const addGlobalCompanyToWorkspaceResponseCompanyIndustryMax = 120;
 
 export const addGlobalCompanyToWorkspaceResponseCompanySizeMax = 80;
@@ -3119,6 +3192,7 @@ export const AddGlobalCompanyToWorkspaceResponse = zod.object({
   "companyName": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(addGlobalCompanyToWorkspaceResponseCompanyRevenueRangeMax).nullable(),
@@ -3139,6 +3213,8 @@ export const listCompaniesResponseCompaniesItemOneCompanyNameMax = 200;
 export const listCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax = 2048;
 
 export const listCompaniesResponseCompaniesItemOneCompanyDomainMax = 255;
+
+export const listCompaniesResponseCompaniesItemOneCompanyBusinessAreaMax = 120;
 
 export const listCompaniesResponseCompaniesItemOneCompanyIndustryMax = 120;
 
@@ -3165,6 +3241,7 @@ export const ListCompaniesResponse = zod.object({
   "companyName": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(listCompaniesResponseCompaniesItemOneCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(listCompaniesResponseCompaniesItemOneCompanyRevenueRangeMax).nullable(),
@@ -3189,6 +3266,8 @@ export const createCompanyBodyCompanyWebsiteUrlMax = 2048;
 
 export const createCompanyBodyCompanyDomainMax = 255;
 
+export const createCompanyBodyCompanyBusinessAreaMax = 120;
+
 export const createCompanyBodyCompanyIndustryMax = 120;
 
 export const createCompanyBodyCompanySizeMax = 80;
@@ -3209,6 +3288,7 @@ export const CreateCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(createCompanyBodyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createCompanyBodyCompanyWebsiteUrlMax).optional(),
   "companyDomain": zod.string().max(createCompanyBodyCompanyDomainMax).optional(),
+  "companyBusinessArea": zod.string().max(createCompanyBodyCompanyBusinessAreaMax).optional(),
   "companyIndustry": zod.string().max(createCompanyBodyCompanyIndustryMax).optional(),
   "companySize": zod.string().max(createCompanyBodyCompanySizeMax).optional(),
   "companyRevenueRange": zod.string().max(createCompanyBodyCompanyRevenueRangeMax).optional(),
@@ -3224,6 +3304,8 @@ export const createCompanyResponseCompanyNameMax = 200;
 export const createCompanyResponseCompanyWebsiteUrlMax = 2048;
 
 export const createCompanyResponseCompanyDomainMax = 255;
+
+export const createCompanyResponseCompanyBusinessAreaMax = 120;
 
 export const createCompanyResponseCompanyIndustryMax = 120;
 
@@ -3247,6 +3329,7 @@ export const CreateCompanyResponse = zod.object({
   "companyName": zod.string().max(createCompanyResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(createCompanyResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(createCompanyResponseCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(createCompanyResponseCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(createCompanyResponseCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(createCompanyResponseCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(createCompanyResponseCompanyRevenueRangeMax).nullable(),
@@ -3329,6 +3412,8 @@ export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyWebsiteUrlMax
 
 export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyDomainMax = 255;
 
+export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyBusinessAreaMax = 120;
+
 export const listUnlinkedCompanyProfilesResponseProfilesItemCompanyIndustryMax = 120;
 
 export const listUnlinkedCompanyProfilesResponseProfilesItemCompanySizeMax = 80;
@@ -3353,6 +3438,7 @@ export const ListUnlinkedCompanyProfilesResponse = zod.object({
   "companyName": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanyNameMax).nullable(),
   "companyWebsiteUrl": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanyBusinessAreaMax).nullish(),
   "companyIndustry": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(listUnlinkedCompanyProfilesResponseProfilesItemCompanyRevenueRangeMax).nullable(),
@@ -3378,6 +3464,8 @@ export const getCompanyResponseCompanyCompanyWebsiteUrlMax = 2048;
 
 export const getCompanyResponseCompanyCompanyDomainMax = 255;
 
+export const getCompanyResponseCompanyCompanyBusinessAreaMax = 120;
+
 export const getCompanyResponseCompanyCompanyIndustryMax = 120;
 
 export const getCompanyResponseCompanyCompanySizeMax = 80;
@@ -3401,6 +3489,7 @@ export const GetCompanyResponse = zod.object({
   "companyName": zod.string().max(getCompanyResponseCompanyCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(getCompanyResponseCompanyCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(getCompanyResponseCompanyCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(getCompanyResponseCompanyCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(getCompanyResponseCompanyCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(getCompanyResponseCompanyCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(getCompanyResponseCompanyCompanyRevenueRangeMax).nullable(),
@@ -3433,6 +3522,8 @@ export const updateCompanyBodyCompanyWebsiteUrlMax = 2048;
 
 export const updateCompanyBodyCompanyDomainMax = 255;
 
+export const updateCompanyBodyCompanyBusinessAreaMax = 120;
+
 export const updateCompanyBodyCompanyIndustryMax = 120;
 
 export const updateCompanyBodyCompanySizeMax = 80;
@@ -3453,6 +3544,7 @@ export const UpdateCompanyBody = zod.object({
   "companyName": zod.string().min(1).max(updateCompanyBodyCompanyNameMax).optional(),
   "companyWebsiteUrl": zod.string().max(updateCompanyBodyCompanyWebsiteUrlMax).nullish(),
   "companyDomain": zod.string().max(updateCompanyBodyCompanyDomainMax).nullish(),
+  "companyBusinessArea": zod.string().max(updateCompanyBodyCompanyBusinessAreaMax).nullish(),
   "companyIndustry": zod.string().max(updateCompanyBodyCompanyIndustryMax).nullish(),
   "companySize": zod.string().max(updateCompanyBodyCompanySizeMax).nullish(),
   "companyRevenueRange": zod.string().max(updateCompanyBodyCompanyRevenueRangeMax).nullish(),
@@ -3467,6 +3559,8 @@ export const updateCompanyResponseCompanyNameMax = 200;
 export const updateCompanyResponseCompanyWebsiteUrlMax = 2048;
 
 export const updateCompanyResponseCompanyDomainMax = 255;
+
+export const updateCompanyResponseCompanyBusinessAreaMax = 120;
 
 export const updateCompanyResponseCompanyIndustryMax = 120;
 
@@ -3490,6 +3584,7 @@ export const UpdateCompanyResponse = zod.object({
   "companyName": zod.string().max(updateCompanyResponseCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(updateCompanyResponseCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(updateCompanyResponseCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(updateCompanyResponseCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(updateCompanyResponseCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(updateCompanyResponseCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(updateCompanyResponseCompanyRevenueRangeMax).nullable(),
@@ -3712,6 +3807,8 @@ export const getContactResponseCompanyOneCompanyWebsiteUrlMax = 2048;
 
 export const getContactResponseCompanyOneCompanyDomainMax = 255;
 
+export const getContactResponseCompanyOneCompanyBusinessAreaMax = 120;
+
 export const getContactResponseCompanyOneCompanyIndustryMax = 120;
 
 export const getContactResponseCompanyOneCompanySizeMax = 80;
@@ -3809,6 +3906,7 @@ export const GetContactResponse = zod.object({
   "companyName": zod.string().max(getContactResponseCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(getContactResponseCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(getContactResponseCompanyOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(getContactResponseCompanyOneCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(getContactResponseCompanyOneCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(getContactResponseCompanyOneCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(getContactResponseCompanyOneCompanyRevenueRangeMax).nullable(),
@@ -3929,6 +4027,8 @@ export const updateContactBodyCompanyWebsiteUrlMax = 2048;
 
 export const updateContactBodyCompanyDomainMax = 255;
 
+export const updateContactBodyCompanyBusinessAreaMax = 120;
+
 export const updateContactBodyCompanyIndustryMax = 120;
 
 export const updateContactBodyCompanySizeMax = 80;
@@ -3979,6 +4079,7 @@ export const UpdateContactBody = zod.object({
   "notes": zod.string().max(updateContactBodyNotesMax).nullish(),
   "companyWebsiteUrl": zod.string().max(updateContactBodyCompanyWebsiteUrlMax).nullish(),
   "companyDomain": zod.string().max(updateContactBodyCompanyDomainMax).nullish(),
+  "companyBusinessArea": zod.string().max(updateContactBodyCompanyBusinessAreaMax).nullish(),
   "companyIndustry": zod.string().max(updateContactBodyCompanyIndustryMax).nullish(),
   "companySize": zod.string().max(updateContactBodyCompanySizeMax).nullish(),
   "companyRevenueRange": zod.string().max(updateContactBodyCompanyRevenueRangeMax).nullish(),
@@ -3995,6 +4096,8 @@ export const updateContactResponseCompanyOneCompanyNameMax = 200;
 export const updateContactResponseCompanyOneCompanyWebsiteUrlMax = 2048;
 
 export const updateContactResponseCompanyOneCompanyDomainMax = 255;
+
+export const updateContactResponseCompanyOneCompanyBusinessAreaMax = 120;
 
 export const updateContactResponseCompanyOneCompanyIndustryMax = 120;
 
@@ -4093,6 +4196,7 @@ export const UpdateContactResponse = zod.object({
   "companyName": zod.string().max(updateContactResponseCompanyOneCompanyNameMax),
   "companyWebsiteUrl": zod.string().max(updateContactResponseCompanyOneCompanyWebsiteUrlMax).nullable(),
   "companyDomain": zod.string().max(updateContactResponseCompanyOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(updateContactResponseCompanyOneCompanyBusinessAreaMax).nullable(),
   "companyIndustry": zod.string().max(updateContactResponseCompanyOneCompanyIndustryMax).nullable(),
   "companySize": zod.string().max(updateContactResponseCompanyOneCompanySizeMax).nullable(),
   "companyRevenueRange": zod.string().max(updateContactResponseCompanyOneCompanyRevenueRangeMax).nullable(),

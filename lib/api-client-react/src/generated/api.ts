@@ -70,6 +70,8 @@ import type {
   CompanyBackfillResult,
   CompanyBulkImportInput,
   CompanyBulkImportResult,
+  CompanyBusinessAreas,
+  CompanyBusinessAreasInput,
   CompanyCollection,
   CompanyDetail,
   CompanyExportInput,
@@ -5019,12 +5021,177 @@ export function useListAdminGlobalCompanies<TData = Awaited<ReturnType<typeof li
 
 
 
+export const getUpdateCompanyBusinessAreasUrl = () => {
+
+
+
+
+  return `/api/admin/company-business-areas`
+}
+
+/**
+ * @summary Replace the platform-wide company business-area choices
+ */
+export const updateCompanyBusinessAreas = async (companyBusinessAreasInput: CompanyBusinessAreasInput, options?: Parameters<typeof customFetch>[1]): Promise<CompanyBusinessAreas> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CompanyBusinessAreas>(getUpdateCompanyBusinessAreasUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(companyBusinessAreasInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateCompanyBusinessAreasMutationKey = () => ['updateCompanyBusinessAreas'] as const;
+
+export const getUpdateCompanyBusinessAreasMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCompanyBusinessAreas>>, TError,UpdateCompanyBusinessAreasMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCompanyBusinessAreas>>, TError,UpdateCompanyBusinessAreasMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCompanyBusinessAreasMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCompanyBusinessAreas>>, UpdateCompanyBusinessAreasMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCompanyBusinessAreas(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCompanyBusinessAreasMutationResult = NonNullable<Awaited<ReturnType<typeof updateCompanyBusinessAreas>>>
+    export type UpdateCompanyBusinessAreasMutationBody = BodyType<CompanyBusinessAreasInput>
+    export type UpdateCompanyBusinessAreasMutationError = ErrorType<ApiError>
+    export type UpdateCompanyBusinessAreasMutationVariables = {data: BodyType<CompanyBusinessAreasInput>}
+
+    /**
+ * @summary Replace the platform-wide company business-area choices
+ */
+export const useUpdateCompanyBusinessAreas = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCompanyBusinessAreas>>, TError,UpdateCompanyBusinessAreasMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCompanyBusinessAreas>>,
+        TError,
+        UpdateCompanyBusinessAreasMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCompanyBusinessAreasMutationOptions(options));
+    }
+
+export const getListCompanyBusinessAreasUrl = () => {
+
+
+
+
+  return `/api/company-business-areas`
+}
+
+/**
+ * @summary List platform-wide company business-area choices
+ */
+export const listCompanyBusinessAreas = async ( options?: Parameters<typeof customFetch>[1]): Promise<CompanyBusinessAreas> => {
+
+  return customFetch<CompanyBusinessAreas>(getListCompanyBusinessAreasUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCompanyBusinessAreasQueryKey = () => {
+    return [
+    `/api/company-business-areas`
+    ] as const;
+    }
+
+
+export const getListCompanyBusinessAreasQueryOptions = <TData = Awaited<ReturnType<typeof listCompanyBusinessAreas>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyBusinessAreas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCompanyBusinessAreasQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCompanyBusinessAreas>>> = ({ signal }) => listCompanyBusinessAreas({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCompanyBusinessAreas>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCompanyBusinessAreasQueryResult = NonNullable<Awaited<ReturnType<typeof listCompanyBusinessAreas>>>
+export type ListCompanyBusinessAreasQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List platform-wide company business-area choices
+ */
+
+export function useListCompanyBusinessAreas<TData = Awaited<ReturnType<typeof listCompanyBusinessAreas>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCompanyBusinessAreas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCompanyBusinessAreasQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getCreateGlobalCompanyUrl = () => {
 
 
 
 
-  return `/api/admin/global-companies`
+  return `/api/company-business-areas`
 }
 
 /**

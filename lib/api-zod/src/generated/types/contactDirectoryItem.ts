@@ -10,4 +10,8 @@ import type { ContactEmailHistoryItem } from './contactEmailHistoryItem';
 
 export type ContactDirectoryItem = Contact & ({
   lastEmail: ContactEmailHistoryItem | null;
-});
+}) & Required<Pick<Contact & ({
+  lastEmail: ContactEmailHistoryItem | null;
+}), Extract<keyof (Contact & ({
+  lastEmail: ContactEmailHistoryItem | null;
+})), 'companyBusinessArea'>>>;

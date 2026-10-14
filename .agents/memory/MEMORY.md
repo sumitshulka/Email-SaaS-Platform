@@ -44,6 +44,7 @@
 - [Add-on entitlement lifecycle](mailflow-add-on-entitlements.md) — add-ons pause when paid-primary access ends; unused allowances resume on a later paid term.
 - [Signup verification analytics](signup-verification-analytics.md) — count signup verification only when a pending unverified registration is confirmed, not for other uses of the shared verification flow.
 - [Contact bounce consent](contact-bounce-consent.md) — a bounced address is suppressed but not unsubscribed; only the recipient’s unsubscribe action records an unsubscribe.
+- [Company business-area taxonomy](company-business-area-taxonomy.md) — Domain means a superadmin-managed broad business area; keep industry specific and technical domain matching separate.
 - [Contact email verification](contact-email-verification.md) — verify one contact with no-message SMTP probes; label limitations honestly and keep this out of bulk import.
 - [M365 trace scheduled runner](m365-trace-scheduled-runner.md) — execute trace polling as a one-shot Scheduled Deployment, not in the Autoscale API process.
 - [Trace backfill progress](m365-trace-backfill-progress.md) — report date-range advancement; Microsoft’s opaque paging links do not expose a trustworthy total.
