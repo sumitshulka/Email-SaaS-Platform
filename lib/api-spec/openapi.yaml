@@ -1528,6 +1528,26 @@ paths:
         in: path
         required: true
         schema: { type: string, format: uuid }
+    get:
+      operationId: getAdminGlobalCompany
+      tags: [admin]
+      summary: Read one global company profile for the superadmin details view
+      responses:
+        "200":
+          description: Global company profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GlobalCompany" }
+        "403":
+          description: Superadmin access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Global company not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
     patch:
       operationId: updateGlobalCompany
       tags: [admin]

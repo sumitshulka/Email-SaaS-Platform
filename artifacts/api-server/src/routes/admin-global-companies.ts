@@ -149,6 +149,25 @@ router.get(
   },
 );
 
+router.get(
+  "/admin/global-companies/:globalCompanyId",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const params = UpdateGlobalCompanyParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid global company identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const [company] = await db.select().from(globalCompaniesTable)
+      .where(eq(globalCompaniesTable.id, params.data.globalCompanyId)).limit(1);
+    if (!company) {
+      res.status(404).json({ error: "Global company not found.", code: "GLOBAL_COMPANY_NOT_FOUND" });
+      return;
+    }
+    res.json(presentGlobalCompany(company));
+  },
+);
+
 const globalCompanyExportHeaders = {
   id: "Company ID",
   companyName: "Company name",

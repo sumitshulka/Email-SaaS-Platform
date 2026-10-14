@@ -5528,6 +5528,83 @@ export const useBulkImportGlobalCompanies = <TError = ErrorType<ApiError>,
       return useMutation(getBulkImportGlobalCompaniesMutationOptions(options));
     }
 
+export const getGetAdminGlobalCompanyUrl = (globalCompanyId: string,) => {
+
+
+
+
+  return `/api/admin/global-companies/${globalCompanyId}`
+}
+
+/**
+ * @summary Read one global company profile for the superadmin details view
+ */
+export const getAdminGlobalCompany = async (globalCompanyId: string, options?: Parameters<typeof customFetch>[1]): Promise<GlobalCompany> => {
+
+  return customFetch<GlobalCompany>(getGetAdminGlobalCompanyUrl(globalCompanyId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminGlobalCompanyQueryKey = (globalCompanyId: string,) => {
+    return [
+    `/api/admin/global-companies/${globalCompanyId}`
+    ] as const;
+    }
+
+
+export const getGetAdminGlobalCompanyQueryOptions = <TData = Awaited<ReturnType<typeof getAdminGlobalCompany>>, TError = ErrorType<ApiError>>(globalCompanyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminGlobalCompany>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminGlobalCompanyQueryKey(globalCompanyId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminGlobalCompany>>> = ({ signal }) => getAdminGlobalCompany(globalCompanyId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: globalCompanyId !== null && globalCompanyId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminGlobalCompany>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminGlobalCompanyQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminGlobalCompany>>>
+export type GetAdminGlobalCompanyQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Read one global company profile for the superadmin details view
+ */
+
+export function useGetAdminGlobalCompany<TData = Awaited<ReturnType<typeof getAdminGlobalCompany>>, TError = ErrorType<ApiError>>(
+ globalCompanyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminGlobalCompany>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminGlobalCompanyQueryOptions(globalCompanyId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getUpdateGlobalCompanyUrl = (globalCompanyId: string,) => {
 
 

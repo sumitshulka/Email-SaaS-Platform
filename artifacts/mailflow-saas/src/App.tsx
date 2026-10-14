@@ -47,6 +47,7 @@ import { clearPackageCheckoutCredentials, getPackageCheckoutTerms, getVerifiedPa
 import { ContactDetailPage } from '@/pages/contact-detail';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
+import { AdminGlobalCompanyDetailPage } from '@/pages/admin-global-company-detail';
 import PlansPage from '@/pages/plans';
 import NotFound from '@/pages/not-found';
 import './index.css';
@@ -1535,7 +1536,7 @@ function Routes() {
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts/:contactId">{params => <RouteGate>{u => u.role === 'USER' ? <ContactDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/companies">{() => <RouteGate>{u => u.role === 'USER' ? <CompaniesPage/> : <NotFound/>}</RouteGate>}</Route>
-    <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : u.role === 'SUPERADMIN' ? <AdminGlobalCompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/lists">{() => <RouteGate>{() => <ListsPage/>}</RouteGate>}</Route>
     <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>

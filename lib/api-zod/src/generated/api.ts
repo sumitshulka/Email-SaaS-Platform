@@ -2978,6 +2978,63 @@ export const BulkImportGlobalCompaniesResponse = zod.object({
 
 
 /**
+ * @summary Read one global company profile for the superadmin details view
+ */
+export const GetAdminGlobalCompanyParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const getAdminGlobalCompanyResponseCompanyNameMax = 200;
+
+export const getAdminGlobalCompanyResponseCompanyWebsiteUrlMax = 2048;
+
+export const getAdminGlobalCompanyResponseCompanyDomainMax = 255;
+
+export const getAdminGlobalCompanyResponseCompanyBusinessAreaMax = 120;
+
+export const getAdminGlobalCompanyResponseCompanyIndustryMax = 120;
+
+export const getAdminGlobalCompanyResponseCompanySizeMax = 80;
+
+export const getAdminGlobalCompanyResponseCompanyRevenueRangeMax = 80;
+
+export const getAdminGlobalCompanyResponseCompanyDescriptionMax = 10000;
+
+export const getAdminGlobalCompanyResponseCompanyPhoneNumberMax = 40;
+
+export const getAdminGlobalCompanyResponseCompanyLinkedinUrlMax = 2048;
+
+export const getAdminGlobalCompanyResponseCompanyLocationMax = 200;
+
+export const getAdminGlobalCompanyResponseResearchSummarySourceCountMin = 0;
+
+
+
+export const GetAdminGlobalCompanyResponse = zod.object({
+  "id": zod.string().uuid(),
+  "companyName": zod.string().max(getAdminGlobalCompanyResponseCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(getAdminGlobalCompanyResponseCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(getAdminGlobalCompanyResponseCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(getAdminGlobalCompanyResponseCompanyBusinessAreaMax).nullable(),
+  "companyIndustry": zod.string().max(getAdminGlobalCompanyResponseCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(getAdminGlobalCompanyResponseCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(getAdminGlobalCompanyResponseCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(getAdminGlobalCompanyResponseCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(getAdminGlobalCompanyResponseCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(getAdminGlobalCompanyResponseCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(getAdminGlobalCompanyResponseCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "researchSummary": zod.object({
+  "status": zod.enum(['not_researched', 'queued', 'running', 'completed', 'failed', 'cancelled']),
+  "freshness": zod.enum(['not_researched', 'fresh', 'aging', 'stale']),
+  "researchedAt": zod.coerce.date().nullable(),
+  "sourceCount": zod.number().int().min(getAdminGlobalCompanyResponseResearchSummarySourceCountMin)
+}).optional()
+})
+
+
+/**
  * @summary Update a global company profile and all linked workspace profiles
  */
 export const UpdateGlobalCompanyParams = zod.object({
