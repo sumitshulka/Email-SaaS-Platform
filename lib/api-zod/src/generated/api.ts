@@ -2742,44 +2742,6 @@ export const ListAdminGlobalCompaniesResponse = zod.object({
 
 
 /**
- * @summary Replace the platform-wide company business-area choices
- */
-export const updateCompanyBusinessAreasBodyValuesItemMax = 120;
-
-export const updateCompanyBusinessAreasBodyValuesMax = 100;
-
-
-
-export const UpdateCompanyBusinessAreasBody = zod.object({
-  "values": zod.array(zod.string().min(1).max(updateCompanyBusinessAreasBodyValuesItemMax)).min(1).max(updateCompanyBusinessAreasBodyValuesMax)
-})
-
-export const updateCompanyBusinessAreasResponseValuesItemMax = 120;
-
-export const updateCompanyBusinessAreasResponseValuesMax = 100;
-
-
-
-export const UpdateCompanyBusinessAreasResponse = zod.object({
-  "values": zod.array(zod.string().min(1).max(updateCompanyBusinessAreasResponseValuesItemMax)).min(1).max(updateCompanyBusinessAreasResponseValuesMax)
-})
-
-
-/**
- * @summary List platform-wide company business-area choices
- */
-export const listCompanyBusinessAreasResponseValuesItemMax = 120;
-
-export const listCompanyBusinessAreasResponseValuesMax = 100;
-
-
-
-export const ListCompanyBusinessAreasResponse = zod.object({
-  "values": zod.array(zod.string().min(1).max(listCompanyBusinessAreasResponseValuesItemMax)).min(1).max(listCompanyBusinessAreasResponseValuesMax)
-})
-
-
-/**
  * @summary Add a company profile to the global catalog
  */
 export const createGlobalCompanyBodyCompanyNameMax = 200;
@@ -2868,6 +2830,44 @@ export const CreateGlobalCompanyResponse = zod.object({
   "researchedAt": zod.coerce.date().nullable(),
   "sourceCount": zod.number().int().min(createGlobalCompanyResponseResearchSummarySourceCountMin)
 }).optional()
+})
+
+
+/**
+ * @summary Replace the platform-wide company business-area choices
+ */
+export const updateCompanyBusinessAreasBodyValuesItemMax = 120;
+
+export const updateCompanyBusinessAreasBodyValuesMax = 100;
+
+
+
+export const UpdateCompanyBusinessAreasBody = zod.object({
+  "values": zod.array(zod.string().min(1).max(updateCompanyBusinessAreasBodyValuesItemMax)).min(1).max(updateCompanyBusinessAreasBodyValuesMax)
+})
+
+export const updateCompanyBusinessAreasResponseValuesItemMax = 120;
+
+export const updateCompanyBusinessAreasResponseValuesMax = 100;
+
+
+
+export const UpdateCompanyBusinessAreasResponse = zod.object({
+  "values": zod.array(zod.string().min(1).max(updateCompanyBusinessAreasResponseValuesItemMax)).min(1).max(updateCompanyBusinessAreasResponseValuesMax)
+})
+
+
+/**
+ * @summary List platform-wide company business-area choices
+ */
+export const listCompanyBusinessAreasResponseValuesItemMax = 120;
+
+export const listCompanyBusinessAreasResponseValuesMax = 100;
+
+
+
+export const ListCompanyBusinessAreasResponse = zod.object({
+  "values": zod.array(zod.string().min(1).max(listCompanyBusinessAreasResponseValuesItemMax)).min(1).max(listCompanyBusinessAreasResponseValuesMax)
 })
 
 

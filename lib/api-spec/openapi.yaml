@@ -1372,6 +1372,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: createGlobalCompany
+      tags: [admin]
+      summary: Add a company profile to the global catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalCompanyInput"
+      responses:
+        "201":
+          description: Global company created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalCompany"
+        "400":
+          description: Invalid company profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A global company already uses this domain or a similar name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/company-business-areas:
     put:
       operationId: updateCompanyBusinessAreas
@@ -1404,35 +1433,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CompanyBusinessAreas" }
-    post:
-      operationId: createGlobalCompany
-      tags: [admin]
-      summary: Add a company profile to the global catalog
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GlobalCompanyInput"
-      responses:
-        "201":
-          description: Global company created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GlobalCompany"
-        "400":
-          description: Invalid company profile
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: A global company already uses this domain
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /admin/global-companies/import-template:
     get:
       operationId: downloadGlobalCompanyImportTemplate
