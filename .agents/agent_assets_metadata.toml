@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "S3M3KZGh-AVptaPNWoWqO"
+uri = "file://artifacts/mailflow-saas/public/mailflow-icon.svg"
+type = "image"
+title = "Mailflow icon (SVG)"
+description = "Scalable standalone Mailflow icon with transparent strokes and the existing navy-and-red mark."
+logical_id = "8aede9a3-559b-4ef1-8f23-a9fa9c8c8208"
+content_hash = "sha256:3e87b32741c0c21f3e495703f202494545aa76207a0f1126a93694f1bee2a4e2"
+size = 359
+mtime_ms = 1791977648197
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5b878010-9d47-4984-9286-b97a209acd73/8aede9a3-559b-4ef1-8f23-a9fa9c8c8208/73abbd6e-aba7-41c0-b608-1a3ae1b504b1"
+storage_version_token = "1791977658582877"
+content_type = "image/svg+xml"
