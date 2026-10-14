@@ -510,6 +510,9 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     const now = Date.now();
     let lastActivityAt = storedActivityAt !== null && storedActivityAt <= now ? storedActivityAt : now;
     let lastStorageSyncAt = lastActivityAt;
+    let pointerX: number | null = null;
+    let pointerY: number | null = null;
+    let lastPointerActivityAt = 0;
     let loggingOut = false;
     if (storedActivityAt === null || storedActivityAt > now) writeUserActivity(user.id, lastActivityAt);
 
@@ -536,6 +539,19 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
         lastStorageSyncAt = now;
       }
     };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (pointerX === null || pointerY === null) {
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        return;
+      }
+      const distance = Math.hypot(event.clientX - pointerX, event.clientY - pointerY);
+      if (distance < 12 || Date.now() - lastPointerActivityAt < 1_000) return;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      lastPointerActivityAt = Date.now();
+      recordActivity();
+    };
     const checkInactivity = () => {
       const storedActivity = readUserActivity(user.id);
       if (storedActivity !== null && storedActivity > lastActivityAt) lastActivityAt = storedActivity;
@@ -546,15 +562,26 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
       const timestamp = Number(event.newValue);
       if (Number.isFinite(timestamp) && timestamp > lastActivityAt) lastActivityAt = timestamp;
     };
-    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'scroll', 'wheel'];
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'scroll', 'wheel'];
     for (const eventName of activityEvents) window.addEventListener(eventName, recordActivity, { passive: true });
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('storage', handleStorage);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkInactivity();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkInactivity);
+    window.addEventListener('pageshow', checkInactivity);
     const interval = window.setInterval(checkInactivity, 1_000);
     checkInactivity();
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('storage', handleStorage);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkInactivity);
+      window.removeEventListener('pageshow', checkInactivity);
+      window.removeEventListener('pointermove', handlePointerMove);
       for (const eventName of activityEvents) window.removeEventListener(eventName, recordActivity);
     };
   }, [logout.mutate, qc, setLocation, user.id]);
