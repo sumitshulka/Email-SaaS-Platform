@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Building2, Check, CircleAlert, Download, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Building2, Check, CircleAlert, Download, Pencil, Plus, Search, Sparkles, Trash2, Upload } from 'lucide-react';
 import {
   getListAdminGlobalCompaniesQueryKey, useCreateGlobalCompany, useDeleteGlobalCompany,
   useListAdminGlobalCompanies, useUpdateGlobalCompany,
@@ -48,18 +48,18 @@ export function GlobalCompanyForm({ record, onClose, onSaved, businessAreas }: {
       create.mutate({ data }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getListAdminGlobalCompaniesQueryKey() }); onSaved(); }, onError: error => { const message = errorText(error); if (message.includes('similarly named')) { setAllowSimilarCompany(true); setError(`${message} If these are different companies, submit again to confirm creation.`); } else setError(domainError(error)); } });
     }
   };
-  return <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-[#1b352e]/35 p-2 backdrop-blur-[2px] sm:items-center sm:p-5" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose(); }}>
-    <section role="dialog" aria-modal="true" aria-labelledby="global-company-form-title" className="fade-in max-h-[calc(100vh-1rem)] w-full max-w-[700px] overflow-y-auto overscroll-contain rounded-t-2xl border border-[#dce6e1] bg-[#fbfdfb] shadow-2xl sm:max-h-[calc(100vh-2.5rem)] sm:rounded-2xl">
-      <header className="sticky top-0 z-10 flex items-start justify-between border-b border-[#e5ede8] bg-[#fbfdfb]/95 px-5 py-4 backdrop-blur sm:px-7"><div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#638a7b]">GLOBAL COMPANY CATALOG</div><h2 id="global-company-form-title" className="display mt-1 text-[21px] font-extrabold tracking-[-.03em] text-[#1e3b32]">{record ? 'Edit company profile' : 'Create global profile'}</h2><p className="mt-1 text-[11px] text-[#71847a]">This shared record can be added to customer workspaces.</p></div><button type="button" aria-label="Close form" onClick={onClose} className="rounded-md p-2 text-[#71847a] hover:bg-[#edf4ef]"><X className="h-4 w-4"/></button></header>
-      <form onSubmit={submit} className="space-y-4 p-5 sm:p-7">
+  return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
+    <DialogContent data-testid="dialog-global-company-form" aria-labelledby="global-company-form-title" className="flex h-[calc(100vh-2rem)] max-h-[900px] w-[calc(100%-2rem)] max-w-[700px] flex-col overflow-hidden rounded-xl border border-[#dce6e1] bg-[#fbfdfb] p-0 shadow-2xl">
+      <header className="flex shrink-0 items-start justify-between border-b border-[#e5ede8] bg-[#fbfdfb] px-5 py-4 pr-12 sm:px-7"><div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#638a7b]">GLOBAL COMPANY CATALOG</div><DialogTitle id="global-company-form-title" className="display mt-1 text-[21px] font-extrabold tracking-[-.03em] text-[#1e3b32]">{record ? 'Edit company profile' : 'Create global profile'}</DialogTitle><p className="mt-1 text-[11px] text-[#71847a]">This shared record can be added to customer workspaces.</p></div></header>
+      <form onSubmit={submit} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5 sm:p-7">
         <label className="block"><span className="mb-1.5 block text-[10px] font-bold text-[#47645a]">Company name <span className="text-[#b66d42]">*</span></span><input required maxLength={200} value={form.companyName} onChange={event => set('companyName', event.target.value)} className="h-10 w-full rounded-lg border border-[#d5e1da] bg-white px-3 text-[12px] text-[#29443b] outline-none focus:border-[#438674] focus:ring-2 focus:ring-[#dcece5]"/></label>
         <div className="grid gap-3 sm:grid-cols-2">{fields.map(([key, label, type]) => <label key={key} className="block"><span className="mb-1.5 block text-[10px] font-bold text-[#47645a]">{label}</span>{type === 'select' ? <select value={form[key]} onChange={event => set(key, event.target.value)} className="h-10 w-full rounded-lg border border-[#d5e1da] bg-white px-3 text-[12px] text-[#29443b]"><option value="">Select a business area</option>{businessAreas.map(area => <option key={area} value={area}>{area}</option>)}</select> : <input type={type} value={form[key]} onChange={event => set(key, event.target.value)} className="h-10 w-full rounded-lg border border-[#d5e1da] bg-white px-3 text-[12px] text-[#29443b] outline-none focus:border-[#438674] focus:ring-2 focus:ring-[#dcece5]"/>}</label>)}</div>
         <label className="block"><span className="mb-1.5 block text-[10px] font-bold text-[#47645a]">Description</span><textarea maxLength={10000} value={form.companyDescription} onChange={event => set('companyDescription', event.target.value)} className="min-h-[96px] w-full rounded-lg border border-[#d5e1da] bg-white px-3 py-2 text-[12px] leading-5 text-[#29443b] outline-none focus:border-[#438674] focus:ring-2 focus:ring-[#dcece5]"/></label>
         {error && <div role="alert" className="rounded-lg border border-[#ead2c2] bg-[#fff8f2] px-3 py-2.5 text-[11px] leading-5 text-[#945b37]">{error}</div>}
         <div className="flex flex-col-reverse gap-2 border-t border-[#e5ede8] pt-4 sm:flex-row sm:justify-end"><button type="button" disabled={saving} onClick={onClose} className="min-h-10 rounded-lg border border-[#d5e1da] bg-white px-4 text-[11px] font-bold text-[#506b5f]">Cancel</button><button type="submit" disabled={saving} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#286d5b] px-4 text-[11px] font-bold text-white hover:bg-[#205a4b] disabled:opacity-55">{saving ? 'Saving…' : <><Check className="h-4 w-4"/>{allowSimilarCompany ? 'Create anyway' : record ? 'Save changes' : 'Create profile'}</>}</button></div>
       </form>
-    </section>
-  </div>;
+    </DialogContent>
+  </Dialog>;
 }
 
 function domainError(error: unknown) {
