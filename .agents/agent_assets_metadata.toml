@@ -14,3 +14,17 @@ mtime_ms = 1791977648197
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5b878010-9d47-4984-9286-b97a209acd73/8aede9a3-559b-4ef1-8f23-a9fa9c8c8208/73abbd6e-aba7-41c0-b608-1a3ae1b504b1"
 storage_version_token = "1791977658582877"
 content_type = "image/svg+xml"
+
+[[outputs]]
+id = "DMN4bTiILtbjhRqIWkK1X"
+uri = "file://artifacts/mailflow-saas/public/mailflow-icon.png"
+type = "image"
+title = "Mailflow icon (PNG)"
+description = "1024 × 1024 PNG with transparent corners, matching the downloadable SVG icon."
+logical_id = "390a0a59-9263-4e1d-9519-f7535e5040fc"
+content_hash = "sha256:4baecbdc867647fbf58a49fc8a844d79d3ae32f424716c4f6f00e09d58f5347c"
+size = 201931
+mtime_ms = 1791977776797
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:5b878010-9d47-4984-9286-b97a209acd73/390a0a59-9263-4e1d-9519-f7535e5040fc/83da07a4-1533-47b9-8439-7bdd3f32b431"
+storage_version_token = "1791977798363389"
+content_type = "image/png"
