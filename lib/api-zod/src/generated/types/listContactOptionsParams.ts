@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListContactOptionsFirstLetter } from './listContactOptionsFirstLetter';
 
 export type ListContactOptionsParams = {
 /**
@@ -28,6 +29,30 @@ excludeListId?: string;
  * Restrict results to contacts that do not belong to any contact list.
  */
 unattachedOnly?: boolean;
+/**
+ * Filter by the first letter of the displayed contact name, or other for names that do not start with A–Z.
+ */
+firstLetter?: ListContactOptionsFirstLetter;
+/**
+ * Search within job titles, or use __unset__ to match blank titles.
+ * @maxLength 200
+ */
+jobTitle?: string;
+/**
+ * Search within company names, or use __unset__ to match contacts without a company.
+ * @maxLength 200
+ */
+company?: string;
+/**
+ * Search within contact or company locations, or use __unset__ to match blank locations.
+ * @maxLength 200
+ */
+location?: string;
+/**
+ * Match a lead source, or use __unset__ to match blank sources.
+ * @maxLength 120
+ */
+leadSource?: string;
 /**
  * @maxLength 64
  */

@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListContactsFirstLetter = typeof ListContactsFirstLetter[keyof typeof ListContactsFirstLetter];
+export type ListContactOptionsFirstLetter = typeof ListContactOptionsFirstLetter[keyof typeof ListContactOptionsFirstLetter];
 
 
-export const ListContactsFirstLetter = {
+export const ListContactOptionsFirstLetter = {
   A: 'A',
   B: 'B',
   C: 'C',

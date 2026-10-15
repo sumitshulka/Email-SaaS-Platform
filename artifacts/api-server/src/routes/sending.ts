@@ -2493,67 +2493,11 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
         : inArray(contactsTable.id, members),
     );
   }
-  if (params.firstLetter) {
-    const displayedName = sql<string>`lower(left(coalesce(nullif(trim(${contactsTable.firstName}), ''), nullif(trim(${contactsTable.name}), ''), ${contactsTable.email}), 1))`;
-    conditions.push(
-      params.firstLetter === "other"
-        ? sql`${displayedName} !~ '^[a-z]$'`
-        : eq(displayedName, params.firstLetter.toLowerCase()),
-    );
-  }
-  if (params.jobTitle?.trim()) {
-    const jobTitleSearch = `%${escapeLikeTerm(params.jobTitle.trim())}%`;
-    conditions.push(
-      params.jobTitle === "__unset__"
-        ? sql`trim(coalesce(${contactsTable.jobTitle}, '')) = ''`
-        : ilike(contactsTable.jobTitle, jobTitleSearch),
-    );
-  }
-  if (params.company?.trim()) {
-    if (params.company === "__unset__") {
-      conditions.push(
-        and(
-          isNull(contactsTable.companyId),
-          sql`trim(coalesce(${contactsTable.companyName}, '')) = ''`,
-        )!,
-      );
-    } else {
-      const companySearch = `%${escapeLikeTerm(params.company.trim())}%`;
-      const matchingCompanyIds = db
-        .select({ id: companiesTable.id })
-        .from(companiesTable)
-        .where(and(eq(companiesTable.userId, userId), ilike(companiesTable.companyName, companySearch)));
-      conditions.push(
-        or(
-          ilike(contactsTable.companyName, companySearch),
-          inArray(contactsTable.companyId, matchingCompanyIds),
-        )!,
-      );
-    }
-  }
-  if (params.location?.trim()) {
-    if (params.location === "__unset__") {
-      conditions.push(
-        and(
-          sql`trim(coalesce(${contactsTable.location}, '')) = ''`,
-          sql`trim(coalesce(${contactsTable.companyLocation}, '')) = ''`,
-        )!,
-      );
-    } else {
-      const locationSearch = `%${escapeLikeTerm(params.location.trim())}%`;
-      conditions.push(
-        or(
-          ilike(contactsTable.location, locationSearch),
-          ilike(contactsTable.companyLocation, locationSearch),
-        )!,
-      );
-    }
-  }
   if (params.companyId === "__none__") {
     conditions.push(
       and(
         isNull(contactsTable.companyId),
-        sql`trim(coalesce(${contactsTable.companyName}, '')) = ''`,
+        or(isNull(contactsTable.companyName), eq(contactsTable.companyName, "")),
       )!,
     );
   } else if (params.companyId && params.companyId !== "all") {
@@ -2567,7 +2511,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     if (!value || value === "all") continue;
     conditions.push(
       value === "__unset__"
-        ? sql`trim(coalesce(${column}, '')) = ''`
+        ? or(isNull(column), eq(column, ""))!
         : eq(column, value),
     );
   }
@@ -2606,13 +2550,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     .select()
     .from(contactsTable)
     .where(where)
-    .orderBy(
-      params.firstLetter
-        ? asc(sql<string>`lower(coalesce(nullif(trim(${contactsTable.firstName}), ''), nullif(trim(${contactsTable.name}), ''), ${contactsTable.email}))`)
-        : desc(contactsTable.createdAt),
-      asc(contactsTable.lastName),
-      asc(contactsTable.email),
-    )
+    .orderBy(desc(contactsTable.createdAt), desc(contactsTable.id))
     .limit(pageSize)
     .offset((page - 1) * pageSize);
   const contactIds = contacts.map((contact) => contact.id);
@@ -2786,6 +2724,68 @@ router.get("/contacts/options", requireUserRole, async (req, res): Promise<void>
   if (params.subscribed !== undefined) {
     conditions.push(eq(contactsTable.subscribed, params.subscribed));
   }
+  if (params.firstLetter) {
+    const displayedName = sql<string>`lower(left(coalesce(nullif(trim(${contactsTable.firstName}), ''), nullif(trim(${contactsTable.name}), ''), ${contactsTable.email}), 1))`;
+    conditions.push(
+      params.firstLetter === "other"
+        ? sql`${displayedName} !~ '^[a-z]$'`
+        : eq(displayedName, params.firstLetter.toLowerCase()),
+    );
+  }
+  if (params.jobTitle?.trim()) {
+    conditions.push(
+      params.jobTitle === "__unset__"
+        ? sql`trim(coalesce(${contactsTable.jobTitle}, '')) = ''`
+        : ilike(contactsTable.jobTitle, `%${escapeLikeTerm(params.jobTitle.trim())}%`),
+    );
+  }
+  if (params.company?.trim()) {
+    if (params.company === "__unset__") {
+      conditions.push(
+        and(
+          isNull(contactsTable.companyId),
+          sql`trim(coalesce(${contactsTable.companyName}, '')) = ''`,
+        )!,
+      );
+    } else {
+      const companySearch = `%${escapeLikeTerm(params.company.trim())}%`;
+      const matchingCompanyIds = db
+        .select({ id: companiesTable.id })
+        .from(companiesTable)
+        .where(and(eq(companiesTable.userId, userId), ilike(companiesTable.companyName, companySearch)));
+      conditions.push(
+        or(
+          ilike(contactsTable.companyName, companySearch),
+          inArray(contactsTable.companyId, matchingCompanyIds),
+        )!,
+      );
+    }
+  }
+  if (params.location?.trim()) {
+    if (params.location === "__unset__") {
+      conditions.push(
+        and(
+          sql`trim(coalesce(${contactsTable.location}, '')) = ''`,
+          sql`trim(coalesce(${contactsTable.companyLocation}, '')) = ''`,
+        )!,
+      );
+    } else {
+      const locationSearch = `%${escapeLikeTerm(params.location.trim())}%`;
+      conditions.push(
+        or(
+          ilike(contactsTable.location, locationSearch),
+          ilike(contactsTable.companyLocation, locationSearch),
+        )!,
+      );
+    }
+  }
+  if (params.leadSource) {
+    conditions.push(
+      params.leadSource === "__unset__"
+        ? sql`trim(coalesce(${contactsTable.leadSource}, '')) = ''`
+        : eq(contactsTable.leadSource, params.leadSource),
+    );
+  }
   if (params.companyId === "__none__") {
     conditions.push(isNull(contactsTable.companyId));
   } else if (params.companyId) {
@@ -2863,9 +2863,11 @@ router.get("/contacts/options", requireUserRole, async (req, res): Promise<void>
       .from(contactsTable)
       .where(where)
       .orderBy(
-        params.companyId === "__none__"
-          ? asc(contactsTable.firstName)
-          : asc(contactsTable.createdAt),
+        params.firstLetter
+          ? asc(sql<string>`lower(coalesce(nullif(trim(${contactsTable.firstName}), ''), nullif(trim(${contactsTable.name}), ''), ${contactsTable.email}))`)
+          : params.companyId === "__none__"
+            ? asc(contactsTable.firstName)
+            : asc(contactsTable.createdAt),
         asc(contactsTable.lastName),
         asc(contactsTable.email),
       )

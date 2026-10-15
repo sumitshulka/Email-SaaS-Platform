@@ -213,9 +213,23 @@ async function installApiFixtures(context) {
       const excludeListId = url.searchParams.get('excludeListId');
       const unattachedOnly = url.searchParams.get('unattachedOnly') === 'true';
       const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
+      const letter = url.searchParams.get('firstLetter');
+      const jobTitle = url.searchParams.get('jobTitle');
+      const company = url.searchParams.get('company');
+      const location = url.searchParams.get('location');
+      const leadSource = url.searchParams.get('leadSource');
+      const subscribed = url.searchParams.get('subscribed');
+      const blank = value => !String(value ?? '').trim();
+      const textFilter = (value, filter) => !filter || (filter === '__unset__' ? blank(value) : String(value ?? '').toLowerCase().includes(filter.toLowerCase()));
       const matches = listContactPickerFixtures.filter(contact =>
         (!excludeListId || !contact.listIds.includes(excludeListId)) &&
         (!unattachedOnly || contact.listIds.length === 0) &&
+        (!letter || (letter === 'other' ? !/^[a-z]/i.test((contact.firstName || contact.name || contact.email).trim()) : (contact.firstName || contact.name || contact.email).trim().toLowerCase().startsWith(letter.toLowerCase()))) &&
+        (subscribed === null || contact.subscribed === (subscribed === 'true')) &&
+        textFilter(contact.jobTitle, jobTitle) &&
+        textFilter(contact.companyName, company) &&
+        textFilter(`${contact.location ?? ''} ${contact.companyLocation ?? ''}`, location) &&
+        (!leadSource || (leadSource === '__unset__' ? blank(contact.leadSource) : contact.leadSource === leadSource)) &&
         (!search || `${contact.name} ${contact.email} ${contact.companyName ?? ''}`.toLowerCase().includes(search)),
       );
       await route.fulfill({ status: 200, json: { contacts: matches.slice(0, limit), total: matches.length, limit } });
@@ -563,7 +577,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     }
   });
 
-  it('filters list members and finds contacts unattached to every list', async () => {
+  it('filters contacts to add and finds contacts unattached to every list', async () => {
     listMemberContactFixtures = [
       {
         id: 'member-alpha',
@@ -595,6 +609,8 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       },
     ];
     listContactPickerFixtures = [
+      { id: 'picker-alpha', name: 'Avery Alpha', firstName: 'Avery', lastName: 'Alpha', email: 'avery@example.test', companyName: 'Acme Labs', jobTitle: 'Product Engineer', location: 'London', leadSource: 'Referral', subscribed: true, createdAt: date, listIds: [listTwoId] },
+      { id: 'picker-blank', name: 'Blank Beta', firstName: 'Blank', lastName: 'Beta', email: 'blank@example.test', companyName: '  ', jobTitle: ' ', location: null, companyLocation: '', leadSource: '', subscribed: false, createdAt: date, listIds: [] },
       { id: 'picker-other-list', name: 'Casey Other', firstName: 'Casey', lastName: 'Other', email: 'casey@example.test', companyName: 'Acme Labs', subscribed: true, createdAt: date, listIds: [listTwoId] },
       { id: 'picker-unattached', name: 'Taylor Free', firstName: 'Taylor', lastName: 'Free', email: 'taylor@example.test', companyName: null, subscribed: true, createdAt: date, listIds: [] },
     ];
@@ -608,23 +624,25 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.getByTestId(`button-view-list-contacts-${listOneId}`).click();
       await page.getByTestId('row-list-contact-member-alpha').waitFor({ state: 'visible' });
 
-      await page.getByTestId('select-list-member-first-letter').selectOption('A');
-      await page.getByTestId('select-list-member-status').selectOption('subscribed');
-      await page.getByTestId('input-list-member-job-title').fill('Engineer');
-      await page.getByTestId('input-list-member-company').fill('Acme');
-      await page.getByTestId('input-list-member-location').fill('London');
-      await page.getByTestId('select-list-member-lead-source').selectOption('Referral');
-      await page.getByText('Showing 1 of 2 members.', { exact: true }).waitFor({ state: 'visible' });
-      assert.equal(await page.getByTestId('row-list-contact-member-beta').count(), 0);
+      await page.getByTestId('select-list-candidate-first-letter').selectOption('A');
+      await page.getByTestId('select-list-candidate-status').selectOption('subscribed');
+      await page.getByTestId('input-list-candidate-job-title').fill('Engineer');
+      await page.getByTestId('input-list-candidate-company').fill('Acme');
+      await page.getByTestId('input-list-candidate-location').fill('London');
+      await page.getByTestId('select-list-candidate-lead-source').selectOption('Referral');
+      await page.getByTestId('row-add-contact-to-list-picker-alpha').waitFor({ state: 'visible' });
+      await page.waitForFunction(() => !document.querySelector('[data-testid="row-add-contact-to-list-picker-blank"]'));
+      assert.equal(await page.getByTestId('row-add-contact-to-list-picker-blank').count(), 0);
+      assert.equal(await page.getByTestId('row-list-contact-member-beta').count(), 1);
 
-      await page.getByTestId('button-clear-list-member-filters').click();
-      await page.getByTestId('checkbox-list-member-jobTitle-blank').check();
-      await page.getByTestId('checkbox-list-member-company-blank').check();
-      await page.getByTestId('checkbox-list-member-location-blank').check();
-      await page.getByTestId('select-list-member-lead-source').selectOption('__unset__');
-      await page.getByText('Showing 1 of 2 members.', { exact: true }).waitFor({ state: 'visible' });
-      await page.getByTestId('row-list-contact-member-beta').waitFor({ state: 'visible' });
-      assert.equal(await page.getByTestId('row-list-contact-member-alpha').count(), 0);
+      await page.getByTestId('button-clear-list-candidate-filters').click();
+      await page.getByTestId('checkbox-list-candidate-jobTitle-blank').check();
+      await page.getByTestId('checkbox-list-candidate-company-blank').check();
+      await page.getByTestId('checkbox-list-candidate-location-blank').check();
+      await page.getByTestId('select-list-candidate-lead-source').selectOption('__unset__');
+      await page.getByTestId('row-add-contact-to-list-picker-blank').waitFor({ state: 'visible' });
+      await page.waitForFunction(() => !document.querySelector('[data-testid="row-add-contact-to-list-picker-alpha"]'));
+      assert.equal(await page.getByTestId('row-add-contact-to-list-picker-alpha').count(), 0);
 
       await page.getByTestId('checkbox-only-unattached-contacts').check();
       await page.getByTestId('button-add-contact-to-list-picker-unattached').waitFor({ state: 'visible' });

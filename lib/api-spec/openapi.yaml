@@ -1027,24 +1027,8 @@ paths:
           name: listId
           schema: { type: string, maxLength: 64 }
         - in: query
-          name: firstLetter
-          description: Filter by the first letter of the displayed contact name, or other for names that do not start with A–Z.
-          schema: { type: string, enum: [A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, other] }
-        - in: query
           name: companyId
           schema: { type: string, maxLength: 64 }
-        - in: query
-          name: jobTitle
-          description: Search within job titles, or use __unset__ to match blank titles.
-          schema: { type: string, maxLength: 200 }
-        - in: query
-          name: company
-          description: Search within company names, or use __unset__ to match contacts without a company.
-          schema: { type: string, maxLength: 200 }
-        - in: query
-          name: location
-          description: Search within contact or company locations, or use __unset__ to match blank locations.
-          schema: { type: string, maxLength: 200 }
         - in: query
           name: lifecycleStage
           schema: { type: string, maxLength: 80 }
@@ -1147,6 +1131,26 @@ paths:
           name: unattachedOnly
           description: Restrict results to contacts that do not belong to any contact list.
           schema: { type: boolean, default: false }
+        - in: query
+          name: firstLetter
+          description: Filter by the first letter of the displayed contact name, or other for names that do not start with A–Z.
+          schema: { type: string, enum: [A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, other] }
+        - in: query
+          name: jobTitle
+          description: Search within job titles, or use __unset__ to match blank titles.
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: company
+          description: Search within company names, or use __unset__ to match contacts without a company.
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: location
+          description: Search within contact or company locations, or use __unset__ to match blank locations.
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: leadSource
+          description: Match a lead source, or use __unset__ to match blank sources.
+          schema: { type: string, maxLength: 120 }
         - in: query
           name: companyId
           schema: { type: string, maxLength: 64 }
