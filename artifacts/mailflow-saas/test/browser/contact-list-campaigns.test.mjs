@@ -331,6 +331,26 @@ async function installApiFixtures(context) {
       });
       return;
     }
+    const contactMatch = pathname.match(/^\/api\/contacts\/([^/]+)$/);
+    if (contactMatch && method === 'PATCH') {
+      const contact = listMemberContactFixtures.find(item => item.id === contactMatch[1]);
+      if (!contact) {
+        await route.fulfill({ status: 404, json: { error: 'Contact not found.' } });
+        return;
+      }
+      const { listIds } = request.postDataJSON();
+      for (const listId of contact.listIds) {
+        const list = lists.find(item => item.id === listId);
+        if (list) list.contactCount = Math.max(0, list.contactCount - 1);
+      }
+      contact.listIds = [...listIds];
+      for (const listId of contact.listIds) {
+        const list = lists.find(item => item.id === listId);
+        if (list) list.contactCount += 1;
+      }
+      await route.fulfill({ status: 200, json: contact });
+      return;
+    }
     if (pathname === '/api/campaigns' && method === 'GET') {
       await route.fulfill({ status: 200, json: campaigns });
       return;
@@ -647,6 +667,12 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.getByTestId('checkbox-only-unattached-contacts').check();
       await page.getByTestId('button-add-contact-to-list-picker-unattached').waitFor({ state: 'visible' });
       assert.equal(await page.getByTestId('button-add-contact-to-list-picker-other-list').count(), 0);
+
+      await page.getByTestId('select-move-contact-member-alpha').selectOption(listTwoId);
+      await page.getByTestId('row-list-contact-member-alpha').waitFor({ state: 'detached' });
+      assert.deepEqual(listMemberContactFixtures.find(contact => contact.id === 'member-alpha').listIds, [listTwoId]);
+      assert.equal(lists.find(list => list.id === listOneId).contactCount, 1);
+      assert.equal(lists.find(list => list.id === listTwoId).contactCount, 2);
     } finally {
       await context.close();
       listMemberContactFixtures = [];

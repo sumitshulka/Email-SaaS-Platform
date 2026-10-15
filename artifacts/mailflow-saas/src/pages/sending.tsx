@@ -1502,6 +1502,29 @@ export function ListsPage() {
       });
     }
   };
+  const moveContactToList = async (contact: { id: string; email: string }, targetListId: string) => {
+    const targetList = lists.find(list => list.id === targetListId);
+    if (!targetList || !viewingList || targetList.id === viewingList.id) return;
+    setPendingMembershipIds(current => new Set(current).add(contact.id));
+    setMembershipFeedback(null);
+    try {
+      await updateContact.mutateAsync({
+        contactId: contact.id,
+        data: { listIds: [targetList.id] },
+      });
+      await refresh();
+      setMembershipFeedback({ kind: 'success', text: `${contact.email} moved to ${targetList.name} and removed from other lists.` });
+    } catch (error) {
+      setMembershipFeedback({ kind: 'error', text: mutationError(error) });
+      await refresh();
+    } finally {
+      setPendingMembershipIds(current => {
+        const next = new Set(current);
+        next.delete(contact.id);
+        return next;
+      });
+    }
+  };
   const save = (e: FormEvent) => {
     e.preventDefault();
     const success = () => { refresh(); setEditing(undefined); setName(''); setNotice({ kind: 'success', text: editing ? 'List changes saved.' : 'Contact list created.' }); };
@@ -1678,18 +1701,32 @@ export function ListsPage() {
             <p className="mt-1 text-[10px] text-[#7b8794]">
               Showing {(contactsQuery.data?.total ?? 0).toLocaleString()} of {viewingList.contactCount.toLocaleString()} members.
             </p>
+            <p className="mt-1 text-[10px] text-[#7b8794]">Choose a destination in “Move to list” to remove that contact from every other list.</p>
           </div>
         </div>
       {contactsQuery.isLoading ? <p className="text-[11px] text-[#7b8794]">Loading list members…</p>
         : contactsQuery.isError ? <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>List members could not be loaded.</span><Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-retry-list-members" onClick={() => void contactsQuery.refetch()}>Retry</Button></div>
       : viewingContacts.length ? <div className="max-h-[36vh] overflow-y-auto rounded-md border border-[#e7ebef]">
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] gap-3 border-b border-[#e7ebef] bg-[#f8fafb] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-[#7e8996]"><span>Contact</span><span>Email</span><span>Status</span></div>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto_minmax(150px,0.8fr)] gap-3 border-b border-[#e7ebef] bg-[#f8fafb] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-[#7e8996]"><span>Contact</span><span>Email</span><span>Status</span><span>Move to list</span></div>
         {viewingContacts.map(contact => {
           const displayName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.name || contact.email;
-          return <div key={contact.id} data-testid={`row-list-contact-${contact.id}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] items-center gap-3 border-b border-[#edf0f2] px-4 py-3 last:border-b-0">
+          const pendingMove = pendingMembershipIds.has(contact.id);
+          const moveTargets = lists.filter(list => list.id !== viewingList.id);
+          return <div key={contact.id} data-testid={`row-list-contact-${contact.id}`} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto_minmax(150px,0.8fr)] items-center gap-3 border-b border-[#edf0f2] px-4 py-3 last:border-b-0">
             <div className="min-w-0"><div className="truncate text-[12px] font-semibold text-[#29384a]">{displayName}</div>{contact.companyName && <div className="mt-0.5 truncate text-[10px] text-[#87919d]">{contact.companyName}</div>}</div>
             <a className="truncate text-[11px] text-[#365f8b] hover:underline" href={`mailto:${contact.email}`}>{contact.email}</a>
             <Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status>
+            <select
+              aria-label={`Move ${displayName} to another list`}
+              data-testid={`select-move-contact-${contact.id}`}
+              value=""
+              disabled={pendingMove || moveTargets.length === 0}
+              onChange={event => { if (event.target.value) void moveContactToList(contact, event.target.value); }}
+              className="h-8 min-w-0 rounded-md border border-[#d3dce7] bg-white px-2 text-[10px] text-[#415166] disabled:bg-[#f4f6f8]"
+            >
+              <option value="">{pendingMove ? 'Moving…' : moveTargets.length ? 'Move to…' : 'No other lists'}</option>
+              {moveTargets.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}
+            </select>
           </div>;
         })}
       </div> : <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-6 text-center">
