@@ -1327,6 +1327,12 @@ export const listContactsQueryListIdMax = 64;
 
 export const listContactsQueryCompanyIdMax = 64;
 
+export const listContactsQueryJobTitleMax = 200;
+
+export const listContactsQueryCompanyMax = 200;
+
+export const listContactsQueryLocationMax = 200;
+
 export const listContactsQueryLifecycleStageMax = 80;
 
 export const listContactsQueryLeadStatusMax = 80;
@@ -1342,7 +1348,11 @@ export const ListContactsQueryParams = zod.object({
   "search": zod.coerce.string().max(listContactsQuerySearchMax).optional(),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']).default(listContactsQueryStatusDefault),
   "listId": zod.coerce.string().max(listContactsQueryListIdMax).optional(),
+  "firstLetter": zod.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'other']).optional().describe('Filter by the first letter of the displayed contact name, or other for names that do not start with A–Z.'),
   "companyId": zod.coerce.string().max(listContactsQueryCompanyIdMax).optional(),
+  "jobTitle": zod.coerce.string().max(listContactsQueryJobTitleMax).optional().describe('Search within job titles, or use __unset__ to match blank titles.'),
+  "company": zod.coerce.string().max(listContactsQueryCompanyMax).optional().describe('Search within company names, or use __unset__ to match contacts without a company.'),
+  "location": zod.coerce.string().max(listContactsQueryLocationMax).optional().describe('Search within contact or company locations, or use __unset__ to match blank locations.'),
   "lifecycleStage": zod.coerce.string().max(listContactsQueryLifecycleStageMax).optional(),
   "leadStatus": zod.coerce.string().max(listContactsQueryLeadStatusMax).optional(),
   "leadSource": zod.coerce.string().max(listContactsQueryLeadSourceMax).optional(),
@@ -1905,6 +1915,7 @@ export const listContactOptionsQueryListIdMax = 64;
 
 export const listContactOptionsQueryExcludeListIdMax = 64;
 
+export const listContactOptionsQueryUnattachedOnlyDefault = false;
 export const listContactOptionsQueryCompanyIdMax = 64;
 
 export const listContactOptionsQueryListIdsMax = 100;
@@ -1916,6 +1927,7 @@ export const ListContactOptionsQueryParams = zod.object({
   "limit": zod.coerce.number().int().min(1).max(listContactOptionsQueryLimitMax).default(listContactOptionsQueryLimitDefault),
   "listId": zod.coerce.string().max(listContactOptionsQueryListIdMax).optional(),
   "excludeListId": zod.coerce.string().max(listContactOptionsQueryExcludeListIdMax).optional(),
+  "unattachedOnly": zod.coerce.boolean().default(listContactOptionsQueryUnattachedOnlyDefault).describe('Restrict results to contacts that do not belong to any contact list.'),
   "companyId": zod.coerce.string().max(listContactOptionsQueryCompanyIdMax).optional(),
   "subscribed": zod.coerce.boolean().optional(),
   "listIds": zod.array(zod.coerce.string().uuid()).max(listContactOptionsQueryListIdsMax).optional()

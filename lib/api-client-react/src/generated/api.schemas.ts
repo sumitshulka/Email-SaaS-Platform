@@ -5090,9 +5090,28 @@ status?: ListContactsStatus;
  */
 listId?: string;
 /**
+ * Filter by the first letter of the displayed contact name, or other for names that do not start with A–Z.
+ */
+firstLetter?: ListContactsFirstLetter;
+/**
  * @maxLength 64
  */
 companyId?: string;
+/**
+ * Search within job titles, or use __unset__ to match blank titles.
+ * @maxLength 200
+ */
+jobTitle?: string;
+/**
+ * Search within company names, or use __unset__ to match contacts without a company.
+ * @maxLength 200
+ */
+company?: string;
+/**
+ * Search within contact or company locations, or use __unset__ to match blank locations.
+ * @maxLength 200
+ */
+location?: string;
 /**
  * @maxLength 80
  */
@@ -5116,6 +5135,39 @@ export const ListContactsStatus = {
   all: 'all',
   subscribed: 'subscribed',
   unsubscribed: 'unsubscribed',
+} as const;
+
+export type ListContactsFirstLetter = typeof ListContactsFirstLetter[keyof typeof ListContactsFirstLetter];
+
+
+export const ListContactsFirstLetter = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+  E: 'E',
+  F: 'F',
+  G: 'G',
+  H: 'H',
+  I: 'I',
+  J: 'J',
+  K: 'K',
+  L: 'L',
+  M: 'M',
+  N: 'N',
+  O: 'O',
+  P: 'P',
+  Q: 'Q',
+  R: 'R',
+  S: 'S',
+  T: 'T',
+  U: 'U',
+  V: 'V',
+  W: 'W',
+  X: 'X',
+  Y: 'Y',
+  Z: 'Z',
+  other: 'other',
 } as const;
 
 export type ListContactsAddedWithin = typeof ListContactsAddedWithin[keyof typeof ListContactsAddedWithin];
@@ -5146,6 +5198,10 @@ listId?: string;
  * @maxLength 64
  */
 excludeListId?: string;
+/**
+ * Restrict results to contacts that do not belong to any contact list.
+ */
+unattachedOnly?: boolean;
 /**
  * @maxLength 64
  */

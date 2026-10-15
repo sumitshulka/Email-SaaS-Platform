@@ -1337,6 +1337,28 @@ export function ContactsPage() {
   </></QueryState>;
 }
 
+type ListMemberFirstLetter = 'all' | 'other' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z';
+
+type ListMemberFilters = {
+  firstLetter: ListMemberFirstLetter;
+  status: 'all' | 'subscribed' | 'unsubscribed';
+  jobTitle: string;
+  company: string;
+  location: string;
+  leadSource: string;
+};
+
+const EMPTY_LIST_MEMBER_FILTERS: ListMemberFilters = {
+  firstLetter: 'all',
+  status: 'all',
+  jobTitle: '',
+  company: '',
+  location: '',
+  leadSource: 'all',
+};
+
+const LIST_MEMBER_FILTER_UNSET = '__unset__';
+
 export function ListsPage() {
   const [, setLocation] = useLocation();
   const query = useListContactLists(); const campaignsQuery = useListCampaigns();
@@ -1350,14 +1372,49 @@ export function ListsPage() {
   const [contactSearch, setContactSearch] = useState('');
   const [debouncedContactSearch, setDebouncedContactSearch] = useState('');
   const [memberPage, setMemberPage] = useState(1);
+  const [memberFilters, setMemberFilters] = useState<ListMemberFilters>(EMPTY_LIST_MEMBER_FILTERS);
+  const [debouncedMemberFilters, setDebouncedMemberFilters] = useState<ListMemberFilters>(EMPTY_LIST_MEMBER_FILTERS);
+  const [onlyUnattachedContacts, setOnlyUnattachedContacts] = useState(false);
   const [pendingMembershipIds, setPendingMembershipIds] = useState<Set<string>>(() => new Set());
   const [membershipFeedback, setMembershipFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedContactSearch(contactSearch), 250);
     return () => window.clearTimeout(timer);
   }, [contactSearch]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedMemberFilters(memberFilters), 250);
+    return () => window.clearTimeout(timer);
+  }, [memberFilters]);
+  const memberFilterOptionsQuery = useGetContactFilterOptions({
+    query: { queryKey: getGetContactFilterOptionsQueryKey(), enabled: Boolean(viewingList), staleTime: 60_000 },
+  });
+  const updateMemberFilter = <K extends keyof ListMemberFilters>(key: K, value: ListMemberFilters[K]) => {
+    setMemberFilters(current => ({ ...current, [key]: value }));
+    setMemberPage(1);
+  };
+  const clearMemberFilters = () => {
+    setMemberFilters(EMPTY_LIST_MEMBER_FILTERS);
+    setDebouncedMemberFilters(EMPTY_LIST_MEMBER_FILTERS);
+    setMemberPage(1);
+  };
+  const activeMemberFilterCount = Object.entries(memberFilters).filter(([key, value]) =>
+    key === 'firstLetter' ? value !== 'all' :
+      key === 'status' ? value !== 'all' :
+        key === 'leadSource' ? value !== 'all' : Boolean(value),
+  ).length;
   const memberParams = viewingList
-    ? { page: memberPage, pageSize: 25, includeHistory: false, listId: viewingList.id }
+    ? {
+        page: memberPage,
+        pageSize: 25,
+        includeHistory: false,
+        listId: viewingList.id,
+        ...(debouncedMemberFilters.firstLetter !== 'all' ? { firstLetter: debouncedMemberFilters.firstLetter } : {}),
+        status: debouncedMemberFilters.status,
+        ...(debouncedMemberFilters.jobTitle ? { jobTitle: debouncedMemberFilters.jobTitle } : {}),
+        ...(debouncedMemberFilters.company ? { company: debouncedMemberFilters.company } : {}),
+        ...(debouncedMemberFilters.location ? { location: debouncedMemberFilters.location } : {}),
+        ...(debouncedMemberFilters.leadSource !== 'all' ? { leadSource: debouncedMemberFilters.leadSource } : {}),
+      }
     : undefined;
   const contactsQuery = useListContacts(memberParams, {
     query: {
@@ -1366,7 +1423,7 @@ export function ListsPage() {
     },
   });
   const contactOptionsParams = viewingList
-    ? { limit: 30, excludeListId: viewingList.id, search: debouncedContactSearch }
+    ? { limit: 30, excludeListId: viewingList.id, search: debouncedContactSearch, ...(onlyUnattachedContacts ? { unattachedOnly: true } : {}) }
     : undefined;
   const contactOptionsQuery = useListContactOptions(contactOptionsParams, {
     query: {
@@ -1412,7 +1469,10 @@ export function ListsPage() {
     setViewingList(list);
     setContactSearch('');
     setDebouncedContactSearch('');
+    setMemberFilters(EMPTY_LIST_MEMBER_FILTERS);
+    setDebouncedMemberFilters(EMPTY_LIST_MEMBER_FILTERS);
     setMemberPage(1);
+    setOnlyUnattachedContacts(false);
     setMembershipFeedback(null);
   };
   const toggleCampaignList = (listId: string) => setOpenCampaignLists(current => {
@@ -1523,7 +1583,7 @@ export function ListsPage() {
         <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4"><Button variant="outline" testId="button-cancel-list" onClick={() => setEditing(undefined)}>Cancel</Button><Button type="submit" testId="button-submit-list" disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{editing ? 'Save list' : 'Create list'}</Button></div>
       </form>
     </Modal>}
-    {viewingList && <Modal wide title={`Manage contacts · ${viewingList.name}`} subtitle={`${(contactsQuery.data?.total ?? viewingList.contactCount).toLocaleString()} contact${(contactsQuery.data?.total ?? viewingList.contactCount) === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
+    {viewingList && <Modal wide title={`Manage contacts · ${viewingList.name}`} subtitle={`${viewingList.contactCount.toLocaleString()} contact${viewingList.contactCount === 1 ? '' : 's'} belong to this list.`} close={() => setViewingList(null)}>
       <section className="mb-4 rounded-md border border-[#e3e7eb] bg-[#fafbfc] p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div><h3 className="text-[12px] font-semibold text-[#344154]">Add existing contacts</h3><p className="mt-1 text-[10px] text-[#7b8794]">Choose a contact to add it to this list. Existing list memberships are preserved.</p></div>
@@ -1532,6 +1592,17 @@ export function ListsPage() {
         <label className="relative mt-3 block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8a95a2]"/>
           <input data-testid={`input-search-list-contacts-${viewingList.id}`} aria-label="Search contacts to add" className={`${inputClass} h-9 pl-9 text-[12px]`} type="search" placeholder="Search by name, email, or company" value={contactSearch} onChange={event => setContactSearch(event.target.value)}/>
+        </label>
+        <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 rounded-md border border-[#dce5ef] bg-white px-3 py-2 text-[11px] font-medium text-[#415166]">
+          <input
+            type="checkbox"
+            data-testid="checkbox-only-unattached-contacts"
+            checked={onlyUnattachedContacts}
+            onChange={event => setOnlyUnattachedContacts(event.currentTarget.checked)}
+            className="accent-[#174f99]"
+          />
+          Only unattached contacts
+          <span className="font-normal text-[#7b8794]">(not in any list)</span>
         </label>
         {membershipFeedback && <p role={membershipFeedback.kind === 'error' ? 'alert' : 'status'} data-testid="status-list-membership" className={`mt-3 rounded-md border px-3 py-2 text-[11px] ${membershipFeedback.kind === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{membershipFeedback.text}</p>}
         {contactOptionsQuery.isLoading ? <p className="mt-3 text-[10px] text-[#7b8794]">Loading matching contacts…</p>
@@ -1548,7 +1619,64 @@ export function ListsPage() {
         </div> : (contactOptionsQuery.data?.total ?? 0) === 0 && !contactSearch.trim() && contactsQuery.data?.workspaceTotal === 0 ? <div className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center"><p className="text-[11px] text-[#7b8794]">No contacts are in this workspace yet.</p><Button variant="outline" className="mt-3" testId="button-go-to-contacts-to-create" onClick={() => { setViewingList(null); setLocation('/contacts'); }}>Go to Contacts</Button></div> : <p className="mt-3 rounded-md border border-dashed border-[#d9dfe6] bg-white px-4 py-5 text-center text-[11px] text-[#7b8794]">{contactSearch.trim() ? 'No contacts match your search.' : 'All workspace contacts already belong to this list.'}</p>}
       </section>
       <section>
-        <h3 className="mb-2 text-[12px] font-semibold text-[#344154]">Contacts in this list</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-[12px] font-semibold text-[#344154]">Contacts in this list</h3>
+            <p className="mt-1 text-[10px] text-[#7b8794]">
+              Showing {(contactsQuery.data?.total ?? 0).toLocaleString()} of {viewingList.contactCount.toLocaleString()} members.
+            </p>
+          </div>
+          {activeMemberFilterCount > 0 && <Button variant="quiet" className="min-h-8 px-2 text-[10px]" testId="button-clear-list-member-filters" onClick={clearMemberFilters}>Clear filters ({activeMemberFilterCount})</Button>}
+        </div>
+        <div data-testid="list-member-filters" className="mb-3 grid gap-3 rounded-md border border-[#e3e8ee] bg-[#f8fafc] p-3 sm:grid-cols-2 xl:grid-cols-3">
+          <label className="block min-w-0">
+            <span className="mb-1 block text-[10px] font-semibold text-[#536276]">Alphabet</span>
+            <select data-testid="select-list-member-first-letter" value={memberFilters.firstLetter} onChange={event => updateMemberFilter('firstLetter', event.target.value as ListMemberFirstLetter)} className="h-9 w-full rounded-md border border-[#d3dce7] bg-white px-2.5 text-[11px] text-[#29394c]">
+              <option value="all">Any letter</option>
+              {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(letter => <option key={letter} value={letter}>{letter}</option>)}
+              <option value="other">Other (number or symbol)</option>
+            </select>
+          </label>
+          <label className="block min-w-0">
+            <span className="mb-1 block text-[10px] font-semibold text-[#536276]">Subscription</span>
+            <select data-testid="select-list-member-status" value={memberFilters.status} onChange={event => updateMemberFilter('status', event.target.value as ListMemberFilters['status'])} className="h-9 w-full rounded-md border border-[#d3dce7] bg-white px-2.5 text-[11px] text-[#29394c]">
+              <option value="all">All statuses</option>
+              <option value="subscribed">Subscribed</option>
+              <option value="unsubscribed">Unsubscribed</option>
+            </select>
+          </label>
+          {([
+            { key: 'jobTitle', label: 'Job title', placeholder: 'Filter by job title', testId: 'input-list-member-job-title' },
+            { key: 'company', label: 'Company', placeholder: 'Filter by company', testId: 'input-list-member-company' },
+            { key: 'location', label: 'Location', placeholder: 'Filter by location', testId: 'input-list-member-location' },
+          ] as const).map(field => {
+            const value = memberFilters[field.key];
+            const blankOnly = value === LIST_MEMBER_FILTER_UNSET;
+            return <label key={field.key} className="block min-w-0">
+              <span className="mb-1 block text-[10px] font-semibold text-[#536276]">{field.label}</span>
+              <input
+                data-testid={field.testId}
+                value={blankOnly ? '' : value}
+                onChange={event => updateMemberFilter(field.key, event.target.value)}
+                disabled={blankOnly}
+                placeholder={field.placeholder}
+                className="h-9 w-full rounded-md border border-[#d3dce7] bg-white px-2.5 text-[11px] text-[#29394c] placeholder:text-[#9aa6b4] disabled:bg-[#f0f2f5]"
+              />
+              <span className="mt-1.5 flex items-center gap-1.5 text-[10px] text-[#68788c]">
+                <input type="checkbox" data-testid={`checkbox-list-member-${field.key}-blank`} checked={blankOnly} onChange={event => updateMemberFilter(field.key, event.currentTarget.checked ? LIST_MEMBER_FILTER_UNSET : '')} className="accent-[#174f99]"/>
+                Blank only
+              </span>
+            </label>;
+          })}
+          <label className="block min-w-0">
+            <span className="mb-1 block text-[10px] font-semibold text-[#536276]">Lead source</span>
+            <select data-testid="select-list-member-lead-source" value={memberFilters.leadSource} onChange={event => updateMemberFilter('leadSource', event.target.value)} className="h-9 w-full rounded-md border border-[#d3dce7] bg-white px-2.5 text-[11px] text-[#29394c]">
+              <option value="all">Any source</option>
+              <option value={LIST_MEMBER_FILTER_UNSET}>Blank only</option>
+              {(memberFilterOptionsQuery.data?.leadSources ?? []).map(source => <option key={source} value={source}>{source}</option>)}
+            </select>
+          </label>
+        </div>
       {contactsQuery.isLoading ? <p className="text-[11px] text-[#7b8794]">Loading list members…</p>
         : contactsQuery.isError ? <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>List members could not be loaded.</span><Button variant="outline" className="min-h-8 px-3 text-[11px]" testId="button-retry-list-members" onClick={() => void contactsQuery.refetch()}>Retry</Button></div>
       : viewingContacts.length ? <div className="max-h-[36vh] overflow-y-auto rounded-md border border-[#e7ebef]">
@@ -1561,6 +1689,8 @@ export function ListsPage() {
             <Status tone={contact.subscribed ? 'green' : 'gray'}>{contact.subscribed ? 'Subscribed' : 'Unsubscribed'}</Status>
           </div>;
         })}
+      </div> : contactsQuery.data?.total === 0 && activeMemberFilterCount > 0 ? <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-6 text-center">
+        <p className="text-[12px] font-semibold text-[#344154]">No contacts match these filters</p><p className="mt-1 text-[10px] text-[#7b8794]">Try changing a filter or clear them to see every member.</p><Button variant="outline" className="mt-3 min-h-8 px-3 text-[10px]" testId="button-empty-clear-list-member-filters" onClick={clearMemberFilters}>Clear filters</Button>
       </div> : <div className="rounded-md border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-6 text-center">
         <Users className="mx-auto h-5 w-5 text-[#7f8ea0]"/><p className="mt-2 text-[12px] font-semibold text-[#344154]">No contacts in this list yet</p><p className="mt-1 text-[10px] text-[#7b8794]">Use the search above to add contacts from your workspace.</p>
       </div>}

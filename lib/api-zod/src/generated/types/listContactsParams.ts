@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ListContactsAddedWithin } from './listContactsAddedWithin';
+import type { ListContactsFirstLetter } from './listContactsFirstLetter';
 import type { ListContactsStatus } from './listContactsStatus';
 
 export type ListContactsParams = {
@@ -28,9 +29,28 @@ status?: ListContactsStatus;
  */
 listId?: string;
 /**
+ * Filter by the first letter of the displayed contact name, or other for names that do not start with A–Z.
+ */
+firstLetter?: ListContactsFirstLetter;
+/**
  * @maxLength 64
  */
 companyId?: string;
+/**
+ * Search within job titles, or use __unset__ to match blank titles.
+ * @maxLength 200
+ */
+jobTitle?: string;
+/**
+ * Search within company names, or use __unset__ to match contacts without a company.
+ * @maxLength 200
+ */
+company?: string;
+/**
+ * Search within contact or company locations, or use __unset__ to match blank locations.
+ * @maxLength 200
+ */
+location?: string;
 /**
  * @maxLength 80
  */

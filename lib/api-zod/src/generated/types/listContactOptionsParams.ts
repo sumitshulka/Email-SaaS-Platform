@@ -25,6 +25,10 @@ listId?: string;
  */
 excludeListId?: string;
 /**
+ * Restrict results to contacts that do not belong to any contact list.
+ */
+unattachedOnly?: boolean;
+/**
  * @maxLength 64
  */
 companyId?: string;

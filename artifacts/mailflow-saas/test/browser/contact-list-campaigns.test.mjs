@@ -67,6 +67,8 @@ const campaigns = [
   campaign('browser-campaign-shared', 'Shared announcement', [listOneId, listTwoId]),
 ];
 const campaignById = new Map(campaigns.map(item => [item.id, item]));
+let listMemberContactFixtures = [];
+let listContactPickerFixtures = [];
 const listUpdates = [];
 const listDeletes = [];
 const dashboardRequests = [];
@@ -190,6 +192,10 @@ async function installApiFixtures(context) {
       await route.fulfill({ status: 200, json: lists });
       return;
     }
+    if (pathname === '/api/contacts/filter-options' && method === 'GET') {
+      await route.fulfill({ status: 200, json: { lifecycleStages: [], leadStatuses: [], leadSources: ['Referral', 'Website'] } });
+      return;
+    }
     if (pathname === '/api/campaigns/variant-limits' && method === 'GET') {
       await route.fulfill({
         status: 200,
@@ -202,8 +208,17 @@ async function installApiFixtures(context) {
       return;
     }
     if (pathname === '/api/contacts/options' && method === 'GET') {
-      const limit = Number(new URL(request.url()).searchParams.get('limit') ?? 30);
-      await route.fulfill({ status: 200, json: { contacts: [], total: 0, limit } });
+      const url = new URL(request.url());
+      const limit = Number(url.searchParams.get('limit') ?? 30);
+      const excludeListId = url.searchParams.get('excludeListId');
+      const unattachedOnly = url.searchParams.get('unattachedOnly') === 'true';
+      const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
+      const matches = listContactPickerFixtures.filter(contact =>
+        (!excludeListId || !contact.listIds.includes(excludeListId)) &&
+        (!unattachedOnly || contact.listIds.length === 0) &&
+        (!search || `${contact.name} ${contact.email} ${contact.companyName ?? ''}`.toLowerCase().includes(search)),
+      );
+      await route.fulfill({ status: 200, json: { contacts: matches.slice(0, limit), total: matches.length, limit } });
       return;
     }
     if (pathname === '/api/campaigns/recipient-summary' && method === 'GET') {
@@ -264,12 +279,40 @@ async function installApiFixtures(context) {
       return;
     }
     if (pathname === '/api/contacts' && method === 'GET') {
+      const url = new URL(request.url());
+      const params = url.searchParams;
+      const isBlank = value => !String(value ?? '').trim();
+      const includes = (value, search) => String(value ?? '').toLowerCase().includes(search.toLowerCase());
+      const matching = listMemberContactFixtures.filter(contact => {
+        const filterText = (key, value) => {
+          const term = params.get(key);
+          if (!term) return true;
+          return term === '__unset__' ? isBlank(value) : includes(value, term);
+        };
+        const letter = params.get('firstLetter');
+        const displayedName = contact.firstName || contact.name || contact.email || '';
+        return (!params.get('listId') || contact.listIds.includes(params.get('listId'))) &&
+          (!letter || (letter === 'other' ? !/^[a-z]/i.test(displayedName.trim()) : displayedName.trim().toLowerCase().startsWith(letter.toLowerCase()))) &&
+          (params.get('status') === 'all' || !params.get('status') || contact.subscribed === (params.get('status') === 'subscribed')) &&
+          filterText('jobTitle', contact.jobTitle) &&
+          filterText('company', contact.companyName) &&
+          filterText('location', `${contact.location ?? ''} ${contact.companyLocation ?? ''}`) &&
+          (!params.get('leadSource') || params.get('leadSource') === 'all' || (params.get('leadSource') === '__unset__' ? isBlank(contact.leadSource) : contact.leadSource === params.get('leadSource')));
+      });
+      const page = Number(params.get('page') ?? 1);
+      const pageSize = Number(params.get('pageSize') ?? 50);
       await route.fulfill({
         status: 200,
         json: {
-          contacts: [],
+          contacts: matching.slice((page - 1) * pageSize, page * pageSize),
           quota: { used: 0, limit: 100, remaining: 100, canAdd: true, requiresSubscription: false },
           uploadSettings: { maxFileSizeMb: 10, allowedFileTypes: ['csv'] },
+          page,
+          pageSize,
+          total: matching.length,
+          pageCount: Math.ceil(matching.length / pageSize),
+          workspaceTotal: listMemberContactFixtures.length,
+          workspaceSubscribed: listMemberContactFixtures.filter(contact => contact.subscribed).length,
         },
       });
       return;
@@ -517,6 +560,79 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       assert.deepEqual(pageErrors, [], 'list and campaign pages should render without browser errors');
     } finally {
       await context.close();
+    }
+  });
+
+  it('filters list members and finds contacts unattached to every list', async () => {
+    listMemberContactFixtures = [
+      {
+        id: 'member-alpha',
+        name: 'Alice Adams',
+        firstName: 'Alice',
+        lastName: 'Adams',
+        email: 'alice@example.test',
+        companyName: 'Acme Labs',
+        jobTitle: 'Product Engineer',
+        location: 'London',
+        companyLocation: 'London',
+        leadSource: 'Referral',
+        subscribed: true,
+        listIds: [listOneId],
+      },
+      {
+        id: 'member-beta',
+        name: 'Bob Brown',
+        firstName: 'Bob',
+        lastName: 'Brown',
+        email: 'bob@example.test',
+        companyName: '   ',
+        jobTitle: ' ',
+        location: null,
+        companyLocation: '',
+        leadSource: '',
+        subscribed: false,
+        listIds: [listOneId],
+      },
+    ];
+    listContactPickerFixtures = [
+      { id: 'picker-other-list', name: 'Casey Other', firstName: 'Casey', lastName: 'Other', email: 'casey@example.test', companyName: 'Acme Labs', subscribed: true, createdAt: date, listIds: [listTwoId] },
+      { id: 'picker-unattached', name: 'Taylor Free', firstName: 'Taylor', lastName: 'Free', email: 'taylor@example.test', companyName: null, subscribed: true, createdAt: date, listIds: [] },
+    ];
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/lists`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Contact lists' }).waitFor({ state: 'visible' });
+      await page.getByTestId(`button-view-list-contacts-${listOneId}`).click();
+      await page.getByTestId('row-list-contact-member-alpha').waitFor({ state: 'visible' });
+
+      await page.getByTestId('select-list-member-first-letter').selectOption('A');
+      await page.getByTestId('select-list-member-status').selectOption('subscribed');
+      await page.getByTestId('input-list-member-job-title').fill('Engineer');
+      await page.getByTestId('input-list-member-company').fill('Acme');
+      await page.getByTestId('input-list-member-location').fill('London');
+      await page.getByTestId('select-list-member-lead-source').selectOption('Referral');
+      await page.getByText('Showing 1 of 2 members.', { exact: true }).waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('row-list-contact-member-beta').count(), 0);
+
+      await page.getByTestId('button-clear-list-member-filters').click();
+      await page.getByTestId('checkbox-list-member-jobTitle-blank').check();
+      await page.getByTestId('checkbox-list-member-company-blank').check();
+      await page.getByTestId('checkbox-list-member-location-blank').check();
+      await page.getByTestId('select-list-member-lead-source').selectOption('__unset__');
+      await page.getByText('Showing 1 of 2 members.', { exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('row-list-contact-member-beta').waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('row-list-contact-member-alpha').count(), 0);
+
+      await page.getByTestId('checkbox-only-unattached-contacts').check();
+      await page.getByTestId('button-add-contact-to-list-picker-unattached').waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('button-add-contact-to-list-picker-other-list').count(), 0);
+    } finally {
+      await context.close();
+      listMemberContactFixtures = [];
+      listContactPickerFixtures = [];
     }
   });
 

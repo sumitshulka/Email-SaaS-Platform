@@ -277,6 +277,7 @@ export * from './listAdminUsersParams';
 export * from './listAdminUsersStatus';
 export * from './listContactOptionsParams';
 export * from './listContactsAddedWithin';
+export * from './listContactsFirstLetter';
 export * from './listContactsParams';
 export * from './listContactsStatus';
 export * from './loginInput';
