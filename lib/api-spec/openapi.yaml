@@ -2737,58 +2737,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /campaigns/{campaignId}/replies:
-    parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      operationId: listCampaignReplies
-      tags: [sending]
-      summary: List saved replies matched to a campaign
-      responses:
-        "200":
-          description: Replies ordered newest first
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/CampaignReply" }
-        "404":
-          description: Campaign not found
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ApiError" }
-  /campaigns/{campaignId}/follow-ups:
-    parameters:
-      - name: campaignId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      operationId: createCampaignFollowUp
-      tags: [sending]
-      summary: Create a follow-up draft from a queued or completed campaign
-      responses:
-        "201":
-          description: Follow-up draft created from the primary campaign
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CampaignSummary"
-        "404":
-          description: Source campaign not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: Source campaign is not queued or completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
     patch:
       operationId: updateCampaign
       tags: [sending]
@@ -2839,6 +2787,58 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "409":
           description: Only draft campaigns can be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/replies:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: listCampaignReplies
+      tags: [sending]
+      summary: List saved replies matched to a campaign
+      responses:
+        "200":
+          description: Replies ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CampaignReply" }
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /campaigns/{campaignId}/follow-ups:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: createCampaignFollowUp
+      tags: [sending]
+      summary: Create a follow-up draft from a queued or completed campaign
+      responses:
+        "201":
+          description: Follow-up draft created from the primary campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignSummary"
+        "404":
+          description: Source campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Source campaign is not queued or completed
           content:
             application/json:
               schema:

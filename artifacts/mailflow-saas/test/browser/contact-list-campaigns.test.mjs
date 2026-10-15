@@ -39,6 +39,8 @@ function campaign(id, name, listIds, listId = listIds[0] ?? null) {
     name,
     objective: '',
     subject: `${name} subject`,
+    parentCampaignId: null,
+    campaignType: 'primary',
     textBody: `${name} body`,
     htmlBody: null,
     listId,
@@ -72,6 +74,7 @@ const campaignAudienceRequests = [];
 const campaignAudienceResponses = [];
 const campaignUpdates = [];
 const campaignQueues = [];
+const campaignDeletions = [];
 let campaignAudienceSummaryOverride = null;
 let aiAssistBalanceReads = 0;
 let aiAssistCreditsRemaining = 1;
@@ -289,6 +292,16 @@ async function installApiFixtures(context) {
       await route.fulfill({ status: 200, json: campaignData });
       return;
     }
+    if (campaignMatch && method === 'DELETE') {
+      const campaignData = campaignById.get(campaignMatch[1]);
+      if (!campaignData) {
+        await route.fulfill({ status: 404, json: { error: 'Campaign not found.' } });
+        return;
+      }
+      campaignDeletions.push(campaignMatch[1]);
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
     const campaignSendMatch = pathname.match(/^\/api\/campaigns\/([^/]+)\/send$/);
     if (campaignSendMatch && method === 'POST') {
       const campaignData = campaignById.get(campaignSendMatch[1]);
@@ -387,6 +400,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     campaignAudienceResponses.length = 0;
     campaignUpdates.length = 0;
     campaignQueues.length = 0;
+    campaignDeletions.length = 0;
     campaignAudienceSummaryOverride = null;
     await startWebServer();
     const executablePath =
@@ -525,7 +539,11 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await installApiFixtures(context);
       const page = await context.newPage();
       const pageErrors = [];
+      const apiRequests = [];
       page.on('pageerror', error => pageErrors.push(error.message));
+      page.on('request', request => {
+        if (request.url().includes('/api/campaigns/')) apiRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+      });
       await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
       await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
@@ -943,6 +961,55 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await context.close();
       campaigns.splice(0, campaigns.length, ...originalCampaigns);
       lists.splice(0, lists.length, ...originalLists);
+    }
+  });
+
+  it('lets users delete a draft follow-up from its campaign dashboard', async () => {
+    const target = campaignById.get('browser-campaign-one');
+    const previousParentId = target.parentCampaignId;
+    const previousCampaignType = target.campaignType;
+    target.parentCampaignId = 'browser-parent-campaign';
+    target.campaignType = 'follow_up';
+    campaignDeletions.length = 0;
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const pageErrors = [];
+      const apiRequests = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      page.on('request', request => {
+        if (request.url().includes('/api/campaigns/')) apiRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+      });
+      await page.goto(`${baseUrl}/campaigns/${target.id}`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: target.name, exact: true }).waitFor({ state: 'visible' });
+
+      await page.getByTestId('button-delete-draft-campaign').click();
+      await page.getByTestId('dialog-delete-draft-campaign').waitFor({ state: 'visible' });
+      assert.equal(campaignDeletions.length, 0, 'opening the confirmation must not delete the campaign');
+      const deletionResponse = page.waitForResponse(response =>
+        response.request().method() === 'DELETE' &&
+        new URL(response.url()).pathname === `/api/campaigns/${target.id}`,
+        { timeout: 5_000 },
+      );
+      await page.getByTestId('button-confirm-action').click();
+      let response;
+      try {
+        response = await deletionResponse;
+      } catch {
+        throw new Error(`Delete request was not sent. URL: ${page.url()}; requests: ${apiRequests.join(', ')}; dialog: ${(await page.locator('[data-testid="dialog-delete-draft-campaign"]').innerText().catch(() => 'closed'))}; errors: ${pageErrors.join(' | ')}`);
+      }
+      assert.equal(response.status(), 204);
+      await page.waitForURL(url => url.pathname === '/campaigns', { timeout: 5_000 }).catch(async () => {
+        throw new Error(`Delete did not return to campaigns. URL: ${page.url()}; dialog: ${(await page.locator('[data-testid="dialog-delete-draft-campaign"]').innerText().catch(() => 'closed'))}; console/page errors: ${pageErrors.join(' | ')}`);
+      });
+      assert.deepEqual(campaignDeletions, [target.id]);
+      assert.deepEqual(pageErrors, [], 'deleting from the campaign dashboard should not cause browser errors');
+    } finally {
+      target.parentCampaignId = previousParentId;
+      target.campaignType = previousCampaignType;
+      await context.close();
     }
   });
 });

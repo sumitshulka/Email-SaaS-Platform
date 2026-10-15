@@ -5408,82 +5408,6 @@ export const GetCampaignDashboardResponse = zod.object({
 
 
 /**
- * @summary List saved replies matched to a campaign
- */
-export const ListCampaignRepliesParams = zod.object({
-  "campaignId": zod.coerce.string().uuid()
-})
-
-export const ListCampaignRepliesResponseItem = zod.object({
-  "id": zod.string().uuid(),
-  "campaignId": zod.string().uuid(),
-  "campaignName": zod.string(),
-  "recipientId": zod.string().uuid(),
-  "contactId": zod.string().uuid().nullable(),
-  "contactName": zod.string(),
-  "recipientEmail": zod.string().email(),
-  "fromEmail": zod.string().email().nullable(),
-  "subject": zod.string().nullable(),
-  "receivedAt": zod.coerce.date(),
-  "bodyText": zod.string().nullable(),
-  "contentStored": zod.boolean()
-})
-export const ListCampaignRepliesResponse = zod.array(ListCampaignRepliesResponseItem)
-
-
-/**
- * @summary Create a follow-up draft from a queued or completed campaign
- */
-export const CreateCampaignFollowUpParams = zod.object({
-  "campaignId": zod.coerce.string().uuid()
-})
-
-export const createCampaignFollowUpResponseObjectiveMax = 500;
-
-export const createCampaignFollowUpResponseSubjectVariantsItemMax = 200;
-
-export const createCampaignFollowUpResponseGreetingVariantsItemMax = 500;
-
-export const createCampaignFollowUpResponseSignatureVariantsItemMax = 4000;
-
-
-
-export const CreateCampaignFollowUpResponse = zod.object({
-  "id": zod.string().uuid(),
-  "parentCampaignId": zod.string().uuid().nullable(),
-  "campaignType": zod.enum(['primary', 'follow_up']),
-  "senderAccountId": zod.string().uuid().nullable(),
-  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
-  "name": zod.string(),
-  "objective": zod.string().max(createCampaignFollowUpResponseObjectiveMax).optional(),
-  "subject": zod.string(),
-  "subjectVariants": zod.array(zod.string().max(createCampaignFollowUpResponseSubjectVariantsItemMax)),
-  "greetingVariants": zod.array(zod.string().max(createCampaignFollowUpResponseGreetingVariantsItemMax)),
-  "signatureVariants": zod.array(zod.string().max(createCampaignFollowUpResponseSignatureVariantsItemMax)),
-  "textBody": zod.string(),
-  "htmlBody": zod.string().nullable(),
-  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
-  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
-  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
-  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
-  "pausedAt": zod.coerce.date().nullable(),
-  "resumeAt": zod.coerce.date().nullable(),
-  "recipients": zod.number().int(),
-  "estimatedDurationSeconds": zod.number().int(),
-  "queued": zod.number().int(),
-  "delivered": zod.number().int(),
-  "bounced": zod.number().int(),
-  "suppressed": zod.number().int(),
-  "unknown": zod.number().int(),
-  "queuedAt": zod.coerce.date().nullable(),
-  "scheduledAt": zod.coerce.date().nullable(),
-  "completedAt": zod.coerce.date().nullable(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
  * @summary Edit a draft campaign owned by the authenticated tenant
  */
 export const UpdateCampaignParams = zod.object({
@@ -5582,6 +5506,82 @@ export const DeleteCampaignParams = zod.object({
 })
 
 export const DeleteCampaignResponse = zod.void()
+
+
+/**
+ * @summary List saved replies matched to a campaign
+ */
+export const ListCampaignRepliesParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const ListCampaignRepliesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "campaignId": zod.string().uuid(),
+  "campaignName": zod.string(),
+  "recipientId": zod.string().uuid(),
+  "contactId": zod.string().uuid().nullable(),
+  "contactName": zod.string(),
+  "recipientEmail": zod.string().email(),
+  "fromEmail": zod.string().email().nullable(),
+  "subject": zod.string().nullable(),
+  "receivedAt": zod.coerce.date(),
+  "bodyText": zod.string().nullable(),
+  "contentStored": zod.boolean()
+})
+export const ListCampaignRepliesResponse = zod.array(ListCampaignRepliesResponseItem)
+
+
+/**
+ * @summary Create a follow-up draft from a queued or completed campaign
+ */
+export const CreateCampaignFollowUpParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const createCampaignFollowUpResponseObjectiveMax = 500;
+
+export const createCampaignFollowUpResponseSubjectVariantsItemMax = 200;
+
+export const createCampaignFollowUpResponseGreetingVariantsItemMax = 500;
+
+export const createCampaignFollowUpResponseSignatureVariantsItemMax = 4000;
+
+
+
+export const CreateCampaignFollowUpResponse = zod.object({
+  "id": zod.string().uuid(),
+  "parentCampaignId": zod.string().uuid().nullable(),
+  "campaignType": zod.enum(['primary', 'follow_up']),
+  "senderAccountId": zod.string().uuid().nullable(),
+  "senderEmail": zod.string().email().nullable().describe('SMTP sender address captured when queued; drafts use the currently assigned account address.'),
+  "name": zod.string(),
+  "objective": zod.string().max(createCampaignFollowUpResponseObjectiveMax).optional(),
+  "subject": zod.string(),
+  "subjectVariants": zod.array(zod.string().max(createCampaignFollowUpResponseSubjectVariantsItemMax)),
+  "greetingVariants": zod.array(zod.string().max(createCampaignFollowUpResponseGreetingVariantsItemMax)),
+  "signatureVariants": zod.array(zod.string().max(createCampaignFollowUpResponseSignatureVariantsItemMax)),
+  "textBody": zod.string(),
+  "htmlBody": zod.string().nullable(),
+  "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
+  "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
+  "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
+  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "pausedAt": zod.coerce.date().nullable(),
+  "resumeAt": zod.coerce.date().nullable(),
+  "recipients": zod.number().int(),
+  "estimatedDurationSeconds": zod.number().int(),
+  "queued": zod.number().int(),
+  "delivered": zod.number().int(),
+  "bounced": zod.number().int(),
+  "suppressed": zod.number().int(),
+  "unknown": zod.number().int(),
+  "queuedAt": zod.coerce.date().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
 
 
 /**

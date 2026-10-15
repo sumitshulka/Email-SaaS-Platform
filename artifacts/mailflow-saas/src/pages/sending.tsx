@@ -2699,6 +2699,9 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const pauseCampaign = useSetCampaignPaused();
+  const deleteDraft = useDeleteCampaign();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const senderAccountsQuery = useListTenantSendingAccounts();
   const repliesQuery = useListCampaignReplies(campaignId, { query: { queryKey: getListCampaignRepliesQueryKey(campaignId), staleTime: 0, refetchOnMount: 'always' } });
   const scanInbox = useCheckSenderMailbox();
@@ -2746,7 +2749,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         <div className="mb-5">
           <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
         </div>
-        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2"><Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2">{campaign.status === 'draft' && <Button variant="quiet" testId="button-delete-draft-campaign" disabled={deleteDraft.isPending} onClick={() => { setDeleteError(null); setDeleteDialogOpen(true); }}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete draft</Button>}<Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
         {(isUserPaused || isPausedForMaintenance) && <div role="status" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]">{isUserPaused && campaign.resumeAt ? `Delivery is paused and will resume automatically at ${formatDate(campaign.resumeAt)}. ` : ''}Queued messages are on hold. A message already being submitted to the SMTP server may finish; remaining messages will wait until delivery resumes.</div>}
         {pauseCampaign.isError && <div role="alert" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] text-[#895b2f]">Could not change the campaign pause state. Please try again.</div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -2864,6 +2867,33 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         </section>
       </>;
     })()}
+    <ConfirmActionDialog
+      open={deleteDialogOpen}
+      title="Delete this draft?"
+      description={dashboard ? `Permanently delete the draft “${dashboard.campaign.name}”? This cannot be undone.` : 'Permanently delete this draft campaign? This cannot be undone.'}
+      confirmLabel="Delete draft"
+      onOpenChange={open => {
+        if (deleteDraft.isPending) return;
+        setDeleteDialogOpen(open);
+        if (!open) setDeleteError(null);
+      }}
+      onConfirm={() => {
+        setDeleteError(null);
+        deleteDraft.mutate({ campaignId }, {
+          onSuccess: () => {
+            setDeleteDialogOpen(false);
+            void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
+            void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() });
+            setLocation('/campaigns');
+          },
+          onError: error => setDeleteError(mutationError(error)),
+        });
+      }}
+      pending={deleteDraft.isPending}
+      testId="dialog-delete-draft-campaign"
+    >
+      {deleteError && <p role="alert" className="text-[12px] leading-5 text-[#99501e]">{deleteError}</p>}
+    </ConfirmActionDialog>
     {pauseDialogOpen && dashboard && <CampaignPauseDialog
       campaignName={dashboard.campaign.name}
       currentResumeAt={dashboard.campaign.resumeAt}

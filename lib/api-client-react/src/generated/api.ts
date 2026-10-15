@@ -9524,6 +9524,169 @@ export function useGetCampaignDashboard<TData = Awaited<ReturnType<typeof getCam
 
 
 
+export const getUpdateCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}`
+}
+
+/**
+ * @summary Edit a draft campaign owned by the authenticated tenant
+ */
+export const updateCampaign = async (campaignId: string,
+    campaignUpdate: CampaignUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignSummary>(getUpdateCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCampaignMutationKey = () => ['updateCampaign'] as const;
+
+export const getUpdateCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaign>>, UpdateCampaignMutationVariables> = (props) => {
+          const {campaignId,data} = props ?? {};
+
+          return  updateCampaign(campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof updateCampaign>>>
+    export type UpdateCampaignMutationBody = BodyType<CampaignUpdate>
+    export type UpdateCampaignMutationError = ErrorType<ApiError>
+    export type UpdateCampaignMutationVariables = {campaignId: string;data: BodyType<CampaignUpdate>}
+
+    /**
+ * @summary Edit a draft campaign owned by the authenticated tenant
+ */
+export const useUpdateCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCampaign>>,
+        TError,
+        UpdateCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCampaignMutationOptions(options));
+    }
+
+export const getDeleteCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}`
+}
+
+/**
+ * @summary Delete a draft campaign owned by the authenticated tenant
+ */
+export const deleteCampaign = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCampaignMutationKey = () => ['deleteCampaign'] as const;
+
+export const getDeleteCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext> => {
+
+const mutationKey = getDeleteCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCampaign>>, DeleteCampaignMutationVariables> = (props) => {
+          const {campaignId} = props ?? {};
+
+          return  deleteCampaign(campaignId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCampaign>>>
+
+    export type DeleteCampaignMutationError = ErrorType<ApiError>
+    export type DeleteCampaignMutationVariables = {campaignId: string}
+
+    /**
+ * @summary Delete a draft campaign owned by the authenticated tenant
+ */
+export const useDeleteCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCampaign>>,
+        TError,
+        DeleteCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteCampaignMutationOptions(options));
+    }
+
 export const getListCampaignRepliesUrl = (campaignId: string,) => {
 
 
@@ -9673,169 +9836,6 @@ export const useCreateCampaignFollowUp = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateCampaignFollowUpMutationOptions(options));
-    }
-
-export const getUpdateCampaignUrl = (campaignId: string,) => {
-
-
-
-
-  return `/api/campaigns/${campaignId}/follow-ups`
-}
-
-/**
- * @summary Edit a draft campaign owned by the authenticated tenant
- */
-export const updateCampaign = async (campaignId: string,
-    campaignUpdate: CampaignUpdate, options?: Parameters<typeof customFetch>[1]): Promise<CampaignSummary> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return customFetch<CampaignSummary>(getUpdateCampaignUrl(campaignId),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(campaignUpdate)
-  }
-);}
-
-
-
-
-
-export const getUpdateCampaignMutationKey = () => ['updateCampaign'] as const;
-
-export const getUpdateCampaignMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext> => {
-
-const mutationKey = getUpdateCampaignMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaign>>, UpdateCampaignMutationVariables> = (props) => {
-          const {campaignId,data} = props ?? {};
-
-          return  updateCampaign(campaignId,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof updateCampaign>>>
-    export type UpdateCampaignMutationBody = BodyType<CampaignUpdate>
-    export type UpdateCampaignMutationError = ErrorType<ApiError>
-    export type UpdateCampaignMutationVariables = {campaignId: string;data: BodyType<CampaignUpdate>}
-
-    /**
- * @summary Edit a draft campaign owned by the authenticated tenant
- */
-export const useUpdateCampaign = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaign>>, TError,UpdateCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof updateCampaign>>,
-        TError,
-        UpdateCampaignMutationVariables,
-        TContext
-      > => {
-      return useMutation(getUpdateCampaignMutationOptions(options));
-    }
-
-export const getDeleteCampaignUrl = (campaignId: string,) => {
-
-
-
-
-  return `/api/campaigns/${campaignId}/follow-ups`
-}
-
-/**
- * @summary Delete a draft campaign owned by the authenticated tenant
- */
-export const deleteCampaign = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
-
-  return customFetch<void>(getDeleteCampaignUrl(campaignId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-
-
-export const getDeleteCampaignMutationKey = () => ['deleteCampaign'] as const;
-
-export const getDeleteCampaignMutationOptions = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext> => {
-
-const mutationKey = getDeleteCampaignMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCampaign>>, DeleteCampaignMutationVariables> = (props) => {
-          const {campaignId} = props ?? {};
-
-          return  deleteCampaign(campaignId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCampaign>>>
-
-    export type DeleteCampaignMutationError = ErrorType<ApiError>
-    export type DeleteCampaignMutationVariables = {campaignId: string}
-
-    /**
- * @summary Delete a draft campaign owned by the authenticated tenant
- */
-export const useDeleteCampaign = <TError = ErrorType<ApiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCampaign>>, TError,DeleteCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteCampaign>>,
-        TError,
-        DeleteCampaignMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteCampaignMutationOptions(options));
     }
 
 export const getSetCampaignPausedUrl = (campaignId: string,) => {
