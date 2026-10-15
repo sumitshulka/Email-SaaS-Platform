@@ -305,7 +305,7 @@ async function installApiFixtures(context) {
         };
         const letter = params.get('firstLetter');
         const displayedName = contact.firstName || contact.name || contact.email || '';
-        return (!params.get('listId') || contact.listIds.includes(params.get('listId'))) &&
+        return (!params.get('listId') || params.get('listId') === 'all' || contact.listIds.includes(params.get('listId'))) &&
           (!letter || (letter === 'other' ? !/^[a-z]/i.test(displayedName.trim()) : displayedName.trim().toLowerCase().startsWith(letter.toLowerCase()))) &&
           (params.get('status') === 'all' || !params.get('status') || contact.subscribed === (params.get('status') === 'subscribed')) &&
           filterText('jobTitle', contact.jobTitle) &&
@@ -677,6 +677,45 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await context.close();
       listMemberContactFixtures = [];
       listContactPickerFixtures = [];
+    }
+  });
+
+  it('moves a contact from the Contacts page Membership column', async () => {
+    lists.splice(0, lists.length,
+      { id: listOneId, name: 'Launch audience', active: true, contactCount: 1, createdAt: date, updatedAt: date },
+      { id: listTwoId, name: 'Customer updates', active: true, contactCount: 0, createdAt: date, updatedAt: date },
+    );
+    listMemberContactFixtures = [{
+      id: 'membership-contact',
+      name: 'Morgan Membership',
+      firstName: 'Morgan',
+      lastName: 'Membership',
+      email: 'morgan@example.test',
+      companyName: null,
+      subscribed: true,
+      createdAt: date,
+      listIds: [listOneId],
+    }];
+
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/contacts`, { waitUntil: 'domcontentloaded' });
+      const membership = page.getByTestId('select-contact-membership-membership-contact');
+      await membership.waitFor({ state: 'visible' });
+      assert.equal(await membership.inputValue(), listOneId);
+
+      await membership.selectOption(listTwoId);
+      await page.waitForFunction((targetId) => (
+        document.querySelector('[data-testid="select-contact-membership-membership-contact"]')?.value === targetId
+      ), listTwoId);
+      assert.deepEqual(listMemberContactFixtures[0].listIds, [listTwoId]);
+      assert.equal(lists.find(list => list.id === listOneId).contactCount, 0);
+      assert.equal(lists.find(list => list.id === listTwoId).contactCount, 1);
+    } finally {
+      await context.close();
+      listMemberContactFixtures = [];
     }
   });
 

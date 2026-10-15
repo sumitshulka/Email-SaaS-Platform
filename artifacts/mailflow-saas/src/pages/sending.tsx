@@ -889,6 +889,7 @@ export function ContactsPage() {
   } | null>(null);
   const [contactToDelete, setContactToDelete] = useState<Contact | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [movingContactId, setMovingContactId] = useState<string | null>(null);
   const contacts = contactsQuery.data?.contacts ?? [];
   const visible = contacts;
   const resultStart = contacts.length && contactsQuery.data
@@ -947,6 +948,23 @@ export function ContactsPage() {
     downloadWorkbook(workbook, 'contacts');
   };
   const reload = () => { void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
+  const moveContactMembership = async (contact: ContactDirectoryItem, targetListId: string) => {
+    const targetList = lists.find(list => list.id === targetListId);
+    if (!targetList || contact.listIds.length === 1 && contact.listIds[0] === targetListId) return;
+    setMovingContactId(contact.id);
+    try {
+      await update.mutateAsync({
+        contactId: contact.id,
+        data: { listIds: [targetList.id] },
+      });
+      reload();
+      setNotice({ kind: 'success', text: `${contact.email} moved to ${targetList.name}; other list memberships were removed.` });
+    } catch (error) {
+      setNotice({ kind: 'error', text: mutationError(error) });
+    } finally {
+      setMovingContactId(null);
+    }
+  };
   const openNew = () => { setEditing(null); setForm(emptyContact); setSelectedCompanyId(''); };
   const openEdit = (contact: Contact) => { setEditing(contact); setForm({ email: contact.email, firstName: contact.firstName, lastName: contact.lastName, companyName: contact.companyName ?? '', linkedinUrl: contact.linkedinUrl ?? '', phoneNumber: contact.phoneNumber ?? '', subscribed: contact.subscribed, listIds: [...contact.listIds] }); };
   const submit = (e: FormEvent) => {
@@ -1197,9 +1215,24 @@ export function ContactsPage() {
           leadSources={leadSources}
         />
       </div>
-       {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
+        {visible.length ? <div className="overflow-x-auto"><p className="px-5 pb-2 text-[10px] text-[#788392]">Changing Membership moves the contact to one list and removes its other list memberships.</p><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
         <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="block text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
-        <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1.5">{contact.listIds.length ? contact.listIds.map(id => <span key={id} className="rounded bg-[#f1f4f7] px-2 py-1 text-[10px] text-[#5f6e7f]">{lists.find(l => l.id === id)?.name || 'List'}</span>) : <span className="text-[11px] text-[#9aa3ad]">No list</span>}</div></td>
+        <td className="px-4 py-3.5"><select
+          data-testid={`select-contact-membership-${contact.id}`}
+          aria-label={`Membership for ${[contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email}`}
+          title="Choose a list to move this contact into; this replaces all other list memberships."
+          value={contact.listIds.length > 1 ? '__multiple__' : contact.listIds[0] ?? '__none__'}
+          disabled={update.isPending || movingContactId === contact.id || lists.length === 0}
+          onChange={event => { if (event.target.value !== '__none__' && event.target.value !== '__multiple__') void moveContactMembership(contact, event.target.value); }}
+          className="h-8 max-w-[190px] rounded-md border border-[#d3dce7] bg-white px-2 text-[10px] text-[#415166] disabled:bg-[#f4f6f8]"
+        >
+          {contact.listIds.length > 1
+            ? <option value="__multiple__" disabled>{contact.listIds.length} lists</option>
+            : contact.listIds.length === 0
+              ? <option value="__none__" disabled>No list assigned</option>
+              : null}
+          {lists.map(list => <option key={list.id} value={list.id}>{list.name}{!list.active ? ' (inactive)' : ''}</option>)}
+        </select></td>
         <td className="px-4 py-3.5">{(() => { const emailStatus = contact.emailStatus ?? (contact.subscribed ? 'subscribed' : 'unsubscribed'); return <button data-testid={`button-toggle-subscription-${contact.id}`} disabled={update.isPending || emailStatus === 'bounced'} onClick={() => toggleSub(contact)} title={emailStatus === 'bounced' ? 'Bounced addresses are suppressed; update the address and reconfirm consent before reactivating.' : undefined} className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#dbe8f7] disabled:opacity-60"><Status tone={emailStatus === 'subscribed' ? 'green' : emailStatus === 'bounced' ? 'orange' : 'gray'}>{emailStatus === 'bounced' ? 'Bounced' : emailStatus === 'unsubscribed' ? 'Unsubscribed' : 'Subscribed'}</Status></button>; })()}</td>
          <td data-testid={`cell-contact-last-email-${contact.id}`} className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div data-testid={`contact-last-email-campaign-${contact.id}`} className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div data-testid={`contact-last-email-date-${contact.id}`} className="mt-1 truncate whitespace-nowrap text-[10px] text-[#7c8794]">{formatDate(contact.lastEmail.lastAttemptAt)}</div></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
