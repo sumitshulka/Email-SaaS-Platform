@@ -167,6 +167,7 @@ function LoginPage() {
   const form = useForm<{ identifier: string; password: string }>({ defaultValues: { identifier: '', password: '' } });
   const [showPassword, setShowPassword] = useState(false);
   const login = useLogin(); const qc = useQueryClient(); const [, setLocation] = useLocation();
+  const isEmbedded = window.self !== window.top;
   const submit = form.handleSubmit(values => login.mutate({ data: values }, { onSuccess: res => {
     qc.setQueryData(getGetCurrentUserQueryKey(), res.user);
     writeUserActivity(res.user.id, Date.now());
@@ -177,6 +178,9 @@ function LoginPage() {
   return (
     <AuthFrame className="auth-branded-frame">
       <AuthTitle className="auth-form-title" overline="Secure sign in" title="Welcome back." sub="Sign in with your account credentials to continue." />
+      {isEmbedded && <div className="mb-5 rounded-md border border-[#d9e4ef] bg-[#f5f9fd] px-3.5 py-3 text-[12px] leading-5 text-[#526579]">
+        Safari and private browsing may block sign-in inside this embedded preview. <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#245b9b] underline underline-offset-2">Open Mailflow in a new tab</a> to sign in.
+      </div>}
       <Form {...form}>
         <form onSubmit={submit} className="auth-form space-y-4">
           <Field label="Username or email" value={form.watch('identifier')} onChange={v => form.setValue('identifier', v, { shouldValidate: true })} testId="input-identifier" placeholder="you@company.com" required autoComplete="username" />
