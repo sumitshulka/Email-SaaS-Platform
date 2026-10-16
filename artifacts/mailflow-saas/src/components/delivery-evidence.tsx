@@ -25,7 +25,7 @@ const MICROSOFT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 const MICROSOFT_TRACE_GUIDE = 'https://learn.microsoft.com/en-us/exchange/monitoring/trace-an-email-message/graph-api-message-trace';
 const MICROSOFT_TRACE_RESOURCE = 'https://learn.microsoft.com/en-us/graph/api/resources/exchangemessagetrace?view=graph-rest-1.0';
 
-type MicrosoftTraceConnectGuidance = { title: string; detail: string; nextSteps: string[] };
+type MicrosoftTraceConnectGuidance = { title: string; detail: string; nextSteps: string[]; providerCode?: string };
 
 type MicrosoftTraceSyncGuidance = { title: string; detail: string };
 
@@ -65,41 +65,82 @@ function microsoftTraceSyncGuidance(error: string): MicrosoftTraceSyncGuidance {
 function microsoftTraceConnectGuidance(error: unknown): MicrosoftTraceConnectGuidance {
   const value = error && typeof error === 'object' ? error as { status?: unknown; data?: unknown } : {};
   const status = typeof value.status === 'number' ? value.status : null;
-  const data = value.data && typeof value.data === 'object' ? value.data as { code?: unknown } : {};
+  const data = value.data && typeof value.data === 'object'
+    ? value.data as { code?: unknown; providerCode?: unknown }
+    : {};
+  const providerCode =
+    typeof data.providerCode === 'string' &&
+    /^[A-Za-z0-9_.-]{1,100}$/.test(data.providerCode)
+      ? data.providerCode
+      : null;
+  const withProviderCode = (
+    guidance: Omit<MicrosoftTraceConnectGuidance, 'providerCode'>,
+  ): MicrosoftTraceConnectGuidance => providerCode
+    ? { ...guidance, providerCode }
+    : guidance;
 
   if (data.code === 'MICROSOFT_365_TENANT_SWITCH_REQUIRES_DISCONNECT' || status === 409) {
-    return {
+    return withProviderCode({
       title: 'Disconnect the current tenant before switching',
       detail: 'This workspace already has a Microsoft 365 trace connection for another tenant.',
       nextSteps: ['Disconnect the current connection below, then enter the new tenant and app details. Previously saved delivery evidence will remain.'],
-    };
+    });
+  }
+  if (
+    providerCode &&
+    /service.?principal.*(not.?found|missing)|principal.?less/i.test(providerCode)
+  ) {
+    return withProviderCode({
+      title: 'Microsoft’s trace service principal is not ready',
+      detail: 'Microsoft authenticated the app, but the Exchange trace API cannot find its required Microsoft service principal in this tenant.',
+      nextSteps: [
+        'In this tenant, create the Microsoft trace service principal with app ID 8bd644d1-64a1-4d4b-ae52-2e0cbf64e373.',
+        'If it was just created, allow several hours for Microsoft to propagate it, then retry.',
+      ],
+    });
   }
   if (data.code === 'MICROSOFT_365_TRACE_NOT_AUTHORIZED' || status === 403) {
-    return {
-      title: 'Microsoft signed in, but did not allow trace access',
-      detail: 'The app is missing permission or the tenant has not completed one of the administrator steps.',
-      nextSteps: ['Confirm ExchangeMessageTrace.Read.All is an Application permission and tenant admin consent is granted.', 'Confirm the Microsoft Exchange trace service principal exists in this tenant.'],
-    };
+    return withProviderCode({
+      title: 'Microsoft denied message-trace access',
+      detail: 'The app credentials were accepted, but Microsoft did not authorize the message-trace request.',
+      nextSteps: [
+        'Confirm ExchangeMessageTrace.Read.All is a Microsoft Graph Application permission (not Delegated) on this exact app registration, and grant tenant admin consent.',
+        'Confirm the Microsoft Exchange trace service principal exists in the same tenant. If it was just created, allow several hours for propagation.',
+      ],
+    });
+  }
+  if (data.code === 'MICROSOFT_365_TRACE_REQUEST_REJECTED') {
+    return withProviderCode({
+      title: 'Microsoft rejected the message-trace request',
+      detail: 'The app credentials were accepted, but Microsoft rejected the trace query. No connection was saved.',
+      nextSteps: [
+        'Check the Microsoft error code below and confirm Microsoft’s message-trace API is available for this tenant.',
+        'If the setup and API availability look correct, share the error code with your Microsoft 365 administrator or support.',
+      ],
+    });
   }
   if (data.code === 'MICROSOFT_365_CREDENTIALS_REJECTED' || data.code === 'INVALID_INPUT' || status === 400) {
-    return {
-      title: 'Check the tenant, app, and secret values',
-      detail: 'Microsoft could not verify the sign-in details. The secret field was cleared; it is not saved in this page after an attempt.',
-      nextSteps: ['Copy the Directory (tenant) ID and Application (client) ID from the same Entra app registration.', 'Enter the secret Value (not its Secret ID) and check that it has not expired.'],
-    };
+    return withProviderCode({
+      title: 'Microsoft rejected the app credentials',
+      detail: 'No trace connection was saved. The secret field was cleared after this attempt.',
+      nextSteps: [
+        'Verify that the Directory (tenant) ID and Application (client) ID belong to the same Entra tenant and app registration.',
+        'Enter the active client secret Value (not the Secret ID) and confirm it has not expired.',
+      ],
+    });
   }
   if (data.code === 'MICROSOFT_365_TRACE_UNAVAILABLE' || status === 502) {
-    return {
+    return withProviderCode({
       title: 'Microsoft could not be reached to verify trace access',
       detail: 'No connection was saved. Check Microsoft service availability and try again.',
       nextSteps: ['If this keeps happening after retrying, confirm the setup in Microsoft’s message-trace guide.'],
-    };
+    });
   }
-  return {
+  return withProviderCode({
     title: 'Trace access could not be verified',
     detail: 'No connection was saved. Check the Microsoft setup steps and try again.',
     nextSteps: ['Confirm the tenant and app IDs, the active secret Value, admin consent, and the Exchange trace service principal.'],
-  };
+  });
 }
 
 /** Maps imported report outcome strings to display labels. Defensive: unknown strings are shown verbatim as Unconfirmed-like gray. */
@@ -438,6 +479,7 @@ export function Microsoft365TraceSettingsPanel() {
       {connectError && <div role="alert" data-testid="error-microsoft365-connect" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">
         <p className="font-semibold">{connectError.title}</p><p className="mt-1">{connectError.detail}</p>
         <ul className="mt-1 list-disc space-y-1 pl-5">{connectError.nextSteps.map((step, i) => <li key={i}>{step}</li>)}</ul>
+        {connectError.providerCode && <p data-testid="text-microsoft365-provider-error-code" className="mt-2 border-t border-[#f0d5bd] pt-2"><span className="font-semibold">Microsoft error code:</span> <code>{connectError.providerCode}</code></p>}
         <p className="mt-2">Review <a data-testid="link-microsoft365-connect-error-guide" className="font-semibold text-[#245b9b] underline" href={MICROSOFT_TRACE_GUIDE} target="_blank" rel="noreferrer">Microsoft’s message-trace setup guide</a> and retry.</p>
       </div>}
       {error && <div role="alert" data-testid="error-microsoft365-control" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] leading-5 text-[#99501e]">{error}</div>}

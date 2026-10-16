@@ -44,6 +44,7 @@ export class Microsoft365TraceApiError extends Error {
     readonly status: number,
     readonly providerCode?: string,
     readonly retryAfterMs?: number,
+    readonly service: "identity" | "trace" = "trace",
   ) {
     super(message);
     this.name = "Microsoft365TraceApiError";
@@ -53,8 +54,12 @@ export class Microsoft365TraceApiError extends Error {
 function safeProviderCode(body: unknown): string | undefined {
   if (!body || typeof body !== "object") return undefined;
   const error = (body as { error?: unknown }).error;
-  if (!error || typeof error !== "object") return undefined;
-  const code = (error as { code?: unknown }).code;
+  const code =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object"
+        ? (error as { code?: unknown }).code
+        : undefined;
   return typeof code === "string" && /^[A-Za-z0-9_.-]{1,100}$/.test(code)
     ? code
     : undefined;
@@ -82,23 +87,27 @@ async function readJson<T>(
         ? "Microsoft Graph message-trace API returned an invalid response."
         : "Microsoft identity service returned an invalid response.",
       response.status || 502,
+      undefined,
+      undefined,
+      service,
     );
   }
   if (!response.ok) {
     const status = response.status;
     const message =
-      status === 401 || status === 403
+      service === "trace" && (status === 401 || status === 403)
         ? "Microsoft did not authorize Exchange message-trace access. Check the tenant admin consent and Exchange trace service-principal setup."
         : status === 429
           ? "Microsoft is throttling message-trace requests."
-      : service === "trace"
-        ? `Microsoft Graph message-trace request failed with status ${status}.`
-        : `Microsoft identity request failed with status ${status}.`;
+          : service === "trace"
+            ? `Microsoft Graph message-trace request failed with status ${status}.`
+            : `Microsoft identity request failed with status ${status}.`;
     throw new Microsoft365TraceApiError(
       message,
       status,
       safeProviderCode(body),
       retryDelay(response),
+      service,
     );
   }
   return body as T;
@@ -128,6 +137,9 @@ export async function requestMicrosoft365AccessToken(
     throw new Microsoft365TraceApiError(
       "Could not reach Microsoft's identity service.",
       0,
+      undefined,
+      undefined,
+      "identity",
     );
   }
   const token = await readJson<{ access_token?: unknown }>(response, "identity");
@@ -158,6 +170,9 @@ async function graphGet<T>(
     throw new Microsoft365TraceApiError(
       "Could not reach the Microsoft Graph message-trace API.",
       0,
+      undefined,
+      undefined,
+      "trace",
     );
   }
   return readJson<T>(response, "trace");

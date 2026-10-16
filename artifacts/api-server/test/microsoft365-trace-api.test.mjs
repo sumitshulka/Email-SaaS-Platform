@@ -41,6 +41,56 @@ describe("Microsoft 365 Exchange trace API", () => {
     assert.equal(body.get("client_secret"), "test-secret-value");
   });
 
+  it("preserves only stable Microsoft error codes for admin diagnostics", async () => {
+    await assert.rejects(
+      requestMicrosoft365AccessToken(
+        {
+          tenantId: "12345678-1234-4234-8234-123456789abc",
+          clientId: "22345678-1234-4234-8234-123456789abc",
+          clientSecret: "test-secret-value",
+        },
+        async () =>
+          jsonResponse(
+            {
+              error: "invalid_client",
+              error_description: "Sensitive provider details must not be returned.",
+            },
+            401,
+          ),
+      ),
+      (error) => {
+        assert.equal(error.providerCode, "invalid_client");
+        assert.equal(error.service, "identity");
+        assert.equal(error.message.includes("Sensitive provider details"), false);
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      listMicrosoft365Traces({
+        accessToken: "test-token",
+        startAt: new Date("2026-09-01T00:00:00.000Z"),
+        endAt: new Date("2026-09-01T00:05:00.000Z"),
+        fetcher: async () =>
+          jsonResponse(
+            {
+              error: {
+                code: "ServicePrincipalNotFound",
+                message: "Sensitive provider details must not be returned.",
+              },
+            },
+            403,
+          ),
+      }),
+      (error) => {
+        assert.equal(error.providerCode, "ServicePrincipalNotFound");
+        assert.equal(error.service, "trace");
+        assert.equal(error.message.includes("Sensitive provider details"), false);
+        return true;
+      },
+    );
+  });
+
   it("limits trace searches to a valid 10-day window and follows only Graph trace links", async () => {
     const calls = [];
     const startAt = new Date("2026-09-01T00:00:00.000Z");

@@ -129,6 +129,13 @@ async function openEmailSetupPage(gmailConnection = {
   maxQueryWindowDays: 10,
   maxPageSize: 5000,
   requestsPerFiveMinutes: 100,
+}, microsoftConnectError = {
+  status: 403,
+  json: {
+    error: 'Microsoft did not authorize Exchange message-trace access. Check tenant admin consent and service-principal setup.',
+    code: 'MICROSOFT_365_TRACE_NOT_AUTHORIZED',
+    providerCode: 'Authorization_RequestDenied',
+  },
 }) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addCookies([{
@@ -165,11 +172,8 @@ async function openEmailSetupPage(gmailConnection = {
       });
     } else if (pathname === '/api/sending/microsoft-365/connect' && request.method() === 'POST') {
       await route.fulfill({
-        status: 403,
-        json: {
-          error: 'Microsoft did not authorize Exchange message-trace access. Check tenant admin consent and service-principal setup.',
-          code: 'MICROSOFT_365_TRACE_NOT_AUTHORIZED',
-        },
+        status: microsoftConnectError.status,
+        json: microsoftConnectError.json,
       });
     } else {
       await route.fulfill({ status: 404, json: { error: `Unexpected API request: ${request.method()} ${pathname}` } });
@@ -277,10 +281,39 @@ describe('Microsoft 365 trace setup', { concurrency: false }, () => {
       await page.getByTestId('error-microsoft365-connect').waitFor();
       assert.equal(await secretField.inputValue(), '');
       const errorText = await page.getByTestId('error-microsoft365-connect').innerText();
-      assert.match(errorText, /Microsoft signed in, but did not allow trace access/);
-      assert.match(errorText, /Application permission and tenant admin consent/);
+      assert.match(errorText, /Microsoft denied message-trace access/);
+      assert.match(errorText, /Microsoft Graph Application permission \(not Delegated\)/);
       assert.match(errorText, /trace service principal exists/);
+      assert.match(errorText, /Microsoft error code: Authorization_RequestDenied/);
       assert.equal(errorText.includes(secretValue), false);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('explains Microsoft trace service-principal propagation failures', async () => {
+    const { context, page } = await openEmailSetupPage(undefined, {}, undefined, {
+      status: 403,
+      json: {
+        error: 'Microsoft did not authorize Exchange message-trace access.',
+        code: 'MICROSOFT_365_TRACE_NOT_AUTHORIZED',
+        providerCode: 'ServicePrincipalNotFound',
+      },
+    });
+    try {
+      await page.getByTestId('input-microsoft365-tenant-id').fill(tenantId);
+      await page.getByTestId('input-microsoft365-client-id').fill(clientId);
+      await page.getByTestId('input-microsoft365-client-secret').fill(secretValue);
+      await page.getByTestId('checkbox-microsoft365-admin-consent').check();
+      await page.getByTestId('button-connect-microsoft365').click();
+
+      const error = page.getByTestId('error-microsoft365-connect');
+      await error.waitFor();
+      const errorText = await error.innerText();
+      assert.match(errorText, /trace service principal is not ready/);
+      assert.match(errorText, /8bd644d1-64a1-4d4b-ae52-2e0cbf64e373/);
+      assert.match(errorText, /allow several hours/);
+      assert.match(errorText, /Microsoft error code: ServicePrincipalNotFound/);
     } finally {
       await context.close();
     }

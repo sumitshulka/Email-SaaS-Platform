@@ -181,14 +181,28 @@ function graphConnectError(error: unknown): {
   status: number;
   code: string;
   message: string;
+  providerCode?: string;
 } {
   if (error instanceof Microsoft365TraceApiError) {
-    if (error.status === 400) {
+    if (
+      error.service === "identity" &&
+      [400, 401, 403].includes(error.status)
+    ) {
       return {
         status: 400,
         code: "MICROSOFT_365_CREDENTIALS_REJECTED",
         message:
-          "Microsoft rejected the tenant or app credentials. Verify the tenant ID, application ID, and active client secret.",
+          "Microsoft identity rejected the app credentials. Verify the tenant ID, application ID, and active client secret Value.",
+        ...(error.providerCode ? { providerCode: error.providerCode } : {}),
+      };
+    }
+    if (error.status === 400 && error.service === "trace") {
+      return {
+        status: 502,
+        code: "MICROSOFT_365_TRACE_REQUEST_REJECTED",
+        message:
+          "Microsoft rejected the message-trace request. Check the Microsoft error code and contact support if the setup appears correct.",
+        ...(error.providerCode ? { providerCode: error.providerCode } : {}),
       };
     }
     if (error.status === 401 || error.status === 403) {
@@ -196,12 +210,14 @@ function graphConnectError(error: unknown): {
         status: 403,
         code: "MICROSOFT_365_TRACE_NOT_AUTHORIZED",
         message: error.message,
+        ...(error.providerCode ? { providerCode: error.providerCode } : {}),
       };
     }
     return {
       status: 502,
       code: "MICROSOFT_365_TRACE_UNAVAILABLE",
       message: error.message,
+      ...(error.providerCode ? { providerCode: error.providerCode } : {}),
     };
   }
   return {
@@ -316,6 +332,7 @@ router.post(
       res.status(failure.status).json({
         error: failure.message,
         code: failure.code,
+        ...(failure.providerCode ? { providerCode: failure.providerCode } : {}),
       });
     }
   },
