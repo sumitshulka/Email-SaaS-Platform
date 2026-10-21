@@ -810,6 +810,31 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     }
   });
 
+  it('keeps the campaign editor open on Review without saving the draft', async () => {
+    campaignUpdates.length = 0;
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('campaign-audience-summary').getByText('2 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('button-campaign-step-next').click();
+
+      await page.getByRole('heading', { name: 'Confirm campaign setup' }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-submit-campaign').waitFor({ state: 'visible' });
+      assert.equal(await page.getByRole('dialog', { name: 'Edit campaign draft' }).isVisible(), true);
+      assert.equal(page.url().endsWith('/campaigns'), true);
+      assert.equal(campaignUpdates.length, 0, 'moving to Review must not save the draft');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('refreshes audience totals and overlap before saving and queueing without discarding draft edits', async () => {
     lists.splice(0, lists.length,
       { id: listOneId, name: 'Launch audience', active: true, contactCount: 2, createdAt: date, updatedAt: date },

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
@@ -59,7 +59,7 @@ function Heading({ eyebrow, title, detail, action }: { eyebrow: string; title: s
     {action}
   </div>;
 }
-function Button({ children, onClick, variant = 'primary', disabled, type = 'button', testId, className = '', ariaLabel, title }: { children: ReactNode; onClick?: () => void; variant?: 'primary' | 'outline' | 'quiet' | 'danger'; disabled?: boolean; type?: 'button' | 'submit'; testId: string; className?: string; ariaLabel?: string; title?: string }) {
+function Button({ children, onClick, variant = 'primary', disabled, type = 'button', testId, className = '', ariaLabel, title }: { children: ReactNode; onClick?: (event: MouseEvent<HTMLButtonElement>) => void; variant?: 'primary' | 'outline' | 'quiet' | 'danger'; disabled?: boolean; type?: 'button' | 'submit'; testId: string; className?: string; ariaLabel?: string; title?: string }) {
   const styles = variant === 'primary' ? primaryButton : variant === 'danger'
     ? 'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-[#edc5a7] bg-white px-3.5 text-[13px] font-semibold text-[#b85b20] hover:bg-[#fff7f0] disabled:opacity-55'
     : variant === 'quiet' ? 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-semibold text-[#596474] hover:bg-[#f4f6f8]'
@@ -2788,7 +2788,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf0f2] pt-4">
            <Button variant="outline" testId="button-cancel-campaign" onClick={closeCampaignEditor}>Cancel</Button>
            <div className="flex gap-2">{campaignStep > 0 && <Button variant="outline" testId="button-campaign-step-back" onClick={() => { setCampaignStepError(''); setCampaignStep(step => Math.max(0, step - 1)); }}>Back</Button>}
-             {campaignStep < 3 ? <Button type="button" testId="button-campaign-step-next" onClick={continueCampaignStep}>Continue</Button> : <Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || uploadingAttachment || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || uploadingAttachment || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{uploadingAttachment ? 'Uploading PDF…' : audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
+              {campaignStep < 3 ? <Button key="campaign-step-continue" type="button" testId="button-campaign-step-next" onClick={event => { event.preventDefault(); continueCampaignStep(); }}>Continue</Button> : <Button key="campaign-step-save" type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || uploadingAttachment || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || uploadingAttachment || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{uploadingAttachment ? 'Uploading PDF…' : audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
            </div>
          </div>
       </form>
