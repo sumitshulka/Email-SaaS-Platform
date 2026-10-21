@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, ChevronDown, ChevronRight, CirclePlus, Clock3,
-  Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Search, Send, Pause, Play,
+  Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Paperclip, Search, Send, Pause, Play,
   ShieldCheck, Trash2, Users, X, BookmarkPlus, Sparkles, RefreshCw,
 } from 'lucide-react';
 import { ContactImportDialog } from '@/components/contact-import-dialog';
@@ -2984,6 +2984,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   return <QueryState loading={query.isLoading} error={query.isError} retry={() => { void query.refetch(); }} label="campaign dashboard">
     {dashboard && (() => {
       const { campaign, targetLists, pacing } = dashboard;
+      const attachments = campaign.attachments ?? [];
       const inboxConnected = Boolean(senderAccountsQuery.data?.accounts.some(account => account.id === campaign.senderAccountId && account.inboxConnectedAt));
       const removedTargetListCount = Math.max(0, campaign.listIds.length - targetLists.length);
       const resolved = campaign.status === 'draft' ? 0 : Math.max(0, campaign.recipients - campaign.queued);
@@ -3033,7 +3034,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div><div className="text-[10px] text-[#85909d]">Hourly cap per SMTP</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerHour.toLocaleString()} emails / rolling hour</div></div>
               <div><div className="text-[10px] text-[#85909d]">Daily cap per SMTP</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">{pacing.emailsPerDay.toLocaleString()} emails / rolling 24 hours</div></div>
-              <div><div className="text-[10px] text-[#85909d]">Minimum spacing</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">One email every {formatDeliveryDuration(pacing.minimumSpacingSeconds)}</div></div>
+              <div><div className="text-[10px] text-[#85909d]">Minimum spacing</div><div className="mt-1 text-[13px] font-semibold text-[#344154]">At least one email every {formatDeliveryDuration(pacing.minimumSpacingSeconds)}</div></div>
             </div>
             {campaign.status === 'draft' && pacing.remainingEmails > pacing.maxCampaignSize && <div className="mt-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]"><AlertCircle className="mr-2 inline h-4 w-4"/>This audience exceeds the current maximum campaign size of {pacing.maxCampaignSize.toLocaleString()} emails, so it cannot be queued yet.</div>}
             <p className="mt-4 border-t border-[#edf0f2] pt-3 text-[10px] leading-5 text-[#8993a0]">This campaign uses the hourly and daily caps for its selected SMTP mailbox. Other campaigns using that same mailbox share its allowance; different mailboxes have separate allowances. SMTP response time and retries are uncertain, so actual finish times may differ.</p>
@@ -3049,7 +3050,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
                 </div>
               </div>)}
               {removedTargetListCount > 0 && <p role="status" className="text-[11px] text-[#895b2f]">{removedTargetListCount} selected {removedTargetListCount === 1 ? 'list is' : 'lists are'} no longer available.</p>}
-              <p className="text-[10px] leading-5 text-[#8993a0]">Only subscribed contacts are eligible. The total is deduplicated across lists and fixed when the draft is queued.</p>
+              <p className="text-[10px] leading-5 text-[#8993a0]">Draft counts exclude contacts removed from this campaign; only subscribed contacts are eligible. Overlapping addresses are deduplicated in the campaign total, and the queued audience is then fixed.</p>
             </div> : <p className="mt-3 text-[12px] text-[#7b8794]">{campaign.listIds.length ? 'The campaign’s selected lists have been removed.' : 'No target lists are selected.'}</p>}
           </section>
         </div>
@@ -3062,6 +3063,22 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
             </div>
           </div>
         </section>
+
+        {attachments.length > 0 && <section data-testid="section-campaign-attachments" className={`${panelClass} mb-5 p-5`}>
+          <div className="flex items-start gap-3">
+            <Paperclip aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/>
+            <div className="min-w-0 flex-1">
+              <h2 className="display text-[17px] font-bold text-[#1b293a]">Attachments sent with this campaign</h2>
+              <p className="mt-1 text-[11px] leading-5 text-[#788392]">These files are included with each campaign email.</p>
+              <ul className="mt-3 space-y-2">
+                {attachments.map((attachment, index) => <li key={attachment.objectPath} data-testid={`campaign-attachment-${index}`} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-[#e7ebef] bg-[#f7f9fb] px-3 py-2.5">
+                  <span className="min-w-0 truncate text-[12px] font-medium text-[#344154]" title={attachment.name}>{attachment.name}</span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-[#778392]">{(attachment.size / 1024 / 1024).toFixed(2)} MB</span>
+                </li>)}
+              </ul>
+            </div>
+          </div>
+        </section>}
 
         <section data-testid="section-campaign-replies" className={`${panelClass} mb-5 p-5`}>
           <div className="flex flex-wrap items-start justify-between gap-3">

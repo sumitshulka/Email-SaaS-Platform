@@ -249,6 +249,53 @@ async function installApiFixtures(context) {
       await route.fulfill({ status: 200, json: summary });
       return;
     }
+    if (pathname === '/api/campaigns/history' && method === 'GET') {
+      const url = new URL(request.url());
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const pageSize = Number(url.searchParams.get('pageSize') ?? 25);
+      const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
+      const status = url.searchParams.get('status') ?? 'all';
+      const campaignType = url.searchParams.get('campaignType') ?? 'all';
+      const listId = url.searchParams.get('listId') ?? 'all';
+      const createdWithinDays = Number(url.searchParams.get('createdWithinDays') ?? 0);
+      const filtered = campaigns.filter(item =>
+        (!search || `${item.name} ${item.subject} ${item.objective ?? ''} ${item.senderEmail ?? ''}`.toLowerCase().includes(search)) &&
+        (status === 'all' || item.status === status) &&
+        (campaignType === 'all' || item.campaignType === campaignType) &&
+        (listId === 'all' || (item.listIds ?? []).includes(listId) || item.listId === listId) &&
+        (!createdWithinDays || Date.now() - Date.parse(item.createdAt) <= createdWithinDays * 24 * 60 * 60 * 1000),
+      );
+      const campaignsToShow = filtered.slice((page - 1) * pageSize, page * pageSize);
+      const contextCampaignIds = new Set();
+      for (const item of [...campaignsToShow]) {
+        const parent = campaigns.find(candidate => candidate.id === item.parentCampaignId);
+        if (parent && !campaignsToShow.some(candidate => candidate.id === parent.id)) {
+          campaignsToShow.push(parent);
+          contextCampaignIds.add(parent.id);
+        }
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          campaigns: campaignsToShow,
+          contextCampaignIds: [...contextCampaignIds],
+          total: filtered.length,
+          page,
+          pageSize,
+          summary: {
+            campaignCount: campaigns.length,
+            draftCount: campaigns.filter(item => item.status === 'draft').length,
+            nonDraftCount: campaigns.filter(item => item.status !== 'draft').length,
+            delivered: campaigns.reduce((total, item) => total + (item.delivered ?? 0), 0),
+            bounced: campaigns.reduce((total, item) => total + (item.bounced ?? 0), 0),
+            suppressed: campaigns.reduce((total, item) => total + (item.suppressed ?? 0), 0),
+            activeCampaignCount: campaigns.filter(item => item.status === 'queued' || item.status === 'sending').length,
+            activeCampaignFinishAt: null,
+          },
+        },
+      });
+      return;
+    }
     if (pathname === '/api/subscriptions/add-ons' && method === 'GET') {
       aiAssistBalanceReads += 1;
       await route.fulfill({
@@ -746,6 +793,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
       await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+      await page.getByTestId('button-campaign-step-next').click();
       const picker = page.getByTestId('campaign-list-picker');
       const order = page.getByTestId('campaign-list-order');
       const audienceSummary = page.getByTestId('campaign-audience-summary');
@@ -858,12 +906,15 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
       await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+      await page.getByTestId('button-campaign-step-next').click();
 
       const audienceSummary = page.getByTestId('campaign-audience-summary');
       const subject = page.getByTestId('input-campaign-subject');
       await audienceSummary.getByText('2 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-campaign-step-next').click();
       await subject.fill('Unsaved subject survives audience refresh');
 
+      await page.getByTestId('button-campaign-step-back').click();
       campaignAudienceSummaryOverride = { uniqueRecipients: 4, overlappingRecipients: 1 };
       await page.getByTestId('button-refresh-campaign-audience').click();
       await audienceSummary.getByText('4 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
@@ -871,9 +922,9 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       assert.equal(await subject.inputValue(), 'Unsaved subject survives audience refresh', 'refreshing the count must not reset unsaved campaign fields');
 
       campaignAudienceSummaryOverride = { uniqueRecipients: 5, overlappingRecipients: 2 };
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('button-campaign-step-next').click();
       await page.getByTestId('button-submit-campaign').click();
-      await audienceSummary.getByText('5 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
-      await audienceSummary.getByText('2 addresses appear in multiple selected lists.', { exact: false }).waitFor({ state: 'visible' });
       await page.getByText('Draft changes saved.', { exact: true }).waitFor({ state: 'visible' });
       assert.deepEqual(campaignAudienceResponses.at(-1), { uniqueRecipients: 5, overlappingRecipients: 2 }, 'saving must recheck the latest audience summary');
       assert.equal(campaignUpdates.at(-1).data.subject, 'Unsaved subject survives audience refresh');
@@ -995,6 +1046,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor({ state: 'visible' });
       await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+      await page.getByTestId('button-campaign-step-next').click();
       const picker = page.getByTestId('campaign-list-picker');
       const order = page.getByTestId('campaign-list-order');
 
@@ -1152,7 +1204,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.getByTestId('select-campaign-date-filter').selectOption('30');
       await waitForRows([parent.id, matchingFollowUp.id]);
       assert.equal(await row(parent.id).getByText('parent context', { exact: true }).count(), 1);
-      assert.equal(await page.getByText('1 matching campaigns', { exact: false }).count(), 1);
+      assert.equal(await page.getByText('1 matching campaigns', { exact: false }).count(), 2, 'the result count appears in both the history heading and pagination');
 
       await page.getByTestId('button-reset-campaign-filters').click();
       await waitForRows(allRows);

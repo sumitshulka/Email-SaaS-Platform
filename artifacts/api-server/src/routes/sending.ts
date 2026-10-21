@@ -151,6 +151,7 @@ import {
   sanitizeCampaignHtml,
 } from "../lib/campaign-template";
 import {
+  removeExcludedCampaignContacts,
   summarizeCampaignAudience,
   uniqueCampaignRecipients,
 } from "../lib/campaign-audience";
@@ -160,7 +161,7 @@ import { ingestDeliveryReports } from "../lib/delivery-report-ingestion";
 import {
   estimateCampaignDeliveryAfterQueueSeconds,
   estimateCampaignQueueDeliverySeconds,
-  getMinimumEmailSpacingSeconds,
+  getCampaignMinimumSpacingSeconds,
   getPlatformSettings,
   lockPlatformSettings,
 } from "../lib/platform-settings";
@@ -801,10 +802,13 @@ async function campaignPayloads(
           : eq(emailCampaignRecipientsTable.userId, userId),
       ),
     draftListIds.length === 0
-      ? Promise.resolve([])
+      ? Promise.resolve(
+          [] as { listId: string; contactId: string; email: string }[],
+        )
       : db
           .select({
             listId: contactListMembersTable.listId,
+            contactId: contactsTable.id,
             email: contactsTable.email,
           })
           .from(contactListMembersTable)
@@ -955,9 +959,16 @@ async function campaignPayloads(
       unknown: 0,
     };
     const listIds = campaignListIds(campaign);
+    const excludedContactIds = new Set(campaign.excludedContactIds ?? []);
     const eligibleAudience =
       campaign.status === "draft"
-        ? summarizeCampaignAudience(eligibleMemberships, listIds)
+        ? summarizeCampaignAudience(
+            removeExcludedCampaignContacts(
+              eligibleMemberships,
+              [...excludedContactIds],
+            ),
+            listIds,
+          )
         : null;
     const recipientCount =
       campaign.status === "draft"
@@ -5038,6 +5049,12 @@ router.get(
       return;
     }
 
+    const excludedContactIds =
+      campaign.status === "draft" ? campaign.excludedContactIds ?? [] : [];
+    const exclusionFilter =
+      excludedContactIds.length > 0
+        ? [notInArray(contactListMembersTable.contactId, excludedContactIds)]
+        : [];
     const [lists, totalRows, eligibleRows, recipientOutcomes] = await Promise.all([
       db
         .select({
@@ -5062,6 +5079,7 @@ router.get(
           and(
             eq(contactListMembersTable.userId, userId),
             inArray(contactListMembersTable.listId, campaign.listIds),
+            ...exclusionFilter,
           ),
         )
         .groupBy(contactListMembersTable.listId),
@@ -5083,6 +5101,7 @@ router.get(
             eq(contactListMembersTable.userId, userId),
             inArray(contactListMembersTable.listId, campaign.listIds),
             eq(contactsTable.subscribed, true),
+            ...exclusionFilter,
           ),
         )
         .groupBy(contactListMembersTable.listId),
@@ -5147,7 +5166,7 @@ router.get(
           emailsPerDay: settings.maxEmailsPerDay,
           maxCampaignSize: settings.maxCampaignSize,
           minimumSpacingSeconds:
-            getMinimumEmailSpacingSeconds(settings),
+            getCampaignMinimumSpacingSeconds(settings),
           remainingEmails,
           estimatedDurationSeconds,
           estimatedCompletionAt,

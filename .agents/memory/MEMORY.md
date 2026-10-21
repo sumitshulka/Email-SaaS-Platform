@@ -34,6 +34,7 @@
 - [Online payment availability](online-payment-gate.md) — default on for compatibility; off blocks only new paid checkouts, not free activation or settlement.
 - [Paid plan change expiry](paid-upgrade-expiry.md) — validate the original active plan and expiry at capture; schedule lower-limit plans at that exact expiry.
 - [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
+- [Campaign wizard submit transitions](campaign-wizard-submit-transition.md) — keep Continue and Save as distinct buttons; changing one form button from `button` to `submit` during a step transition can submit unexpectedly.
 - [Campaign claim atomicity](campaign-claim-atomicity.md) — win the conditional queued-to-sending transition before recording an attempt or calling SMTP.
 - [Campaign mailbox pacing](campaign-mailbox-pacing.md) — space all sends through one SMTP mailbox by a randomized 5–15 minutes, across campaigns, while retaining stricter caps.
 - [Campaign audience exclusions](campaign-audience-exclusions.md) — draft list membership stays live, with saved contact-level exclusions; queueing rechecks current eligibility.

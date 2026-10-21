@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  removeExcludedCampaignContacts,
   summarizeCampaignAudience,
   uniqueCampaignRecipients,
 } from "../src/lib/campaign-audience.ts";
@@ -62,5 +63,21 @@ test("ignores memberships outside the selected lists", () => {
   assert.deepEqual(
     summarizeCampaignAudience(memberships, ["list-first"]),
     { uniqueRecipients: 2, overlappingRecipients: 0 },
+  );
+});
+
+test("draft audience summaries honor contact-level deselections", () => {
+  const selectedMemberships = [
+    { contactId: "contact-a", listId: "list-first", email: "kept@example.com" },
+    { contactId: "contact-b", listId: "list-first", email: "removed@example.com" },
+    { contactId: "contact-c", listId: "list-second", email: "other@example.com" },
+  ];
+  const remaining = removeExcludedCampaignContacts(selectedMemberships, [
+    "contact-b",
+    "contact-c",
+  ]);
+  assert.deepEqual(
+    summarizeCampaignAudience(remaining, ["list-first", "list-second"]),
+    { uniqueRecipients: 1, overlappingRecipients: 0 },
   );
 });

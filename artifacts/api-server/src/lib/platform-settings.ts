@@ -102,6 +102,20 @@ export const CAMPAIGN_EMAIL_GAP_MAX_SECONDS = 15 * 60;
 export const CAMPAIGN_EMAIL_GAP_AVERAGE_SECONDS =
   (CAMPAIGN_EMAIL_GAP_MIN_SECONDS + CAMPAIGN_EMAIL_GAP_MAX_SECONDS) / 2;
 
+export function getCampaignMinimumSpacingSeconds(
+  settings: Pick<
+    PlatformSettingsInput,
+    "defaultEmailsPerHour" | "maxEmailsPerDay" | "queuePollingSeconds"
+  >,
+): number {
+  const dailyCap = Math.max(1, settings.maxEmailsPerDay);
+  return Math.max(
+    CAMPAIGN_EMAIL_GAP_MIN_SECONDS,
+    getMinimumEmailSpacingSeconds(settings),
+    Math.ceil((24 * 60 * 60) / dailyCap),
+  );
+}
+
 export function getCampaignEmailGapSeconds(
   attemptId: string,
   minimumSeconds = CAMPAIGN_EMAIL_GAP_MIN_SECONDS,

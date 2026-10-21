@@ -13616,6 +13616,14 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(savedAfterPreview.body.campaign.htmlBody, updatedCampaign.body.htmlBody);
     assert.equal(campaign.body.recipients, 3);
     assert.equal(campaign.body.estimatedDurationSeconds, 108);
+    const deselectedCampaign = await api(`/campaigns/${campaign.body.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        excludedContactIds: ownerContacts.slice(1).map((contact) => contact.body.id),
+      },
+    });
+    assert.equal(deselectedCampaign.response.status, 200);
     const draftDashboard = await api(`/campaigns/${campaign.body.id}`, {
       cookie: owner.cookie,
     });
@@ -13632,8 +13640,15 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(draftDashboard.body.targetLists[0].totalContacts, 1);
     assert.equal(draftDashboard.body.targetLists[0].eligibleContacts, 1);
-    assert.equal(draftDashboard.body.pacing.remainingEmails, 3);
-    assert.equal(draftDashboard.body.pacing.minimumSpacingSeconds, 36);
+    assert.equal(draftDashboard.body.campaign.recipients, 1);
+    assert.equal(draftDashboard.body.pacing.remainingEmails, 1);
+    assert.equal(draftDashboard.body.pacing.minimumSpacingSeconds, 300);
+    const restoredCampaignAudience = await api(`/campaigns/${campaign.body.id}`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { excludedContactIds: [] },
+    });
+    assert.equal(restoredCampaignAudience.response.status, 200);
 
     await db.insert(dbModule.systemConfigurationTable).values({
       key: "platform",
@@ -13723,6 +13738,9 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const queuedDashboard = await api(`/campaigns/${campaign.body.id}`, {
       cookie: owner.cookie,
     });
+    assert.equal(queuedDashboard.body.pacing.emailsPerHour, 1);
+    assert.equal(queuedDashboard.body.pacing.emailsPerDay, 2);
+    assert.equal(queuedDashboard.body.pacing.minimumSpacingSeconds, 43200);
     await db
       .update(dbModule.tenantSendingConfigurationTable)
       .set({ fromEmail: "changed@owner.test" })

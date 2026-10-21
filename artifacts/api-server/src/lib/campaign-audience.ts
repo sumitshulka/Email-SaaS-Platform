@@ -11,6 +11,17 @@ function normalizedEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+export function removeExcludedCampaignContacts<
+  T extends CampaignAudienceMember & { contactId: string },
+>(
+  memberships: readonly T[],
+  excludedContactIds: readonly string[],
+): T[] {
+  if (excludedContactIds.length === 0) return [...memberships];
+  const excluded = new Set(excludedContactIds);
+  return memberships.filter((membership) => !excluded.has(membership.contactId));
+}
+
 export function summarizeCampaignAudience(
   memberships: readonly CampaignAudienceMember[],
   orderedListIds: readonly string[],
