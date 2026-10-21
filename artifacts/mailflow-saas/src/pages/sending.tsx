@@ -1798,6 +1798,7 @@ type CampaignForm = {
   listIds: string[];
   senderAccountId: string;
   excludedContactIds: string[];
+  attachments: Array<{ objectPath: string; name: string; size: number }>;
 };
 type CampaignVariantField = 'subjectVariants' | 'greetingVariants' | 'signatureVariants';
 type CampaignAiBrief = {
@@ -1839,6 +1840,7 @@ const blankCampaign: CampaignForm = {
   listIds: [],
   senderAccountId: '',
   excludedContactIds: [],
+  attachments: [],
 };
 
 export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused?: boolean } = {}) {
@@ -1884,6 +1886,8 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [campaignReviewPage, setCampaignReviewPage] = useState(1);
   const [campaignReviewSearch, setCampaignReviewSearch] = useState('');
   const [campaignContentError, setCampaignContentError] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const addOnCreditsQuery = useGetSubscriptionAddOns({
     query: {
       queryKey: getGetSubscriptionAddOnsQueryKey(),
@@ -2151,8 +2155,49 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         : current.excludedContactIds.includes(contactId) ? current.excludedContactIds : [...current.excludedContactIds, contactId],
     }));
   };
-  const openNew = () => { dismiss(); setCampaignContentError(null); setCampaignStepError(''); setCampaignStep(0); setEditing(null); const listIds = activeLists[0]?.id ? [activeLists[0].id] : []; setForm({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
-  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
+  const openNew = () => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(null); const listIds = activeLists[0]?.id ? [activeLists[0].id] : []; setForm({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
+  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [], attachments: campaign.attachments ?? [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
+  const uploadCampaignAttachment = async (file: File) => {
+    setAttachmentError('');
+    const maxBytes = 5 * 1024 * 1024;
+    if (!/\.pdf$/i.test(file.name) || file.size < 1 || file.size > maxBytes) {
+      setAttachmentError('Choose a PDF file no larger than 5 MB.');
+      return;
+    }
+    if (form.attachments.length >= 2 || form.attachments.reduce((sum, file) => sum + file.size, 0) + file.size > maxBytes) {
+      setAttachmentError('A campaign can include up to two PDFs with a combined size no greater than 5 MB.');
+      return;
+    }
+    setUploadingAttachment(true);
+    try {
+      const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+      if (new TextDecoder().decode(header) !== '%PDF-') throw new Error('The selected file is not a valid PDF.');
+      const response = await fetch('/api/campaigns/attachments/upload-url', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: file.name, size: file.size }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error ?? 'Could not prepare the PDF upload.');
+      }
+      const { uploadUrl, objectPath } = await response.json();
+      const uploaded = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/pdf' },
+        body: file,
+      });
+      if (!uploaded.ok) throw new Error('The PDF upload failed. Please retry.');
+      setForm(current => ({
+        ...current,
+        attachments: [...current.attachments, { objectPath, name: file.name, size: file.size }],
+      }));
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : 'Could not upload this PDF.');
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
   const updateCampaignListSelection = (update: (listIds: string[]) => string[]) => {
     setForm(current => ({ ...current, listIds: update(current.listIds) }));
     setSampleContactId('');
@@ -2294,6 +2339,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
       htmlBody: form.htmlBody.trim(),
       listIds: [...form.listIds],
       excludedContactIds: [...form.excludedContactIds],
+      attachments: [...form.attachments],
       senderAccountId: form.senderAccountId || null,
     };
     try {
@@ -2695,6 +2741,19 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
            <div className="flex flex-wrap gap-1.5">{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
          </section>
           <label hidden={campaignStep !== 2} className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
+          <section hidden={campaignStep !== 2} className="rounded-lg border border-[#dce4e9] bg-white p-4" aria-label="Email attachments">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h3 className="text-[12px] font-semibold text-[#344154]">PDF attachments</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Up to 2 PDFs; each and the combined total must be 5 MB or less.</p></div>
+              <label className={cx('inline-flex cursor-pointer items-center gap-2 rounded-md border border-[#c9d7e5] px-3 py-2 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc]', (uploadingAttachment || form.attachments.length >= 2) && 'cursor-not-allowed opacity-50')}>
+                {uploadingAttachment ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Upload className="h-3.5 w-3.5"/>}
+                {uploadingAttachment ? 'Uploading PDF…' : 'Add PDF'}
+                <input data-testid="input-campaign-attachment" type="file" accept="application/pdf,.pdf" className="sr-only" disabled={uploadingAttachment || form.attachments.length >= 2} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void uploadCampaignAttachment(file); }}/>
+              </label>
+            </div>
+            {form.attachments.length > 0 && <ul className="mt-3 space-y-2">{form.attachments.map((file, index) => <li key={file.objectPath} className="flex items-center justify-between gap-3 rounded-md bg-[#f7f9fb] px-3 py-2 text-[11px]"><span className="min-w-0 truncate font-medium text-[#344154]">{file.name}<span className="ml-2 text-[10px] font-normal text-[#778392]">{(file.size / 1024 / 1024).toFixed(2)} MB</span></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => setForm(current => ({ ...current, attachments: current.attachments.filter((_, i) => i !== index) }))} className="shrink-0 text-[#8a4b40] hover:underline">Remove</button></li>)}</ul>}
+            <p className="mt-2 text-[10px] text-[#808a97]">Total: {(form.attachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(2)} / 5 MB</p>
+            {attachmentError && <p role="alert" className="mt-2 text-[11px] text-[#a23f35]">{attachmentError}</p>}
+          </section>
           <section hidden={campaignStep !== 3} className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
             <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the first subject, greeting, and signature options with a subscribed contact. Queued recipients receive their fixed test assignments.</p></div>
            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -2729,7 +2788,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf0f2] pt-4">
            <Button variant="outline" testId="button-cancel-campaign" onClick={closeCampaignEditor}>Cancel</Button>
            <div className="flex gap-2">{campaignStep > 0 && <Button variant="outline" testId="button-campaign-step-back" onClick={() => { setCampaignStepError(''); setCampaignStep(step => Math.max(0, step - 1)); }}>Back</Button>}
-             {campaignStep < 3 ? <Button type="button" testId="button-campaign-step-next" onClick={continueCampaignStep}>Continue</Button> : <Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
+             {campaignStep < 3 ? <Button type="button" testId="button-campaign-step-next" onClick={continueCampaignStep}>Continue</Button> : <Button type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || uploadingAttachment || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || uploadingAttachment || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{uploadingAttachment ? 'Uploading PDF…' : audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
            </div>
          </div>
       </form>

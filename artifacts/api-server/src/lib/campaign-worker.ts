@@ -27,6 +27,7 @@ import {
   type TenantSendingConfiguration,
 } from "@workspace/db";
 import { sendTenantEmail } from "./application-email";
+import { readCampaignAttachments } from "./campaign-attachments";
 import { decryptSecret } from "./security";
 import {
   createCampaignUnsubscribeUrls,
@@ -957,6 +958,10 @@ export async function processPendingCampaignDeliveries(
           unsubscribeUrl: unsubscribeUrls.browserUrl,
         },
       );
+      const attachments = await readCampaignAttachments(
+        claimed.campaign.userId,
+        claimed.campaign.attachments ?? [],
+      );
       result = await sendTenantEmail(
         claimed.sender,
         claimed.recipient.email,
@@ -967,6 +972,7 @@ export async function processPendingCampaignDeliveries(
           attemptId: claimed.attemptId,
           messageId: claimed.messageId,
           dsnRequested: claimed.dsnRequested,
+          attachments,
           headers: {
             "List-Unsubscribe": `<${unsubscribeUrls.oneClickUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",

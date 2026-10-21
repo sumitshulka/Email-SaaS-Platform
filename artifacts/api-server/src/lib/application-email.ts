@@ -30,11 +30,13 @@ export type TenantEmailMessage = {
   subject: string;
   text: string;
   html?: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
   tracking?: {
     attemptId: string;
     messageId: string;
     dsnRequested: boolean;
     headers?: Record<string, string>;
+    attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
   };
 };
 
@@ -149,6 +151,7 @@ export async function sendTenantEmail(
     subject,
     text,
     ...(html ? { html } : {}),
+    ...(tracking?.attachments ? { attachments: tracking.attachments } : {}),
     ...(tracking ? { tracking } : {}),
   };
   if (tenantTestTransport) {
@@ -167,6 +170,7 @@ export async function sendTenantEmail(
       subject,
       text,
       ...(html ? { html } : {}),
+      ...(tracking?.attachments ? { attachments: tracking.attachments } : {}),
       ...(tracking
         ? {
             messageId: tracking.messageId,

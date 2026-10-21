@@ -3134,6 +3134,24 @@ export const CampaignSummaryStatus = {
   completed: 'completed',
 } as const;
 
+export interface CampaignAttachment {
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  objectPath: string;
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 5242880
+     */
+  size: number;
+}
+
 export interface CampaignSummary {
   id: string;
   /** @nullable */
@@ -3159,6 +3177,8 @@ export interface CampaignSummary {
   textBody: string;
   /** @nullable */
   htmlBody: string | null;
+  /** @maxItems 2 */
+  attachments?: CampaignAttachment[];
   /**
      * First selected list, retained for compatibility. Use listIds for the ordered audience.
      * @deprecated
@@ -3501,6 +3521,24 @@ export interface CampaignDeliveryReport {
   offset: number;
 }
 
+export interface CampaignAttachmentUploadInput {
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 5242880
+     */
+  size: number;
+}
+
+export interface CampaignAttachmentUpload {
+  uploadUrl: string;
+  objectPath: string;
+}
+
 export interface CampaignInput {
   /** @nullable */
   senderAccountId?: string | null;
@@ -3540,6 +3578,8 @@ export interface CampaignInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  /** @maxItems 2 */
+  attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
   listIds?: string[];
   /** Contact IDs deselected from the live list audience. */
@@ -3590,6 +3630,8 @@ export interface CampaignUpdate {
   textBody?: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  /** @maxItems 2 */
+  attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
   listIds?: string[];
   /** Contact IDs deselected from the live list audience. */

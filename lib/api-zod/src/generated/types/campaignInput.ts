@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignAttachment } from './campaignAttachment';
 
 export interface CampaignInput {
   /** @nullable */
@@ -45,6 +46,8 @@ export interface CampaignInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  /** @maxItems 2 */
+  attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
   listIds?: string[];
   /** Contact IDs deselected from the live list audience. */

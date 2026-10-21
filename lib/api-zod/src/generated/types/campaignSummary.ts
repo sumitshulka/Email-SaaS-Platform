@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignAttachment } from './campaignAttachment';
 import type { CampaignSummaryCampaignType } from './campaignSummaryCampaignType';
 import type { CampaignSummaryStatus } from './campaignSummaryStatus';
 
@@ -33,6 +34,8 @@ export interface CampaignSummary {
   textBody: string;
   /** @nullable */
   htmlBody: string | null;
+  /** @maxItems 2 */
+  attachments?: CampaignAttachment[];
   /**
      * First selected list, retained for compatibility. Use listIds for the ordered audience.
      * @deprecated

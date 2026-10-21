@@ -4862,6 +4862,14 @@ export const listCampaignsResponseGreetingVariantsItemMax = 500;
 
 export const listCampaignsResponseSignatureVariantsItemMax = 4000;
 
+export const listCampaignsResponseAttachmentsItemObjectPathMax = 300;
+
+export const listCampaignsResponseAttachmentsItemNameMax = 180;
+
+export const listCampaignsResponseAttachmentsItemSizeMax = 5242880;
+
+export const listCampaignsResponseAttachmentsMax = 2;
+
 
 
 export const ListCampaignsResponseItem = zod.object({
@@ -4878,6 +4886,11 @@ export const ListCampaignsResponseItem = zod.object({
   "signatureVariants": zod.array(zod.string().max(listCampaignsResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(listCampaignsResponseAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(listCampaignsResponseAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(listCampaignsResponseAttachmentsItemSizeMax)
+})).max(listCampaignsResponseAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
@@ -4925,6 +4938,14 @@ export const createCampaignBodyTextBodyMax = 100000;
 
 export const createCampaignBodyHtmlBodyMax = 100000;
 
+export const createCampaignBodyAttachmentsItemObjectPathMax = 300;
+
+export const createCampaignBodyAttachmentsItemNameMax = 180;
+
+export const createCampaignBodyAttachmentsItemSizeMax = 5242880;
+
+export const createCampaignBodyAttachmentsMax = 2;
+
 
 
 export const CreateCampaignBody = zod.object({
@@ -4937,6 +4958,11 @@ export const CreateCampaignBody = zod.object({
   "signatureVariants": zod.array(zod.string().max(createCampaignBodySignatureVariantsItemMax)).max(createCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(createCampaignBodyAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(createCampaignBodyAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(createCampaignBodyAttachmentsItemSizeMax)
+})).max(createCampaignBodyAttachmentsMax).optional(),
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).optional().describe('Contact IDs deselected from the live list audience.'),
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
@@ -4949,6 +4975,14 @@ export const createCampaignResponseSubjectVariantsItemMax = 200;
 export const createCampaignResponseGreetingVariantsItemMax = 500;
 
 export const createCampaignResponseSignatureVariantsItemMax = 4000;
+
+export const createCampaignResponseAttachmentsItemObjectPathMax = 300;
+
+export const createCampaignResponseAttachmentsItemNameMax = 180;
+
+export const createCampaignResponseAttachmentsItemSizeMax = 5242880;
+
+export const createCampaignResponseAttachmentsMax = 2;
 
 
 
@@ -4966,6 +5000,11 @@ export const CreateCampaignResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(createCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(createCampaignResponseAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(createCampaignResponseAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(createCampaignResponseAttachmentsItemSizeMax)
+})).max(createCampaignResponseAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
@@ -4984,6 +5023,26 @@ export const CreateCampaignResponse = zod.object({
   "completedAt": zod.coerce.date().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Request a private upload URL for a campaign PDF
+ */
+export const requestCampaignAttachmentUploadBodyNameMax = 180;
+
+export const requestCampaignAttachmentUploadBodySizeMax = 5242880;
+
+
+
+export const RequestCampaignAttachmentUploadBody = zod.object({
+  "name": zod.string().min(1).max(requestCampaignAttachmentUploadBodyNameMax),
+  "size": zod.number().int().min(1).max(requestCampaignAttachmentUploadBodySizeMax)
+})
+
+export const RequestCampaignAttachmentUploadResponse = zod.object({
+  "uploadUrl": zod.string().url(),
+  "objectPath": zod.string()
 })
 
 
@@ -5017,6 +5076,14 @@ export const getCampaignHistoryResponseCampaignsItemSubjectVariantsItemMax = 200
 export const getCampaignHistoryResponseCampaignsItemGreetingVariantsItemMax = 500;
 
 export const getCampaignHistoryResponseCampaignsItemSignatureVariantsItemMax = 4000;
+
+export const getCampaignHistoryResponseCampaignsItemAttachmentsItemObjectPathMax = 300;
+
+export const getCampaignHistoryResponseCampaignsItemAttachmentsItemNameMax = 180;
+
+export const getCampaignHistoryResponseCampaignsItemAttachmentsItemSizeMax = 5242880;
+
+export const getCampaignHistoryResponseCampaignsItemAttachmentsMax = 2;
 
 export const getCampaignHistoryResponseTotalMin = 0;
 
@@ -5054,6 +5121,11 @@ export const GetCampaignHistoryResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(getCampaignHistoryResponseCampaignsItemSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(getCampaignHistoryResponseCampaignsItemAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(getCampaignHistoryResponseCampaignsItemAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(getCampaignHistoryResponseCampaignsItemAttachmentsItemSizeMax)
+})).max(getCampaignHistoryResponseCampaignsItemAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
@@ -5284,6 +5356,14 @@ export const getCampaignDashboardResponseCampaignGreetingVariantsItemMax = 500;
 
 export const getCampaignDashboardResponseCampaignSignatureVariantsItemMax = 4000;
 
+export const getCampaignDashboardResponseCampaignAttachmentsItemObjectPathMax = 300;
+
+export const getCampaignDashboardResponseCampaignAttachmentsItemNameMax = 180;
+
+export const getCampaignDashboardResponseCampaignAttachmentsItemSizeMax = 5242880;
+
+export const getCampaignDashboardResponseCampaignAttachmentsMax = 2;
+
 export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemIndexMin = 0;
 
 export const getCampaignDashboardResponseVariantResultsSubjectVariantsItemAssignedMin = 0;
@@ -5337,6 +5417,11 @@ export const GetCampaignDashboardResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(getCampaignDashboardResponseCampaignSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(getCampaignDashboardResponseCampaignAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(getCampaignDashboardResponseCampaignAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(getCampaignDashboardResponseCampaignAttachmentsItemSizeMax)
+})).max(getCampaignDashboardResponseCampaignAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
@@ -5451,6 +5536,14 @@ export const updateCampaignBodyTextBodyMax = 100000;
 
 export const updateCampaignBodyHtmlBodyMax = 100000;
 
+export const updateCampaignBodyAttachmentsItemObjectPathMax = 300;
+
+export const updateCampaignBodyAttachmentsItemNameMax = 180;
+
+export const updateCampaignBodyAttachmentsItemSizeMax = 5242880;
+
+export const updateCampaignBodyAttachmentsMax = 2;
+
 
 
 export const UpdateCampaignBody = zod.object({
@@ -5463,6 +5556,11 @@ export const UpdateCampaignBody = zod.object({
   "signatureVariants": zod.array(zod.string().max(updateCampaignBodySignatureVariantsItemMax)).max(updateCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
   "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(updateCampaignBodyAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(updateCampaignBodyAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(updateCampaignBodyAttachmentsItemSizeMax)
+})).max(updateCampaignBodyAttachmentsMax).optional(),
   "listIds": zod.array(zod.string().uuid()).optional().describe('Ordered target lists. The first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).optional().describe('Contact IDs deselected from the live list audience.'),
   "listId": zod.string().uuid().optional().describe('Legacy single-list input; use listIds.')
@@ -5475,6 +5573,14 @@ export const updateCampaignResponseSubjectVariantsItemMax = 200;
 export const updateCampaignResponseGreetingVariantsItemMax = 500;
 
 export const updateCampaignResponseSignatureVariantsItemMax = 4000;
+
+export const updateCampaignResponseAttachmentsItemObjectPathMax = 300;
+
+export const updateCampaignResponseAttachmentsItemNameMax = 180;
+
+export const updateCampaignResponseAttachmentsItemSizeMax = 5242880;
+
+export const updateCampaignResponseAttachmentsMax = 2;
 
 
 
@@ -5492,6 +5598,11 @@ export const UpdateCampaignResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(updateCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(updateCampaignResponseAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(updateCampaignResponseAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(updateCampaignResponseAttachmentsItemSizeMax)
+})).max(updateCampaignResponseAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
@@ -5562,6 +5673,14 @@ export const createCampaignFollowUpResponseGreetingVariantsItemMax = 500;
 
 export const createCampaignFollowUpResponseSignatureVariantsItemMax = 4000;
 
+export const createCampaignFollowUpResponseAttachmentsItemObjectPathMax = 300;
+
+export const createCampaignFollowUpResponseAttachmentsItemNameMax = 180;
+
+export const createCampaignFollowUpResponseAttachmentsItemSizeMax = 5242880;
+
+export const createCampaignFollowUpResponseAttachmentsMax = 2;
+
 
 
 export const CreateCampaignFollowUpResponse = zod.object({
@@ -5578,6 +5697,11 @@ export const CreateCampaignFollowUpResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(createCampaignFollowUpResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(createCampaignFollowUpResponseAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(createCampaignFollowUpResponseAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(createCampaignFollowUpResponseAttachmentsItemSizeMax)
+})).max(createCampaignFollowUpResponseAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),
@@ -5755,6 +5879,14 @@ export const sendCampaignResponseGreetingVariantsItemMax = 500;
 
 export const sendCampaignResponseSignatureVariantsItemMax = 4000;
 
+export const sendCampaignResponseAttachmentsItemObjectPathMax = 300;
+
+export const sendCampaignResponseAttachmentsItemNameMax = 180;
+
+export const sendCampaignResponseAttachmentsItemSizeMax = 5242880;
+
+export const sendCampaignResponseAttachmentsMax = 2;
+
 
 
 export const SendCampaignResponse = zod.object({
@@ -5771,6 +5903,11 @@ export const SendCampaignResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(sendCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "attachments": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(sendCampaignResponseAttachmentsItemObjectPathMax),
+  "name": zod.string().min(1).max(sendCampaignResponseAttachmentsItemNameMax),
+  "size": zod.number().int().min(1).max(sendCampaignResponseAttachmentsItemSizeMax)
+})).max(sendCampaignResponseAttachmentsMax).optional(),
   "listId": zod.string().uuid().nullable().describe('First selected list, retained for compatibility. Use listIds for the ordered audience.'),
   "listIds": zod.array(zod.string().uuid()).describe('Selected list IDs in campaign processing order; the first matching list wins for overlapping email addresses.'),
   "excludedContactIds": zod.array(zod.string().uuid()).describe('Tenant contact IDs explicitly deselected while the campaign keeps its list audience live.'),

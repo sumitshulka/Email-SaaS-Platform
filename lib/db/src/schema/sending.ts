@@ -335,6 +335,10 @@ export const emailCampaignsTable = pgTable(
     unsubscribeOrigin: text("unsubscribe_origin"),
     textBody: text("text_body").notNull(),
     htmlBody: text("html_body"),
+    attachments: jsonb("attachments")
+      .$type<Array<{ objectPath: string; name: string; size: number }>>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     status: emailCampaignStatusEnum("status").notNull().default("draft"),
     pausedAt: timestamp("paused_at", { withTimezone: true }),
     resumeAt: timestamp("resume_at", { withTimezone: true }),

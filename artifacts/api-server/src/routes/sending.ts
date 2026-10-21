@@ -23,6 +23,8 @@ import { Router, type IRouter } from "express";
 import {
   CreateCampaignBody,
   CreateCampaignResponse,
+  RequestCampaignAttachmentUploadBody,
+  RequestCampaignAttachmentUploadResponse,
   CreateContactBody,
   CreateContactListBody,
   CreateContactListResponse,
@@ -182,6 +184,11 @@ import { getCurrentSubscriptionForUser } from "../lib/billing";
 import { getSubscriptionAddOnsDashboard } from "../lib/add-on-entitlements";
 import { requireUserRole } from "../lib/session";
 import { verifyContactEmail } from "../lib/contact-email-verifier";
+import {
+  createCampaignAttachmentUpload,
+  readCampaignAttachments,
+  validateAttachmentList,
+} from "../lib/campaign-attachments";
 import {
   companyDomainKey,
   companyProfileFields,
@@ -5154,6 +5161,31 @@ router.get(
   },
 );
 
+router.post(
+  "/campaigns/attachments/upload-url",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = RequestCampaignAttachmentUploadBody.safeParse(req.body);
+    if (!parsed.success || !/\.pdf$/i.test(parsed.data?.name ?? "")) {
+      res.status(400).json({ error: "Choose a PDF file no larger than 5 MB.", code: "INVALID_ATTACHMENT" });
+      return;
+    }
+    try {
+      const upload = await createCampaignAttachmentUpload(
+        req.authUser!.id,
+        parsed.data.name,
+        parsed.data.size,
+      );
+      res.json(RequestCampaignAttachmentUploadResponse.parse(upload));
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Could not upload this PDF.",
+        code: "INVALID_ATTACHMENT",
+      });
+    }
+  },
+);
+
 router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   const parsed = CreateCampaignBody.safeParse(req.body);
   if (!parsed.success) {
@@ -5161,6 +5193,17 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
   const userId = req.authUser!.id;
+  const attachments = parsed.data.attachments ?? [];
+  if (!validateAttachmentList(attachments)) {
+    res.status(400).json({ error: "Use up to two PDFs with a combined size no greater than 5 MB.", code: "INVALID_ATTACHMENT" });
+    return;
+  }
+  try {
+    await readCampaignAttachments(userId, attachments);
+  } catch {
+    res.status(400).json({ error: "An attachment is missing, invalid, or not a PDF.", code: "INVALID_ATTACHMENT" });
+    return;
+  }
   const variants = cleanedVariantValues({
     subject: parsed.data.subjectVariants ?? [parsed.data.subject],
     greeting: parsed.data.greetingVariants,
@@ -5228,6 +5271,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
         htmlBody: parsed.data.htmlBody
           ? sanitizeCampaignHtml(parsed.data.htmlBody)
           : null,
+        attachments,
       })
       .returning();
     return { kind: "created" as const, campaign };
@@ -5287,6 +5331,7 @@ router.post(
       signatureVariants: source.signatureVariants,
       textBody: source.textBody,
       htmlBody: source.htmlBody,
+      attachments: source.attachments,
       unsubscribeOrigin: source.unsubscribeOrigin,
     }).returning();
     const [summary] = (await campaignPayloads(userId)).filter(item => item.id === child!.id);
@@ -5324,6 +5369,17 @@ router.patch(
         error: "Only draft campaigns can be edited.",
         code: "CAMPAIGN_NOT_EDITABLE",
       });
+      return;
+    }
+    const nextAttachments = parsed.data.attachments ?? campaignBeforeUpdate.attachments;
+    if (!validateAttachmentList(nextAttachments)) {
+      res.status(400).json({ error: "Use up to two PDFs with a combined size no greater than 5 MB.", code: "INVALID_ATTACHMENT" });
+      return;
+    }
+    try {
+      await readCampaignAttachments(userId, nextAttachments);
+    } catch {
+      res.status(400).json({ error: "An attachment is missing, invalid, or not a PDF.", code: "INVALID_ATTACHMENT" });
       return;
     }
 
@@ -5443,6 +5499,9 @@ router.patch(
             : {}),
           ...(parsed.data.textBody !== undefined
             ? { textBody: parsed.data.textBody }
+            : {}),
+          ...(parsed.data.attachments !== undefined
+            ? { attachments: parsed.data.attachments }
             : {}),
           ...(parsed.data.htmlBody !== undefined
             ? {
