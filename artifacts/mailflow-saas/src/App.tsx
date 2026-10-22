@@ -1139,6 +1139,46 @@ function AdminEmailTemplatesPage() {
   const [editingId, setEditingId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const subjectRef = useRef<HTMLInputElement | null>(null);
+  const htmlBodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const placeholders = [
+    ['First name', '{{firstName}}', 'firstName'],
+    ['Last name', '{{lastName}}', 'lastName'],
+    ['Email', '{{email}}', 'email'],
+    ['Username', '{{username}}', 'username'],
+    ['Application name', '{{applicationName}}', 'applicationName'],
+  ] as const;
+  const insertPlaceholder = (field: 'subject' | 'htmlBody', token: string) => {
+    const input = field === 'subject' ? subjectRef.current : htmlBodyRef.current;
+    if (!input) return;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const updated = `${input.value.slice(0, start)}${token}${input.value.slice(end)}`;
+    setDraft(current => ({ ...current, [field]: updated }));
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
+  const placeholderPicker = (field: 'subject' | 'htmlBody') => (
+    <div className="mt-2">
+      <div className="mb-1.5 text-[10px] font-medium text-[#687484]">Insert placeholder</div>
+      <div className="flex flex-wrap gap-1.5">
+        {placeholders.map(([label, token, key]) => (
+          <button
+            key={key}
+            type="button"
+            data-testid={`button-insert-placeholder-${field}-${key}`}
+            aria-label={`Insert ${token} placeholder into ${field === 'subject' ? 'subject' : 'email body'}`}
+            onClick={() => insertPlaceholder(field, token)}
+            className="rounded border border-[#d8e2ed] bg-[#f7faff] px-2 py-1 text-[10px] text-[#245b9b] hover:bg-[#edf4fc] focus:outline-none focus:ring-2 focus:ring-[#b8d2ef]"
+          >
+            {label} <code className="ml-1">{token}</code>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListEmailTemplatesQueryKey() }); };
   const edit = (template: EmailTemplate) => { setEditingId(template.id); setDraft({ name: template.name, kind: template.kind, subject: template.subject, htmlBody: template.htmlBody }); setError(''); setMessage(''); };
   const save = (e: FormEvent) => {
@@ -1155,8 +1195,16 @@ function AdminEmailTemplatesPage() {
     <Panel className="mb-4 p-5"><form onSubmit={save} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2"><Field label="Template name" value={draft.name} onChange={v => setDraft({ ...draft, name: v })} testId="input-inactivity-template-name" required/>
       <label className="text-[11px] font-medium text-[#687484]">Template type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as typeof draft.kind })} className="mt-1 block h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px]"><option value="inactive_warning">Inactivity warning</option><option value="suspension_notice">Suspension notice</option></select></label></div>
-      <Field label="Subject" value={draft.subject} onChange={v => setDraft({ ...draft, subject: v })} testId="input-inactivity-template-subject" required/>
-      <label className="block text-[11px] font-medium text-[#687484]">HTML email body<textarea required value={draft.htmlBody} onChange={e => setDraft({ ...draft, htmlBody: e.target.value })} rows={7} maxLength={100000} className="mt-1 block w-full rounded-md border border-[#d8dde4] p-3 font-mono text-[12px] outline-none focus:border-[#3b73b8]" placeholder="<p>Hello {{firstName}},</p>"/></label>
+      <div>
+        <label htmlFor="input-inactivity-template-subject" className="block text-[11px] font-medium text-[#687484]">Subject</label>
+        <input ref={subjectRef} id="input-inactivity-template-subject" data-testid="input-inactivity-template-subject" required maxLength={200} value={draft.subject} onChange={e => setDraft({ ...draft, subject: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-[#d8dde4] px-3 text-[12px] outline-none focus:border-[#3b73b8]"/>
+        {placeholderPicker('subject')}
+      </div>
+      <div>
+        <label htmlFor="input-inactivity-template-body" className="block text-[11px] font-medium text-[#687484]">HTML email body</label>
+        <textarea ref={htmlBodyRef} id="input-inactivity-template-body" data-testid="input-inactivity-template-body" required value={draft.htmlBody} onChange={e => setDraft({ ...draft, htmlBody: e.target.value })} rows={7} maxLength={100000} className="mt-1 block w-full rounded-md border border-[#d8dde4] p-3 font-mono text-[12px] outline-none focus:border-[#3b73b8]" placeholder="<p>Hello {{firstName}},</p>"/>
+        {placeholderPicker('htmlBody')}
+      </div>
       <div className="flex items-center gap-2"><Button type="submit" testId="button-save-inactivity-template" disabled={create.isPending || update.isPending}>{editingId ? 'Save changes' : 'Create template'}</Button>{editingId && <Button variant="quiet" testId="button-cancel-template-edit" onClick={() => { setEditingId(''); setDraft(empty); }}>Cancel edit</Button>}</div>
       {error && <FormError message={error}/>}
       {message && <p role="status" className="text-[11px] text-[#31674b]">{message}</p>}
