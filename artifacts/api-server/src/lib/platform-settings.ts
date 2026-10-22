@@ -38,6 +38,9 @@ export type PlatformSettingsInput = {
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: "public" | "hidden";
+  inactiveUserMonths: number;
+  inactivityWarningDays: number;
+  inactivityRemovalDays: number;
 };
 
 export const defaultPlatformSettings: PlatformSettingsInput = {
@@ -75,6 +78,9 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   allowUserWithoutSubscription: false,
   gracePeriodDays: 0,
   packageVisibility: "public",
+  inactiveUserMonths: 3,
+  inactivityWarningDays: 15,
+  inactivityRemovalDays: 7,
 };
 
 function withSettingsVersion(settings: unknown) {

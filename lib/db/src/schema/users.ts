@@ -31,6 +31,10 @@ export const usersTable = pgTable(
       .notNull()
       .default(false),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    inactivityWarningSentAt: timestamp("inactivity_warning_sent_at", { withTimezone: true }),
+    suspensionEmailSentAt: timestamp("suspension_email_sent_at", { withTimezone: true }),
+    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    inactivityResetAt: timestamp("inactivity_reset_at", { withTimezone: true }),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
