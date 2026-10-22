@@ -28,6 +28,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
 import { MailflowBrand } from '@/components/brand';
 import { TaskoneAttributionFooter } from '@/components/taskone-footer';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import AdminBillingPage, { AdminPackagesPage } from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
@@ -1140,7 +1141,6 @@ function AdminEmailTemplatesPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const subjectRef = useRef<HTMLInputElement | null>(null);
-  const htmlBodyRef = useRef<HTMLTextAreaElement | null>(null);
   const placeholders = [
     ['First name', '{{firstName}}', 'firstName'],
     ['Last name', '{{lastName}}', 'lastName'],
@@ -1148,8 +1148,8 @@ function AdminEmailTemplatesPage() {
     ['Username', '{{username}}', 'username'],
     ['Application name', '{{applicationName}}', 'applicationName'],
   ] as const;
-  const insertPlaceholder = (field: 'subject' | 'htmlBody', token: string) => {
-    const input = field === 'subject' ? subjectRef.current : htmlBodyRef.current;
+  const insertPlaceholder = (field: 'subject', token: string) => {
+    const input = subjectRef.current;
     if (!input) return;
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
@@ -1160,7 +1160,7 @@ function AdminEmailTemplatesPage() {
       input.setSelectionRange(start + token.length, start + token.length);
     });
   };
-  const placeholderPicker = (field: 'subject' | 'htmlBody') => (
+  const placeholderPicker = (field: 'subject') => (
     <div className="mt-2">
       <div className="mb-1.5 text-[10px] font-medium text-[#687484]">Insert placeholder</div>
       <div className="flex flex-wrap gap-1.5">
@@ -1169,7 +1169,7 @@ function AdminEmailTemplatesPage() {
             key={key}
             type="button"
             data-testid={`button-insert-placeholder-${field}-${key}`}
-            aria-label={`Insert ${token} placeholder into ${field === 'subject' ? 'subject' : 'email body'}`}
+            aria-label={`Insert ${token} placeholder into subject`}
             onClick={() => insertPlaceholder(field, token)}
             className="rounded border border-[#d8e2ed] bg-[#f7faff] px-2 py-1 text-[10px] text-[#245b9b] hover:bg-[#edf4fc] focus:outline-none focus:ring-2 focus:ring-[#b8d2ef]"
           >
@@ -1191,7 +1191,7 @@ function AdminEmailTemplatesPage() {
     if (!window.confirm(`Delete template “${template.name}”?`)) return;
     remove.mutate({ templateId: template.id }, { onSuccess: () => { refresh(); if (editingId === template.id) { setEditingId(''); setDraft(empty); } }, onError: e => setError(getError(e)) });
   };
-  return <><PageHeading eyebrow="PLATFORM CONFIGURATION" title="Inactivity email templates" detail="Create separate warning and suspension templates. Available placeholders: {{firstName}}, {{lastName}}, {{email}}, {{username}}, {{applicationName}}."/>
+  return <><PageHeading eyebrow="PLATFORM CONFIGURATION" title="Inactivity email templates" detail="Create and format warning and suspension emails with the visual editor. Use the placeholder buttons to personalize each message."/>
     <Panel className="mb-4 p-5"><form onSubmit={save} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2"><Field label="Template name" value={draft.name} onChange={v => setDraft({ ...draft, name: v })} testId="input-inactivity-template-name" required/>
       <label className="text-[11px] font-medium text-[#687484]">Template type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as typeof draft.kind })} className="mt-1 block h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px]"><option value="inactive_warning">Inactivity warning</option><option value="suspension_notice">Suspension notice</option></select></label></div>
@@ -1201,9 +1201,15 @@ function AdminEmailTemplatesPage() {
         {placeholderPicker('subject')}
       </div>
       <div>
-        <label htmlFor="input-inactivity-template-body" className="block text-[11px] font-medium text-[#687484]">HTML email body</label>
-        <textarea ref={htmlBodyRef} id="input-inactivity-template-body" data-testid="input-inactivity-template-body" required value={draft.htmlBody} onChange={e => setDraft({ ...draft, htmlBody: e.target.value })} rows={7} maxLength={100000} className="mt-1 block w-full rounded-md border border-[#d8dde4] p-3 font-mono text-[12px] outline-none focus:border-[#3b73b8]" placeholder="<p>Hello {{firstName}},</p>"/>
-        {placeholderPicker('htmlBody')}
+        <div className="mb-1 text-[11px] font-medium text-[#687484]">Email message</div>
+        <RichTextEditor
+          value={draft.htmlBody}
+          onChange={htmlBody => setDraft(current => ({ ...current, htmlBody }))}
+          placeholders={placeholders.map(([label, token]) => ({ label, token }))}
+          placeholderTitle="Personalize this email"
+          placeholderDescription="Choose a placeholder to add it at your cursor position in the message."
+          testId="input-inactivity-template-body"
+        />
       </div>
       <div className="flex items-center gap-2"><Button type="submit" testId="button-save-inactivity-template" disabled={create.isPending || update.isPending}>{editingId ? 'Save changes' : 'Create template'}</Button>{editingId && <Button variant="quiet" testId="button-cancel-template-edit" onClick={() => { setEditingId(''); setDraft(empty); }}>Cancel edit</Button>}</div>
       {error && <FormError message={error}/>}

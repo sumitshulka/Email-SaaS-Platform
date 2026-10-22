@@ -5,6 +5,10 @@ import { CONTACT_PLACEHOLDERS, escapeHtml } from "./campaign-placeholders";
 type RichTextEditorProps = {
   value: string;
   onChange: (html: string, plainText: string) => void;
+  placeholders?: Array<{ token: string; label: string }>;
+  placeholderTitle?: string;
+  placeholderDescription?: string;
+  testId?: string;
 };
 
 type EditorCommand =
@@ -18,7 +22,14 @@ type EditorCommand =
 const toolbarButton =
   "grid h-8 w-8 place-items-center rounded border border-transparent text-[#536172] hover:border-[#d8dde4] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9abbe1]";
 
-export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
+export function RichTextEditor({
+  value,
+  onChange,
+  placeholders = CONTACT_PLACEHOLDERS,
+  placeholderTitle = "Personalization placeholders",
+  placeholderDescription = "Click a field to insert it. Its value is filled in separately for each recipient when the campaign is sent.",
+  testId = "input-campaign-html-body",
+}: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,16 +89,16 @@ export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
         aria-multiline="true"
         contentEditable
         suppressContentEditableWarning
-        data-testid="input-campaign-html-body"
+        data-testid={testId}
         onInput={handleInput}
         onPaste={handlePaste}
         className="min-h-[220px] max-h-[55vh] overflow-y-auto px-3 py-3 text-[13px] leading-6 text-[#182333] outline-none empty:before:text-[#a0a8b3] empty:before:content-['Write_your_message…'] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-[#9abbe1] [&_blockquote]:pl-3 [&_h1]:my-2 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:text-base [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_ul]:my-2 [&_ul]:list-disc"
       />
       <div className="border-t border-[#edf0f2] bg-[#fbfcfd] px-3 py-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-[#788596]">Personalization placeholders</div>
-        <p className="mt-1 text-[10px] leading-4 text-[#8993a0]">Click a field to insert it. Its value is filled in separately for each recipient when the campaign is sent.</p>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-[#788596]">{placeholderTitle}</div>
+        <p className="mt-1 text-[10px] leading-4 text-[#8993a0]">{placeholderDescription}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {CONTACT_PLACEHOLDERS.map(({ token, label }) => (
+          {placeholders.map(({ token, label }) => (
             <button
               key={token}
               type="button"
