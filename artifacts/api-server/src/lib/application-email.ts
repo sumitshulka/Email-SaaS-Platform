@@ -110,7 +110,7 @@ export async function sendApplicationEmail(
   });
 
   try {
-    await transport.sendMail({
+    const info = await transport.sendMail({
       from: { name: config.fromName, address: config.fromEmail },
       to,
       replyTo: config.replyTo ?? undefined,
@@ -118,6 +118,27 @@ export async function sendApplicationEmail(
       text,
       ...(html ? { html } : {}),
     });
+    const addressIsRecipient = (value: unknown): boolean => {
+      if (typeof value === "string") {
+        return value.trim().toLowerCase() === to.trim().toLowerCase();
+      }
+      return (
+        typeof value === "object" &&
+        value !== null &&
+        "address" in value &&
+        typeof value.address === "string" &&
+        value.address.trim().toLowerCase() === to.trim().toLowerCase()
+      );
+    };
+    if (Array.isArray(info.rejected) && info.rejected.some(addressIsRecipient)) {
+      throw new Error("SMTP server rejected the recipient.");
+    }
+    if (
+      !Array.isArray(info.accepted) ||
+      !info.accepted.some(addressIsRecipient)
+    ) {
+      throw new Error("SMTP server did not accept the recipient.");
+    }
   } finally {
     transport.close();
   }
