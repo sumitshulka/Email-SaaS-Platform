@@ -31,6 +31,7 @@ import {
 } from "@workspace/db";
 import { sendApplicationEmail, getApplicationEmailConfig } from "../lib/application-email";
 import { getPlatformSettings } from "../lib/platform-settings";
+import { renewExpiredFreePrimaryPlanOnLogin } from "../lib/billing";
 import {
   clearSessionCookie,
   createUserSession,
@@ -302,6 +303,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .set({ lastLoginAt: now })
     .where(eq(usersTable.id, user.id))
     .returning();
+  await renewExpiredFreePrimaryPlanOnLogin(updatedUser.id, now);
   await createUserSession(updatedUser, req, res);
   req.log.info({ userId: user.id, role: user.role }, "User signed in");
   res.json(LoginResponse.parse({ user: toPublicUser(updatedUser) }));

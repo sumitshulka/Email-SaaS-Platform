@@ -2784,6 +2784,69 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
+  it("catches up expired free-plan terms from the prior expiry date when the user logs in", async () => {
+    const admin = await loggedInUser({
+      username: "free-renewal-admin",
+      role: "SUPERADMIN",
+    });
+    const user = await loggedInUser({ username: "free-renewal-user" });
+    const created = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Free Monthly",
+        description: "Monthly free access",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        active: true,
+      },
+    });
+    assert.equal(created.response.status, 201, JSON.stringify(created.body));
+    const activation = await api("/subscriptions/free", {
+      method: "POST",
+      cookie: user.cookie,
+      body: { packageId: created.body.id },
+    });
+    assert.equal(activation.response.status, 200, JSON.stringify(activation.body));
+    const original = activation.body.subscription;
+    const lastExpiry = new Date(Date.now() - 75 * 24 * 60 * 60 * 1000);
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({
+        startsAt: new Date(lastExpiry.getTime() - 30 * 24 * 60 * 60 * 1000),
+        endsAt: lastExpiry,
+      })
+      .where(eq(dbModule.userSubscriptionsTable.id, original.id));
+
+    const renewedLogin = await login(user.user.email);
+    assert.equal(renewedLogin.response.status, 200, JSON.stringify(renewedLogin.body));
+    const revisions = await db
+      .select()
+      .from(dbModule.userSubscriptionsTable)
+      .where(eq(dbModule.userSubscriptionsTable.userId, user.user.id));
+    revisions.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+    assert.equal(revisions.length, 4);
+    assert.deepEqual(
+      revisions.map((revision) => revision.status),
+      ["superseded", "superseded", "superseded", "active"],
+    );
+    assert.equal(revisions[1].startsAt.getTime(), lastExpiry.getTime());
+    assert.equal(revisions[2].startsAt.getTime(), revisions[1].endsAt.getTime());
+    assert.equal(revisions[3].startsAt.getTime(), revisions[2].endsAt.getTime());
+    assert.ok(revisions[3].endsAt > new Date());
+    assert.ok(revisions.every((revision) => revision.paymentId === null));
+
+    const repeatedLogin = await login(user.user.email);
+    assert.equal(repeatedLogin.response.status, 200, JSON.stringify(repeatedLogin.body));
+    const unchanged = await db
+      .select()
+      .from(dbModule.userSubscriptionsTable)
+      .where(eq(dbModule.userSubscriptionsTable.userId, user.user.id));
+    assert.equal(unchanged.length, revisions.length);
+  });
+
   it("applies zero-cost higher-limit upgrades immediately and exposes scheduled free downgrades", async () => {
     const immediateUser = await loggedInUser({
       username: "zero-cost-upgrade-user",

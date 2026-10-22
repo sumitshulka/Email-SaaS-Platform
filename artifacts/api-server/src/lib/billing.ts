@@ -91,6 +91,80 @@ export function serializePackage(pkg: PackageRow) {
   };
 }
 
+export async function renewExpiredFreePrimaryPlanOnLogin(
+  userId: string,
+  now = new Date(),
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(
+        and(
+          eq(usersTable.id, userId),
+          eq(usersTable.role, "USER"),
+          isNull(usersTable.deletedAt),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!user) return 0;
+
+    const [latest] = await tx
+      .select({ subscription: userSubscriptionsTable, pkg: subscriptionPackagesTable })
+      .from(userSubscriptionsTable)
+      .innerJoin(
+        subscriptionPackagesTable,
+        eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+      )
+      .where(
+        and(
+          eq(userSubscriptionsTable.userId, user.id),
+          eq(userSubscriptionsTable.status, "active"),
+        ),
+      )
+      .orderBy(desc(userSubscriptionsTable.endsAt))
+      .limit(1)
+      .for("update");
+    if (
+      !latest ||
+      latest.subscription.startsAt > now ||
+      latest.subscription.endsAt > now ||
+      latest.pkg.packageType !== "primary" ||
+      latest.pkg.amountMinor !== 0 ||
+      latest.pkg.periodDays <= 0
+    ) {
+      return 0;
+    }
+
+    await tx
+      .update(userSubscriptionsTable)
+      .set({ status: "superseded" })
+      .where(eq(userSubscriptionsTable.id, latest.subscription.id));
+
+    let startsAt = latest.subscription.endsAt;
+    let revisions = 0;
+    while (true) {
+      const endsAt = new Date(
+        startsAt.getTime() + latest.pkg.periodDays * 24 * 60 * 60 * 1000,
+      );
+      const status = endsAt > now ? "active" : "superseded";
+      await tx.insert(userSubscriptionsTable).values({
+        userId: user.id,
+        packageId: latest.pkg.id,
+        paymentId: null,
+        status,
+        startsAt,
+        endsAt,
+      });
+      revisions += 1;
+      if (status === "active") break;
+      startsAt = endsAt;
+    }
+    return revisions;
+  });
+}
+
 function serializeSubscription(
   subscription: SubscriptionRow,
   pkg: PackageRow,
