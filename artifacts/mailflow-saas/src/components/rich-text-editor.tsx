@@ -17,6 +17,8 @@ type EditorCommand =
   | "underline"
   | "insertUnorderedList"
   | "insertOrderedList"
+  | "fontName"
+  | "fontSize"
   | "formatBlock";
 
 const toolbarButton =
@@ -77,6 +79,40 @@ export function RichTextEditor({
         <button type="button" className={toolbarButton} aria-label="Bold" title="Bold" data-testid="button-editor-bold" onMouseDown={keepEditorSelection} onClick={() => runCommand("bold")}><Bold className="h-4 w-4"/></button>
         <button type="button" className={toolbarButton} aria-label="Italic" title="Italic" data-testid="button-editor-italic" onMouseDown={keepEditorSelection} onClick={() => runCommand("italic")}><Italic className="h-4 w-4"/></button>
         <button type="button" className={toolbarButton} aria-label="Underline" title="Underline" data-testid="button-editor-underline" onMouseDown={keepEditorSelection} onClick={() => runCommand("underline")}><Underline className="h-4 w-4"/></button>
+        <span className="mx-1 h-5 border-l border-[#dfe4ea]"/>
+        <label className="sr-only" htmlFor="rich-text-font-family">Font family</label>
+        <select
+          id="rich-text-font-family"
+          aria-label="Font family"
+          data-testid="select-editor-font-family"
+          defaultValue="Arial"
+          onMouseDown={() => editorRef.current?.focus()}
+          onChange={event => runCommand("fontName", event.currentTarget.value)}
+          className="h-8 rounded border border-[#d8dde4] bg-white px-2 text-[11px] text-[#536172] focus:outline-none focus:ring-2 focus:ring-[#9abbe1]"
+        >
+          <option value="Arial">Arial</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Tahoma">Tahoma</option>
+          <option value="Verdana">Verdana</option>
+          <option value="Trebuchet MS">Trebuchet MS</option>
+        </select>
+        <label className="sr-only" htmlFor="rich-text-font-size">Text size</label>
+        <select
+          id="rich-text-font-size"
+          aria-label="Text size"
+          data-testid="select-editor-font-size"
+          defaultValue="3"
+          onMouseDown={() => editorRef.current?.focus()}
+          onChange={event => runCommand("fontSize", event.currentTarget.value)}
+          className="h-8 rounded border border-[#d8dde4] bg-white px-2 text-[11px] text-[#536172] focus:outline-none focus:ring-2 focus:ring-[#9abbe1]"
+        >
+          <option value="1">Tiny</option>
+          <option value="2">Small</option>
+          <option value="3">Normal</option>
+          <option value="4">Large</option>
+          <option value="5">Extra large</option>
+          <option value="6">Huge</option>
+        </select>
         <span className="mx-1 h-5 border-l border-[#dfe4ea]"/>
         <button type="button" className={toolbarButton} aria-label="Bulleted list" title="Bulleted list" data-testid="button-editor-bullets" onMouseDown={keepEditorSelection} onClick={() => runCommand("insertUnorderedList")}><List className="h-4 w-4"/></button>
         <button type="button" className={toolbarButton} aria-label="Numbered list" title="Numbered list" data-testid="button-editor-numbered-list" onMouseDown={keepEditorSelection} onClick={() => runCommand("insertOrderedList")}><ListOrdered className="h-4 w-4"/></button>
