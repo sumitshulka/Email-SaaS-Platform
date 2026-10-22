@@ -9,17 +9,17 @@ import {
   Trash2, UserRound, Users, Building2, LifeBuoy, X,
 } from 'lucide-react';
 import {
-  AUTH_SESSION_EXPIRED_EVENT, getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey,
+  AUTH_SESSION_EXPIRED_EVENT, getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey, getListEmailTemplatesQueryKey, getListInactiveUsersQueryKey,
   getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
   getGetUserNotificationsQueryKey, useGetUserNotifications, useMarkUserNotificationRead,
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetPasswordPolicy, useGetUserDashboard,
-  useGetApplicationEmailSettings, useGetCurrentUser, useGetMaintenanceStatus, useListAdminUsers,
+  useGetApplicationEmailSettings, useGetCurrentUser, useGetMaintenanceStatus, useListAdminUsers, useListEmailTemplates, useListInactiveUsers,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
-  usePreviewBlockedTerms, useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus,
+  usePreviewBlockedTerms, useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus, useCreateEmailTemplate, useUpdateEmailTemplate, useDeleteEmailTemplate, useSendInactivityNotice, useRemoveInactiveUser,
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
   useListAvailableSubscriptionPackages,
 } from '@workspace/api-client-react';
-import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, BlockedTermPreviewResult, PlatformSettingsInput } from '@workspace/api-client-react';
+import type { AdminUser, ApplicationEmailSettingsInput, AuthUser, BlockedTermPreviewResult, PlatformSettingsInput, EmailTemplate, InactiveUser } from '@workspace/api-client-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
@@ -377,6 +377,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Accounts & intelligence',
     items: [
       { href: '/admin/users', label: 'Accounts', icon: Users },
+      { href: '/admin/email-templates', label: 'Email templates', icon: Send },
       { href: '/admin/global-companies', label: 'Global companies', icon: Building2 },
       { href: '/admin/company-intelligence', label: 'Company intelligence', icon: BrainCircuit },
     ],
@@ -1067,6 +1068,7 @@ function AdminUsersPage() {
     }
   };
   return <><PageHeading eyebrow="CUSTOMER ACCOUNTS" title="Accounts" detail="Search and manage tenant access. Changes apply to the selected customer account."/>
+    <AdminInactivityPanel/>
     <FormError message={actionError || undefined}/>
     {actionMessage && <div role="status" data-testid="status-admin-account-action" className="mb-4 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] px-4 py-3 text-[12px] text-[#31674b]">{actionMessage}</div>}
     <Panel className="mb-4 p-4"><div className="flex flex-col gap-3 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8b95a1]"/><input data-testid="input-account-search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search name, username, or email" className="h-10 w-full rounded-md border border-[#d8dde4] pl-9 pr-3 text-[13px] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]"/></label><div className="relative"><SlidersHorizontal className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8b95a1]"/><select data-testid="select-account-status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }} className="h-10 min-w-[172px] rounded-md border border-[#d8dde4] bg-white pl-9 pr-3 text-[12px] outline-none focus:border-[#3b73b8]"><option value="all">All accounts</option><option value="active">Active</option><option value="inactive">Disabled</option><option value="pending">Pending verification</option></select></div></div></Panel>{q.isLoading ? <div className="space-y-2"><div className="h-14 animate-pulse rounded bg-[#eceff2]"/><div className="h-14 animate-pulse rounded bg-[#eceff2]"/><div className="h-14 animate-pulse rounded bg-[#eceff2]"/></div> : q.isError ? <QueryProblem retry={() => q.refetch()}/> : <Panel><div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left"><thead className="bg-[#fafbfc]"><tr className="border-b border-[#e8ebef] text-[10px] uppercase tracking-[.12em] text-[#8893a0]"><th className="px-5 py-3 font-medium">Customer</th><th className="px-4 py-3 font-medium">Created</th><th className="px-4 py-3 font-medium">Last sign-in</th><th className="px-4 py-3 font-medium">Subscription</th><th className="px-4 py-3 font-medium">Account status</th><th className="px-4 py-3 font-medium text-right">Actions</th></tr></thead><tbody>{q.data?.items.map((u: AdminUser) => <tr key={u.id} data-testid={`row-account-${u.id}`} className="border-b border-[#eef0f2] last:border-0 hover:bg-[#fcfcfd]"><td className="px-5 py-3.5"><div className="text-[12px] font-semibold">{u.firstName} {u.lastName}</div><div className="mt-0.5 text-[11px] text-[#7d8794]">{u.email} <span className="text-[#b1b8c0]">· @{u.username}</span></div></td><td className="px-4 py-3 text-[11px] text-[#687484]">{new Date(u.createdAt).toLocaleDateString()}</td><td className="px-4 py-3 text-[11px] text-[#687484]">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'}</td><td className="px-4 py-3 text-[11px] text-[#687484]">{u.subscriptionStatus || '—'}</td><td className="px-4 py-3"><div className="flex flex-col items-start gap-1.5"><StatusPill tone={u.active ? 'blue' : 'orange'}>{u.active ? 'Active' : 'Disabled'}</StatusPill>{!u.emailVerified && <span className="text-[10px] text-[#aa5c24]">Email unverified</span>}</div></td><td className="px-4 py-3 text-right"><div className="inline-flex gap-1"><Button variant="outline" className="min-h-8 px-2.5 text-[11px]" testId={`button-toggle-account-${u.id}`} disabled={update.isPending} onClick={() => setActive(u)}>{u.active ? 'Deactivate' : 'Activate'}</Button><Button variant="danger" className="min-h-8 px-2.5" testId={`button-delete-account-${u.id}`} disabled={remove.isPending} onClick={() => softDelete(u)}><Trash2 className="h-3.5 w-3.5"/></Button></div></td></tr>)}{!q.data?.items.length && <tr><td colSpan={6} className="px-5 py-16 text-center"><div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-[#f1f4f7] text-[#778392]"><Search className="h-4 w-4"/></div><div className="mt-3 text-[13px] font-semibold">No matching accounts</div><div className="mt-1 text-[11px] text-[#7d8794]">Try another search or status filter.</div></td></tr>}</tbody></table></div><div className="flex items-center justify-between border-t border-[#e8ebef] px-5 py-3"><span className="text-[11px] text-[#7d8794]">{q.data?.total || 0} accounts</span><div className="flex items-center gap-2"><Button variant="quiet" className="min-h-8 px-2" testId="button-page-previous" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4"/>Previous</Button><span className="mono text-[10px] text-[#687484]">{page} / {totalPages}</span><Button variant="quiet" className="min-h-8 px-2" testId="button-page-next" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next<ChevronRight className="h-4 w-4"/></Button></div></div></Panel>}
@@ -1085,9 +1087,87 @@ function AdminUsersPage() {
     />
   </>;
 }
+
+function AdminInactivityPanel() {
+  const [stage, setStage] = useState<'warning'|'suspension'|'removal'>('warning');
+  const [templateId, setTemplateId] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const qc = useQueryClient();
+  const candidates = useListInactiveUsers(stage);
+  const templates = useListEmailTemplates();
+  const send = useSendInactivityNotice();
+  const remove = useRemoveInactiveUser();
+  const eligibleTemplates = (templates.data || []).filter(t => t.kind === (stage === 'suspension' ? 'suspension_notice' : 'inactive_warning'));
+  useEffect(() => { setTemplateId(eligibleTemplates[0]?.id || ''); }, [stage, templates.data]);
+  const refresh = () => { void qc.invalidateQueries({ queryKey: getListInactiveUsersQueryKey(stage) }); void qc.invalidateQueries({ queryKey: getListAdminUsersQueryKey() }); };
+  const sendNotice = (user: InactiveUser) => {
+    setError(''); setMessage('');
+    send.mutate({ userId: user.id, data: { stage: stage as 'warning'|'suspension', templateId } }, {
+      onSuccess: () => { refresh(); setMessage(stage === 'warning' ? 'Warning email sent.' : 'Suspension email sent and account access disabled.'); },
+      onError: e => setError(getError(e)),
+    });
+  };
+  const softRemove = (user: InactiveUser) => {
+    if (!window.confirm(`Soft-delete ${user.email}? The account will be recoverable through the existing removal process.`)) return;
+    remove.mutate({ userId: user.id }, { onSuccess: () => { refresh(); setMessage('Account soft-deleted.'); }, onError: e => setError(getError(e)) });
+  };
+  return <Panel className="mb-4 p-4">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div><div className="mono text-[9px] uppercase tracking-[.14em] text-[#87919b]">MANUAL LIFECYCLE REVIEW</div><h2 className="display mt-1 text-[16px] font-bold">Inactive accounts</h2><p className="mt-1 text-[11px] text-[#718091]">Check eligible accounts, send an approved template, and apply soft-removal after the configured grace period.</p></div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[10px] font-medium text-[#687484]">Review stage<select value={stage} onChange={e => setStage(e.target.value as typeof stage)} className="mt-1 block h-9 rounded-md border border-[#d8dde4] bg-white px-2 text-[12px]"><option value="warning">Warning due</option><option value="suspension">Suspension due</option><option value="removal">Soft-delete due</option></select></label>
+        {stage !== 'removal' && <label className="text-[10px] font-medium text-[#687484]">Email template<select value={templateId} onChange={e => setTemplateId(e.target.value)} className="mt-1 block h-9 max-w-[220px] rounded-md border border-[#d8dde4] bg-white px-2 text-[12px]"><option value="">Choose template</option>{eligibleTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
+        <Link href="/admin/email-templates" className="mb-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:underline">Manage templates</Link>
+      </div>
+    </div>
+    {error && <div role="alert" className="mt-3"><FormError message={error}/></div>}
+    {message && <p role="status" className="mt-3 text-[11px] text-[#31674b]">{message}</p>}
+    {candidates.isLoading ? <p className="mt-4 text-[12px] text-[#718091]">Checking eligibility…</p> : candidates.isError ? <div className="mt-3"><QueryProblem retry={() => candidates.refetch()}/></div> :
+      candidates.data?.length ? <div className="mt-3 divide-y divide-[#eef0f2]">{candidates.data.map((user: InactiveUser) => <div key={user.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5"><div><div className="text-[12px] font-semibold">{user.firstName} {user.lastName}</div><div className="text-[11px] text-[#778291]">{user.email} · last activity {new Date(user.lastActivityAt).toLocaleDateString()}</div></div>{stage === 'removal' ? <Button variant="danger" testId={`button-inactivity-remove-${user.id}`} disabled={remove.isPending} onClick={() => softRemove(user)}>Soft-delete</Button> : <Button variant={stage === 'suspension' ? 'danger' : 'outline'} testId={`button-inactivity-send-${user.id}`} disabled={!templateId || send.isPending} onClick={() => sendNotice(user)}>{stage === 'warning' ? 'Send warning' : 'Send & suspend'}</Button>}</div>)}</div> : <p className="mt-4 text-[12px] text-[#718091]">No accounts are currently eligible for this stage.</p>}
+  </Panel>;
+}
+
+function AdminEmailTemplatesPage() {
+  const q = useListEmailTemplates();
+  const qc = useQueryClient();
+  const create = useCreateEmailTemplate();
+  const update = useUpdateEmailTemplate();
+  const remove = useDeleteEmailTemplate();
+  const empty = { name: '', kind: 'inactive_warning' as 'inactive_warning'|'suspension_notice', subject: '', htmlBody: '' };
+  const [draft, setDraft] = useState(empty);
+  const [editingId, setEditingId] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const refresh = () => { void qc.invalidateQueries({ queryKey: getListEmailTemplatesQueryKey() }); };
+  const edit = (template: EmailTemplate) => { setEditingId(template.id); setDraft({ name: template.name, kind: template.kind, subject: template.subject, htmlBody: template.htmlBody }); setError(''); setMessage(''); };
+  const save = (e: FormEvent) => {
+    e.preventDefault(); setError(''); setMessage('');
+    const callbacks = { onSuccess: () => { setDraft(empty); setEditingId(''); refresh(); setMessage('Template saved.'); }, onError: (e: unknown) => setError(getError(e)) };
+    if (editingId) update.mutate({ templateId: editingId, data: draft }, callbacks);
+    else create.mutate({ data: draft }, callbacks);
+  };
+  const deleteTemplate = (template: EmailTemplate) => {
+    if (!window.confirm(`Delete template “${template.name}”?`)) return;
+    remove.mutate({ templateId: template.id }, { onSuccess: () => { refresh(); if (editingId === template.id) { setEditingId(''); setDraft(empty); } }, onError: e => setError(getError(e)) });
+  };
+  return <><PageHeading eyebrow="PLATFORM CONFIGURATION" title="Inactivity email templates" detail="Create separate warning and suspension templates. Available placeholders: {{firstName}}, {{lastName}}, {{email}}, {{username}}, {{applicationName}}."/>
+    <Panel className="mb-4 p-5"><form onSubmit={save} className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2"><Field label="Template name" value={draft.name} onChange={v => setDraft({ ...draft, name: v })} testId="input-inactivity-template-name" required/>
+      <label className="text-[11px] font-medium text-[#687484]">Template type<select value={draft.kind} onChange={e => setDraft({ ...draft, kind: e.target.value as typeof draft.kind })} className="mt-1 block h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px]"><option value="inactive_warning">Inactivity warning</option><option value="suspension_notice">Suspension notice</option></select></label></div>
+      <Field label="Subject" value={draft.subject} onChange={v => setDraft({ ...draft, subject: v })} testId="input-inactivity-template-subject" required/>
+      <label className="block text-[11px] font-medium text-[#687484]">HTML email body<textarea required value={draft.htmlBody} onChange={e => setDraft({ ...draft, htmlBody: e.target.value })} rows={7} maxLength={100000} className="mt-1 block w-full rounded-md border border-[#d8dde4] p-3 font-mono text-[12px] outline-none focus:border-[#3b73b8]" placeholder="<p>Hello {{firstName}},</p>"/></label>
+      <div className="flex items-center gap-2"><Button type="submit" testId="button-save-inactivity-template" disabled={create.isPending || update.isPending}>{editingId ? 'Save changes' : 'Create template'}</Button>{editingId && <Button variant="quiet" testId="button-cancel-template-edit" onClick={() => { setEditingId(''); setDraft(empty); }}>Cancel edit</Button>}</div>
+      {error && <FormError message={error}/>}
+      {message && <p role="status" className="text-[11px] text-[#31674b]">{message}</p>}
+    </form></Panel>
+    <Panel><div className="divide-y divide-[#eef0f2] px-5">{q.data?.map((t: EmailTemplate) => <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 py-4"><div><div className="text-[12px] font-semibold">{t.name}</div><div className="mt-1 text-[11px] text-[#778291]">{t.kind === 'inactive_warning' ? 'Inactivity warning' : 'Suspension notice'} · {t.subject}</div></div><div className="flex gap-2"><Button variant="outline" testId={`button-edit-template-${t.id}`} onClick={() => edit(t)}>Edit</Button><Button variant="danger" testId={`button-delete-template-${t.id}`} disabled={remove.isPending} onClick={() => deleteTemplate(t)}>Delete</Button></div></div>)}{q.isLoading && <p className="py-5 text-[12px]">Loading templates…</p>}{!q.isLoading && !q.data?.length && <p className="py-5 text-[12px] text-[#778291]">No templates yet.</p>}</div></Panel>
+  </>;
+}
 const settingGroups: Array<{ title: string; description?: string; fields: Array<[keyof PlatformSettingsInput, string, 'text' | 'number' | 'boolean' | 'list' | 'select', string[]?]> }> = [
   { title: 'Identity & defaults', fields: [['applicationName','Application name','text'],['defaultCurrency','Default currency','text'],['defaultTimezone','Default timezone','text'],['dateFormat','Date format','text'],['supportEmail','Support email','text'],['supportPhone','Support phone','text'],['maintenanceMode','Maintenance mode','boolean']] },
   { title: 'Account & authentication', fields: [['maxContactsPerUser','Contacts per user','number'],['maxUploadFileSizeMb','Upload file size limit (MB)','number'],['allowedContactFileTypes','Allowed contact file types','list'],['passwordMinimumLength','Minimum password length','number'],['otpExpiryMinutes','OTP expiry (minutes)','number'],['maxOtpAttempts','Maximum OTP attempts','number'],['loginAttemptThreshold','Login attempt threshold','number'],['sessionDurationHours','Session duration (hours)','number']] },
+  { title: 'Inactivity lifecycle', description: 'Review accounts manually from Accounts. Warning emails begin after the configured inactive period; sending a suspension notice disables access. Eligible accounts are soft-deleted after the suspension grace period.', fields: [['inactiveUserMonths','Months inactive before warning','number'],['inactivityWarningDays','Days after warning before suspension','number'],['inactivityRemovalDays','Days suspended before soft-delete','number']] },
   { title: 'Sending & delivery', fields: [['defaultEmailsPerHour','Default emails per hour','number'],['maxEmailsPerDay','Maximum emails per day','number'],['maxCampaignSize','Maximum campaign size','number'],['maxConcurrentCampaigns','Concurrent campaigns','number'],['retryAttempts','Retry attempts','number'],['retryDelaySeconds','Retry delay (seconds)','number'],['bounceThreshold','Bounce threshold','number'],['deliveryTrackingEnabled','Request SMTP delivery notices (best effort)','boolean'],['queuePollingSeconds','Queue polling (seconds)','number']] },
   { title: 'Campaign content tests', description: 'Set the number of subject, greeting, and signature options required to split recipients across a test, and the maximum options allowed. Below the minimum, the first option is used for everyone.', fields: [['subjectVariantMinimum','Minimum subject options','number'],['subjectVariantMaximum','Maximum subject options','number'],['greetingVariantMinimum','Minimum greeting options','number'],['greetingVariantMaximum','Maximum greeting options','number'],['signatureVariantMinimum','Minimum signature options','number'],['signatureVariantMaximum','Maximum signature options','number']] },
   { title: 'Campaign content policy', description: 'Add blocked words or phrases one at a time. They are checked in subject lines, greetings, body text, HTML content, and signatures. Separators such as spaces, dots, brackets, and zero-width characters between letters do not bypass the check.', fields: [['prohibitedEmailKeywords','Blocked words and phrases','list']] },
@@ -1694,6 +1774,7 @@ function Routes() {
     <Route path="/admin/notifications">{() => <RouteGate admin>{() => <AdminNotificationsPage/>}</RouteGate>}</Route>
     <Route path="/admin/support">{() => <RouteGate admin>{() => <AdminSupportTicketsPage/>}</RouteGate>}</Route>
     <Route path="/admin/users">{() => <RouteGate admin>{() => <AdminUsersPage/>}</RouteGate>}</Route>
+    <Route path="/admin/email-templates">{() => <RouteGate admin>{() => <AdminEmailTemplatesPage/>}</RouteGate>}</Route>
     <Route path="/admin/billing">{() => <RouteGate admin>{() => <AdminBillingPage/>}</RouteGate>}</Route>
     <Route path="/admin/packages">{() => <RouteGate admin>{() => <AdminPackagesPage/>}</RouteGate>}</Route>
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>

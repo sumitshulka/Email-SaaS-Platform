@@ -83,9 +83,10 @@ export async function sendApplicationEmail(
   to: string,
   subject: string,
   text: string,
+  html?: string,
 ): Promise<void> {
   if (testTransport) {
-    await testTransport({ to, subject, text });
+    await testTransport({ to, subject, text, ...(html ? { html } : {}) });
     return;
   }
 
@@ -115,6 +116,7 @@ export async function sendApplicationEmail(
       replyTo: config.replyTo ?? undefined,
       subject,
       text,
+      ...(html ? { html } : {}),
     });
   } finally {
     transport.close();

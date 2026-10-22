@@ -569,7 +569,15 @@ router.patch("/admin/users/:userId/status", requireSuperadmin, async (req, res):
 
   const [updated] = await db
     .update(usersTable)
-    .set({ active: body.data.active })
+    .set(body.data.active
+      ? {
+          active: true,
+          inactivityResetAt: new Date(),
+          inactivityWarningSentAt: null,
+          suspensionEmailSentAt: null,
+          suspendedAt: null,
+        }
+      : { active: false })
     .where(eq(usersTable.id, target.id))
     .returning();
   if (!body.data.active) {

@@ -50,3 +50,4 @@
 - [M365 trace scheduled runner](m365-trace-scheduled-runner.md) — execute trace polling as a one-shot Scheduled Deployment, not in the Autoscale API process.
 - [Trace backfill progress](m365-trace-backfill-progress.md) — report date-range advancement; Microsoft’s opaque paging links do not expose a trustworthy total.
 - [Color-only UI changes](color-only-ui-changes.md) — when asked to adjust color accents, preserve the existing layout, spacing, and typography.
+- [Inactivity lifecycle](inactivity-lifecycle.md) — inactivity checks and notices are admin-initiated; suspension disables access, and delayed removal stays recoverable through soft delete.

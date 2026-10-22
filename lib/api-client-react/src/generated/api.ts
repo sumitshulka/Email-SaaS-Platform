@@ -119,6 +119,8 @@ import type {
   CurrentSubscription,
   DeliveryReportImportResult,
   DeliveryReportInput,
+  EmailTemplate,
+  EmailTemplateInput,
   ForgotPasswordInput,
   FreeAddOnActivation,
   FreeSubscriptionActivation,
@@ -145,6 +147,8 @@ import type {
   GoogleOAuthSettingsInput,
   HealthStatus,
   ImportContactsParams,
+  InactiveUser,
+  InactivityNoticeInput,
   ListAdminFinancePaymentsParams,
   ListAdminGlobalCompaniesParams,
   ListAdminNotificationsParams,
@@ -11203,6 +11207,574 @@ export function useListAdminUsers<TData = Awaited<ReturnType<typeof listAdminUse
 
 
 
+
+export const getListInactiveUsersUrl = (stage: 'warning' | 'suspension' | 'removal',) => {
+
+
+
+
+  return `/api/admin/inactivity/${stage}`
+}
+
+/**
+ * @summary List accounts eligible for an inactivity stage
+ */
+export const listInactiveUsers = async (stage: 'warning' | 'suspension' | 'removal', options?: Parameters<typeof customFetch>[1]): Promise<InactiveUser[]> => {
+
+  return customFetch<InactiveUser[]>(getListInactiveUsersUrl(stage),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInactiveUsersQueryKey = (stage: 'warning' | 'suspension' | 'removal',) => {
+    return [
+    `/api/admin/inactivity/${stage}`
+    ] as const;
+    }
+
+
+export const getListInactiveUsersQueryOptions = <TData = Awaited<ReturnType<typeof listInactiveUsers>>, TError = ErrorType<unknown>>(stage: 'warning' | 'suspension' | 'removal', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInactiveUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInactiveUsersQueryKey(stage);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInactiveUsers>>> = ({ signal }) => listInactiveUsers(stage, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: stage !== null && stage !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInactiveUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInactiveUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listInactiveUsers>>>
+export type ListInactiveUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List accounts eligible for an inactivity stage
+ */
+
+export function useListInactiveUsers<TData = Awaited<ReturnType<typeof listInactiveUsers>>, TError = ErrorType<unknown>>(
+ stage: 'warning' | 'suspension' | 'removal', options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInactiveUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInactiveUsersQueryOptions(stage,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendInactivityNoticeUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/inactivity/${userId}/send`
+}
+
+/**
+ * @summary Send an inactivity notice and apply its lifecycle transition
+ */
+export const sendInactivityNotice = async (userId: string,
+    inactivityNoticeInput: InactivityNoticeInput, options?: Parameters<typeof customFetch>[1]): Promise<InactiveUser> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<InactiveUser>(getSendInactivityNoticeUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(inactivityNoticeInput)
+  }
+);}
+
+
+
+
+
+export const getSendInactivityNoticeMutationKey = () => ['sendInactivityNotice'] as const;
+
+export const getSendInactivityNoticeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInactivityNotice>>, TError,SendInactivityNoticeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendInactivityNotice>>, TError,SendInactivityNoticeMutationVariables, TContext> => {
+
+const mutationKey = getSendInactivityNoticeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendInactivityNotice>>, SendInactivityNoticeMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  sendInactivityNotice(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendInactivityNoticeMutationResult = NonNullable<Awaited<ReturnType<typeof sendInactivityNotice>>>
+    export type SendInactivityNoticeMutationBody = BodyType<InactivityNoticeInput>
+    export type SendInactivityNoticeMutationError = ErrorType<unknown>
+    export type SendInactivityNoticeMutationVariables = {userId: string;data: BodyType<InactivityNoticeInput>}
+
+    /**
+ * @summary Send an inactivity notice and apply its lifecycle transition
+ */
+export const useSendInactivityNotice = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInactivityNotice>>, TError,SendInactivityNoticeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendInactivityNotice>>,
+        TError,
+        SendInactivityNoticeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendInactivityNoticeMutationOptions(options));
+    }
+
+export const getRemoveInactiveUserUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/inactivity/${userId}/remove`
+}
+
+/**
+ * @summary Soft-delete an account after the inactivity grace period
+ */
+export const removeInactiveUser = async (userId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRemoveInactiveUserUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveInactiveUserMutationKey = () => ['removeInactiveUser'] as const;
+
+export const getRemoveInactiveUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeInactiveUser>>, TError,RemoveInactiveUserMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeInactiveUser>>, TError,RemoveInactiveUserMutationVariables, TContext> => {
+
+const mutationKey = getRemoveInactiveUserMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeInactiveUser>>, RemoveInactiveUserMutationVariables> = (props) => {
+          const {userId} = props ?? {};
+
+          return  removeInactiveUser(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveInactiveUserMutationResult = NonNullable<Awaited<ReturnType<typeof removeInactiveUser>>>
+
+    export type RemoveInactiveUserMutationError = ErrorType<unknown>
+    export type RemoveInactiveUserMutationVariables = {userId: string}
+
+    /**
+ * @summary Soft-delete an account after the inactivity grace period
+ */
+export const useRemoveInactiveUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeInactiveUser>>, TError,RemoveInactiveUserMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeInactiveUser>>,
+        TError,
+        RemoveInactiveUserMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRemoveInactiveUserMutationOptions(options));
+    }
+
+export const getListEmailTemplatesUrl = () => {
+
+
+
+
+  return `/api/admin/email-templates`
+}
+
+/**
+ * @summary List inactivity email templates
+ */
+export const listEmailTemplates = async ( options?: Parameters<typeof customFetch>[1]): Promise<EmailTemplate[]> => {
+
+  return customFetch<EmailTemplate[]>(getListEmailTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEmailTemplatesQueryKey = () => {
+    return [
+    `/api/admin/email-templates`
+    ] as const;
+    }
+
+
+export const getListEmailTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listEmailTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEmailTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEmailTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEmailTemplates>>> = ({ signal }) => listEmailTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEmailTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEmailTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listEmailTemplates>>>
+export type ListEmailTemplatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List inactivity email templates
+ */
+
+export function useListEmailTemplates<TData = Awaited<ReturnType<typeof listEmailTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEmailTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEmailTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateEmailTemplateUrl = () => {
+
+
+
+
+  return `/api/admin/email-templates`
+}
+
+/**
+ * @summary Create an inactivity email template
+ */
+export const createEmailTemplate = async (emailTemplateInput: EmailTemplateInput, options?: Parameters<typeof customFetch>[1]): Promise<EmailTemplate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<EmailTemplate>(getCreateEmailTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(emailTemplateInput)
+  }
+);}
+
+
+
+
+
+export const getCreateEmailTemplateMutationKey = () => ['createEmailTemplate'] as const;
+
+export const getCreateEmailTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEmailTemplate>>, TError,CreateEmailTemplateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEmailTemplate>>, TError,CreateEmailTemplateMutationVariables, TContext> => {
+
+const mutationKey = getCreateEmailTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEmailTemplate>>, CreateEmailTemplateMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEmailTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEmailTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof createEmailTemplate>>>
+    export type CreateEmailTemplateMutationBody = BodyType<EmailTemplateInput>
+    export type CreateEmailTemplateMutationError = ErrorType<unknown>
+    export type CreateEmailTemplateMutationVariables = {data: BodyType<EmailTemplateInput>}
+
+    /**
+ * @summary Create an inactivity email template
+ */
+export const useCreateEmailTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEmailTemplate>>, TError,CreateEmailTemplateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEmailTemplate>>,
+        TError,
+        CreateEmailTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateEmailTemplateMutationOptions(options));
+    }
+
+export const getUpdateEmailTemplateUrl = (templateId: string,) => {
+
+
+
+
+  return `/api/admin/email-templates/${templateId}`
+}
+
+/**
+ * @summary Update an inactivity email template
+ */
+export const updateEmailTemplate = async (templateId: string,
+    emailTemplateInput: EmailTemplateInput, options?: Parameters<typeof customFetch>[1]): Promise<EmailTemplate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<EmailTemplate>(getUpdateEmailTemplateUrl(templateId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(emailTemplateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateEmailTemplateMutationKey = () => ['updateEmailTemplate'] as const;
+
+export const getUpdateEmailTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmailTemplate>>, TError,UpdateEmailTemplateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEmailTemplate>>, TError,UpdateEmailTemplateMutationVariables, TContext> => {
+
+const mutationKey = getUpdateEmailTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEmailTemplate>>, UpdateEmailTemplateMutationVariables> = (props) => {
+          const {templateId,data} = props ?? {};
+
+          return  updateEmailTemplate(templateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEmailTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateEmailTemplate>>>
+    export type UpdateEmailTemplateMutationBody = BodyType<EmailTemplateInput>
+    export type UpdateEmailTemplateMutationError = ErrorType<unknown>
+    export type UpdateEmailTemplateMutationVariables = {templateId: string;data: BodyType<EmailTemplateInput>}
+
+    /**
+ * @summary Update an inactivity email template
+ */
+export const useUpdateEmailTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmailTemplate>>, TError,UpdateEmailTemplateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEmailTemplate>>,
+        TError,
+        UpdateEmailTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateEmailTemplateMutationOptions(options));
+    }
+
+export const getDeleteEmailTemplateUrl = (templateId: string,) => {
+
+
+
+
+  return `/api/admin/email-templates/${templateId}`
+}
+
+/**
+ * @summary Delete an inactivity email template
+ */
+export const deleteEmailTemplate = async (templateId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteEmailTemplateUrl(templateId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteEmailTemplateMutationKey = () => ['deleteEmailTemplate'] as const;
+
+export const getDeleteEmailTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEmailTemplate>>, TError,DeleteEmailTemplateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEmailTemplate>>, TError,DeleteEmailTemplateMutationVariables, TContext> => {
+
+const mutationKey = getDeleteEmailTemplateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEmailTemplate>>, DeleteEmailTemplateMutationVariables> = (props) => {
+          const {templateId} = props ?? {};
+
+          return  deleteEmailTemplate(templateId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEmailTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEmailTemplate>>>
+
+    export type DeleteEmailTemplateMutationError = ErrorType<unknown>
+    export type DeleteEmailTemplateMutationVariables = {templateId: string}
+
+    /**
+ * @summary Delete an inactivity email template
+ */
+export const useDeleteEmailTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEmailTemplate>>, TError,DeleteEmailTemplateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEmailTemplate>>,
+        TError,
+        DeleteEmailTemplateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteEmailTemplateMutationOptions(options));
+    }
 
 export const getUpdateAdminUserStatusUrl = (userId: string,) => {
 

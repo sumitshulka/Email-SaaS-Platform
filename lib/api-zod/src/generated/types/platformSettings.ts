@@ -71,6 +71,21 @@ export interface PlatformSettings {
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsPackageVisibility;
+  /**
+     * @minimum 1
+     * @maximum 36
+     */
+  inactiveUserMonths: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityWarningDays: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityRemovalDays: number;
   /** @nullable */
   updatedAt: Date | null;
   /**

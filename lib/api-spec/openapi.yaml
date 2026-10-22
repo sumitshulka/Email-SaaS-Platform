@@ -3382,6 +3382,117 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserPage"
+  /admin/inactivity/{stage}:
+    get:
+      operationId: listInactiveUsers
+      tags: [admin]
+      summary: List accounts eligible for an inactivity stage
+      parameters:
+        - name: stage
+          in: path
+          required: true
+          schema: { type: string, enum: [warning, suspension, removal] }
+      responses:
+        "200":
+          description: Accounts eligible for the selected stage
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InactiveUser" }
+  /admin/inactivity/{userId}/send:
+    post:
+      operationId: sendInactivityNotice
+      tags: [admin]
+      summary: Send an inactivity notice and apply its lifecycle transition
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InactivityNoticeInput" }
+      responses:
+        "200":
+          description: Notice sent and lifecycle transition recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InactiveUser" }
+  /admin/inactivity/{userId}/remove:
+    post:
+      operationId: removeInactiveUser
+      tags: [admin]
+      summary: Soft-delete an account after the inactivity grace period
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Account soft-deleted }
+  /admin/email-templates:
+    get:
+      operationId: listEmailTemplates
+      tags: [admin]
+      summary: List inactivity email templates
+      responses:
+        "200":
+          description: Email templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EmailTemplate" }
+    post:
+      operationId: createEmailTemplate
+      tags: [admin]
+      summary: Create an inactivity email template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailTemplateInput" }
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplate" }
+  /admin/email-templates/{templateId}:
+    patch:
+      operationId: updateEmailTemplate
+      tags: [admin]
+      summary: Update an inactivity email template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailTemplateInput" }
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailTemplate" }
+    delete:
+      operationId: deleteEmailTemplate
+      tags: [admin]
+      summary: Delete an inactivity email template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Template deleted }
   /admin/users/{userId}/status:
     patch:
       operationId: updateAdminUserStatus
@@ -6273,6 +6384,45 @@ components:
         primaryEndsAt: { type: ["string", "null"], format: date-time }
         addOnGiftEligibility: { type: string, enum: [eligible, free, expired, inactive, missing] }
       required: [id, username, firstName, lastName, email, emailVerified, active, createdAt, lastLoginAt, subscriptionStatus, primaryPackageName, primaryPackageAmountMinor, primaryPackageCurrency, primaryStartsAt, primaryEndsAt, addOnGiftEligibility]
+    InactiveUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        lastActivityAt: { type: string, format: date-time }
+        inactivityWarningSentAt: { type: ["string", "null"], format: date-time }
+        suspensionEmailSentAt: { type: ["string", "null"], format: date-time }
+        suspendedAt: { type: ["string", "null"], format: date-time }
+        stage: { type: string, enum: [warning, suspension, removal] }
+      required: [id, username, firstName, lastName, email, lastActivityAt, inactivityWarningSentAt, suspensionEmailSentAt, suspendedAt, stage]
+    InactivityNoticeInput:
+      type: object
+      properties:
+        templateId: { type: string, format: uuid }
+        stage: { type: string, enum: [warning, suspension] }
+      required: [templateId, stage]
+    EmailTemplate:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [inactive_warning, suspension_notice] }
+        subject: { type: string }
+        htmlBody: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, kind, subject, htmlBody, createdAt, updatedAt]
+    EmailTemplateInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        kind: { type: string, enum: [inactive_warning, suspension_notice] }
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        htmlBody: { type: string, minLength: 1, maxLength: 100000 }
+      required: [name, kind, subject, htmlBody]
     AdminUserPage:
       type: object
       properties:
@@ -6325,9 +6475,12 @@ components:
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer }
         packageVisibility: { type: string, enum: [public, hidden] }
+        inactiveUserMonths: { type: integer, minimum: 1, maximum: 36 }
+        inactivityWarningDays: { type: integer, minimum: 1, maximum: 365 }
+        inactivityRemovalDays: { type: integer, minimum: 1, maximum: 365 }
         updatedAt: { type: ["string", "null"], format: date-time }
         settingsVersion: { type: string, minLength: 1, maxLength: 128 }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, updatedAt, settingsVersion]
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, inactiveUserMonths, inactivityWarningDays, inactivityRemovalDays, updatedAt, settingsVersion]
     PlatformSettingsInput:
       type: object
       properties:
@@ -6365,8 +6518,11 @@ components:
         allowUserWithoutSubscription: { type: boolean }
         gracePeriodDays: { type: integer, minimum: 0 }
         packageVisibility: { type: string, enum: [public, hidden] }
+        inactiveUserMonths: { type: integer, minimum: 1, maximum: 36 }
+        inactivityWarningDays: { type: integer, minimum: 1, maximum: 365 }
+        inactivityRemovalDays: { type: integer, minimum: 1, maximum: 365 }
         expectedSettingsVersion: { type: string, minLength: 1, maxLength: 128 }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, expectedSettingsVersion]
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, inactiveUserMonths, inactivityWarningDays, inactivityRemovalDays, expectedSettingsVersion]
     BlockedTermPreviewInput:
       type: object
       properties:

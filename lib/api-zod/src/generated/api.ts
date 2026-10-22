@@ -6437,6 +6437,151 @@ export const ListAdminUsersResponse = zod.object({
 
 
 /**
+ * @summary List accounts eligible for an inactivity stage
+ */
+export const ListInactiveUsersParams = zod.object({
+  "stage": zod.enum(['warning', 'suspension', 'removal'])
+})
+
+export const ListInactiveUsersResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "username": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().email(),
+  "lastActivityAt": zod.coerce.date(),
+  "inactivityWarningSentAt": zod.coerce.date().nullable(),
+  "suspensionEmailSentAt": zod.coerce.date().nullable(),
+  "suspendedAt": zod.coerce.date().nullable(),
+  "stage": zod.enum(['warning', 'suspension', 'removal'])
+})
+export const ListInactiveUsersResponse = zod.array(ListInactiveUsersResponseItem)
+
+
+/**
+ * @summary Send an inactivity notice and apply its lifecycle transition
+ */
+export const SendInactivityNoticeParams = zod.object({
+  "userId": zod.coerce.string().uuid()
+})
+
+export const SendInactivityNoticeBody = zod.object({
+  "templateId": zod.string().uuid(),
+  "stage": zod.enum(['warning', 'suspension'])
+})
+
+export const SendInactivityNoticeResponse = zod.object({
+  "id": zod.string().uuid(),
+  "username": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "email": zod.string().email(),
+  "lastActivityAt": zod.coerce.date(),
+  "inactivityWarningSentAt": zod.coerce.date().nullable(),
+  "suspensionEmailSentAt": zod.coerce.date().nullable(),
+  "suspendedAt": zod.coerce.date().nullable(),
+  "stage": zod.enum(['warning', 'suspension', 'removal'])
+})
+
+
+/**
+ * @summary Soft-delete an account after the inactivity grace period
+ */
+export const RemoveInactiveUserParams = zod.object({
+  "userId": zod.coerce.string().uuid()
+})
+
+export const RemoveInactiveUserResponse = zod.void()
+
+
+/**
+ * @summary List inactivity email templates
+ */
+export const ListEmailTemplatesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "kind": zod.enum(['inactive_warning', 'suspension_notice']),
+  "subject": zod.string(),
+  "htmlBody": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEmailTemplatesResponse = zod.array(ListEmailTemplatesResponseItem)
+
+
+/**
+ * @summary Create an inactivity email template
+ */
+export const createEmailTemplateBodyNameMax = 120;
+
+export const createEmailTemplateBodySubjectMax = 200;
+
+export const createEmailTemplateBodyHtmlBodyMax = 100000;
+
+
+
+export const CreateEmailTemplateBody = zod.object({
+  "name": zod.string().min(1).max(createEmailTemplateBodyNameMax),
+  "kind": zod.enum(['inactive_warning', 'suspension_notice']),
+  "subject": zod.string().min(1).max(createEmailTemplateBodySubjectMax),
+  "htmlBody": zod.string().min(1).max(createEmailTemplateBodyHtmlBodyMax)
+})
+
+export const CreateEmailTemplateResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "kind": zod.enum(['inactive_warning', 'suspension_notice']),
+  "subject": zod.string(),
+  "htmlBody": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an inactivity email template
+ */
+export const UpdateEmailTemplateParams = zod.object({
+  "templateId": zod.coerce.string().uuid()
+})
+
+export const updateEmailTemplateBodyNameMax = 120;
+
+export const updateEmailTemplateBodySubjectMax = 200;
+
+export const updateEmailTemplateBodyHtmlBodyMax = 100000;
+
+
+
+export const UpdateEmailTemplateBody = zod.object({
+  "name": zod.string().min(1).max(updateEmailTemplateBodyNameMax),
+  "kind": zod.enum(['inactive_warning', 'suspension_notice']),
+  "subject": zod.string().min(1).max(updateEmailTemplateBodySubjectMax),
+  "htmlBody": zod.string().min(1).max(updateEmailTemplateBodyHtmlBodyMax)
+})
+
+export const UpdateEmailTemplateResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "kind": zod.enum(['inactive_warning', 'suspension_notice']),
+  "subject": zod.string(),
+  "htmlBody": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an inactivity email template
+ */
+export const DeleteEmailTemplateParams = zod.object({
+  "templateId": zod.coerce.string().uuid()
+})
+
+export const DeleteEmailTemplateResponse = zod.void()
+
+
+/**
  * @summary Activate or deactivate a tenant account
  */
 export const UpdateAdminUserStatusParams = zod.object({
@@ -6506,6 +6651,12 @@ export const getAdminSettingsResponseProhibitedEmailKeywordsItemMax = 100;
 
 export const getAdminSettingsResponseProhibitedEmailKeywordsMax = 200;
 
+export const getAdminSettingsResponseInactiveUserMonthsMax = 36;
+
+export const getAdminSettingsResponseInactivityWarningDaysMax = 365;
+
+export const getAdminSettingsResponseInactivityRemovalDaysMax = 365;
+
 export const getAdminSettingsResponseSettingsVersionMax = 128;
 
 
@@ -6545,6 +6696,9 @@ export const GetAdminSettingsResponse = zod.object({
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
+  "inactiveUserMonths": zod.number().int().min(1).max(getAdminSettingsResponseInactiveUserMonthsMax),
+  "inactivityWarningDays": zod.number().int().min(1).max(getAdminSettingsResponseInactivityWarningDaysMax),
+  "inactivityRemovalDays": zod.number().int().min(1).max(getAdminSettingsResponseInactivityRemovalDaysMax),
   "updatedAt": zod.coerce.date().nullable(),
   "settingsVersion": zod.string().min(1).max(getAdminSettingsResponseSettingsVersionMax)
 })
@@ -6610,6 +6764,12 @@ export const updateAdminSettingsBodyProhibitedEmailKeywordsMax = 200;
 
 export const updateAdminSettingsBodyGracePeriodDaysMin = 0;
 
+export const updateAdminSettingsBodyInactiveUserMonthsMax = 36;
+
+export const updateAdminSettingsBodyInactivityWarningDaysMax = 365;
+
+export const updateAdminSettingsBodyInactivityRemovalDaysMax = 365;
+
 export const updateAdminSettingsBodyExpectedSettingsVersionMax = 128;
 
 
@@ -6649,6 +6809,9 @@ export const UpdateAdminSettingsBody = zod.object({
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int().min(updateAdminSettingsBodyGracePeriodDaysMin),
   "packageVisibility": zod.enum(['public', 'hidden']),
+  "inactiveUserMonths": zod.number().int().min(1).max(updateAdminSettingsBodyInactiveUserMonthsMax),
+  "inactivityWarningDays": zod.number().int().min(1).max(updateAdminSettingsBodyInactivityWarningDaysMax),
+  "inactivityRemovalDays": zod.number().int().min(1).max(updateAdminSettingsBodyInactivityRemovalDaysMax),
   "expectedSettingsVersion": zod.string().min(1).max(updateAdminSettingsBodyExpectedSettingsVersionMax)
 })
 
@@ -6670,6 +6833,12 @@ export const updateAdminSettingsResponseSignatureVariantMaximumMax = 20;
 export const updateAdminSettingsResponseProhibitedEmailKeywordsItemMax = 100;
 
 export const updateAdminSettingsResponseProhibitedEmailKeywordsMax = 200;
+
+export const updateAdminSettingsResponseInactiveUserMonthsMax = 36;
+
+export const updateAdminSettingsResponseInactivityWarningDaysMax = 365;
+
+export const updateAdminSettingsResponseInactivityRemovalDaysMax = 365;
 
 export const updateAdminSettingsResponseSettingsVersionMax = 128;
 
@@ -6710,6 +6879,9 @@ export const UpdateAdminSettingsResponse = zod.object({
   "allowUserWithoutSubscription": zod.boolean(),
   "gracePeriodDays": zod.number().int(),
   "packageVisibility": zod.enum(['public', 'hidden']),
+  "inactiveUserMonths": zod.number().int().min(1).max(updateAdminSettingsResponseInactiveUserMonthsMax),
+  "inactivityWarningDays": zod.number().int().min(1).max(updateAdminSettingsResponseInactivityWarningDaysMax),
+  "inactivityRemovalDays": zod.number().int().min(1).max(updateAdminSettingsResponseInactivityRemovalDaysMax),
   "updatedAt": zod.coerce.date().nullable(),
   "settingsVersion": zod.string().min(1).max(updateAdminSettingsResponseSettingsVersionMax)
 })

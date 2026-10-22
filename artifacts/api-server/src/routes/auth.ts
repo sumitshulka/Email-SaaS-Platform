@@ -300,7 +300,12 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     );
   const [updatedUser] = await db
     .update(usersTable)
-    .set({ lastLoginAt: now })
+    .set({
+      lastLoginAt: now,
+      inactivityResetAt: now,
+      inactivityWarningSentAt: null,
+      suspensionEmailSentAt: null,
+    })
     .where(eq(usersTable.id, user.id))
     .returning();
   await renewExpiredFreePrimaryPlanOnLogin(updatedUser.id, now);

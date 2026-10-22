@@ -3826,6 +3826,89 @@ export interface AdminDashboard {
   recentUsers: AdminUser[];
 }
 
+export type InactiveUserStage = typeof InactiveUserStage[keyof typeof InactiveUserStage];
+
+
+export const InactiveUserStage = {
+  warning: 'warning',
+  suspension: 'suspension',
+  removal: 'removal',
+} as const;
+
+export interface InactiveUser {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  lastActivityAt: string;
+  /** @nullable */
+  inactivityWarningSentAt: string | null;
+  /** @nullable */
+  suspensionEmailSentAt: string | null;
+  /** @nullable */
+  suspendedAt: string | null;
+  stage: InactiveUserStage;
+}
+
+export type InactivityNoticeInputStage = typeof InactivityNoticeInputStage[keyof typeof InactivityNoticeInputStage];
+
+
+export const InactivityNoticeInputStage = {
+  warning: 'warning',
+  suspension: 'suspension',
+} as const;
+
+export interface InactivityNoticeInput {
+  templateId: string;
+  stage: InactivityNoticeInputStage;
+}
+
+export type EmailTemplateKind = typeof EmailTemplateKind[keyof typeof EmailTemplateKind];
+
+
+export const EmailTemplateKind = {
+  inactive_warning: 'inactive_warning',
+  suspension_notice: 'suspension_notice',
+} as const;
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  kind: EmailTemplateKind;
+  subject: string;
+  htmlBody: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EmailTemplateInputKind = typeof EmailTemplateInputKind[keyof typeof EmailTemplateInputKind];
+
+
+export const EmailTemplateInputKind = {
+  inactive_warning: 'inactive_warning',
+  suspension_notice: 'suspension_notice',
+} as const;
+
+export interface EmailTemplateInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  kind: EmailTemplateInputKind;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 100000
+     */
+  htmlBody: string;
+}
+
 export interface AdminUserPage {
   items: AdminUser[];
   total: number;
@@ -3909,6 +3992,21 @@ export interface PlatformSettings {
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsPackageVisibility;
+  /**
+     * @minimum 1
+     * @maximum 36
+     */
+  inactiveUserMonths: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityWarningDays: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityRemovalDays: number;
   /** @nullable */
   updatedAt: string | null;
   /**
@@ -4044,6 +4142,21 @@ export interface PlatformSettingsInput {
   /** @minimum 0 */
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsInputPackageVisibility;
+  /**
+     * @minimum 1
+     * @maximum 36
+     */
+  inactiveUserMonths: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityWarningDays: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityRemovalDays: number;
   /**
      * @minLength 1
      * @maxLength 128

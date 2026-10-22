@@ -126,6 +126,21 @@ export interface PlatformSettingsInput {
   gracePeriodDays: number;
   packageVisibility: PlatformSettingsInputPackageVisibility;
   /**
+     * @minimum 1
+     * @maximum 36
+     */
+  inactiveUserMonths: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityWarningDays: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  inactivityRemovalDays: number;
+  /**
      * @minLength 1
      * @maxLength 128
      */
