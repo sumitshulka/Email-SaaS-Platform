@@ -65,6 +65,9 @@ router.post("/company-intelligence/:globalCompanyId/research", researchRole, asy
   const parsed = StartCompanyResearchBody.safeParse(req.body);
   if (!params.success || !parsed.success || parsed.data.confirmed !== true) { res.status(400).json({ error: "Explicitly confirm research for this global company." }); return; }
   const superadmin = req.authUser?.role === "SUPERADMIN";
+  if (!superadmin && parsed.data.scope !== "full") {
+    res.status(403).json({ error: "Focused section research is available to platform administrators only." }); return;
+  }
   const [settings, provider] = await Promise.all([getResearchSettings(), getAIProviderConfigurationStatus()]);
   if (!provider.provider || !provider.selectedModel || !await getStoredAIProviderApiKey(provider.provider)) { res.status(503).json({ error: "A superadmin must configure an AI provider and model before research is available.", code: "RESEARCH_UNAVAILABLE" }); return; }
   const depth = parsed.data.depth ?? 1;
@@ -73,7 +76,7 @@ router.post("/company-intelligence/:globalCompanyId/research", researchRole, asy
     globalCompanyId: params.data.globalCompanyId, userId: req.authUser!.id,
     ...(superadmin ? {} : { tenantUserId: req.authUser!.id }),
     settings, depth, provider: provider.provider, selectedModel: provider.selectedModel,
-    overrideFresh: parsed.data.overrideFresh ?? false, ipAddress: req.ip,
+    overrideFresh: parsed.data.overrideFresh ?? false, scope: parsed.data.scope, ipAddress: req.ip,
   });
   if (result.kind === "missing") { res.status(404).json({ error: "Global company not found. Private companies are not researched or shared by this endpoint." }); return; }
   if (result.kind === "active") { res.status(409).json({ error: "Research is already in progress for this company.", code: "RESEARCH_IN_PROGRESS" }); return; }

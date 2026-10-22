@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CompanyResearchInputScope } from './companyResearchInputScope';
 
 export interface CompanyResearchInput {
   confirmed: true;
@@ -14,4 +15,5 @@ export interface CompanyResearchInput {
      * @maximum 3
      */
   depth?: number;
+  scope?: CompanyResearchInputScope;
 }

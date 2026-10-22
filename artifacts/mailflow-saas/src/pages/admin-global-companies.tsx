@@ -180,7 +180,7 @@ export function AdminGlobalCompaniesPage() {
           <DialogDescription className="text-[12px] text-[#526071]">Stored company intelligence, sources and research history.</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="scroll-company-intelligence">
-          <CompanyIntelligencePanel globalCompanyId={intelRecord.id}/>
+          <CompanyIntelligencePanel globalCompanyId={intelRecord.id} adminMode/>
         </div>
         <DialogFooter className="shrink-0 border-t border-[#dfe5ec] pt-3">
           <DialogClose asChild><button type="button" data-testid="button-close-intelligence" aria-label="Close intelligence" className="min-h-10 rounded-md border border-[#d4dce6] bg-white px-5 text-[13px] font-semibold text-[#27384c] hover:bg-[#edf3fa]">Close</button></DialogClose>

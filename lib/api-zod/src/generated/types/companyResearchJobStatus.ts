@@ -5,11 +5,13 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CompanyResearchJobStatusScope } from './companyResearchJobStatusScope';
 import type { CompanyResearchJobStatusStatus } from './companyResearchJobStatusStatus';
 
 export interface CompanyResearchJobStatus {
   id: string;
   status: CompanyResearchJobStatusStatus;
+  scope: CompanyResearchJobStatusScope;
   stage: string;
   createdAt: Date;
   /** @nullable */

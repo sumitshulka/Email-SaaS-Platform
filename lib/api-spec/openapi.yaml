@@ -4833,6 +4833,7 @@ components:
         confirmed: { type: boolean, enum: [true] }
         overrideFresh: { type: boolean, default: false }
         depth: { type: integer, minimum: 1, maximum: 3, default: 1 }
+        scope: { type: string, enum: [full, sales_intelligence, competitors], default: full }
       required: [confirmed]
     IntelligenceSourceType:
       type: string
@@ -4870,12 +4871,13 @@ components:
       properties:
         id: { type: string, format: uuid }
         status: { type: string, enum: [queued, running, completed, failed, cancelled] }
+        scope: { type: string, enum: [full, sales_intelligence, competitors] }
         stage: { type: string }
         createdAt: { type: string, format: date-time }
         startedAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
         error: { type: ["string", "null"] }
-      required: [id, status, stage, createdAt, startedAt, completedAt, error]
+      required: [id, status, scope, stage, createdAt, startedAt, completedAt, error]
     IntelligenceSource:
       type: object
       properties:

@@ -3,15 +3,77 @@ import { addOnEntitlementsTable, auditLogsTable, companyIntelligenceTable, compa
 import { contactIntentAnalysesTable } from "@workspace/db/schema";
 import { getAIProviderConfigurationStatus, getStoredAIProviderApiKey } from "./ai-provider-configuration";
 import type { AIProviderId } from "./ai-provider-client";
-import { intelligenceProfileSchema, researchFreshness, validateIntelligence } from "./company-intelligence-schema";
+import { intelligenceProfileSchema, researchFreshness, validateIntelligence, type IntelligenceProfile } from "./company-intelligence-schema";
 import { estimateResearchCost, getResearchSettings, parseResearchSettings, type ResearchSettings } from "./company-research-settings";
 import { collectCompanyEvidence } from "./company-research-sources";
-import { analysisPrompt, discoveryPrompt, researchProviderRequest, ResearchProviderError, type ResearchUsage } from "./company-research-provider";
+import { analysisPrompt, discoveryPrompt, researchProviderRequest, ResearchProviderError, type CompanyResearchScope, type ResearchUsage } from "./company-research-provider";
 import { logger } from "./logger";
 import { prorateAddOnAllowance } from "./add-on-entitlements";
 
 export function presentResearchJob(job: CompanyResearchJob) {
-  return { id: job.id, status: job.status, stage: job.stage, createdAt: job.createdAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null, completedAt: job.completedAt?.toISOString() ?? null, error: job.error };
+  return { id: job.id, status: job.status, scope: researchScope(job.settings), stage: job.stage, createdAt: job.createdAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null, completedAt: job.completedAt?.toISOString() ?? null, error: job.error };
+}
+
+function researchScope(value: unknown): CompanyResearchScope {
+  if (!value || typeof value !== "object") return "full";
+  const scope = (value as { researchScope?: unknown }).researchScope;
+  return scope === "sales_intelligence" || scope === "competitors" ? scope : "full";
+}
+
+function rewriteSourceReferences(value: unknown, ids: Map<string, string>): unknown {
+  if (Array.isArray(value)) return value.map(item => rewriteSourceReferences(item, ids));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+    key,
+    key === "source_ids" && Array.isArray(child)
+      ? child.map(id => typeof id === "string" ? ids.get(id) ?? id : id)
+      : rewriteSourceReferences(child, ids),
+  ]));
+}
+
+function mergeScopedProfile(current: unknown, refreshed: IntelligenceProfile, scope: CompanyResearchScope): IntelligenceProfile {
+  if (scope === "full" || !current) return refreshed;
+  const existing = intelligenceProfileSchema.parse(current);
+  const usedIds = new Set(existing.sources.map(source => source.source_id));
+  const existingByUrl = new Map(existing.sources.map(source => [source.url, source.source_id]));
+  let nextId = 1;
+  const allocateId = () => {
+    while (usedIds.has(`SRC-${String(nextId).padStart(3, "0")}`)) nextId += 1;
+    const id = `SRC-${String(nextId++).padStart(3, "0")}`;
+    usedIds.add(id);
+    return id;
+  };
+  const remappedIds = new Map<string, string>();
+  const freshSources = refreshed.sources.map(source => {
+    const reused = existingByUrl.get(source.url);
+    const id = reused ?? (usedIds.has(source.source_id) ? allocateId() : source.source_id);
+    usedIds.add(id);
+    remappedIds.set(source.source_id, id);
+    return { ...source, source_id: id };
+  });
+  const fresh = rewriteSourceReferences(refreshed, remappedIds) as IntelligenceProfile;
+  const merged = {
+    ...existing,
+    ...(scope === "sales_intelligence" ? { sales_intelligence: fresh.sales_intelligence } : {}),
+    ...(scope === "competitors" ? { competitors: fresh.competitors } : {}),
+    sources: [...existing.sources, ...freshSources.filter(source => !existingByUrl.has(source.url))],
+    conflicts: [...existing.conflicts, ...fresh.conflicts].slice(-15),
+  };
+  const referencedIds = new Set<string>();
+  const collectReferences = (value: unknown) => {
+    if (Array.isArray(value)) { value.forEach(collectReferences); return; }
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "source_ids" && Array.isArray(child)) {
+        child.forEach(id => { if (typeof id === "string") referencedIds.add(id); });
+      } else collectReferences(child);
+    }
+  };
+  collectReferences(merged);
+  return intelligenceProfileSchema.parse({
+    ...merged,
+    sources: merged.sources.filter(source => referencedIds.has(source.source_id)),
+  });
 }
 
 type VersionMetadata = Omit<CompanyIntelligence, "profile" | "jobId" | "globalCompanyId"> & { profile?: unknown };
@@ -141,7 +203,7 @@ export async function readCompanyIntelligence(companyId: string) {
 
 export async function enqueueCompanyResearch(input: {
   globalCompanyId: string; userId: string | null; tenantUserId?: string; provider: AIProviderId; selectedModel: string;
-  settings: ResearchSettings; depth: number; overrideFresh: boolean; ipAddress?: string;
+  settings: ResearchSettings; depth: number; overrideFresh: boolean; scope?: CompanyResearchScope; ipAddress?: string;
 }) {
   return db.transaction(async tx => {
     const [company] = await tx.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable).where(eq(globalCompaniesTable.id, input.globalCompanyId)).for("update");
@@ -226,7 +288,7 @@ export async function enqueueCompanyResearch(input: {
     }
     const [job] = await tx.insert(companyResearchJobsTable).values({
       globalCompanyId: company.id, requestedBy: input.userId, status: "queued", stage: "queued", depth: input.depth,
-      creditCost: input.settings.researchCreditCost, settings: input.settings, provider: input.provider, model: input.settings.preferredModel ?? input.selectedModel,
+      creditCost: input.settings.researchCreditCost, settings: { ...input.settings, researchScope: input.scope ?? "full" }, provider: input.provider, model: input.settings.preferredModel ?? input.selectedModel,
     }).returning();
     await tx.insert(auditLogsTable).values({
       actorId: input.userId, action: "company_intelligence.research_requested", entity: "global_company", entityId: company.id,
@@ -249,6 +311,7 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
   const requestProvider = dependencies.requestProvider ?? researchProviderRequest;
   const collectEvidence = dependencies.collectEvidence ?? collectCompanyEvidence;
   const settings = parseResearchSettings(job.settings);
+  const scope = researchScope(job.settings);
   const usage: ResearchUsage = { inputTokens: 0, outputTokens: 0, webSearchCount: 0 };
   let model = job.model;
   const addUsage = (next: ResearchUsage) => {
@@ -267,7 +330,7 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
     await saveProgress("discovering_sources");
     // Only public company master fields are sent. No tenant contacts or associations are queried.
     const master = { companyName: company.companyName, website: company.companyWebsiteUrl, domain: company.companyDomain, industry: company.companyIndustry, location: company.companyLocation, description: company.companyDescription };
-    const discovery = await requestProvider({ provider, model, apiKey, prompt: discoveryPrompt(master, settings), search: true, maxWebSearches: settings.maxWebSearches });
+    const discovery = await requestProvider({ provider, model, apiKey, prompt: discoveryPrompt(master, settings, scope), search: true, maxWebSearches: settings.maxWebSearches });
     addUsage(discovery.usage);
     await saveProgress("collecting_evidence");
     const evidence = await collectEvidence({ officialUrl: officialWebsite(company), candidates: discovery.candidates, allowedSourceTypes: settings.allowedSourceTypes, maxPages: job.depth === 3 ? 12 : job.depth === 2 ? 8 : 4 });
@@ -279,7 +342,7 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
     for (const candidateModel of [...new Set([job.model, settings.backupModel].filter((item): item is string => Boolean(item)))]) {
       model = candidateModel;
       try {
-        const analysis = await requestProvider({ provider, model, apiKey, prompt: analysisPrompt(evidence, now, master), search: false, maxWebSearches: 0 });
+        const analysis = await requestProvider({ provider, model, apiKey, prompt: analysisPrompt(evidence, now, master, scope), search: false, maxWebSearches: 0 });
         addUsage(analysis.usage);
         await saveProgress("validating", evidence.length);
         const raw = analysis.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -300,11 +363,11 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
       const [exists] = await tx.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable).where(eq(globalCompaniesTable.id, job.globalCompanyId)).for("update");
       const [active] = await tx.select({ id: companyResearchJobsTable.id }).from(companyResearchJobsTable).where(and(eq(companyResearchJobsTable.id, job.id), eq(companyResearchJobsTable.status, "running"))).for("update");
       if (!exists || !active) return;
-      const [latest] = await tx.select({ version: companyIntelligenceTable.version }).from(companyIntelligenceTable).where(eq(companyIntelligenceTable.globalCompanyId, job.globalCompanyId)).orderBy(desc(companyIntelligenceTable.version)).limit(1);
+       const [latest] = await tx.select({ version: companyIntelligenceTable.version, profile: companyIntelligenceTable.profile }).from(companyIntelligenceTable).where(eq(companyIntelligenceTable.globalCompanyId, job.globalCompanyId)).orderBy(desc(companyIntelligenceTable.version)).limit(1);
       const completedAt = new Date();
       await tx.insert(companyIntelligenceTable).values({
         globalCompanyId: job.globalCompanyId, jobId: job.id, version: (latest?.version ?? 0) + 1, schemaVersion: "1.0",
-        profile, provider, model, confidence: confidence.toFixed(4), sourceCount: evidence.length, researchedAt: completedAt,
+         profile: mergeScopedProfile(latest?.profile, profile!, scope), provider, model, confidence: confidence.toFixed(4), sourceCount: evidence.length, researchedAt: completedAt,
         validUntil: new Date(completedAt.getTime() + settings.freshDays * 86_400_000),
       });
       const cost = model === job.model ? estimateResearchCost(usage, settings) : { usd: null, inr: null };

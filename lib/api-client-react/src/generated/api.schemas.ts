@@ -1122,6 +1122,15 @@ export interface GlobalCompany {
   researchSummary?: CompanyResearchSummary;
 }
 
+export type CompanyResearchInputScope = typeof CompanyResearchInputScope[keyof typeof CompanyResearchInputScope];
+
+
+export const CompanyResearchInputScope = {
+  full: 'full',
+  sales_intelligence: 'sales_intelligence',
+  competitors: 'competitors',
+} as const;
+
 export interface CompanyResearchInput {
   confirmed: true;
   overrideFresh?: boolean;
@@ -1130,6 +1139,7 @@ export interface CompanyResearchInput {
      * @maximum 3
      */
   depth?: number;
+  scope?: CompanyResearchInputScope;
 }
 
 export type IntelligenceSourceType = typeof IntelligenceSourceType[keyof typeof IntelligenceSourceType];
@@ -1222,9 +1232,19 @@ export const CompanyResearchJobStatusStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type CompanyResearchJobStatusScope = typeof CompanyResearchJobStatusScope[keyof typeof CompanyResearchJobStatusScope];
+
+
+export const CompanyResearchJobStatusScope = {
+  full: 'full',
+  sales_intelligence: 'sales_intelligence',
+  competitors: 'competitors',
+} as const;
+
 export interface CompanyResearchJobStatus {
   id: string;
   status: CompanyResearchJobStatusStatus;
+  scope: CompanyResearchJobStatusScope;
   stage: string;
   createdAt: string;
   /** @nullable */

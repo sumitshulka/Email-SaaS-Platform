@@ -45,7 +45,7 @@ export const intelligenceProfileSchema = z.object({
   competitors: z.array(z.object({ name: text.min(1), category: text, relationship: z.enum(["direct", "indirect", "adjacent"]), confidence, source_ids: ids }).strict()).max(10),
   fact_sources: z.array(z.object({ path: z.string().min(1).max(200), confidence, source_ids: ids }).strict()).max(150),
   conflicts: z.array(claim).max(15),
-  sources: z.array(intelligenceSourceSchema).min(1).max(20),
+  sources: z.array(intelligenceSourceSchema).min(1).max(40),
 }).strict();
 
 export type IntelligenceProfile = z.infer<typeof intelligenceProfileSchema>;

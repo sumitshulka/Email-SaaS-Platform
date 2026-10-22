@@ -60,7 +60,7 @@ export function AdminGlobalCompanyDetailPage() {
       <div className="mt-5"><h3 className="text-[10px] font-semibold text-[#819088]">Description</h3><p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-6 text-[#29443b]">{company.companyDescription || '—'}</p></div>
     </section>
     <section className="mt-5">
-      <CompanyIntelligencePanel globalCompanyId={company.id}/>
+      <CompanyIntelligencePanel globalCompanyId={company.id} adminMode/>
     </section>
     {businessAreaLoadError && <p role="status" className="mt-3 text-[11px] text-[#a45335]">Business-area choices could not be loaded: {businessAreaLoadError}. The existing value is preserved.</p>}
     {editing && <GlobalCompanyForm

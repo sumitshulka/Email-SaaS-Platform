@@ -2292,6 +2292,7 @@ export const GetCompanyIntelligenceResponse = zod.object({
   "latestJob": zod.union([zod.object({
   "id": zod.string().uuid(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "scope": zod.enum(['full', 'sales_intelligence', 'competitors']),
   "stage": zod.string(),
   "createdAt": zod.coerce.date(),
   "startedAt": zod.coerce.date().nullable(),
@@ -2334,17 +2335,19 @@ export const startCompanyResearchBodyOverrideFreshDefault = false;
 export const startCompanyResearchBodyDepthDefault = 1;
 export const startCompanyResearchBodyDepthMax = 3;
 
-
+export const startCompanyResearchBodyScopeDefault = `full`;
 
 export const StartCompanyResearchBody = zod.object({
   "confirmed": zod.literal(true),
   "overrideFresh": zod.boolean().default(startCompanyResearchBodyOverrideFreshDefault),
-  "depth": zod.number().int().min(1).max(startCompanyResearchBodyDepthMax).default(startCompanyResearchBodyDepthDefault)
+  "depth": zod.number().int().min(1).max(startCompanyResearchBodyDepthMax).default(startCompanyResearchBodyDepthDefault),
+  "scope": zod.enum(['full', 'sales_intelligence', 'competitors']).default(startCompanyResearchBodyScopeDefault)
 })
 
 export const StartCompanyResearchResponse = zod.object({
   "id": zod.string().uuid(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "scope": zod.enum(['full', 'sales_intelligence', 'competitors']),
   "stage": zod.string(),
   "createdAt": zod.coerce.date(),
   "startedAt": zod.coerce.date().nullable(),
@@ -2696,6 +2699,7 @@ export const GetCompanyResearchUsageResponse = zod.object({
   "jobs": zod.array(zod.object({
   "id": zod.string().uuid(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "scope": zod.enum(['full', 'sales_intelligence', 'competitors']),
   "stage": zod.string(),
   "createdAt": zod.coerce.date(),
   "startedAt": zod.coerce.date().nullable(),
