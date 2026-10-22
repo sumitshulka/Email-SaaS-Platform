@@ -377,7 +377,6 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Accounts & intelligence',
     items: [
       { href: '/admin/users', label: 'Accounts', icon: Users },
-      { href: '/admin/email-templates', label: 'Email templates', icon: Send },
       { href: '/admin/global-companies', label: 'Global companies', icon: Building2 },
       { href: '/admin/company-intelligence', label: 'Company intelligence', icon: BrainCircuit },
     ],
@@ -394,6 +393,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Notifications & support',
     items: [
       { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { href: '/admin/email-templates', label: 'Email templates', icon: Send },
       { href: '/admin/support', label: 'Support inbox', icon: LifeBuoy },
     ],
   },
