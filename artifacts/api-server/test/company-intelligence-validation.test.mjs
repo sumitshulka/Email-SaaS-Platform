@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { validateIntelligence, researchFreshness, evidenceContainsDate } from "../src/lib/company-intelligence-schema.ts";
 import { isPublicResearchAddress, researchUrl, collectCompanyEvidence } from "../src/lib/company-research-sources.ts";
-import { researchProviderRequest } from "../src/lib/company-research-provider.ts";
+import { analysisPrompt, discoveryPrompt, researchProviderRequest } from "../src/lib/company-research-provider.ts";
 import { defaultResearchSettings, estimateResearchCost } from "../src/lib/company-research-settings.ts";
 import { profileFixture, source } from "./fixtures/company-intelligence.mjs";
 
@@ -51,6 +51,28 @@ test("research URLs block private addresses, credentials and nonweb ports", asyn
   assert.equal(isPublicResearchAddress("2606:4700:4700::1111"), true);
   for (const url of ["file:///etc/passwd", "http://localhost", "https://user:pass@example.com", "http://example.com:8080"]) assert.throws(() => researchUrl(url));
   await assert.rejects(collectCompanyEvidence({ officialUrl: "http://127.0.0.1", candidates: [], maxPages: 1, allowedSourceTypes: ["company_website"] }), /No readable evidence/);
+});
+test("competitor research prioritizes third-party evidence and uses targeted market-overlap guidance", async () => {
+  const visited = [];
+  const evidence = await collectCompanyEvidence({
+    officialUrl: "https://clarity.example/",
+    candidates: [{ url: "https://industry.example/benefits-platforms" }, { url: "https://clarity.example/products" }],
+    allowedSourceTypes: ["other", "company_website", "company_product_page"],
+    maxPages: 2,
+    prioritizeExternalCandidates: true,
+  }, {
+    downloadPage: async url => {
+      visited.push(url);
+      return { url, html: `<html><head><title>Market evidence</title></head><body>${"Independent market comparison. ".repeat(10)}</body></html>` };
+    },
+  });
+  assert.deepEqual(visited, ["https://industry.example/benefits-platforms", "https://clarity.example/products"]);
+  assert.equal(evidence[0].source.source_type, "other");
+
+  const settings = { maxWebSearches: 3 };
+  assert.match(discoveryPrompt({ companyName: "Clarity Benefit Solutions" }, settings, "competitors"), /dedicated searches combining the exact company name/);
+  assert.match(discoveryPrompt({ companyName: "Clarity Benefit Solutions" }, settings, "competitors"), /third-party pages ahead of the target company's own pages/);
+  assert.match(analysisPrompt([], "2026-10-22T00:00:00.000Z", { companyName: "Clarity Benefit Solutions" }, "competitors"), /overlapping customers or needs/);
 });
 test("public research collects actual page text rather than a search snippet", { skip: !process.env.RUN_PUBLIC_SOURCE_TESTS }, async () => {
   const evidence = await collectCompanyEvidence({ officialUrl: "https://example.com", candidates: [], maxPages: 1, allowedSourceTypes: ["company_website"] });

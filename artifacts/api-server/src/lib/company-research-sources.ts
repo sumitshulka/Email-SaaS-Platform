@@ -97,14 +97,29 @@ function sourceKind(url: URL, officialDomain: string | null): IntelligenceSource
 }
 
 export async function collectCompanyEvidence(input: {
-  officialUrl: string | null; candidates: SourceCandidate[]; allowedSourceTypes: readonly string[]; maxPages: number;
-}): Promise<ResearchEvidence[]> {
+  officialUrl: string | null; candidates: SourceCandidate[]; allowedSourceTypes: readonly string[]; maxPages: number; prioritizeExternalCandidates?: boolean;
+}, dependencies: { downloadPage?: typeof downloadPage } = {}): Promise<ResearchEvidence[]> {
+  const fetchPage = dependencies.downloadPage ?? downloadPage;
   const evidence: ResearchEvidence[] = [];
   const deadline = Date.now() + 90_000;
-  const queue: SourceCandidate[] = input.officialUrl ? [{ url: input.officialUrl }, ...input.candidates] : [...input.candidates];
+  const officialDomain = input.officialUrl ? researchUrl(input.officialUrl).hostname.toLowerCase().replace(/^www\./, "") : null;
+  const candidates = input.candidates;
+  const isExternalCandidate = (candidate: SourceCandidate) => {
+    if (!officialDomain) return true;
+    try {
+      const host = researchUrl(candidate.url).hostname.toLowerCase().replace(/^www\./, "");
+      return host !== officialDomain && !host.endsWith(`.${officialDomain}`);
+    } catch { return false; }
+  };
+  const queue: SourceCandidate[] = input.prioritizeExternalCandidates
+    ? [
+        ...candidates.filter(isExternalCandidate),
+        ...candidates.filter(candidate => !isExternalCandidate(candidate)),
+        ...(input.officialUrl ? [{ url: input.officialUrl }] : []),
+      ]
+    : input.officialUrl ? [{ url: input.officialUrl }, ...candidates] : [...candidates];
   const attempted = new Set<string>();
   const saved = new Set<string>();
-  const officialDomain = input.officialUrl ? researchUrl(input.officialUrl).hostname.toLowerCase().replace(/^www\./, "") : null;
   for (let index = 0; index < queue.length && evidence.length < input.maxPages && attempted.size < input.maxPages * 2 && Date.now() < deadline; index += 1) {
     const candidate = queue[index]!;
     let canonical: string;
@@ -112,7 +127,7 @@ export async function collectCompanyEvidence(input: {
     if (attempted.has(canonical)) continue;
     attempted.add(canonical);
     try {
-      const page = await downloadPage(canonical, 0, deadline);
+      const page = await fetchPage(canonical, 0, deadline);
       if (saved.has(page.url)) continue;
       const url = new URL(page.url);
       const kind = sourceKind(url, officialDomain);
@@ -130,7 +145,7 @@ export async function collectCompanyEvidence(input: {
       };
       evidence.push({ source, text: text.slice(0, 12_000) });
       saved.add(page.url);
-      if (officialDomain && url.hostname.replace(/^www\./, "") === officialDomain) {
+      if (!input.prioritizeExternalCandidates && officialDomain && url.hostname.replace(/^www\./, "") === officialDomain) {
         const related = [...page.html.matchAll(/href=["']([^"'#]+)["']/gi)].flatMap(match => {
           try {
             const linked = new URL(match[1]!, url);

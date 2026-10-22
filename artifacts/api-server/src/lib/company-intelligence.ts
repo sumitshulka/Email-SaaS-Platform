@@ -333,7 +333,7 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
     const discovery = await requestProvider({ provider, model, apiKey, prompt: discoveryPrompt(master, settings, scope), search: true, maxWebSearches: settings.maxWebSearches });
     addUsage(discovery.usage);
     await saveProgress("collecting_evidence");
-    const evidence = await collectEvidence({ officialUrl: officialWebsite(company), candidates: discovery.candidates, allowedSourceTypes: settings.allowedSourceTypes, maxPages: job.depth === 3 ? 12 : job.depth === 2 ? 8 : 4 });
+    const evidence = await collectEvidence({ officialUrl: officialWebsite(company), candidates: discovery.candidates, allowedSourceTypes: settings.allowedSourceTypes, maxPages: job.depth === 3 ? 12 : job.depth === 2 ? 8 : 4, prioritizeExternalCandidates: scope === "competitors" });
     await saveProgress("analyzing", evidence.length);
     const now = new Date().toISOString();
     let profile;
