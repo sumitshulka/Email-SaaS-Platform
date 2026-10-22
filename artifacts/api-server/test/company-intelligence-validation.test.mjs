@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validateIntelligence, researchFreshness, evidenceContainsDate } from "../src/lib/company-intelligence-schema.ts";
+import { validateFocusedIntelligence, validateIntelligence, researchFreshness, evidenceContainsDate } from "../src/lib/company-intelligence-schema.ts";
 import { isPublicResearchAddress, researchUrl, collectCompanyEvidence } from "../src/lib/company-research-sources.ts";
 import { analysisPrompt, discoveryPrompt, researchProviderRequest } from "../src/lib/company-research-provider.ts";
 import { defaultResearchSettings, estimateResearchCost } from "../src/lib/company-research-settings.ts";
@@ -73,6 +73,15 @@ test("competitor research prioritizes third-party evidence and uses targeted mar
   assert.match(discoveryPrompt({ companyName: "Clarity Benefit Solutions" }, settings, "competitors"), /dedicated searches combining the exact company name/);
   assert.match(discoveryPrompt({ companyName: "Clarity Benefit Solutions" }, settings, "competitors"), /third-party pages ahead of the target company's own pages/);
   assert.match(analysisPrompt([], "2026-10-22T00:00:00.000Z", { companyName: "Clarity Benefit Solutions" }, "competitors"), /overlapping customers or needs/);
+});
+test("focused competitor validation does not require unrelated full-profile fields", () => {
+  const competitor = { name: "Example Benefits", category: "benefits administration", relationship: "direct", confidence: 0.8, source_ids: ["SRC-001"] };
+  assert.deepEqual(
+    validateFocusedIntelligence({ competitors: [competitor] }, [source], "competitors").competitors,
+    [competitor],
+  );
+  assert.throws(() => validateFocusedIntelligence({ competitors: [] }, [source], "competitors"), /At least one sourced competitor/);
+  assert.throws(() => validateFocusedIntelligence({ competitors: [{ ...competitor, source_ids: ["SRC-999"] }] }, [source], "competitors"), /unknown source/);
 });
 test("public research collects actual page text rather than a search snippet", { skip: !process.env.RUN_PUBLIC_SOURCE_TESTS }, async () => {
   const evidence = await collectCompanyEvidence({ officialUrl: "https://example.com", candidates: [], maxPages: 1, allowedSourceTypes: ["company_website"] });

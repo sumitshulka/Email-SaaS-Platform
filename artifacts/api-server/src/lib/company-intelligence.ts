@@ -3,7 +3,7 @@ import { addOnEntitlementsTable, auditLogsTable, companyIntelligenceTable, compa
 import { contactIntentAnalysesTable } from "@workspace/db/schema";
 import { getAIProviderConfigurationStatus, getStoredAIProviderApiKey } from "./ai-provider-configuration";
 import type { AIProviderId } from "./ai-provider-client";
-import { intelligenceProfileSchema, researchFreshness, validateIntelligence, type IntelligenceProfile } from "./company-intelligence-schema";
+import { intelligenceProfileSchema, researchFreshness, validateFocusedIntelligence, validateIntelligence, type FocusedIntelligenceProfile, type IntelligenceProfile } from "./company-intelligence-schema";
 import { estimateResearchCost, getResearchSettings, parseResearchSettings, type ResearchSettings } from "./company-research-settings";
 import { collectCompanyEvidence } from "./company-research-sources";
 import { analysisPrompt, discoveryPrompt, researchProviderRequest, ResearchProviderError, type CompanyResearchScope, type ResearchUsage } from "./company-research-provider";
@@ -31,9 +31,11 @@ function rewriteSourceReferences(value: unknown, ids: Map<string, string>): unkn
   ]));
 }
 
-function mergeScopedProfile(current: unknown, refreshed: IntelligenceProfile, scope: CompanyResearchScope): IntelligenceProfile {
-  if (scope === "full" || !current) return refreshed;
+function mergeScopedProfile(current: unknown, refreshed: IntelligenceProfile | FocusedIntelligenceProfile, scope: CompanyResearchScope): IntelligenceProfile {
+  if (scope === "full") return intelligenceProfileSchema.parse(refreshed);
+  if (!current) throw new Error("Focused research requires an existing company profile.");
   const existing = intelligenceProfileSchema.parse(current);
+  const focused = refreshed as FocusedIntelligenceProfile;
   const usedIds = new Set(existing.sources.map(source => source.source_id));
   const existingByUrl = new Map(existing.sources.map(source => [source.url, source.source_id]));
   let nextId = 1;
@@ -44,20 +46,20 @@ function mergeScopedProfile(current: unknown, refreshed: IntelligenceProfile, sc
     return id;
   };
   const remappedIds = new Map<string, string>();
-  const freshSources = refreshed.sources.map(source => {
+  const freshSources = focused.sources.map(source => {
     const reused = existingByUrl.get(source.url);
     const id = reused ?? (usedIds.has(source.source_id) ? allocateId() : source.source_id);
     usedIds.add(id);
     remappedIds.set(source.source_id, id);
     return { ...source, source_id: id };
   });
-  const fresh = rewriteSourceReferences(refreshed, remappedIds) as IntelligenceProfile;
+  const fresh = rewriteSourceReferences(focused, remappedIds) as FocusedIntelligenceProfile;
   const merged = {
     ...existing,
-    ...(scope === "sales_intelligence" ? { sales_intelligence: fresh.sales_intelligence } : {}),
-    ...(scope === "competitors" ? { competitors: fresh.competitors } : {}),
+    ...(scope === "sales_intelligence" ? { sales_intelligence: (fresh as Extract<FocusedIntelligenceProfile, { sales_intelligence: unknown }>).sales_intelligence } : {}),
+    ...(scope === "competitors" ? { competitors: (fresh as Extract<FocusedIntelligenceProfile, { competitors: unknown }>).competitors } : {}),
     sources: [...existing.sources, ...freshSources.filter(source => !existingByUrl.has(source.url))],
-    conflicts: [...existing.conflicts, ...fresh.conflicts].slice(-15),
+    conflicts: existing.conflicts,
   };
   const referencedIds = new Set<string>();
   const collectReferences = (value: unknown) => {
@@ -211,6 +213,7 @@ export async function enqueueCompanyResearch(input: {
     const [active] = await tx.select({ id: companyResearchJobsTable.id }).from(companyResearchJobsTable).where(and(eq(companyResearchJobsTable.globalCompanyId, company.id), inArray(companyResearchJobsTable.status, ["queued", "running"]))).limit(1);
     if (active) return { kind: "active" as const };
     const [latest] = await tx.select({ researchedAt: companyIntelligenceTable.researchedAt }).from(companyIntelligenceTable).where(eq(companyIntelligenceTable.globalCompanyId, company.id)).orderBy(desc(companyIntelligenceTable.version)).limit(1);
+    if (input.scope && input.scope !== "full" && !latest) return { kind: "profile_required" as const };
     if (latest && researchFreshness(latest.researchedAt, input.settings.freshDays, input.settings.agingDays) === "fresh" && !input.overrideFresh) return { kind: "fresh" as const };
     if (input.tenantUserId) {
       const now = new Date();
@@ -336,7 +339,7 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
     const evidence = await collectEvidence({ officialUrl: officialWebsite(company), candidates: discovery.candidates, allowedSourceTypes: settings.allowedSourceTypes, maxPages: job.depth === 3 ? 12 : job.depth === 2 ? 8 : 4, prioritizeExternalCandidates: scope === "competitors" });
     await saveProgress("analyzing", evidence.length);
     const now = new Date().toISOString();
-    let profile;
+    let profile: IntelligenceProfile | FocusedIntelligenceProfile | undefined;
     let analysisError: unknown;
     // A configured backup reuses collected evidence; it never performs another search.
     for (const candidateModel of [...new Set([job.model, settings.backupModel].filter((item): item is string => Boolean(item)))]) {
@@ -346,17 +349,27 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
         addUsage(analysis.usage);
         await saveProgress("validating", evidence.length);
         const raw = analysis.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-        profile = validateIntelligence(JSON.parse(raw), evidence.map(item => item.source), evidence);
-        profile.current_signals.forEach(signal => {
-          signal.observed_at = now;
-          signal.source_published_date = evidence.find(item => signal.source_ids.includes(item.source.source_id) && item.source.published_date)?.source.published_date ?? null;
-        });
-        profile.opportunity_signals.forEach(opportunity => { opportunity.generated_at = now; });
+        const sourceRecords = evidence.map(item => item.source);
+        if (scope === "full") {
+          const fullProfile = validateIntelligence(JSON.parse(raw), sourceRecords, evidence);
+          fullProfile.current_signals.forEach(signal => {
+            signal.observed_at = now;
+            signal.source_published_date = evidence.find(item => signal.source_ids.includes(item.source.source_id) && item.source.published_date)?.source.published_date ?? null;
+          });
+          fullProfile.opportunity_signals.forEach(opportunity => { opportunity.generated_at = now; });
+          profile = fullProfile;
+        } else {
+          profile = validateFocusedIntelligence(JSON.parse(raw), sourceRecords, scope);
+        }
         break;
       } catch (error) { analysisError = error; await saveProgress("analyzing", evidence.length); }
     }
     if (!profile) throw analysisError ?? new Error("Invalid research");
-    const scores = profile.fact_sources.map(item => item.confidence);
+    const scores = scope === "full"
+      ? (profile as IntelligenceProfile).fact_sources.map(item => item.confidence)
+      : scope === "competitors"
+        ? (profile as Extract<FocusedIntelligenceProfile, { competitors: unknown }>).competitors.map(item => item.confidence)
+        : Object.values((profile as Extract<FocusedIntelligenceProfile, { sales_intelligence: unknown }>).sales_intelligence).flat().map(item => item.confidence);
     const confidence = scores.reduce((total, score) => total + score, 0) / Math.max(1, scores.length);
     await db.transaction(async tx => {
       // Serialize completion with global deletion and any future master operations.
@@ -374,11 +387,16 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
       await tx.update(companyResearchJobsTable).set({ status: "completed", stage: "completed", completedAt, model, ...usage, sourceCount: evidence.length, estimatedCostUsd: cost.usd, estimatedCostInr: cost.inr, error: null }).where(eq(companyResearchJobsTable.id, job.id));
     });
   } catch (error) {
+    const validationPath = error && typeof error === "object" && "issues" in error && Array.isArray(error.issues)
+      ? error.issues.slice(0, 3).map((issue: { path?: unknown[] }) => Array.isArray(issue.path) && issue.path.length ? issue.path.join(".") : "response").join(", ")
+      : "";
     const message = error instanceof ResearchProviderError ? error.message
       : error instanceof Error && error.message.startsWith("No readable evidence") ? error.message
-        : "Research could not be completed because the evidence or JSON failed validation. Existing intelligence has been retained.";
+        : validationPath
+          ? `The research response did not match required fields (${validationPath}). Existing intelligence has been retained; retry the research.`
+          : "Research could not be completed because the evidence or JSON failed validation. Existing intelligence has been retained.";
     await db.update(companyResearchJobsTable).set({ status: "failed", stage: "failed", completedAt: new Date(), error: message, model, ...usage, estimatedCostUsd: null, estimatedCostInr: null }).where(and(eq(companyResearchJobsTable.id, job.id), eq(companyResearchJobsTable.status, "running")));
-    logger.warn({ errorName: error instanceof Error ? error.name : "UnknownError" }, "Company research failed; previous intelligence retained");
+    logger.warn({ errorName: error instanceof Error ? error.name : "UnknownError", ...(validationPath ? { validationPath } : {}) }, "Company research failed; previous intelligence retained");
   }
 }
 

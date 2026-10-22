@@ -83,6 +83,7 @@ router.post("/company-intelligence/:globalCompanyId/research", researchRole, asy
   if (result.kind === "fresh") { res.status(409).json({ error: "This company was researched recently. Confirm a deliberate re-research to continue.", code: "RESEARCH_FRESH_OVERRIDE_REQUIRED" }); return; }
   if (result.kind === "no_allowance") { res.status(403).json({ error: "An active package with company research allowance is required to research companies.", code: "AI_PACKAGE_REQUIRED" }); return; }
   if (result.kind === "allowance_exhausted") { res.status(403).json({ error: "You have used all company research runs for this subscription term. Your allowance renews with a new package term.", code: "RESEARCH_ALLOWANCE_EXHAUSTED" }); return; }
+  if (result.kind === "profile_required") { res.status(409).json({ error: "Run full company research before refreshing an individual section.", code: "COMPANY_PROFILE_REQUIRED" }); return; }
   res.status(202).json(StartCompanyResearchResponse.parse(presentResearchJob(result.job)));
 });
 

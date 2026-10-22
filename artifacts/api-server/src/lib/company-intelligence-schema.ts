@@ -50,6 +50,35 @@ export const intelligenceProfileSchema = z.object({
 
 export type IntelligenceProfile = z.infer<typeof intelligenceProfileSchema>;
 export type IntelligenceSource = z.infer<typeof intelligenceSourceSchema>;
+export type FocusedIntelligenceProfile =
+  | { competitors: IntelligenceProfile["competitors"]; sources: IntelligenceSource[] }
+  | { sales_intelligence: IntelligenceProfile["sales_intelligence"]; sources: IntelligenceSource[] };
+
+export function validateFocusedIntelligence(
+  value: unknown,
+  sources: IntelligenceSource[],
+  scope: "sales_intelligence" | "competitors",
+): FocusedIntelligenceProfile {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Focused research did not return a JSON object.");
+  const parsed = scope === "competitors"
+    ? z.object({ competitors: intelligenceProfileSchema.shape.competitors.min(1, "At least one sourced competitor is required for a focused competitor refresh.") }).strict().parse(value)
+    : z.object({ sales_intelligence: intelligenceProfileSchema.shape.sales_intelligence }).strict().parse(value);
+  const knownIds = new Set(sources.map(source => source.source_id));
+  const reliableIds = new Set(sources.filter(source => source.reliability !== "low").map(source => source.source_id));
+  function verifyReferences(item: unknown): void {
+    if (!item || typeof item !== "object") return;
+    if ("source_ids" in item) {
+      const references = (item as { source_ids: string[] }).source_ids;
+      if (!references.every(id => knownIds.has(id))) throw new Error("Focused research cited an unknown source.");
+      if ("confidence" in item && typeof item.confidence === "number" && item.confidence > 0.6 && !references.some(id => reliableIds.has(id))) {
+        throw new Error("Focused research expressed strong confidence using only low-reliability evidence.");
+      }
+    }
+    Object.values(item).forEach(verifyReferences);
+  }
+  verifyReferences(parsed);
+  return { ...parsed, sources } as FocusedIntelligenceProfile;
+}
 
 export function factPaths(value: unknown, prefix = ""): string[] {
   if (value === null || value === "") return [];
