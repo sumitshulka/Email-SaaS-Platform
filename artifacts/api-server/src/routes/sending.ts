@@ -40,6 +40,9 @@ import {
   ApplyCampaignUnsubscribeResponse,
   SetCampaignPausedBody,
   SetCampaignPausedResponse,
+  RescheduleCampaignBody,
+  RescheduleCampaignParams,
+  RescheduleCampaignResponse,
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
@@ -4821,6 +4824,149 @@ router.patch(
       paused: result.pausedAt !== null,
       pausedAt: result.pausedAt,
       resumeAt: result.resumeAt,
+    }));
+  },
+);
+
+router.patch(
+  "/campaigns/:campaignId/reschedule",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = RescheduleCampaignParams.safeParse(req.params);
+    const body = RescheduleCampaignBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Choose a valid campaign start date and time.", code: "INVALID_INPUT" });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    const scheduledAt = body.data.scheduledAt;
+    const outcome = await db.transaction(async (tx) => {
+      await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .for("update");
+      const [campaign] = await tx
+        .select()
+        .from(emailCampaignsTable)
+        .where(and(
+          eq(emailCampaignsTable.id, params.data.campaignId),
+          eq(emailCampaignsTable.userId, userId),
+        ))
+        .for("update");
+      if (!campaign) return { kind: "not_found" as const };
+      const now = new Date();
+      if (campaign.status !== "queued" || !campaign.scheduledAt || campaign.scheduledAt <= now || campaign.pausedAt) {
+        return { kind: "not_reschedulable" as const };
+      }
+      if (scheduledAt <= now) return { kind: "invalid_time" as const };
+
+      const activeCampaigns = await tx
+        .select({
+          id: emailCampaignsTable.id,
+          name: emailCampaignsTable.name,
+          scheduledAt: emailCampaignsTable.scheduledAt,
+          pausedAt: emailCampaignsTable.pausedAt,
+        })
+        .from(emailCampaignsTable)
+        .where(and(
+          eq(emailCampaignsTable.userId, userId),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
+          ne(emailCampaignsTable.id, campaign.id),
+        ))
+        .for("update");
+      const runningTimeConflict = activeCampaigns.find((active) =>
+        !active.pausedAt &&
+        active.scheduledAt?.getTime() === scheduledAt.getTime()
+      );
+      if (runningTimeConflict) return { kind: "running_time_conflict" as const };
+
+      const pausedConflicts = activeCampaigns.filter((active) =>
+        active.pausedAt &&
+        active.scheduledAt?.getTime() === scheduledAt.getTime()
+      );
+      if (pausedConflicts.length && !body.data.confirmPausedConflicts) {
+        return { kind: "paused_conflict" as const, campaigns: pausedConflicts };
+      }
+
+      if (pausedConflicts.length) {
+        const pausedIds = pausedConflicts.map((item) => item.id);
+        await tx
+          .update(emailCampaignsTable)
+          .set({ scheduledAt: null, resumeAt: null, updatedAt: now })
+          .where(and(
+            eq(emailCampaignsTable.userId, userId),
+            inArray(emailCampaignsTable.id, pausedIds),
+          ));
+        await tx
+          .update(emailCampaignRecipientsTable)
+          .set({ nextAttemptAt: now })
+          .where(and(
+            eq(emailCampaignRecipientsTable.userId, userId),
+            inArray(emailCampaignRecipientsTable.campaignId, pausedIds),
+            eq(emailCampaignRecipientsTable.status, "queued"),
+          ));
+      }
+
+      await tx
+        .update(emailCampaignsTable)
+        .set({ scheduledAt, updatedAt: now })
+        .where(and(
+          eq(emailCampaignsTable.id, campaign.id),
+          eq(emailCampaignsTable.userId, userId),
+        ));
+      await tx
+        .update(emailCampaignRecipientsTable)
+        .set({ nextAttemptAt: scheduledAt })
+        .where(and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+          eq(emailCampaignRecipientsTable.status, "queued"),
+        ));
+      return {
+        kind: "ok" as const,
+        campaigns: pausedConflicts,
+      };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      return;
+    }
+    if (outcome.kind === "not_reschedulable") {
+      res.status(409).json({ error: "Only an upcoming, unpaused campaign can be rescheduled.", code: "CAMPAIGN_NOT_RESCHEDULABLE" });
+      return;
+    }
+    if (outcome.kind === "invalid_time") {
+      res.status(400).json({ error: "Choose a start time in the future.", code: "INVALID_SCHEDULE_TIME" });
+      return;
+    }
+    if (outcome.kind === "running_time_conflict") {
+      res.status(409).json({ error: "That start time is already assigned to a campaign that is not paused. Choose another time.", code: "RUNNING_CAMPAIGN_TIME_CONFLICT" });
+      return;
+    }
+    if (outcome.kind === "paused_conflict") {
+      res.status(409).json({
+        error: "A paused campaign is scheduled for this time. Confirm to cancel its schedule; it will remain paused and must be scheduled again manually.",
+        code: "PAUSED_CAMPAIGN_SCHEDULE_CONFLICT",
+        campaigns: outcome.campaigns.map(({ id, name, scheduledAt }) => ({
+          campaignId: id,
+          campaignName: name,
+          scheduledAt,
+        })),
+      });
+      return;
+    }
+
+    res.json(RescheduleCampaignResponse.parse({
+      campaignId: params.data.campaignId,
+      scheduledAt,
+      cancelledPausedSchedules: outcome.campaigns.map(({ id, name, scheduledAt: pausedScheduledAt }) => ({
+        campaignId: id,
+        campaignName: name,
+        scheduledAt: pausedScheduledAt,
+      })),
     }));
   },
 );

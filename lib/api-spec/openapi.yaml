@@ -2921,6 +2921,42 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /campaigns/{campaignId}/reschedule:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: rescheduleCampaign
+      tags: [sending]
+      summary: Change the start time of an already scheduled campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignRescheduleInput" }
+      responses:
+        "200":
+          description: Campaign schedule updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignRescheduleResponse" }
+        "400":
+          description: Invalid or past start time
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Campaign cannot be rescheduled, the time conflicts with an active campaign, or paused campaign schedules need confirmation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /campaigns/{campaignId}/delivery-report:
     parameters:
       - name: campaignId
@@ -5985,6 +6021,28 @@ components:
         pausedAt: { type: ["string", "null"], format: date-time }
         resumeAt: { type: ["string", "null"], format: date-time }
       required: [campaignId, paused, pausedAt, resumeAt]
+    CampaignRescheduleInput:
+      type: object
+      properties:
+        scheduledAt: { type: string, format: date-time }
+        confirmPausedConflicts: { type: boolean, default: false }
+      required: [scheduledAt]
+    CampaignRescheduleConflict:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        campaignName: { type: string }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+      required: [campaignId, campaignName, scheduledAt]
+    CampaignRescheduleResponse:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        scheduledAt: { type: string, format: date-time }
+        cancelledPausedSchedules:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignRescheduleConflict" }
+      required: [campaignId, scheduledAt, cancelledPausedSchedules]
     CampaignAudienceSummary:
       type: object
       properties:

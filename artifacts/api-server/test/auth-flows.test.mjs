@@ -21,6 +21,7 @@ memory.public.registerFunction({
   implementation: () => randomUUID(),
   impure: true,
 });
+
 memory.public.registerOperator({
   operator: "AT TIME ZONE",
   left: DataType.timestamptz,
@@ -11038,6 +11039,85 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("requires confirmation for paused schedule collisions and rejects another active campaign's start time", async () => {
+    const owner = await loggedInUser({ username: "campaign-reschedule-owner" });
+    const movedTo = new Date(Date.now() + 30 * 60_000);
+    const blockedTime = new Date(Date.now() + 45 * 60_000);
+    let target;
+    try {
+      [target] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      name: "Campaign to move",
+      subject: "Campaign reschedule",
+      textBody: "Scheduled campaign content",
+      unsubscribeOrigin: "https://app.mailflow.test",
+      status: "queued",
+      }).returning();
+    } catch (error) {
+      console.error("CAMPAIGN RESCHEDULE TEST INSERT CAUSE", error.cause?.message, error.message);
+      throw error;
+    }
+    await db.update(dbModule.emailCampaignsTable)
+      .set({ scheduledAt: new Date(Date.now() + 2 * 60 * 60_000) })
+      .where(eq(dbModule.emailCampaignsTable.id, target.id));
+    const pausedAt = new Date(Date.now() - 5 * 60_000);
+    const [paused] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      name: "Paused campaign",
+      subject: "Paused campaign content",
+      textBody: "This campaign is paused.",
+      status: "queued",
+      pausedAt,
+      resumeAt: new Date(Date.now() + 3 * 60 * 60_000),
+    }).returning();
+    await db.update(dbModule.emailCampaignsTable)
+      .set({ scheduledAt: movedTo })
+      .where(eq(dbModule.emailCampaignsTable.id, paused.id));
+
+    const warning = await api(`/campaigns/${target.id}/reschedule`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { scheduledAt: movedTo.toISOString() },
+    });
+    assert.equal(warning.response.status, 409);
+    assert.equal(warning.body.code, "PAUSED_CAMPAIGN_SCHEDULE_CONFLICT");
+    assert.equal(warning.body.campaigns[0].campaignId, paused.id);
+
+    const confirmed = await api(`/campaigns/${target.id}/reschedule`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { scheduledAt: movedTo.toISOString(), confirmPausedConflicts: true },
+    });
+    assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.body));
+    assert.equal(confirmed.body.cancelledPausedSchedules[0].campaignId, paused.id);
+    const [cancelledPaused] = await db.select().from(dbModule.emailCampaignsTable)
+      .where(eq(dbModule.emailCampaignsTable.id, paused.id));
+    assert.equal(cancelledPaused.scheduledAt, null);
+    assert.equal(cancelledPaused.resumeAt, null);
+    assert.equal(cancelledPaused.pausedAt.getTime(), pausedAt.getTime());
+
+    await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      name: "Active campaign",
+      subject: "Active campaign content",
+      textBody: "This campaign is active.",
+      status: "sending",
+    });
+    const [activeCampaign] = await db.select({ id: dbModule.emailCampaignsTable.id })
+      .from(dbModule.emailCampaignsTable)
+      .where(eq(dbModule.emailCampaignsTable.name, "Active campaign"));
+    await db.update(dbModule.emailCampaignsTable)
+      .set({ scheduledAt: blockedTime })
+      .where(eq(dbModule.emailCampaignsTable.id, activeCampaign.id));
+    const blocked = await api(`/campaigns/${target.id}/reschedule`, {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: { scheduledAt: blockedTime.toISOString() },
+    });
+    assert.equal(blocked.response.status, 409);
+    assert.equal(blocked.body.code, "RUNNING_CAMPAIGN_TIME_CONFLICT");
+  });
+
   it("keeps a scheduled campaign pause in effect until its resume time", async () => {
     const owner = await loggedInUser({
       username: "scheduled-campaign-resume-owner",

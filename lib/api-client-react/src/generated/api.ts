@@ -62,6 +62,8 @@ import type {
   CampaignPreviewInput,
   CampaignQueueInput,
   CampaignReply,
+  CampaignRescheduleInput,
+  CampaignRescheduleResponse,
   CampaignSummary,
   CampaignTemplatePreview,
   CampaignUnsubscribeResult,
@@ -10019,6 +10021,95 @@ export const useSetCampaignPaused = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getSetCampaignPausedMutationOptions(options));
+    }
+
+export const getRescheduleCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/reschedule`
+}
+
+/**
+ * @summary Change the start time of an already scheduled campaign
+ */
+export const rescheduleCampaign = async (campaignId: string,
+    campaignRescheduleInput: CampaignRescheduleInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignRescheduleResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignRescheduleResponse>(getRescheduleCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignRescheduleInput)
+  }
+);}
+
+
+
+
+
+export const getRescheduleCampaignMutationKey = () => ['rescheduleCampaign'] as const;
+
+export const getRescheduleCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescheduleCampaign>>, TError,RescheduleCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rescheduleCampaign>>, TError,RescheduleCampaignMutationVariables, TContext> => {
+
+const mutationKey = getRescheduleCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rescheduleCampaign>>, RescheduleCampaignMutationVariables> = (props) => {
+          const {campaignId,data} = props ?? {};
+
+          return  rescheduleCampaign(campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RescheduleCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof rescheduleCampaign>>>
+    export type RescheduleCampaignMutationBody = BodyType<CampaignRescheduleInput>
+    export type RescheduleCampaignMutationError = ErrorType<ApiError>
+    export type RescheduleCampaignMutationVariables = {campaignId: string;data: BodyType<CampaignRescheduleInput>}
+
+    /**
+ * @summary Change the start time of an already scheduled campaign
+ */
+export const useRescheduleCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rescheduleCampaign>>, TError,RescheduleCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rescheduleCampaign>>,
+        TError,
+        RescheduleCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRescheduleCampaignMutationOptions(options));
     }
 
 export const getGetCampaignDeliveryReportUrl = (campaignId: string,

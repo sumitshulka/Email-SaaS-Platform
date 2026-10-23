@@ -3284,6 +3284,24 @@ export interface CampaignPauseResponse {
   resumeAt: string | null;
 }
 
+export interface CampaignRescheduleInput {
+  scheduledAt: string;
+  confirmPausedConflicts?: boolean;
+}
+
+export interface CampaignRescheduleConflict {
+  campaignId: string;
+  campaignName: string;
+  /** @nullable */
+  scheduledAt: string | null;
+}
+
+export interface CampaignRescheduleResponse {
+  campaignId: string;
+  scheduledAt: string;
+  cancelledPausedSchedules: CampaignRescheduleConflict[];
+}
+
 export interface CampaignAudienceSummary {
   /** @minimum 0 */
   uniqueRecipients: number;

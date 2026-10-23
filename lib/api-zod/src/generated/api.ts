@@ -5748,6 +5748,31 @@ export const SetCampaignPausedResponse = zod.object({
 
 
 /**
+ * @summary Change the start time of an already scheduled campaign
+ */
+export const RescheduleCampaignParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const rescheduleCampaignBodyConfirmPausedConflictsDefault = false;
+
+export const RescheduleCampaignBody = zod.object({
+  "scheduledAt": zod.coerce.date(),
+  "confirmPausedConflicts": zod.boolean().default(rescheduleCampaignBodyConfirmPausedConflictsDefault)
+})
+
+export const RescheduleCampaignResponse = zod.object({
+  "campaignId": zod.string().uuid(),
+  "scheduledAt": zod.coerce.date(),
+  "cancelledPausedSchedules": zod.array(zod.object({
+  "campaignId": zod.string().uuid(),
+  "campaignName": zod.string(),
+  "scheduledAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
  * SMTP acceptance is not proof of inbox delivery. Imported reports are user-provided and are not authenticated provider events.
  * @summary Get SMTP and imported delivery evidence for a tenant campaign
  */

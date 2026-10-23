@@ -21,7 +21,7 @@ import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
-  getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox,
+  getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
@@ -1876,6 +1876,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
   const variantLimitsQuery = useGetCampaignVariantLimits();
   const create = useCreateCampaign(); const createFollowUp = useCreateCampaignFollowUp(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign(); const pauseCampaign = useSetCampaignPaused();
+  const rescheduleCampaign = useRescheduleCampaign();
   const previewCampaign = usePreviewCampaign();
   const aiAssist = useGenerateCampaignEmailDraft();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -1915,6 +1916,9 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [queueStartError, setQueueStartError] = useState<string | null>(null);
   const [queuePolicyError, setQueuePolicyError] = useState<string | null>(null);
   const [pauseTarget, setPauseTarget] = useState<CampaignSummary | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<CampaignSummary | null>(null);
+  const [rescheduleAt, setRescheduleAt] = useState('');
+  const [pausedScheduleConflicts, setPausedScheduleConflicts] = useState<Array<{ campaignId: string; campaignName: string }>>([]);
   const campaignHistory = campaignsQuery.data as CampaignHistory | undefined;
   const campaigns = campaignHistory?.campaigns ?? [];
   const activeCampaignFinishAt = campaignHistory?.summary.activeCampaignFinishAt
@@ -2374,6 +2378,39 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     setPendingAction({ kind: 'queue', campaign });
   };
   const del = (campaign: CampaignSummary) => setPendingAction({ kind: 'delete', campaign });
+  const openReschedule = (campaign: CampaignSummary) => {
+    setRescheduleTarget(campaign);
+    setRescheduleAt(campaign.scheduledAt ? dateTimeLocalValue(new Date(campaign.scheduledAt)) : '');
+    setPausedScheduleConflicts([]);
+  };
+  const submitReschedule = () => {
+    if (!rescheduleTarget || !rescheduleAt) return;
+    const date = new Date(rescheduleAt);
+    if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+      setNotice({ kind: 'error', text: 'Choose a new start time in the future.' });
+      return;
+    }
+    rescheduleCampaign.mutate({
+      campaignId: rescheduleTarget.id,
+      data: { scheduledAt: date.toISOString(), confirmPausedConflicts: pausedScheduleConflicts.length > 0 },
+    }, {
+      onSuccess: result => {
+        setRescheduleTarget(null);
+        setPausedScheduleConflicts([]);
+        refresh();
+        const cancelled = result.cancelledPausedSchedules.length;
+        setNotice({ kind: 'success', text: `Campaign rescheduled for ${formatDate(result.scheduledAt)}.${cancelled ? ` ${cancelled} paused campaign schedule${cancelled === 1 ? ' was' : 's were'} cancelled; those campaigns remain paused and must be scheduled again manually.` : ''}` });
+      },
+      onError: error => {
+        const apiError = (error as { data?: { code?: string; campaigns?: Array<{ campaignId: string; campaignName: string }> } }).data;
+        if (apiError?.code === 'PAUSED_CAMPAIGN_SCHEDULE_CONFLICT' && apiError.campaigns?.length) {
+          setPausedScheduleConflicts(apiError.campaigns);
+          return;
+        }
+        setNotice({ kind: 'error', text: mutationError(error) });
+      },
+    });
+  };
   const confirmCampaignAction = async () => {
     if (!pendingAction) return;
     const action = pendingAction;
@@ -2473,7 +2510,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') || campaign.pausedAt ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Maintenance paused' : campaign.pausedAt ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · provider bounce/failure reports count as rejected / failed · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
           <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]"><span className="block">Start {campaign.scheduledAt || campaign.queuedAt ? formatDate(campaign.scheduledAt || campaign.queuedAt) : '—'}</span><span className="block">End {campaign.completedAt ? formatDate(campaign.completedAt) : '—'}</span>{campaign.pausedAt && <span data-testid={`text-campaign-resume-at-${campaign.id}`} className="block font-semibold text-[#a95218]">{campaign.resumeAt ? `Resume ${formatDate(campaign.resumeAt)}` : 'No automatic resume'}</span>}</td>
-          <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'completed') && <Button variant="quiet" testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><CirclePlus className="h-3.5 w-3.5"/>Follow-up</Button>}{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && (campaign.pausedAt ? <><Button variant="quiet" testId={`button-list-edit-resume-time-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}>Schedule</Button><Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><Play className="h-3.5 w-3.5"/>Resume</Button></> : <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}><Pause className="h-3.5 w-3.5"/>Pause</Button>)}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
+           <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'completed') && <Button variant="quiet" testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><CirclePlus className="h-3.5 w-3.5"/>Follow-up</Button>}{campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() && !campaign.pausedAt && !maintenancePaused && <Button variant="quiet" testId={`button-reschedule-campaign-${campaign.id}`} disabled={rescheduleCampaign.isPending} onClick={() => openReschedule(campaign)}>Reschedule</Button>}{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && (campaign.pausedAt ? <><Button variant="quiet" testId={`button-list-edit-resume-time-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}>Schedule</Button><Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><Play className="h-3.5 w-3.5"/>Resume</Button></> : <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}><Pause className="h-3.5 w-3.5"/>Pause</Button>)}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
        </tr>)}</tbody></table></div>
      </section> : (campaignSummary?.campaignCount ?? 0) > 0 ? <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setDebouncedCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); setCampaignHistoryPage(1); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
     {(campaignHistory?.total ?? 0) > 0 && <nav aria-label="Campaign history pages" data-testid="campaign-history-pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e0e4e9] bg-white px-4 py-3">
@@ -2820,6 +2857,31 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
          onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
        })}
      />}
+      {rescheduleTarget && <Modal
+        title="Reschedule campaign"
+        subtitle={`Choose a new start time for “${rescheduleTarget.name}”.`}
+        close={() => { if (!rescheduleCampaign.isPending) { setRescheduleTarget(null); setPausedScheduleConflicts([]); } }}
+      >
+        <div className="space-y-4">
+          <label className="block">
+            <span className={labelClass}>New start date and time (your local time)</span>
+            <input data-testid="input-reschedule-campaign-at" type="datetime-local" min={dateTimeLocalValue(roundUpToMinute(new Date(Date.now() + 60_000)))} value={rescheduleAt} onChange={event => { setRescheduleAt(event.target.value); setPausedScheduleConflicts([]); }} className={inputClass}/>
+          </label>
+          <p className="text-[11px] leading-5 text-[#788392]">You can move this scheduled campaign earlier or later. Times already assigned to another active, unpaused campaign are not allowed.</p>
+          {pausedScheduleConflicts.length > 0 && <div role="alert" data-testid="warning-paused-campaign-schedule-conflict" className="rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-3 text-[11px] leading-5 text-[#895b2f]">
+            <p><strong>A paused campaign is scheduled for this exact time:</strong></p>
+            <ul className="my-1 list-disc pl-5">{pausedScheduleConflicts.map(item => <li key={item.campaignId}>{item.campaignName}</li>)}</ul>
+            <p>Confirming will cancel that campaign’s schedule and automatic resume time. It will remain paused and must be scheduled again manually.</p>
+          </div>}
+          <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-4">
+            <Button variant="outline" testId="button-cancel-reschedule-campaign" disabled={rescheduleCampaign.isPending} onClick={() => { setRescheduleTarget(null); setPausedScheduleConflicts([]); }}>Cancel</Button>
+            <Button testId="button-confirm-reschedule-campaign" disabled={rescheduleCampaign.isPending || !rescheduleAt} onClick={submitReschedule}>
+              {rescheduleCampaign.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}
+              {pausedScheduleConflicts.length ? 'Confirm and cancel paused schedule' : 'Save new schedule'}
+            </Button>
+          </div>
+        </div>
+      </Modal>}
      <ConfirmActionDialog
        open={Boolean(pendingAction)}
        title={pendingAction?.kind === 'queue' ? 'Queue this campaign?' : 'Delete this draft?'}
