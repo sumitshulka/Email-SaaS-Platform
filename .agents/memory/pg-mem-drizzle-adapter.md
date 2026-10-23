@@ -9,7 +9,7 @@ For one-time database claims, pg-mem 3.x reports the existing row from `INSERT .
 
 Keep reduced test DDL aligned with production column nullability as well as names and types. In particular, `user_subscriptions.payment_id` must remain nullable so gift and free subscription terms can be represented without a payment.
 
-When adding columns to a Drizzle table, update every hand-written pg-mem DDL fixture for that table; inserts and returning clauses can reference the new columns even in unrelated route tests.
+When adding columns to a Drizzle table, update every hand-written pg-mem DDL fixture for that table; inserts and returning clauses can reference the new columns even in unrelated route tests. If a route test fails on a missing column, align the fixture instead of weakening application behavior.
 
 For multi-row Drizzle inserts, provide explicit values for every required column in each row when using pg-mem; omitted defaults in a multi-row `VALUES` query can be materialized as null by the test database.
 

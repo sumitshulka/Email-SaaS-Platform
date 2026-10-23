@@ -542,6 +542,7 @@ memory.public.none(`
     text_body text NOT NULL,
     html_body text,
     unsubscribe_origin text,
+    attachments jsonb NOT NULL DEFAULT '[]'::jsonb,
     status email_campaign_status NOT NULL DEFAULT 'draft',
     paused_at timestamptz,
     resume_at timestamptz,
@@ -11043,20 +11044,14 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const owner = await loggedInUser({ username: "campaign-reschedule-owner" });
     const movedTo = new Date(Date.now() + 30 * 60_000);
     const blockedTime = new Date(Date.now() + 45 * 60_000);
-    let target;
-    try {
-      [target] = await db.insert(dbModule.emailCampaignsTable).values({
+    const [target] = await db.insert(dbModule.emailCampaignsTable).values({
       userId: owner.user.id,
       name: "Campaign to move",
       subject: "Campaign reschedule",
       textBody: "Scheduled campaign content",
       unsubscribeOrigin: "https://app.mailflow.test",
       status: "queued",
-      }).returning();
-    } catch (error) {
-      console.error("CAMPAIGN RESCHEDULE TEST INSERT CAUSE", error.cause?.message, error.message);
-      throw error;
-    }
+    }).returning();
     await db.update(dbModule.emailCampaignsTable)
       .set({ scheduledAt: new Date(Date.now() + 2 * 60 * 60_000) })
       .where(eq(dbModule.emailCampaignsTable.id, target.id));
