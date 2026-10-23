@@ -16,12 +16,13 @@ import {
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
-  getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign,
+  getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign, useCancelPausedCampaign,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
@@ -65,6 +66,27 @@ function Button({ children, onClick, variant = 'primary', disabled, type = 'butt
     : variant === 'quiet' ? 'inline-flex min-h-9 items-center justify-center gap-2 rounded-md px-3 text-[12px] font-semibold text-[#596474] hover:bg-[#f4f6f8]'
     : outlineButton;
   return <button type={type} data-testid={testId} onClick={onClick} disabled={disabled} aria-label={ariaLabel} title={title} className={cx(styles, className)}>{children}</button>;
+}
+function CampaignActionIcon({ label, icon, onClick, testId, disabled = false, danger = false }: { label: string; icon: ReactNode; onClick: () => void; testId: string; disabled?: boolean; danger?: boolean }) {
+  return <Tooltip>
+    <TooltipTrigger asChild>
+      <button
+        type="button"
+        data-testid={testId}
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        onClick={onClick}
+        className={cx(
+          'inline-flex h-8 w-8 items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ba3d0] disabled:cursor-not-allowed disabled:opacity-45',
+          danger ? 'text-[#b85b20] hover:bg-[#fff3e8]' : 'text-[#596a7d] hover:bg-[#edf3f8] hover:text-[#245b9b]',
+        )}
+      >
+        <span aria-hidden="true">{icon}</span>
+      </button>
+    </TooltipTrigger>
+    <TooltipContent side="top">{label}</TooltipContent>
+  </Tooltip>;
 }
 function Field({ label, value, onChange, type = 'text', placeholder, required, hint, testId, maxLength }: { label: string; value: string | number; onChange: (value: string) => void; type?: string; placeholder?: string; required?: boolean; hint?: string; testId: string; maxLength?: number }) {
   return <label className="block"><span className={labelClass}>{label}</span><input data-testid={testId} className={inputClass} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} maxLength={maxLength} />{hint && <span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">{hint}</span>}</label>;
@@ -1877,6 +1899,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const variantLimitsQuery = useGetCampaignVariantLimits();
   const create = useCreateCampaign(); const createFollowUp = useCreateCampaignFollowUp(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign(); const pauseCampaign = useSetCampaignPaused();
   const rescheduleCampaign = useRescheduleCampaign();
+  const cancelPausedCampaign = useCancelPausedCampaign();
   const previewCampaign = usePreviewCampaign();
   const aiAssist = useGenerateCampaignEmailDraft();
   const qc = useQueryClient(); const { notice, setNotice, dismiss } = useNotice();
@@ -1917,6 +1940,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [queuePolicyError, setQueuePolicyError] = useState<string | null>(null);
   const [pauseTarget, setPauseTarget] = useState<CampaignSummary | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<CampaignSummary | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<CampaignSummary | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState('');
   const [pausedScheduleConflicts, setPausedScheduleConflicts] = useState<Array<{ campaignId: string; campaignName: string }>>([]);
   const campaignHistory = campaignsQuery.data as CampaignHistory | undefined;
@@ -2510,7 +2534,20 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') || campaign.pausedAt ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Maintenance paused' : campaign.pausedAt ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · provider bounce/failure reports count as rejected / failed · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
           <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]"><span className="block">Start {campaign.scheduledAt || campaign.queuedAt ? formatDate(campaign.scheduledAt || campaign.queuedAt) : '—'}</span><span className="block">End {campaign.completedAt ? formatDate(campaign.completedAt) : '—'}</span>{campaign.pausedAt && <span data-testid={`text-campaign-resume-at-${campaign.id}`} className="block font-semibold text-[#a95218]">{campaign.resumeAt ? `Resume ${formatDate(campaign.resumeAt)}` : 'No automatic resume'}</span>}</td>
-           <td className="px-5 py-4"><div className="flex justify-end gap-1">{(campaign.status === 'queued' || campaign.status === 'completed') && <Button variant="quiet" testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><CirclePlus className="h-3.5 w-3.5"/>Follow-up</Button>}{campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() && !campaign.pausedAt && !maintenancePaused && <Button variant="quiet" testId={`button-reschedule-campaign-${campaign.id}`} disabled={rescheduleCampaign.isPending} onClick={() => openReschedule(campaign)}>Reschedule</Button>}{(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && (campaign.pausedAt ? <><Button variant="quiet" testId={`button-list-edit-resume-time-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}>Schedule</Button><Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}><Play className="h-3.5 w-3.5"/>Resume</Button></> : <Button variant="quiet" testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}><Pause className="h-3.5 w-3.5"/>Pause</Button>)}{campaign.status === 'draft' && <><Button variant="quiet" testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}><Edit3 className="h-3.5 w-3.5"/>Edit</Button><Button testId={`button-queue-campaign-${campaign.id}`} onClick={() => queue(campaign)} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))}><Send className="h-3.5 w-3.5"/>Queue</Button><Button variant="quiet" testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} onClick={() => del(campaign)}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete</Button></>}</div></td>
+            <td className="px-5 py-4"><div className="flex justify-end gap-1">
+              {(campaign.status === 'queued' || campaign.status === 'completed') && <CampaignActionIcon label="Create follow-up draft" icon={<CirclePlus className="h-4 w-4"/>} testId={`button-follow-up-campaign-${campaign.id}`} disabled={createFollowUp.isPending} onClick={() => createFollowUp.mutate({ campaignId: campaign.id }, { onSuccess: followUp => { refresh(); openEdit(followUp); setNotice({ kind: 'success', text: 'Follow-up draft created. Its schedule must be at least 24 hours after the primary campaign completes.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}/>}
+              {campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() && !campaign.pausedAt && !maintenancePaused && <CampaignActionIcon label="Reschedule campaign" icon={<Clock3 className="h-4 w-4"/>} testId={`button-reschedule-campaign-${campaign.id}`} disabled={rescheduleCampaign.isPending} onClick={() => openReschedule(campaign)}/>}
+              {(campaign.status === 'queued' || campaign.status === 'sending') && !maintenancePaused && (campaign.pausedAt ? <>
+                <CampaignActionIcon label="Change resume time" icon={<Clock3 className="h-4 w-4"/>} testId={`button-list-edit-resume-time-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}/>
+                <CampaignActionIcon label="Resume campaign" icon={<Play className="h-4 w-4"/>} testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => pauseCampaign.mutate({ campaignId: campaign.id, data: { paused: false } }, { onSuccess: () => { refresh(); setNotice({ kind: 'success', text: 'Campaign delivery resumed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) })}/>
+                <CampaignActionIcon label="Cancel paused campaign" icon={<X className="h-4 w-4"/>} testId={`button-cancel-paused-campaign-${campaign.id}`} danger onClick={() => setCancelTarget(campaign)}/>
+              </> : <CampaignActionIcon label="Pause campaign" icon={<Pause className="h-4 w-4"/>} testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}/>)}
+              {campaign.status === 'draft' && <>
+                <CampaignActionIcon label="Edit campaign draft" icon={<Edit3 className="h-4 w-4"/>} testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}/>
+                <CampaignActionIcon label="Queue campaign" icon={<Send className="h-4 w-4"/>} testId={`button-queue-campaign-${campaign.id}`} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))} onClick={() => queue(campaign)}/>
+                <CampaignActionIcon label="Delete campaign draft" icon={<Trash2 className="h-4 w-4"/>} testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} danger onClick={() => del(campaign)}/>
+              </>}
+            </div></td>
        </tr>)}</tbody></table></div>
      </section> : (campaignSummary?.campaignCount ?? 0) > 0 ? <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setDebouncedCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); setCampaignHistoryPage(1); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openNew}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
     {(campaignHistory?.total ?? 0) > 0 && <nav aria-label="Campaign history pages" data-testid="campaign-history-pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e0e4e9] bg-white px-4 py-3">
@@ -2882,6 +2919,31 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           </div>
         </div>
       </Modal>}
+      <ConfirmActionDialog
+        open={Boolean(cancelTarget)}
+        title="Cancel this paused campaign?"
+        description={cancelTarget
+          ? `Stop “${cancelTarget.name}” and suppress its messages that have not started. Messages already sent stay in campaign history. A message already being submitted to the SMTP server may still finish. The campaign will be marked completed; use Follow-up to create a new draft and schedule another run.`
+          : ''}
+        confirmLabel="Stop campaign"
+        pending={cancelPausedCampaign.isPending}
+        onOpenChange={open => { if (!open && !cancelPausedCampaign.isPending) setCancelTarget(null); }}
+        onConfirm={() => {
+          if (!cancelTarget) return;
+          cancelPausedCampaign.mutate({ campaignId: cancelTarget.id }, {
+            onSuccess: result => {
+              setCancelTarget(null);
+              refresh();
+              setNotice({
+                kind: 'success',
+                text: `Campaign stopped. ${result.stoppedRecipients.toLocaleString()} queued message${result.stoppedRecipients === 1 ? '' : 's'} will not be sent; sent mail remains in the dashboard.${result.inFlightRecipients ? ` ${result.inFlightRecipients} message${result.inFlightRecipients === 1 ? ' was' : 's were'} already being submitted and may finish.` : ''} Use Follow-up to create and schedule another draft.`,
+              });
+            },
+            onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+          });
+        }}
+        testId="dialog-cancel-paused-campaign"
+      />
      <ConfirmActionDialog
        open={Boolean(pendingAction)}
        title={pendingAction?.kind === 'queue' ? 'Queue this campaign?' : 'Delete this draft?'}
@@ -3021,7 +3083,9 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const pauseCampaign = useSetCampaignPaused();
+  const cancelPausedCampaign = useCancelPausedCampaign();
   const deleteDraft = useDeleteCampaign();
+  const { notice, setNotice, dismiss } = useNotice();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const senderAccountsQuery = useListTenantSendingAccounts();
@@ -3029,6 +3093,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   const scanInbox = useCheckSenderMailbox();
   const [storeReplyContent, setStoreReplyContent] = useState(false);
   const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const query = useGetCampaignDashboard(campaignId, {
     query: {
@@ -3072,7 +3137,8 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         <div className="mb-5">
           <Button variant="outline" testId="button-back-to-campaigns" onClick={() => setLocation('/campaigns')}><ArrowLeft className="h-4 w-4"/>Back to campaigns</Button>
         </div>
-        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2">{campaign.status === 'draft' && <Button variant="quiet" testId="button-delete-draft-campaign" disabled={deleteDraft.isPending} onClick={() => { setDeleteError(null); setDeleteDialogOpen(true); }}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete draft</Button>}<Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
+        <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2">{campaign.status === 'draft' && <Button variant="quiet" testId="button-delete-draft-campaign" disabled={deleteDraft.isPending} onClick={() => { setDeleteError(null); setDeleteDialogOpen(true); }}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete draft</Button>}<Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="danger" testId="button-cancel-paused-campaign-detail" disabled={cancelPausedCampaign.isPending} onClick={() => setCancelDialogOpen(true)}>Cancel campaign</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
+        {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
         {(isUserPaused || isPausedForMaintenance) && <div role="status" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]">{isUserPaused && campaign.resumeAt ? `Delivery is paused and will resume automatically at ${formatDate(campaign.resumeAt)}. ` : ''}Queued messages are on hold. A message already being submitted to the SMTP server may finish; remaining messages will wait until delivery resumes.</div>}
         {pauseCampaign.isError && <div role="alert" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] text-[#895b2f]">Could not change the campaign pause state. Please try again.</div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -3233,6 +3299,29 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
     >
       {deleteError && <p role="alert" className="text-[12px] leading-5 text-[#99501e]">{deleteError}</p>}
     </ConfirmActionDialog>
+    <ConfirmActionDialog
+      open={cancelDialogOpen}
+      title="Cancel this paused campaign?"
+      description="This stops queued messages and keeps sent mail in the campaign dashboard. A message already being submitted to the SMTP server may still finish. After cancellation, use the campaign’s Follow-up action to create a new draft and schedule another run."
+      confirmLabel="Stop campaign"
+      pending={cancelPausedCampaign.isPending}
+      onOpenChange={open => { if (!cancelPausedCampaign.isPending) setCancelDialogOpen(open); }}
+      onConfirm={() => cancelPausedCampaign.mutate({ campaignId }, {
+        onSuccess: result => {
+          setCancelDialogOpen(false);
+          void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) });
+          void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() });
+          const remaining = result.stoppedRecipients;
+          setNotice({
+            kind: 'success',
+            text: `Campaign stopped. ${remaining.toLocaleString()} queued message${remaining === 1 ? '' : 's'} will not be sent. Sent mail remains in the dashboard.${result.inFlightRecipients ? ` ${result.inFlightRecipients} message${result.inFlightRecipients === 1 ? ' was' : 's were'} already being submitted and may finish.` : ''} Use Follow-up to schedule another draft.`,
+          });
+        },
+        onError: () => { void query.refetch(); },
+      })}
+      testId="dialog-cancel-paused-campaign-detail"
+    />
     {pauseDialogOpen && dashboard && <CampaignPauseDialog
       campaignName={dashboard.campaign.name}
       currentResumeAt={dashboard.campaign.resumeAt}

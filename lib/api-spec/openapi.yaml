@@ -2957,6 +2957,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /campaigns/{campaignId}/cancel:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: cancelPausedCampaign
+      tags: [sending]
+      summary: Stop a paused campaign while preserving its delivery history
+      responses:
+        "200":
+          description: Paused campaign stopped
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignCancelResponse" }
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Only a paused active campaign can be cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /campaigns/{campaignId}/delivery-report:
     parameters:
       - name: campaignId
@@ -6043,6 +6069,15 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CampaignRescheduleConflict" }
       required: [campaignId, scheduledAt, cancelledPausedSchedules]
+    CampaignCancelResponse:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        status: { type: string, enum: [completed] }
+        stoppedRecipients: { type: integer, minimum: 0 }
+        inFlightRecipients: { type: integer, minimum: 0 }
+        completedAt: { type: string, format: date-time }
+      required: [campaignId, status, stoppedRecipients, inFlightRecipients, completedAt]
     CampaignAudienceSummary:
       type: object
       properties:

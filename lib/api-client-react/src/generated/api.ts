@@ -51,6 +51,7 @@ import type {
   CampaignAttachmentUpload,
   CampaignAttachmentUploadInput,
   CampaignAudienceSummary,
+  CampaignCancelResponse,
   CampaignDashboard,
   CampaignDeliveryReport,
   CampaignEmailAssistInput,
@@ -10110,6 +10111,80 @@ export const useRescheduleCampaign = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getRescheduleCampaignMutationOptions(options));
+    }
+
+export const getCancelPausedCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/cancel`
+}
+
+/**
+ * @summary Stop a paused campaign while preserving its delivery history
+ */
+export const cancelPausedCampaign = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignCancelResponse> => {
+
+  return customFetch<CampaignCancelResponse>(getCancelPausedCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelPausedCampaignMutationKey = () => ['cancelPausedCampaign'] as const;
+
+export const getCancelPausedCampaignMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPausedCampaign>>, TError,CancelPausedCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelPausedCampaign>>, TError,CancelPausedCampaignMutationVariables, TContext> => {
+
+const mutationKey = getCancelPausedCampaignMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelPausedCampaign>>, CancelPausedCampaignMutationVariables> = (props) => {
+          const {campaignId} = props ?? {};
+
+          return  cancelPausedCampaign(campaignId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelPausedCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof cancelPausedCampaign>>>
+
+    export type CancelPausedCampaignMutationError = ErrorType<ApiError>
+    export type CancelPausedCampaignMutationVariables = {campaignId: string}
+
+    /**
+ * @summary Stop a paused campaign while preserving its delivery history
+ */
+export const useCancelPausedCampaign = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPausedCampaign>>, TError,CancelPausedCampaignMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelPausedCampaign>>,
+        TError,
+        CancelPausedCampaignMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCancelPausedCampaignMutationOptions(options));
     }
 
 export const getGetCampaignDeliveryReportUrl = (campaignId: string,

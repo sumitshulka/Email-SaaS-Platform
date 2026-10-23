@@ -43,6 +43,8 @@ import {
   RescheduleCampaignBody,
   RescheduleCampaignParams,
   RescheduleCampaignResponse,
+  CancelPausedCampaignParams,
+  CancelPausedCampaignResponse,
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
@@ -4824,6 +4826,106 @@ router.patch(
       paused: result.pausedAt !== null,
       pausedAt: result.pausedAt,
       resumeAt: result.resumeAt,
+    }));
+  },
+);
+
+router.post(
+  "/campaigns/:campaignId/cancel",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = CancelPausedCampaignParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid campaign identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const outcome = await db.transaction(async (tx) => {
+      await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .for("update");
+      const [campaign] = await tx
+        .select({
+          id: emailCampaignsTable.id,
+          status: emailCampaignsTable.status,
+          pausedAt: emailCampaignsTable.pausedAt,
+        })
+        .from(emailCampaignsTable)
+        .where(and(
+          eq(emailCampaignsTable.id, params.data.campaignId),
+          eq(emailCampaignsTable.userId, userId),
+        ))
+        .for("update");
+      if (!campaign) return { kind: "not_found" as const };
+      if ((campaign.status !== "queued" && campaign.status !== "sending") || !campaign.pausedAt) {
+        return { kind: "not_paused" as const };
+      }
+
+      const recipients = await tx
+        .select({ status: emailCampaignRecipientsTable.status })
+        .from(emailCampaignRecipientsTable)
+        .where(and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+          inArray(emailCampaignRecipientsTable.status, ["queued", "sending"]),
+        ));
+      const stoppedRecipients = recipients.filter((recipient) => recipient.status === "queued").length;
+      const inFlightRecipients = recipients.filter((recipient) => recipient.status === "sending").length;
+      const now = new Date();
+      await tx
+        .update(emailCampaignRecipientsTable)
+        .set({
+          status: "suppressed",
+          lastError: "Campaign cancelled by the user before this message was sent.",
+          updatedAt: now,
+        })
+        .where(and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+          eq(emailCampaignRecipientsTable.status, "queued"),
+        ));
+      const [updated] = await tx
+        .update(emailCampaignsTable)
+        .set({
+          status: "completed",
+          pausedAt: null,
+          resumeAt: null,
+          scheduledAt: null,
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(emailCampaignsTable.id, campaign.id),
+          eq(emailCampaignsTable.userId, userId),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
+          isNotNull(emailCampaignsTable.pausedAt),
+        ))
+        .returning({ completedAt: emailCampaignsTable.completedAt });
+      if (!updated) return { kind: "not_paused" as const };
+      return {
+        kind: "ok" as const,
+        stoppedRecipients,
+        inFlightRecipients,
+        completedAt: updated.completedAt ?? now,
+      };
+    });
+
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      return;
+    }
+    if (outcome.kind === "not_paused") {
+      res.status(409).json({ error: "Only a paused, active campaign can be cancelled.", code: "CAMPAIGN_NOT_PAUSED" });
+      return;
+    }
+    res.json(CancelPausedCampaignResponse.parse({
+      campaignId: params.data.campaignId,
+      status: "completed",
+      stoppedRecipients: outcome.stoppedRecipients,
+      inFlightRecipients: outcome.inFlightRecipients,
+      completedAt: outcome.completedAt,
     }));
   },
 );

@@ -11040,6 +11040,66 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("cancels only a paused campaign's unsent recipients and keeps sent history follow-up eligible", async () => {
+    const owner = await loggedInUser({ username: "campaign-cancel-owner" });
+    const pausedAt = new Date(Date.now() - 60_000);
+    const [campaign] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      name: "Paused campaign to cancel",
+      subject: "Campaign cancellation",
+      textBody: "Campaign content",
+      unsubscribeOrigin: "https://app.mailflow.test",
+      status: "queued",
+      pausedAt,
+      resumeAt: new Date(Date.now() + 60 * 60_000),
+    }).returning();
+    const deliveredAt = new Date(Date.now() - 5 * 60_000);
+    const [delivered] = await db.insert(dbModule.emailCampaignRecipientsTable).values({
+      campaignId: campaign.id,
+      userId: owner.user.id,
+      email: "already-sent@campaign-cancel.test",
+      status: "delivered",
+      deliveredAt,
+    }).returning();
+    const [queued] = await db.insert(dbModule.emailCampaignRecipientsTable).values({
+      campaignId: campaign.id,
+      userId: owner.user.id,
+      email: "not-sent@campaign-cancel.test",
+      status: "queued",
+      nextAttemptAt: new Date(Date.now() + 30 * 60_000),
+    }).returning();
+
+    const cancelled = await api(`/campaigns/${campaign.id}/cancel`, {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(cancelled.response.status, 200, JSON.stringify(cancelled.body));
+    assert.equal(cancelled.body.status, "completed");
+    assert.equal(cancelled.body.stoppedRecipients, 1);
+    assert.equal(cancelled.body.inFlightRecipients, 0);
+
+    const [completedCampaign] = await db.select().from(dbModule.emailCampaignsTable)
+      .where(eq(dbModule.emailCampaignsTable.id, campaign.id));
+    assert.equal(completedCampaign.status, "completed");
+    assert.equal(completedCampaign.pausedAt, null);
+    assert.equal(completedCampaign.resumeAt, null);
+    const [preservedSent] = await db.select().from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, delivered.id));
+    assert.equal(preservedSent.status, "delivered");
+    assert.equal(preservedSent.deliveredAt.getTime(), deliveredAt.getTime());
+    const [stoppedQueued] = await db.select().from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, queued.id));
+    assert.equal(stoppedQueued.status, "suppressed");
+
+    const followUp = await api(`/campaigns/${campaign.id}/follow-ups`, {
+      method: "POST",
+      cookie: owner.cookie,
+    });
+    assert.equal(followUp.response.status, 201, JSON.stringify(followUp.body));
+    assert.equal(followUp.body.status, "draft");
+    assert.equal(followUp.body.parentCampaignId, campaign.id);
+  });
+
   it("requires confirmation for paused schedule collisions and rejects another active campaign's start time", async () => {
     const owner = await loggedInUser({ username: "campaign-reschedule-owner" });
     const movedTo = new Date(Date.now() + 30 * 60_000);

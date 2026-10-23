@@ -3302,6 +3302,23 @@ export interface CampaignRescheduleResponse {
   cancelledPausedSchedules: CampaignRescheduleConflict[];
 }
 
+export type CampaignCancelResponseStatus = typeof CampaignCancelResponseStatus[keyof typeof CampaignCancelResponseStatus];
+
+
+export const CampaignCancelResponseStatus = {
+  completed: 'completed',
+} as const;
+
+export interface CampaignCancelResponse {
+  campaignId: string;
+  status: CampaignCancelResponseStatus;
+  /** @minimum 0 */
+  stoppedRecipients: number;
+  /** @minimum 0 */
+  inFlightRecipients: number;
+  completedAt: string;
+}
+
 export interface CampaignAudienceSummary {
   /** @minimum 0 */
   uniqueRecipients: number;

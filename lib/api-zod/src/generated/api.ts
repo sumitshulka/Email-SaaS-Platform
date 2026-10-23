@@ -5773,6 +5773,28 @@ export const RescheduleCampaignResponse = zod.object({
 
 
 /**
+ * @summary Stop a paused campaign while preserving its delivery history
+ */
+export const CancelPausedCampaignParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const cancelPausedCampaignResponseStoppedRecipientsMin = 0;
+
+export const cancelPausedCampaignResponseInFlightRecipientsMin = 0;
+
+
+
+export const CancelPausedCampaignResponse = zod.object({
+  "campaignId": zod.string().uuid(),
+  "status": zod.enum(['completed']),
+  "stoppedRecipients": zod.number().int().min(cancelPausedCampaignResponseStoppedRecipientsMin),
+  "inFlightRecipients": zod.number().int().min(cancelPausedCampaignResponseInFlightRecipientsMin),
+  "completedAt": zod.coerce.date()
+})
+
+
+/**
  * SMTP acceptance is not proof of inbox delivery. Imported reports are user-provided and are not authenticated provider events.
  * @summary Get SMTP and imported delivery evidence for a tenant campaign
  */

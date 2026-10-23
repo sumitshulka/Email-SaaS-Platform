@@ -72,6 +72,8 @@ export * from './campaignAttachment';
 export * from './campaignAttachmentUpload';
 export * from './campaignAttachmentUploadInput';
 export * from './campaignAudienceSummary';
+export * from './campaignCancelResponse';
+export * from './campaignCancelResponseStatus';
 export * from './campaignDashboard';
 export * from './campaignDeliveryReport';
 export * from './campaignDeliveryReportSummary';
