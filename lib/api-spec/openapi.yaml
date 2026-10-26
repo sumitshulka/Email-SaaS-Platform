@@ -2575,6 +2575,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/attachments/availability:
+    get:
+      operationId: getCampaignAttachmentAvailability
+      tags: [sending]
+      summary: Check whether campaign PDF uploads are configured
+      responses:
+        "200":
+          description: Campaign PDF upload availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignAttachmentAvailability"
   /campaigns/attachments/upload-url:
     post:
       operationId: requestCampaignAttachmentUpload
@@ -6285,6 +6297,11 @@ components:
         uploadUrl: { type: string, format: uri }
         objectPath: { type: string }
       required: [uploadUrl, objectPath]
+    CampaignAttachmentAvailability:
+      type: object
+      properties:
+        available: { type: boolean }
+      required: [available]
     CampaignInput:
       type: object
       properties:

@@ -19,17 +19,21 @@ type StoredS3Settings = {
   secretAccessKeyEncrypted: string;
 };
 
-async function getStorageSettings(): Promise<StoredS3Settings> {
+async function getStorageSettings(): Promise<StoredS3Settings | null> {
   const [row] = await db.select().from(systemConfigurationTable).where(eq(systemConfigurationTable.key, SETTINGS_KEY));
   const value = row?.value;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Campaign object storage is not configured by a superadmin.");
+    return null;
   }
   const settings = value as Partial<StoredS3Settings>;
   if (!settings.bucket || !settings.region || !settings.accessKeyIdEncrypted || !settings.secretAccessKeyEncrypted) {
-    throw new Error("Campaign object storage is not configured by a superadmin.");
+    return null;
   }
   return settings as StoredS3Settings;
+}
+
+export async function isCampaignAttachmentStorageConfigured(): Promise<boolean> {
+  return Boolean(await getStorageSettings());
 }
 
 function clientConfig(settings: StoredS3Settings): S3ClientConfig {
@@ -71,6 +75,9 @@ export async function createCampaignAttachmentUpload(userId: string, name: strin
   if (!/^[^/\\\u0000-\u001f]{1,180}\.pdf$/i.test(name)) throw new Error("Only PDF files are allowed.");
   if (!Number.isInteger(size) || size < 1 || size > MAX_BYTES) throw new Error("Each PDF must be 5 MB or smaller.");
   const settings = await getStorageSettings();
+  if (!settings) {
+    throw new Error("Campaign PDF uploads are unavailable because private storage is not configured.");
+  }
   const key = `${settings.prefix.replace(/^\/+|\/+$/g, "")}/mailflow-attachments/${userId}/${randomUUID()}`.replace(/^\//, "");
   const client = new S3Client(clientConfig(settings));
   const uploadUrl = await getSignedUrl(
@@ -87,6 +94,9 @@ export async function createCampaignAttachmentUpload(userId: string, name: strin
 export async function readCampaignAttachments(userId: string, attachments: CampaignAttachment[]) {
   if (attachments.length === 0) return [];
   const settings = await getStorageSettings();
+  if (!settings) {
+    throw new Error("Campaign attachment storage is not configured.");
+  }
   const client = new S3Client(clientConfig(settings));
   let total = 0;
   const result = [];

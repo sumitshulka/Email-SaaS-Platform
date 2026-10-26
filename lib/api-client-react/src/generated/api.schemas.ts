@@ -3594,6 +3594,10 @@ export interface CampaignAttachmentUpload {
   objectPath: string;
 }
 
+export interface CampaignAttachmentAvailability {
+  available: boolean;
+}
+
 export interface CampaignInput {
   /** @nullable */
   senderAccountId?: string | null;

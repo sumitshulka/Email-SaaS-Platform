@@ -48,6 +48,7 @@ import type {
   AuthUser,
   BlockedTermPreviewInput,
   BlockedTermPreviewResult,
+  CampaignAttachmentAvailability,
   CampaignAttachmentUpload,
   CampaignAttachmentUploadInput,
   CampaignAudienceSummary,
@@ -8948,6 +8949,83 @@ export const useCreateCampaign = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getCreateCampaignMutationOptions(options));
     }
+
+export const getGetCampaignAttachmentAvailabilityUrl = () => {
+
+
+
+
+  return `/api/campaigns/attachments/availability`
+}
+
+/**
+ * @summary Check whether campaign PDF uploads are configured
+ */
+export const getCampaignAttachmentAvailability = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignAttachmentAvailability> => {
+
+  return customFetch<CampaignAttachmentAvailability>(getGetCampaignAttachmentAvailabilityUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignAttachmentAvailabilityQueryKey = () => {
+    return [
+    `/api/campaigns/attachments/availability`
+    ] as const;
+    }
+
+
+export const getGetCampaignAttachmentAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignAttachmentAvailabilityQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>> = ({ signal }) => getCampaignAttachmentAvailability({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignAttachmentAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>>
+export type GetCampaignAttachmentAvailabilityQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether campaign PDF uploads are configured
+ */
+
+export function useGetCampaignAttachmentAvailability<TData = Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignAttachmentAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignAttachmentAvailabilityQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRequestCampaignAttachmentUploadUrl = () => {
 

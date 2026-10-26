@@ -69,6 +69,7 @@ export * from './blockedTermPreviewInput';
 export * from './blockedTermPreviewInputSampleFields';
 export * from './blockedTermPreviewResult';
 export * from './campaignAttachment';
+export * from './campaignAttachmentAvailability';
 export * from './campaignAttachmentUpload';
 export * from './campaignAttachmentUploadInput';
 export * from './campaignAudienceSummary';

@@ -21,13 +21,13 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
-  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
+  exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetCampaignAttachmentAvailabilityQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign, useCancelPausedCampaign,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useListCampaignReplies, useSetCampaignPaused,
-  useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
+  useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useGetCampaignAttachmentAvailability, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
   useUpdateContactList,
@@ -1911,6 +1911,13 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const campaignsQuery = useGetCampaignHistory(campaignHistoryParams);
   const listsQuery = useListContactLists(); const senderAccountsQuery = useListTenantSendingAccounts();
   const variantLimitsQuery = useGetCampaignVariantLimits();
+  const attachmentAvailabilityQuery = useGetCampaignAttachmentAvailability({
+    query: {
+      queryKey: getGetCampaignAttachmentAvailabilityQueryKey(),
+      staleTime: 60_000,
+    },
+  });
+  const campaignPdfUploadAvailable = attachmentAvailabilityQuery.data?.available === true;
   const create = useCreateCampaign(); const createFollowUp = useCreateCampaignFollowUp(); const update = useUpdateCampaign(); const remove = useDeleteCampaign(); const send = useSendCampaign(); const pauseCampaign = useSetCampaignPaused();
   const rescheduleCampaign = useRescheduleCampaign();
   const cancelPausedCampaign = useCancelPausedCampaign();
@@ -2201,6 +2208,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [], attachments: campaign.attachments ?? [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
   const uploadCampaignAttachment = async (file: File) => {
     setAttachmentError('');
+    if (!campaignPdfUploadAvailable) {
+      setAttachmentError('PDF uploads are unavailable because document storage is not configured. You can continue without an attachment.');
+      return;
+    }
     const maxBytes = 5 * 1024 * 1024;
     if (!/\.pdf$/i.test(file.name) || file.size < 1 || file.size > maxBytes) {
       setAttachmentError('Choose a PDF file no larger than 5 MB.');
@@ -2832,12 +2843,13 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           <section hidden={campaignStep !== 2} className="rounded-lg border border-[#dce4e9] bg-white p-4" aria-label="Email attachments">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="text-[12px] font-semibold text-[#344154]">PDF attachments</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Up to 2 PDFs; each and the combined total must be 5 MB or less.</p></div>
-              <label className={cx('inline-flex cursor-pointer items-center gap-2 rounded-md border border-[#c9d7e5] px-3 py-2 text-[11px] font-semibold text-[#245b9b] hover:bg-[#f2f7fc]', (uploadingAttachment || form.attachments.length >= 2) && 'cursor-not-allowed opacity-50')}>
+              <label className={cx('inline-flex items-center gap-2 rounded-md border border-[#c9d7e5] px-3 py-2 text-[11px] font-semibold text-[#245b9b]', campaignPdfUploadAvailable ? 'cursor-pointer hover:bg-[#f2f7fc]' : 'cursor-not-allowed opacity-50', (uploadingAttachment || form.attachments.length >= 2) && 'cursor-not-allowed opacity-50')}>
                 {uploadingAttachment ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Upload className="h-3.5 w-3.5"/>}
-                {uploadingAttachment ? 'Uploading PDF…' : 'Add PDF'}
-                <input data-testid="input-campaign-attachment" type="file" accept="application/pdf,.pdf" className="sr-only" disabled={uploadingAttachment || form.attachments.length >= 2} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void uploadCampaignAttachment(file); }}/>
+                {uploadingAttachment ? 'Uploading PDF…' : attachmentAvailabilityQuery.isLoading ? 'Checking PDF storage…' : campaignPdfUploadAvailable ? 'Add PDF' : 'PDF uploads unavailable'}
+                <input data-testid="input-campaign-attachment" type="file" accept="application/pdf,.pdf" className="sr-only" disabled={!campaignPdfUploadAvailable || attachmentAvailabilityQuery.isLoading || attachmentAvailabilityQuery.isError || uploadingAttachment || form.attachments.length >= 2} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void uploadCampaignAttachment(file); }}/>
               </label>
             </div>
+            {!campaignPdfUploadAvailable && <p role="status" className="mt-2 text-[11px] leading-5 text-[#778392]">{attachmentAvailabilityQuery.isLoading ? 'Checking PDF storage availability…' : attachmentAvailabilityQuery.isError ? 'PDF storage availability could not be checked, so uploads are disabled. You can still create the campaign without a PDF.' : 'PDF storage is not configured, so uploads are disabled. You can still create the campaign without a PDF.'}</p>}
             {form.attachments.length > 0 && <ul className="mt-3 space-y-2">{form.attachments.map((file, index) => <li key={file.objectPath} className="flex items-center justify-between gap-3 rounded-md bg-[#f7f9fb] px-3 py-2 text-[11px]"><span className="min-w-0 truncate font-medium text-[#344154]">{file.name}<span className="ml-2 text-[10px] font-normal text-[#778392]">{(file.size / 1024 / 1024).toFixed(2)} MB</span></span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => setForm(current => ({ ...current, attachments: current.attachments.filter((_, i) => i !== index) }))} className="shrink-0 text-[#8a4b40] hover:underline">Remove</button></li>)}</ul>}
             <p className="mt-2 text-[10px] text-[#808a97]">Total: {(form.attachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(2)} / 5 MB</p>
             {attachmentError && <p role="alert" className="mt-2 text-[11px] text-[#a23f35]">{attachmentError}</p>}

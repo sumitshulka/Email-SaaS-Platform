@@ -5031,6 +5031,14 @@ export const CreateCampaignResponse = zod.object({
 
 
 /**
+ * @summary Check whether campaign PDF uploads are configured
+ */
+export const GetCampaignAttachmentAvailabilityResponse = zod.object({
+  "available": zod.boolean()
+})
+
+
+/**
  * @summary Request a private upload URL for a campaign PDF
  */
 export const requestCampaignAttachmentUploadBodyNameMax = 180;

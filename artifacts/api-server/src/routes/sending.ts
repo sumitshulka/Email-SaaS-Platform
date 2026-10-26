@@ -36,6 +36,7 @@ import {
   GetCampaignHistoryResponse,
   GetCampaignDashboardParams,
   GetCampaignDashboardResponse,
+  GetCampaignAttachmentAvailabilityResponse,
   GetCampaignVariantLimitsResponse,
   ApplyCampaignUnsubscribeResponse,
   SetCampaignPausedBody,
@@ -192,6 +193,7 @@ import { requireUserRole } from "../lib/session";
 import { verifyContactEmail } from "../lib/contact-email-verifier";
 import {
   createCampaignAttachmentUpload,
+  isCampaignAttachmentStorageConfigured,
   readCampaignAttachments,
   validateAttachmentList,
 } from "../lib/campaign-attachments";
@@ -1328,6 +1330,25 @@ function isPublicIpv4(address: string): boolean {
     (a === 198 && (b === 18 || b === 19))
   );
 }
+
+router.get(
+  "/campaigns/attachments/availability",
+  requireUserRole,
+  async (_req, res): Promise<void> => {
+    try {
+      res.json(
+        GetCampaignAttachmentAvailabilityResponse.parse({
+          available: await isCampaignAttachmentStorageConfigured(),
+        }),
+      );
+    } catch {
+      res.status(500).json({
+        error: "Could not check PDF upload availability.",
+        code: "ATTACHMENT_STORAGE_STATUS_UNAVAILABLE",
+      });
+    }
+  },
+);
 
 router.post(
   "/sending/accounts/:accountId/inbox-check",
