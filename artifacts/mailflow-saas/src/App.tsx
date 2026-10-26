@@ -403,6 +403,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Platform configuration',
     items: [
       { href: '/admin/settings', label: 'Platform settings', icon: Settings2 },
+      { href: '/admin/object-storage', label: 'Campaign file storage', icon: Package },
       { href: '/admin/google-oauth', label: 'Gmail setup', icon: ShieldCheck },
       { href: '/admin/ai-provider', label: 'AI integration', icon: BrainCircuit },
       { href: '/admin/contact-intent', label: 'Intent questionnaire', icon: BrainCircuit },
