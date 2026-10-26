@@ -1,12 +1,16 @@
-# Mailflow SaaS architecture
+# Mailflow SaaS architecture — initial plan
 
-## Delivery order
+> **Document status:** This file records the initial phased architecture plan and
+> planned table inventory. It predates many currently implemented features and
+> is not a current feature list or authoritative description of production
+> behavior. See [the functional guide](functional-guide.md) for the current
+> implemented product workflows and limits.
 
-Build in the eight product phases in the specification. Phase 1 is the current
-scope: authentication, roles, tenant identity, user administration, admin
-settings, and configuration. Subscription, SMTP sender accounts, contacts,
-templates, campaigns, durable sending jobs, and analytics will be delivered in
-their later phases; they are not represented as working features until then.
+## Original delivery plan
+
+The project was originally planned as eight product phases. The Phase 1 scope
+and “future” items below describe that original plan; they do not reflect the
+current feature set.
 
 ## System architecture
 
