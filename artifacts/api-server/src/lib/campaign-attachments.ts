@@ -86,6 +86,8 @@ export async function readCampaignAttachments(
   userId: string,
   attachments: CampaignAttachment[],
 ) {
+  if (attachments.length === 0) return [];
+
   const { bucketName, prefix } = storageLocation();
   let total = 0;
   const result = [];

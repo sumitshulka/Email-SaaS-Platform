@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { validateAttachmentList } from "../src/lib/campaign-attachments.ts";
+import {
+  readCampaignAttachments,
+  validateAttachmentList,
+} from "../src/lib/campaign-attachments.ts";
 
 const entry = (name, size, objectPath = "/objects/mailflow-attachments/user-id/01234567-89ab-4cde-8fab-0123456789ab") => ({
   objectPath,
@@ -25,6 +28,20 @@ describe("campaign PDF attachment limits", () => {
       entry("one.pdf", 3_000_001),
       entry("two.pdf", 2_242_880, "/objects/mailflow-attachments/user-id/11234567-89ab-4cde-8fab-0123456789ab"),
     ]), false);
+  });
+
+  it("allows campaigns without attachments when private storage is not configured", async () => {
+    const previousPrivateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+    delete process.env.PRIVATE_OBJECT_DIR;
+    try {
+      assert.deepEqual(await readCampaignAttachments("user-id", []), []);
+    } finally {
+      if (previousPrivateObjectDir === undefined) {
+        delete process.env.PRIVATE_OBJECT_DIR;
+      } else {
+        process.env.PRIVATE_OBJECT_DIR = previousPrivateObjectDir;
+      }
+    }
   });
 
   it("rejects non-PDF names and paths outside private campaign uploads", () => {
