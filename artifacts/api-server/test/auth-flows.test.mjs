@@ -963,6 +963,7 @@ describe("contact and company workbook exports", () => {
             lastName: "Filtered",
             email: "charlie@northstar.test",
             location: "Austin, TX",
+            ...(email === "one@owner.test" ? { companyName: "Acme & Sons" } : {}),
             subscribed: true,
           },
           {
@@ -13271,7 +13272,6 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
             email,
             firstName: "Owner",
             lastName: "Contact",
-            ...(email === "one@owner.test" ? { companyName: "Acme & Sons" } : {}),
             subscribed: true,
             listIds: [ownerList.body.id],
           },
@@ -13470,6 +13470,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       encryption: "none",
       fromName: "Owner Mail",
       fromEmail: "mail@owner.test",
+      replyTo: "mail@owner.test",
     };
     emailModule.setTenantEmailVerifierForTests(async () => {
       throw new Error("SMTP authentication rejected");
@@ -13532,6 +13533,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       senderAfterSuccessfulConnectionCheck.connectionCheckStatus,
       "success",
     );
+    assert.equal(senderAfterSuccessfulConnectionCheck.replyTo, "mail@owner.test");
     assert.equal(
       new Date(senderAfterSuccessfulConnectionCheck.connectionCheckAt).toISOString(),
       successfulSavedConnectionCheck.body.checkedAt,
@@ -13542,6 +13544,13 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     );
     assert.equal(senderAfterSuccessfulConnectionCheck.verifiedAt, null);
     assert.equal(tenantDeliveries.length, deliveriesBeforeConnectionCheck);
+    const dashboardAfterSuccessfulConnectionCheck = await api("/dashboard", {
+      cookie: owner.cookie,
+    });
+    assert.equal(
+      dashboardAfterSuccessfulConnectionCheck.body.setupChecklist.emailSetup,
+      true,
+    );
 
     const testedEmailConfigurations = [];
     emailModule.setTenantEmailTransportForTests(async (message, configuration) => {

@@ -368,7 +368,7 @@ export function SendingSettingsPage() {
   const currentSendingSettings = (): TenantSendingSettingsInput => ({
       provider: form.provider, host: form.host.trim(), port: Number(form.port), encryption: form.encryption,
       ...(form.username.trim() ? { username: form.username.trim() } : {}), ...(form.password ? { password: form.password } : {}),
-      fromName: form.fromName.trim(), fromEmail: form.fromEmail.trim(),
+      fromName: form.fromName.trim(), fromEmail: form.fromEmail.trim(), replyTo: form.fromEmail.trim(),
   });
   const canTestSmtp = Boolean(
     form.host.trim() &&
