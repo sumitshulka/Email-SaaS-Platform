@@ -20,6 +20,7 @@
 - [Google OAuth admin setup](google-oauth-admin-config.md) — keep Gmail OAuth credentials in superadmin-managed app settings, not Replit Secrets.
 - [Gmail mailbox replacement](gmail-mailbox-replacement.md) — an unverified replacement must not trigger revocation when a saved mailbox already exists.
 - [SMTP sender accounts](smtp-sender-account-quota.md) — sender slots/caps are mailbox-specific; M365 MFA mailboxes may need app passwords; ZeptoMail is transactional-only.
+- [SMTP setup versus campaign readiness](smtp-setup-verification.md) — a saved-settings connection check completes onboarding, but campaign sending still requires an accepted SMTP test email.
 - [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
 - [Settings snapshot concurrency](settings-snapshot-concurrency.md) — full settings replacements need a version of the locked current values; timestamps can be absent or imprecise.

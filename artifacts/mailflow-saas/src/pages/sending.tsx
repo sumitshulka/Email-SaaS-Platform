@@ -37,7 +37,7 @@ import type {
   ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
   CampaignHistory, GetCampaignHistoryParams, GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
-  SenderInboxCheckResult,
+  SenderInboxCheckResult, UserDashboard,
   ListContactsQueryResult,
 } from '@workspace/api-client-react';
 import {
@@ -310,6 +310,18 @@ export function SendingSettingsPage() {
     void qc.invalidateQueries({ queryKey: getGetTenantSendingSettingsQueryKey() });
     void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
   };
+  const markEmailSetupComplete = () => {
+    qc.setQueryData<UserDashboard>(getGetUserDashboardQueryKey(), current => {
+      if (!current || current.setupChecklist.emailSetup) return current;
+      const setupChecklist = { ...current.setupChecklist, emailSetup: true };
+      return {
+        ...current,
+        setupChecklist,
+        setupStepsCompleted: Object.values(setupChecklist).filter(Boolean).length,
+      };
+    });
+    void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+  };
   const selectAccount = (accountId: string) => {
     setSelectedAccountId(accountId);
     const account = accounts.find(account => account.id === accountId);
@@ -407,6 +419,7 @@ export function SendingSettingsPage() {
           savedSettingsUpdated: response.savedSettingsUpdated,
         });
         refreshSenderAccounts();
+        if (response.savedSettingsUpdated) markEmailSetupComplete();
         setNotice({ kind: 'success', text: response.message });
       },
       onError: error => {
@@ -446,6 +459,7 @@ export function SendingSettingsPage() {
       onSuccess: response => {
         if (response.verifiedAt) {
           refreshSenderAccounts();
+          markEmailSetupComplete();
         }
         setNotice({ kind: 'success', text: response.message || 'SMTP accepted the test message; check the recipient mailbox to confirm it arrived.' });
       },
@@ -541,7 +555,7 @@ export function SendingSettingsPage() {
           </div>
         </section>
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
-          <div className={`${panelClass} flex items-center gap-3 p-4`} style={{ backgroundColor: '#f4f8ff', borderColor: '#dce7f5' }}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fc] text-[#245b9b]"><Fingerprint className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Identity status</div><div className="mt-1"><Status tone={settings?.verified ? 'green' : 'orange'}>{settings?.verified ? 'Verified' : 'Verification needed'}</Status></div></div></div>
+          <div className={`${panelClass} flex items-center gap-3 p-4`} style={{ backgroundColor: '#f4f8ff', borderColor: '#dce7f5' }}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[#245b9b]"><Fingerprint className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Campaign sender status</div><div className="mt-1"><Status tone={settings?.verified ? 'green' : 'orange'}>{settings?.verified ? 'Test email accepted' : 'Test email required'}</Status></div><p className="mt-1 text-[10px] leading-4 text-[#778291]">A connection check completes setup; campaigns require an accepted test email.</p></div></div>
           <div className={`${panelClass} flex items-center gap-3 p-4`} style={{ backgroundColor: '#f5f7fa', borderColor: '#e1e7ee' }}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#f0f3f6] text-[#657488]"><ShieldCheck className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">SMTP credentials</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{settings?.credentialsConfigured ? 'Configured · protected' : 'Not configured'}</div></div></div>
           <div className={`${panelClass} flex items-center gap-3 p-4`} style={{ backgroundColor: '#fff8f1', borderColor: '#f0e1d2' }}><div className="grid h-9 w-9 place-items-center rounded-md bg-[#fff3e8] text-[#ae642c]"><Clock3 className="h-4 w-4"/></div><div><div className="text-[11px] text-[#778291]">Last updated</div><div className="mt-1 text-[13px] font-semibold text-[#26364a]">{formatDate(settings?.updatedAt)}</div></div></div>
         </div>
@@ -578,7 +592,7 @@ export function SendingSettingsPage() {
                 <div className="flex items-start gap-2">{connectionResult.kind === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0"/> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>}<div><strong>{connectionResult.kind === 'success' ? 'SMTP connection successful' : 'SMTP connection failed'}</strong><p>{connectionResult.message}</p><p className="mt-1">Checked {formatDate(connectionResult.checkedAt)}{connectionResult.savedSettingsUpdated ? ' · Saved check details updated' : ' · Saved check details unchanged'}</p></div></div>
               </div>}
               {settings?.connectionCheckAt && settings.connectionCheckStatus && <div data-testid="text-last-smtp-connection-check" className="flex flex-wrap items-center gap-2 border-t border-[#edf0f2] pt-3 text-[11px] text-[#647365]"><span>Last saved-settings connection check:</span><Status tone={settings.connectionCheckStatus === 'success' ? 'green' : 'orange'}>{settings.connectionCheckStatus === 'success' ? 'Successful' : 'Failed'}</Status><span>{formatDate(settings.connectionCheckAt)}</span></div>}
-              <p className="text-[11px] leading-5 text-[#788392]">A connection check sends no email and does not mark the sender verified for campaigns. Matching saved settings keep a separate result and date; draft values are never saved. Sending a test email marks matching saved settings verified.</p>
+              <p className="text-[11px] leading-5 text-[#788392]">A successful connection check sends no email and completes the Getting Started email step only when it matches saved settings. Campaigns require a test email accepted by the SMTP server; this does not confirm inbox delivery. Draft values are never saved.</p>
               {settings?.verified && settings.verifiedAt && <div className="flex items-start gap-2 border-t border-[#edf0f2] pt-4 text-[11px] leading-5 text-[#647365]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#52815d]"/>Verified {formatDate(settings.verifiedAt)}</div>}
             </form>
           </div>
