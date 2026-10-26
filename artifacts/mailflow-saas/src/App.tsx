@@ -36,6 +36,7 @@ import AdminAIProviderPage from '@/pages/admin-ai-provider';
 import AdminContactIntentPage from '@/pages/admin-contact-intent';
 import { AdminGlobalCompaniesPage } from '@/pages/admin-global-companies';
 import { AdminCompanyIntelligencePage } from '@/pages/admin-company-intelligence';
+import AdminObjectStoragePage from '@/pages/admin-object-storage';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PackageCheckoutPage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
@@ -1581,6 +1582,7 @@ function AdminSettingsPage() {
         title="Settings"
         detail="Operational controls are platform-wide. SMTP credentials are write-only and never returned by the API."
       />
+      <p className="mb-4 text-right text-xs"><Link href="/admin/object-storage" className="font-semibold text-[#245b9b] hover:underline">Campaign file storage settings</Link></p>
       <form onSubmit={savePlatform} className="space-y-4">
         {settingGroups.map(group => (
           <SettingsGroup key={group.title} {...group} values={settings} setValues={setSettings}/>
@@ -1833,6 +1835,7 @@ function Routes() {
     <Route path="/admin/packages">{() => <RouteGate admin>{() => <AdminPackagesPage/>}</RouteGate>}</Route>
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>
     <Route path="/admin/settings">{() => <RouteGate admin>{() => <AdminSettingsPage/>}</RouteGate>}</Route>
+    <Route path="/admin/object-storage">{() => <RouteGate admin>{() => <AdminObjectStoragePage/>}</RouteGate>}</Route>
     <Route path="/admin/google-oauth">{() => <RouteGate admin>{() => <AdminGoogleOAuthPage/>}</RouteGate>}</Route>
     <Route path="/admin/ai-provider">{() => <RouteGate admin>{() => <AdminAIProviderPage/>}</RouteGate>}</Route>
     <Route path="/admin/contact-intent">{() => <RouteGate admin>{() => <AdminContactIntentPage/>}</RouteGate>}</Route>

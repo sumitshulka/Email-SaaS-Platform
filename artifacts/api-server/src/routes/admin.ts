@@ -18,6 +18,7 @@ import {
   GetAdminDashboardResponse,
   GetAdminSettingsResponse,
   GetApplicationEmailSettingsResponse,
+  GetCampaignObjectStorageSettingsResponse,
   GetGoogleOAuthSettingsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
@@ -34,6 +35,7 @@ import {
   DeleteAdminUserResponse,
   UpdateApplicationEmailSettingsBody,
   UpdateApplicationEmailSettingsResponse,
+  UpdateCampaignObjectStorageSettingsBody,
   UpdateGoogleOAuthSettingsBody,
   UpdateGoogleOAuthSettingsResponse,
 } from "@workspace/api-zod";
@@ -851,6 +853,100 @@ router.put("/admin/settings/email", requireSuperadmin, async (req, res): Promise
       updatedAt: saved!.updatedAt.toISOString(),
     }),
   );
+});
+
+router.get("/admin/settings/object-storage", requireSuperadmin, async (_req, res): Promise<void> => {
+  const [row] = await db.select().from(systemConfigurationTable).where(eq(systemConfigurationTable.key, "campaign_object_storage"));
+  const config = row?.value && typeof row.value === "object" && !Array.isArray(row.value)
+    ? row.value as Record<string, unknown>
+    : {};
+  res.json(GetCampaignObjectStorageSettingsResponse.parse({
+    configured: Boolean(config.bucket && config.accessKeyIdEncrypted && config.secretAccessKeyEncrypted),
+    endpoint: typeof config.endpoint === "string" ? config.endpoint : null,
+    region: typeof config.region === "string" ? config.region : null,
+    bucket: typeof config.bucket === "string" ? config.bucket : null,
+    prefix: typeof config.prefix === "string" ? config.prefix : null,
+    forcePathStyle: config.forcePathStyle === true,
+    accessKeyIdConfigured: Boolean(config.accessKeyIdEncrypted),
+    secretAccessKeyConfigured: Boolean(config.secretAccessKeyEncrypted),
+    updatedAt: row?.updatedAt?.toISOString() ?? null,
+  }));
+});
+
+router.put("/admin/settings/object-storage", requireSuperadmin, async (req, res): Promise<void> => {
+  const parsed = UpdateCampaignObjectStorageSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter valid S3-compatible storage settings.", code: "INVALID_OBJECT_STORAGE_SETTINGS" });
+    return;
+  }
+  const endpoint = parsed.data.endpoint?.trim() || null;
+  if (endpoint) {
+    try {
+      const url = new URL(endpoint);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error();
+    } catch {
+      res.status(400).json({ error: "The storage endpoint must be an HTTP(S) URL without embedded credentials.", code: "INVALID_OBJECT_STORAGE_ENDPOINT" });
+      return;
+    }
+  }
+  const bucket = parsed.data.bucket.trim();
+  if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) || bucket.includes("..")) {
+    res.status(400).json({ error: "Enter a valid S3 bucket name.", code: "INVALID_OBJECT_STORAGE_BUCKET" });
+    return;
+  }
+  const prefix = parsed.data.prefix.trim().replace(/^\/+|\/+$/g, "");
+  if (prefix.split("/").some(part => part === "." || part === "..") || /[\\\u0000-\u001f]/.test(prefix)) {
+    res.status(400).json({ error: "The object prefix cannot contain traversal or control characters.", code: "INVALID_OBJECT_STORAGE_PREFIX" });
+    return;
+  }
+  const [row] = await db.select().from(systemConfigurationTable).where(eq(systemConfigurationTable.key, "campaign_object_storage"));
+  const existing = row?.value && typeof row.value === "object" && !Array.isArray(row.value)
+    ? row.value as Record<string, unknown>
+    : {};
+  const accessKeyId = parsed.data.accessKeyId?.trim() ?? "";
+  const secretAccessKey = parsed.data.secretAccessKey?.trim() ?? "";
+  if (Boolean(accessKeyId) !== Boolean(secretAccessKey)) {
+    res.status(400).json({ error: "Enter both the access key ID and secret access key, or leave both blank to keep the saved credentials.", code: "OBJECT_STORAGE_CREDENTIAL_PAIR_REQUIRED" });
+    return;
+  }
+  if ((!accessKeyId || !secretAccessKey) && (!existing.accessKeyIdEncrypted || !existing.secretAccessKeyEncrypted)) {
+    res.status(400).json({ error: "Enter the S3-compatible access key ID and secret access key.", code: "OBJECT_STORAGE_CREDENTIALS_REQUIRED" });
+    return;
+  }
+  const value = {
+    endpoint,
+    region: parsed.data.region.trim(),
+    bucket,
+    prefix,
+    forcePathStyle: parsed.data.forcePathStyle,
+    accessKeyIdEncrypted: accessKeyId ? encryptSecret(accessKeyId) : existing.accessKeyIdEncrypted,
+    secretAccessKeyEncrypted: secretAccessKey ? encryptSecret(secretAccessKey) : existing.secretAccessKeyEncrypted,
+  };
+  await db.insert(systemConfigurationTable)
+    .values({ key: "campaign_object_storage", value, updatedBy: req.authUser!.id })
+    .onConflictDoUpdate({
+      target: systemConfigurationTable.key,
+      set: { value, updatedBy: req.authUser!.id, updatedAt: new Date() },
+    });
+  await writeAuditLog({
+    actorId: req.authUser!.id,
+    action: "campaign_object_storage_configuration.updated",
+    entity: "system_configuration",
+    entityId: "campaign_object_storage",
+    ipAddress: req.ip?.slice(0, 80) ?? null,
+    metadata: { endpointConfigured: Boolean(endpoint), bucket, prefix, forcePathStyle: parsed.data.forcePathStyle },
+  });
+  res.json(GetCampaignObjectStorageSettingsResponse.parse({
+    configured: true,
+    endpoint,
+    region: value.region,
+    bucket,
+    prefix,
+    forcePathStyle: value.forcePathStyle,
+    accessKeyIdConfigured: true,
+    secretAccessKeyConfigured: true,
+    updatedAt: new Date().toISOString(),
+  }));
 });
 
 router.post("/admin/settings/email/test", requireSuperadmin, async (req, res): Promise<void> => {

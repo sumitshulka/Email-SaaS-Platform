@@ -7088,6 +7088,83 @@ export const UpdateApplicationEmailSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get masked campaign object-storage configuration
+ */
+export const getCampaignObjectStorageSettingsResponseEndpointMax = 500;
+
+export const getCampaignObjectStorageSettingsResponseRegionMax = 120;
+
+export const getCampaignObjectStorageSettingsResponseBucketMax = 255;
+
+export const getCampaignObjectStorageSettingsResponsePrefixMax = 500;
+
+
+
+export const GetCampaignObjectStorageSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "endpoint": zod.string().max(getCampaignObjectStorageSettingsResponseEndpointMax).nullable(),
+  "region": zod.string().max(getCampaignObjectStorageSettingsResponseRegionMax).nullable(),
+  "bucket": zod.string().max(getCampaignObjectStorageSettingsResponseBucketMax).nullable(),
+  "prefix": zod.string().max(getCampaignObjectStorageSettingsResponsePrefixMax).nullable(),
+  "forcePathStyle": zod.boolean(),
+  "accessKeyIdConfigured": zod.boolean(),
+  "secretAccessKeyConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save S3-compatible campaign object-storage settings
+ */
+export const updateCampaignObjectStorageSettingsBodyEndpointMax = 500;
+
+export const updateCampaignObjectStorageSettingsBodyRegionMax = 120;
+
+export const updateCampaignObjectStorageSettingsBodyBucketMin = 3;
+export const updateCampaignObjectStorageSettingsBodyBucketMax = 255;
+
+export const updateCampaignObjectStorageSettingsBodyPrefixMax = 500;
+
+export const updateCampaignObjectStorageSettingsBodyAccessKeyIdMax = 512;
+
+export const updateCampaignObjectStorageSettingsBodySecretAccessKeyMax = 512;
+
+
+
+export const UpdateCampaignObjectStorageSettingsBody = zod.object({
+  "endpoint": zod.string().max(updateCampaignObjectStorageSettingsBodyEndpointMax).nullable(),
+  "region": zod.string().min(1).max(updateCampaignObjectStorageSettingsBodyRegionMax),
+  "bucket": zod.string().min(updateCampaignObjectStorageSettingsBodyBucketMin).max(updateCampaignObjectStorageSettingsBodyBucketMax),
+  "prefix": zod.string().max(updateCampaignObjectStorageSettingsBodyPrefixMax),
+  "forcePathStyle": zod.boolean(),
+  "accessKeyId": zod.string().max(updateCampaignObjectStorageSettingsBodyAccessKeyIdMax).optional(),
+  "secretAccessKey": zod.string().max(updateCampaignObjectStorageSettingsBodySecretAccessKeyMax).optional()
+})
+
+export const updateCampaignObjectStorageSettingsResponseEndpointMax = 500;
+
+export const updateCampaignObjectStorageSettingsResponseRegionMax = 120;
+
+export const updateCampaignObjectStorageSettingsResponseBucketMax = 255;
+
+export const updateCampaignObjectStorageSettingsResponsePrefixMax = 500;
+
+
+
+export const UpdateCampaignObjectStorageSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "endpoint": zod.string().max(updateCampaignObjectStorageSettingsResponseEndpointMax).nullable(),
+  "region": zod.string().max(updateCampaignObjectStorageSettingsResponseRegionMax).nullable(),
+  "bucket": zod.string().max(updateCampaignObjectStorageSettingsResponseBucketMax).nullable(),
+  "prefix": zod.string().max(updateCampaignObjectStorageSettingsResponsePrefixMax).nullable(),
+  "forcePathStyle": zod.boolean(),
+  "accessKeyIdConfigured": zod.boolean(),
+  "secretAccessKeyConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Get masked Google OAuth configuration
  */
 export const GetGoogleOAuthSettingsResponse = zod.object({

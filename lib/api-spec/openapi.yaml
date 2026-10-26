@@ -3679,6 +3679,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApplicationEmailSettings"
+  /admin/settings/object-storage:
+    get:
+      operationId: getCampaignObjectStorageSettings
+      tags: [settings]
+      summary: Get masked campaign object-storage configuration
+      responses:
+        "200":
+          description: Current S3-compatible storage settings without credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignObjectStorageSettings"
+    put:
+      operationId: updateCampaignObjectStorageSettings
+      tags: [settings]
+      summary: Save S3-compatible campaign object-storage settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignObjectStorageSettingsInput"
+      responses:
+        "200":
+          description: Saved storage settings without credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignObjectStorageSettings"
+        "400":
+          description: Invalid storage settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/google-oauth:
     get:
       operationId: getGoogleOAuthSettings
@@ -6708,6 +6743,30 @@ components:
         clientSecret: { type: string, minLength: 1, maxLength: 512 }
         redirectUri: { type: string, format: uri, minLength: 1, maxLength: 2048 }
       required: [clientId, redirectUri]
+    CampaignObjectStorageSettings:
+      type: object
+      properties:
+        configured: { type: boolean }
+        endpoint: { type: ["string", "null"], maxLength: 500 }
+        region: { type: ["string", "null"], maxLength: 120 }
+        bucket: { type: ["string", "null"], maxLength: 255 }
+        prefix: { type: ["string", "null"], maxLength: 500 }
+        forcePathStyle: { type: boolean }
+        accessKeyIdConfigured: { type: boolean }
+        secretAccessKeyConfigured: { type: boolean }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [configured, endpoint, region, bucket, prefix, forcePathStyle, accessKeyIdConfigured, secretAccessKeyConfigured, updatedAt]
+    CampaignObjectStorageSettingsInput:
+      type: object
+      properties:
+        endpoint: { type: ["string", "null"], maxLength: 500 }
+        region: { type: string, minLength: 1, maxLength: 120 }
+        bucket: { type: string, minLength: 3, maxLength: 255 }
+        prefix: { type: string, maxLength: 500 }
+        forcePathStyle: { type: boolean }
+        accessKeyId: { type: string, maxLength: 512 }
+        secretAccessKey: { type: string, maxLength: 512 }
+      required: [endpoint, region, bucket, prefix, forcePathStyle]
     AIProviderType:
       type: string
       enum: [openai, anthropic, gemini]

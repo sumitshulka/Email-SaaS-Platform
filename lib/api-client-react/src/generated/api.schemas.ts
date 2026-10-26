@@ -4389,6 +4389,60 @@ export interface GoogleOAuthSettingsInput {
   redirectUri: string;
 }
 
+export interface CampaignObjectStorageSettings {
+  configured: boolean;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  endpoint: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  region: string | null;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  bucket: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  prefix: string | null;
+  forcePathStyle: boolean;
+  accessKeyIdConfigured: boolean;
+  secretAccessKeyConfigured: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface CampaignObjectStorageSettingsInput {
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  endpoint: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  region: string;
+  /**
+     * @minLength 3
+     * @maxLength 255
+     */
+  bucket: string;
+  /** @maxLength 500 */
+  prefix: string;
+  forcePathStyle: boolean;
+  /** @maxLength 512 */
+  accessKeyId?: string;
+  /** @maxLength 512 */
+  secretAccessKey?: string;
+}
+
 export type AIProviderType = typeof AIProviderType[keyof typeof AIProviderType];
 
 

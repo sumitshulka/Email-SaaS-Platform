@@ -58,6 +58,8 @@ import type {
   CampaignEmailAssistResponse,
   CampaignHistory,
   CampaignInput,
+  CampaignObjectStorageSettings,
+  CampaignObjectStorageSettingsInput,
   CampaignPauseInput,
   CampaignPauseResponse,
   CampaignPreviewInput,
@@ -12521,6 +12523,171 @@ export const useUpdateApplicationEmailSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateApplicationEmailSettingsMutationOptions(options));
+    }
+
+export const getGetCampaignObjectStorageSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/object-storage`
+}
+
+/**
+ * @summary Get masked campaign object-storage configuration
+ */
+export const getCampaignObjectStorageSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignObjectStorageSettings> => {
+
+  return customFetch<CampaignObjectStorageSettings>(getGetCampaignObjectStorageSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignObjectStorageSettingsQueryKey = () => {
+    return [
+    `/api/admin/settings/object-storage`
+    ] as const;
+    }
+
+
+export const getGetCampaignObjectStorageSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignObjectStorageSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>> = ({ signal }) => getCampaignObjectStorageSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignObjectStorageSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>>
+export type GetCampaignObjectStorageSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get masked campaign object-storage configuration
+ */
+
+export function useGetCampaignObjectStorageSettings<TData = Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignObjectStorageSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignObjectStorageSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateCampaignObjectStorageSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/object-storage`
+}
+
+/**
+ * @summary Save S3-compatible campaign object-storage settings
+ */
+export const updateCampaignObjectStorageSettings = async (campaignObjectStorageSettingsInput: CampaignObjectStorageSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignObjectStorageSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignObjectStorageSettings>(getUpdateCampaignObjectStorageSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignObjectStorageSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateCampaignObjectStorageSettingsMutationKey = () => ['updateCampaignObjectStorageSettings'] as const;
+
+export const getUpdateCampaignObjectStorageSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaignObjectStorageSettings>>, TError,UpdateCampaignObjectStorageSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCampaignObjectStorageSettings>>, TError,UpdateCampaignObjectStorageSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCampaignObjectStorageSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaignObjectStorageSettings>>, UpdateCampaignObjectStorageSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateCampaignObjectStorageSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCampaignObjectStorageSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateCampaignObjectStorageSettings>>>
+    export type UpdateCampaignObjectStorageSettingsMutationBody = BodyType<CampaignObjectStorageSettingsInput>
+    export type UpdateCampaignObjectStorageSettingsMutationError = ErrorType<ApiError>
+    export type UpdateCampaignObjectStorageSettingsMutationVariables = {data: BodyType<CampaignObjectStorageSettingsInput>}
+
+    /**
+ * @summary Save S3-compatible campaign object-storage settings
+ */
+export const useUpdateCampaignObjectStorageSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaignObjectStorageSettings>>, TError,UpdateCampaignObjectStorageSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCampaignObjectStorageSettings>>,
+        TError,
+        UpdateCampaignObjectStorageSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCampaignObjectStorageSettingsMutationOptions(options));
     }
 
 export const getGetGoogleOAuthSettingsUrl = () => {

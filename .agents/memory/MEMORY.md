@@ -51,3 +51,4 @@
 - [Trace backfill progress](m365-trace-backfill-progress.md) — report date-range advancement; Microsoft’s opaque paging links do not expose a trustworthy total.
 - [Color-only UI changes](color-only-ui-changes.md) — when asked to adjust color accents, preserve the existing layout, spacing, and typography.
 - [Inactivity lifecycle](inactivity-lifecycle.md) — inactivity checks and notices are admin-initiated; suspension disables access, and delayed removal stays recoverable through soft delete.
+- [Production object storage](production-object-storage.md) — production is self-hosted outside Replit; superadmins configure S3-compatible storage and credentials remain encrypted.
