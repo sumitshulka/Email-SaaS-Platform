@@ -6360,7 +6360,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
     [contactCount],
     [companyCount],
     [listCount],
-    [sender],
+    senderAccounts,
     amountSpentRows,
     lifecycleStageRows,
     leadStatusRows,
@@ -6391,11 +6391,11 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       .select({
         id: tenantSendingConfigurationTable.id,
         verifiedAt: tenantSendingConfigurationTable.verifiedAt,
+        connectionCheckStatus: tenantSendingConfigurationTable.connectionCheckStatus,
       })
       .from(tenantSendingConfigurationTable)
       .where(eq(tenantSendingConfigurationTable.userId, userId))
-      .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt))
-      .limit(1),
+      .orderBy(desc(tenantSendingConfigurationTable.isPrimary), asc(tenantSendingConfigurationTable.createdAt)),
     db
       .select({
         currency: paymentsTable.currency,
@@ -6474,6 +6474,7 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       .limit(5),
   ]);
 
+  const sender = senderAccounts[0];
   const contacts = contactCount?.value ?? 0;
   const companies = companyCount?.value ?? 0;
   const activeLists = listCount?.value ?? 0;
@@ -6633,7 +6634,10 @@ router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
       req.authUser!.lastName.trim() &&
       req.authUser!.username.trim(),
     ),
-    emailSetup: Boolean(sender?.verifiedAt),
+    emailSetup: senderAccounts.some(
+      (sender) =>
+        Boolean(sender.verifiedAt) || sender.connectionCheckStatus === "success",
+    ),
     contact: contacts > 0,
     list: activeLists > 0,
     campaignQueued: Number(queuedCampaignCountRow?.value ?? 0) > 0,

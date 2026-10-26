@@ -461,7 +461,7 @@ function WorkspaceGettingStarted({ user }: { user: AuthUser }) {
 
   const steps = [
     { key: 'profile', title: 'Confirm your profile', detail: 'Check your name, email, and account details.', href: '/profile', done: query.data?.setupChecklist.profile ?? false },
-    { key: 'email', title: 'Set up your email', detail: 'Add and verify an SMTP sender account.', href: '/sending-settings', done: query.data?.setupChecklist.emailSetup ?? false },
+    { key: 'email', title: 'Set up your email', detail: 'Save an SMTP sender and pass a connection check or test email.', href: '/sending-settings', done: query.data?.setupChecklist.emailSetup ?? false },
     { key: 'contact', title: 'Add a contact', detail: 'Create your first contact in the workspace.', href: '/contacts', done: query.data?.setupChecklist.contact ?? false },
     { key: 'list', title: 'Create and manage a list', detail: 'Create an active list for your campaign audience.', href: '/lists', done: query.data?.setupChecklist.list ?? false },
     { key: 'campaign', title: 'Create your first campaign', detail: 'Prepare and queue a campaign when you’re ready.', href: '/campaigns', done: query.data?.setupChecklist.campaignQueued ?? false },
