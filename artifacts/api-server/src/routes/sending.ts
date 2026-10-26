@@ -19,7 +19,7 @@ import {
   sql,
   sum,
 } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, raw, type IRouter } from "express";
 import {
   CreateCampaignBody,
   CreateCampaignResponse,
@@ -195,6 +195,7 @@ import {
   createCampaignAttachmentUpload,
   isCampaignAttachmentStorageConfigured,
   readCampaignAttachments,
+  uploadCampaignAttachment,
   validateAttachmentList,
 } from "../lib/campaign-attachments";
 import {
@@ -5446,6 +5447,33 @@ router.get(
         ),
       }),
     );
+  },
+);
+
+router.post(
+  "/campaigns/attachments/upload",
+  requireUserRole,
+  raw({ type: "application/pdf", limit: "5mb" }),
+  async (req, res): Promise<void> => {
+    const name = typeof req.query.name === "string" ? req.query.name : "";
+    const bytes = Buffer.isBuffer(req.body) ? req.body : null;
+    if (
+      !/^[^/\\\u0000-\u001f]{1,180}\.pdf$/i.test(name) ||
+      !bytes || bytes.length < 1 || bytes.length > 5 * 1024 * 1024 ||
+      bytes.subarray(0, 5).toString("ascii") !== "%PDF-"
+    ) {
+      res.status(400).json({ error: "Choose a valid PDF file no larger than 5 MB.", code: "INVALID_ATTACHMENT" });
+      return;
+    }
+    try {
+      res.json(await uploadCampaignAttachment(req.authUser!.id, name, bytes));
+    } catch (error) {
+      req.log.error({ err: error }, "Campaign PDF upload failed");
+      res.status(500).json({
+        error: "Could not store the PDF. Check the storage endpoint and bucket write permissions.",
+        code: "ATTACHMENT_STORAGE_FAILURE",
+      });
+    }
   },
 );
 

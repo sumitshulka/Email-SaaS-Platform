@@ -5569,6 +5569,14 @@ export type GetContactIntentQuestions200 = { [key: string]: unknown };
 
 export type PutContactIntentQuestions200 = { [key: string]: unknown };
 
+export type UploadCampaignAttachmentParams = {
+/**
+ * @minLength 1
+ * @maxLength 180
+ */
+name: string;
+};
+
 export type GetCampaignHistoryParams = {
 /**
  * @minimum 1

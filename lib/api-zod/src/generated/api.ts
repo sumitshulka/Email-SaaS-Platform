@@ -5039,6 +5039,32 @@ export const GetCampaignAttachmentAvailabilityResponse = zod.object({
 
 
 /**
+ * @summary Upload a campaign PDF through the authenticated API
+ */
+export const uploadCampaignAttachmentQueryNameMax = 180;
+
+
+
+export const UploadCampaignAttachmentQueryParams = zod.object({
+  "name": zod.coerce.string().min(1).max(uploadCampaignAttachmentQueryNameMax)
+})
+
+export const uploadCampaignAttachmentResponseObjectPathMax = 300;
+
+export const uploadCampaignAttachmentResponseNameMax = 180;
+
+export const uploadCampaignAttachmentResponseSizeMax = 5242880;
+
+
+
+export const UploadCampaignAttachmentResponse = zod.object({
+  "objectPath": zod.string().min(1).max(uploadCampaignAttachmentResponseObjectPathMax),
+  "name": zod.string().min(1).max(uploadCampaignAttachmentResponseNameMax),
+  "size": zod.number().int().min(1).max(uploadCampaignAttachmentResponseSizeMax)
+})
+
+
+/**
  * @summary Request a private upload URL for a campaign PDF
  */
 export const requestCampaignAttachmentUploadBodyNameMax = 180;

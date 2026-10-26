@@ -91,6 +91,37 @@ export async function createCampaignAttachmentUpload(userId: string, name: strin
   };
 }
 
+export async function uploadCampaignAttachment(userId: string, name: string, bytes: Buffer) {
+  if (!/^[^/\\\u0000-\u001f]{1,180}\.pdf$/i.test(name)) {
+    throw new Error("Only PDF files are allowed.");
+  }
+  if (bytes.length < 1 || bytes.length > MAX_BYTES) {
+    throw new Error("Each PDF must be 5 MB or smaller.");
+  }
+  if (bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
+    throw new Error("The selected file is not a valid PDF.");
+  }
+  const settings = await getStorageSettings();
+  if (!settings) {
+    throw new Error("Campaign PDF uploads are unavailable because private storage is not configured.");
+  }
+  const id = randomUUID();
+  const key = `${settings.prefix.replace(/^\/+|\/+$/g, "")}/mailflow-attachments/${userId}/${id}`.replace(/^\//, "");
+  const client = new S3Client(clientConfig(settings));
+  await client.send(new PutObjectCommand({
+    Bucket: settings.bucket,
+    Key: key,
+    Body: bytes,
+    ContentLength: bytes.length,
+    ContentType: "application/pdf",
+  }));
+  return {
+    objectPath: `/objects/mailflow-attachments/${userId}/${id}`,
+    name,
+    size: bytes.length,
+  };
+}
+
 export async function readCampaignAttachments(userId: string, attachments: CampaignAttachment[]) {
   if (attachments.length === 0) return [];
   const settings = await getStorageSettings();

@@ -2225,25 +2225,19 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     try {
       const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
       if (new TextDecoder().decode(header) !== '%PDF-') throw new Error('The selected file is not a valid PDF.');
-      const response = await fetch('/api/campaigns/attachments/upload-url', {
+      const response = await fetch(`/api/campaigns/attachments/upload?name=${encodeURIComponent(file.name)}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name: file.name, size: file.size }),
-      });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error ?? 'Could not prepare the PDF upload.');
-      }
-      const { uploadUrl, objectPath } = await response.json();
-      const uploaded = await fetch(uploadUrl, {
-        method: 'PUT',
         headers: { 'content-type': 'application/pdf' },
         body: file,
       });
-      if (!uploaded.ok) throw new Error('The PDF upload failed. Please retry.');
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error ?? 'Could not store the PDF.');
+      }
+      const attachment = await response.json();
       setForm(current => ({
         ...current,
-        attachments: [...current.attachments, { objectPath, name: file.name, size: file.size }],
+        attachments: [...current.attachments, attachment],
       }));
     } catch (error) {
       setAttachmentError(error instanceof Error ? error.message : 'Could not upload this PDF.');

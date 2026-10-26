@@ -2587,6 +2587,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CampaignAttachmentAvailability"
+  /campaigns/attachments/upload:
+    post:
+      operationId: uploadCampaignAttachment
+      tags: [sending]
+      summary: Upload a campaign PDF through the authenticated API
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 180 }
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Stored private campaign PDF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignAttachment"
   /campaigns/attachments/upload-url:
     post:
       operationId: requestCampaignAttachmentUpload

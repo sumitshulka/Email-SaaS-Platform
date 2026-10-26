@@ -398,6 +398,7 @@ export * from './testEmailInput';
 export * from './testRazorpayConnectionInput';
 export * from './unlinkedCompanyProfile';
 export * from './unlinkedCompanyProfileCollection';
+export * from './uploadCampaignAttachmentParams';
 export * from './userDashboard';
 export * from './userDashboardSetupChecklist';
 export * from './userDashboardSubscriptionStatus';

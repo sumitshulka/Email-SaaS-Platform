@@ -48,6 +48,7 @@ import type {
   AuthUser,
   BlockedTermPreviewInput,
   BlockedTermPreviewResult,
+  CampaignAttachment,
   CampaignAttachmentAvailability,
   CampaignAttachmentUpload,
   CampaignAttachmentUploadInput,
@@ -218,6 +219,7 @@ import type {
   TestEmailInput,
   TestRazorpayConnectionInput,
   UnlinkedCompanyProfileCollection,
+  UploadCampaignAttachmentParams,
   UserDashboard,
   UserNotificationReadResponse,
   UserNotificationsResponse,
@@ -9026,6 +9028,102 @@ export function useGetCampaignAttachmentAvailability<TData = Awaited<ReturnType<
 
 
 
+
+export const getUploadCampaignAttachmentUrl = (params: UploadCampaignAttachmentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/campaigns/attachments/upload?${stringifiedParams}` : `/api/campaigns/attachments/upload`
+}
+
+/**
+ * @summary Upload a campaign PDF through the authenticated API
+ */
+export const uploadCampaignAttachment = async (uploadCampaignAttachmentBody: Blob,
+    params: UploadCampaignAttachmentParams, options?: Parameters<typeof customFetch>[1]): Promise<CampaignAttachment> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<CampaignAttachment>(getUploadCampaignAttachmentUrl(params),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/pdf', ...getHeaders(options?.headers) },
+    body: uploadCampaignAttachmentBody
+  }
+);}
+
+
+
+
+
+export const getUploadCampaignAttachmentMutationKey = () => ['uploadCampaignAttachment'] as const;
+
+export const getUploadCampaignAttachmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadCampaignAttachment>>, TError,UploadCampaignAttachmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadCampaignAttachment>>, TError,UploadCampaignAttachmentMutationVariables, TContext> => {
+
+const mutationKey = getUploadCampaignAttachmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadCampaignAttachment>>, UploadCampaignAttachmentMutationVariables> = (props) => {
+          const {data,params} = props ?? {};
+
+          return  uploadCampaignAttachment(data,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadCampaignAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof uploadCampaignAttachment>>>
+    export type UploadCampaignAttachmentMutationBody = BodyType<Blob>
+    export type UploadCampaignAttachmentMutationError = ErrorType<unknown>
+    export type UploadCampaignAttachmentMutationVariables = {data: BodyType<Blob>;params: UploadCampaignAttachmentParams}
+
+    /**
+ * @summary Upload a campaign PDF through the authenticated API
+ */
+export const useUploadCampaignAttachment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadCampaignAttachment>>, TError,UploadCampaignAttachmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadCampaignAttachment>>,
+        TError,
+        UploadCampaignAttachmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUploadCampaignAttachmentMutationOptions(options));
+    }
 
 export const getRequestCampaignAttachmentUploadUrl = () => {
 
