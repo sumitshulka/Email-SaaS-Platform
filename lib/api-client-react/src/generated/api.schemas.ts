@@ -3889,40 +3889,6 @@ export interface AdminDashboard {
   recentUsers: AdminUser[];
 }
 
-export interface AdminAccountContact {
-  id: string;
-  name: string;
-  email: string;
-  /** @nullable */
-  companyName: string | null;
-  /** @nullable */
-  jobTitle: string | null;
-  createdAt: string;
-}
-
-export interface AdminExecutedCampaign {
-  id: string;
-  name: string;
-  subject: string;
-  /** @nullable */
-  completedAt: string | null;
-  createdAt: string;
-}
-
-export interface AdminAccountContactsPage {
-  items: AdminAccountContact[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export interface AdminExecutedCampaignsPage {
-  items: AdminExecutedCampaign[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 export type InactiveUserStage = typeof InactiveUserStage[keyof typeof InactiveUserStage];
 
 
@@ -5839,28 +5805,4 @@ export const ListAdminUsersStatus = {
   inactive: 'inactive',
   pending: 'pending',
 } as const;
-
-export type ListAdminAccountContactsParams = {
-/**
- * @minimum 1
- */
-page?: number;
-/**
- * @minimum 1
- * @maximum 100
- */
-pageSize?: number;
-};
-
-export type ListAdminAccountExecutedCampaignsParams = {
-/**
- * @minimum 1
- */
-page?: number;
-/**
- * @minimum 1
- * @maximum 100
- */
-pageSize?: number;
-};
 

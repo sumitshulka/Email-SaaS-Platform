@@ -25,12 +25,10 @@ import type {
   AIProviderTestResult,
   ActivateFreeAddOnInput,
   ActivateFreeSubscriptionInput,
-  AdminAccountContactsPage,
   AdminAddOnGiftCorrectionInput,
   AdminAddOnGiftCorrectionResult,
   AdminAddOnGiftEntitlement,
   AdminDashboard,
-  AdminExecutedCampaignsPage,
   AdminFinancePaymentPage,
   AdminGlobalCompanyExportInput,
   AdminNotification,
@@ -158,8 +156,6 @@ import type {
   ImportContactsParams,
   InactiveUser,
   InactivityNoticeInput,
-  ListAdminAccountContactsParams,
-  ListAdminAccountExecutedCampaignsParams,
   ListAdminFinancePaymentsParams,
   ListAdminGlobalCompaniesParams,
   ListAdminNotificationsParams,
@@ -11544,184 +11540,6 @@ export function useListAdminUsers<TData = Awaited<ReturnType<typeof listAdminUse
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAdminUsersQueryOptions(params,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getListAdminAccountContactsUrl = (userId: string,
-    params?: ListAdminAccountContactsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/admin/users/${userId}/contacts?${stringifiedParams}` : `/api/admin/users/${userId}/contacts`
-}
-
-/**
- * @summary List contacts owned by a tenant account
- */
-export const listAdminAccountContacts = async (userId: string,
-    params?: ListAdminAccountContactsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccountContactsPage> => {
-
-  return customFetch<AdminAccountContactsPage>(getListAdminAccountContactsUrl(userId,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListAdminAccountContactsQueryKey = (userId: string,
-    params?: ListAdminAccountContactsParams,) => {
-    return [
-    `/api/admin/users/${userId}/contacts`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-
-export const getListAdminAccountContactsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAccountContacts>>, TError = ErrorType<unknown>>(userId: string,
-    params?: ListAdminAccountContactsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccountContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListAdminAccountContactsQueryKey(userId,params);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAccountContacts>>> = ({ signal }) => listAdminAccountContacts(userId,params, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: userId !== null && userId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAccountContacts>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListAdminAccountContactsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAccountContacts>>>
-export type ListAdminAccountContactsQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List contacts owned by a tenant account
- */
-
-export function useListAdminAccountContacts<TData = Awaited<ReturnType<typeof listAdminAccountContacts>>, TError = ErrorType<unknown>>(
- userId: string,
-    params?: ListAdminAccountContactsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccountContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListAdminAccountContactsQueryOptions(userId,params,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getListAdminAccountExecutedCampaignsUrl = (userId: string,
-    params?: ListAdminAccountExecutedCampaignsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/admin/users/${userId}/executed-campaigns?${stringifiedParams}` : `/api/admin/users/${userId}/executed-campaigns`
-}
-
-/**
- * @summary List completed campaigns owned by a tenant account
- */
-export const listAdminAccountExecutedCampaigns = async (userId: string,
-    params?: ListAdminAccountExecutedCampaignsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminExecutedCampaignsPage> => {
-
-  return customFetch<AdminExecutedCampaignsPage>(getListAdminAccountExecutedCampaignsUrl(userId,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListAdminAccountExecutedCampaignsQueryKey = (userId: string,
-    params?: ListAdminAccountExecutedCampaignsParams,) => {
-    return [
-    `/api/admin/users/${userId}/executed-campaigns`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-
-export const getListAdminAccountExecutedCampaignsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>, TError = ErrorType<unknown>>(userId: string,
-    params?: ListAdminAccountExecutedCampaignsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListAdminAccountExecutedCampaignsQueryKey(userId,params);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>> = ({ signal }) => listAdminAccountExecutedCampaigns(userId,params, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: userId !== null && userId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListAdminAccountExecutedCampaignsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>>
-export type ListAdminAccountExecutedCampaignsQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List completed campaigns owned by a tenant account
- */
-
-export function useListAdminAccountExecutedCampaigns<TData = Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>, TError = ErrorType<unknown>>(
- userId: string,
-    params?: ListAdminAccountExecutedCampaignsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccountExecutedCampaigns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListAdminAccountExecutedCampaignsQueryOptions(userId,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

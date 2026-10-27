@@ -40,6 +40,7 @@
 - [Campaign mailbox pacing](campaign-mailbox-pacing.md) — space all sends through one SMTP mailbox by a randomized 5–15 minutes, across campaigns, while retaining stricter caps.
 - [Campaign audience exclusions](campaign-audience-exclusions.md) — draft list membership stays live, with saved contact-level exclusions; queueing rechecks current eligibility.
 - [Global company privacy](global-company-privacy.md) — keep the global catalog profile-only; contacts stay tenant-private while linked company profiles sync.
+- [Tenant data in superadmin views](tenant-data-admin-privacy.md) — show cross-account aggregates, not tenant-owned contact records or campaign details.
 - [Company intelligence policy](company-intelligence-policy.md) — explicit reusable research, cited evidence and dated signals; no master overwrite, private-contact research or user-facing internal costs.
 - [Superadmin bootstrap decision](superadmin-bootstrap.md) — retain the current one-time seeded superadmin login for SaaS onboarding.
 - [Gmail sync diagnostic privacy](gmail-sync-diagnostic-privacy.md) — keep sync diagnostics tenant-scoped, aggregate-only, and free of message or provider payloads.
