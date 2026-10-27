@@ -1115,7 +1115,7 @@ function AdminInactivityPanel() {
     if (!window.confirm(`Soft-delete ${user.email}? The account will be recoverable through the existing removal process.`)) return;
     remove.mutate({ userId: user.id }, { onSuccess: () => { refresh(); setMessage('Account soft-deleted.'); }, onError: e => setError(getError(e)) });
   };
-  return <Panel className="mb-4 p-4">
+  return <Panel className="mb-4 p-4" style={{ backgroundColor: '#fff6e8', borderColor: '#ead2ae' }}>
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><div className="mono text-[9px] uppercase tracking-[.14em] text-[#87919b]">MANUAL LIFECYCLE REVIEW</div><h2 className="display mt-1 text-[16px] font-bold">Inactive accounts</h2><p className="mt-1 text-[11px] text-[#718091]">Check eligible accounts, send an approved template, and apply soft-removal after the configured grace period.</p></div>
       <div className="flex flex-wrap items-end gap-2">
