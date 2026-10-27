@@ -38,4 +38,8 @@ export interface AdminUser {
   /** @nullable */
   primaryEndsAt: Date | null;
   addOnGiftEligibility: AdminUserAddOnGiftEligibility;
+  /** @minimum 0 */
+  contactCount?: number;
+  /** @minimum 0 */
+  executedCampaignCount?: number;
 }

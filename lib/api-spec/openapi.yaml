@@ -3478,6 +3478,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserPage"
+  /admin/users/{userId}/contacts:
+    get:
+      operationId: listAdminAccountContacts
+      tags: [admin]
+      summary: List contacts owned by a tenant account
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Paginated tenant-owned contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAccountContactsPage"
+  /admin/users/{userId}/executed-campaigns:
+    get:
+      operationId: listAdminAccountExecutedCampaigns
+      tags: [admin]
+      summary: List completed campaigns owned by a tenant account
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Paginated completed tenant campaigns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminExecutedCampaignsPage"
   /admin/inactivity/{stage}:
     get:
       operationId: listInactiveUsers
@@ -6552,7 +6598,48 @@ components:
         primaryStartsAt: { type: ["string", "null"], format: date-time }
         primaryEndsAt: { type: ["string", "null"], format: date-time }
         addOnGiftEligibility: { type: string, enum: [eligible, free, expired, inactive, missing] }
+        contactCount: { type: integer, minimum: 0 }
+        executedCampaignCount: { type: integer, minimum: 0 }
       required: [id, username, firstName, lastName, email, emailVerified, active, createdAt, lastLoginAt, subscriptionStatus, primaryPackageName, primaryPackageAmountMinor, primaryPackageCurrency, primaryStartsAt, primaryEndsAt, addOnGiftEligibility]
+    AdminAccountContact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        companyName: { type: ["string", "null"] }
+        jobTitle: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, email, companyName, jobTitle, createdAt]
+    AdminExecutedCampaign:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        subject: { type: string }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, subject, completedAt, createdAt]
+    AdminAccountContactsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAccountContact" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    AdminExecutedCampaignsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminExecutedCampaign" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
     InactiveUser:
       type: object
       properties:

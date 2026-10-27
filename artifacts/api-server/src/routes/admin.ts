@@ -22,6 +22,12 @@ import {
   GetGoogleOAuthSettingsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
+  ListAdminAccountContactsParams,
+  ListAdminAccountContactsQueryParams,
+  ListAdminAccountContactsResponse,
+  ListAdminAccountExecutedCampaignsParams,
+  ListAdminAccountExecutedCampaignsQueryParams,
+  ListAdminAccountExecutedCampaignsResponse,
   PreviewBlockedTermsBody,
   PreviewBlockedTermsResponse,
   SendApplicationEmailTestBody,
@@ -42,7 +48,9 @@ import {
 import {
   applicationEmailConfigurationTable,
   auditLogsTable,
+  contactsTable,
   db,
+  emailCampaignsTable,
   emailSendAttemptsTable,
   paymentsTable,
   razorpayConfigurationTable,
@@ -536,14 +544,99 @@ router.get("/admin/users", requireSuperadmin, async (req, res): Promise<void> =>
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
+  const ids = rows.map((row) => row.id);
+  const [contactCounts, campaignCounts] = ids.length
+    ? await Promise.all([
+        db.select({ userId: contactsTable.userId, value: count() })
+          .from(contactsTable).where(inArray(contactsTable.userId, ids)).groupBy(contactsTable.userId),
+        db.select({ userId: emailCampaignsTable.userId, value: count() })
+          .from(emailCampaignsTable)
+          .where(and(inArray(emailCampaignsTable.userId, ids), eq(emailCampaignsTable.status, "completed")))
+          .groupBy(emailCampaignsTable.userId),
+      ])
+    : [[], []];
+  const contactCountByUser = new Map(contactCounts.map((row) => [row.userId, row.value]));
+  const campaignCountByUser = new Map(campaignCounts.map((row) => [row.userId, row.value]));
+  const users = await toAdminUsers(rows);
   res.json(
     ListAdminUsersResponse.parse({
-      items: await toAdminUsers(rows),
+      items: users.map((user) => ({
+        ...user,
+        contactCount: contactCountByUser.get(user.id) ?? 0,
+        executedCampaignCount: campaignCountByUser.get(user.id) ?? 0,
+      })),
       total: totalResult?.value ?? 0,
       page,
       pageSize,
     }),
   );
+});
+
+router.get("/admin/users/:userId/contacts", requireSuperadmin, async (req, res): Promise<void> => {
+  const accountParams = ListAdminAccountContactsParams.safeParse(req.params);
+  const queryParams = ListAdminAccountContactsQueryParams.safeParse(req.query);
+  if (!accountParams.success || !queryParams.success) {
+    res.status(400).json({ error: "Invalid account or pagination options.", code: "INVALID_INPUT" });
+    return;
+  }
+  const { userId } = accountParams.data;
+  const { page, pageSize } = queryParams.data;
+  const [account] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(and(eq(usersTable.id, userId), eq(usersTable.role, "USER"), isNull(usersTable.deletedAt))).limit(1);
+  if (!account) {
+    res.status(404).json({ error: "Account not found.", code: "NOT_FOUND" });
+    return;
+  }
+  const [totalResult] = await db.select({ value: count() }).from(contactsTable).where(eq(contactsTable.userId, userId));
+  const items = await db.select({
+    id: contactsTable.id,
+    name: contactsTable.name,
+    email: contactsTable.email,
+    companyName: contactsTable.companyName,
+    jobTitle: contactsTable.jobTitle,
+    createdAt: contactsTable.createdAt,
+  }).from(contactsTable).where(eq(contactsTable.userId, userId))
+    .orderBy(desc(contactsTable.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
+  res.json(ListAdminAccountContactsResponse.parse({
+    items: items.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
+    total: totalResult?.value ?? 0, page, pageSize,
+  }));
+});
+
+router.get("/admin/users/:userId/executed-campaigns", requireSuperadmin, async (req, res): Promise<void> => {
+  const accountParams = ListAdminAccountExecutedCampaignsParams.safeParse(req.params);
+  const queryParams = ListAdminAccountExecutedCampaignsQueryParams.safeParse(req.query);
+  if (!accountParams.success || !queryParams.success) {
+    res.status(400).json({ error: "Invalid account or pagination options.", code: "INVALID_INPUT" });
+    return;
+  }
+  const { userId } = accountParams.data;
+  const { page, pageSize } = queryParams.data;
+  const [account] = await db.select({ id: usersTable.id }).from(usersTable)
+    .where(and(eq(usersTable.id, userId), eq(usersTable.role, "USER"), isNull(usersTable.deletedAt))).limit(1);
+  if (!account) {
+    res.status(404).json({ error: "Account not found.", code: "NOT_FOUND" });
+    return;
+  }
+  const where = and(eq(emailCampaignsTable.userId, userId), eq(emailCampaignsTable.status, "completed"));
+  const [totalResult] = await db.select({ value: count() }).from(emailCampaignsTable).where(where);
+  const items = await db.select({
+    id: emailCampaignsTable.id,
+    name: emailCampaignsTable.name,
+    subject: emailCampaignsTable.subject,
+    completedAt: emailCampaignsTable.completedAt,
+    createdAt: emailCampaignsTable.createdAt,
+  }).from(emailCampaignsTable).where(where)
+    .orderBy(desc(emailCampaignsTable.completedAt), desc(emailCampaignsTable.createdAt))
+    .limit(pageSize).offset((page - 1) * pageSize);
+  res.json(ListAdminAccountExecutedCampaignsResponse.parse({
+    items: items.map((item) => ({
+      ...item,
+      completedAt: item.completedAt?.toISOString() ?? null,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    total: totalResult?.value ?? 0, page, pageSize,
+  }));
 });
 
 router.patch("/admin/users/:userId/status", requireSuperadmin, async (req, res): Promise<void> => {

@@ -6042,6 +6042,10 @@ export const getAdminDashboardResponseRecentUsersItemPrimaryPackageAmountMinorMi
 export const getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMin = 3;
 export const getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMax = 3;
 
+export const getAdminDashboardResponseRecentUsersItemContactCountMin = 0;
+
+export const getAdminDashboardResponseRecentUsersItemExecutedCampaignCountMin = 0;
+
 
 
 export const GetAdminDashboardResponse = zod.object({
@@ -6103,7 +6107,9 @@ export const GetAdminDashboardResponse = zod.object({
   "primaryPackageCurrency": zod.string().min(getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMin).max(getAdminDashboardResponseRecentUsersItemPrimaryPackageCurrencyMax).nullable(),
   "primaryStartsAt": zod.coerce.date().nullable(),
   "primaryEndsAt": zod.coerce.date().nullable(),
-  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing'])
+  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing']),
+  "contactCount": zod.number().int().min(getAdminDashboardResponseRecentUsersItemContactCountMin).optional(),
+  "executedCampaignCount": zod.number().int().min(getAdminDashboardResponseRecentUsersItemExecutedCampaignCountMin).optional()
 }))
 })
 
@@ -6494,6 +6500,10 @@ export const listAdminUsersResponseItemsItemPrimaryPackageAmountMinorMin = 0;
 export const listAdminUsersResponseItemsItemPrimaryPackageCurrencyMin = 3;
 export const listAdminUsersResponseItemsItemPrimaryPackageCurrencyMax = 3;
 
+export const listAdminUsersResponseItemsItemContactCountMin = 0;
+
+export const listAdminUsersResponseItemsItemExecutedCampaignCountMin = 0;
+
 
 
 export const ListAdminUsersResponse = zod.object({
@@ -6513,7 +6523,76 @@ export const ListAdminUsersResponse = zod.object({
   "primaryPackageCurrency": zod.string().min(listAdminUsersResponseItemsItemPrimaryPackageCurrencyMin).max(listAdminUsersResponseItemsItemPrimaryPackageCurrencyMax).nullable(),
   "primaryStartsAt": zod.coerce.date().nullable(),
   "primaryEndsAt": zod.coerce.date().nullable(),
-  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing'])
+  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing']),
+  "contactCount": zod.number().int().min(listAdminUsersResponseItemsItemContactCountMin).optional(),
+  "executedCampaignCount": zod.number().int().min(listAdminUsersResponseItemsItemExecutedCampaignCountMin).optional()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
+})
+
+
+/**
+ * @summary List contacts owned by a tenant account
+ */
+export const ListAdminAccountContactsParams = zod.object({
+  "userId": zod.coerce.string().uuid()
+})
+
+export const listAdminAccountContactsQueryPageDefault = 1;
+
+export const listAdminAccountContactsQueryPageSizeDefault = 25;
+export const listAdminAccountContactsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminAccountContactsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(listAdminAccountContactsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminAccountContactsQueryPageSizeMax).default(listAdminAccountContactsQueryPageSizeDefault)
+})
+
+export const ListAdminAccountContactsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int()
+})
+
+
+/**
+ * @summary List completed campaigns owned by a tenant account
+ */
+export const ListAdminAccountExecutedCampaignsParams = zod.object({
+  "userId": zod.coerce.string().uuid()
+})
+
+export const listAdminAccountExecutedCampaignsQueryPageDefault = 1;
+
+export const listAdminAccountExecutedCampaignsQueryPageSizeDefault = 25;
+export const listAdminAccountExecutedCampaignsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminAccountExecutedCampaignsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(listAdminAccountExecutedCampaignsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminAccountExecutedCampaignsQueryPageSizeMax).default(listAdminAccountExecutedCampaignsQueryPageSizeDefault)
+})
+
+export const ListAdminAccountExecutedCampaignsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "subject": zod.string(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
 })),
   "total": zod.number().int(),
   "page": zod.number().int(),
@@ -6682,6 +6761,10 @@ export const updateAdminUserStatusResponsePrimaryPackageAmountMinorMin = 0;
 export const updateAdminUserStatusResponsePrimaryPackageCurrencyMin = 3;
 export const updateAdminUserStatusResponsePrimaryPackageCurrencyMax = 3;
 
+export const updateAdminUserStatusResponseContactCountMin = 0;
+
+export const updateAdminUserStatusResponseExecutedCampaignCountMin = 0;
+
 
 
 export const UpdateAdminUserStatusResponse = zod.object({
@@ -6700,7 +6783,9 @@ export const UpdateAdminUserStatusResponse = zod.object({
   "primaryPackageCurrency": zod.string().min(updateAdminUserStatusResponsePrimaryPackageCurrencyMin).max(updateAdminUserStatusResponsePrimaryPackageCurrencyMax).nullable(),
   "primaryStartsAt": zod.coerce.date().nullable(),
   "primaryEndsAt": zod.coerce.date().nullable(),
-  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing'])
+  "addOnGiftEligibility": zod.enum(['eligible', 'free', 'expired', 'inactive', 'missing']),
+  "contactCount": zod.number().int().min(updateAdminUserStatusResponseContactCountMin).optional(),
+  "executedCampaignCount": zod.number().int().min(updateAdminUserStatusResponseExecutedCampaignCountMin).optional()
 })
 
 
