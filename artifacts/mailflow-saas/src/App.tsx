@@ -948,7 +948,7 @@ function AdminDashboardPage() {
         </div>
         {d.totalUsers === 0 && <p className="mt-3 text-[11px] text-[#798491]">No customer accounts have been created yet.</p>}
       </Panel>
-      <Panel className="flex flex-col justify-between border-[#dce6e0] bg-[#f4f8f4] p-5">
+      <Panel className="flex flex-col justify-between p-5" style={{ backgroundColor: '#e9f3ec', borderColor: '#c7ddce' }}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><div className="mono text-[9px] uppercase tracking-[.15em] text-[#71867b]">{activeEnvironmentLabel} BILLING / {d.defaultCurrency}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263f37]">Net revenue</h2></div>
           <Link href="/admin/finance" data-testid="link-revenue-finance" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#34776b] no-underline hover:underline">Payment ledger <ArrowRight className="h-3.5 w-3.5"/></Link>
