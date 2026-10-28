@@ -35,6 +35,9 @@ export function MicrosoftSenderSetup({ accountId, refresh, verified }: { account
       <li><strong>2. Try an app password only if allowed.</strong> If MFA is enabled and your organization offers app passwords, enter an app password above and check again. App passwords do not bypass blocked legacy authentication. Do not disable MFA or organization-wide security defaults just to connect.</li>
       <li><strong>3. Sign in with Microsoft.</strong> If passwords are restricted or do not work, authorize this mailbox directly with Microsoft. This supports MFA and uses Microsoft’s mail API instead of password-based SMTP. Mailflow’s campaign pacing and mailbox limits still apply.</li>
     </ol>
+    <p data-testid="notice-microsoft-sender-display-name" className="mt-3 rounded-md border border-[#d8e4f1] bg-white/70 px-3 py-2 text-[11px] leading-5 text-[#47627e]">
+      <strong>About the sender name:</strong> Mailflow includes the From name set above, but with Microsoft sign-in, Microsoft 365 or the recipient’s mail app may show the mailbox’s Microsoft account name instead. To change that name consistently, update the mailbox display name in Microsoft 365.
+    </p>
     {!accountId ? <p className="mt-4 text-[12px] text-[#7b5e31]">Save the Microsoft 365 sender identity first. You may leave the password blank when you intend to use Microsoft sign-in.</p> :
       query.isLoading ? <p className="mt-4 text-xs">Checking Microsoft sign-in availability…</p> :
       query.isError ? <p role="alert" className="mt-4 text-xs text-[#9a453e]">Microsoft connection status could not load. <button type="button" onClick={() => void query.refetch()} className="underline">Retry</button></p> :
