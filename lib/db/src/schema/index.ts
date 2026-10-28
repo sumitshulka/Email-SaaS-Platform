@@ -18,6 +18,7 @@
 //   export type Post = typeof postsTable.$inferSelect;
 
 export * from "./users";
+export * from "./microsoft-senders";
 export * from "./email-templates";
 export * from "./auth";
 export * from "./settings";

@@ -46,6 +46,7 @@ import type {
   ApplyCampaignUnsubscribeParams,
   AuthResponse,
   AuthUser,
+  AuthorizeMicrosoftSender200,
   BlockedTermPreviewInput,
   BlockedTermPreviewResult,
   CampaignAttachment,
@@ -170,6 +171,9 @@ import type {
   Microsoft365TraceBackfillInput,
   Microsoft365TraceConnectInput,
   Microsoft365TraceConnection,
+  MicrosoftOAuthSettings,
+  MicrosoftOAuthSettingsInput,
+  MicrosoftSenderConnection,
   OnlinePaymentSettings,
   OnlinePaymentSettingsInput,
   PackageCheckoutCodeInput,
@@ -2822,6 +2826,437 @@ export const useTestTenantSendingConnection = <TError = ErrorType<ApiError | Ten
       > => {
       return useMutation(getTestTenantSendingConnectionMutationOptions(options));
     }
+
+export const getGetMicrosoftOAuthSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/microsoft-oauth`
+}
+
+export const getMicrosoftOAuthSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<MicrosoftOAuthSettings> => {
+
+  return customFetch<MicrosoftOAuthSettings>(getGetMicrosoftOAuthSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMicrosoftOAuthSettingsQueryKey = () => {
+    return [
+    `/api/admin/settings/microsoft-oauth`
+    ] as const;
+    }
+
+
+export const getGetMicrosoftOAuthSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMicrosoftOAuthSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>> = ({ signal }) => getMicrosoftOAuthSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMicrosoftOAuthSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>>
+export type GetMicrosoftOAuthSettingsQueryError = ErrorType<unknown>
+
+
+
+export function useGetMicrosoftOAuthSettings<TData = Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMicrosoftOAuthSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMicrosoftOAuthSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateMicrosoftOAuthSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings/microsoft-oauth`
+}
+
+export const updateMicrosoftOAuthSettings = async (microsoftOAuthSettingsInput: MicrosoftOAuthSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<MicrosoftOAuthSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MicrosoftOAuthSettings>(getUpdateMicrosoftOAuthSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(microsoftOAuthSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMicrosoftOAuthSettingsMutationKey = () => ['updateMicrosoftOAuthSettings'] as const;
+
+export const getUpdateMicrosoftOAuthSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMicrosoftOAuthSettings>>, TError,UpdateMicrosoftOAuthSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMicrosoftOAuthSettings>>, TError,UpdateMicrosoftOAuthSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateMicrosoftOAuthSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMicrosoftOAuthSettings>>, UpdateMicrosoftOAuthSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMicrosoftOAuthSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMicrosoftOAuthSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateMicrosoftOAuthSettings>>>
+    export type UpdateMicrosoftOAuthSettingsMutationBody = BodyType<MicrosoftOAuthSettingsInput>
+    export type UpdateMicrosoftOAuthSettingsMutationError = ErrorType<unknown>
+    export type UpdateMicrosoftOAuthSettingsMutationVariables = {data: BodyType<MicrosoftOAuthSettingsInput>}
+
+    export const useUpdateMicrosoftOAuthSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMicrosoftOAuthSettings>>, TError,UpdateMicrosoftOAuthSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMicrosoftOAuthSettings>>,
+        TError,
+        UpdateMicrosoftOAuthSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateMicrosoftOAuthSettingsMutationOptions(options));
+    }
+
+export const getGetMicrosoftSenderConnectionUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}/microsoft/connection`
+}
+
+export const getMicrosoftSenderConnection = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<MicrosoftSenderConnection> => {
+
+  return customFetch<MicrosoftSenderConnection>(getGetMicrosoftSenderConnectionUrl(accountId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMicrosoftSenderConnectionQueryKey = (accountId: string,) => {
+    return [
+    `/api/sending/accounts/${accountId}/microsoft/connection`
+    ] as const;
+    }
+
+
+export const getGetMicrosoftSenderConnectionQueryOptions = <TData = Awaited<ReturnType<typeof getMicrosoftSenderConnection>>, TError = ErrorType<unknown>>(accountId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMicrosoftSenderConnection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMicrosoftSenderConnectionQueryKey(accountId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMicrosoftSenderConnection>>> = ({ signal }) => getMicrosoftSenderConnection(accountId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: accountId !== null && accountId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMicrosoftSenderConnection>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMicrosoftSenderConnectionQueryResult = NonNullable<Awaited<ReturnType<typeof getMicrosoftSenderConnection>>>
+export type GetMicrosoftSenderConnectionQueryError = ErrorType<unknown>
+
+
+
+export function useGetMicrosoftSenderConnection<TData = Awaited<ReturnType<typeof getMicrosoftSenderConnection>>, TError = ErrorType<unknown>>(
+ accountId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMicrosoftSenderConnection>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMicrosoftSenderConnectionQueryOptions(accountId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDisconnectMicrosoftSenderUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}/microsoft/connection`
+}
+
+export const disconnectMicrosoftSender = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<MicrosoftSenderConnection> => {
+
+  return customFetch<MicrosoftSenderConnection>(getDisconnectMicrosoftSenderUrl(accountId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisconnectMicrosoftSenderMutationKey = () => ['disconnectMicrosoftSender'] as const;
+
+export const getDisconnectMicrosoftSenderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectMicrosoftSender>>, TError,DisconnectMicrosoftSenderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectMicrosoftSender>>, TError,DisconnectMicrosoftSenderMutationVariables, TContext> => {
+
+const mutationKey = getDisconnectMicrosoftSenderMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectMicrosoftSender>>, DisconnectMicrosoftSenderMutationVariables> = (props) => {
+          const {accountId} = props ?? {};
+
+          return  disconnectMicrosoftSender(accountId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectMicrosoftSenderMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectMicrosoftSender>>>
+
+    export type DisconnectMicrosoftSenderMutationError = ErrorType<unknown>
+    export type DisconnectMicrosoftSenderMutationVariables = {accountId: string}
+
+    export const useDisconnectMicrosoftSender = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectMicrosoftSender>>, TError,DisconnectMicrosoftSenderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectMicrosoftSender>>,
+        TError,
+        DisconnectMicrosoftSenderMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDisconnectMicrosoftSenderMutationOptions(options));
+    }
+
+export const getAuthorizeMicrosoftSenderUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/sending/accounts/${accountId}/microsoft/authorize`
+}
+
+export const authorizeMicrosoftSender = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<AuthorizeMicrosoftSender200> => {
+
+  return customFetch<AuthorizeMicrosoftSender200>(getAuthorizeMicrosoftSenderUrl(accountId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAuthorizeMicrosoftSenderMutationKey = () => ['authorizeMicrosoftSender'] as const;
+
+export const getAuthorizeMicrosoftSenderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authorizeMicrosoftSender>>, TError,AuthorizeMicrosoftSenderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof authorizeMicrosoftSender>>, TError,AuthorizeMicrosoftSenderMutationVariables, TContext> => {
+
+const mutationKey = getAuthorizeMicrosoftSenderMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authorizeMicrosoftSender>>, AuthorizeMicrosoftSenderMutationVariables> = (props) => {
+          const {accountId} = props ?? {};
+
+          return  authorizeMicrosoftSender(accountId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AuthorizeMicrosoftSenderMutationResult = NonNullable<Awaited<ReturnType<typeof authorizeMicrosoftSender>>>
+
+    export type AuthorizeMicrosoftSenderMutationError = ErrorType<unknown>
+    export type AuthorizeMicrosoftSenderMutationVariables = {accountId: string}
+
+    export const useAuthorizeMicrosoftSender = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authorizeMicrosoftSender>>, TError,AuthorizeMicrosoftSenderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof authorizeMicrosoftSender>>,
+        TError,
+        AuthorizeMicrosoftSenderMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAuthorizeMicrosoftSenderMutationOptions(options));
+    }
+
+export const getCompleteMicrosoftSenderAuthorizationUrl = () => {
+
+
+
+
+  return `/api/sending/microsoft/oauth/callback`
+}
+
+export const completeMicrosoftSenderAuthorization = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getCompleteMicrosoftSenderAuthorizationUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteMicrosoftSenderAuthorizationQueryKey = () => {
+    return [
+    `/api/sending/microsoft/oauth/callback`
+    ] as const;
+    }
+
+
+export const getCompleteMicrosoftSenderAuthorizationQueryOptions = <TData = Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCompleteMicrosoftSenderAuthorizationQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>> = ({ signal }) => completeMicrosoftSenderAuthorization({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type CompleteMicrosoftSenderAuthorizationQueryResult = NonNullable<Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>>
+export type CompleteMicrosoftSenderAuthorizationQueryError = ErrorType<void>
+
+
+
+export function useCompleteMicrosoftSenderAuthorization<TData = Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof completeMicrosoftSenderAuthorization>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getCompleteMicrosoftSenderAuthorizationQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetGmailMailboxConnectionUrl = () => {
 

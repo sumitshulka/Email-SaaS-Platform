@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { MicrosoftSenderError } from "./microsoft-sender";
 import {
   and,
   asc,
@@ -746,6 +747,7 @@ async function claimDelivery(
     }
 
     const attemptId = randomUUID();
+    const requestsDsn = dsnRequested && sender.authenticationMethod !== "microsoft_oauth";
     const messageId = `<${attemptId}@mailflow.local>`;
     const [claimed] = await tx
       .update(emailCampaignRecipientsTable)
@@ -776,7 +778,7 @@ async function claimDelivery(
       senderAccountId: sender.id,
       recipientId: recipient.id,
       messageId,
-      dsnRequested,
+      dsnRequested: requestsDsn,
       attemptedAt: now,
     });
     await tx
@@ -800,7 +802,7 @@ async function claimDelivery(
       personalization,
       attemptId,
       messageId,
-      dsnRequested,
+      dsnRequested: requestsDsn,
     };
   }));
 }
@@ -996,13 +998,17 @@ export async function processPendingCampaignDeliveries(
         },
       );
     } catch (error) {
-      const evidence = smtpFailureEvidence(error, claimed.sender);
+      const microsoftError = error instanceof MicrosoftSenderError ? error : null;
+      const evidence = microsoftError
+        ? { outcome: microsoftError.deliveryUncertain ? "unknown" as const : "send_failed" as const, smtpCode: undefined, smtpResponse: undefined, enhancedStatus: undefined }
+        : smtpFailureEvidence(error, claimed.sender);
       const permanentSmtpRejection =
         evidence.smtpCode !== undefined &&
         evidence.smtpCode >= 500 &&
         evidence.smtpCode <= 599;
       const recipientAttemptNumber = claimed.recipient.attempts;
       const retry =
+        (!microsoftError || Boolean(microsoftError.retryAfterMs)) &&
         !permanentSmtpRejection &&
         recipientAttemptNumber <= settings.retryAttempts;
       const errorMessage = safeAttemptError(
@@ -1027,7 +1033,7 @@ export async function processPendingCampaignDeliveries(
           ...(retry
             ? {
                 nextAttemptAt: new Date(
-                  Date.now() + settings.retryDelaySeconds * 1000,
+                  Date.now() + Math.max(settings.retryDelaySeconds * 1000, microsoftError?.retryAfterMs ?? 0),
                 ),
               }
             : {}),

@@ -457,6 +457,14 @@ export interface AdminNotificationStatusInput {
   enabled: boolean;
 }
 
+export type TenantSendingSettingsAuthenticationMethod = typeof TenantSendingSettingsAuthenticationMethod[keyof typeof TenantSendingSettingsAuthenticationMethod];
+
+
+export const TenantSendingSettingsAuthenticationMethod = {
+  password: 'password',
+  microsoft_oauth: 'microsoft_oauth',
+} as const;
+
 export type TenantSendingSettingsProvider = typeof TenantSendingSettingsProvider[keyof typeof TenantSendingSettingsProvider];
 
 
@@ -491,6 +499,7 @@ export const TenantSendingSettingsConnectionCheckStatus = {
 } as const;
 
 export interface TenantSendingSettings {
+  authenticationMethod?: TenantSendingSettingsAuthenticationMethod;
   provider: TenantSendingSettingsProvider;
   /** @nullable */
   host: string | null;
@@ -943,6 +952,39 @@ export interface TenantSendingConnectionTestResponse {
   message: string;
   checkedAt: string;
   savedSettingsUpdated: boolean;
+}
+
+export interface MicrosoftOAuthSettingsInput {
+  enabled: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  clientId: string;
+  /** @maxLength 2048 */
+  clientSecret?: string;
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     */
+  redirectUri: string;
+}
+
+export interface MicrosoftOAuthSettings {
+  enabled: boolean;
+  configured: boolean;
+  /** @nullable */
+  clientId: string | null;
+  clientSecretConfigured: boolean;
+  /** @nullable */
+  redirectUri: string | null;
+}
+
+export interface MicrosoftSenderConnection {
+  configured: boolean;
+  connected: boolean;
+  /** @nullable */
+  mailbox: string | null;
 }
 
 export interface TenantSendingConnectionTestFailure {
@@ -5319,6 +5361,10 @@ export interface ContactIntentQuestionsInput {
      */
   questions: ContactIntentQuestionsInputQuestionsItem[];
 }
+
+export type AuthorizeMicrosoftSender200 = {
+  authorizationUrl: string;
+};
 
 export type CompleteGmailMailboxConnectionParams = {
 code?: string;

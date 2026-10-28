@@ -49,6 +49,10 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 - The API process executes explicitly queued jobs. Interrupted running jobs time out and require an explicit retry; completed versions stay current if a later job fails.
 - Cost estimates require saved pricing rates and do not substitute for provider billing. Backup model analysis has no reliable mixed-model estimate. Gemini's internal grounded query count is provider-controlled; the search cap controls hosted calls for OpenAI/Anthropic, not Gemini's internal queries.
 - Unit/provider-fixture checks: `pnpm --filter @workspace/api-server run test`. Optional PostgreSQL invariant tests can run with `RUN_COMPANY_RESEARCH_DB_TESTS=1`; their fixtures are rolled back. `RUN_PUBLIC_SOURCE_TESTS=1` enables the real public-page retrieval check.
+## Microsoft 365 sender sign-in
+
+- Existing self-hosted installations must run `pnpm --filter @workspace/api-server run migrate:microsoft-sender` before starting the updated API. Application-wide Entra credentials are configured once under Superadmin → Settings, not per user or in Replit Secrets. See `docs/microsoft-365-sender-setup.md` for deployment, permissions, callback setup, and limitations.
+
 ## User preferences
 
 _Populate as you build — explicit user instructions worth remembering across sessions._

@@ -319,6 +319,7 @@ memory.public.none(`
     last_used_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     provider varchar(32) NOT NULL DEFAULT 'other',
+    authentication_method varchar(32) NOT NULL DEFAULT 'password',
     host varchar(255) NOT NULL,
     port integer NOT NULL,
     encryption varchar(10) NOT NULL,

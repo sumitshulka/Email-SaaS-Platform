@@ -711,6 +711,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TenantSendingConnectionTestFailure"
+  /admin/settings/microsoft-oauth:
+    get:
+      operationId: getMicrosoftOAuthSettings
+      tags: [admin]
+      responses:
+        "200":
+          description: Application-wide Microsoft sign-in settings without secrets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MicrosoftOAuthSettings" }
+    put:
+      operationId: updateMicrosoftOAuthSettings
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MicrosoftOAuthSettingsInput" }
+      responses:
+        "200":
+          description: Settings saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MicrosoftOAuthSettings" }
+  /sending/accounts/{accountId}/microsoft/connection:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getMicrosoftSenderConnection
+      tags: [sending]
+      responses:
+        "200":
+          description: Microsoft sender connection status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MicrosoftSenderConnection" }
+    delete:
+      operationId: disconnectMicrosoftSender
+      tags: [sending]
+      responses:
+        "200":
+          description: Connection removed; password setup can be used again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MicrosoftSenderConnection" }
+  /sending/accounts/{accountId}/microsoft/authorize:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: authorizeMicrosoftSender
+      tags: [sending]
+      responses:
+        "200":
+          description: Open this URL to authorize the saved sender mailbox
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl]
+                properties:
+                  authorizationUrl: { type: string }
+  /sending/microsoft/oauth/callback:
+    get:
+      operationId: completeMicrosoftSenderAuthorization
+      tags: [sending]
+      responses:
+        "302":
+          description: Return to Email Setup with a safe result code
   /sending/gmail/connection:
     get:
       operationId: getGmailMailboxConnection
@@ -4674,6 +4742,7 @@ components:
     TenantSendingSettings:
       type: object
       properties:
+        authenticationMethod: { type: string, enum: [password, microsoft_oauth] }
         provider: { type: string, enum: [google_workspace, gmail, microsoft_365, other] }
         host: { type: ["string", "null"] }
         port: { type: ["integer", "null"] }
@@ -4920,6 +4989,30 @@ components:
         checkedAt: { type: string, format: date-time }
         savedSettingsUpdated: { type: boolean }
       required: [message, checkedAt, savedSettingsUpdated]
+    MicrosoftOAuthSettingsInput:
+      type: object
+      required: [enabled, clientId, redirectUri]
+      properties:
+        enabled: { type: boolean }
+        clientId: { type: string, minLength: 1, maxLength: 100 }
+        clientSecret: { type: string, maxLength: 2048 }
+        redirectUri: { type: string, minLength: 1, maxLength: 2048 }
+    MicrosoftOAuthSettings:
+      type: object
+      required: [enabled, configured, clientId, clientSecretConfigured, redirectUri]
+      properties:
+        enabled: { type: boolean }
+        configured: { type: boolean }
+        clientId: { type: ["string", "null"] }
+        clientSecretConfigured: { type: boolean }
+        redirectUri: { type: ["string", "null"] }
+    MicrosoftSenderConnection:
+      type: object
+      required: [configured, connected, mailbox]
+      properties:
+        configured: { type: boolean }
+        connected: { type: boolean }
+        mailbox: { type: ["string", "null"] }
     TenantSendingConnectionTestFailure:
       type: object
       properties:

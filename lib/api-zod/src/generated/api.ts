@@ -517,6 +517,7 @@ export const ReplyToSupportTicketResponse = zod.object({
  * @summary Get the authenticated tenant's sending identity
  */
 export const GetTenantSendingSettingsResponse = zod.object({
+  "authenticationMethod": zod.enum(['password', 'microsoft_oauth']).optional(),
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
@@ -564,6 +565,7 @@ export const UpdateTenantSendingSettingsBody = zod.object({
 })
 
 export const UpdateTenantSendingSettingsResponse = zod.object({
+  "authenticationMethod": zod.enum(['password', 'microsoft_oauth']).optional(),
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
@@ -598,6 +600,7 @@ export const listTenantSendingAccountsResponseScheduledDowngradeOneEmailAccountL
 
 export const ListTenantSendingAccountsResponse = zod.object({
   "accounts": zod.array(zod.object({
+  "authenticationMethod": zod.enum(['password', 'microsoft_oauth']).optional(),
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
@@ -665,6 +668,7 @@ export const createTenantSendingAccountResponseAccountTwoActiveCampaignCountMin 
 
 export const CreateTenantSendingAccountResponse = zod.object({
   "account": zod.object({
+  "authenticationMethod": zod.enum(['password', 'microsoft_oauth']).optional(),
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
@@ -727,6 +731,7 @@ export const updateTenantSendingAccountResponseAccountTwoActiveCampaignCountMin 
 
 export const UpdateTenantSendingAccountResponse = zod.object({
   "account": zod.object({
+  "authenticationMethod": zod.enum(['password', 'microsoft_oauth']).optional(),
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
@@ -816,6 +821,7 @@ export const setPrimaryTenantSendingAccountResponseAccountTwoActiveCampaignCount
 
 export const SetPrimaryTenantSendingAccountResponse = zod.object({
   "account": zod.object({
+  "authenticationMethod": zod.enum(['password', 'microsoft_oauth']).optional(),
   "provider": zod.enum(['google_workspace', 'gmail', 'microsoft_365', 'other']),
   "host": zod.string().nullable(),
   "port": zod.number().int().nullable(),
@@ -913,6 +919,73 @@ export const TestTenantSendingConnectionResponse = zod.object({
   "checkedAt": zod.coerce.date(),
   "savedSettingsUpdated": zod.boolean()
 })
+
+
+export const GetMicrosoftOAuthSettingsResponse = zod.object({
+  "enabled": zod.boolean(),
+  "configured": zod.boolean(),
+  "clientId": zod.string().nullable(),
+  "clientSecretConfigured": zod.boolean(),
+  "redirectUri": zod.string().nullable()
+})
+
+
+export const updateMicrosoftOAuthSettingsBodyClientIdMax = 100;
+
+export const updateMicrosoftOAuthSettingsBodyClientSecretMax = 2048;
+
+export const updateMicrosoftOAuthSettingsBodyRedirectUriMax = 2048;
+
+
+
+export const UpdateMicrosoftOAuthSettingsBody = zod.object({
+  "enabled": zod.boolean(),
+  "clientId": zod.string().min(1).max(updateMicrosoftOAuthSettingsBodyClientIdMax),
+  "clientSecret": zod.string().max(updateMicrosoftOAuthSettingsBodyClientSecretMax).optional(),
+  "redirectUri": zod.string().min(1).max(updateMicrosoftOAuthSettingsBodyRedirectUriMax)
+})
+
+export const UpdateMicrosoftOAuthSettingsResponse = zod.object({
+  "enabled": zod.boolean(),
+  "configured": zod.boolean(),
+  "clientId": zod.string().nullable(),
+  "clientSecretConfigured": zod.boolean(),
+  "redirectUri": zod.string().nullable()
+})
+
+
+export const GetMicrosoftSenderConnectionParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const GetMicrosoftSenderConnectionResponse = zod.object({
+  "configured": zod.boolean(),
+  "connected": zod.boolean(),
+  "mailbox": zod.string().nullable()
+})
+
+
+export const DisconnectMicrosoftSenderParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const DisconnectMicrosoftSenderResponse = zod.object({
+  "configured": zod.boolean(),
+  "connected": zod.boolean(),
+  "mailbox": zod.string().nullable()
+})
+
+
+export const AuthorizeMicrosoftSenderParams = zod.object({
+  "accountId": zod.coerce.string().uuid()
+})
+
+export const AuthorizeMicrosoftSenderResponse = zod.object({
+  "authorizationUrl": zod.string()
+})
+
+
+export const CompleteMicrosoftSenderAuthorizationResponse = zod.void()
 
 
 /**

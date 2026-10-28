@@ -5,11 +5,13 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { TenantSendingSettingsAuthenticationMethod } from './tenantSendingSettingsAuthenticationMethod';
 import type { TenantSendingSettingsConnectionCheckStatus } from './tenantSendingSettingsConnectionCheckStatus';
 import type { TenantSendingSettingsEncryption } from './tenantSendingSettingsEncryption';
 import type { TenantSendingSettingsProvider } from './tenantSendingSettingsProvider';
 
 export interface TenantSendingSettings {
+  authenticationMethod?: TenantSendingSettingsAuthenticationMethod;
   provider: TenantSendingSettingsProvider;
   /** @nullable */
   host: string | null;

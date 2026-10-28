@@ -6,6 +6,7 @@ import {
   type TenantSendingConfiguration,
 } from "@workspace/db";
 import { decryptSecret } from "./security";
+import { sendMicrosoftMime, verifyMicrosoftSender } from "./microsoft-sender";
 
 export type ApplicationEmailConfigInput = {
   host: string;
@@ -65,7 +66,7 @@ export type TenantSendingEmailConfiguration = Pick<
   | "fromName"
   | "fromEmail"
   | "replyTo"
->;
+> & { id?: string; authenticationMethod?: string };
 
 type TenantEmailVerifier = (
   configuration: TenantSendingEmailConfiguration,
@@ -105,6 +106,7 @@ export async function sendApplicationEmail(
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 30000,
+    tls: { minVersion: "TLSv1.2" },
     logger: false,
     debug: false,
   });
@@ -181,7 +183,11 @@ export async function sendTenantEmail(
     return tenantTestTransport(message, configuration);
   }
 
-  const transport = createTenantTransport(configuration);
+  const microsoft = configuration.authenticationMethod === "microsoft_oauth";
+  if (microsoft && !configuration.id) throw new Error("Microsoft sender account ID is required.");
+  const transport = microsoft
+    ? nodemailer.createTransport({ streamTransport: true, buffer: true, newline: "windows" })
+    : createTenantTransport(configuration);
 
   try {
     const info = await transport.sendMail({
@@ -214,6 +220,9 @@ export async function sendTenantEmail(
           }
         : {}),
     });
+    if (microsoft) {
+      return await sendMicrosoftMime(configuration.id!, configuration.userId, Buffer.isBuffer(info.message) ? info.message : Buffer.from(info.message));
+    }
     const smtpResponse = safeSmtpResponse(info.response, configuration);
     const smtpCode =
       typeof info.responseCode === "number"
@@ -255,6 +264,11 @@ export async function sendTenantEmail(
 export async function verifyTenantEmailConnection(
   configuration: TenantSendingEmailConfiguration,
 ): Promise<void> {
+  if (configuration.authenticationMethod === "microsoft_oauth") {
+    if (!configuration.id) throw new Error("Microsoft sender account ID is required.");
+    await verifyMicrosoftSender(configuration.id, configuration.userId, configuration.fromEmail);
+    return;
+  }
   if (tenantTestTransport) {
     if (!tenantTestVerifier) {
       throw new Error(

@@ -64,6 +64,7 @@ export const tenantSendingConfigurationTable = pgTable(
       .references(() => usersTable.id, { onDelete: "cascade" }),
     isPrimary: boolean("is_primary").notNull().default(true),
     provider: varchar("provider", { length: 32 }).notNull().default("other"),
+    authenticationMethod: varchar("authentication_method", { length: 32 }).notNull().default("password"),
     host: varchar("host", { length: 255 }).notNull(),
     port: integer("port").notNull(),
     encryption: varchar("encryption", { length: 10 }).notNull(),

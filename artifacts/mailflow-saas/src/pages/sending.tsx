@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
+import { MicrosoftSenderSetup } from '@/components/microsoft-sender-setup';
 import {
   Activity, AlertCircle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, CheckCircle2, ChevronDown, ChevronRight, CirclePlus, Clock3,
   Download, Edit3, Fingerprint, Linkedin, LoaderCircle, Upload, Mail, MoreHorizontal, Paperclip, Search, Send, Pause, Play,
@@ -216,6 +217,7 @@ export function SendingSettingsPage() {
   const [inboxCheckError, setInboxCheckError] = useState<string | null>(null);
   const [form, setForm] = useState(blankSettings);
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [requestedAccountId] = useState(() => new URLSearchParams(window.location.search).get('accountId'));
   const [initialized, setInitialized] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [connectionResult, setConnectionResult] = useState<{
@@ -239,7 +241,6 @@ export function SendingSettingsPage() {
   }) : blankSettings;
   useEffect(() => {
     if (!query.data || initialized) return;
-    const requestedAccountId = new URLSearchParams(window.location.search).get('accountId');
     const initial = accounts.find(account => account.id === requestedAccountId) ?? accounts.find(account => account.isPrimary) ?? accounts[0];
     setSelectedAccountId(initial?.id ?? '');
     setForm(formForAccount(initial));
@@ -247,6 +248,21 @@ export function SendingSettingsPage() {
     setInitialized(true);
   }, [query.data, accounts, initialized]);
   useEffect(() => {
+    const microsoft = new URLSearchParams(window.location.search).get('microsoft');
+    if (microsoft) {
+      const messages: Record<string, string> = {
+        connected: 'Microsoft sign-in connected. Send a test email for this saved account to enable campaign sending.',
+        'consent-required': 'Microsoft authorization was declined or requires administrator consent. Ask your organization administrator to approve the application, then reconnect.',
+        'mailbox-mismatch': 'The Microsoft account did not match the saved From email. Connect the exact mailbox saved for this sender.',
+        'settings-changed': 'The saved mailbox or Microsoft application settings changed during sign-in. Start a new connection attempt.',
+        expired: 'Microsoft sign-in expired or was already used. Start a new attempt from the same signed-in Mailflow session.',
+        failed: 'Microsoft sign-in could not complete. Check application setup and organization consent, then retry.',
+      };
+      setNotice({ kind: microsoft === 'connected' ? 'success' : 'error', text: messages[microsoft] || messages.failed! });
+      void query.refetch();
+      void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     const result = new URLSearchParams(window.location.search).get('gmail');
     if (result === 'connected') {
       setNotice({ kind: 'success', text: 'Gmail bounce monitoring is connected. Initial sync will begin shortly.' });
@@ -568,7 +584,7 @@ export function SendingSettingsPage() {
               <Field label="Port" value={form.port} onChange={v => change('port', v)} type="number" required testId="input-smtp-port"/>
               <label><span className={labelClass}>Encryption</span><select data-testid="select-smtp-encryption" className={inputClass} value={form.encryption} onChange={e => change('encryption', e.target.value)}><option value="tls">STARTTLS / TLS</option><option value="ssl">SSL</option><option value="none">None</option></select></label>
               <Field label="SMTP username" value={form.username} onChange={v => change('username', v)} placeholder={settings?.credentialsConfigured ? 'Leave blank to keep the saved username' : 'sender@example.com'} testId="input-smtp-username" hint={settings?.credentialsConfigured ? `Saved username: ${settings.username} · leave blank to keep it` : 'Required with the SMTP password'}/>
-              <Field label="SMTP password" value={form.password} onChange={v => change('password', v)} type="password" placeholder={settings?.credentialsConfigured ? 'Leave blank to keep current password' : 'Enter SMTP password'} testId="input-smtp-password" hint="Try an app password first if your email system allows it; otherwise, use your email password."/>
+              <Field label="SMTP password" value={form.password} onChange={v => change('password', v)} type="password" placeholder={settings?.authenticationMethod === 'microsoft_oauth' ? 'Microsoft sign-in is connected; no password needed' : settings?.credentialsConfigured ? 'Leave blank to keep current password' : 'Enter SMTP password'} testId="input-smtp-password" hint="Try your mailbox password if the provider permits it. If rejected, try an app password only if allowed; Microsoft users can then use Microsoft sign-in below."/>
             </div>
             <div className="my-6 border-t border-[#edf0f2]"/>
             <div className="mb-4"><h3 className="display text-[16px] font-bold text-[#1b293a]">Sender identity</h3><p className="mt-1 text-[12px] text-[#788392]">The visible name and addresses recipients will see.</p></div>
@@ -597,7 +613,9 @@ export function SendingSettingsPage() {
             </form>
           </div>
         </div>
+        {form.provider === 'microsoft_365' && <MicrosoftSenderSetup accountId={settings?.provider === 'microsoft_365' ? selectedAccountId : ''} refresh={refreshSenderAccounts} verified={Boolean(settings?.verified)}/>}
         <section className={`${panelClass} mt-5 p-5`} data-testid="section-imap-inbox-check">
+          {settings?.authenticationMethod === 'microsoft_oauth' && <p className="mb-3 rounded-md bg-[#fff8ef] p-3 text-[12px] leading-5 text-[#8a6235]">Microsoft sign-in authorizes sending only, not inbox reading. This password-based inbox check is unavailable for Microsoft-authorized senders. Message-trace reporting remains a separate connection.</p>}
           <div className="max-w-3xl">
             <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">INBOX MONITORING</div>
             <h2 className="display mt-2 text-[18px] font-bold text-[#1b293a]">Check this sender’s inbox</h2>
@@ -617,7 +635,7 @@ export function SendingSettingsPage() {
             <Button
               testId="button-check-sender-inbox"
               onClick={runInboxCheck}
-              disabled={!selectedAccountId || !settings?.credentialsConfigured || !imapHost.trim() || checkSenderMailbox.isPending}
+              disabled={!selectedAccountId || !settings?.credentialsConfigured || settings.authenticationMethod === 'microsoft_oauth' || !imapHost.trim() || checkSenderMailbox.isPending}
             >
               {checkSenderMailbox.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}
               {checkSenderMailbox.isPending ? 'Checking inbox…' : 'Check inbox now'}

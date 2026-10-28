@@ -122,6 +122,8 @@ import {
   CheckSenderMailboxResponse,
 } from "@workspace/api-zod";
 import type { TenantSendingSettingsInput } from "@workspace/api-zod";
+import { smtpConnectionDiagnostic } from "../lib/smtp-diagnostics";
+import { MicrosoftSenderError } from "../lib/microsoft-sender";
 import {
   companiesTable,
   contactFieldKeys,
@@ -336,11 +338,16 @@ function tenantSendingEmailConfiguration(
     settings.username?.trim() ||
     (existing ? decryptSecret(existing.usernameEncrypted) : "");
   const password =
-    settings.password?.trim() ||
+    settings.password ||
     (existing ? decryptSecret(existing.passwordEncrypted) : "");
-  if (!username || !password) return null;
+  const microsoftOAuth = existing?.authenticationMethod === "microsoft_oauth" &&
+    settings.provider === "microsoft_365" && settings.fromEmail.toLowerCase() === existing.fromEmail.toLowerCase() &&
+    !settings.password && (!settings.username || settings.username.trim() === decryptSecret(existing.usernameEncrypted));
+  if ((!username || !password) && !microsoftOAuth) return null;
 
   return {
+    id: existing?.id,
+    authenticationMethod: microsoftOAuth ? "microsoft_oauth" : "password",
     userId,
     provider: settings.provider,
     host: settings.host.trim(),
@@ -351,7 +358,7 @@ function tenantSendingEmailConfiguration(
         ? encryptSecret(username)
         : existing.usernameEncrypted,
     passwordEncrypted:
-      settings.password?.trim() || !existing
+      settings.password || !existing
         ? encryptSecret(password)
         : existing.passwordEncrypted,
     fromName: settings.fromName.trim(),
@@ -448,7 +455,9 @@ function sendingSettingsResponse(
     port: config?.port ?? null,
     encryption: config?.encryption ?? null,
     username: config ? MASKED_CREDENTIAL : null,
-    credentialsConfigured: Boolean(config?.usernameEncrypted && config.passwordEncrypted),
+    authenticationMethod: config?.authenticationMethod ?? "password",
+    credentialsConfigured: Boolean(config && (config.authenticationMethod === "microsoft_oauth" ||
+      (decryptSecret(config.usernameEncrypted) && decryptSecret(config.passwordEncrypted)))),
     fromName: config?.fromName ?? null,
     fromEmail: config?.fromEmail ?? null,
     replyTo: config?.replyTo ?? null,
@@ -1218,8 +1227,8 @@ router.post("/sending/accounts", requireUserRole, async (req, res): Promise<void
   }
   const userId = req.authUser!.id;
   const suppliedUsername = parsed.data.username?.trim();
-  const suppliedPassword = parsed.data.password?.trim();
-  if (!suppliedUsername || !suppliedPassword) {
+  const suppliedPassword = parsed.data.password;
+  if ((!suppliedUsername || !suppliedPassword) && parsed.data.provider !== "microsoft_365") {
     res.status(400).json({ error: "Enter the SMTP username and password for this sender.", code: "SMTP_CREDENTIALS_REQUIRED" });
     return;
   }
@@ -1240,8 +1249,8 @@ router.post("/sending/accounts", requireUserRole, async (req, res): Promise<void
         host: parsed.data.host.trim(),
         port: parsed.data.port,
         encryption: parsed.data.encryption,
-        usernameEncrypted: encryptSecret(suppliedUsername),
-        passwordEncrypted: encryptSecret(suppliedPassword),
+        usernameEncrypted: encryptSecret(suppliedUsername || parsed.data.fromEmail.trim()),
+        passwordEncrypted: encryptSecret(suppliedPassword || ""),
         fromName: parsed.data.fromName.trim(),
         fromEmail: parsed.data.fromEmail.trim().toLowerCase(),
         replyTo: parsed.data.fromEmail.trim().toLowerCase(),
@@ -1287,7 +1296,13 @@ router.patch("/sending/accounts/:accountId", requireUserRole, async (req, res): 
     return;
   }
   const suppliedUsername = parsed.data.username?.trim();
-  const suppliedPassword = parsed.data.password?.trim();
+  const suppliedPassword = parsed.data.password;
+  if (existing.authenticationMethod === "microsoft_oauth" &&
+    (parsed.data.provider !== existing.provider || parsed.data.fromEmail.trim().toLowerCase() !== existing.fromEmail.toLowerCase() ||
+      suppliedPassword || (suppliedUsername && suppliedUsername !== decryptSecret(existing.usernameEncrypted)))) {
+    res.status(409).json({ error: "Disconnect Microsoft sign-in before changing the mailbox, provider, or password. You can still change the sender name.", code: "MICROSOFT_DISCONNECT_FIRST" });
+    return;
+  }
   const [saved] = await db
     .update(tenantSendingConfigurationTable)
     .set({
@@ -1310,9 +1325,14 @@ router.patch("/sending/accounts/:accountId", requireUserRole, async (req, res): 
       and(
         eq(tenantSendingConfigurationTable.id, existing.id),
         eq(tenantSendingConfigurationTable.userId, userId),
+        eq(tenantSendingConfigurationTable.authenticationMethod, existing.authenticationMethod),
       ),
     )
     .returning();
+  if (!saved) {
+    res.status(409).json({ error: "This sender's authentication changed while you were editing. Reload Email Setup before saving again.", code: "STALE_SENDER_SETTINGS" });
+    return;
+  }
   res.json(
     UpdateTenantSendingAccountResponse.parse({
       account: sendingAccountResponse(saved!),
@@ -1385,6 +1405,10 @@ router.post(
       return;
     }
 
+    if (sender.authenticationMethod === "microsoft_oauth") {
+      res.status(409).json({ error: "Microsoft sign-in authorizes sending only, not password-based inbox access. Inbox monitoring requires a separate supported connection.", code: "MICROSOFT_INBOX_NOT_AUTHORIZED" });
+      return;
+    }
     const hostname = (parsed.data.imapHost ?? sender.inboxHost ?? "").trim().toLowerCase().replace(/\.$/, "");
     if (!hostname) {
       res.status(400).json({ error: "Connect this sender’s inbox first by entering its IMAP host.", code: "INBOX_NOT_CONNECTED" });
@@ -1748,7 +1772,10 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
       .from(tenantSendingConfigurationTable)
       .where(eq(tenantSendingConfigurationTable.userId, userId));
     const suppliedUsername = parsed.data.username?.trim();
-    const suppliedPassword = parsed.data.password?.trim();
+    const suppliedPassword = parsed.data.password;
+    if (existing?.authenticationMethod === "microsoft_oauth") {
+      return { error: "microsoft" as const };
+    }
     if (!existing && accounts.length >= limit) return { error: "limit" as const };
     if (!existing && (!suppliedUsername || !suppliedPassword)) {
       return { error: "credentials" as const };
@@ -1788,6 +1815,10 @@ router.put("/sending/settings", requireUserRole, async (req, res): Promise<void>
     return { saved: saved! };
   });
   if ("error" in outcome) {
+    if (outcome.error === "microsoft") {
+      res.status(409).json({ error: "Disconnect Microsoft sign-in from Email Setup before replacing this sender's password settings.", code: "MICROSOFT_DISCONNECT_FIRST" });
+      return;
+    }
     if (outcome.error === "credentials") {
       res.status(400).json({
         error: "Enter the SMTP username and password to configure a sender.",
@@ -1868,8 +1899,8 @@ router.post(
       res.json(
         TestTenantSendingConnectionResponse.parse({
           message: savedSettingsMatch
-            ? "Connection successful. SMTP authentication passed; no email was sent. The saved connection-check details were updated."
-            : "Connection successful. SMTP authentication passed; no email was sent. Saved check details were unchanged because the tested values differ from saved settings.",
+            ? "Connection successful. Mail-provider authentication passed; no email was sent. The saved connection-check details were updated."
+            : "Connection successful. Mail-provider authentication passed; no email was sent. Saved check details were unchanged because the tested values differ from saved settings.",
           checkedAt,
           savedSettingsUpdated: savedSettingsMatch,
         }),
@@ -1892,11 +1923,11 @@ router.post(
         },
         "Tenant SMTP connection check failed",
       );
+      const diagnostic = error instanceof MicrosoftSenderError
+        ? { error: error.message, code: error.code }
+        : smtpConnectionDiagnostic(error, config.provider === "microsoft_365");
       res.status(502).json({
-        error: savedSettingsMatch
-          ? "Connection failed. Verify the saved SMTP host, port, encryption, and credentials. The failed check and time were recorded."
-          : "Connection failed. Verify the SMTP host, port, encryption, and credentials. Saved check details were unchanged because the tested values differ from saved settings.",
-        code: "SMTP_CONNECTION_TEST_FAILED",
+        ...diagnostic,
         checkedAt,
         savedSettingsUpdated: savedSettingsMatch,
       });
@@ -1974,8 +2005,8 @@ router.post(
       res.json(
         TestTenantSendingSettingsResponse.parse({
           message: settingsMatch
-            ? "The SMTP server accepted the test message; inbox delivery is not confirmed."
-            : "The SMTP server accepted the test message, but saved settings were not changed or verified because they differ from the values tested.",
+            ? "The mail provider accepted the test message; inbox delivery is not confirmed."
+            : "The mail provider accepted the test message, but saved settings were not changed or verified because they differ from the values tested.",
           verifiedAt,
         }),
       );
@@ -1988,8 +2019,9 @@ router.post(
         "Tenant SMTP test send failed",
       );
       res.status(502).json({
-        error: "The test message could not be sent. Verify your SMTP host and credentials.",
-        code: "SMTP_TEST_FAILED",
+        ...(error instanceof MicrosoftSenderError
+          ? { error: error.message, code: error.code }
+          : smtpConnectionDiagnostic(error, config.provider === "microsoft_365")),
       });
     }
   },
