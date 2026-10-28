@@ -69,6 +69,7 @@ import type {
   CampaignReply,
   CampaignRescheduleInput,
   CampaignRescheduleResponse,
+  CampaignRetryUnknownResponse,
   CampaignSummary,
   CampaignTemplatePreview,
   CampaignUnsubscribeResult,
@@ -10200,6 +10201,80 @@ export const useSetCampaignPaused = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getSetCampaignPausedMutationOptions(options));
+    }
+
+export const getRetryUnknownCampaignDeliveriesUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/retry-unknown`
+}
+
+/**
+ * @summary Re-queue unresolved recipients for delivery through the campaign worker
+ */
+export const retryUnknownCampaignDeliveries = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignRetryUnknownResponse> => {
+
+  return customFetch<CampaignRetryUnknownResponse>(getRetryUnknownCampaignDeliveriesUrl(campaignId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryUnknownCampaignDeliveriesMutationKey = () => ['retryUnknownCampaignDeliveries'] as const;
+
+export const getRetryUnknownCampaignDeliveriesMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryUnknownCampaignDeliveries>>, TError,RetryUnknownCampaignDeliveriesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryUnknownCampaignDeliveries>>, TError,RetryUnknownCampaignDeliveriesMutationVariables, TContext> => {
+
+const mutationKey = getRetryUnknownCampaignDeliveriesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryUnknownCampaignDeliveries>>, RetryUnknownCampaignDeliveriesMutationVariables> = (props) => {
+          const {campaignId} = props ?? {};
+
+          return  retryUnknownCampaignDeliveries(campaignId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryUnknownCampaignDeliveriesMutationResult = NonNullable<Awaited<ReturnType<typeof retryUnknownCampaignDeliveries>>>
+
+    export type RetryUnknownCampaignDeliveriesMutationError = ErrorType<ApiError>
+    export type RetryUnknownCampaignDeliveriesMutationVariables = {campaignId: string}
+
+    /**
+ * @summary Re-queue unresolved recipients for delivery through the campaign worker
+ */
+export const useRetryUnknownCampaignDeliveries = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryUnknownCampaignDeliveries>>, TError,RetryUnknownCampaignDeliveriesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryUnknownCampaignDeliveries>>,
+        TError,
+        RetryUnknownCampaignDeliveriesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRetryUnknownCampaignDeliveriesMutationOptions(options));
     }
 
 export const getRescheduleCampaignUrl = (campaignId: string,) => {

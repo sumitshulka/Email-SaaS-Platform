@@ -223,33 +223,49 @@ async function completeCampaignIfFinished(
   userId: string,
   campaignId: string,
 ): Promise<void> {
-  const [unfinished] = await db
-    .select({ value: count() })
-    .from(emailCampaignRecipientsTable)
-    .where(
-      and(
-        eq(emailCampaignRecipientsTable.userId, userId),
-        eq(emailCampaignRecipientsTable.campaignId, campaignId),
-        inArray(emailCampaignRecipientsTable.status, ["queued", "sending"]),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    const [campaign] = await tx
+      .select({ id: emailCampaignsTable.id })
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          eq(emailCampaignsTable.id, campaignId),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
+        ),
+      )
+      .for("update");
+    if (!campaign) return;
 
-  if ((unfinished?.value ?? 0) > 0) return;
-  await db
-    .update(emailCampaignsTable)
-    .set({
-      status: "completed",
-      pausedAt: null,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(emailCampaignsTable.userId, userId),
-        eq(emailCampaignsTable.id, campaignId),
-        inArray(emailCampaignsTable.status, ["queued", "sending"]),
-      ),
-    );
+    const [unfinished] = await tx
+      .select({ value: count() })
+      .from(emailCampaignRecipientsTable)
+      .where(
+        and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaignId),
+          inArray(emailCampaignRecipientsTable.status, ["queued", "sending"]),
+        ),
+      );
+
+    if ((unfinished?.value ?? 0) > 0) return;
+    const now = new Date();
+    await tx
+      .update(emailCampaignsTable)
+      .set({
+        status: "completed",
+        pausedAt: null,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          eq(emailCampaignsTable.id, campaignId),
+          inArray(emailCampaignsTable.status, ["queued", "sending"]),
+        ),
+      );
+  });
 }
 
 async function markInterruptedDeliveriesUnknown(): Promise<void> {

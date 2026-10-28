@@ -46,6 +46,8 @@ import {
   RescheduleCampaignResponse,
   CancelPausedCampaignParams,
   CancelPausedCampaignResponse,
+  RetryUnknownCampaignDeliveriesParams,
+  RetryUnknownCampaignDeliveriesResponse,
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
@@ -4848,6 +4850,86 @@ router.patch(
       paused: result.pausedAt !== null,
       pausedAt: result.pausedAt,
       resumeAt: result.resumeAt,
+    }));
+  },
+);
+
+router.post(
+  "/campaigns/:campaignId/retry-unknown",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = RetryUnknownCampaignDeliveriesParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid campaign identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const outcome = await db.transaction(async (tx) => {
+      await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .for("update");
+      const [campaign] = await tx
+        .select({
+          id: emailCampaignsTable.id,
+          status: emailCampaignsTable.status,
+        })
+        .from(emailCampaignsTable)
+        .where(and(
+          eq(emailCampaignsTable.id, params.data.campaignId),
+          eq(emailCampaignsTable.userId, userId),
+        ))
+        .for("update");
+      if (!campaign) return { kind: "not_found" as const };
+      if (!["queued", "sending", "completed"].includes(campaign.status)) {
+        return { kind: "not_retryable" as const };
+      }
+      const now = new Date();
+      const requeued = await tx
+        .update(emailCampaignRecipientsTable)
+        .set({
+          status: "queued",
+          nextAttemptAt: now,
+          lastError: null,
+          rateLimitDeferredAt: null,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+          eq(emailCampaignRecipientsTable.status, "unknown"),
+        ))
+        .returning({ id: emailCampaignRecipientsTable.id });
+      if (requeued.length === 0) return { kind: "empty" as const };
+      const campaignUpdate =
+        campaign.status === "completed"
+          ? { status: "queued" as const, completedAt: null, updatedAt: now }
+          : { updatedAt: now };
+      await tx
+        .update(emailCampaignsTable)
+        .set(campaignUpdate)
+        .where(and(
+          eq(emailCampaignsTable.id, campaign.id),
+          eq(emailCampaignsTable.userId, userId),
+        ));
+      return { kind: "ok" as const, requeued: requeued.length };
+    });
+    if (outcome.kind === "not_found") {
+      res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      return;
+    }
+    if (outcome.kind === "not_retryable") {
+      res.status(409).json({ error: "This campaign cannot retry unresolved recipients.", code: "CAMPAIGN_NOT_RETRYABLE" });
+      return;
+    }
+    if (outcome.kind === "empty") {
+      res.status(409).json({ error: "There are no unresolved recipients to retry.", code: "NO_UNKNOWN_RECIPIENTS" });
+      return;
+    }
+    res.json(RetryUnknownCampaignDeliveriesResponse.parse({
+      campaignId: params.data.campaignId,
+      requeued: outcome.requeued,
     }));
   },
 );

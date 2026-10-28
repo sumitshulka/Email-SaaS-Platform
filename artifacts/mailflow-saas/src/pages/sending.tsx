@@ -26,7 +26,7 @@ import {
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
   getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
-  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useListCampaignReplies, useSetCampaignPaused,
+  useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useListCampaignReplies, useSetCampaignPaused, useRetryUnknownCampaignDeliveries,
   useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useGetCampaignAttachmentAvailability, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
@@ -3104,8 +3104,10 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
   const qc = useQueryClient();
   const pauseCampaign = useSetCampaignPaused();
   const cancelPausedCampaign = useCancelPausedCampaign();
+  const retryUnknown = useRetryUnknownCampaignDeliveries();
   const deleteDraft = useDeleteCampaign();
   const { notice, setNotice, dismiss } = useNotice();
+  const [retryUnknownDialogOpen, setRetryUnknownDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const senderAccountsQuery = useListTenantSendingAccounts();
@@ -3160,6 +3162,11 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         <Heading eyebrow="DELIVERY / CAMPAIGNS / DASHBOARD" title={campaign.name} detail={campaign.subject} action={<div className="flex flex-wrap items-center gap-2">{campaign.status === 'draft' && <Button variant="quiet" testId="button-delete-draft-campaign" disabled={deleteDraft.isPending} onClick={() => { setDeleteError(null); setDeleteDialogOpen(true); }}><Trash2 className="h-3.5 w-3.5 text-[#b85b20]"/>Delete draft</Button>}<Status tone={isPausedForMaintenance || isUserPaused ? 'orange' : statusTone}>{isPausedForMaintenance ? 'Maintenance paused' : isUserPaused ? 'Paused' : isScheduled ? 'scheduled' : campaign.status}</Status>{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="outline" testId="button-edit-campaign-resume-time" disabled={pauseCampaign.isPending} onClick={() => setPauseDialogOpen(true)}>Change resume time</Button>}{isActive && !isPausedForMaintenance && isUserPaused && <Button variant="danger" testId="button-cancel-paused-campaign-detail" disabled={cancelPausedCampaign.isPending} onClick={() => setCancelDialogOpen(true)}>Cancel campaign</Button>}{isActive && !isPausedForMaintenance && <Button variant="outline" testId="button-toggle-campaign-pause" disabled={pauseCampaign.isPending} onClick={() => isUserPaused ? pauseCampaign.mutate({ campaignId, data: { paused: false } }, { onSuccess: () => { void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }); void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); }, onError: () => { void query.refetch(); } }) : setPauseDialogOpen(true)}>{isUserPaused ? <><Play className="h-3.5 w-3.5"/>Resume delivery</> : <><Pause className="h-3.5 w-3.5"/>Pause campaign</>}</Button>}</div>}/>
         {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
         {(isUserPaused || isPausedForMaintenance) && <div role="status" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]">{isUserPaused && campaign.resumeAt ? `Delivery is paused and will resume automatically at ${formatDate(campaign.resumeAt)}. ` : ''}Queued messages are on hold. A message already being submitted to the SMTP server may finish; remaining messages will wait until delivery resumes.</div>}
+        {campaign.unknown > 0 && <div role="alert" data-testid="warning-campaign-unknown-deliveries" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e6c28f] bg-[#fff5e7] px-4 py-3 text-[12px] text-[#774b20]">
+          <div><div className="font-semibold">{campaign.unknown.toLocaleString()} email {campaign.unknown === 1 ? 'has' : 'have'} an unknown delivery outcome</div><p className="mt-1 max-w-3xl text-[11px] leading-5">A worker interruption may have happened while submitting these emails. Some may already have been accepted by the email provider, so retrying could send duplicates.{isUserPaused || isPausedForMaintenance ? ' Retried emails will remain queued until delivery resumes.' : ''}</p></div>
+          <Button variant="outline" testId="button-retry-unknown-campaign-deliveries" disabled={retryUnknown.isPending} onClick={() => setRetryUnknownDialogOpen(true)}><RefreshCw className="h-3.5 w-3.5"/>Retry unknown emails</Button>
+        </div>}
+        {retryUnknown.isError && <div role="alert" className="mb-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]">Could not queue the unknown emails for retry. Refresh the campaign and try again.</div>}
         {pauseCampaign.isError && <div role="alert" className="mb-4 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] text-[#895b2f]">Could not change the campaign pause state. Please try again.</div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {metrics.map(metric => <div key={metric.label} className={`${panelClass} p-4`} style={metric.surface}>
@@ -3341,6 +3348,27 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
         onError: () => { void query.refetch(); },
       })}
       testId="dialog-cancel-paused-campaign-detail"
+    />
+    <ConfirmActionDialog
+      open={retryUnknownDialogOpen}
+      title="Retry emails with unknown outcomes?"
+      description={`${dashboard?.campaign.unknown.toLocaleString() ?? 0} email(s) will be re-queued through the normal campaign worker. Their earlier SMTP outcomes are uncertain; some may already have been accepted, so duplicates are possible.${dashboard?.campaign.pausedAt || maintenancePaused ? ' The campaign is paused, so the re-queued emails will wait until delivery resumes.' : ''}`}
+      confirmLabel="Retry unknown emails"
+      destructive
+      pending={retryUnknown.isPending}
+      onOpenChange={open => { if (!retryUnknown.isPending) setRetryUnknownDialogOpen(open); }}
+      onConfirm={() => retryUnknown.mutate({ campaignId }, {
+        onSuccess: result => {
+          setRetryUnknownDialogOpen(false);
+          retryUnknown.reset();
+          void qc.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) });
+          void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() });
+          void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() });
+          setNotice({ kind: 'success', text: `${result.requeued.toLocaleString()} unknown email${result.requeued === 1 ? '' : 's'} queued for retry.` });
+        },
+        onError: () => { void query.refetch(); },
+      })}
+      testId="dialog-retry-unknown-campaign-deliveries"
     />
     {pauseDialogOpen && dashboard && <CampaignPauseDialog
       campaignName={dashboard.campaign.name}

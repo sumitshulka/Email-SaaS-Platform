@@ -3284,6 +3284,12 @@ export interface CampaignPauseResponse {
   resumeAt: string | null;
 }
 
+export interface CampaignRetryUnknownResponse {
+  campaignId: string;
+  /** @minimum 1 */
+  requeued: number;
+}
+
 export interface CampaignRescheduleInput {
   scheduledAt: string;
   confirmPausedConflicts?: boolean;

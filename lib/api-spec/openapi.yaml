@@ -2955,6 +2955,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /campaigns/{campaignId}/retry-unknown:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: retryUnknownCampaignDeliveries
+      tags: [sending]
+      summary: Re-queue unresolved recipients for delivery through the campaign worker
+      responses:
+        "200":
+          description: Unknown recipients re-queued for delivery
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignRetryUnknownResponse" }
+        "404":
+          description: Campaign not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Campaign cannot be retried or has no unresolved recipients
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /campaigns/{campaignId}/reschedule:
     parameters:
       - name: campaignId
@@ -6116,6 +6142,12 @@ components:
         pausedAt: { type: ["string", "null"], format: date-time }
         resumeAt: { type: ["string", "null"], format: date-time }
       required: [campaignId, paused, pausedAt, resumeAt]
+    CampaignRetryUnknownResponse:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        requeued: { type: integer, minimum: 1 }
+      required: [campaignId, requeued]
     CampaignRescheduleInput:
       type: object
       properties:

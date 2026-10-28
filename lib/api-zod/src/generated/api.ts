@@ -5782,6 +5782,22 @@ export const SetCampaignPausedResponse = zod.object({
 
 
 /**
+ * @summary Re-queue unresolved recipients for delivery through the campaign worker
+ */
+export const RetryUnknownCampaignDeliveriesParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+
+
+
+export const RetryUnknownCampaignDeliveriesResponse = zod.object({
+  "campaignId": zod.string().uuid(),
+  "requeued": zod.number().int().min(1)
+})
+
+
+/**
  * @summary Change the start time of an already scheduled campaign
  */
 export const RescheduleCampaignParams = zod.object({

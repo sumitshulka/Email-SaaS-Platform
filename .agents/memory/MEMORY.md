@@ -37,6 +37,7 @@
 - [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
 - [Campaign wizard submit transitions](campaign-wizard-submit-transition.md) — keep Continue and Save as distinct buttons; changing one form button from `button` to `submit` during a step transition can submit unexpectedly.
 - [Campaign claim atomicity](campaign-claim-atomicity.md) — win the conditional queued-to-sending transition before recording an attempt or calling SMTP.
+- [Campaign unknown-delivery retry](campaign-unknown-delivery-retry.md) — warn that an unknown outcome may be a duplicate, then re-queue only explicitly confirmed recipients through the worker.
 - [Campaign mailbox pacing](campaign-mailbox-pacing.md) — space all sends through one SMTP mailbox by a randomized 5–15 minutes, across campaigns, while retaining stricter caps.
 - [Campaign audience exclusions](campaign-audience-exclusions.md) — draft list membership stays live, with saved contact-level exclusions; queueing rechecks current eligibility.
 - [Global company privacy](global-company-privacy.md) — keep the global catalog profile-only; contacts stay tenant-private while linked company profiles sync.

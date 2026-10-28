@@ -96,6 +96,7 @@ export * from './campaignReply';
 export * from './campaignRescheduleConflict';
 export * from './campaignRescheduleInput';
 export * from './campaignRescheduleResponse';
+export * from './campaignRetryUnknownResponse';
 export * from './campaignSummary';
 export * from './campaignSummaryCampaignType';
 export * from './campaignSummaryStatus';
