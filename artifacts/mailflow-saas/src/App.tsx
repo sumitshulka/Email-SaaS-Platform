@@ -525,6 +525,8 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/campaigns',
     '/notifications',
     '/support',
+    '/plans',
+    '/profile',
   ].includes(location);
   const leave = () => logout.mutate(undefined, { onSuccess: () => { clearUserActivity(user.id); qc.clear(); setLocation('/'); } });
 
