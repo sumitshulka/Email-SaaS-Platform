@@ -130,7 +130,7 @@ function Usage() {
 export function AdminCompanyIntelligencePage() {
   const [tab, setTab] = useState<'usage' | 'settings'>('usage');
   const settings = useGetCompanyResearchSettings({ query: { queryKey: getGetCompanyResearchSettingsQueryKey(), staleTime: 30_000 } });
-  return <main className="fade-in mx-auto max-w-[1180px]">
+  return <main className="fade-in max-w-[1180px]">
     <Link href="/admin/global-companies" data-testid="link-back-global-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4" />Global companies</Link>
     <header className="mb-6"><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">PLATFORM / COMPANY INTELLIGENCE</div><h1 className="display text-[30px] font-bold text-[#172334]">Company intelligence</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Monitor research usage and tune freshness, limits, and models. Research itself starts from a company, after confirmation.</p></header>
     <div role="tablist" className="mb-5 flex gap-1 border-b border-[#e3e7eb]">{(['usage', 'settings'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold ${tab === t ? 'border-[#174f99] text-[#174f99]' : 'border-transparent text-[#687484]'}`}>{t === 'usage' ? 'Usage and jobs' : 'Settings'}</button>)}</div>

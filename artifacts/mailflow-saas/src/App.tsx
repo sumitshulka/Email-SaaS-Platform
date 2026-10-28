@@ -510,6 +510,12 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
   const [navOpen, setNavOpen] = useState(false);
   const qc = useQueryClient();
   const navGroups = admin ? platformNavigationGroups : workspaceNavigationGroups;
+  const leftAlignedAdminPage = admin && [
+    '/admin',
+    '/admin/users',
+    '/admin/global-companies',
+    '/admin/company-intelligence',
+  ].includes(location);
   const leave = () => logout.mutate(undefined, { onSuccess: () => { clearUserActivity(user.id); qc.clear(); setLocation('/'); } });
 
   useEffect(() => {
@@ -680,7 +686,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
             </button>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-8 md:px-9 md:py-10">
+        <main className={cn('w-full max-w-[1440px] flex-1 px-5 py-8 md:px-9 md:py-10', !leftAlignedAdminPage && 'mx-auto')}>
           {!admin && user.role === 'USER' && !user.mustChangeCredentials && <WorkspaceGettingStarted user={user}/>}
           {children}
         </main>
