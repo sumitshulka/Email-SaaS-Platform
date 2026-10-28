@@ -517,6 +517,10 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/admin/global-companies',
     '/admin/company-intelligence',
     '/sending-settings',
+    '/companies',
+    '/contacts',
+    '/contact-report',
+    '/contact-field-settings',
   ].includes(location);
   const leave = () => logout.mutate(undefined, { onSuccess: () => { clearUserActivity(user.id); qc.clear(); setLocation('/'); } });
 
