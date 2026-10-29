@@ -8,6 +8,7 @@ import {
   inArray,
   ilike,
   isNull,
+  lt,
   ne,
   or,
 } from "drizzle-orm";
@@ -24,6 +25,7 @@ import {
   ExportAdminGlobalCompaniesBody,
   CreateGlobalCompanyBody,
   DeleteGlobalCompanyParams,
+  GetAdminGlobalCompanyNavigationResponse,
   ListAdminGlobalCompaniesQueryParams,
   UpdateGlobalCompanyBody,
   UpdateGlobalCompanyParams,
@@ -136,7 +138,7 @@ router.get(
         .select()
         .from(globalCompaniesTable)
         .where(where)
-        .orderBy(asc(globalCompaniesTable.companyName), desc(globalCompaniesTable.createdAt))
+        .orderBy(asc(globalCompaniesTable.companyName), desc(globalCompaniesTable.createdAt), asc(globalCompaniesTable.id))
         .limit(pageSize)
         .offset((page - 1) * pageSize),
       db.select({ total: count() }).from(globalCompaniesTable).where(where),
@@ -149,6 +151,68 @@ router.get(
       page,
       pageSize,
     });
+  },
+);
+
+router.get(
+  "/admin/global-companies/:globalCompanyId/navigation",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const params = UpdateGlobalCompanyParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid global company identifier.", code: "INVALID_INPUT" });
+      return;
+    }
+    const [company] = await db.select({
+      id: globalCompaniesTable.id,
+      companyName: globalCompaniesTable.companyName,
+      createdAt: globalCompaniesTable.createdAt,
+    }).from(globalCompaniesTable)
+      .where(eq(globalCompaniesTable.id, params.data.globalCompanyId)).limit(1);
+    if (!company) {
+      res.status(404).json({ error: "Global company not found.", code: "NOT_FOUND" });
+      return;
+    }
+
+    const previousConditions = or(
+      lt(globalCompaniesTable.companyName, company.companyName),
+      and(
+        eq(globalCompaniesTable.companyName, company.companyName),
+        gt(globalCompaniesTable.createdAt, company.createdAt),
+      ),
+      and(
+        eq(globalCompaniesTable.companyName, company.companyName),
+        eq(globalCompaniesTable.createdAt, company.createdAt),
+        lt(globalCompaniesTable.id, company.id),
+      ),
+    );
+    const nextConditions = or(
+      gt(globalCompaniesTable.companyName, company.companyName),
+      and(
+        eq(globalCompaniesTable.companyName, company.companyName),
+        lt(globalCompaniesTable.createdAt, company.createdAt),
+      ),
+      and(
+        eq(globalCompaniesTable.companyName, company.companyName),
+        eq(globalCompaniesTable.createdAt, company.createdAt),
+        gt(globalCompaniesTable.id, company.id),
+      ),
+    );
+    const [[previous], [next]] = await Promise.all([
+      db.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable)
+        .where(previousConditions)
+        .orderBy(desc(globalCompaniesTable.companyName), asc(globalCompaniesTable.createdAt), desc(globalCompaniesTable.id))
+        .limit(1),
+      db.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable)
+        .where(nextConditions)
+        .orderBy(asc(globalCompaniesTable.companyName), desc(globalCompaniesTable.createdAt), asc(globalCompaniesTable.id))
+        .limit(1),
+    ]);
+
+    res.json(GetAdminGlobalCompanyNavigationResponse.parse({
+      previousCompanyId: previous?.id ?? null,
+      nextCompanyId: next?.id ?? null,
+    }));
   },
 );
 

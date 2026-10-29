@@ -1164,6 +1164,11 @@ export interface GlobalCompany {
   researchSummary?: CompanyResearchSummary;
 }
 
+export interface AdminGlobalCompanyNavigation {
+  previousCompanyId: string | null;
+  nextCompanyId: string | null;
+}
+
 export type CompanyResearchInputScope = typeof CompanyResearchInputScope[keyof typeof CompanyResearchInputScope];
 
 

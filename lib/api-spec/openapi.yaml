@@ -1680,6 +1680,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /admin/global-companies/{globalCompanyId}/navigation:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getAdminGlobalCompanyNavigation
+      tags: [admin]
+      summary: Get adjacent global company IDs for direct detail-page navigation
+      responses:
+        "200":
+          description: Previous and next global company IDs in catalog order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGlobalCompanyNavigation" }
+        "403":
+          description: Superadmin access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Global company not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /admin/global-companies/{globalCompanyId}:
     parameters:
       - name: globalCompanyId
@@ -5175,6 +5201,12 @@ components:
         updatedAt: { type: string, format: date-time }
         researchSummary: { $ref: "#/components/schemas/CompanyResearchSummary" }
       required: [id, companyName, companyWebsiteUrl, companyDomain, companyBusinessArea, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, createdAt, updatedAt]
+    AdminGlobalCompanyNavigation:
+      type: object
+      properties:
+        previousCompanyId: { type: string, format: uuid, nullable: true }
+        nextCompanyId: { type: string, format: uuid, nullable: true }
+      required: [previousCompanyId, nextCompanyId]
     CompanyResearchInput:
       type: object
       properties:

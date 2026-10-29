@@ -324,6 +324,31 @@ async function installApiFixtures(context, {
       });
       return;
     }
+    const globalCompanyNavigationMatch = pathname.match(/^\/api\/admin\/global-companies\/([^/]+)\/navigation$/);
+    if (globalCompanyNavigationMatch && method === 'GET') {
+      const ordered = [...globalCompanies].sort((a, b) => a.companyName.localeCompare(b.companyName));
+      const index = ordered.findIndex(item => item.id === globalCompanyNavigationMatch[1]);
+      await route.fulfill(index >= 0
+        ? {
+            status: 200,
+            json: {
+              previousCompanyId: ordered[index - 1]?.id ?? null,
+              nextCompanyId: ordered[index + 1]?.id ?? null,
+            },
+          }
+        : { status: 404, json: { error: 'Global company not found.' } });
+      return;
+    }
+    const globalCompanyDetailMatch = pathname.match(/^\/api\/admin\/global-companies\/([^/]+)$/);
+    if (globalCompanyDetailMatch && method === 'GET') {
+      const selectedCompany = globalCompanies.find(item => item.id === globalCompanyDetailMatch[1]);
+      await route.fulfill(
+        selectedCompany
+          ? { status: 200, json: selectedCompany }
+          : { status: 404, json: { error: 'Global company not found.' } },
+      );
+      return;
+    }
     if (pathname === '/api/admin/global-companies/business-area' && method === 'PATCH') {
       const body = request.postDataJSON();
       globalBusinessAreaUpdates.push(body);
@@ -1145,6 +1170,59 @@ describe('company profile review and contact data preservation', { concurrency: 
       await page.waitForURL(`**/companies/${companies[2].id}`);
       assert.equal(await page.getByTestId('text-company-name').innerText(), 'Gamma Systems');
       assert.equal(await page.getByTestId('button-next-company').isDisabled(), true);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('navigates through superadmin global companies across pages and keeps details left aligned', async () => {
+    const adminUser = {
+      ...user,
+      id: 'browser-global-navigation-admin-id',
+      username: 'global-navigation-browser-admin',
+      role: 'SUPERADMIN',
+    };
+    const globalCompanies = Array.from({ length: 12 }, (_, index) => ({
+      ...company,
+      id: `browser-global-navigation-${String(index).padStart(2, '0')}`,
+      companyName: `Global Navigation ${String(index).padStart(2, '0')}`,
+      companyBusinessArea: 'Manufacturing',
+    }));
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { authenticatedUser: adminUser, globalCompanies });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(adminUser.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/admin');
+      await page.goto(`${baseUrl}/admin/global-companies`);
+      await page.getByLabel('Search global company catalog').fill('Global Navigation');
+      await page.getByTestId('row-global-company-browser-global-navigation-09').waitFor({ state: 'visible' });
+      await page.getByTestId('link-global-company-detail-browser-global-navigation-09').click();
+      await page.waitForFunction(() => window.location.pathname.endsWith('/companies/browser-global-navigation-09'));
+      assert.equal(await page.locator('h1').innerText(), 'Global Navigation 09');
+      assert.equal(new URL(page.url()).searchParams.get('listSearch'), 'Global Navigation');
+      assert.equal(new URL(page.url()).searchParams.get('listPage'), '1');
+      const detailClasses = await page.getByTestId('admin-global-company-detail').getAttribute('class');
+      assert.match(detailClasses ?? '', /\bw-full\b/);
+      assert.doesNotMatch(detailClasses ?? '', /\bmx-auto\b/);
+
+      await page.getByTestId('button-next-global-company').click();
+      await page.getByRole('heading', { name: 'Global Navigation 10' }).waitFor({ state: 'visible' });
+      assert.equal(await page.locator('h1').innerText(), 'Global Navigation 10');
+      assert.equal(new URL(page.url()).searchParams.get('listSearch'), 'Global Navigation');
+      assert.equal(new URL(page.url()).searchParams.get('listPage'), '2');
+      await page.getByTestId('button-previous-global-company').click();
+      await page.getByRole('heading', { name: 'Global Navigation 09' }).waitFor({ state: 'visible' });
+      assert.equal(await page.locator('h1').innerText(), 'Global Navigation 09');
+
+      await page.goto(`${baseUrl}/companies/browser-global-navigation-05`);
+      await page.getByRole('heading', { name: 'Global Navigation 05' }).waitFor({ state: 'visible' });
+      await page.getByTestId('button-next-global-company').click();
+      await page.getByRole('heading', { name: 'Global Navigation 06' }).waitFor({ state: 'visible' });
+      assert.equal(new URL(page.url()).search, '', 'direct detail navigation should not add stale list filters');
     } finally {
       await context.close();
     }

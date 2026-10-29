@@ -31,6 +31,7 @@ import type {
   AdminDashboard,
   AdminFinancePaymentPage,
   AdminGlobalCompanyExportInput,
+  AdminGlobalCompanyNavigation,
   AdminNotification,
   AdminNotificationInput,
   AdminNotificationStatusInput,
@@ -6156,6 +6157,83 @@ export const useBulkUpdateGlobalCompanyBusinessArea = <TError = ErrorType<ApiErr
       > => {
       return useMutation(getBulkUpdateGlobalCompanyBusinessAreaMutationOptions(options));
     }
+
+export const getGetAdminGlobalCompanyNavigationUrl = (globalCompanyId: string,) => {
+
+
+
+
+  return `/api/admin/global-companies/${globalCompanyId}/navigation`
+}
+
+/**
+ * @summary Get adjacent global company IDs for direct detail-page navigation
+ */
+export const getAdminGlobalCompanyNavigation = async (globalCompanyId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminGlobalCompanyNavigation> => {
+
+  return customFetch<AdminGlobalCompanyNavigation>(getGetAdminGlobalCompanyNavigationUrl(globalCompanyId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminGlobalCompanyNavigationQueryKey = (globalCompanyId: string,) => {
+    return [
+    `/api/admin/global-companies/${globalCompanyId}/navigation`
+    ] as const;
+    }
+
+
+export const getGetAdminGlobalCompanyNavigationQueryOptions = <TData = Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>, TError = ErrorType<ApiError>>(globalCompanyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminGlobalCompanyNavigationQueryKey(globalCompanyId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>> = ({ signal }) => getAdminGlobalCompanyNavigation(globalCompanyId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: globalCompanyId !== null && globalCompanyId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminGlobalCompanyNavigationQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>>
+export type GetAdminGlobalCompanyNavigationQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get adjacent global company IDs for direct detail-page navigation
+ */
+
+export function useGetAdminGlobalCompanyNavigation<TData = Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>, TError = ErrorType<ApiError>>(
+ globalCompanyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminGlobalCompanyNavigation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminGlobalCompanyNavigationQueryOptions(globalCompanyId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAdminGlobalCompanyUrl = (globalCompanyId: string,) => {
 

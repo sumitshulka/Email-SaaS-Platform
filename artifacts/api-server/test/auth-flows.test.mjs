@@ -8924,6 +8924,65 @@ describe("authentication and account recovery", { concurrency: false }, () => {
   });
 });
 
+describe("superadmin global company navigation", { concurrency: false }, () => {
+  it("returns adjacent catalog IDs in stable order and remains superadmin-only", async () => {
+    const admin = await loggedInUser({
+      username: "global-company-navigation-admin",
+      role: "SUPERADMIN",
+    });
+    const customer = await loggedInUser({
+      username: "global-company-navigation-customer",
+    });
+    const namePrefix = `ZZZ Navigation ${Date.now()}`;
+    const domainPrefix = `global-navigation-${Date.now()}`;
+    const records = await db.insert(dbModule.globalCompaniesTable).values(
+      ["A", "B", "C"].map(suffix => ({
+        companyName: `${namePrefix} ${suffix}`,
+        companyDomain: `${domainPrefix}-${suffix.toLowerCase()}.example`,
+        companyDomainKey: `${domainPrefix}-${suffix.toLowerCase()}.example`,
+      })),
+    ).returning();
+
+    try {
+      const anonymous = await api(`/admin/global-companies/${records[1].id}/navigation`);
+      assert.equal(anonymous.response.status, 401);
+      const customerResponse = await api(`/admin/global-companies/${records[1].id}/navigation`, {
+        cookie: customer.cookie,
+      });
+      assert.equal(customerResponse.response.status, 403);
+
+      const middle = await api(`/admin/global-companies/${records[1].id}/navigation`, {
+        cookie: admin.cookie,
+      });
+      assert.equal(middle.response.status, 200, JSON.stringify(middle.body));
+      assert.deepEqual(middle.body, {
+        previousCompanyId: records[0].id,
+        nextCompanyId: records[2].id,
+      });
+
+      const first = await api(`/admin/global-companies/${records[0].id}/navigation`, {
+        cookie: admin.cookie,
+      });
+      assert.deepEqual(first.body, {
+        previousCompanyId: null,
+        nextCompanyId: records[1].id,
+      });
+      const last = await api(`/admin/global-companies/${records[2].id}/navigation`, {
+        cookie: admin.cookie,
+      });
+      assert.deepEqual(last.body, {
+        previousCompanyId: records[1].id,
+        nextCompanyId: null,
+      });
+    } finally {
+      for (const record of records) {
+        await db.delete(dbModule.globalCompaniesTable)
+          .where(eq(dbModule.globalCompaniesTable.id, record.id));
+      }
+    }
+  });
+});
+
 describe("company research package access", { concurrency: false }, () => {
   it("enforces per-term package allowances for tenants while preserving superadmin policy access", async () => {
     const admin = await loggedInUser({

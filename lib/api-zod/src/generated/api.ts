@@ -3135,6 +3135,19 @@ export const BulkUpdateGlobalCompanyBusinessAreaResponse = zod.object({
 
 
 /**
+ * @summary Get adjacent global company IDs for direct detail-page navigation
+ */
+export const GetAdminGlobalCompanyNavigationParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const GetAdminGlobalCompanyNavigationResponse = zod.object({
+  "previousCompanyId": zod.string().uuid().nullable(),
+  "nextCompanyId": zod.string().uuid().nullable()
+})
+
+
+/**
  * @summary Read one global company profile for the superadmin details view
  */
 export const GetAdminGlobalCompanyParams = zod.object({
