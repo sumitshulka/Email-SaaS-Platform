@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { Router, type IRouter, type RequestHandler } from "express";
 import { db, systemConfigurationTable } from "@workspace/db";
 import {
@@ -7,26 +6,19 @@ import {
   UpdateCompanyBusinessAreasResponse,
 } from "@workspace/api-zod";
 import { requireSuperadmin, requireUserRole } from "../lib/session";
+import {
+  COMPANY_BUSINESS_AREAS_SETTING_KEY,
+  getCompanyBusinessAreaValues,
+} from "../lib/company-business-areas";
 
 const router: IRouter = Router();
-const SETTINGS_KEY = "company_business_areas";
-const DEFAULT_VALUES = ["Manufacturing", "Education", "Textiles", "Service Industry"];
 const requireBusinessAreaViewer: RequestHandler = (req, res, next) =>
   req.authUser?.role === "SUPERADMIN"
     ? requireSuperadmin(req, res, next)
     : requireUserRole(req, res, next);
 
-async function getValues(): Promise<string[]> {
-  const [row] = await db.select({ value: systemConfigurationTable.value })
-    .from(systemConfigurationTable).where(eq(systemConfigurationTable.key, SETTINGS_KEY)).limit(1);
-  const value = row?.value;
-  return Array.isArray(value) && value.every(item => typeof item === "string")
-    ? value
-    : DEFAULT_VALUES;
-}
-
 router.get("/company-business-areas", requireBusinessAreaViewer, async (_req, res): Promise<void> => {
-  res.json(ListCompanyBusinessAreasResponse.parse({ values: await getValues() }));
+  res.json(ListCompanyBusinessAreasResponse.parse({ values: await getCompanyBusinessAreaValues() }));
 });
 
 router.put("/admin/company-business-areas", requireSuperadmin, async (req, res): Promise<void> => {
@@ -42,7 +34,7 @@ router.put("/admin/company-business-areas", requireSuperadmin, async (req, res):
     return;
   }
   await db.insert(systemConfigurationTable)
-    .values({ key: SETTINGS_KEY, value: values, updatedBy: req.authUser!.id })
+    .values({ key: COMPANY_BUSINESS_AREAS_SETTING_KEY, value: values, updatedBy: req.authUser!.id })
     .onConflictDoUpdate({
       target: systemConfigurationTable.key,
       set: { value: values, updatedBy: req.authUser!.id, updatedAt: new Date() },

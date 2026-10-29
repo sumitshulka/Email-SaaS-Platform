@@ -339,6 +339,7 @@ memory.public.none(`
     company_website_url varchar(2048),
     company_domain varchar(255),
     company_domain_key varchar(255),
+    company_business_area varchar(120),
     company_industry varchar(120),
     company_size varchar(80),
     company_revenue_range varchar(80),
@@ -408,6 +409,7 @@ memory.public.none(`
     company_website_url varchar(2048),
     company_domain varchar(255),
     company_domain_key varchar(255),
+    company_business_area varchar(120),
     company_industry varchar(120),
     company_size varchar(80),
     company_revenue_range varchar(80),
@@ -6700,6 +6702,106 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(storedForeignCompany.companyName, "Other Workspace Company");
     assert.equal(storedForeignCompany.companyDomain, "other-private.test");
     assert.equal(storedForeignCompany.companyIndustry, "Finance");
+  });
+
+  it("bulk-updates only owned companies to a platform-approved business area", async () => {
+    const owner = await loggedInUser({
+      username: "company-business-area-bulk-owner",
+      email: "company-business-area-bulk-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "company-business-area-bulk-other",
+      email: "company-business-area-bulk-other@example.test",
+    });
+    const [firstCompany, secondCompany] = await db
+      .insert(dbModule.companiesTable)
+      .values([
+        {
+          userId: owner.user.id,
+          companyName: "Bulk Area First",
+          companyDomain: "bulk-area-first.test",
+          companyDomainKey: "bulk-area-first.test",
+          companyBusinessArea: "Old Area",
+        },
+        {
+          userId: owner.user.id,
+          companyName: "Bulk Area Second",
+          companyDomain: "bulk-area-second.test",
+          companyDomainKey: "bulk-area-second.test",
+          companyBusinessArea: "Old Area",
+        },
+      ])
+      .returning();
+    const [otherCompany] = await db
+      .insert(dbModule.companiesTable)
+      .values({
+        userId: other.user.id,
+        companyName: "Foreign Bulk Area",
+        companyDomain: "foreign-bulk-area.test",
+        companyDomainKey: "foreign-bulk-area.test",
+        companyBusinessArea: "Old Area",
+      })
+      .returning();
+    await db
+      .insert(dbModule.systemConfigurationTable)
+      .values({
+        key: "company_business_areas",
+        value: ["Manufacturing", "Education"],
+        updatedBy: owner.user.id,
+      })
+      .onConflictDoUpdate({
+        target: dbModule.systemConfigurationTable.key,
+        set: { value: ["Manufacturing", "Education"], updatedBy: owner.user.id },
+      });
+
+    const updated = await api("/companies/business-area", {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        companyIds: [firstCompany.id, secondCompany.id],
+        companyBusinessArea: "Manufacturing",
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.updatedCount, 2);
+    const saved = await db
+      .select()
+      .from(dbModule.companiesTable)
+      .where(and(
+        eq(dbModule.companiesTable.userId, owner.user.id),
+        eq(dbModule.companiesTable.companyBusinessArea, "Manufacturing"),
+      ));
+    assert.deepEqual(
+      saved.map(({ id }) => id).sort(),
+      [firstCompany.id, secondCompany.id].sort(),
+    );
+
+    const unapproved = await api("/companies/business-area", {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        companyIds: [firstCompany.id],
+        companyBusinessArea: "Unapproved Area",
+      },
+    });
+    assert.equal(unapproved.response.status, 400);
+    assert.equal(unapproved.body.code, "BUSINESS_AREA_NOT_ALLOWED");
+
+    const crossTenant = await api("/companies/business-area", {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        companyIds: [firstCompany.id, otherCompany.id],
+        companyBusinessArea: "Education",
+      },
+    });
+    assert.equal(crossTenant.response.status, 404);
+    assert.equal(crossTenant.body.code, "COMPANY_NOT_FOUND");
+    const [unchanged] = await db
+      .select()
+      .from(dbModule.companiesTable)
+      .where(eq(dbModule.companiesTable.id, firstCompany.id));
+    assert.equal(unchanged.companyBusinessArea, "Manufacturing");
   });
 
   it("keeps the global company catalog contact-free while linked profiles remain live and tenant-private", async () => {

@@ -256,6 +256,7 @@ async function installApiFixtures(context, {
   contacts = contactDirectoryFixtures(),
   companySearchRequests = [],
   companyDirectoryRequests = [],
+  businessAreaUpdates = [],
   leadStatusOptions = [],
 } = {}) {
   await context.route('**/api/**', async route => {
@@ -285,6 +286,20 @@ async function installApiFixtures(context, {
 
     if (pathname === '/api/auth/me' && method === 'GET') {
       await route.fulfill({ status: 200, json: user });
+      return;
+    }
+    if (pathname === '/api/company-business-areas' && method === 'GET') {
+      await route.fulfill({ status: 200, json: { values: ['Manufacturing', 'Education', 'Textiles'] } });
+      return;
+    }
+    if (pathname === '/api/companies/business-area' && method === 'PATCH') {
+      const body = request.postDataJSON();
+      businessAreaUpdates.push(body);
+      for (const companyId of body.companyIds) {
+        const selectedCompany = companies.find(item => item.id === companyId);
+        if (selectedCompany) selectedCompany.companyBusinessArea = body.companyBusinessArea;
+      }
+      await route.fulfill({ status: 200, json: { updatedCount: body.companyIds.length } });
       return;
     }
     if (pathname === '/api/companies/search' && method === 'GET') {
@@ -966,6 +981,53 @@ describe('company profile review and contact data preservation', { concurrency: 
       await page.setViewportSize({ width: 390, height: 844 });
       const pageOverflowsHorizontally = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
       assert.equal(pageOverflowsHorizontally, false, 'filters should not cause page-level horizontal overflow on mobile');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('bulk-assigns one controlled business area to selected workspace companies', async () => {
+    const companies = [
+      {
+        ...company,
+        id: 'browser-bulk-company-area-one',
+        companyName: 'Bulk Area One',
+        companyBusinessArea: null,
+      },
+      {
+        ...company,
+        id: 'browser-bulk-company-area-two',
+        companyName: 'Bulk Area Two',
+        companyBusinessArea: 'Education',
+      },
+    ];
+    const businessAreaUpdates = [];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { companies, businessAreaUpdates });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/companies`);
+
+      await page.getByTestId('row-company-browser-bulk-company-area-one').waitFor({ state: 'visible' });
+      await page.getByTestId('checkbox-select-company-browser-bulk-company-area-one').check();
+      await page.getByTestId('checkbox-select-company-browser-bulk-company-area-two').check();
+      await page.getByTestId('text-company-result-count').waitFor({ state: 'visible' });
+      await page.getByTestId('select-bulk-company-business-area').selectOption({ label: 'Manufacturing' });
+      await page.getByTestId('button-apply-bulk-company-business-area').click();
+      await page.getByText('Business area set to Manufacturing for 2 companies.').waitFor({ state: 'visible' });
+
+      assert.deepEqual(businessAreaUpdates, [{
+        companyIds: ['browser-bulk-company-area-one', 'browser-bulk-company-area-two'],
+        companyBusinessArea: 'Manufacturing',
+      }]);
+      assert.equal(companies[0].companyBusinessArea, 'Manufacturing');
+      assert.equal(companies[1].companyBusinessArea, 'Manufacturing');
+      assert.equal(await page.getByTestId('panel-bulk-company-business-area').count(), 0, 'successful updates should clear the selection');
     } finally {
       await context.close();
     }

@@ -1806,6 +1806,24 @@ export type CompanyListItem = Company & {
   contactCount: number;
 };
 
+export interface CompanyBusinessAreaBulkUpdate {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  companyIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  companyBusinessArea: string;
+}
+
+export interface CompanyBusinessAreaBulkUpdateResult {
+  /** @minimum 0 */
+  updatedCount: number;
+}
+
 export interface CompanyContact {
   id: string;
   name: string;

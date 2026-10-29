@@ -18,6 +18,8 @@ import {
   BulkImportCompaniesBody,
   BulkImportCompaniesResponse,
   BackfillCompanyProfilesResponse,
+  BulkUpdateCompanyBusinessAreaBody,
+  BulkUpdateCompanyBusinessAreaResponse,
   CreateCompanyBody,
   CreateCompanyResponse,
   ExportCompaniesBody,
@@ -53,6 +55,7 @@ import {
   listUnlinkedCompanyProfilesForTenant,
 } from "../lib/company-backfill";
 import { requireUserRole } from "../lib/session";
+import { getCompanyBusinessAreaValues } from "../lib/company-business-areas";
 
 const router: IRouter = Router();
 const COMPANY_EXPORT_BATCH_SIZE = 250;
@@ -188,6 +191,96 @@ router.get("/companies", requireUserRole, async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.patch(
+  "/companies/business-area",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = BulkUpdateCompanyBusinessAreaBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: "Select companies and a valid business area to update.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const allowedBusinessAreas = await getCompanyBusinessAreaValues();
+    if (!allowedBusinessAreas.includes(parsed.data.companyBusinessArea)) {
+      res.status(400).json({
+        error: "Choose a business area from the current controlled list.",
+        code: "BUSINESS_AREA_NOT_ALLOWED",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1)
+        .for("update");
+      if (!lockedUser) return { kind: "not_found" as const };
+
+      const selectedCompanies = await tx
+        .select({
+          id: companiesTable.id,
+          globalCompanyId: companiesTable.globalCompanyId,
+        })
+        .from(companiesTable)
+        .where(
+          and(
+            eq(companiesTable.userId, userId),
+            inArray(companiesTable.id, parsed.data.companyIds),
+          ),
+        )
+        .for("update");
+      if (selectedCompanies.length !== parsed.data.companyIds.length) {
+        return { kind: "not_found" as const };
+      }
+      if (selectedCompanies.some((company) => company.globalCompanyId)) {
+        return { kind: "global_managed" as const };
+      }
+
+      const updated = await tx
+        .update(companiesTable)
+        .set({
+          companyBusinessArea: parsed.data.companyBusinessArea,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(companiesTable.userId, userId),
+            inArray(companiesTable.id, parsed.data.companyIds),
+          ),
+        )
+        .returning({ id: companiesTable.id });
+      return { kind: "updated" as const, updatedCount: updated.length };
+    });
+
+    if (result.kind === "not_found") {
+      res.status(404).json({
+        error: "One or more selected companies could not be found in this workspace.",
+        code: "COMPANY_NOT_FOUND",
+      });
+      return;
+    }
+    if (result.kind === "global_managed") {
+      res.status(409).json({
+        error: "Companies managed by the Global Company DB must be updated there.",
+        code: "GLOBAL_COMPANY_MANAGED",
+      });
+      return;
+    }
+    res.json(
+      BulkUpdateCompanyBusinessAreaResponse.parse({
+        updatedCount: result.updatedCount,
+      }),
+    );
+  },
+);
 
 router.get(
   "/companies/search",

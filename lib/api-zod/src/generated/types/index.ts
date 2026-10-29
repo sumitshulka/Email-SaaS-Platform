@@ -119,6 +119,8 @@ export * from './companyBulkImportInputRowsItemCompany';
 export * from './companyBulkImportResult';
 export * from './companyBulkImportResultRowsItem';
 export * from './companyBulkImportResultRowsItemStatus';
+export * from './companyBusinessAreaBulkUpdate';
+export * from './companyBusinessAreaBulkUpdateResult';
 export * from './companyBusinessAreas';
 export * from './companyBusinessAreasInput';
 export * from './companyCollection';

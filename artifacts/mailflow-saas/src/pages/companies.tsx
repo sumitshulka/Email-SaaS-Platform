@@ -4,7 +4,7 @@ import { Link } from 'wouter';
 import { ArrowUpRight, Building2, Check, CircleAlert, Download, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 import {
   exportCompanies, getGetCompanyQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey, getSearchGlobalCompaniesQueryKey,
-  useBackfillCompanyProfiles, useCreateCompany, useListCompanies, useListUnlinkedCompanyProfiles, useUpdateCompany,
+  useBackfillCompanyProfiles, useBulkUpdateCompanyBusinessArea, useCreateCompany, useListCompanies, useListUnlinkedCompanyProfiles, useUpdateCompany,
 } from '@workspace/api-client-react';
 import type { Company, CompanyExportInput, CompanyInput, CompanyUpdate, UnlinkedCompanyProfile } from '@workspace/api-client-react';
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
@@ -13,6 +13,7 @@ import { GlobalCompanyDirectoryPage } from '@/pages/global-company-directory';
 import { CompanyImportDialog } from '@/components/company-import-dialog';
 
 const card = 'rounded-lg border border-[#e0e4e9] bg-white';
+const MAX_BULK_COMPANY_SELECTION = 500;
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
 const labelClass = 'mb-1.5 block text-[11px] font-semibold text-[#465568]';
 const fields = [
@@ -112,7 +113,9 @@ export function CompaniesPage() {
   const listQuery = useListCompanies();
   const unlinkedProfilesQuery = useListUnlinkedCompanyProfiles();
   const backfill = useBackfillCompanyProfiles();
+  const bulkBusinessAreaUpdate = useBulkUpdateCompanyBusinessArea();
   const started = useRef(false);
+  const selectPageCheckboxRef = useRef<HTMLInputElement>(null);
   const [editor, setEditor] = useState<'new' | Company | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -122,6 +125,11 @@ export function CompaniesPage() {
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ linkedContacts: number; createdCompanies: number; skippedContacts: number } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(() => new Set());
+  const [businessAreas, setBusinessAreas] = useState<string[]>([]);
+  const [businessAreasLoading, setBusinessAreasLoading] = useState(true);
+  const [businessAreasError, setBusinessAreasError] = useState('');
+  const [bulkBusinessArea, setBulkBusinessArea] = useState('');
   const companies = listQuery.data?.companies ?? [];
   const companyFilterOptions = useMemo(() => ({
     industries: uniqueCompanyFilterOptions(companies.map(company => company.companyIndustry)),
@@ -164,6 +172,78 @@ export function CompaniesPage() {
   const pageSize = 10;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const pageSelectableIds = pageItems.filter(company => !company.globalCompanyId).map(company => company.id);
+  const pageSelectedCount = pageSelectableIds.filter(id => selectedCompanyIds.has(id)).length;
+  const pageFullySelected = pageSelectableIds.length > 0 && pageSelectedCount === pageSelectableIds.length;
+  const pagePartiallySelected = pageSelectedCount > 0 && !pageFullySelected;
+
+  useEffect(() => {
+    if (selectPageCheckboxRef.current) {
+      selectPageCheckboxRef.current.indeterminate = pagePartiallySelected;
+    }
+  }, [pagePartiallySelected]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/company-business-areas', { credentials: 'include' })
+      .then(async response => {
+        if (!response.ok) throw new Error('Business-area choices could not be loaded.');
+        return response.json() as Promise<{ values: string[] }>;
+      })
+      .then(result => {
+        if (active) setBusinessAreas(result.values);
+      })
+      .catch(error => {
+        if (active) setBusinessAreasError(error instanceof Error ? error.message : 'Business-area choices could not be loaded.');
+      })
+      .finally(() => {
+        if (active) setBusinessAreasLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const toggleCompanySelection = (companyId: string, checked: boolean) => {
+    setSelectedCompanyIds(current => {
+      if (checked && current.size >= MAX_BULK_COMPANY_SELECTION) return current;
+      const next = new Set(current);
+      if (checked) next.add(companyId);
+      else next.delete(companyId);
+      return next;
+    });
+  };
+  const togglePageSelection = (checked: boolean) => {
+    setSelectedCompanyIds(current => {
+      const next = new Set(current);
+      for (const companyId of pageSelectableIds) {
+        if (checked) {
+          if (next.size < MAX_BULK_COMPANY_SELECTION) next.add(companyId);
+        } else {
+          next.delete(companyId);
+        }
+      }
+      return next;
+    });
+  };
+  const applyBulkBusinessArea = () => {
+    if (!bulkBusinessArea || !selectedCompanyIds.size) return;
+    const companyIds = [...selectedCompanyIds];
+    bulkBusinessAreaUpdate.mutate(
+      { data: { companyIds, companyBusinessArea: bulkBusinessArea } },
+      {
+        onSuccess: result => {
+          setNotice({ tone: 'success', text: `Business area set to ${bulkBusinessArea} for ${result.updatedCount} companies.` });
+          setSelectedCompanyIds(new Set());
+          setBulkBusinessArea('');
+          void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+          void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
+          for (const companyId of companyIds) {
+            void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(companyId) });
+          }
+        },
+        onError: error => setNotice({ tone: 'error', text: errorText(error) }),
+      },
+    );
+  };
 
   useEffect(() => {
     if (started.current) return;
@@ -210,7 +290,7 @@ export function CompaniesPage() {
       <footer className="border-t border-[#edf0f2] bg-[#fbfcfd] px-4 py-3 text-[10px] leading-4 text-[#778596] sm:px-5">To keep a profile unchanged, leave it as-is. It remains on the contact and in this list until you correct or link it.</footer>
     </section>
     <section className={`${card} overflow-hidden`}>
-      <div className="flex flex-col gap-3 border-b border-[#e8edf1] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><h2 className="text-[14px] font-bold text-[#223247]">Company directory</h2><p data-testid="text-company-result-count" className="mt-1 text-[11px] text-[#84909e]">{filtered.length} {filtered.length === 1 ? 'record' : 'records'} in this workspace</p></div><label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search companies" data-testid="input-search-companies" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-md border border-[#dce2e8] bg-[#fbfcfd] pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label></div>
+      <div className="flex flex-col gap-3 border-b border-[#e8edf1] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><h2 className="text-[14px] font-bold text-[#223247]">Company directory</h2><p data-testid="text-company-result-count" className="mt-1 text-[11px] text-[#84909e]">{filtered.length} {filtered.length === 1 ? 'record' : 'records'} in this workspace</p><p className="mt-1 text-[10px] text-[#84909e]">Select workspace-owned companies to set one shared business area. Global catalog profiles are managed there.</p></div><label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search companies" data-testid="input-search-companies" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-md border border-[#dce2e8] bg-[#fbfcfd] pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label></div>
       <section data-testid="section-company-filters" aria-label="Smart company filters" className="border-b border-[#e8edf1] bg-[#fbfcfd] px-4 py-4 sm:px-5">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Smart filters</h3><p className="mt-1 text-[10px] text-[#7d8997]">Combine company profile filters; all selected values must match.</p></div>{hasActiveCompanyFilters && <button type="button" data-testid="button-clear-company-filters" onClick={clearCompanyFilters} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Clear filters</button>}</div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -220,7 +300,8 @@ export function CompaniesPage() {
           <label className="block"><span className={labelClass}>Location</span><input data-testid="input-company-location-filter" className={input} value={companyFilters.location} onChange={event => updateCompanyFilter('location', event.target.value)} placeholder="City, region, or country"/></label>
         </div>
       </section>
-      {pageItems.length ? <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="bg-[#f8fafb]"><tr className="mono text-[9px] uppercase tracking-[.11em] text-[#84909e]"><th className="px-5 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Business area (Domain)</th><th className="px-4 py-3 font-medium">Location</th><th className="px-5 py-3 font-medium">Contacts</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{pageItems.map(company => <tr key={company.id} data-testid={`row-company-${company.id}`} className="group hover:bg-[#f8fafb]"><td className="px-5 py-3.5"><Link href={`/companies/${company.id}`} data-testid={`link-company-detail-${company.id}`} className="flex items-center gap-3 no-underline"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[#dbe5ef] bg-[#eef4fa] text-[#245b9b]"><Building2 className="h-4 w-4"/></span><span className="min-w-0 truncate text-[12px] font-semibold text-[#26364a] group-hover:text-[#174f99]">{company.companyName}</span></Link></td><td className="px-4 py-3.5 text-[11px] text-[#536477]">{company.companyBusinessArea || '—'}</td><td className="max-w-[220px] px-4 py-3.5 text-[11px] text-[#536477]"><span data-testid={`text-company-location-${company.id}`} title={company.companyLocation || undefined} className="block truncate">{company.companyLocation || '—'}</span></td><td className="px-5 py-3.5"><span data-testid={`text-company-contact-count-${company.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f0f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#607184]"><Users className="h-3 w-3"/>{company.contactCount}</span></td></tr>)}</tbody></table></div>
+      {selectedCompanyIds.size > 0 && <div data-testid="panel-bulk-company-business-area" className="flex flex-col gap-3 border-b border-[#e8edf1] bg-[#f5f9fd] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><p className="text-[11px] font-semibold text-[#344154]">{selectedCompanyIds.size} {selectedCompanyIds.size === 1 ? 'company' : 'companies'} selected</p><p className="mt-1 text-[10px] text-[#778596]">Selection is kept across pages and filters; up to {MAX_BULK_COMPANY_SELECTION} companies can be updated at once.</p>{businessAreasError && <p role="alert" className="mt-1 text-[10px] text-[#a45335]">{businessAreasError}</p>}</div><div className="flex flex-wrap items-center gap-2"><select data-testid="select-bulk-company-business-area" value={bulkBusinessArea} onChange={event => setBulkBusinessArea(event.target.value)} disabled={businessAreasLoading || Boolean(businessAreasError) || bulkBusinessAreaUpdate.isPending} className="h-9 min-w-[190px] rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] text-[#344154] disabled:opacity-60"><option value="">{businessAreasLoading ? 'Loading business areas…' : 'Choose business area'}</option>{businessAreas.map(area => <option key={area} value={area}>{area}</option>)}</select><button type="button" data-testid="button-apply-bulk-company-business-area" disabled={!bulkBusinessArea || businessAreasLoading || bulkBusinessAreaUpdate.isPending} onClick={applyBulkBusinessArea} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-[#174f99] px-3.5 text-[11px] font-semibold text-white disabled:opacity-50">{bulkBusinessAreaUpdate.isPending ? 'Updating…' : 'Apply to selected'}</button><button type="button" data-testid="button-clear-company-selection" disabled={bulkBusinessAreaUpdate.isPending} onClick={() => { setSelectedCompanyIds(new Set()); setBulkBusinessArea(''); }} className="min-h-9 rounded-md px-2.5 text-[11px] font-semibold text-[#5b6b7d] hover:bg-white disabled:opacity-50">Clear selection</button></div></div>}
+      {pageItems.length ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#f8fafb]"><tr className="mono text-[9px] uppercase tracking-[.11em] text-[#84909e]"><th className="w-10 px-3 py-3"><input ref={selectPageCheckboxRef} type="checkbox" aria-label="Select editable companies on this page" data-testid="checkbox-select-company-page" checked={pageFullySelected} disabled={!pageSelectableIds.length || (selectedCompanyIds.size >= MAX_BULK_COMPANY_SELECTION && !pageFullySelected) || bulkBusinessAreaUpdate.isPending} onChange={event => togglePageSelection(event.currentTarget.checked)} className="h-4 w-4 accent-[#174f99]"/></th><th className="px-5 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Business area (Domain)</th><th className="px-4 py-3 font-medium">Location</th><th className="px-5 py-3 font-medium">Contacts</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{pageItems.map(company => <tr key={company.id} data-testid={`row-company-${company.id}`} className="group hover:bg-[#f8fafb]"><td className="px-3 py-3.5"><input type="checkbox" aria-label={`Select ${company.companyName}`} data-testid={`checkbox-select-company-${company.id}`} checked={selectedCompanyIds.has(company.id)} disabled={Boolean(company.globalCompanyId) || (!selectedCompanyIds.has(company.id) && selectedCompanyIds.size >= MAX_BULK_COMPANY_SELECTION) || bulkBusinessAreaUpdate.isPending} title={company.globalCompanyId ? 'Managed by the Global Company DB' : undefined} onChange={event => toggleCompanySelection(company.id, event.currentTarget.checked)} className="h-4 w-4 accent-[#174f99] disabled:cursor-not-allowed disabled:opacity-40"/></td><td className="px-5 py-3.5"><Link href={`/companies/${company.id}`} data-testid={`link-company-detail-${company.id}`} className="flex items-center gap-3 no-underline"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[#dbe5ef] bg-[#eef4fa] text-[#245b9b]"><Building2 className="h-4 w-4"/></span><span className="min-w-0 truncate text-[12px] font-semibold text-[#26364a] group-hover:text-[#174f99]">{company.companyName}</span></Link></td><td className="px-4 py-3.5 text-[11px] text-[#536477]">{company.companyBusinessArea || '—'}</td><td className="max-w-[220px] px-4 py-3.5 text-[11px] text-[#536477]"><span data-testid={`text-company-location-${company.id}`} title={company.companyLocation || undefined} className="block truncate">{company.companyLocation || '—'}</span></td><td className="px-5 py-3.5"><span data-testid={`text-company-contact-count-${company.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f0f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#607184]"><Users className="h-3 w-3"/>{company.contactCount}</span></td></tr>)}</tbody></table></div>
         : <div data-testid="empty-company-directory" className="px-5 py-14 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#eef4fa] text-[#51789f]"><Building2 className="h-5 w-5"/></span><h3 className="mt-4 text-[13px] font-semibold text-[#344154]">{hasCompanySearchOrFilters ? 'No matching companies' : 'No shared companies yet'}</h3><p className="mx-auto mt-1 max-w-xs text-[11px] leading-5 text-[#818d9b]">{hasCompanySearchOrFilters ? 'Adjust your search or clear one or more filters to see results.' : 'Add a company profile or let the legacy profile check link safe domain matches.'}</p>{!hasCompanySearchOrFilters && <button type="button" data-testid="button-empty-add-company" onClick={() => setEditor('new')} className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#245b9b]"><Plus className="h-3.5 w-3.5"/>Add first company</button>}</div>}
       {filtered.length > 0 && <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8edf1] px-5 py-3"><span data-testid="text-company-page" className="text-[10px] text-[#7f8b99]">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}</span><div className="flex items-center gap-2"><button type="button" data-testid="button-company-page-previous" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronLeft className="h-4 w-4"/></button><span className="mono min-w-[54px] text-center text-[10px] text-[#667586]">{page} / {pageCount}</span><button type="button" data-testid="button-company-page-next" aria-label="Next page" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="grid h-8 w-8 place-items-center rounded-md border border-[#dce2e8] text-[#536477] disabled:opacity-40"><ChevronRight className="h-4 w-4"/></button></div></footer>}
     </section>

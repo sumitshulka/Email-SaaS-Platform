@@ -3545,6 +3545,29 @@ export const CreateCompanyResponse = zod.object({
 
 
 /**
+ * @summary Set the controlled business area for selected tenant companies
+ */
+export const bulkUpdateCompanyBusinessAreaBodyCompanyIdsMax = 500;
+
+export const bulkUpdateCompanyBusinessAreaBodyCompanyBusinessAreaMax = 120;
+
+
+
+export const BulkUpdateCompanyBusinessAreaBody = zod.object({
+  "companyIds": zod.array(zod.string().uuid()).min(1).max(bulkUpdateCompanyBusinessAreaBodyCompanyIdsMax),
+  "companyBusinessArea": zod.string().min(1).max(bulkUpdateCompanyBusinessAreaBodyCompanyBusinessAreaMax)
+})
+
+export const bulkUpdateCompanyBusinessAreaResponseUpdatedCountMin = 0;
+
+
+
+export const BulkUpdateCompanyBusinessAreaResponse = zod.object({
+  "updatedCount": zod.number().int().min(bulkUpdateCompanyBusinessAreaResponseUpdatedCountMin)
+})
+
+
+/**
  * @summary Search a bounded page of company names and domains for the authenticated tenant
  */
 export const searchCompaniesQuerySearchDefault = ``;
