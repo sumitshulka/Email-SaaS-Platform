@@ -206,6 +206,7 @@ export * from './contactLeadStatusUpdate';
 export * from './contactList';
 export * from './contactListInput';
 export * from './contactListUpdate';
+export * from './contactNavigation';
 export * from './contactNote';
 export * from './contactNoteInput';
 export * from './contactOption';

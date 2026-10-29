@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'wouter';
-import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail, Plus, NotebookPen } from 'lucide-react';
+import { Link, useLocation, useParams } from 'wouter';
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail, Plus, NotebookPen } from 'lucide-react';
 import {
   getListContactNotesQueryKey,
-  getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactLeadStatusUpdatesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
-  getListContactCampaignRepliesQueryKey, useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useListCampaignReplies, useListContactCampaignReplies, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact,
+  getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactNavigationQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactLeadStatusUpdatesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
+  getListContactCampaignRepliesQueryKey, useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useGetContactNavigation, useListCampaignReplies, useListContactCampaignReplies, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate, ContactNote, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
@@ -220,8 +220,12 @@ function ContactLeadStatusUpdatesSection({ contactId }: { contactId: string }) {
 export function ContactDetailPage() {
   const params = useParams<{ contactId: string }>();
   const contactId = params.contactId || '';
+  const [, setLocation] = useLocation();
   const query = useGetContact(contactId, {
     query: { enabled: !!contactId, queryKey: getGetContactQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
+  });
+  const navigationQuery = useGetContactNavigation(contactId, {
+    query: { enabled: !!contactId, queryKey: getGetContactNavigationQueryKey(contactId) },
   });
   const fieldOptionsQuery = useGetContactFieldOptions();
   const listsQuery = useListContactLists();
@@ -377,7 +381,14 @@ export function ContactDetailPage() {
       }} />
     {companyNotice && <div role={companyNotice.kind === 'error' ? 'alert' : 'status'} data-testid="status-contact-company"
       className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${companyNotice.kind === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{companyNotice.text}</div>}
-    <div className="mb-5"><Link href="/contacts" data-testid="link-back-contacts" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Back to contacts</Link></div>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <Link href="/contacts" data-testid="link-back-contacts" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Back to contacts</Link>
+      <nav aria-label="Contact record navigation" data-testid="contact-record-navigation" className="inline-flex items-center gap-2">
+        <button type="button" data-testid="button-previous-contact" disabled={navigationQuery.isLoading || !navigationQuery.data?.previousContactId} onClick={() => { const previousId = navigationQuery.data?.previousContactId; if (previousId) setLocation(`/contacts/${previousId}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45"><ChevronLeft className="h-4 w-4"/>Previous</button>
+        <span aria-live="polite" className="min-w-[82px] text-center text-[10px] text-[#788696]">{navigationQuery.isLoading ? 'Loading…' : navigationQuery.isError ? 'Unavailable' : 'Contact'}</span>
+        <button type="button" data-testid="button-next-contact" disabled={navigationQuery.isLoading || !navigationQuery.data?.nextContactId} onClick={() => { const nextId = navigationQuery.data?.nextContactId; if (nextId) setLocation(`/contacts/${nextId}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45">Next<ChevronRight className="h-4 w-4"/></button>
+      </nav>
+    </div>
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-4">
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] font-semibold text-[#245b9b]">{(contact.firstName[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName[0]?.toUpperCase() || ''}</div>

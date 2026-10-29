@@ -456,6 +456,7 @@ memory.public.none(`
     notes text,
     company_website_url varchar(2048),
     company_domain varchar(255),
+    company_business_area varchar(120),
     company_industry varchar(120),
     company_size varchar(80),
     company_revenue_range varchar(80),
@@ -2186,6 +2187,80 @@ describe("online payment availability", { concurrency: false }, () => {
 });
 
 describe("tenant contact management and package quotas", { concurrency: false }, () => {
+  it("returns adjacent contact IDs in directory order without crossing tenant boundaries", async () => {
+    const owner = await loggedInUser({ username: "contact-navigation-owner" });
+    const other = await loggedInUser({ username: "contact-navigation-other" });
+    const [oldest, current, newest] = await db
+      .insert(dbModule.contactsTable)
+      .values([
+        {
+          userId: owner.user.id,
+          name: "Oldest Contact",
+          firstName: "Oldest",
+          email: "oldest@navigation.test",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+        {
+          userId: owner.user.id,
+          name: "Current Contact",
+          firstName: "Current",
+          email: "current@navigation.test",
+          createdAt: new Date("2026-01-02T00:00:00.000Z"),
+        },
+        {
+          userId: owner.user.id,
+          name: "Newest Contact",
+          firstName: "Newest",
+          email: "newest@navigation.test",
+          createdAt: new Date("2026-01-03T00:00:00.000Z"),
+        },
+      ])
+      .returning();
+    const [otherContact] = await db
+      .insert(dbModule.contactsTable)
+      .values({
+        userId: other.user.id,
+        name: "Other Tenant Contact",
+        firstName: "Other",
+        email: "other@navigation.test",
+        createdAt: new Date("2026-01-04T00:00:00.000Z"),
+      })
+      .returning();
+
+    const navigation = await api(`/contacts/${current.id}/navigation`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(navigation.response.status, 200, JSON.stringify(navigation.body));
+    assert.deepEqual(navigation.body, {
+      previousContactId: newest.id,
+      nextContactId: oldest.id,
+    });
+
+    const first = await api(`/contacts/${newest.id}/navigation`, {
+      cookie: owner.cookie,
+    });
+    assert.deepEqual(first.body, {
+      previousContactId: null,
+      nextContactId: current.id,
+    });
+    const last = await api(`/contacts/${oldest.id}/navigation`, {
+      cookie: owner.cookie,
+    });
+    assert.deepEqual(last.body, {
+      previousContactId: current.id,
+      nextContactId: null,
+    });
+
+    const foreign = await api(`/contacts/${current.id}/navigation`, {
+      cookie: other.cookie,
+    });
+    assert.equal(foreign.response.status, 404);
+    const otherOnly = await api(`/contacts/${otherContact.id}/navigation`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(otherOnly.response.status, 404);
+  });
+
   it("stores full contact filters and scopes saved segment CRUD by tenant", async () => {
     const owner = await loggedInUser({ username: "segment-owner" });
     const other = await loggedInUser({ username: "segment-other" });

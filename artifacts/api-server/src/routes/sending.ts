@@ -51,6 +51,7 @@ import {
   GetCampaignRecipientSummaryQueryParams,
   GetCampaignRecipientSummaryResponse,
   GetContactParams,
+  GetContactNavigationResponse,
   GetContactReportQueryParams,
   GetContactReportResponse,
   GetContactResponse,
@@ -3019,6 +3020,81 @@ router.get(
         lifecycleStages: values(stages),
         leadStatuses: values(statuses),
         leadSources: values(sources),
+      }),
+    );
+  },
+);
+
+router.get(
+  "/contacts/:contactId/navigation",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = GetContactParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({
+        error: "Invalid contact identifier.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+    const userId = req.authUser!.id;
+    const [contact] = await db
+      .select({ id: contactsTable.id, createdAt: contactsTable.createdAt })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!contact) {
+      res.status(404).json({
+        error: "Contact not found.",
+        code: "CONTACT_NOT_FOUND",
+      });
+      return;
+    }
+    const [previous, next] = await Promise.all([
+      db
+        .select({ id: contactsTable.id })
+        .from(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.userId, userId),
+            or(
+              gt(contactsTable.createdAt, contact.createdAt),
+              and(
+                eq(contactsTable.createdAt, contact.createdAt),
+                gt(contactsTable.id, contact.id),
+              ),
+            ),
+          ),
+        )
+        .orderBy(asc(contactsTable.createdAt), asc(contactsTable.id))
+        .limit(1),
+      db
+        .select({ id: contactsTable.id })
+        .from(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.userId, userId),
+            or(
+              lt(contactsTable.createdAt, contact.createdAt),
+              and(
+                eq(contactsTable.createdAt, contact.createdAt),
+                lt(contactsTable.id, contact.id),
+              ),
+            ),
+          ),
+        )
+        .orderBy(desc(contactsTable.createdAt), desc(contactsTable.id))
+        .limit(1),
+    ]);
+    res.json(
+      GetContactNavigationResponse.parse({
+        previousContactId: previous[0]?.id ?? null,
+        nextContactId: next[0]?.id ?? null,
       }),
     );
   },

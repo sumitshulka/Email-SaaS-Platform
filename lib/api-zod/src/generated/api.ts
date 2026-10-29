@@ -4044,6 +4044,19 @@ export const DeleteContactFieldOptionResponse = zod.void()
 
 
 /**
+ * @summary Get adjacent contacts in the authenticated tenant's directory
+ */
+export const GetContactNavigationParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const GetContactNavigationResponse = zod.object({
+  "previousContactId": zod.string().uuid().nullable(),
+  "nextContactId": zod.string().uuid().nullable()
+})
+
+
+/**
  * @summary Get a contact owned by the authenticated tenant
  */
 export const GetContactParams = zod.object({

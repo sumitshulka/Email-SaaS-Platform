@@ -1118,6 +1118,38 @@ describe('company profile review and contact data preservation', { concurrency: 
     }
   });
 
+  it('navigates through company records without returning to the directory', async () => {
+    const companies = [
+      { ...company, id: 'browser-company-alpha', companyName: 'Alpha Systems' },
+      { ...company, id: 'browser-company-beta', companyName: 'Beta Systems' },
+      { ...company, id: 'browser-company-gamma', companyName: 'Gamma Systems' },
+    ];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { companies, contacts: [] });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/companies/${companies[1].id}`);
+      await page.getByTestId('text-company-name').waitFor({ state: 'visible' });
+      await page.getByTestId('button-previous-company').click();
+      await page.waitForURL(`**/companies/${companies[0].id}`);
+      assert.equal(await page.getByTestId('text-company-name').innerText(), 'Alpha Systems');
+      await page.getByTestId('button-next-company').click();
+      await page.waitForURL(`**/companies/${companies[1].id}`);
+      assert.equal(await page.getByTestId('text-company-name').innerText(), 'Beta Systems');
+      await page.getByTestId('button-next-company').click();
+      await page.waitForURL(`**/companies/${companies[2].id}`);
+      assert.equal(await page.getByTestId('text-company-name').innerText(), 'Gamma Systems');
+      assert.equal(await page.getByTestId('button-next-company').isDisabled(), true);
+    } finally {
+      await context.close();
+    }
+  });
+
   it('confirms company deletion, preserves linked contacts, and returns to the directory', async () => {
     const linkedContact = {
       ...contact,

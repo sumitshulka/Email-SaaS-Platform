@@ -218,7 +218,7 @@ export default function ContactsPage() {
                   className="flex items-center justify-between gap-4 px-5 py-4"
                 >
                   <div className="min-w-0">
-                    <h3 data-testid={`text-contact-name-${contact.id}`} className="truncate text-[13px] font-semibold text-[#26374a]">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.name}</h3>
+                    <h3 data-testid={`text-contact-name-${contact.id}`} className="truncate text-[13px] font-semibold text-[#26374a]"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-detail-${contact.id}`} className="text-inherit no-underline hover:text-[#174f99]">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.name}</Link></h3>
                     <p data-testid={`text-contact-email-${contact.id}`} className="mt-1 truncate text-[11px] text-[#758394]">{contact.email}</p>
                     <p data-testid={`text-contact-lists-${contact.id}`} className="mt-1 text-[11px] text-[#586a7b]">
                       <span className="font-medium">Lists: </span>{getContactListNames(contact.listIds)}

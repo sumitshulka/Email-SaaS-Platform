@@ -378,7 +378,32 @@ async function installApiFixtures(context) {
       });
       return;
     }
+    const contactNavigationMatch = pathname.match(/^\/api\/contacts\/([^/]+)\/navigation$/);
+    if (contactNavigationMatch && method === 'GET') {
+      const index = listMemberContactFixtures.findIndex(contact => contact.id === contactNavigationMatch[1]);
+      if (index < 0) {
+        await route.fulfill({ status: 404, json: { error: 'Contact not found.' } });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          previousContactId: listMemberContactFixtures[index - 1]?.id ?? null,
+          nextContactId: listMemberContactFixtures[index + 1]?.id ?? null,
+        },
+      });
+      return;
+    }
     const contactMatch = pathname.match(/^\/api\/contacts\/([^/]+)$/);
+    if (contactMatch && method === 'GET') {
+      const contact = listMemberContactFixtures.find(item => item.id === contactMatch[1]);
+      await route.fulfill(
+        contact
+          ? { status: 200, json: contact }
+          : { status: 404, json: { error: 'Contact not found.' } },
+      );
+      return;
+    }
     if (contactMatch && method === 'PATCH') {
       const contact = listMemberContactFixtures.find(item => item.id === contactMatch[1]);
       if (!contact) {
@@ -539,6 +564,66 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
   after(async () => {
     await browser?.close();
     await stopWebServer();
+  });
+
+  it('opens and navigates between contact records without returning to the directory', async () => {
+    const contacts = [
+      {
+        id: 'navigation-contact-newest',
+        name: 'Alex Newest',
+        firstName: 'Alex',
+        lastName: 'Newest',
+        email: 'alex.newest@example.test',
+        companyId: null,
+        companyName: null,
+        subscribed: true,
+        createdAt: '2026-01-03T00:00:00.000Z',
+        updatedAt: date,
+        listIds: [],
+      },
+      {
+        id: 'navigation-contact-older',
+        name: 'Bailey Older',
+        firstName: 'Bailey',
+        lastName: 'Older',
+        email: 'bailey.older@example.test',
+        companyId: null,
+        companyName: null,
+        subscribed: true,
+        createdAt: '2026-01-02T00:00:00.000Z',
+        updatedAt: date,
+        listIds: [],
+      },
+    ];
+    listMemberContactFixtures = contacts;
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      const pageErrors = [];
+      const apiRequests = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      page.on('request', request => {
+        if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(new URL(request.url()).pathname);
+      });
+      await page.goto(`${baseUrl}/contacts`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('row-contact-navigation-contact-newest').waitFor({ state: 'visible', timeout: 10000 }).catch(async () => {
+        throw new Error(`Contact directory did not show fixtures. URL: ${page.url()}; body: ${(await page.locator('body').innerText()).slice(0, 1000)}; requests: ${apiRequests.join(', ')}; errors: ${pageErrors.join(' | ')}`);
+      });
+      await page.getByTestId('link-contact-detail-navigation-contact-newest').click();
+      await page.waitForURL('**/contacts/navigation-contact-newest');
+      await page.getByTestId('button-next-contact').waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('text-contact-name-navigation-contact-newest').innerText(), 'Alex Newest');
+      assert.equal(await page.getByTestId('button-previous-contact').isDisabled(), true);
+      await page.getByTestId('button-next-contact').click();
+      await page.waitForURL('**/contacts/navigation-contact-older');
+      assert.equal(await page.getByTestId('text-contact-name-navigation-contact-older').innerText(), 'Bailey Older');
+      assert.equal(await page.getByTestId('button-next-contact').isDisabled(), true);
+      assert.equal(await page.getByTestId('button-previous-contact').isDisabled(), false);
+    } finally {
+      await context.close();
+      listMemberContactFixtures = [];
+    }
   });
 
   it('shows only each list’s campaigns, opens matching dashboards, and keeps menu actions working', async () => {

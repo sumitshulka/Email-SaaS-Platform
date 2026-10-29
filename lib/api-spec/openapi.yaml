@@ -2170,6 +2170,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contacts/{contactId}/navigation:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getContactNavigation
+      tags: [sending]
+      summary: Get adjacent contacts in the authenticated tenant's directory
+      responses:
+        "200":
+          description: Previous and next contact IDs in directory order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactNavigation"
+        "400":
+          description: Invalid contact identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /contacts/{contactId}:
     parameters:
       - name: contactId
@@ -5810,6 +5841,12 @@ components:
         pageSize: { type: integer }
         total: { type: integer }
       required: [contacts, page, pageSize, total]
+    ContactNavigation:
+      type: object
+      required: [previousContactId, nextContactId]
+      properties:
+        previousContactId: { type: ["string", "null"], format: uuid }
+        nextContactId: { type: ["string", "null"], format: uuid }
     Contact:
       type: object
       properties:

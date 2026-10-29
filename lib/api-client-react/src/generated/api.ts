@@ -121,6 +121,7 @@ import type {
   ContactList,
   ContactListInput,
   ContactListUpdate,
+  ContactNavigation,
   ContactNote,
   ContactNoteInput,
   ContactOptionsResponse,
@@ -7703,6 +7704,83 @@ export const useDeleteContactFieldOption = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getDeleteContactFieldOptionMutationOptions(options));
     }
+
+export const getGetContactNavigationUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/navigation`
+}
+
+/**
+ * @summary Get adjacent contacts in the authenticated tenant's directory
+ */
+export const getContactNavigation = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<ContactNavigation> => {
+
+  return customFetch<ContactNavigation>(getGetContactNavigationUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContactNavigationQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/navigation`
+    ] as const;
+    }
+
+
+export const getGetContactNavigationQueryOptions = <TData = Awaited<ReturnType<typeof getContactNavigation>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactNavigation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContactNavigationQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactNavigation>>> = ({ signal }) => getContactNavigation(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContactNavigation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContactNavigationQueryResult = NonNullable<Awaited<ReturnType<typeof getContactNavigation>>>
+export type GetContactNavigationQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get adjacent contacts in the authenticated tenant's directory
+ */
+
+export function useGetContactNavigation<TData = Awaited<ReturnType<typeof getContactNavigation>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContactNavigation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContactNavigationQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetContactUrl = (contactId: string,) => {
 

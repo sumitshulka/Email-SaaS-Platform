@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
-  ArrowLeft, Building2, Check, CircleAlert, Globe2, Link2, MapPin, Pencil,
+  ArrowLeft, Building2, Check, ChevronLeft, ChevronRight, CircleAlert, Globe2, Link2, MapPin, Pencil,
   Search, Trash2, Users,
 } from 'lucide-react';
 import {
   getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey,
-  useDeleteCompany, useGetCompany, useListContactOptions, useUpdateContact,
+  useDeleteCompany, useGetCompany, useListCompanies, useListContactOptions, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
@@ -53,9 +53,10 @@ const profileFields = [
 export function CompanyDetailPage() {
   const { companyId = '' } = useParams<{ companyId: string }>();
   const query = useGetCompany(companyId, { query: { enabled: !!companyId, retry: false, queryKey: getGetCompanyQueryKey(companyId) } });
+  const companiesQuery = useListCompanies();
   const updateContact = useUpdateContact();
   const deleteCompany = useDeleteCompany();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const qc = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
@@ -74,6 +75,25 @@ export function CompanyDetailPage() {
   const company = query.data?.company;
   const linked = query.data?.contacts ?? [];
   const unlinked = contactsQuery.data?.contacts ?? [];
+  const locationQuery = new URLSearchParams(location.split('?')[1] ?? '');
+  const directorySearch = (locationQuery.get('listSearch') ?? '').trim().toLowerCase();
+  const directoryIndustry = locationQuery.get('listIndustry') ?? '';
+  const directorySize = locationQuery.get('listSize') ?? '';
+  const directoryRevenue = locationQuery.get('listRevenueRange') ?? '';
+  const directoryLocation = (locationQuery.get('listLocation') ?? '').trim().toLowerCase();
+  const navigationCompanies = useMemo(() => {
+    const companies = companiesQuery.data?.companies ?? [];
+    return companies.filter(item => {
+      const searchableText = [item.companyName, item.companyDomain, item.companyWebsiteUrl, item.companyIndustry, item.companySize, item.companyRevenueRange, item.companyLocation, item.companyDescription].filter(Boolean).join(' ').toLowerCase();
+      return (!directorySearch || searchableText.includes(directorySearch))
+        && (!directoryIndustry || item.companyIndustry === directoryIndustry)
+        && (!directorySize || item.companySize === directorySize)
+        && (!directoryRevenue || item.companyRevenueRange === directoryRevenue)
+        && (!directoryLocation || item.companyLocation?.toLowerCase().includes(directoryLocation));
+    });
+  }, [companiesQuery.data?.companies, directoryIndustry, directoryLocation, directoryRevenue, directorySearch, directorySize]);
+  const navigationIndex = navigationCompanies.findIndex(item => item.id === companyId);
+  const navigationSearch = location.includes('?') ? location.slice(location.indexOf('?')) : '';
   useEffect(() => {
     if (selectedContactId && !unlinked.some(contact => contact.id === selectedContactId)) {
       setSelectedContactId('');
@@ -169,7 +189,14 @@ export function CompanyDetailPage() {
     </ConfirmActionDialog>
     <CompanyLinkConfirmation replacement={replacement} pending={updateContact.isPending}
       onCancel={() => setReplacement(null)} onConfirm={target => linkContact(target, true)} />
-    <Link href="/companies" data-testid="link-back-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Company directory</Link>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <Link href="/companies" data-testid="link-back-companies" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Company directory</Link>
+      <nav aria-label="Company record navigation" data-testid="company-record-navigation" className="inline-flex items-center gap-2">
+        <button type="button" data-testid="button-previous-company" disabled={companiesQuery.isLoading || navigationIndex <= 0} onClick={() => { const previous = navigationCompanies[navigationIndex - 1]; if (previous) setLocation(`/companies/${previous.id}${navigationSearch}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45"><ChevronLeft className="h-4 w-4"/>Previous</button>
+        <span data-testid="text-company-navigation-position" aria-live="polite" className="min-w-[54px] text-center text-[10px] text-[#788696]">{navigationIndex >= 0 ? `${navigationIndex + 1} of ${navigationCompanies.length}` : companiesQuery.isLoading ? 'Loading…' : '—'}</span>
+        <button type="button" data-testid="button-next-company" disabled={companiesQuery.isLoading || navigationIndex < 0 || navigationIndex >= navigationCompanies.length - 1} onClick={() => { const next = navigationCompanies[navigationIndex + 1]; if (next) setLocation(`/companies/${next.id}${navigationSearch}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45">Next<ChevronRight className="h-4 w-4"/></button>
+      </nav>
+    </div>
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#d7e3ef] bg-[#edf4fc] text-[#245b9b]"><Building2 className="h-5 w-5"/></span><div className="min-w-0"><div className="mono mb-1 text-[9px] uppercase tracking-[.16em] text-[#7d8794]">{company.globalCompanyId ? 'GLOBAL CATALOG LINK' : 'PRIVATE COMPANY'} / {company.id.slice(0, 8)}</div><h1 data-testid="text-company-name" className="display break-words text-[28px] font-bold leading-tight text-[#172334]">{company.companyName}</h1><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#758394]"><span className="inline-flex items-center gap-1.5"><Globe2 className="h-3.5 w-3.5"/>{company.companyDomain || 'Domain not provided'}</span>{company.companyLocation && <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5"/>{company.companyLocation}</span>}</div></div></div>
       {!company.globalCompanyId && <button type="button" data-testid="button-edit-company" onClick={() => setEditorOpen(true)} className="inline-flex min-h-9 items-center gap-2 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa]"><Pencil className="h-3.5 w-3.5"/>Edit profile</button>}

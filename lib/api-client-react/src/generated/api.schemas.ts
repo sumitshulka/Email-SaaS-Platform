@@ -2214,6 +2214,13 @@ export interface ContactReportResponse {
   total: number;
 }
 
+export interface ContactNavigation {
+  /** @nullable */
+  previousContactId: string | null;
+  /** @nullable */
+  nextContactId: string | null;
+}
+
 /**
  * @nullable
  */
