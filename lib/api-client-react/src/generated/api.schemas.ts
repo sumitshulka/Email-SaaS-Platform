@@ -1824,6 +1824,24 @@ export interface CompanyBusinessAreaBulkUpdateResult {
   updatedCount: number;
 }
 
+export interface GlobalCompanyBusinessAreaBulkUpdate {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  globalCompanyIds: string[];
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  companyBusinessArea: string;
+}
+
+export interface GlobalCompanyBusinessAreaBulkUpdateResult {
+  /** @minimum 0 */
+  updatedCount: number;
+}
+
 export interface CompanyContact {
   id: string;
   name: string;

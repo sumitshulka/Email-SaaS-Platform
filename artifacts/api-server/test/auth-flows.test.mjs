@@ -6999,6 +6999,116 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     );
   });
 
+  it("bulk-assigns controlled business areas to global profiles and linked workspace copies", async () => {
+    const admin = await loggedInUser({
+      username: "global-company-area-bulk-admin",
+      role: "SUPERADMIN",
+    });
+    const owner = await loggedInUser({
+      username: "global-company-area-bulk-owner",
+      email: "global-company-area-bulk-owner@example.test",
+    });
+    const other = await loggedInUser({
+      username: "global-company-area-bulk-other",
+      email: "global-company-area-bulk-other@example.test",
+    });
+
+    const [firstGlobal, secondGlobal] = await db
+      .insert(dbModule.globalCompaniesTable)
+      .values([
+        {
+          companyName: "Bulk Area Global One",
+          companyDomain: "bulk-area-global-one.test",
+          companyDomainKey: "bulk-area-global-one.test",
+        },
+        {
+          companyName: "Bulk Area Global Two",
+          companyDomain: "bulk-area-global-two.test",
+          companyDomainKey: "bulk-area-global-two.test",
+        },
+      ])
+      .returning();
+    const linkedProfiles = await db.insert(dbModule.companiesTable).values([
+      {
+        userId: owner.user.id,
+        globalCompanyId: firstGlobal.id,
+        companyName: firstGlobal.companyName,
+        companyDomain: firstGlobal.companyDomain,
+        companyDomainKey: firstGlobal.companyDomainKey,
+      },
+      {
+        userId: other.user.id,
+        globalCompanyId: firstGlobal.id,
+        companyName: firstGlobal.companyName,
+        companyDomain: firstGlobal.companyDomain,
+        companyDomainKey: firstGlobal.companyDomainKey,
+      },
+      {
+        userId: owner.user.id,
+        globalCompanyId: secondGlobal.id,
+        companyName: secondGlobal.companyName,
+        companyDomain: secondGlobal.companyDomain,
+        companyDomainKey: secondGlobal.companyDomainKey,
+      },
+    ]).returning();
+
+    const denied = await api("/admin/global-companies/business-area", {
+      method: "PATCH",
+      cookie: owner.cookie,
+      body: {
+        globalCompanyIds: [firstGlobal.id],
+        companyBusinessArea: "Manufacturing",
+      },
+    });
+    assert.equal(denied.response.status, 403);
+
+    const updated = await api("/admin/global-companies/business-area", {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: {
+        globalCompanyIds: [firstGlobal.id, secondGlobal.id],
+        companyBusinessArea: "Manufacturing",
+      },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    assert.deepEqual(updated.body, { updatedCount: 2 });
+
+    const globalRows = (await db.select().from(dbModule.globalCompaniesTable))
+      .filter(row => [firstGlobal.id, secondGlobal.id].includes(row.id));
+    assert.deepEqual(globalRows.map(row => row.companyBusinessArea), ["Manufacturing", "Manufacturing"]);
+    const linkedRows = (await db.select().from(dbModule.companiesTable))
+      .filter(row => linkedProfiles.some(profile => profile.id === row.id));
+    assert.deepEqual(linkedRows.map(row => row.companyBusinessArea), [
+      "Manufacturing",
+      "Manufacturing",
+      "Manufacturing",
+    ]);
+
+    const unapproved = await api("/admin/global-companies/business-area", {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: {
+        globalCompanyIds: [firstGlobal.id],
+        companyBusinessArea: "Unapproved Area",
+      },
+    });
+    assert.equal(unapproved.response.status, 400);
+    assert.equal(unapproved.body.code, "BUSINESS_AREA_NOT_ALLOWED");
+
+    const missingCompany = await api("/admin/global-companies/business-area", {
+      method: "PATCH",
+      cookie: admin.cookie,
+      body: {
+        globalCompanyIds: [secondGlobal.id, "00000000-0000-4000-8000-000000000000"],
+        companyBusinessArea: "Education",
+      },
+    });
+    assert.equal(missingCompany.response.status, 404);
+    const unchanged = await db.select().from(dbModule.globalCompaniesTable)
+      .where(eq(dbModule.globalCompaniesTable.id, secondGlobal.id));
+    assert.equal(unchanged[0].companyBusinessArea, "Manufacturing");
+  });
+
   it("bulk imports global company profiles with duplicate reporting and superadmin access control", async () => {
     const admin = await loggedInUser({
       username: "global-company-import-admin",

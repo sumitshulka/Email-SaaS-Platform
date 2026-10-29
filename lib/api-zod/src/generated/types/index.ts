@@ -254,6 +254,8 @@ export * from './globalCompanyBulkImportResult';
 export * from './globalCompanyBulkImportRowInput';
 export * from './globalCompanyBulkImportRowResult';
 export * from './globalCompanyBulkImportRowResultStatus';
+export * from './globalCompanyBusinessAreaBulkUpdate';
+export * from './globalCompanyBusinessAreaBulkUpdateResult';
 export * from './globalCompanyDirectoryItem';
 export * from './globalCompanyDirectoryResults';
 export * from './globalCompanyInput';

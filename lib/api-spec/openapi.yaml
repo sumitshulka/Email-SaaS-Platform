@@ -1649,6 +1649,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/global-companies/business-area:
+    patch:
+      operationId: bulkUpdateGlobalCompanyBusinessArea
+      tags: [admin]
+      summary: Assign a controlled business area to selected global companies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GlobalCompanyBusinessAreaBulkUpdate" }
+      responses:
+        "200":
+          description: Updated global company profiles
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GlobalCompanyBusinessAreaBulkUpdateResult" }
+        "400":
+          description: Invalid input or unapproved business area
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403":
+          description: Superadmin access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: One or more selected global companies were not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /admin/global-companies/{globalCompanyId}:
     parameters:
       - name: globalCompanyId
@@ -5537,6 +5568,22 @@ components:
         companyBusinessArea: { type: string, minLength: 1, maxLength: 120 }
       required: [companyIds, companyBusinessArea]
     CompanyBusinessAreaBulkUpdateResult:
+      type: object
+      properties:
+        updatedCount: { type: integer, minimum: 0 }
+      required: [updatedCount]
+    GlobalCompanyBusinessAreaBulkUpdate:
+      type: object
+      properties:
+        globalCompanyIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        companyBusinessArea: { type: string, minLength: 1, maxLength: 120 }
+      required: [globalCompanyIds, companyBusinessArea]
+    GlobalCompanyBusinessAreaBulkUpdateResult:
       type: object
       properties:
         updatedCount: { type: integer, minimum: 0 }

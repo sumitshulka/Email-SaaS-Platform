@@ -252,11 +252,14 @@ async function stopWebServer() {
 }
 
 async function installApiFixtures(context, {
+  authenticatedUser = user,
   companies = [company],
   contacts = contactDirectoryFixtures(),
   companySearchRequests = [],
   companyDirectoryRequests = [],
   businessAreaUpdates = [],
+  globalCompanies = [],
+  globalBusinessAreaUpdates = [],
   leadStatusOptions = [],
 } = {}) {
   await context.route('**/api/**', async route => {
@@ -267,14 +270,14 @@ async function installApiFixtures(context, {
 
     if (pathname === '/api/auth/login' && method === 'POST') {
       const credentials = request.postDataJSON();
-      if (credentials.identifier !== user.username || credentials.password !== 'browser-test-password') {
+      if (credentials.identifier !== authenticatedUser.username || credentials.password !== 'browser-test-password') {
         await route.fulfill({ status: 401, json: { error: 'Invalid credentials.' } });
         return;
       }
       await route.fulfill({
         status: 200,
         headers: { 'set-cookie': 'mailflow_session=company-review-browser-test; Path=/; SameSite=Lax' },
-        json: { user },
+        json: { user: authenticatedUser },
       });
       return;
     }
@@ -285,7 +288,7 @@ async function installApiFixtures(context, {
     }
 
     if (pathname === '/api/auth/me' && method === 'GET') {
-      await route.fulfill({ status: 200, json: user });
+      await route.fulfill({ status: 200, json: authenticatedUser });
       return;
     }
     if (pathname === '/api/company-business-areas' && method === 'GET') {
@@ -300,6 +303,35 @@ async function installApiFixtures(context, {
         if (selectedCompany) selectedCompany.companyBusinessArea = body.companyBusinessArea;
       }
       await route.fulfill({ status: 200, json: { updatedCount: body.companyIds.length } });
+      return;
+    }
+    if (pathname === '/api/admin/global-companies' && method === 'GET') {
+      const params = new URL(request.url()).searchParams;
+      const search = (params.get('search') ?? '').trim().toLowerCase();
+      const page = Number(params.get('page') ?? 1);
+      const pageSize = Number(params.get('pageSize') ?? 10);
+      const matching = globalCompanies.filter(item =>
+        `${item.companyName} ${item.companyDomain ?? ''} ${item.companyIndustry ?? ''}`.toLowerCase().includes(search),
+      );
+      await route.fulfill({
+        status: 200,
+        json: {
+          globalCompanies: matching.slice((page - 1) * pageSize, page * pageSize),
+          total: matching.length,
+          page,
+          pageSize,
+        },
+      });
+      return;
+    }
+    if (pathname === '/api/admin/global-companies/business-area' && method === 'PATCH') {
+      const body = request.postDataJSON();
+      globalBusinessAreaUpdates.push(body);
+      for (const globalCompanyId of body.globalCompanyIds) {
+        const selectedCompany = globalCompanies.find(item => item.id === globalCompanyId);
+        if (selectedCompany) selectedCompany.companyBusinessArea = body.companyBusinessArea;
+      }
+      await route.fulfill({ status: 200, json: { updatedCount: body.globalCompanyIds.length } });
       return;
     }
     if (pathname === '/api/companies/search' && method === 'GET') {
@@ -1028,6 +1060,59 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.equal(companies[0].companyBusinessArea, 'Manufacturing');
       assert.equal(companies[1].companyBusinessArea, 'Manufacturing');
       assert.equal(await page.getByTestId('panel-bulk-company-business-area').count(), 0, 'successful updates should clear the selection');
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('bulk-assigns a controlled business area to selected global catalog companies', async () => {
+    const adminUser = {
+      ...user,
+      id: 'browser-global-company-admin-id',
+      username: 'global-company-browser-admin',
+      role: 'SUPERADMIN',
+    };
+    const globalCompanies = [
+      {
+        ...company,
+        id: 'browser-global-area-one',
+        companyName: 'Global Area One',
+        companyBusinessArea: null,
+      },
+      {
+        ...company,
+        id: 'browser-global-area-two',
+        companyName: 'Global Area Two',
+        companyBusinessArea: 'Education',
+      },
+    ];
+    const globalBusinessAreaUpdates = [];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context, { authenticatedUser: adminUser, globalCompanies, globalBusinessAreaUpdates });
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(adminUser.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/admin');
+      await page.goto(`${baseUrl}/admin/global-companies`);
+
+      await page.getByTestId('row-global-company-browser-global-area-one').waitFor({ state: 'visible' });
+      await page.getByTestId('checkbox-select-global-company-browser-global-area-one').check();
+      await page.getByTestId('checkbox-select-global-company-browser-global-area-two').check();
+      await page.getByTestId('select-bulk-global-company-business-area').selectOption({ label: 'Manufacturing' });
+      await page.getByTestId('button-apply-bulk-global-company-business-area').click();
+      await page.getByText('Business area set to Manufacturing for 2 global companies and their linked workspace profiles.').waitFor({ state: 'visible' });
+
+      assert.deepEqual(globalBusinessAreaUpdates, [{
+        globalCompanyIds: ['browser-global-area-one', 'browser-global-area-two'],
+        companyBusinessArea: 'Manufacturing',
+      }]);
+      assert.equal(globalCompanies[0].companyBusinessArea, 'Manufacturing');
+      assert.equal(globalCompanies[1].companyBusinessArea, 'Manufacturing');
+      await page.getByTestId('text-global-company-business-area-browser-global-area-one').getByText('Manufacturing').waitFor({ state: 'visible' });
+      assert.equal(await page.getByTestId('panel-bulk-global-company-business-area').count(), 0, 'successful updates should clear the selection');
     } finally {
       await context.close();
     }

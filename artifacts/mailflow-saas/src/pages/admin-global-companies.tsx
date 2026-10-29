@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Building2, Check, CircleAlert, Download, Pencil, Plus, Search, Sparkles, Trash2, Upload } from 'lucide-react';
 import {
+  getGetAdminGlobalCompanyQueryKey, getSearchGlobalCompaniesQueryKey,
   getListAdminGlobalCompaniesQueryKey, useCreateGlobalCompany, useDeleteGlobalCompany,
-  useListAdminGlobalCompanies, useUpdateGlobalCompany,
+  useBulkUpdateGlobalCompanyBusinessArea, useListAdminGlobalCompanies, useUpdateGlobalCompany,
 } from '@workspace/api-client-react';
 import type { GlobalCompany, GlobalCompanyInput, GlobalCompanyUpdate, ListAdminGlobalCompaniesParams } from '@workspace/api-client-react';
 import { Link } from 'wouter';
@@ -12,6 +13,7 @@ import { GlobalCompanyImportDialog } from '@/components/global-company-import-di
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const panel = 'rounded-xl border border-[#dce6e1] bg-[#fbfdfb] shadow-[0_2px_8px_rgba(33,65,54,.035)]';
+const MAX_BULK_GLOBAL_COMPANY_SELECTION = 500;
 const fields = [
   ['companyBusinessArea', 'Business area (Domain)', 'select'], ['companyWebsiteUrl', 'Website URL', 'url'], ['companyDomain', 'Website/email domain (matching)', 'text'], ['companyIndustry', 'Industry', 'text'],
   ['companySize', 'Company size', 'text'], ['companyRevenueRange', 'Revenue range', 'text'], ['companyLocation', 'Location', 'text'],
@@ -69,18 +71,26 @@ function domainError(error: unknown) {
 
 export function AdminGlobalCompaniesPage() {
   const qc = useQueryClient();
+  const selectPageCheckboxRef = useRef<HTMLInputElement>(null);
   const [businessAreas, setBusinessAreas] = useState<string[]>([]);
+  const [savedBusinessAreas, setSavedBusinessAreas] = useState<string[]>([]);
   const [businessAreaDraft, setBusinessAreaDraft] = useState('');
   const [businessAreasLoading, setBusinessAreasLoading] = useState(true);
   const [businessAreasSaving, setBusinessAreasSaving] = useState(false);
   const [businessAreasError, setBusinessAreasError] = useState('');
+  const [selectedGlobalCompanyIds, setSelectedGlobalCompanyIds] = useState<Set<string>>(() => new Set());
+  const [bulkBusinessArea, setBulkBusinessArea] = useState('');
+  const [bulkBusinessAreaError, setBulkBusinessAreaError] = useState('');
   useEffect(() => {
     fetch('/api/company-business-areas', { credentials: 'include' })
       .then(async response => {
         if (!response.ok) throw new Error('Could not load business-area choices.');
         return response.json() as Promise<{ values: string[] }>;
       })
-      .then(result => setBusinessAreas(result.values))
+      .then(result => {
+        setBusinessAreas(result.values);
+        setSavedBusinessAreas(result.values);
+      })
       .catch(error => setBusinessAreasError(error instanceof Error ? error.message : 'Could not load business-area choices.'))
       .finally(() => setBusinessAreasLoading(false));
   }, []);
@@ -95,8 +105,64 @@ export function AdminGlobalCompaniesPage() {
   const params = useMemo<ListAdminGlobalCompaniesParams>(() => ({ search: search.trim() || undefined, page, pageSize: 10 }), [search, page]);
   const query = useListAdminGlobalCompanies(params, { query: { queryKey: getListAdminGlobalCompaniesQueryKey(params), placeholderData: previous => previous } });
   const remove = useDeleteGlobalCompany();
+  const bulkBusinessAreaUpdate = useBulkUpdateGlobalCompanyBusinessArea();
   const rows = query.data?.globalCompanies ?? [];
   const pages = Math.max(1, Math.ceil((query.data?.total ?? 0) / 10));
+  const pageSelectedCount = rows.filter(record => selectedGlobalCompanyIds.has(record.id)).length;
+  const pageFullySelected = rows.length > 0 && pageSelectedCount === rows.length;
+  const pagePartiallySelected = pageSelectedCount > 0 && !pageFullySelected;
+
+  useEffect(() => {
+    if (selectPageCheckboxRef.current) {
+      selectPageCheckboxRef.current.indeterminate = pagePartiallySelected;
+    }
+  }, [pagePartiallySelected]);
+
+  const toggleGlobalCompanySelection = (globalCompanyId: string, checked: boolean) => {
+    setSelectedGlobalCompanyIds(current => {
+      if (checked && current.size >= MAX_BULK_GLOBAL_COMPANY_SELECTION) return current;
+      const next = new Set(current);
+      if (checked) next.add(globalCompanyId);
+      else next.delete(globalCompanyId);
+      return next;
+    });
+  };
+  const togglePageSelection = (checked: boolean) => {
+    setSelectedGlobalCompanyIds(current => {
+      const next = new Set(current);
+      for (const record of rows) {
+        if (checked) {
+          if (next.size < MAX_BULK_GLOBAL_COMPANY_SELECTION) next.add(record.id);
+        } else {
+          next.delete(record.id);
+        }
+      }
+      return next;
+    });
+  };
+  const applyBulkBusinessArea = () => {
+    if (!bulkBusinessArea || !selectedGlobalCompanyIds.size) return;
+    const globalCompanyIds = [...selectedGlobalCompanyIds];
+    setNotice('');
+    setBulkBusinessAreaError('');
+    bulkBusinessAreaUpdate.mutate(
+      { data: { globalCompanyIds, companyBusinessArea: bulkBusinessArea } },
+      {
+        onSuccess: result => {
+          setNotice(`Business area set to ${bulkBusinessArea} for ${result.updatedCount} global companies and their linked workspace profiles.`);
+          setBulkBusinessAreaError('');
+          setSelectedGlobalCompanyIds(new Set());
+          setBulkBusinessArea('');
+          void qc.invalidateQueries({ queryKey: getListAdminGlobalCompaniesQueryKey() });
+          void qc.invalidateQueries({ queryKey: getSearchGlobalCompaniesQueryKey() });
+          for (const globalCompanyId of globalCompanyIds) {
+            void qc.invalidateQueries({ queryKey: getGetAdminGlobalCompanyQueryKey(globalCompanyId) });
+          }
+        },
+        onError: error => setBulkBusinessAreaError(errorText(error)),
+      },
+    );
+  };
   const downloadGlobalCompanies = async () => {
     if (exporting) return;
     setExporting(true);
@@ -140,6 +206,8 @@ export function AdminGlobalCompaniesPage() {
       const result = await response.json() as { values?: string[]; error?: string };
       if (!response.ok || !result.values) throw new Error(result.error || 'Business-area choices could not be saved.');
       setBusinessAreas(result.values);
+      setSavedBusinessAreas(result.values);
+      if (!result.values.includes(bulkBusinessArea)) setBulkBusinessArea('');
     } catch (error) {
       setBusinessAreasError(error instanceof Error ? error.message : 'Business-area choices could not be saved.');
     } finally {
@@ -160,7 +228,7 @@ export function AdminGlobalCompaniesPage() {
     <section className={`${panel} mb-5 p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 className="text-[13px] font-bold text-[#29443b]">Business-area list (Domain)</h2><p className="mt-1 max-w-2xl text-[10px] leading-5 text-[#71847a]">These platform-wide choices appear in company profiles. Industry remains a separate, more specific field.</p></div>
-        <button type="button" onClick={() => void saveBusinessAreas()} disabled={businessAreasLoading || businessAreasSaving || !businessAreas.length} className="min-h-9 rounded-lg bg-[#286d5b] px-4 text-[10px] font-bold text-white disabled:opacity-50">{businessAreasSaving ? 'Saving…' : 'Save business areas'}</button>
+         <button type="button" onClick={() => void saveBusinessAreas()} disabled={businessAreasLoading || businessAreasSaving || bulkBusinessAreaUpdate.isPending || !businessAreas.length} className="min-h-9 rounded-lg bg-[#286d5b] px-4 text-[10px] font-bold text-white disabled:opacity-50">{businessAreasSaving ? 'Saving…' : 'Save business areas'}</button>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">{businessAreas.map(area => <span key={area} className="inline-flex items-center gap-1.5 rounded-full border border-[#d3e2d9] bg-white px-3 py-1.5 text-[10px] font-semibold text-[#47645a]">{area}<button type="button" aria-label={`Remove ${area}`} onClick={() => setBusinessAreas(current => current.filter(value => value !== area))} className="font-bold text-[#9b654b]">×</button></span>)}</div>
       <div className="mt-3 flex max-w-[480px] gap-2"><input value={businessAreaDraft} onChange={event => setBusinessAreaDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addBusinessArea(); } }} maxLength={120} placeholder="Add a business area" className="h-9 min-w-0 flex-1 rounded-lg border border-[#d7e3dc] bg-white px-3 text-[11px] outline-none focus:border-[#488875]"/><button type="button" onClick={addBusinessArea} disabled={!businessAreaDraft.trim() || businessAreas.length >= 100} className="rounded-lg border border-[#cddbd3] bg-white px-3 text-[10px] font-bold text-[#416b5b] disabled:opacity-50">Add</button></div>
@@ -170,7 +238,35 @@ export function AdminGlobalCompaniesPage() {
     <section className={`${panel} overflow-hidden`}>
       <div className="flex flex-col gap-3 border-b border-[#e5ede8] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h2 className="text-[13px] font-bold text-[#29443b]">Catalog records</h2><p className="mt-1 text-[10px] text-[#819088]">{(query.data?.total ?? 0).toLocaleString()} profiles · no workspace contact data</p></div><label className="relative block w-full sm:max-w-[320px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#80938a]"/><input aria-label="Search global company catalog" value={search} onChange={event => { setSearch(event.target.value); setPage(1); setNotice(''); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-lg border border-[#d7e3dc] bg-[#f8fbf9] pl-9 pr-3 text-[11px] text-[#29443b] outline-none focus:border-[#488875]"/></label></div>
       {query.isFetching && query.data && <p className="px-6 pt-3 text-[10px] text-[#82938a]">Refreshing catalog…</p>}
-       {rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#f5f9f6]"><tr className="mono text-[9px] uppercase tracking-[.12em] text-[#819188]"><th className="px-5 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Business area (Domain)</th><th className="px-4 py-3 font-medium">Industry</th><th className="px-4 py-3 font-medium">Location</th><th className="px-4 py-3 font-medium">Intelligence</th><th className="px-4 py-3 font-medium">Updated</th><th className="px-5 py-3 text-right font-medium">Actions</th></tr></thead><tbody className="divide-y divide-[#e8efeb]">{rows.map(record => <tr key={record.id} className="hover:bg-[#f7faf8]"><td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#edf6f0] text-[#3b7a67]"><Building2 className="h-4 w-4"/></span><div className="min-w-0"><Link href={`/companies/${record.id}`} data-testid={`link-global-company-detail-${record.id}`} className="block truncate text-[11px] font-bold text-[#29443b] no-underline hover:text-[#286d5b]">{record.companyName}</Link>{record.companyWebsiteUrl && <p className="mt-0.5 truncate text-[9px] text-[#819088]">{record.companyWebsiteUrl}</p>}</div></div></td><td className="px-4 py-3.5 text-[10px] text-[#536d61]">{record.companyBusinessArea || '—'}</td><td className="px-4 py-3.5 text-[10px] text-[#536d61]">{record.companyIndustry || '—'}</td><td className="px-4 py-3.5 text-[10px] text-[#536d61]">{record.companyLocation || '—'}</td><td className="px-4 py-3.5" data-testid={`status-intelligence-${record.id}`}>{record.researchSummary ? <div><FreshnessBadge freshness={record.researchSummary.freshness} status={record.researchSummary.status}/><p className="mt-1 text-[9px] text-[#82938a]">{record.researchSummary.researchedAt ? `${dateText(record.researchSummary.researchedAt)} · ${record.researchSummary.sourceCount} sources` : 'Not researched'}</p></div> : <span className="text-[10px] text-[#82938a]">Not researched</span>}</td><td className="px-4 py-3.5 text-[10px] text-[#7c8d84]">{dateText(record.updatedAt)}</td><td className="px-5 py-3.5"><div className="flex justify-end gap-1"><button type="button" data-testid={`button-intelligence-${record.id}`} aria-label={`Open intelligence for ${record.companyName}`} title="Company intelligence" onClick={() => setIntelRecord(record)} className="grid h-8 w-8 place-items-center rounded-md text-[#2d6c8f] hover:bg-[#edf4fc]"><Sparkles className="h-3.5 w-3.5"/></button><button type="button" aria-label={`Edit ${record.companyName}`} onClick={() => { setNotice(''); setFormRecord(record); }} className="grid h-8 w-8 place-items-center rounded-md text-[#58796b] hover:bg-[#edf6f0]"><Pencil className="h-3.5 w-3.5"/></button><button type="button" aria-label={`Delete ${record.companyName}`} onClick={() => setDeleteRecord(record)} className="grid h-8 w-8 place-items-center rounded-md text-[#a56848] hover:bg-[#fff3eb]"><Trash2 className="h-3.5 w-3.5"/></button></div></td></tr>)}</tbody></table></div> : <div className="px-5 py-14 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#edf6f0] text-[#558b78]"><Building2 className="h-5 w-5"/></span><h3 className="mt-4 text-[13px] font-bold text-[#37564b]">{search ? 'No matching profiles' : 'No global companies yet'}</h3><p className="mt-1 text-[11px] text-[#829188]">{search ? 'Try another search term.' : 'Create the first catalog profile to make it available to customers.'}</p>{!search && <button type="button" onClick={() => setFormRecord('new')} className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#347765]"><Plus className="h-3.5 w-3.5"/>Create profile</button>}</div>}
+       {selectedGlobalCompanyIds.size > 0 && <div data-testid="panel-bulk-global-company-business-area" className="flex flex-col gap-3 border-b border-[#e5ede8] bg-[#f2f8f4] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+         <div>
+           <p className="text-[11px] font-semibold text-[#344c40]">{selectedGlobalCompanyIds.size} {selectedGlobalCompanyIds.size === 1 ? 'company' : 'companies'} selected</p>
+           <p className="mt-1 text-[10px] text-[#77877e]">Selection stays across pages and searches; up to {MAX_BULK_GLOBAL_COMPANY_SELECTION} catalog profiles can be updated at once. Linked workspace profiles update too.</p>
+           {businessAreasError && <p role="alert" className="mt-1 text-[10px] text-[#a45335]">{businessAreasError}</p>}
+           {bulkBusinessAreaError && <p role="alert" className="mt-1 text-[10px] text-[#a45335]">{bulkBusinessAreaError}</p>}
+         </div>
+         <div className="flex flex-wrap items-center gap-2">
+           <select aria-label="Business area for selected global companies" data-testid="select-bulk-global-company-business-area" value={bulkBusinessArea} onChange={event => { setBulkBusinessArea(event.target.value); setBulkBusinessAreaError(''); }} disabled={businessAreasLoading || Boolean(businessAreasError) || bulkBusinessAreaUpdate.isPending} className="h-9 min-w-[190px] rounded-md border border-[#d5e1da] bg-white px-3 text-[11px] text-[#344c40] disabled:opacity-60">
+             <option value="">{businessAreasLoading ? 'Loading business areas…' : 'Choose business area'}</option>
+             {savedBusinessAreas.map(area => <option key={area} value={area}>{area}</option>)}
+           </select>
+           <button type="button" data-testid="button-apply-bulk-global-company-business-area" disabled={!bulkBusinessArea || businessAreasLoading || bulkBusinessAreaUpdate.isPending} onClick={applyBulkBusinessArea} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-[#286d5b] px-3.5 text-[11px] font-semibold text-white disabled:opacity-50">{bulkBusinessAreaUpdate.isPending ? 'Updating…' : 'Apply to selected'}</button>
+           <button type="button" data-testid="button-clear-global-company-selection" disabled={bulkBusinessAreaUpdate.isPending} onClick={() => { setSelectedGlobalCompanyIds(new Set()); setBulkBusinessArea(''); setBulkBusinessAreaError(''); }} className="min-h-9 rounded-md px-2.5 text-[11px] font-semibold text-[#5b6b60] hover:bg-white disabled:opacity-50">Clear selection</button>
+         </div>
+       </div>}
+       {rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[960px] text-left">
+         <thead className="bg-[#f5f9f6]"><tr className="mono text-[9px] uppercase tracking-[.12em] text-[#819188]">
+           <th className="w-10 px-3 py-3"><input ref={selectPageCheckboxRef} type="checkbox" aria-label="Select all global companies on this page" data-testid="checkbox-select-global-company-page" checked={pageFullySelected} disabled={!rows.length || (selectedGlobalCompanyIds.size >= MAX_BULK_GLOBAL_COMPANY_SELECTION && !pageFullySelected) || bulkBusinessAreaUpdate.isPending} onChange={event => togglePageSelection(event.currentTarget.checked)} className="h-4 w-4 accent-[#286d5b]"/></th>
+           <th className="px-5 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Business area (Domain)</th><th className="px-4 py-3 font-medium">Industry</th><th className="px-4 py-3 font-medium">Location</th><th className="px-4 py-3 font-medium">Intelligence</th><th className="px-4 py-3 font-medium">Updated</th><th className="px-5 py-3 text-right font-medium">Actions</th>
+         </tr></thead>
+         <tbody className="divide-y divide-[#e8efeb]">{rows.map(record => <tr key={record.id} data-testid={`row-global-company-${record.id}`} className="hover:bg-[#f7faf8]">
+           <td className="px-3 py-3.5"><input type="checkbox" aria-label={`Select ${record.companyName}`} data-testid={`checkbox-select-global-company-${record.id}`} checked={selectedGlobalCompanyIds.has(record.id)} disabled={(!selectedGlobalCompanyIds.has(record.id) && selectedGlobalCompanyIds.size >= MAX_BULK_GLOBAL_COMPANY_SELECTION) || bulkBusinessAreaUpdate.isPending} onChange={event => toggleGlobalCompanySelection(record.id, event.currentTarget.checked)} className="h-4 w-4 accent-[#286d5b] disabled:cursor-not-allowed disabled:opacity-40"/></td>
+           <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#edf6f0] text-[#3b7a67]"><Building2 className="h-4 w-4"/></span><div className="min-w-0"><Link href={`/companies/${record.id}`} data-testid={`link-global-company-detail-${record.id}`} className="block truncate text-[11px] font-bold text-[#29443b] no-underline hover:text-[#286d5b]">{record.companyName}</Link>{record.companyWebsiteUrl && <p className="mt-0.5 truncate text-[9px] text-[#819088]">{record.companyWebsiteUrl}</p>}</div></div></td>
+           <td className="px-4 py-3.5 text-[10px] text-[#536d61]" data-testid={`text-global-company-business-area-${record.id}`}>{record.companyBusinessArea || '—'}</td><td className="px-4 py-3.5 text-[10px] text-[#536d61]">{record.companyIndustry || '—'}</td><td className="px-4 py-3.5 text-[10px] text-[#536d61]">{record.companyLocation || '—'}</td>
+           <td className="px-4 py-3.5" data-testid={`status-intelligence-${record.id}`}>{record.researchSummary ? <div><FreshnessBadge freshness={record.researchSummary.freshness} status={record.researchSummary.status}/><p className="mt-1 text-[9px] text-[#82938a]">{record.researchSummary.researchedAt ? `${dateText(record.researchSummary.researchedAt)} · ${record.researchSummary.sourceCount} sources` : 'Not researched'}</p></div> : <span className="text-[10px] text-[#82938a]">Not researched</span>}</td>
+           <td className="px-4 py-3.5 text-[10px] text-[#7c8d84]">{dateText(record.updatedAt)}</td><td className="px-5 py-3.5"><div className="flex justify-end gap-1"><button type="button" data-testid={`button-intelligence-${record.id}`} aria-label={`Open intelligence for ${record.companyName}`} title="Company intelligence" onClick={() => setIntelRecord(record)} className="grid h-8 w-8 place-items-center rounded-md text-[#2d6c8f] hover:bg-[#edf4fc]"><Sparkles className="h-3.5 w-3.5"/></button><button type="button" aria-label={`Edit ${record.companyName}`} onClick={() => { setNotice(''); setFormRecord(record); }} className="grid h-8 w-8 place-items-center rounded-md text-[#58796b] hover:bg-[#edf6f0]"><Pencil className="h-3.5 w-3.5"/></button><button type="button" aria-label={`Delete ${record.companyName}`} onClick={() => setDeleteRecord(record)} className="grid h-8 w-8 place-items-center rounded-md text-[#a56848] hover:bg-[#fff3eb]"><Trash2 className="h-3.5 w-3.5"/></button></div></td>
+         </tr>)}</tbody>
+       </table></div> : <div className="px-5 py-14 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-[#edf6f0] text-[#558b78]"><Building2 className="h-5 w-5"/></span><h3 className="mt-4 text-[13px] font-bold text-[#37564b]">{search ? 'No matching profiles' : 'No global companies yet'}</h3><p className="mt-1 text-[11px] text-[#829188]">{search ? 'Try another search term.' : 'Create the first catalog profile to make it available to customers.'}</p>{!search && <button type="button" onClick={() => setFormRecord('new')} className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#347765]"><Plus className="h-3.5 w-3.5"/>Create profile</button>}</div>}
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e5ede8] bg-[#f8fbf9] px-5 py-3"><span className="text-[10px] text-[#788a81]">{query.data?.total ? `Showing ${(page - 1) * 10 + 1}–${Math.min(page * 10, query.data.total)} of ${query.data.total}` : '0 records'}</span><div className="flex items-center gap-2"><button type="button" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded-md border border-[#d5e1da] px-3 py-1.5 text-[10px] font-semibold text-[#537365] disabled:opacity-40">Previous</button><span className="mono min-w-10 text-center text-[10px] text-[#71867c]">{page} / {pages}</span><button type="button" disabled={page >= pages} onClick={() => setPage(value => value + 1)} className="rounded-md border border-[#d5e1da] px-3 py-1.5 text-[10px] font-semibold text-[#537365] disabled:opacity-40">Next</button></div></footer>
     </section>
     {intelRecord && <Dialog open onOpenChange={open => { if (!open) setIntelRecord(null); }}>

@@ -3112,6 +3112,29 @@ export const BulkImportGlobalCompaniesResponse = zod.object({
 
 
 /**
+ * @summary Assign a controlled business area to selected global companies
+ */
+export const bulkUpdateGlobalCompanyBusinessAreaBodyGlobalCompanyIdsMax = 500;
+
+export const bulkUpdateGlobalCompanyBusinessAreaBodyCompanyBusinessAreaMax = 120;
+
+
+
+export const BulkUpdateGlobalCompanyBusinessAreaBody = zod.object({
+  "globalCompanyIds": zod.array(zod.string().uuid()).min(1).max(bulkUpdateGlobalCompanyBusinessAreaBodyGlobalCompanyIdsMax),
+  "companyBusinessArea": zod.string().min(1).max(bulkUpdateGlobalCompanyBusinessAreaBodyCompanyBusinessAreaMax)
+})
+
+export const bulkUpdateGlobalCompanyBusinessAreaResponseUpdatedCountMin = 0;
+
+
+
+export const BulkUpdateGlobalCompanyBusinessAreaResponse = zod.object({
+  "updatedCount": zod.number().int().min(bulkUpdateGlobalCompanyBusinessAreaResponseUpdatedCountMin)
+})
+
+
+/**
  * @summary Read one global company profile for the superadmin details view
  */
 export const GetAdminGlobalCompanyParams = zod.object({
