@@ -225,7 +225,12 @@ export function ContactDetailPage() {
     query: { enabled: !!contactId, queryKey: getGetContactQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
   });
   const navigationQuery = useGetContactNavigation(contactId, {
-    query: { enabled: !!contactId, queryKey: getGetContactNavigationQueryKey(contactId) },
+    query: {
+      enabled: !!contactId,
+      queryKey: getGetContactNavigationQueryKey(contactId),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
   });
   const fieldOptionsQuery = useGetContactFieldOptions();
   const listsQuery = useListContactLists();
@@ -384,9 +389,9 @@ export function ContactDetailPage() {
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <Link href="/contacts" data-testid="link-back-contacts" className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4"/>Back to contacts</Link>
       <nav aria-label="Contact record navigation" data-testid="contact-record-navigation" className="inline-flex items-center gap-2">
-        <button type="button" data-testid="button-previous-contact" disabled={navigationQuery.isLoading || !navigationQuery.data?.previousContactId} onClick={() => { const previousId = navigationQuery.data?.previousContactId; if (previousId) setLocation(`/contacts/${previousId}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45"><ChevronLeft className="h-4 w-4"/>Previous</button>
-        <span aria-live="polite" className="min-w-[82px] text-center text-[10px] text-[#788696]">{navigationQuery.isLoading ? 'Loading…' : navigationQuery.isError ? 'Unavailable' : 'Contact'}</span>
-        <button type="button" data-testid="button-next-contact" disabled={navigationQuery.isLoading || !navigationQuery.data?.nextContactId} onClick={() => { const nextId = navigationQuery.data?.nextContactId; if (nextId) setLocation(`/contacts/${nextId}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45">Next<ChevronRight className="h-4 w-4"/></button>
+        <button type="button" data-testid="button-previous-contact" disabled={navigationQuery.isFetching || !navigationQuery.data?.previousContactId} onClick={() => { const previousId = navigationQuery.data?.previousContactId; if (previousId) setLocation(`/contacts/${previousId}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45"><ChevronLeft className="h-4 w-4"/>Previous</button>
+        <span aria-live="polite" className="min-w-[82px] text-center text-[10px] text-[#788696]">{navigationQuery.isFetching ? 'Loading…' : navigationQuery.isError ? 'Unavailable' : 'Contact'}</span>
+        <button type="button" data-testid="button-next-contact" disabled={navigationQuery.isFetching || !navigationQuery.data?.nextContactId} onClick={() => { const nextId = navigationQuery.data?.nextContactId; if (nextId) setLocation(`/contacts/${nextId}`); }} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#dce2e8] bg-white px-3 text-[11px] font-semibold text-[#536477] hover:bg-[#f4f7fa] disabled:cursor-not-allowed disabled:opacity-45">Next<ChevronRight className="h-4 w-4"/></button>
       </nav>
     </div>
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">

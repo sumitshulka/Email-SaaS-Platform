@@ -3039,10 +3039,7 @@ router.get(
     }
     const userId = req.authUser!.id;
     const [contact] = await db
-      .select({
-        id: contactsTable.id,
-        createdAt: sql<string>`${contactsTable.createdAt}::text`,
-      })
+      .select({ id: contactsTable.id })
       .from(contactsTable)
       .where(
         and(
@@ -3058,18 +3055,34 @@ router.get(
       });
       return;
     }
+    // Compare database timestamps directly: decoding PostgreSQL timestamptz into
+    // a JavaScript Date drops microseconds and can make a contact its own neighbor.
+    const contactCursor = db
+      .select({
+        id: contactsTable.id,
+        createdAt: contactsTable.createdAt,
+      })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.userId, userId),
+        ),
+      )
+      .as("contact_navigation_cursor");
     const [previous, next] = await Promise.all([
       db
         .select({ id: contactsTable.id })
         .from(contactsTable)
+        .innerJoin(contactCursor, sql`true`)
         .where(
           and(
             eq(contactsTable.userId, userId),
             or(
-              sql`${contactsTable.createdAt} > ${contact.createdAt}::timestamptz`,
+              gt(contactsTable.createdAt, contactCursor.createdAt),
               and(
-                sql`${contactsTable.createdAt} = ${contact.createdAt}::timestamptz`,
-                gt(contactsTable.id, contact.id),
+                eq(contactsTable.createdAt, contactCursor.createdAt),
+                gt(contactsTable.id, contactCursor.id),
               ),
             ),
           ),
@@ -3079,14 +3092,15 @@ router.get(
       db
         .select({ id: contactsTable.id })
         .from(contactsTable)
+        .innerJoin(contactCursor, sql`true`)
         .where(
           and(
             eq(contactsTable.userId, userId),
             or(
-              sql`${contactsTable.createdAt} < ${contact.createdAt}::timestamptz`,
+              lt(contactsTable.createdAt, contactCursor.createdAt),
               and(
-                sql`${contactsTable.createdAt} = ${contact.createdAt}::timestamptz`,
-                lt(contactsTable.id, contact.id),
+                eq(contactsTable.createdAt, contactCursor.createdAt),
+                lt(contactsTable.id, contactCursor.id),
               ),
             ),
           ),
