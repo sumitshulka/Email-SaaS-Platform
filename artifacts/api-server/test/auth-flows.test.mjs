@@ -4,7 +4,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { DataType, newDb } from "pg-mem";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import express from "express";
 import cookieParser from "cookie-parser";
 import ExcelJS from "exceljs";
@@ -2216,6 +2216,15 @@ describe("tenant contact management and package quotas", { concurrency: false },
         },
       ])
       .returning();
+    await db.execute(sql`
+      UPDATE contacts
+      SET created_at = CASE id
+        WHEN ${oldest.id} THEN '2026-01-01T00:00:00.000100Z'::timestamptz
+        WHEN ${current.id} THEN '2026-01-02T00:00:00.000200Z'::timestamptz
+        WHEN ${newest.id} THEN '2026-01-03T00:00:00.000300Z'::timestamptz
+      END
+      WHERE id IN (${oldest.id}, ${current.id}, ${newest.id})
+    `);
     const [otherContact] = await db
       .insert(dbModule.contactsTable)
       .values({

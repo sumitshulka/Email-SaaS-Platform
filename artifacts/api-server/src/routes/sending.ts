@@ -3039,7 +3039,10 @@ router.get(
     }
     const userId = req.authUser!.id;
     const [contact] = await db
-      .select({ id: contactsTable.id, createdAt: contactsTable.createdAt })
+      .select({
+        id: contactsTable.id,
+        createdAt: sql<string>`${contactsTable.createdAt}::text`,
+      })
       .from(contactsTable)
       .where(
         and(
@@ -3063,9 +3066,9 @@ router.get(
           and(
             eq(contactsTable.userId, userId),
             or(
-              gt(contactsTable.createdAt, contact.createdAt),
+              sql`${contactsTable.createdAt} > ${contact.createdAt}::timestamptz`,
               and(
-                eq(contactsTable.createdAt, contact.createdAt),
+                sql`${contactsTable.createdAt} = ${contact.createdAt}::timestamptz`,
                 gt(contactsTable.id, contact.id),
               ),
             ),
@@ -3080,9 +3083,9 @@ router.get(
           and(
             eq(contactsTable.userId, userId),
             or(
-              lt(contactsTable.createdAt, contact.createdAt),
+              sql`${contactsTable.createdAt} < ${contact.createdAt}::timestamptz`,
               and(
-                eq(contactsTable.createdAt, contact.createdAt),
+                sql`${contactsTable.createdAt} = ${contact.createdAt}::timestamptz`,
                 lt(contactsTable.id, contact.id),
               ),
             ),
