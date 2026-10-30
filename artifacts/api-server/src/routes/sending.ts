@@ -3070,7 +3070,7 @@ router.get(
         ),
       )
       .as("contact_navigation_cursor");
-    const [previous, next] = await Promise.all([
+    const [[previous], [next], [directoryStats]] = await Promise.all([
       db
         .select({ id: contactsTable.id })
         .from(contactsTable)
@@ -3107,11 +3107,21 @@ router.get(
         )
         .orderBy(desc(contactsTable.createdAt), desc(contactsTable.id))
         .limit(1),
+      db
+        .select({
+          position: sql<number>`coalesce(sum(case when ${contactsTable.createdAt} > ${contactCursor.createdAt} or (${contactsTable.createdAt} = ${contactCursor.createdAt} and ${contactsTable.id} > ${contactCursor.id}) then 1 else 0 end), 0) + 1`.mapWith(Number),
+          total: count(),
+        })
+        .from(contactsTable)
+        .innerJoin(contactCursor, sql`true`)
+        .where(eq(contactsTable.userId, userId)),
     ]);
     res.json(
       GetContactNavigationResponse.parse({
-        previousContactId: previous[0]?.id ?? null,
-        nextContactId: next[0]?.id ?? null,
+        previousContactId: previous?.id ?? null,
+        nextContactId: next?.id ?? null,
+        position: directoryStats.position,
+        total: directoryStats.total,
       }),
     );
   },

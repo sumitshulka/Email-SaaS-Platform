@@ -2243,6 +2243,8 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.deepEqual(navigation.body, {
       previousContactId: newest.id,
       nextContactId: oldest.id,
+      position: 2,
+      total: 3,
     });
 
     const first = await api(`/contacts/${newest.id}/navigation`, {
@@ -2251,6 +2253,8 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.deepEqual(first.body, {
       previousContactId: null,
       nextContactId: current.id,
+      position: 1,
+      total: 3,
     });
     const last = await api(`/contacts/${oldest.id}/navigation`, {
       cookie: owner.cookie,
@@ -2258,6 +2262,8 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.deepEqual(last.body, {
       previousContactId: current.id,
       nextContactId: null,
+      position: 3,
+      total: 3,
     });
 
     const foreign = await api(`/contacts/${current.id}/navigation`, {

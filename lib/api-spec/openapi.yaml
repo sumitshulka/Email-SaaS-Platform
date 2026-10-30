@@ -5875,10 +5875,12 @@ components:
       required: [contacts, page, pageSize, total]
     ContactNavigation:
       type: object
-      required: [previousContactId, nextContactId]
+      required: [previousContactId, nextContactId, position, total]
       properties:
         previousContactId: { type: ["string", "null"], format: uuid }
         nextContactId: { type: ["string", "null"], format: uuid }
+        position: { type: integer, minimum: 1, description: 1-based position in the tenant contact directory }
+        total: { type: integer, minimum: 1, description: Total contacts in the tenant directory }
     Contact:
       type: object
       properties:

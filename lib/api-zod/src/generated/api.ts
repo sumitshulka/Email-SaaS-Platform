@@ -4063,9 +4063,15 @@ export const GetContactNavigationParams = zod.object({
   "contactId": zod.coerce.string().uuid()
 })
 
+
+
+
+
 export const GetContactNavigationResponse = zod.object({
   "previousContactId": zod.string().uuid().nullable(),
-  "nextContactId": zod.string().uuid().nullable()
+  "nextContactId": zod.string().uuid().nullable(),
+  "position": zod.number().int().min(1).describe('1-based position in the tenant contact directory'),
+  "total": zod.number().int().min(1).describe('Total contacts in the tenant directory')
 })
 
 

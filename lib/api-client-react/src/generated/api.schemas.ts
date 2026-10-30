@@ -2224,6 +2224,16 @@ export interface ContactNavigation {
   previousContactId: string | null;
   /** @nullable */
   nextContactId: string | null;
+  /**
+     * 1-based position in the tenant contact directory
+     * @minimum 1
+     */
+  position: number;
+  /**
+     * Total contacts in the tenant directory
+     * @minimum 1
+     */
+  total: number;
 }
 
 /**

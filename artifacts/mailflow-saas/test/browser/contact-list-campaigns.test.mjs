@@ -390,6 +390,8 @@ async function installApiFixtures(context) {
         json: {
           previousContactId: listMemberContactFixtures[index - 1]?.id ?? null,
           nextContactId: listMemberContactFixtures[index + 1]?.id ?? null,
+          position: index + 1,
+          total: listMemberContactFixtures.length,
         },
       });
       return;
@@ -605,11 +607,15 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.getByTestId('link-contact-navigation-contact-newest').click();
       await page.waitForURL('**/contacts/navigation-contact-newest');
       await page.getByTestId('button-next-contact').waitFor({ state: 'visible' });
+      await page.waitForFunction(() => document.querySelector('[data-testid="text-contact-navigation-position"]')?.textContent === '1 of 2');
       assert.equal(await page.locator('h1').innerText(), 'Alex Newest');
+      assert.equal(await page.getByTestId('text-contact-navigation-position').innerText(), '1 of 2');
       assert.equal(await page.getByTestId('button-previous-contact').isDisabled(), true);
       await page.getByTestId('button-next-contact').click();
       await page.waitForURL('**/contacts/navigation-contact-older');
       assert.equal(await page.locator('h1').innerText(), 'Bailey Older');
+      await page.waitForFunction(() => document.querySelector('[data-testid="text-contact-navigation-position"]')?.textContent === '2 of 2');
+      assert.equal(await page.getByTestId('text-contact-navigation-position').innerText(), '2 of 2');
       assert.equal(await page.getByTestId('button-next-contact').isDisabled(), true);
       assert.equal(await page.getByTestId('button-previous-contact').isDisabled(), false);
     } finally {
