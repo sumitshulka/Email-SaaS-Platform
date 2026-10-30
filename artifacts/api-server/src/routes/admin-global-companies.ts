@@ -11,6 +11,7 @@ import {
   lt,
   ne,
   or,
+  sql,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { alias } from "drizzle-orm/pg-core";
@@ -165,45 +166,54 @@ router.get(
     }
     const [company] = await db.select({
       id: globalCompaniesTable.id,
-      companyName: globalCompaniesTable.companyName,
-      createdAt: globalCompaniesTable.createdAt,
     }).from(globalCompaniesTable)
       .where(eq(globalCompaniesTable.id, params.data.globalCompanyId)).limit(1);
     if (!company) {
       res.status(404).json({ error: "Global company not found.", code: "NOT_FOUND" });
       return;
     }
+    // Keep timestamp comparisons inside SQL; converting timestamptz to Date
+    // loses microseconds and can make the current row its own neighbor.
+    const companyCursor = db.select({
+      id: globalCompaniesTable.id,
+      companyName: globalCompaniesTable.companyName,
+      createdAt: globalCompaniesTable.createdAt,
+    }).from(globalCompaniesTable)
+      .where(eq(globalCompaniesTable.id, params.data.globalCompanyId))
+      .as("global_company_navigation_cursor");
 
     const previousConditions = or(
-      lt(globalCompaniesTable.companyName, company.companyName),
+      lt(globalCompaniesTable.companyName, companyCursor.companyName),
       and(
-        eq(globalCompaniesTable.companyName, company.companyName),
-        gt(globalCompaniesTable.createdAt, company.createdAt),
+        eq(globalCompaniesTable.companyName, companyCursor.companyName),
+        gt(globalCompaniesTable.createdAt, companyCursor.createdAt),
       ),
       and(
-        eq(globalCompaniesTable.companyName, company.companyName),
-        eq(globalCompaniesTable.createdAt, company.createdAt),
-        lt(globalCompaniesTable.id, company.id),
+        eq(globalCompaniesTable.companyName, companyCursor.companyName),
+        eq(globalCompaniesTable.createdAt, companyCursor.createdAt),
+        lt(globalCompaniesTable.id, companyCursor.id),
       ),
     );
     const nextConditions = or(
-      gt(globalCompaniesTable.companyName, company.companyName),
+      gt(globalCompaniesTable.companyName, companyCursor.companyName),
       and(
-        eq(globalCompaniesTable.companyName, company.companyName),
-        lt(globalCompaniesTable.createdAt, company.createdAt),
+        eq(globalCompaniesTable.companyName, companyCursor.companyName),
+        lt(globalCompaniesTable.createdAt, companyCursor.createdAt),
       ),
       and(
-        eq(globalCompaniesTable.companyName, company.companyName),
-        eq(globalCompaniesTable.createdAt, company.createdAt),
-        gt(globalCompaniesTable.id, company.id),
+        eq(globalCompaniesTable.companyName, companyCursor.companyName),
+        eq(globalCompaniesTable.createdAt, companyCursor.createdAt),
+        gt(globalCompaniesTable.id, companyCursor.id),
       ),
     );
     const [[previous], [next]] = await Promise.all([
       db.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable)
+        .innerJoin(companyCursor, sql`true`)
         .where(previousConditions)
         .orderBy(desc(globalCompaniesTable.companyName), asc(globalCompaniesTable.createdAt), desc(globalCompaniesTable.id))
         .limit(1),
       db.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable)
+        .innerJoin(companyCursor, sql`true`)
         .where(nextConditions)
         .orderBy(asc(globalCompaniesTable.companyName), desc(globalCompaniesTable.createdAt), asc(globalCompaniesTable.id))
         .limit(1),

@@ -8946,11 +8946,20 @@ describe("superadmin global company navigation", { concurrency: false }, () => {
     const domainPrefix = `global-navigation-${Date.now()}`;
     const records = await db.insert(dbModule.globalCompaniesTable).values(
       ["A", "B", "C"].map(suffix => ({
-        companyName: `${namePrefix} ${suffix}`,
+        companyName: namePrefix,
         companyDomain: `${domainPrefix}-${suffix.toLowerCase()}.example`,
         companyDomainKey: `${domainPrefix}-${suffix.toLowerCase()}.example`,
       })),
     ).returning();
+    await db.execute(sql`
+      UPDATE global_companies
+      SET created_at = CASE id
+        WHEN ${records[0].id} THEN '2026-01-01T00:00:00.001100Z'::timestamptz
+        WHEN ${records[1].id} THEN '2026-01-01T00:00:00.002200Z'::timestamptz
+        WHEN ${records[2].id} THEN '2026-01-01T00:00:00.003300Z'::timestamptz
+      END
+      WHERE id IN (${records[0].id}, ${records[1].id}, ${records[2].id})
+    `);
 
     try {
       const anonymous = await api(`/admin/global-companies/${records[1].id}/navigation`);
@@ -8965,18 +8974,18 @@ describe("superadmin global company navigation", { concurrency: false }, () => {
       });
       assert.equal(middle.response.status, 200, JSON.stringify(middle.body));
       assert.deepEqual(middle.body, {
-        previousCompanyId: records[0].id,
-        nextCompanyId: records[2].id,
+        previousCompanyId: records[2].id,
+        nextCompanyId: records[0].id,
       });
 
-      const first = await api(`/admin/global-companies/${records[0].id}/navigation`, {
+      const first = await api(`/admin/global-companies/${records[2].id}/navigation`, {
         cookie: admin.cookie,
       });
       assert.deepEqual(first.body, {
         previousCompanyId: null,
         nextCompanyId: records[1].id,
       });
-      const last = await api(`/admin/global-companies/${records[2].id}/navigation`, {
+      const last = await api(`/admin/global-companies/${records[0].id}/navigation`, {
         cookie: admin.cookie,
       });
       assert.deepEqual(last.body, {
