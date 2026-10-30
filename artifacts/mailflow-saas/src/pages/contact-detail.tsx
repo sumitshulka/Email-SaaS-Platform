@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import { AlertCircle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, Pencil, Save, ShieldCheck, Unlink2, Building2, Link2, Mail, Plus, NotebookPen } from 'lucide-react';
@@ -220,6 +220,8 @@ function ContactLeadStatusUpdatesSection({ contactId }: { contactId: string }) {
 export function ContactDetailPage() {
   const params = useParams<{ contactId: string }>();
   const contactId = params.contactId || '';
+  const activeContactId = useRef(contactId);
+  activeContactId.current = contactId;
   const [, setLocation] = useLocation();
   const query = useGetContact(contactId, {
     query: { enabled: !!contactId, queryKey: getGetContactQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
@@ -252,6 +254,16 @@ export function ContactDetailPage() {
   const [noteDraft, setNoteDraft] = useState('');
   const [noteError, setNoteError] = useState('');
   const contact = query.data as Contact | undefined;
+
+  // Clear record-specific feedback and selections when route navigation reuses this page.
+  useEffect(() => {
+    setNotice(null);
+    setCompanyNotice(null);
+    setCompanyChoice('');
+    setReplacement(null);
+    setLeadStatusChangeReason('');
+    setLeadStatusReasonError(false);
+  }, [contactId]);
 
   // Reinitialize when a contact is first loaded or the server returns a newer revision.
   useEffect(() => {
@@ -290,17 +302,22 @@ export function ContactDetailPage() {
     };
     update.mutate({ contactId: contact.id, data }, {
       onSuccess: updatedContact => {
-        setForm(fromContact(updatedContact));
+        const isCurrentContact = activeContactId.current === contact.id;
+        if (isCurrentContact) setForm(fromContact(updatedContact));
         qc.setQueryData(getGetContactQueryKey(contact.id), updatedContact);
-        setLeadStatusChangeReason('');
-        setLeadStatusReasonError(false);
+        if (isCurrentContact) {
+          setLeadStatusChangeReason('');
+          setLeadStatusReasonError(false);
+        }
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactLeadStatusUpdatesQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
         void qc.invalidateQueries({ queryKey: getListUnlinkedCompanyProfilesQueryKey() });
-        setNotice({ kind: 'success', text: 'Contact changes saved. This save does not change the company association.' });
+        if (isCurrentContact) setNotice({ kind: 'success', text: 'Contact changes saved. This save does not change the company association.' });
       },
-      onError: error => setNotice({ kind: 'error', text: errorText(error) }),
+      onError: error => {
+        if (activeContactId.current === contact.id) setNotice({ kind: 'error', text: errorText(error) });
+      },
     });
   };
 
@@ -347,7 +364,8 @@ export function ContactDetailPage() {
       companyId, ...(confirmed ? { replaceLegacyCompanyProfile: true } : {}),
     } }, {
       onSuccess: linkedContact => {
-        setReplacement(null);
+        const isCurrentContact = activeContactId.current === contact.id;
+        if (isCurrentContact) setReplacement(null);
         qc.setQueryData(getGetContactQueryKey(contact.id), linkedContact);
         void qc.invalidateQueries({ queryKey: getGetContactQueryKey(contact.id) });
         void qc.invalidateQueries({ queryKey: getListContactsQueryKey() });
@@ -356,13 +374,16 @@ export function ContactDetailPage() {
         if (contact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(contact.companyId) });
         if (linkedContact.companyId) void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(linkedContact.companyId) });
         if (linkedContact.companyId !== companyId) {
-          setCompanyNotice({ kind: 'error', text: 'The server did not confirm the company association. Refresh and try again.' });
+          if (isCurrentContact) setCompanyNotice({ kind: 'error', text: 'The server did not confirm the company association. Refresh and try again.' });
           return;
         }
-        setCompanyChoice('');
-        setCompanyNotice({ kind: 'success', text: linkedContact.companyId ? 'Shared company profile linked. Company details now come from the shared record.' : 'Company unlinked. The company profile was preserved on this contact.' });
+        if (isCurrentContact) {
+          setCompanyChoice('');
+          setCompanyNotice({ kind: 'success', text: linkedContact.companyId ? 'Shared company profile linked. Company details now come from the shared record.' : 'Company unlinked. The company profile was preserved on this contact.' });
+        }
       },
       onError: error => {
+        if (activeContactId.current !== contact.id) return;
         setReplacement(!confirmed && targetCompany && isCompanyProfileConflict(error) ? {
           contactId: contact.id, contactName: contact.name, legacyCompanyName: contact.companyName,
           companyId: targetCompany.id, companyName: targetCompany.companyName,

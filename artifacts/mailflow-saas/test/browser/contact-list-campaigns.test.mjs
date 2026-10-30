@@ -69,6 +69,7 @@ const campaigns = [
 const campaignById = new Map(campaigns.map(item => [item.id, item]));
 let listMemberContactFixtures = [];
 let listContactPickerFixtures = [];
+let companyFixtures = [];
 const listUpdates = [];
 const listDeletes = [];
 const dashboardRequests = [];
@@ -190,6 +191,10 @@ async function installApiFixtures(context) {
     }
     if (pathname === '/api/contact-lists' && method === 'GET') {
       await route.fulfill({ status: 200, json: lists });
+      return;
+    }
+    if (pathname === '/api/companies' && method === 'GET') {
+      await route.fulfill({ status: 200, json: { companies: companyFixtures } });
       return;
     }
     if (pathname === '/api/contacts/filter-options' && method === 'GET') {
@@ -578,6 +583,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
         email: 'alex.newest@example.test',
         companyId: null,
         companyName: null,
+        emailStatus: 'bounced',
         subscribed: true,
         createdAt: '2026-01-03T00:00:00.000Z',
         updatedAt: date,
@@ -598,6 +604,24 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       },
     ];
     listMemberContactFixtures = contacts;
+    companyFixtures = [{
+      id: 'navigation-company',
+      globalCompanyId: null,
+      companyName: 'Navigation Test Company',
+      companyWebsiteUrl: null,
+      companyDomain: null,
+      companyBusinessArea: null,
+      companyIndustry: null,
+      companySize: null,
+      companyRevenueRange: null,
+      companyDescription: null,
+      companyPhoneNumber: null,
+      companyLinkedinUrl: null,
+      companyLocation: null,
+      contactCount: 0,
+      createdAt: date,
+      updatedAt: date,
+    }];
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
       await installApiFixtures(context);
@@ -611,9 +635,15 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       assert.equal(await page.locator('h1').innerText(), 'Alex Newest');
       assert.equal(await page.getByTestId('text-contact-navigation-position').innerText(), '1 of 2');
       assert.equal(await page.getByTestId('button-previous-contact').isDisabled(), true);
+      const companySelect = page.getByTestId('select-contact-company');
+      await companySelect.selectOption('navigation-company');
+      await page.getByTestId('button-save-contact-detail').click();
+      await page.getByTestId('status-contact-save').waitFor({ state: 'visible' });
       await page.getByTestId('button-next-contact').click();
       await page.waitForURL('**/contacts/navigation-contact-older');
       assert.equal(await page.locator('h1').innerText(), 'Bailey Older');
+      await page.waitForFunction(() => !document.querySelector('[data-testid="status-contact-save"]'));
+      await page.waitForFunction(() => document.querySelector('[data-testid="select-contact-company"]')?.value === '');
       await page.waitForFunction(() => document.querySelector('[data-testid="text-contact-navigation-position"]')?.textContent === '2 of 2');
       assert.equal(await page.getByTestId('text-contact-navigation-position').innerText(), '2 of 2');
       assert.equal(await page.getByTestId('button-next-contact').isDisabled(), true);
@@ -621,6 +651,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     } finally {
       await context.close();
       listMemberContactFixtures = [];
+      companyFixtures = [];
     }
   });
 
