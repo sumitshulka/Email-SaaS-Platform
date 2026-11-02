@@ -79,6 +79,7 @@ const campaignUpdates = [];
 const campaignQueues = [];
 const campaignDeletions = [];
 let campaignAudienceSummaryOverride = null;
+let campaignSendFailure = null;
 let aiAssistBalanceReads = 0;
 let aiAssistCreditsRemaining = 1;
 let aiAssistDraftRequests = 0;
@@ -467,6 +468,13 @@ async function installApiFixtures(context) {
       }
       const data = request.postDataJSON();
       campaignQueues.push({ id: campaignData.id, data });
+      if (campaignSendFailure) {
+        await route.fulfill({
+          status: campaignSendFailure.status,
+          json: campaignSendFailure.body,
+        });
+        return;
+      }
       Object.assign(campaignData, { status: 'queued', scheduledAt: data.scheduledAt, updatedAt: '2026-01-02T00:00:00.000Z' });
       await delay(200);
       await route.fulfill({ status: 201, json: campaignData });
@@ -1055,13 +1063,29 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.getByTestId('input-campaign-start-at').fill(startAtValue);
 
       campaignAudienceSummaryOverride = { uniqueRecipients: 6, overlappingRecipients: 2 };
-      const queueResponse = page.waitForResponse(response =>
+      campaignSendFailure = {
+        status: 409,
+        body: {
+          error: 'The account does not currently allow this campaign to be queued.',
+          code: 'TEST_QUEUE_REJECTED',
+        },
+      };
+      const queueFailureResponse = page.waitForResponse(response =>
         response.url().includes('/api/campaigns/browser-campaign-one/send') && response.request().method() === 'POST',
       );
       await page.getByTestId('button-confirm-action').click();
       await page.getByTestId('queue-audience-summary').getByText('6 unique subscribed email addresses', { exact: false }).waitFor({ state: 'visible' });
       await page.getByTestId('queue-audience-summary').getByText('2 addresses are on more than one selected list.', { exact: false }).waitFor({ state: 'visible' });
       assert.deepEqual(campaignAudienceResponses.at(-1), { uniqueRecipients: 6, overlappingRecipients: 2 }, 'queueing must recheck the latest audience summary');
+      assert.equal((await queueFailureResponse).status(), 409);
+      await page.getByTestId('status-queue-campaign-error').getByText('The account does not currently allow this campaign to be queued.', { exact: false }).waitFor({ state: 'visible' });
+      await page.getByTestId('dialog-campaign-action').waitFor({ state: 'visible' });
+
+      campaignSendFailure = null;
+      const queueResponse = page.waitForResponse(response =>
+        response.url().includes('/api/campaigns/browser-campaign-one/send') && response.request().method() === 'POST',
+      );
+      await page.getByTestId('button-confirm-action').click();
       assert.equal((await queueResponse).status(), 201);
       assert.equal(campaignQueues.at(-1).id, 'browser-campaign-one');
       assert.equal(campaignQueues.at(-1).data.scheduledAt, new Date(startAtValue).toISOString());
@@ -1069,6 +1093,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     } finally {
       await context.close();
       campaignAudienceSummaryOverride = null;
+      campaignSendFailure = null;
       editableCampaign.status = 'draft';
       editableCampaign.scheduledAt = null;
       editableCampaign.subject = 'Launch follow-up subject';

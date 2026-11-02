@@ -1976,6 +1976,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const [queueStartAt, setQueueStartAt] = useState('');
   const [serverMinimumStartAt, setServerMinimumStartAt] = useState<Date | null>(null);
   const [queueStartError, setQueueStartError] = useState<string | null>(null);
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [queuePolicyError, setQueuePolicyError] = useState<string | null>(null);
   const [pauseTarget, setPauseTarget] = useState<CampaignSummary | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<CampaignSummary | null>(null);
@@ -2434,6 +2435,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
   const queue = (campaign: CampaignSummary) => {
     setServerMinimumStartAt(null);
     setQueueStartError(null);
+    setQueueError(null);
     setQueuePolicyError(null);
     setQueueStartAt(dateTimeLocalValue(minimumCampaignStartAt(campaigns, effectiveServerMinimumStartAt)));
     setPendingAction({ kind: 'queue', campaign });
@@ -2476,17 +2478,26 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     if (!pendingAction) return;
     const action = pendingAction;
     if (action.kind === 'queue') {
-      if (!queueStartIsValid || !queueStartDate || !audienceCheckReady || audienceActionInProgress.current) return;
+      setQueueError(null);
+      if (!queueStartIsValid || !queueStartDate) {
+        setQueueStartError('Choose a valid start date and time before queueing this campaign.');
+        return;
+      }
+      if (!audienceCheckReady) {
+        setQueueError('The current audience could not be verified. Retry the audience check before queueing.');
+        return;
+      }
+      if (audienceActionInProgress.current) return;
       audienceActionInProgress.current = true;
       setAudienceActionPending(true);
       try {
         const audience = await campaignAudienceQuery.refetch();
         if (audience.isError || !audience.data) {
-          setNotice({ kind: 'error', text: 'We couldn’t verify the current audience. Retry before queueing this campaign.' });
+          setQueueError('We couldn’t verify the current audience. Retry the audience check before queueing this campaign.');
           return;
         }
         send.mutate({ campaignId: action.campaign.id, data: { scheduledAt: queueStartDate.toISOString() } }, {
-          onSuccess: response => { setPendingAction(null); setQueuePolicyError(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
+          onSuccess: response => { setPendingAction(null); setQueueError(null); setQueuePolicyError(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
           onError: error => {
             const apiError = (error as { data?: { code?: string; earliestStartAt?: string | null } }).data;
             if (apiError?.code === 'CAMPAIGN_START_TOO_EARLY' && apiError.earliestStartAt) {
@@ -2500,8 +2511,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
               setQueuePolicyError(mutationError(error));
               return;
             }
-            setPendingAction(null);
-            setNotice({ kind: 'error', text: mutationError(error) });
+            setQueueError(mutationError(error));
           },
         });
       } finally {
@@ -2992,7 +3002,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
        destructive={pendingAction?.kind !== 'queue'}
        pending={audienceActionPending || send.isPending || remove.isPending}
          confirmDisabled={pendingAction?.kind === 'queue' && (!queueStartIsValid || !audienceCheckReady)}
-        onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) { setPendingAction(null); setQueuePolicyError(null); } }}
+         onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) { setPendingAction(null); setQueueError(null); setQueueStartError(null); setQueuePolicyError(null); } }}
        onConfirm={confirmCampaignAction}
        testId="dialog-campaign-action"
       >
@@ -3007,13 +3017,15 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
            </div>}
           <label className="block">
             <span className={labelClass}>Start date and time (your local time)</span>
-            <input data-testid="input-campaign-start-at" type="datetime-local" min={queueMinimumStartAtInput} value={queueStartAt} onChange={event => { setQueueStartAt(event.target.value); setQueueStartError(null); }} className={inputClass} required />
+            <input data-testid="input-campaign-start-at" type="datetime-local" min={queueMinimumStartAtInput} value={queueStartAt} onChange={event => { setQueueStartAt(event.target.value); setQueueStartError(null); setQueueError(null); }} className={inputClass} required />
           </label>
           {hasActiveCampaigns && <div className="rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2.5 text-[11px] leading-5 text-[#895b2f]">
             Existing campaign delivery is queued or in progress. This campaign cannot start before <strong>{formatDate(queueMinimumStartAt.toISOString())}</strong>. The finish time is an estimate and can change.
           </div>}
           {!hasActiveCampaigns && <p className="text-[11px] leading-5 text-[#788392]">Choose a future time. The time is interpreted in your device’s time zone.</p>}
           {queueStartError && <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{queueStartError}</div>}
+           {!queueStartError && !queueStartIsValid && <div role="alert" data-testid="status-campaign-start-invalid" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">Choose a start time at or after the earliest available time shown above.</div>}
+           {queueError && <div role="alert" data-testid="status-queue-campaign-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{queueError}</div>}
            {queuePolicyError && <div role="alert" data-testid="status-queue-campaign-content-policy-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{queuePolicyError}</div>}
         </div>}
       </ConfirmActionDialog>
