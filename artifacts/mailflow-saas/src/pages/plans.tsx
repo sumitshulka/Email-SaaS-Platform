@@ -689,7 +689,7 @@ export default function PlansPage() {
     <header className="relative overflow-hidden rounded-lg border border-[#dce5ec] bg-[#eff5f9] px-5 py-7 md:px-8 md:py-8">
       <div className="relative z-[1] max-w-[700px]"><div className="mono mb-2 flex items-center gap-2 text-[9px] uppercase tracking-[.19em] text-[#58748e]"><span className="h-px w-6 bg-[#d7823c]"/>WORKSPACE BILLING</div>
         <h1 className="display text-[30px] font-bold leading-tight tracking-[-.05em] text-[#1a2e43] md:text-[37px]">Manage your Mailflow plan.</h1>
-        <p className="mt-3 max-w-[650px] text-[13px] leading-6 text-[#64778a]">Higher-limit upgrades start immediately and charge only the prorated price difference through your current expiry. Downgrades and other plan changes are paid once now and start after the current term. Plans do not auto-renew.</p>
+        <p className="mt-3 max-w-[650px] text-[13px] leading-6 text-[#64778a]">Higher-limit upgrades start immediately and charge only the prorated price difference through your current expiry. Downgrades and other plan changes are paid once now and start after the current term. Paid plans do not auto-renew. Free plans renew automatically at expiry at no charge.</p>
       </div>
       <div aria-hidden="true" className="pointer-events-none absolute -right-5 -top-16 hidden h-64 w-64 rounded-full border border-[#d5e1e9] md:block"><div className="absolute inset-7 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-14 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-[84px] rounded-full border border-[#d5e1e9]"/></div>
     </header>
@@ -700,6 +700,7 @@ export default function PlansPage() {
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.14em] text-[#4d795e]"><CheckCircle2 className="h-4 w-4"/>Current term active</div>
           <h2 className="display mt-2 text-[20px] font-bold text-[#213a2e]">{activeSubscription.package.name}</h2>
           <p data-testid="text-current-subscription-dates" className="mt-1 text-[12px] text-[#647b6b]">Started {new Date(activeSubscription.startsAt).toLocaleDateString()} · Ends {new Date(activeSubscription.endsAt).toLocaleDateString()}</p>
+          {activeSubscription.package.amountMinor === 0 && <p data-testid="text-free-plan-auto-renewal" className="mt-1 text-[11px] text-[#477154]">This free plan renews automatically at expiry at no charge.</p>}
           <p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p>
           <p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {currentEmailAccountLimit} SMTP sender account{currentEmailAccountLimit === 1 ? '' : 's'} (including active mailbox add-ons)</p>
           <p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{activeSubscription.package.researchAllowance === 0 ? 'No company research runs are included this term' : `Up to ${activeSubscription.package.researchAllowance} company research run${activeSubscription.package.researchAllowance === 1 ? '' : 's'} this term; unused runs expire at term end`}</p>
@@ -931,7 +932,7 @@ export default function PlansPage() {
             <p><strong>Additional mailboxes:</strong> {checkoutTermsReview.pkg.additionalMailboxCount.toLocaleString()}</p>
             <p><strong>Campaign attempts:</strong> up to {checkoutTermsReview.sendingLimits.emailsPerHourPerSmtp.toLocaleString()} per hour and {checkoutTermsReview.sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per 24 hours, per mailbox</p>
           </div>
-          <p className="mt-3 border-t border-[#e4e9ed] pt-3 text-[10px] text-[#6b7b8c]">One-time plan term. Plans do not auto-renew.</p>
+          <p className="mt-3 border-t border-[#e4e9ed] pt-3 text-[10px] text-[#6b7b8c]">{checkoutTermsReview.pkg.amountMinor === 0 ? 'This free plan renews automatically at expiry at no charge.' : 'One-time paid term. Paid plans do not auto-renew.'}</p>
         </div>
         {checkoutTermsReview.sendingLimits.emailsPerHourPerSmtp === 0 && <p role="alert" className="mt-3 text-[11px] text-[#99501e]">Sending limits could not be confirmed. Retry loading the plan list before continuing.</p>}
         <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#edf0f2] pt-4">
@@ -990,7 +991,7 @@ export default function PlansPage() {
       </section>
     </div>}
 
-    <footer className="flex flex-col gap-3 border-t border-[#e5eaee] pt-5 text-[10px] leading-5 text-[#82909d] sm:flex-row sm:items-center sm:justify-between"><span>Upgrades are prorated through the current expiry. Downgrades are paid once at selection and start at term end. Free plans need no checkout. No plan renews automatically.</span><span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5"/>Paid checkout by Razorpay</span></footer>
+    <footer className="flex flex-col gap-3 border-t border-[#e5eaee] pt-5 text-[10px] leading-5 text-[#82909d] sm:flex-row sm:items-center sm:justify-between"><span>Upgrades are prorated through the current expiry. Downgrades are paid once at selection and start at term end. Free plans need no checkout and renew automatically at expiry. Paid plans do not auto-renew.</span><span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5"/>Paid checkout by Razorpay</span></footer>
     {checkoutOrder && verifyPayment.isPending && <span className="sr-only" data-testid="text-checkout-order">Order {checkoutOrder.orderId} awaiting payment verification</span>}
   </div>;
 }

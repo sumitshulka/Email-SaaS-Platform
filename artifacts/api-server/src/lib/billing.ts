@@ -24,6 +24,7 @@ import {
   calculateProratedUpgradeAmountMinor,
   comparePrimaryPlanLimits,
 } from "./subscription-plan-changes";
+import { logger } from "./logger";
 
 export {
   calculateProratedUpgradeAmountMinor,
@@ -35,6 +36,9 @@ type SubscriptionRow = typeof userSubscriptionsTable.$inferSelect;
 type PackageSnapshot = NonNullable<
   (typeof paymentsTable.$inferSelect)["packageSnapshot"]
 >;
+const FREE_PRIMARY_PLAN_RENEWAL_INTERVAL_MS = 30_000;
+const FREE_PRIMARY_PLAN_RENEWAL_BATCH_SIZE = 250;
+let freePrimaryPlanRenewalWorkerStarted = false;
 
 export function createPackageCheckoutSnapshot(
   pkg: PackageRow,
@@ -91,7 +95,7 @@ export function serializePackage(pkg: PackageRow) {
   };
 }
 
-export async function renewExpiredFreePrimaryPlanOnLogin(
+export async function renewExpiredFreePrimaryPlanForUser(
   userId: string,
   now = new Date(),
 ): Promise<number> {
@@ -163,6 +167,97 @@ export async function renewExpiredFreePrimaryPlanOnLogin(
     }
     return revisions;
   });
+}
+
+export async function renewExpiredFreePrimaryPlans(
+  now = new Date(),
+  batchSize = FREE_PRIMARY_PLAN_RENEWAL_BATCH_SIZE,
+): Promise<{ usersChecked: number; usersRenewed: number; termsCreated: number; failed: number }> {
+  const candidates = await db
+    .select({
+      userId: userSubscriptionsTable.userId,
+      endsAt: userSubscriptionsTable.endsAt,
+    })
+    .from(userSubscriptionsTable)
+    .innerJoin(
+      subscriptionPackagesTable,
+      eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+    )
+    .innerJoin(usersTable, eq(userSubscriptionsTable.userId, usersTable.id))
+    .where(
+      and(
+        eq(userSubscriptionsTable.status, "active"),
+        lte(userSubscriptionsTable.startsAt, now),
+        lte(userSubscriptionsTable.endsAt, now),
+        eq(subscriptionPackagesTable.packageType, "primary"),
+        eq(subscriptionPackagesTable.amountMinor, 0),
+        gt(subscriptionPackagesTable.periodDays, 0),
+        eq(usersTable.role, "USER"),
+        isNull(usersTable.deletedAt),
+      ),
+    )
+    .orderBy(asc(userSubscriptionsTable.endsAt))
+    .limit(Math.max(1, Math.floor(batchSize)));
+
+  const userIds = [...new Set(candidates.map(({ userId }) => userId))];
+  let usersRenewed = 0;
+  let termsCreated = 0;
+  let failed = 0;
+  for (const userId of userIds) {
+    try {
+      const revisions = await renewExpiredFreePrimaryPlanForUser(userId, now);
+      if (revisions > 0) {
+        usersRenewed += 1;
+        termsCreated += revisions;
+      }
+    } catch (error) {
+      failed += 1;
+      logger.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Free primary plan renewal failed for a user",
+      );
+    }
+  }
+
+  return { usersChecked: userIds.length, usersRenewed, termsCreated, failed };
+}
+
+export function startFreePrimaryPlanRenewalWorker(): void {
+  if (freePrimaryPlanRenewalWorkerStarted) return;
+  freePrimaryPlanRenewalWorkerStarted = true;
+
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const result = await renewExpiredFreePrimaryPlans();
+      if (result.termsCreated > 0) {
+        logger.info(
+          {
+            usersRenewed: result.usersRenewed,
+            termsCreated: result.termsCreated,
+            failed: result.failed,
+          },
+          "Expired free primary plans renewed",
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { errorName: error instanceof Error ? error.name : "UnknownError" },
+        "Free primary plan renewal worker failed",
+      );
+    } finally {
+      busy = false;
+    }
+  };
+
+  const timer = setInterval(
+    () => void tick(),
+    FREE_PRIMARY_PLAN_RENEWAL_INTERVAL_MS,
+  );
+  timer.unref();
+  void tick();
 }
 
 function serializeSubscription(

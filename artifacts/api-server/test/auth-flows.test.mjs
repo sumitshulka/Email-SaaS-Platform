@@ -2884,12 +2884,37 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
-  it("catches up expired free-plan terms from the prior expiry date when the user logs in", async () => {
+  it("automatically catches up expired free-plan terms from the prior expiry date", async () => {
     const admin = await loggedInUser({
       username: "free-renewal-admin",
       role: "SUPERADMIN",
     });
     const user = await loggedInUser({ username: "free-renewal-user" });
+    const paidUser = await loggedInUser({
+      username: "paid-no-auto-renew-user",
+    });
+    const [paidPackage] = await db
+      .insert(dbModule.subscriptionPackagesTable)
+      .values({
+        name: "Paid Term Without Auto-Renewal",
+        description: "",
+        amountMinor: 1000,
+        currency: "INR",
+        periodDays: 30,
+      })
+      .returning();
+    const paidExpiry = new Date(Date.now() - 75 * 24 * 60 * 60 * 1000);
+    const [paidSubscription] = await db
+      .insert(dbModule.userSubscriptionsTable)
+      .values({
+        userId: paidUser.user.id,
+        packageId: paidPackage.id,
+        paymentId: null,
+        status: "active",
+        startsAt: new Date(paidExpiry.getTime() - 30 * 24 * 60 * 60 * 1000),
+        endsAt: paidExpiry,
+      })
+      .returning();
     const created = await api("/admin/billing/packages", {
       method: "POST",
       cookie: admin.cookie,
@@ -2919,6 +2944,20 @@ describe("tenant contact management and package quotas", { concurrency: false },
         endsAt: lastExpiry,
       })
       .where(eq(dbModule.userSubscriptionsTable.id, original.id));
+
+    const { renewExpiredFreePrimaryPlans } = await import("../src/lib/billing.ts");
+    const backgroundRenewal = await renewExpiredFreePrimaryPlans(new Date());
+    assert.equal(backgroundRenewal.usersChecked, 1);
+    assert.equal(backgroundRenewal.usersRenewed, 1);
+    assert.equal(backgroundRenewal.termsCreated, 3);
+    assert.equal(backgroundRenewal.failed, 0);
+    const unchangedPaidTerm = await db
+      .select()
+      .from(dbModule.userSubscriptionsTable)
+      .where(eq(dbModule.userSubscriptionsTable.id, paidSubscription.id));
+    assert.equal(unchangedPaidTerm.length, 1);
+    assert.equal(unchangedPaidTerm[0].status, "active");
+    assert.equal(unchangedPaidTerm[0].endsAt.getTime(), paidExpiry.getTime());
 
     const renewedLogin = await login(user.user.email);
     assert.equal(renewedLogin.response.status, 200, JSON.stringify(renewedLogin.body));

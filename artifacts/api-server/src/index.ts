@@ -6,6 +6,7 @@ import { startCampaignWorker } from "./lib/campaign-worker";
 import { startGmailMailboxWorker } from "./lib/gmail-mailbox";
 import { startCompanyResearchWorker } from "./lib/company-intelligence";
 import { startAiEmailAssistReservationCleanupWorker } from "./lib/add-on-entitlements";
+import { startFreePrimaryPlanRenewalWorker } from "./lib/billing";
 
 const rawPort = process.env["PORT"];
 
@@ -27,6 +28,7 @@ try {
   startCampaignWorker();
   startGmailMailboxWorker();
   startCompanyResearchWorker();
+  startFreePrimaryPlanRenewalWorker();
   await startAiEmailAssistReservationCleanupWorker();
   app.listen(port, (err) => {
     if (err) {

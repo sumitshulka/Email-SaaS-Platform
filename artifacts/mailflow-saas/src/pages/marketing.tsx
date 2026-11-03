@@ -711,7 +711,7 @@ export function PackageCheckoutPage() {
           <p className="mt-2 text-[13px] leading-6 text-[#526276]">{pkg.description || 'A considered plan for your contacts and campaigns.'}</p>
           <div className="mt-5 border-y border-[#e5e9ed] py-4">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><strong className="display text-[31px] font-bold tracking-[-.04em] text-[#172334]">{formatMoney(pkg)}</strong><span className="text-[12px] text-[#657487]">for {pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</span></div>
-            <p className="mt-1 text-[11px] leading-5 text-[#526276]">One-time payment for this term. Plans do not auto-renew.</p>
+            <p className="mt-1 text-[11px] leading-5 text-[#526276]">{pkg.amountMinor === 0 ? 'This free plan renews automatically at expiry at no charge.' : 'One-time payment for this term. Paid plans do not auto-renew.'}</p>
           </div>
           <ul className="mt-4 space-y-3 text-[12px] leading-5 text-[#405267]">
             <li className="flex gap-2.5"><ContactRound size={16} className="mt-0.5 shrink-0 text-[#4c759d]"/>Up to <b>{pkg.contactLimit.toLocaleString()}</b> contacts</li>
