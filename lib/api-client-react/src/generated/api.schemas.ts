@@ -1546,6 +1546,30 @@ export interface CompanyResearchAllowance {
   resetsAt: string;
 }
 
+export type CompanyResearchRequestStatus = typeof CompanyResearchRequestStatus[keyof typeof CompanyResearchRequestStatus];
+
+
+export const CompanyResearchRequestStatus = {
+  requested: 'requested',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface CompanyResearchRequest {
+  id: string;
+  globalCompanyId: string;
+  companyName: string;
+  status: CompanyResearchRequestStatus;
+  /** @nullable */
+  researchJobId: string | null;
+  createdAt: string;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+}
+
 export interface CompanyIntelligenceResult {
   companyId: string;
   companyName: string;
@@ -1560,6 +1584,52 @@ export interface CompanyIntelligenceResult {
   /** @nullable */
   researchAvailabilityReason: CompanyIntelligenceResultResearchAvailabilityReason;
   researchAllowance: CompanyResearchAllowance | null;
+  researchRequest: CompanyResearchRequest | null;
+}
+
+/**
+ * @nullable
+ */
+export type CompanyResearchRequestAccessReason = typeof CompanyResearchRequestAccessReason[keyof typeof CompanyResearchRequestAccessReason] | null;
+
+
+export const CompanyResearchRequestAccessReason = {
+  active_paid_plan_required: 'active_paid_plan_required',
+} as const;
+
+export interface CompanyResearchRequestAccess {
+  eligible: boolean;
+  /** @nullable */
+  reason: CompanyResearchRequestAccessReason;
+}
+
+export interface CompanyResearchRequestResponse {
+  request: CompanyResearchRequest;
+  /** The user's private company record ID */
+  companyId?: string;
+}
+
+export type AdminCompanyResearchRequest = CompanyResearchRequest & {
+  requesterName: string;
+  requesterEmail: string;
+};
+
+export interface AdminCompanyResearchRequests {
+  items: AdminCompanyResearchRequest[];
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+}
+
+export interface AdminCompanyResearchRequestStart {
+  request: CompanyResearchRequest;
+  job: CompanyResearchJobStatus;
 }
 
 export interface CompanyResearchAllowanceResponse {
@@ -5601,6 +5671,18 @@ export const ListContactOptionsFirstLetter = {
 } as const;
 
 export type GetCompanyResearchUsageParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+};
+
+export type ListAdminCompanyResearchRequestsParams = {
 /**
  * @minimum 1
  */

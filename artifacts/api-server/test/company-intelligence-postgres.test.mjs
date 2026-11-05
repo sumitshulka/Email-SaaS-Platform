@@ -8,7 +8,7 @@ import { source, profileFixture } from "./fixtures/company-intelligence.mjs";
 test("PostgreSQL research is explicit, deduplicated, versioned and isolated from master/contact data", { skip: !process.env.RUN_COMPANY_RESEARCH_DB_TESTS }, async () => {
   process.env.NODE_ENV = "test";
   const schema = await import("@workspace/db");
-  const { pool, setTestDatabase, globalCompaniesTable, companyResearchJobsTable, companyIntelligenceTable } = schema;
+  const { pool, setTestDatabase, globalCompaniesTable, companyResearchJobsTable, companyIntelligenceTable, companyResearchRequestsTable, usersTable, platformNotificationsTable, platformNotificationRecipientsTable, subscriptionPackagesTable, userSubscriptionsTable } = schema;
   const realDb = drizzle(pool, { schema });
   const service = await import("../src/lib/company-intelligence.ts");
   const { defaultResearchSettings } = await import("../src/lib/company-research-settings.ts");
@@ -43,7 +43,11 @@ test("PostgreSQL research is explicit, deduplicated, versioned and isolated from
       assert.equal(current.current.version, "1.0");
       assert.equal(current.latestJob.status, "completed");
       assert.equal(current.current.profile.executive_summary.one_liner, profileFixture().executive_summary.one_liner);
-      const safe = GetCompanyIntelligenceResponse.parse(current);
+      const safe = GetCompanyIntelligenceResponse.parse({
+        ...current,
+        researchAllowance: null,
+        researchAvailabilityReason: null,
+      });
       const json = JSON.stringify(safe);
       for (const forbidden of ["requestedBy", "estimatedCostUsd", "estimatedCostInr", "apiKey", "inputTokens", "outputTokens"]) assert.equal(json.includes(forbidden), false);
       const [master] = await tx.select().from(globalCompaniesTable).where(eq(globalCompaniesTable.id, company.id));
@@ -65,6 +69,64 @@ test("PostgreSQL research is explicit, deduplicated, versioned and isolated from
       const old = await tx.select().from(companyIntelligenceTable).where(and(eq(companyIntelligenceTable.id, current.current.id), eq(companyIntelligenceTable.globalCompanyId, company.id)));
       assert.equal(old.length, 1, "A successful update must retain the original version");
       assert.equal(prompts.length, 4, "Exactly two explicit successful jobs made provider calls; reads did not");
+      const [requestUser] = await tx.insert(usersTable).values({
+        username: `research-request-${randomUUID().slice(0, 8)}`,
+        firstName: "Research",
+        lastName: "Requester",
+        email: `research-request-${randomUUID()}@example.test`,
+        passwordHash: "test-only-hash",
+      }).returning();
+      const [giftedPremium] = await tx.insert(subscriptionPackagesTable).values({
+        name: `Gifted premium fixture ${randomUUID()}`,
+        amountMinor: 100,
+        periodDays: 30,
+      }).returning();
+      const [giftedTerm] = await tx.insert(userSubscriptionsTable).values({
+        userId: requestUser.id,
+        packageId: giftedPremium.id,
+        paymentId: null,
+        status: "active",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      }).returning();
+      assert.equal(await service.hasPaidPrimaryResearchRequestAccess(requestUser.id), true, "An active gifted paid-premium term qualifies without a payment row");
+      await tx.update(userSubscriptionsTable).set({ endsAt: new Date(Date.now() - 1) })
+        .where(eq(userSubscriptionsTable.id, giftedTerm.id));
+      assert.equal(await service.hasPaidPrimaryResearchRequestAccess(requestUser.id), false, "An expired gifted term does not qualify");
+      const [requestCompany] = await tx.insert(globalCompaniesTable).values({
+        companyName: `Requested research fixture ${randomUUID()}`,
+        companyWebsiteUrl: "https://example.org",
+      }).returning();
+      const [request] = await tx.insert(companyResearchRequestsTable).values({
+        globalCompanyId: requestCompany.id,
+        requestedBy: requestUser.id,
+      }).returning();
+      const requestedJob = await service.enqueueCompanyResearch({
+        globalCompanyId: requestCompany.id,
+        userId: null,
+        provider: "openai",
+        selectedModel: "test-model",
+        settings,
+        depth: 1,
+        overrideFresh: false,
+        requestId: request.id,
+      });
+      assert.equal(requestedJob.kind, "created");
+      const [requestedRunning] = await tx.update(companyResearchJobsTable)
+        .set({ status: "running", startedAt: new Date() })
+        .where(eq(companyResearchJobsTable.id, requestedJob.job.id))
+        .returning();
+      await service.executeResearchJob(requestedRunning, dependencies);
+      const [completedRequest] = await tx.select().from(companyResearchRequestsTable)
+        .where(eq(companyResearchRequestsTable.id, request.id));
+      assert.equal(completedRequest.status, "completed");
+      assert.equal(completedRequest.researchJobId, requestedJob.job.id);
+      const [completionNotice] = await tx.select().from(platformNotificationsTable)
+        .where(eq(platformNotificationsTable.title, "Company research completed"));
+      assert.ok(completionNotice, "Successful request completion creates an in-app notice");
+      const [noticeRecipient] = await tx.select().from(platformNotificationRecipientsTable)
+        .where(eq(platformNotificationRecipientsTable.notificationId, completionNotice.id));
+      assert.equal(noticeRecipient.userId, requestUser.id);
       throw rollback;
     }), error => error === rollback);
   } finally {

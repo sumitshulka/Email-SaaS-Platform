@@ -5,7 +5,7 @@ import { Link } from 'wouter';
 import { ArrowLeft, CircleAlert, LoaderCircle } from 'lucide-react';
 import {
   getGetCompanyResearchSettingsQueryKey, getGetCompanyResearchUsageQueryKey, getListAdminGlobalCompaniesQueryKey,
-  getGetAIProviderSettingsQueryKey, useGetAIProviderSettings, useGetCompanyResearchSettings, useGetCompanyResearchUsage,
+  getGetAIProviderSettingsQueryKey, getListAdminCompanyResearchRequestsQueryKey, useGetAIProviderSettings, useGetCompanyResearchSettings, useGetCompanyResearchUsage, useListAdminCompanyResearchRequests, useStartAdminCompanyResearchRequest,
   useTestAIProviderConnection, useUpdateCompanyResearchSettings,
 } from '@workspace/api-client-react';
 import type { AIProviderModel, CompanyResearchSettings, IntelligenceSourceType } from '@workspace/api-client-react';
@@ -134,13 +134,64 @@ function Usage() {
   </div>;
 }
 
+function ResearchRequests() {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [error, setError] = useState('');
+  const params = { page, pageSize: 10 };
+  const query = useListAdminCompanyResearchRequests(params, {
+    query: {
+      queryKey: getListAdminCompanyResearchRequestsQueryKey(params),
+      staleTime: 15_000,
+      refetchInterval: 20_000,
+      placeholderData: previous => previous,
+    },
+  });
+  const start = useStartAdminCompanyResearchRequest();
+  const items = query.data?.items ?? [];
+  const pages = Math.max(1, Math.ceil((query.data?.total ?? 0) / params.pageSize));
+  const beginResearch = (requestId: string) => {
+    setError('');
+    start.mutate({ requestId }, {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getListAdminCompanyResearchRequestsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getGetCompanyResearchUsageQueryKey() });
+      },
+      onError: cause => setError(errText(cause)),
+    });
+  };
+  if (query.isLoading) return <div data-testid="loading-research-requests" className="space-y-3"><div className="h-20 animate-pulse rounded-lg bg-[#f1f3f5]"/><div className="h-48 animate-pulse rounded-lg bg-[#f1f3f5]"/></div>;
+  if (query.isError && !query.data) return <section role="alert" data-testid="error-research-requests" className={`${card} flex items-center justify-between p-5 text-[13px]`}><span>Research requests could not be loaded.</span><button type="button" onClick={() => void query.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button></section>;
+  return <div className="space-y-4" data-testid="admin-company-research-requests">
+    <section className="rounded-lg border border-[#cfe5d5] bg-[#eff8f1] px-5 py-4">
+      <h2 className="text-[13px] font-bold text-[#28583b]">Customer research requests</h2>
+      <p className="mt-1 text-[11px] leading-5 text-[#557b61]">Eligible paid-plan customers can ask the platform team to research an unresearched company. Start each request here; customers are promised a maximum turnaround of 48 working hours and receive an in-app notification when research completes. These jobs do not use customer research credits.</p>
+    </section>
+    {error && <div role="alert" data-testid="status-start-research-request-error" className="rounded-md bg-[#fff8f1] px-4 py-3 text-[12px] text-[#99501e]">Research could not be started. {error}</div>}
+    {query.isFetching && query.data && <p role="status" className="text-[10px] text-[#788696]">Refreshing requests…</p>}
+    {items.length ? <section className={`${card} overflow-hidden`}>
+      <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left text-[11px]">
+        <thead className="bg-[#fbfcfd]"><tr className={lab}>{['Company', 'Requested by', 'Status', 'Requested', 'Action'].map(label => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead>
+        <tbody className="divide-y divide-[#edf0f2]">{items.map(item => <tr key={item.id} data-testid={`row-research-request-${item.id}`}>
+          <td className="px-4 py-3"><div className="font-semibold text-[#344154]">{item.companyName}</div><div className="mono mt-0.5 text-[9px] text-[#8a96a4]">{item.globalCompanyId.slice(0, 8)}</div></td>
+          <td className="px-4 py-3"><div className="font-semibold text-[#3b4d61]">{item.requesterName}</div><div className="mt-0.5 text-[10px] text-[#7f8b99]">{item.requesterEmail}</div></td>
+          <td className="px-4 py-3"><span data-testid={`status-research-request-${item.id}`} className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${item.status === 'completed' ? 'bg-[#edf8f1] text-[#326847]' : item.status === 'failed' ? 'bg-[#fff1f0] text-[#883f39]' : item.status === 'in_progress' ? 'bg-[#eef6ff] text-[#315c86]' : 'bg-[#fff7ec] text-[#805923]'}`}>{human(item.status)}</span></td>
+          <td className="px-4 py-3 text-[#7f8b99]">{fmtDate(item.createdAt)}</td>
+          <td className="px-4 py-3">{item.status === 'requested' || item.status === 'failed' ? <button type="button" data-testid={`button-start-research-request-${item.id}`} disabled={start.isPending} onClick={() => beginResearch(item.id)} className="inline-flex min-h-8 items-center gap-1.5 rounded-md bg-[#174f99] px-3 text-[10px] font-semibold text-white hover:bg-[#103f7e] disabled:opacity-50">{start.isPending ? <LoaderCircle className="h-3 w-3 animate-spin"/> : null}{item.status === 'failed' ? 'Retry research' : 'Start research'}</button> : item.status === 'in_progress' ? <span className="text-[10px] text-[#315c86]">Research running</span> : <span className="text-[10px] text-[#326847]">Requester notified</span>}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <footer className="flex items-center justify-between border-t border-[#e8edf1] bg-[#fbfcfd] px-4 py-3 text-[11px]"><span>{query.data?.total ?? 0} requests</span><div className="flex items-center gap-2"><button type="button" data-testid="button-research-requests-prev" disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="rounded-md border border-[#d7dce3] px-3 py-1.5 disabled:opacity-40">Previous</button><span className="mono">{page} / {pages}</span><button type="button" data-testid="button-research-requests-next" disabled={page >= pages} onClick={() => setPage(value => value + 1)} className="rounded-md border border-[#d7dce3] px-3 py-1.5 disabled:opacity-40">Next</button></div></footer>
+    </section> : <section data-testid="empty-research-requests" className={`${card} px-5 py-12 text-center`}><h3 className="text-[13px] font-semibold text-[#45566a]">No research requests yet</h3><p className="mt-1 text-[11px] text-[#8995a2]">Customer requests will appear here.</p></section>}
+  </div>;
+}
+
 export function AdminCompanyIntelligencePage() {
-  const [tab, setTab] = useState<'usage' | 'settings'>('usage');
+  const [tab, setTab] = useState<'usage' | 'requests' | 'settings'>('usage');
   const settings = useGetCompanyResearchSettings({ query: { queryKey: getGetCompanyResearchSettingsQueryKey(), staleTime: 30_000 } });
   return <main className="fade-in max-w-[1180px]">
     <Link href="/admin/global-companies" data-testid="link-back-global-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4" />Global companies</Link>
-    <header className="mb-6"><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">PLATFORM / COMPANY INTELLIGENCE</div><h1 className="display text-[30px] font-bold text-[#172334]">Company intelligence</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Monitor research usage and tune freshness, limits, and models. Research itself starts from a company, after confirmation.</p></header>
-    <div role="tablist" className="mb-5 flex gap-1 border-b border-[#e3e7eb]">{(['usage', 'settings'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold ${tab === t ? 'border-[#174f99] text-[#174f99]' : 'border-transparent text-[#687484]'}`}>{t === 'usage' ? 'Usage and jobs' : 'Settings'}</button>)}</div>
-    {tab === 'usage' ? <Usage /> : settings.isLoading ? <div data-testid="loading-settings" className="h-64 animate-pulse rounded-lg bg-[#f1f3f5]" /> : settings.isError || !settings.data ? <div role="alert" data-testid="error-settings" className={`${card} flex items-center justify-between p-5 text-[13px]`}>Settings could not be loaded<button type="button" data-testid="button-retry-settings" onClick={() => void settings.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button></div> : <SettingsForm settings={settings.data} />}
+    <header className="mb-6"><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">PLATFORM / COMPANY INTELLIGENCE</div><h1 className="display text-[30px] font-bold text-[#172334]">Company intelligence</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Monitor research usage, customer requests, and research settings.</p></header>
+    <div role="tablist" className="mb-5 flex gap-1 border-b border-[#e3e7eb]">{(['usage', 'requests', 'settings'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold ${tab === t ? 'border-[#174f99] text-[#174f99]' : 'border-transparent text-[#687484]'}`}>{t === 'usage' ? 'Usage and jobs' : t === 'requests' ? 'Customer requests' : 'Settings'}</button>)}</div>
+    {tab === 'usage' ? <Usage /> : tab === 'requests' ? <ResearchRequests /> : settings.isLoading ? <div data-testid="loading-settings" className="h-64 animate-pulse rounded-lg bg-[#f1f3f5]" /> : settings.isError || !settings.data ? <div role="alert" data-testid="error-settings" className={`${card} flex items-center justify-between p-5 text-[13px]`}>Settings could not be loaded<button type="button" data-testid="button-retry-settings" onClick={() => void settings.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button></div> : <SettingsForm settings={settings.data} />}
   </main>;
 }

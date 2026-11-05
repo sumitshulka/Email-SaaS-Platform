@@ -5,7 +5,7 @@ description: Explicit company research, master-data separation and evidence/priv
 
 Company intelligence is an explicitly requested, confirmed, reusable company-level asset. Opening, searching, editing or selecting a company must not trigger research, and future email generation must consume stored intelligence rather than research per email.
 
-Keep researched intelligence separate from company master fields; a failed refresh must preserve the last successful profile and successful versions must remain available. Private companies must not become global through research.
+Keep researched intelligence separate from company master fields; a failed refresh must preserve the last successful profile and successful versions must remain available. Private companies must not become global as an implicit side effect of research. An owner may explicitly share a private company profile to the Global Company DB when submitting a platform-managed research request; associated contacts and contact data remain tenant-private.
 
 The superadmin Global Company profile details view should retain the company intelligence panel and an edit action for the master profile; it is not a read-only summary.
 
@@ -14,6 +14,10 @@ Every factual claim needs source provenance; technology adoption cannot be guess
 **Why:** The supplied specification prioritizes reusable intelligence, explicit research resource use, auditable evidence, and preservation of existing company/contact privacy.
 
 **How to apply:** Require a new confirmed action for each research job, retain successful history, and separate global company evidence from tenant-owned relationship/contact information when extending AI workflows.
+
+**Why:** The product owner explicitly authorized paid-plan users to request platform research, including an explicit private-profile-to-global conversion, with contacts remaining private and a 48-working-hour maximum turnaround.
+
+**How to apply:** Gate requests on an active paid-priced primary term (payment row not required for a gifted paid term), keep research start under superadmin control, do not debit customer research allowances, and send an in-app completion notice to each requester.
 
 **Why:** The user expects intelligence research and profile updates to remain available from the superadmin company details page.
 

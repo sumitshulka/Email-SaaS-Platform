@@ -26,6 +26,7 @@ export * from "./audit";
 export * from "./billing";
 export * from "./global-companies";
 export * from "./company-intelligence";
+export * from "./company-research-requests";
 export * from "./companies";
 export * from "./contacts";
 export * from "./contact-lead-status-updates";

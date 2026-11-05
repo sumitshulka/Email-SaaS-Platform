@@ -2202,6 +2202,59 @@ export const GetCompanyResearchAllowanceResponse = zod.object({
 
 
 /**
+ * @summary Check whether the authenticated customer can request platform-managed company research
+ */
+export const GetCompanyResearchRequestAccessResponse = zod.object({
+  "eligible": zod.boolean(),
+  "reason": zod.union([zod.literal('active_paid_plan_required'),zod.literal(null)]).nullable()
+})
+
+
+/**
+ * @summary Request superadmin-managed research for an unresearched global company
+ */
+export const RequestGlobalCompanyResearchParams = zod.object({
+  "globalCompanyId": zod.coerce.string().uuid()
+})
+
+export const RequestGlobalCompanyResearchResponse = zod.object({
+  "request": zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid(),
+  "companyName": zod.string(),
+  "status": zod.enum(['requested', 'in_progress', 'completed', 'failed']),
+  "researchJobId": zod.string().uuid().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}),
+  "companyId": zod.string().uuid().optional().describe('The user\'s private company record ID')
+})
+
+
+/**
+ * @summary Convert a private company profile into a global profile and request research
+ */
+export const RequestPrivateCompanyResearchParams = zod.object({
+  "companyId": zod.coerce.string().uuid()
+})
+
+export const RequestPrivateCompanyResearchResponse = zod.object({
+  "request": zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid(),
+  "companyName": zod.string(),
+  "status": zod.enum(['requested', 'in_progress', 'completed', 'failed']),
+  "researchJobId": zod.string().uuid().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}),
+  "companyId": zod.string().uuid().optional().describe('The user\'s private company record ID')
+})
+
+
+/**
  * @summary Read reusable global company intelligence without starting research
  */
 export const GetCompanyIntelligenceParams = zod.object({
@@ -2393,6 +2446,16 @@ export const GetCompanyIntelligenceResponse = zod.object({
   "used": zod.number().int().min(getCompanyIntelligenceResponseResearchAllowanceOneUsedMin),
   "remaining": zod.number().int().min(getCompanyIntelligenceResponseResearchAllowanceOneRemainingMin),
   "resetsAt": zod.coerce.date()
+}),zod.null()]),
+  "researchRequest": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid(),
+  "companyName": zod.string(),
+  "status": zod.enum(['requested', 'in_progress', 'completed', 'failed']),
+  "researchJobId": zod.string().uuid().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
 }),zod.null()])
 })
 
@@ -2792,6 +2855,79 @@ export const GetCompanyResearchUsageResponse = zod.object({
   "estimatedCostUsd": zod.number().nullable(),
   "estimatedCostInr": zod.number().nullable()
 })))
+})
+
+
+/**
+ * @summary List customer requests for company intelligence
+ */
+export const listAdminCompanyResearchRequestsQueryPageDefault = 1;
+
+export const listAdminCompanyResearchRequestsQueryPageSizeDefault = 20;
+export const listAdminCompanyResearchRequestsQueryPageSizeMax = 100;
+
+
+
+export const ListAdminCompanyResearchRequestsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(listAdminCompanyResearchRequestsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listAdminCompanyResearchRequestsQueryPageSizeMax).default(listAdminCompanyResearchRequestsQueryPageSizeDefault)
+})
+
+export const listAdminCompanyResearchRequestsResponseTotalMin = 0;
+
+
+export const listAdminCompanyResearchRequestsResponsePageSizeMax = 100;
+
+
+
+export const ListAdminCompanyResearchRequestsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid(),
+  "companyName": zod.string(),
+  "status": zod.enum(['requested', 'in_progress', 'completed', 'failed']),
+  "researchJobId": zod.string().uuid().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}).and(zod.object({
+  "requesterName": zod.string(),
+  "requesterEmail": zod.string().email()
+}))),
+  "total": zod.number().int().min(listAdminCompanyResearchRequestsResponseTotalMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(listAdminCompanyResearchRequestsResponsePageSizeMax)
+})
+
+
+/**
+ * @summary Start or retry research for a customer request without consuming customer credits
+ */
+export const StartAdminCompanyResearchRequestParams = zod.object({
+  "requestId": zod.coerce.string().uuid()
+})
+
+export const StartAdminCompanyResearchRequestResponse = zod.object({
+  "request": zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid(),
+  "companyName": zod.string(),
+  "status": zod.enum(['requested', 'in_progress', 'completed', 'failed']),
+  "researchJobId": zod.string().uuid().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+}),
+  "job": zod.object({
+  "id": zod.string().uuid(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
+  "scope": zod.enum(['full', 'sales_intelligence', 'competitors']),
+  "stage": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "error": zod.string().nullable()
+})
 })
 
 

@@ -1335,6 +1335,69 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CompanyResearchAllowanceResponse" }
+  /company-intelligence/request-access:
+    get:
+      operationId: getCompanyResearchRequestAccess
+      tags: [companies]
+      summary: Check whether the authenticated customer can request platform-managed company research
+      responses:
+        "200":
+          description: Eligibility for the paid-plan research request feature
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchRequestAccess" }
+  /company-intelligence/{globalCompanyId}/requests:
+    parameters:
+      - name: globalCompanyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: requestGlobalCompanyResearch
+      tags: [companies]
+      summary: Request superadmin-managed research for an unresearched global company
+      responses:
+        "201":
+          description: Research request submitted with a maximum turnaround of 48 working hours
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchRequestResponse" }
+        "403":
+          description: An active paid primary subscription is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Company research is already complete or a request is already active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /companies/{companyId}/research-requests:
+    parameters:
+      - name: companyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: requestPrivateCompanyResearch
+      tags: [companies]
+      summary: Convert a private company profile into a global profile and request research
+      responses:
+        "201":
+          description: Private profile shared as a global company and research requested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompanyResearchRequestResponse" }
+        "403":
+          description: An active paid primary subscription is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: A matching global company or active request already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /company-intelligence/{globalCompanyId}:
     parameters:
       - name: globalCompanyId
@@ -1471,6 +1534,55 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CompanyResearchUsage" }
+  /admin/company-intelligence/requests:
+    get:
+      operationId: listAdminCompanyResearchRequests
+      tags: [admin]
+      summary: List customer requests for company intelligence
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Customer research requests with public company profile and requester account information
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCompanyResearchRequests" }
+  /admin/company-intelligence/requests/{requestId}/start:
+    parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: startAdminCompanyResearchRequest
+      tags: [admin]
+      summary: Start or retry research for a customer request without consuming customer credits
+      responses:
+        "202":
+          description: Customer request is linked to the running or newly queued research job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCompanyResearchRequestStart" }
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Request is already being processed or research is already complete
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "503":
+          description: Research provider is not configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /admin/global-companies:
     get:
       operationId: listAdminGlobalCompanies
@@ -5446,7 +5558,62 @@ components:
           anyOf:
             - $ref: "#/components/schemas/CompanyResearchAllowance"
             - type: "null"
-      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable, researchAvailabilityReason, researchAllowance]
+        researchRequest:
+          anyOf:
+            - $ref: "#/components/schemas/CompanyResearchRequest"
+            - type: "null"
+      required: [companyId, companyName, summary, current, latestJob, history, researchCreditCost, maxResearchDepth, deepResearchEnabled, researchAvailable, researchAvailabilityReason, researchAllowance, researchRequest]
+    CompanyResearchRequestStatus:
+      type: string
+      enum: [requested, in_progress, completed, failed]
+    CompanyResearchRequest:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        globalCompanyId: { type: string, format: uuid }
+        companyName: { type: string }
+        status: { $ref: "#/components/schemas/CompanyResearchRequestStatus" }
+        researchJobId: { type: ["string", "null"], format: uuid }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+      required: [id, globalCompanyId, companyName, status, researchJobId, createdAt, startedAt, completedAt]
+    CompanyResearchRequestAccess:
+      type: object
+      properties:
+        eligible: { type: boolean }
+        reason: { type: ["string", "null"], enum: [active_paid_plan_required, null] }
+      required: [eligible, reason]
+    CompanyResearchRequestResponse:
+      type: object
+      properties:
+        request: { $ref: "#/components/schemas/CompanyResearchRequest" }
+        companyId: { type: string, format: uuid, description: The user's private company record ID, when applicable }
+      required: [request]
+    AdminCompanyResearchRequest:
+      allOf:
+        - $ref: "#/components/schemas/CompanyResearchRequest"
+        - type: object
+          properties:
+            requesterName: { type: string }
+            requesterEmail: { type: string, format: email }
+          required: [requesterName, requesterEmail]
+    AdminCompanyResearchRequests:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminCompanyResearchRequest" }
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+      required: [items, total, page, pageSize]
+    AdminCompanyResearchRequestStart:
+      type: object
+      properties:
+        request: { $ref: "#/components/schemas/CompanyResearchRequest" }
+        job: { $ref: "#/components/schemas/CompanyResearchJobStatus" }
+      required: [request, job]
     CompanyResearchAllowance:
       type: object
       properties:

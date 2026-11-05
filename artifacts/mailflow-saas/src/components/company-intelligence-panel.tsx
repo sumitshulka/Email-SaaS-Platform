@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CircleAlert, ExternalLink, History, LoaderCircle, RefreshCw, Sparkles } from 'lucide-react';
 import {
-  getGetCompanyIntelligenceQueryKey, getGetCompanyIntelligenceVersionQueryKey, getListAdminGlobalCompaniesQueryKey,
-  useGetCompanyIntelligence, useGetCompanyIntelligenceVersion, useStartCompanyResearch,
+  getGetCompanyIntelligenceQueryKey, getGetCompanyIntelligenceVersionQueryKey, getGetCompanyResearchRequestAccessQueryKey, getListAdminGlobalCompaniesQueryKey,
+  useGetCompanyIntelligence, useGetCompanyIntelligenceVersion, useGetCompanyResearchRequestAccess, useRequestGlobalCompanyResearch, useStartCompanyResearch,
 } from '@workspace/api-client-react';
 import type { CompanyIntelligenceVersion, IntelligenceFactSource, IntelligenceSource } from '@workspace/api-client-react';
 import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
@@ -101,16 +101,25 @@ export function CompanyIntelligencePanel({ globalCompanyId, adminMode = false }:
     queryKey: key, staleTime: 15_000,
     refetchInterval: q => {
       const job = q.state.data?.latestJob;
+      const request = q.state.data?.researchRequest;
+      if (request && (request.status === 'requested' || request.status === 'in_progress' || request.status === 'failed')) return 30_000;
       return job && (job.status === 'queued' || job.status === 'running') && Date.now() - +new Date(job.createdAt) < POLL_WINDOW_MS ? 4000 : false;
     },
   } });
   const start = useStartCompanyResearch();
+  const requestAccess = useGetCompanyResearchRequestAccess({ query: {
+    enabled: !adminMode,
+    queryKey: getGetCompanyResearchRequestAccessQueryKey(),
+    staleTime: 30_000,
+  } });
+  const requestResearch = useRequestGlobalCompanyResearch();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [depth, setDepth] = useState(1);
   const [researchScope, setResearchScope] = useState<'full' | 'sales_intelligence' | 'competitors'>('full');
   const [override, setOverride] = useState(false);
   const [selected, setSelected] = useState('');
   const [startError, setStartError] = useState('');
+  const [requestError, setRequestError] = useState('');
   const data = query.data;
   const current = data?.current ?? null;
   const viewingOld = !!selected && !!current && selected !== current.id;
@@ -143,13 +152,31 @@ export function CompanyIntelligencePanel({ globalCompanyId, adminMode = false }:
       onError: e => { setConfirmOpen(false); setStartError(errText(e)); void qc.invalidateQueries({ queryKey: key }); },
     });
   };
+  const submitResearchRequest = () => {
+    setRequestError('');
+    requestResearch.mutate({ globalCompanyId }, {
+      onSuccess: response => {
+        qc.setQueryData(key, current => current ? { ...current, researchRequest: response.request } : current);
+        void qc.invalidateQueries({ queryKey: key });
+      },
+      onError: error => setRequestError(errText(error)),
+    });
+  };
+  const requestOpen = data.researchRequest?.status === 'requested' || data.researchRequest?.status === 'in_progress';
   return <section data-testid="panel-company-intelligence" className="space-y-4">
     <div className={`${card} p-5`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><div className={label}>COMPANY INTELLIGENCE</div><h2 className="mt-1 flex items-center gap-2 text-[16px] font-bold text-[#223247]"><Sparkles className="h-4 w-4 text-[#245b9b]" />{data.companyName}</h2>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#758394]"><FreshnessBadge freshness={data.summary.freshness} status={focusedResearchActive ? undefined : data.summary.status} /><span data-testid="text-last-researched">Last researched {fmtDate(data.summary.researchedAt)}</span><span data-testid="text-source-count">{data.summary.sourceCount} sources</span></div></div>
-         <button type="button" data-testid="button-research" aria-describedby={!data.researchAvailable ? 'status-research-unavailable' : undefined} disabled={active || start.isPending || !data.researchAvailable} onClick={() => { setResearchScope('full'); setStartError(''); setDepth(1); setOverride(false); setConfirmOpen(true); }} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[13px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55">{active && !focusedResearchActive ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{active && !focusedResearchActive ? (job?.status === 'queued' ? 'Queued' : 'Researching') : fullResearchLabel}</button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" data-testid="button-research" aria-describedby={!data.researchAvailable ? 'status-research-unavailable' : undefined} disabled={active || requestOpen || start.isPending || !data.researchAvailable} onClick={() => { setResearchScope('full'); setStartError(''); setDepth(1); setOverride(false); setConfirmOpen(true); }} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[13px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-55">{active && !focusedResearchActive ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{active && !focusedResearchActive ? (job?.status === 'queued' ? 'Queued' : 'Researching') : fullResearchLabel}</button>
+            {!adminMode && !current && requestAccess.data?.eligible && !requestOpen && <button type="button" data-testid="button-request-company-research" disabled={requestResearch.isPending || active} onClick={submitResearchRequest} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#286d5b] bg-[#eff7f2] px-4 text-[12px] font-semibold text-[#286d5b] hover:bg-[#e4f1e9] disabled:cursor-not-allowed disabled:opacity-55">{requestResearch.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Sparkles className="h-4 w-4"/>}{requestResearch.isPending ? 'Submitting…' : 'Request research'}</button>}
+          </div>
       </div>
+      {!adminMode && !current && requestAccess.data && !requestAccess.data.eligible && <p data-testid="status-request-research-ineligible" className="mt-3 rounded-md bg-[#f4f6f8] px-3 py-2 text-[11px] text-[#667386]">Platform-managed research requests are available with an active paid premium plan, including a gifted premium plan.</p>}
+      {requestOpen && <p data-testid="status-company-research-request" role="status" className="mt-3 rounded-md bg-[#eff7f2] px-3 py-2 text-[12px] text-[#315f50]">{data.researchRequest?.status === 'in_progress' ? 'Your request is being researched.' : 'Your request is in the research queue.'} Maximum turnaround is 48 working hours.</p>}
+      {data.researchRequest?.status === 'failed' && !current && <p data-testid="status-company-research-request-failed" role="status" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[12px] text-[#99501e]">The previous request could not be completed. You can submit a new request.</p>}
+      {requestError && <p role="alert" data-testid="status-company-research-request-error" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[12px] text-[#99501e]">The research request was not submitted. {requestError}</p>}
       {data.researchAllowance && <p data-testid="status-research-allowance" role="status" className={`mt-3 rounded-md px-3 py-2 text-[12px] ${data.researchAllowance.remaining > 0 ? 'bg-[#f2f7fb] text-[#365d7f]' : 'bg-[#fff8f1] text-[#99501e]'}`}>
         {data.researchAllowance.limit === 0
           ? 'This package includes no company research runs for the current term.'

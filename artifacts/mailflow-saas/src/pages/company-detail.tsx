@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
-  ArrowLeft, Building2, Check, ChevronLeft, ChevronRight, CircleAlert, Globe2, Link2, MapPin, Pencil,
-  Search, Trash2, Users,
+  ArrowLeft, Building2, Check, ChevronLeft, ChevronRight, CircleAlert, Globe2, Link2, LoaderCircle, MapPin, Pencil,
+  Search, Sparkles, Trash2, Users,
 } from 'lucide-react';
 import {
-  getGetCompanyQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey,
-  useDeleteCompany, useGetCompany, useListCompanies, useListContactOptions, useUpdateContact,
+  getGetCompanyQueryKey, getGetCompanyResearchRequestAccessQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey,
+  useDeleteCompany, useGetCompany, useGetCompanyResearchRequestAccess, useListCompanies, useListContactOptions, useRequestPrivateCompanyResearch, useUpdateContact,
 } from '@workspace/api-client-react';
 import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
@@ -53,6 +53,12 @@ const profileFields = [
 export function CompanyDetailPage() {
   const { companyId = '' } = useParams<{ companyId: string }>();
   const query = useGetCompany(companyId, { query: { enabled: !!companyId, retry: false, queryKey: getGetCompanyQueryKey(companyId) } });
+  const researchRequestAccess = useGetCompanyResearchRequestAccess({ query: {
+    enabled: Boolean(query.data?.company && !query.data.company.globalCompanyId),
+    queryKey: getGetCompanyResearchRequestAccessQueryKey(),
+    staleTime: 30_000,
+  } });
+  const requestPrivateResearch = useRequestPrivateCompanyResearch();
   const companiesQuery = useListCompanies();
   const updateContact = useUpdateContact();
   const deleteCompany = useDeleteCompany();
@@ -70,6 +76,7 @@ export function CompanyDetailPage() {
     },
   });
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [researchRequestError, setResearchRequestError] = useState('');
   const [selectedContactId, setSelectedContactId] = useState('');
   const [replacement, setReplacement] = useState<CompanyLinkReplacement | null>(null);
   const company = query.data?.company;
@@ -133,6 +140,18 @@ export function CompanyDetailPage() {
       contactId: contact.id, contactName: contact.name, legacyCompanyName: contact.companyName,
       companyId: company.id, companyName: company.companyName,
       legacyProfile: profileFromContact(contact), sharedProfile: profileFromCompany(company),
+    });
+  };
+  const requestResearchForPrivateCompany = () => {
+    if (!company) return;
+    setResearchRequestError('');
+    requestPrivateResearch.mutate({ companyId: company.id }, {
+      onSuccess: () => {
+        setNotice({ type: 'success', text: 'Company shared to the Global Company catalog and research requested. Maximum turnaround is 48 working hours.' });
+        void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) });
+        void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() });
+      },
+      onError: error => setResearchRequestError(errorText(error)),
     });
   };
 
@@ -232,7 +251,13 @@ export function CompanyDetailPage() {
         </section>
       </div>
     </div>
-    {company.globalCompanyId ? <div className="mt-6" data-testid="section-company-intelligence"><CompanyIntelligencePanel globalCompanyId={company.globalCompanyId}/></div> : <p data-testid="text-private-no-research" className="mt-6 rounded-md border border-dashed border-[#dfe5eb] bg-[#fbfcfd] px-4 py-3 text-[11px] text-[#7f8b99]">Company intelligence is available for global catalog companies only. This private company is not shared or researched.</p>}
+    {company.globalCompanyId ? <div className="mt-6" data-testid="section-company-intelligence"><CompanyIntelligencePanel globalCompanyId={company.globalCompanyId}/></div> : <section data-testid="section-private-company-research" className="mt-6 rounded-lg border border-dashed border-[#dfe5eb] bg-[#fbfcfd] px-5 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-[13px] font-bold text-[#344154]">Company intelligence</h2><p data-testid="text-private-no-research" className="mt-1 max-w-2xl text-[11px] leading-5 text-[#7f8b99]">Request platform research by sharing this company profile to the Global Company catalog. Only company profile fields are shared; contacts and contact details stay private.</p></div>
+      {researchRequestAccess.data?.eligible && <button type="button" data-testid="button-share-and-request-company-research" disabled={requestPrivateResearch.isPending} onClick={requestResearchForPrivateCompany} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#286d5b] px-4 text-[12px] font-semibold text-white hover:bg-[#205a4b] disabled:opacity-55">{requestPrivateResearch.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Sparkles className="h-4 w-4"/>}{requestPrivateResearch.isPending ? 'Submitting…' : 'Share company and request research'}</button>}
+      </div>
+      {!researchRequestAccess.isLoading && !researchRequestAccess.data?.eligible && <p data-testid="status-private-research-ineligible" className="mt-3 rounded-md bg-[#f4f6f8] px-3 py-2 text-[11px] text-[#667386]">Platform-managed research requests are available with an active paid premium plan, including a gifted premium plan.</p>}
+      {researchRequestError && <p role="alert" data-testid="status-private-research-error" className="mt-3 rounded-md bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]">The company was not shared and research was not requested. {researchRequestError}</p>}
+    </section>}
     {editorOpen && !company.globalCompanyId && <CompanyEditor company={company as Company} onClose={() => setEditorOpen(false)} onSaved={() => { setEditorOpen(false); setNotice({ type: 'success', text: 'Company profile saved.' }); void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(company.id) }); void qc.invalidateQueries({ queryKey: getListCompaniesQueryKey() }); }}/>}
   </div>;
 }

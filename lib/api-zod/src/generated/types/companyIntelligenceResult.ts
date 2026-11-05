@@ -10,6 +10,7 @@ import type { CompanyIntelligenceVersion } from './companyIntelligenceVersion';
 import type { CompanyIntelligenceVersionSummary } from './companyIntelligenceVersionSummary';
 import type { CompanyResearchAllowance } from './companyResearchAllowance';
 import type { CompanyResearchJobStatus } from './companyResearchJobStatus';
+import type { CompanyResearchRequest } from './companyResearchRequest';
 import type { CompanyResearchSummary } from './companyResearchSummary';
 
 export interface CompanyIntelligenceResult {
@@ -26,4 +27,5 @@ export interface CompanyIntelligenceResult {
   /** @nullable */
   researchAvailabilityReason: CompanyIntelligenceResultResearchAvailabilityReason;
   researchAllowance: CompanyResearchAllowance | null;
+  researchRequest: CompanyResearchRequest | null;
 }

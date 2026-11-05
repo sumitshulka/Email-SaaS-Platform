@@ -28,6 +28,8 @@ import type {
   AdminAddOnGiftCorrectionInput,
   AdminAddOnGiftCorrectionResult,
   AdminAddOnGiftEntitlement,
+  AdminCompanyResearchRequestStart,
+  AdminCompanyResearchRequests,
   AdminDashboard,
   AdminFinancePaymentPage,
   AdminGlobalCompanyExportInput,
@@ -95,6 +97,8 @@ import type {
   CompanyResearchAllowanceResponse,
   CompanyResearchInput,
   CompanyResearchJobStatus,
+  CompanyResearchRequestAccess,
+  CompanyResearchRequestResponse,
   CompanyResearchSettings,
   CompanyResearchUsage,
   CompanySearchResults,
@@ -164,6 +168,7 @@ import type {
   ImportContactsParams,
   InactiveUser,
   InactivityNoticeInput,
+  ListAdminCompanyResearchRequestsParams,
   ListAdminFinancePaymentsParams,
   ListAdminGlobalCompaniesParams,
   ListAdminNotificationsParams,
@@ -4982,6 +4987,231 @@ export function useGetCompanyResearchAllowance<TData = Awaited<ReturnType<typeof
 
 
 
+export const getGetCompanyResearchRequestAccessUrl = () => {
+
+
+
+
+  return `/api/company-intelligence/request-access`
+}
+
+/**
+ * @summary Check whether the authenticated customer can request platform-managed company research
+ */
+export const getCompanyResearchRequestAccess = async ( options?: Parameters<typeof customFetch>[1]): Promise<CompanyResearchRequestAccess> => {
+
+  return customFetch<CompanyResearchRequestAccess>(getGetCompanyResearchRequestAccessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCompanyResearchRequestAccessQueryKey = () => {
+    return [
+    `/api/company-intelligence/request-access`
+    ] as const;
+    }
+
+
+export const getGetCompanyResearchRequestAccessQueryOptions = <TData = Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCompanyResearchRequestAccessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>> = ({ signal }) => getCompanyResearchRequestAccess({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCompanyResearchRequestAccessQueryResult = NonNullable<Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>>
+export type GetCompanyResearchRequestAccessQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether the authenticated customer can request platform-managed company research
+ */
+
+export function useGetCompanyResearchRequestAccess<TData = Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCompanyResearchRequestAccess>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCompanyResearchRequestAccessQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestGlobalCompanyResearchUrl = (globalCompanyId: string,) => {
+
+
+
+
+  return `/api/company-intelligence/${globalCompanyId}/requests`
+}
+
+/**
+ * @summary Request superadmin-managed research for an unresearched global company
+ */
+export const requestGlobalCompanyResearch = async (globalCompanyId: string, options?: Parameters<typeof customFetch>[1]): Promise<CompanyResearchRequestResponse> => {
+
+  return customFetch<CompanyResearchRequestResponse>(getRequestGlobalCompanyResearchUrl(globalCompanyId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRequestGlobalCompanyResearchMutationKey = () => ['requestGlobalCompanyResearch'] as const;
+
+export const getRequestGlobalCompanyResearchMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestGlobalCompanyResearch>>, TError,RequestGlobalCompanyResearchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestGlobalCompanyResearch>>, TError,RequestGlobalCompanyResearchMutationVariables, TContext> => {
+
+const mutationKey = getRequestGlobalCompanyResearchMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestGlobalCompanyResearch>>, RequestGlobalCompanyResearchMutationVariables> = (props) => {
+          const {globalCompanyId} = props ?? {};
+
+          return  requestGlobalCompanyResearch(globalCompanyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestGlobalCompanyResearchMutationResult = NonNullable<Awaited<ReturnType<typeof requestGlobalCompanyResearch>>>
+
+    export type RequestGlobalCompanyResearchMutationError = ErrorType<ApiError>
+    export type RequestGlobalCompanyResearchMutationVariables = {globalCompanyId: string}
+
+    /**
+ * @summary Request superadmin-managed research for an unresearched global company
+ */
+export const useRequestGlobalCompanyResearch = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestGlobalCompanyResearch>>, TError,RequestGlobalCompanyResearchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestGlobalCompanyResearch>>,
+        TError,
+        RequestGlobalCompanyResearchMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestGlobalCompanyResearchMutationOptions(options));
+    }
+
+export const getRequestPrivateCompanyResearchUrl = (companyId: string,) => {
+
+
+
+
+  return `/api/companies/${companyId}/research-requests`
+}
+
+/**
+ * @summary Convert a private company profile into a global profile and request research
+ */
+export const requestPrivateCompanyResearch = async (companyId: string, options?: Parameters<typeof customFetch>[1]): Promise<CompanyResearchRequestResponse> => {
+
+  return customFetch<CompanyResearchRequestResponse>(getRequestPrivateCompanyResearchUrl(companyId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRequestPrivateCompanyResearchMutationKey = () => ['requestPrivateCompanyResearch'] as const;
+
+export const getRequestPrivateCompanyResearchMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPrivateCompanyResearch>>, TError,RequestPrivateCompanyResearchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPrivateCompanyResearch>>, TError,RequestPrivateCompanyResearchMutationVariables, TContext> => {
+
+const mutationKey = getRequestPrivateCompanyResearchMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPrivateCompanyResearch>>, RequestPrivateCompanyResearchMutationVariables> = (props) => {
+          const {companyId} = props ?? {};
+
+          return  requestPrivateCompanyResearch(companyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPrivateCompanyResearchMutationResult = NonNullable<Awaited<ReturnType<typeof requestPrivateCompanyResearch>>>
+
+    export type RequestPrivateCompanyResearchMutationError = ErrorType<ApiError>
+    export type RequestPrivateCompanyResearchMutationVariables = {companyId: string}
+
+    /**
+ * @summary Convert a private company profile into a global profile and request research
+ */
+export const useRequestPrivateCompanyResearch = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPrivateCompanyResearch>>, TError,RequestPrivateCompanyResearchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestPrivateCompanyResearch>>,
+        TError,
+        RequestPrivateCompanyResearchMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestPrivateCompanyResearchMutationOptions(options));
+    }
+
 export const getGetCompanyIntelligenceUrl = (globalCompanyId: string,) => {
 
 
@@ -5478,6 +5708,164 @@ export function useGetCompanyResearchUsage<TData = Awaited<ReturnType<typeof get
 
 
 
+
+export const getListAdminCompanyResearchRequestsUrl = (params?: ListAdminCompanyResearchRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/company-intelligence/requests?${stringifiedParams}` : `/api/admin/company-intelligence/requests`
+}
+
+/**
+ * @summary List customer requests for company intelligence
+ */
+export const listAdminCompanyResearchRequests = async (params?: ListAdminCompanyResearchRequestsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminCompanyResearchRequests> => {
+
+  return customFetch<AdminCompanyResearchRequests>(getListAdminCompanyResearchRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminCompanyResearchRequestsQueryKey = (params?: ListAdminCompanyResearchRequestsParams,) => {
+    return [
+    `/api/admin/company-intelligence/requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminCompanyResearchRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>, TError = ErrorType<unknown>>(params?: ListAdminCompanyResearchRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminCompanyResearchRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>> = ({ signal }) => listAdminCompanyResearchRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminCompanyResearchRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>>
+export type ListAdminCompanyResearchRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List customer requests for company intelligence
+ */
+
+export function useListAdminCompanyResearchRequests<TData = Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>, TError = ErrorType<unknown>>(
+ params?: ListAdminCompanyResearchRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminCompanyResearchRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminCompanyResearchRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getStartAdminCompanyResearchRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/admin/company-intelligence/requests/${requestId}/start`
+}
+
+/**
+ * @summary Start or retry research for a customer request without consuming customer credits
+ */
+export const startAdminCompanyResearchRequest = async (requestId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminCompanyResearchRequestStart> => {
+
+  return customFetch<AdminCompanyResearchRequestStart>(getStartAdminCompanyResearchRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartAdminCompanyResearchRequestMutationKey = () => ['startAdminCompanyResearchRequest'] as const;
+
+export const getStartAdminCompanyResearchRequestMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startAdminCompanyResearchRequest>>, TError,StartAdminCompanyResearchRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startAdminCompanyResearchRequest>>, TError,StartAdminCompanyResearchRequestMutationVariables, TContext> => {
+
+const mutationKey = getStartAdminCompanyResearchRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startAdminCompanyResearchRequest>>, StartAdminCompanyResearchRequestMutationVariables> = (props) => {
+          const {requestId} = props ?? {};
+
+          return  startAdminCompanyResearchRequest(requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartAdminCompanyResearchRequestMutationResult = NonNullable<Awaited<ReturnType<typeof startAdminCompanyResearchRequest>>>
+
+    export type StartAdminCompanyResearchRequestMutationError = ErrorType<ApiError>
+    export type StartAdminCompanyResearchRequestMutationVariables = {requestId: string}
+
+    /**
+ * @summary Start or retry research for a customer request without consuming customer credits
+ */
+export const useStartAdminCompanyResearchRequest = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startAdminCompanyResearchRequest>>, TError,StartAdminCompanyResearchRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startAdminCompanyResearchRequest>>,
+        TError,
+        StartAdminCompanyResearchRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getStartAdminCompanyResearchRequestMutationOptions(options));
+    }
 
 export const getListAdminGlobalCompaniesUrl = (params?: ListAdminGlobalCompaniesParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
-import { addOnEntitlementsTable, auditLogsTable, companyIntelligenceTable, companyResearchJobsTable, db, globalCompaniesTable, paymentsTable, subscriptionPackagesTable, userSubscriptionsTable, usersTable, type CompanyIntelligence, type CompanyResearchJob } from "@workspace/db";
+import { addOnEntitlementsTable, auditLogsTable, companyIntelligenceTable, companyResearchJobsTable, companyResearchRequestsTable, db, globalCompaniesTable, paymentsTable, platformNotificationRecipientsTable, platformNotificationsTable, subscriptionPackagesTable, userSubscriptionsTable, usersTable, type CompanyIntelligence, type CompanyResearchJob, type CompanyResearchRequest } from "@workspace/db";
 import { contactIntentAnalysesTable } from "@workspace/db/schema";
 import { getAIProviderConfigurationStatus, getStoredAIProviderApiKey } from "./ai-provider-configuration";
 import type { AIProviderId } from "./ai-provider-client";
@@ -12,6 +12,36 @@ import { prorateAddOnAllowance } from "./add-on-entitlements";
 
 export function presentResearchJob(job: CompanyResearchJob) {
   return { id: job.id, status: job.status, scope: researchScope(job.settings), stage: job.stage, createdAt: job.createdAt.toISOString(), startedAt: job.startedAt?.toISOString() ?? null, completedAt: job.completedAt?.toISOString() ?? null, error: job.error };
+}
+
+export function presentCompanyResearchRequest(request: CompanyResearchRequest, companyName: string) {
+  return {
+    id: request.id,
+    globalCompanyId: request.globalCompanyId,
+    companyName,
+    status: request.status,
+    researchJobId: request.researchJobId,
+    createdAt: request.createdAt.toISOString(),
+    startedAt: request.startedAt?.toISOString() ?? null,
+    completedAt: request.completedAt?.toISOString() ?? null,
+  };
+}
+
+export async function hasPaidPrimaryResearchRequestAccess(userId: string, now = new Date()) {
+  const [active] = await db.select({ id: userSubscriptionsTable.id })
+    .from(userSubscriptionsTable)
+    .innerJoin(subscriptionPackagesTable, eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id))
+    .where(and(
+      eq(userSubscriptionsTable.userId, userId),
+      eq(userSubscriptionsTable.status, "active"),
+      lte(userSubscriptionsTable.startsAt, now),
+      gt(userSubscriptionsTable.endsAt, now),
+      eq(subscriptionPackagesTable.packageType, "primary"),
+      gt(subscriptionPackagesTable.amountMinor, 0),
+    ))
+    .limit(1);
+  // Gifted premium terms have no payment row, but retain their paid package price.
+  return Boolean(active);
 }
 
 function researchScope(value: unknown): CompanyResearchScope {
@@ -197,6 +227,7 @@ export async function readCompanyIntelligence(companyId: string) {
     summary: { status: latestJob?.status ?? "not_researched", freshness: researchFreshness(current?.researchedAt ?? null, settings.freshDays, settings.agingDays), researchedAt: current?.researchedAt.toISOString() ?? null, sourceCount: current?.sourceCount ?? 0 },
     current: current ? presentIntelligenceVersion(current) : null,
     latestJob: latestJob ? presentResearchJob(latestJob) : null,
+    researchRequest: null,
     history: history.map(row => presentIntelligenceVersion(row, false)),
     researchCreditCost: settings.researchCreditCost, maxResearchDepth: settings.maxResearchDepth,
     deepResearchEnabled: settings.deepResearchEnabled, researchAvailable: provider.configured,
@@ -205,7 +236,7 @@ export async function readCompanyIntelligence(companyId: string) {
 
 export async function enqueueCompanyResearch(input: {
   globalCompanyId: string; userId: string | null; tenantUserId?: string; provider: AIProviderId; selectedModel: string;
-  settings: ResearchSettings; depth: number; overrideFresh: boolean; scope?: CompanyResearchScope; ipAddress?: string;
+  settings: ResearchSettings; depth: number; overrideFresh: boolean; scope?: CompanyResearchScope; ipAddress?: string; requestId?: string;
 }) {
   return db.transaction(async tx => {
     const [company] = await tx.select({ id: globalCompaniesTable.id }).from(globalCompaniesTable).where(eq(globalCompaniesTable.id, input.globalCompanyId)).for("update");
@@ -293,6 +324,18 @@ export async function enqueueCompanyResearch(input: {
       globalCompanyId: company.id, requestedBy: input.userId, status: "queued", stage: "queued", depth: input.depth,
       creditCost: input.settings.researchCreditCost, settings: { ...input.settings, researchScope: input.scope ?? "full" }, provider: input.provider, model: input.settings.preferredModel ?? input.selectedModel,
     }).returning();
+    if (input.requestId) {
+      const [request] = await tx.update(companyResearchRequestsTable).set({
+        status: "in_progress",
+        researchJobId: job!.id,
+        startedAt: new Date(),
+      }).where(and(
+        eq(companyResearchRequestsTable.id, input.requestId),
+        eq(companyResearchRequestsTable.globalCompanyId, company.id),
+        inArray(companyResearchRequestsTable.status, ["requested", "failed"]),
+      )).returning({ id: companyResearchRequestsTable.id });
+      if (!request) throw new Error("The company research request is no longer available.");
+    }
     await tx.insert(auditLogsTable).values({
       actorId: input.userId, action: "company_intelligence.research_requested", entity: "global_company", entityId: company.id,
       ipAddress: input.ipAddress?.slice(0, 80) ?? null, metadata: { depth: input.depth },
@@ -385,6 +428,30 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
       });
       const cost = model === job.model ? estimateResearchCost(usage, settings) : { usd: null, inr: null };
       await tx.update(companyResearchJobsTable).set({ status: "completed", stage: "completed", completedAt, model, ...usage, sourceCount: evidence.length, estimatedCostUsd: cost.usd, estimatedCostInr: cost.inr, error: null }).where(eq(companyResearchJobsTable.id, job.id));
+       const completedRequests = await tx.update(companyResearchRequestsTable).set({
+         status: "completed",
+         researchJobId: job.id,
+         completedAt,
+       }).where(and(
+         eq(companyResearchRequestsTable.globalCompanyId, company.id),
+          inArray(companyResearchRequestsTable.status, ["requested", "in_progress", "failed"]),
+       )).returning({ requestedBy: companyResearchRequestsTable.requestedBy });
+      for (const requestedBy of new Set(completedRequests.map(request => request.requestedBy))) {
+         const [notification] = await tx.insert(platformNotificationsTable).values({
+           title: "Company research completed",
+            message: `Company intelligence research for ${company.companyName} is complete and available in your workspace.`,
+           audience: "focused",
+           enabled: true,
+           startsAt: completedAt,
+           expiresAt: new Date(completedAt.getTime() + 5 * 365 * 24 * 60 * 60 * 1000),
+         }).returning({ id: platformNotificationsTable.id });
+         if (notification) {
+           await tx.insert(platformNotificationRecipientsTable).values({
+             notificationId: notification.id,
+             userId: requestedBy,
+           }).onConflictDoNothing();
+         }
+       }
     });
   } catch (error) {
     const validationPath = error && typeof error === "object" && "issues" in error && Array.isArray(error.issues)
@@ -396,6 +463,10 @@ export async function executeResearchJob(job: CompanyResearchJob, dependencies: 
           ? `The research response did not match required fields (${validationPath}). Existing intelligence has been retained; retry the research.`
           : "Research could not be completed because the evidence or JSON failed validation. Existing intelligence has been retained.";
     await db.update(companyResearchJobsTable).set({ status: "failed", stage: "failed", completedAt: new Date(), error: message, model, ...usage, estimatedCostUsd: null, estimatedCostInr: null }).where(and(eq(companyResearchJobsTable.id, job.id), eq(companyResearchJobsTable.status, "running")));
+    await db.update(companyResearchRequestsTable).set({ status: "failed" }).where(and(
+      eq(companyResearchRequestsTable.researchJobId, job.id),
+      eq(companyResearchRequestsTable.status, "in_progress"),
+    ));
     logger.warn({ errorName: error instanceof Error ? error.name : "UnknownError", ...(validationPath ? { validationPath } : {}) }, "Company research failed; previous intelligence retained");
   }
 }
@@ -410,7 +481,13 @@ export function startCompanyResearchWorker(): void {
     busy = true;
     try {
       // Crashed/interrupted jobs are failed, never silently re-researched. A user must retry.
-      await db.update(companyResearchJobsTable).set({ status: "failed", stage: "failed", completedAt: new Date(), error: "Research was interrupted. Existing intelligence has been retained. Please retry explicitly." }).where(and(eq(companyResearchJobsTable.status, "running"), lt(companyResearchJobsTable.startedAt, new Date(Date.now() - 15 * 60_000))));
+      const interruptedJobs = await db.update(companyResearchJobsTable).set({ status: "failed", stage: "failed", completedAt: new Date(), error: "Research was interrupted. Existing intelligence has been retained. Please retry explicitly." }).where(and(eq(companyResearchJobsTable.status, "running"), lt(companyResearchJobsTable.startedAt, new Date(Date.now() - 15 * 60_000)))).returning({ id: companyResearchJobsTable.id });
+      if (interruptedJobs.length) {
+        await db.update(companyResearchRequestsTable).set({ status: "failed" }).where(and(
+          inArray(companyResearchRequestsTable.researchJobId, interruptedJobs.map(({ id }) => id)),
+          eq(companyResearchRequestsTable.status, "in_progress"),
+        ));
+      }
       const [next] = await db.select({ id: companyResearchJobsTable.id }).from(companyResearchJobsTable).where(eq(companyResearchJobsTable.status, "queued")).orderBy(companyResearchJobsTable.createdAt).limit(1);
       if (!next) return;
       const [claimed] = await db.update(companyResearchJobsTable).set({ status: "running", stage: "loading_company", startedAt: new Date() }).where(and(eq(companyResearchJobsTable.id, next.id), eq(companyResearchJobsTable.status, "queued"))).returning();
