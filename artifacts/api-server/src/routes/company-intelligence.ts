@@ -297,7 +297,7 @@ router.get("/admin/company-intelligence/requests", requireSuperadmin, async (req
   const parsed = ListAdminCompanyResearchRequestsQueryParams.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request page." }); return; }
   const { page, pageSize } = parsed.data;
-  const [rows, [totalRow]] = await Promise.all([
+  const [rows, [totalRow], [pendingCountRow]] = await Promise.all([
     db.select({
       request: companyResearchRequestsTable,
       companyName: globalCompaniesTable.companyName,
@@ -310,6 +310,8 @@ router.get("/admin/company-intelligence/requests", requireSuperadmin, async (req
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ total: count() }).from(companyResearchRequestsTable),
+    db.select({ total: count() }).from(companyResearchRequestsTable)
+      .where(eq(companyResearchRequestsTable.status, "requested")),
   ]);
   res.json(ListAdminCompanyResearchRequestsResponse.parse({
     items: rows.map(({ request, companyName, requesterName, requesterEmail }) => ({
@@ -318,6 +320,7 @@ router.get("/admin/company-intelligence/requests", requireSuperadmin, async (req
       requesterEmail,
     })),
     total: Number(totalRow?.total ?? 0),
+    pendingCount: Number(pendingCountRow?.total ?? 0),
     page,
     pageSize,
   }));

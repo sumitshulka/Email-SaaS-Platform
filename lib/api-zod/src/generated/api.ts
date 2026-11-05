@@ -2875,6 +2875,8 @@ export const ListAdminCompanyResearchRequestsQueryParams = zod.object({
 
 export const listAdminCompanyResearchRequestsResponseTotalMin = 0;
 
+export const listAdminCompanyResearchRequestsResponsePendingCountMin = 0;
+
 
 export const listAdminCompanyResearchRequestsResponsePageSizeMax = 100;
 
@@ -2895,6 +2897,7 @@ export const ListAdminCompanyResearchRequestsResponse = zod.object({
   "requesterEmail": zod.string().email()
 }))),
   "total": zod.number().int().min(listAdminCompanyResearchRequestsResponseTotalMin),
+  "pendingCount": zod.number().int().min(listAdminCompanyResearchRequestsResponsePendingCountMin).describe('Requests waiting for an administrator to start research'),
   "page": zod.number().int().min(1),
   "pageSize": zod.number().int().min(1).max(listAdminCompanyResearchRequestsResponsePageSizeMax)
 })

@@ -188,10 +188,19 @@ function ResearchRequests() {
 export function AdminCompanyIntelligencePage() {
   const [tab, setTab] = useState<'usage' | 'requests' | 'settings'>('usage');
   const settings = useGetCompanyResearchSettings({ query: { queryKey: getGetCompanyResearchSettingsQueryKey(), staleTime: 30_000 } });
+  const requestCountParams = { page: 1, pageSize: 1 };
+  const requestCounts = useListAdminCompanyResearchRequests(requestCountParams, {
+    query: {
+      queryKey: getListAdminCompanyResearchRequestsQueryKey(requestCountParams),
+      staleTime: 15_000,
+      refetchInterval: 20_000,
+    },
+  });
+  const pendingRequestCount = requestCounts.data?.pendingCount;
   return <main className="fade-in max-w-[1180px]">
     <Link href="/admin/global-companies" data-testid="link-back-global-companies" className="mb-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#55708e] no-underline hover:text-[#174f99]"><ArrowLeft className="h-4 w-4" />Global companies</Link>
     <header className="mb-6"><div className="mono mb-2 text-[10px] uppercase tracking-[.16em] text-[#7d8794]">PLATFORM / COMPANY INTELLIGENCE</div><h1 className="display text-[30px] font-bold text-[#172334]">Company intelligence</h1><p className="mt-2 max-w-2xl text-[13px] text-[#687484]">Monitor research usage, customer requests, and research settings.</p></header>
-    <div role="tablist" className="mb-5 flex gap-1 border-b border-[#e3e7eb]">{(['usage', 'requests', 'settings'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold ${tab === t ? 'border-[#174f99] text-[#174f99]' : 'border-transparent text-[#687484]'}`}>{t === 'usage' ? 'Usage and jobs' : t === 'requests' ? 'Customer requests' : 'Settings'}</button>)}</div>
+    <div role="tablist" className="mb-5 flex gap-1 border-b border-[#e3e7eb]">{(['usage', 'requests', 'settings'] as const).map(t => <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`} onClick={() => setTab(t)} className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] font-semibold ${tab === t ? 'border-[#174f99] text-[#174f99]' : 'border-transparent text-[#687484]'}`}>{t === 'usage' ? 'Usage and jobs' : t === 'requests' ? <span className="inline-flex items-center gap-2">Customer requests<span data-testid="badge-pending-research-requests" aria-label={`${pendingRequestCount ?? 'Loading'} pending requests`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#fff1d8] px-1.5 py-0.5 text-[10px] font-bold leading-none text-[#805923]">{pendingRequestCount ?? '…'}</span></span> : 'Settings'}</button>)}</div>
     {tab === 'usage' ? <Usage /> : tab === 'requests' ? <ResearchRequests /> : settings.isLoading ? <div data-testid="loading-settings" className="h-64 animate-pulse rounded-lg bg-[#f1f3f5]" /> : settings.isError || !settings.data ? <div role="alert" data-testid="error-settings" className={`${card} flex items-center justify-between p-5 text-[13px]`}>Settings could not be loaded<button type="button" data-testid="button-retry-settings" onClick={() => void settings.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-xs font-semibold">Retry</button></div> : <SettingsForm settings={settings.data} />}
   </main>;
 }

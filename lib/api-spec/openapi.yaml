@@ -5605,9 +5605,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AdminCompanyResearchRequest" }
         total: { type: integer, minimum: 0 }
+        pendingCount: { type: integer, minimum: 0, description: Requests waiting for an administrator to start research }
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 1, maximum: 100 }
-      required: [items, total, page, pageSize]
+      required: [items, total, pendingCount, page, pageSize]
     AdminCompanyResearchRequestStart:
       type: object
       properties:

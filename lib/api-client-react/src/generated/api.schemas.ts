@@ -1618,6 +1618,11 @@ export interface AdminCompanyResearchRequests {
   items: AdminCompanyResearchRequest[];
   /** @minimum 0 */
   total: number;
+  /**
+     * Requests waiting for an administrator to start research
+     * @minimum 0
+     */
+  pendingCount: number;
   /** @minimum 1 */
   page: number;
   /**
