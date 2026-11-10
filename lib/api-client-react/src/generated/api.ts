@@ -66,6 +66,7 @@ import type {
   CampaignInput,
   CampaignObjectStorageSettings,
   CampaignObjectStorageSettingsInput,
+  CampaignObjectStorageTestResult,
   CampaignPauseInput,
   CampaignPauseResponse,
   CampaignPreviewInput,
@@ -14098,6 +14099,80 @@ export const useUpdateCampaignObjectStorageSettings = <TError = ErrorType<ApiErr
         TContext
       > => {
       return useMutation(getUpdateCampaignObjectStorageSettingsMutationOptions(options));
+    }
+
+export const getTestCampaignObjectStorageConnectionUrl = () => {
+
+
+
+
+  return `/api/admin/settings/object-storage/test`
+}
+
+/**
+ * @summary Test campaign object-storage upload and download access
+ */
+export const testCampaignObjectStorageConnection = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignObjectStorageTestResult> => {
+
+  return customFetch<CampaignObjectStorageTestResult>(getTestCampaignObjectStorageConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestCampaignObjectStorageConnectionMutationKey = () => ['testCampaignObjectStorageConnection'] as const;
+
+export const getTestCampaignObjectStorageConnectionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testCampaignObjectStorageConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testCampaignObjectStorageConnection>>, TError,void, TContext> => {
+
+const mutationKey = getTestCampaignObjectStorageConnectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testCampaignObjectStorageConnection>>, void> = () => {
+
+
+          return  testCampaignObjectStorageConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestCampaignObjectStorageConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testCampaignObjectStorageConnection>>>
+
+    export type TestCampaignObjectStorageConnectionMutationError = ErrorType<ApiError>
+
+
+    /**
+ * @summary Test campaign object-storage upload and download access
+ */
+export const useTestCampaignObjectStorageConnection = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testCampaignObjectStorageConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testCampaignObjectStorageConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestCampaignObjectStorageConnectionMutationOptions(options));
     }
 
 export const getGetGoogleOAuthSettingsUrl = () => {

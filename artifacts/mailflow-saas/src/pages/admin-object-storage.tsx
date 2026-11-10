@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getCampaignObjectStorageSettings,
+  testCampaignObjectStorageConnection,
   updateCampaignObjectStorageSettings,
   type CampaignObjectStorageSettingsInput,
 } from "@workspace/api-client-react";
@@ -16,12 +17,25 @@ export default function AdminObjectStoragePage() {
     accessKeyId: "", secretAccessKey: "",
   });
   const [message, setMessage] = useState("");
+  const [testMessage, setTestMessage] = useState("");
+  const [testCleanupWarning, setTestCleanupWarning] = useState("");
   const save = useMutation({
     mutationFn: (input: CampaignObjectStorageSettingsInput) => updateCampaignObjectStorageSettings(input),
     onSuccess: async () => {
       setForm(current => ({ ...current, accessKeyId: "", secretAccessKey: "" }));
       setMessage("Storage settings saved. Credentials are encrypted and never returned to this page.");
       await queryClient.invalidateQueries({ queryKey: ["admin", "campaign-object-storage"] });
+    },
+  });
+  const testStorage = useMutation({
+    mutationFn: () => testCampaignObjectStorageConnection(),
+    onSuccess: result => {
+      setTestMessage(result.message);
+      setTestCleanupWarning(result.cleanupWarning ?? "");
+    },
+    onError: error => {
+      setTestMessage(error instanceof Error ? error.message : "Storage test failed. Check the API server log for details.");
+      setTestCleanupWarning("");
     },
   });
   useEffect(() => {
@@ -46,6 +60,15 @@ export default function AdminObjectStoragePage() {
       ...(form.secretAccessKey?.trim() ? { secretAccessKey: form.secretAccessKey.trim() } : {}),
     });
   };
+  const settingsChanged = Boolean(query.data && (
+    form.endpoint !== query.data.endpoint ||
+    form.region !== (query.data.region ?? "us-east-1") ||
+    form.bucket !== (query.data.bucket ?? "") ||
+    form.prefix !== (query.data.prefix ?? "mailflow") ||
+    form.forcePathStyle !== query.data.forcePathStyle ||
+    form.accessKeyId?.trim() ||
+    form.secretAccessKey?.trim()
+  ));
 
   if (query.isLoading) return <main className="mx-auto max-w-4xl p-6 text-sm">Loading storage settings…</main>;
   if (query.isError || !query.data) return <main className="mx-auto max-w-4xl p-6 text-sm text-red-700">Could not load storage settings. Reload this page to retry.</main>;
@@ -60,7 +83,7 @@ export default function AdminObjectStoragePage() {
       <div className="mb-4 rounded-md bg-[#f5f8fb] p-3 text-xs leading-5 text-[#586778]">
         Status: <strong>{query.data.configured ? "Configured" : "Not configured"}</strong>
         {query.data.configured && <span> · Saved access key and secret are masked; leave both fields blank to keep them.</span>}
-        <p className="mt-1">For encrypted storage credentials, your cloud deployment must provide APP_ENCRYPTION_KEY or SESSION_SECRET. Give the key permission to put and read objects under this prefix. Changing bucket or prefix does not move existing PDFs. Configure bucket CORS to allow PUT requests and the Content-Type header from your app’s production origin; use HTTPS for endpoints outside a private network.</p>
+        <p className="mt-1">The production API needs a stable APP_ENCRYPTION_KEY or SESSION_SECRET; it must match the key used when these credentials were saved. If the key changes, re-enter both storage credentials here. Grant the key PutObject and GetObject access under this prefix. Uploads are sent from the API server, so bucket CORS is not required; ensure that server can reach the endpoint over HTTPS. The connection test also attempts to delete its probe object; if DeleteObject is not allowed, it warns that one probe object remains. Changing bucket or prefix does not move existing PDFs.</p>
       </div>
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         <label className="text-xs font-medium text-[#344154]">S3 endpoint URL <span className="font-normal text-[#7b8794]">(blank for AWS S3)</span><input className={inputClass} type="url" value={form.endpoint ?? ""} onChange={e => setForm(v => ({ ...v, endpoint: e.target.value || null }))} placeholder="https://s3.example.com" /></label>
@@ -71,9 +94,15 @@ export default function AdminObjectStoragePage() {
         <label className="text-xs font-medium text-[#344154]">Secret access key<input className={inputClass} type="password" autoComplete="new-password" value={form.secretAccessKey ?? ""} onChange={e => setForm(v => ({ ...v, secretAccessKey: e.target.value }))} placeholder={query.data.secretAccessKeyConfigured ? "Saved; leave blank to keep" : "Secret access key"} /></label>
         <label className="flex items-center gap-2 text-xs text-[#344154] sm:col-span-2"><input type="checkbox" checked={form.forcePathStyle} onChange={e => setForm(v => ({ ...v, forcePathStyle: e.target.checked }))} />Use path-style requests (commonly required by MinIO and some S3-compatible services)</label>
         <div className="sm:col-span-2">
-          <button disabled={save.isPending} className="rounded-md bg-[#174f99] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{save.isPending ? "Saving…" : "Save storage settings"}</button>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={save.isPending} className="rounded-md bg-[#174f99] px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{save.isPending ? "Saving…" : "Save storage settings"}</button>
+            <button type="button" data-testid="button-test-object-storage" disabled={!query.data.configured || save.isPending || testStorage.isPending || settingsChanged} onClick={() => { setTestMessage(""); setTestCleanupWarning(""); testStorage.mutate(); }} className="rounded-md border border-[#c9d7e5] bg-white px-4 py-2.5 text-xs font-semibold text-[#245b9b] disabled:cursor-not-allowed disabled:opacity-50">{testStorage.isPending ? "Testing upload and download…" : "Test storage connection"}</button>
+          </div>
           {message && <p role="status" className="mt-3 text-xs text-green-800">{message}</p>}
           {save.isError && <p role="alert" className="mt-3 text-xs text-red-700">{save.error instanceof Error ? save.error.message : "Could not save storage settings."}</p>}
+          {settingsChanged && <p className="mt-3 text-xs text-[#7a6a32]">Save the current settings before testing them.</p>}
+          {testMessage && <p role={testStorage.isError ? "alert" : "status"} data-testid="status-object-storage-test" className={`mt-3 rounded-md px-3 py-2 text-xs ${testStorage.isError ? "bg-[#fff1f0] text-[#883f39]" : "bg-[#edf8f1] text-[#326847]"}`}>{testMessage}</p>}
+          {testCleanupWarning && <p role="status" data-testid="warning-object-storage-test-cleanup" className="mt-2 rounded-md bg-[#fff8e9] px-3 py-2 text-xs text-[#805923]">{testCleanupWarning}</p>}
         </div>
       </form>
     </section>

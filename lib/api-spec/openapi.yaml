@@ -4091,7 +4091,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/CampaignObjectStorageTestResult"
         "400":
-          description: Storage is not configured or the test failed
+          description: Campaign object storage is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: The production API could not complete an S3 operation
           content:
             application/json:
               schema:

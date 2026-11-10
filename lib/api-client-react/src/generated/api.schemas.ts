@@ -4632,6 +4632,13 @@ export interface CampaignObjectStorageSettingsInput {
   secretAccessKey?: string;
 }
 
+export interface CampaignObjectStorageTestResult {
+  success: true;
+  message: string;
+  /** @nullable */
+  cleanupWarning: string | null;
+}
+
 export type AIProviderType = typeof AIProviderType[keyof typeof AIProviderType];
 
 

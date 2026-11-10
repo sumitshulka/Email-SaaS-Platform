@@ -5687,7 +5687,7 @@ router.post(
     } catch (error) {
       req.log.error({ err: error }, "Campaign PDF upload failed");
       res.status(500).json({
-        error: "Could not store the PDF. Check the storage endpoint and bucket write permissions.",
+        error: "Could not store the PDF. Ask your superadmin to test the campaign file storage connection.",
         code: "ATTACHMENT_STORAGE_FAILURE",
       });
     }

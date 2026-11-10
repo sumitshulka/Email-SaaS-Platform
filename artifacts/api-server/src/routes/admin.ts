@@ -19,6 +19,7 @@ import {
   GetAdminSettingsResponse,
   GetApplicationEmailSettingsResponse,
   GetCampaignObjectStorageSettingsResponse,
+  TestCampaignObjectStorageConnectionResponse,
   GetGoogleOAuthSettingsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
@@ -72,6 +73,7 @@ import {
   saveGoogleOAuthConfiguration,
 } from "../lib/google-oauth-configuration";
 import { requireSuperadmin } from "../lib/session";
+import { testCampaignAttachmentStorage } from "../lib/campaign-attachments";
 
 const router: IRouter = Router();
 
@@ -967,6 +969,20 @@ router.put("/admin/settings/object-storage", requireSuperadmin, async (req, res)
     secretAccessKeyConfigured: true,
     updatedAt: new Date().toISOString(),
   }));
+});
+
+router.post("/admin/settings/object-storage/test", requireSuperadmin, async (req, res): Promise<void> => {
+  try {
+    const result = await testCampaignAttachmentStorage();
+    res.json(TestCampaignObjectStorageConnectionResponse.parse(result));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Storage test failed. Check the API server log for details.";
+    req.log.error({ err: error }, "Campaign object-storage connectivity test failed");
+    res.status(message.includes("not configured") ? 400 : 502).json({
+      error: message,
+      code: "OBJECT_STORAGE_TEST_FAILED",
+    });
+  }
 });
 
 router.post("/admin/settings/email/test", requireSuperadmin, async (req, res): Promise<void> => {

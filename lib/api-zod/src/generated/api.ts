@@ -7523,6 +7523,16 @@ export const UpdateCampaignObjectStorageSettingsResponse = zod.object({
 
 
 /**
+ * @summary Test campaign object-storage upload and download access
+ */
+export const TestCampaignObjectStorageConnectionResponse = zod.object({
+  "success": zod.literal(true),
+  "message": zod.string(),
+  "cleanupWarning": zod.string().nullable()
+})
+
+
+/**
  * @summary Get masked Google OAuth configuration
  */
 export const GetGoogleOAuthSettingsResponse = zod.object({

@@ -92,6 +92,7 @@ export * from './campaignHistorySummary';
 export * from './campaignInput';
 export * from './campaignObjectStorageSettings';
 export * from './campaignObjectStorageSettingsInput';
+export * from './campaignObjectStorageTestResult';
 export * from './campaignPacing';
 export * from './campaignPauseInput';
 export * from './campaignPauseResponse';

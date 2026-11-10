@@ -26,10 +26,23 @@ async function getStorageSettings(): Promise<StoredS3Settings | null> {
     return null;
   }
   const settings = value as Partial<StoredS3Settings>;
-  if (!settings.bucket || !settings.region || !settings.accessKeyIdEncrypted || !settings.secretAccessKeyEncrypted) {
+  if (
+    typeof settings.bucket !== "string" || !settings.bucket.trim() ||
+    typeof settings.region !== "string" || !settings.region.trim() ||
+    typeof settings.accessKeyIdEncrypted !== "string" || !settings.accessKeyIdEncrypted ||
+    typeof settings.secretAccessKeyEncrypted !== "string" || !settings.secretAccessKeyEncrypted
+  ) {
     return null;
   }
-  return settings as StoredS3Settings;
+  return {
+    endpoint: typeof settings.endpoint === "string" && settings.endpoint.trim() ? settings.endpoint.trim() : null,
+    region: settings.region.trim(),
+    bucket: settings.bucket.trim(),
+    prefix: typeof settings.prefix === "string" ? settings.prefix : "mailflow",
+    forcePathStyle: settings.forcePathStyle === true,
+    accessKeyIdEncrypted: settings.accessKeyIdEncrypted,
+    secretAccessKeyEncrypted: settings.secretAccessKeyEncrypted,
+  };
 }
 
 export async function isCampaignAttachmentStorageConfigured(): Promise<boolean> {
@@ -151,7 +164,8 @@ function explainStorageTestFailure(error: unknown): Error {
   if (code === "AccessDenied" || code === "AllAccessDisabled" || status === 403) {
     return new Error("The storage service denied an operation. Check the bucket policy and grant this key PutObject and GetObject access for the configured prefix.");
   }
-  if (["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code)) {
+  if (["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code) ||
+    /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|timed out|certificate|TLS/i.test(message)) {
     return new Error("The production API could not reach the storage endpoint. Check DNS, outbound network access, TLS, and the endpoint URL from the API host.");
   }
   const safeCode = code.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
