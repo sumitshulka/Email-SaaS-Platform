@@ -71,7 +71,9 @@ app.use(
     const bodyParserError = error && typeof error === "object" ? error as { type?: unknown } : null;
     if (bodyParserError?.type === "entity.too.large") {
       res.status(413).json({
-        error: "PDF uploads are limited to 5 MB; the production reverse proxy must allow at least 6 MB.",
+        error: req.path === "/api/campaigns/attachments/upload"
+          ? "PDF uploads are limited to 5 MB; the production reverse proxy must allow at least 6 MB."
+          : "This request exceeds the allowed size for this endpoint.",
         code: "PAYLOAD_TOO_LARGE",
       });
       return;
