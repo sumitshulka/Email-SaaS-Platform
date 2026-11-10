@@ -2250,8 +2250,11 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
         body: file,
       });
       if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error('The production server rejected this upload (HTTP 413). Its reverse-proxy request limit must allow at least 6 MB for campaign PDFs.');
+        }
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.error ?? 'Could not store the PDF.');
+        throw new Error(error.error ?? `The upload failed (HTTP ${response.status}). Check the production API and reverse-proxy logs.`);
       }
       const attachment = await response.json();
       setForm(current => ({

@@ -5670,7 +5670,9 @@ router.get(
 router.post(
   "/campaigns/attachments/upload",
   requireUserRole,
-  raw({ type: "application/pdf", limit: "5mb" }),
+  // The authenticated route validates the PDF signature itself; accept binary
+  // content types that a reverse proxy may normalize, not just application/pdf.
+  raw({ type: "*/*", limit: "5mb" }),
   async (req, res): Promise<void> => {
     const name = typeof req.query.name === "string" ? req.query.name : "";
     const bytes = Buffer.isBuffer(req.body) ? req.body : null;

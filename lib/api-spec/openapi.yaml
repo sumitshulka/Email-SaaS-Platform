@@ -2913,6 +2913,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CampaignAttachment"
+        "413":
+          description: The upload exceeds the API body-size limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /campaigns/attachments/upload-url:
     post:
       operationId: requestCampaignAttachmentUpload

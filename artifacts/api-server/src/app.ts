@@ -68,6 +68,14 @@ app.use(
       "Unhandled API error",
     );
     if (res.headersSent) return;
+    const bodyParserError = error && typeof error === "object" ? error as { type?: unknown } : null;
+    if (bodyParserError?.type === "entity.too.large") {
+      res.status(413).json({
+        error: "PDF uploads are limited to 5 MB; the production reverse proxy must allow at least 6 MB.",
+        code: "PAYLOAD_TOO_LARGE",
+      });
+      return;
+    }
     res.status(500).json({
       error: "The request could not be completed.",
       code: "INTERNAL_ERROR",
