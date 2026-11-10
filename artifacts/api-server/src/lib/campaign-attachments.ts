@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { GetObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
 import { PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { db, systemConfigurationTable } from "@workspace/db";
@@ -119,6 +119,96 @@ export async function uploadCampaignAttachment(userId: string, name: string, byt
     objectPath: `/objects/mailflow-attachments/${userId}/${id}`,
     name,
     size: bytes.length,
+  };
+}
+
+function explainStorageTestFailure(error: unknown): Error {
+  const message = error instanceof Error ? error.message : "";
+  const details = error && typeof error === "object" ? error as {
+    name?: unknown;
+    Code?: unknown;
+    code?: unknown;
+    $metadata?: { httpStatusCode?: number };
+  } : {};
+  const code = String(details.Code ?? details.code ?? details.name ?? "");
+  const status = details.$metadata?.httpStatusCode;
+
+  if (/APP_ENCRYPTION_KEY or SESSION_SECRET must be configured/i.test(message)) {
+    return new Error("The API deployment needs APP_ENCRYPTION_KEY or SESSION_SECRET to decrypt the saved storage credentials.");
+  }
+  if (/unable to authenticate|unsupported state/i.test(message)) {
+    return new Error("The saved storage credentials cannot be decrypted. Keep APP_ENCRYPTION_KEY or SESSION_SECRET stable and re-enter both storage credentials in Superadmin settings using the production API.");
+  }
+  if (["InvalidAccessKeyId", "SignatureDoesNotMatch", "InvalidToken"].includes(code)) {
+    return new Error("The storage service rejected the credentials. Re-enter the access key and secret in Superadmin settings and save them from the production environment.");
+  }
+  if (code === "NoSuchBucket") {
+    return new Error("The configured bucket was not found. Check the bucket name, endpoint, and region in Superadmin settings.");
+  }
+  if (["PermanentRedirect", "AuthorizationHeaderMalformed", "IncorrectEndpoint"].includes(code) || status === 301) {
+    return new Error("The storage service redirected the request. Check that the configured region and endpoint match the bucket's region.");
+  }
+  if (code === "AccessDenied" || code === "AllAccessDisabled" || status === 403) {
+    return new Error("The storage service denied an operation. Check the bucket policy and grant this key PutObject and GetObject access for the configured prefix.");
+  }
+  if (["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"].includes(code)) {
+    return new Error("The production API could not reach the storage endpoint. Check DNS, outbound network access, TLS, and the endpoint URL from the API host.");
+  }
+  const safeCode = code.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+  return new Error(`Storage test failed${safeCode ? ` (${safeCode})` : status ? ` (HTTP ${status})` : ""}. Check the API server log for the provider error.`);
+}
+
+export async function testCampaignAttachmentStorage() {
+  const settings = await getStorageSettings();
+  if (!settings) {
+    throw new Error("Campaign file storage is not configured. Save the S3-compatible settings first.");
+  }
+
+  let client: S3Client;
+  try {
+    client = new S3Client(clientConfig(settings));
+  } catch (error) {
+    throw explainStorageTestFailure(error);
+  }
+
+  const prefix = settings.prefix.replace(/^\/+|\/+$/g, "");
+  const key = `${prefix ? `${prefix}/` : ""}mailflow-storage-check/probe.pdf`;
+  const bytes = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n", "ascii");
+  let failure: Error | null = null;
+  let cleanupWarning: string | null = null;
+  try {
+    await client.send(new PutObjectCommand({
+      Bucket: settings.bucket,
+      Key: key,
+      Body: bytes,
+      ContentLength: bytes.length,
+      ContentType: "application/pdf",
+    }));
+    const head = await client.send(new HeadObjectCommand({ Bucket: settings.bucket, Key: key }));
+    if (Number(head.ContentLength) !== bytes.length) {
+      throw new Error("Storage probe size did not match after upload.");
+    }
+    const object = await client.send(new GetObjectCommand({ Bucket: settings.bucket, Key: key }));
+    if (!object.Body || !Buffer.from(await object.Body.transformToByteArray()).equals(bytes)) {
+      throw new Error("Storage probe content did not match after download.");
+    }
+  } catch (error) {
+    failure = explainStorageTestFailure(error);
+  }
+
+  try {
+    await client.send(new DeleteObjectCommand({ Bucket: settings.bucket, Key: key }));
+  } catch {
+    cleanupWarning = "The test object could not be removed; grant DeleteObject for the check or remove mailflow-storage-check/probe.pdf manually.";
+  }
+
+  if (failure) {
+    throw new Error(cleanupWarning ? `${failure.message} ${cleanupWarning}` : failure.message);
+  }
+  return {
+    success: true,
+    message: "Storage upload and download checks passed.",
+    cleanupWarning,
   };
 }
 

@@ -4078,6 +4078,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/settings/object-storage/test:
+    post:
+      operationId: testCampaignObjectStorageConnection
+      tags: [settings]
+      summary: Test campaign object-storage upload and download access
+      responses:
+        "200":
+          description: Storage upload and download test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignObjectStorageTestResult"
+        "400":
+          description: Storage is not configured or the test failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/google-oauth:
     get:
       operationId: getGoogleOAuthSettings
@@ -7271,6 +7289,13 @@ components:
         accessKeyId: { type: string, maxLength: 512 }
         secretAccessKey: { type: string, maxLength: 512 }
       required: [endpoint, region, bucket, prefix, forcePathStyle]
+    CampaignObjectStorageTestResult:
+      type: object
+      properties:
+        success: { type: boolean, enum: [true] }
+        message: { type: string }
+        cleanupWarning: { type: ["string", "null"] }
+      required: [success, message, cleanupWarning]
     AIProviderType:
       type: string
       enum: [openai, anthropic, gemini]
