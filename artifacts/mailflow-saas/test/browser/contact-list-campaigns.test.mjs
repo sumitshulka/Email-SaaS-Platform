@@ -980,6 +980,41 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     }
   });
 
+  it('shows list contacts in a new campaign after the audience request completes', async () => {
+    const audienceContact = {
+      id: 'campaign-audience-contact',
+      name: 'Audience Contact',
+      firstName: 'Audience',
+      lastName: 'Contact',
+      email: 'audience@example.test',
+      subscribed: true,
+      emailStatus: 'active',
+      listIds: [listOneId],
+    };
+    listMemberContactFixtures = [];
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor();
+      await page.getByTestId('button-create-campaign').click();
+      await page.getByTestId('input-campaign-name').fill('Audience regression');
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByText('No contacts match this list and search.', { exact: true }).waitFor();
+      // Another page/session adds a member while this wizard remains open.
+      // Returning to the audience step must not reuse its cached empty result.
+      listMemberContactFixtures = [audienceContact];
+      await page.getByTestId('button-campaign-step-back').click();
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByRole('cell', { name: 'audience@example.test', exact: true }).waitFor({ timeout: 15000 });
+      assert.equal(await page.getByRole('checkbox', { name: 'Include audience@example.test', exact: true }).isChecked(), true);
+    } finally {
+      await context.close();
+      listMemberContactFixtures = [];
+    }
+  });
+
   it('keeps the campaign editor open on Review without saving the draft', async () => {
     campaignUpdates.length = 0;
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

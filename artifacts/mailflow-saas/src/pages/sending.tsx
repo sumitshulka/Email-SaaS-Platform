@@ -2066,6 +2066,10 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     query: {
       queryKey: getListContactsQueryKey(campaignReviewParams),
       enabled: editing !== undefined && campaignStep === 1 && Boolean(campaignReviewListId),
+      // List membership is live. Never reuse a recently cached empty audience
+      // when the wizard returns to this step.
+      staleTime: 0,
+      refetchOnWindowFocus: true,
     },
   });
   const campaignReviewContacts = campaignReviewContactsQuery.data?.contacts ?? [];
@@ -2249,6 +2253,7 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
     if (campaignReviewListId && form.listIds.includes(campaignReviewListId)) return;
     setCampaignReviewListId(form.listIds[0] ?? '');
     setCampaignReviewPage(1);
+    setCampaignReviewSearch('');
   }, [campaignReviewListId, form.listIds]);
   const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subjectVariants, form.greetingVariants, form.signatureVariants, form.textBody, form.htmlBody]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
@@ -2848,9 +2853,9 @@ export function CampaignsPage({ maintenancePaused = false }: { maintenancePaused
           </Button>
         </div>}
         {campaignStep === 1 && <section aria-label="Contact selection" className="space-y-3 rounded-lg border border-[#dce4e9] bg-white p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Review contacts</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Selected lists stay live until queueing. Uncheck contacts to exclude them. Bounced and unsubscribed contacts stay visible but cannot be selected.</p></div><span className="rounded-full bg-[#edf4fc] px-2.5 py-1 text-[10px] font-semibold text-[#245b9b]">{form.excludedContactIds.length} excluded</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Review contacts</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Selected lists stay live until queueing. Uncheck contacts to exclude them. Bounced and unsubscribed contacts stay visible but cannot be selected.</p></div><div className="flex items-center gap-2"><Button type="button" variant="quiet" testId="button-refresh-campaign-contacts" disabled={!campaignReviewListId || campaignReviewContactsQuery.isFetching} onClick={() => { void campaignReviewContactsQuery.refetch(); void campaignAudienceQuery.refetch(); }}>{campaignReviewContactsQuery.isFetching ? 'Refreshing contacts…' : 'Refresh contacts'}</Button><span className="rounded-full bg-[#edf4fc] px-2.5 py-1 text-[10px] font-semibold text-[#245b9b]">{form.excludedContactIds.length} excluded</span></div></div>
           <div className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_minmax(180px,2fr)]">
-            <label><span className={labelClass}>Review contacts in list</span><select className={inputClass} value={campaignReviewListId} onChange={event => { setCampaignReviewListId(event.target.value); setCampaignReviewPage(1); }}><option value="">Choose selected list</option>{form.listIds.map(id => <option key={id} value={id}>{lists.find(list => list.id === id)?.name ?? 'Selected list'}</option>)}</select></label>
+            <label><span className={labelClass}>Review contacts in list</span><select className={inputClass} value={campaignReviewListId} onChange={event => { setCampaignReviewListId(event.target.value); setCampaignReviewPage(1); setCampaignReviewSearch(''); }}><option value="">Choose selected list</option>{form.listIds.map(id => <option key={id} value={id}>{lists.find(list => list.id === id)?.name ?? 'Selected list'}</option>)}</select></label>
             <label><span className={labelClass}>Search contacts</span><input type="search" className={inputClass} value={campaignReviewSearch} onChange={event => { setCampaignReviewSearch(event.target.value); setCampaignReviewPage(1); }} placeholder="Name or email"/></label>
           </div>
           {!campaignReviewListId ? <p className="rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#6f7b88]">Choose a list to review its contacts.</p> : campaignReviewContactsQuery.isLoading ? <p role="status" className="p-3 text-[11px] text-[#6f7b88]">Loading contacts from {lists.find(list => list.id === campaignReviewListId)?.name ?? 'the selected list'}…</p> : campaignReviewContactsQuery.isError ? <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-3 text-[11px] text-[#99501e]">
