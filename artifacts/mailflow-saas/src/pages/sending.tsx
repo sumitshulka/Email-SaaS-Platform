@@ -31,11 +31,11 @@ import {
   useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useGetCampaignAttachmentAvailability, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
-  useUpdateContactList,
+  useUpdateContactList, useBulkUpdateContacts,
 } from '@workspace/api-client-react';
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactEmailVerification, ContactList, ContactOption,
-  ContactAudienceSegment, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
+  ContactAudienceSegment, ContactBulkUpdate, ContactExportInput, TenantSendingAccount, TenantSendingSettingsInput, CampaignVariantLimits,
   CampaignHistory, GetCampaignHistoryParams, GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
   SenderInboxCheckResult, UserDashboard,
@@ -47,6 +47,7 @@ import {
   trackSmtpSenderAccountDeleted,
 } from '@/lib/analytics';
 import { downloadWorkbook } from '@/lib/download-workbook';
+import { ContactBulkActions } from '@/components/contact-bulk-actions';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 const inputClass = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -886,6 +887,8 @@ const contactDownloadColumns: DownloadListColumn<ContactExportInput['columns'][n
 ];
 
 export function ContactsPage() {
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const bulkUpdate = useBulkUpdateContacts();
   const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -946,6 +949,7 @@ export function ContactsPage() {
   const [movingContactId, setMovingContactId] = useState<string | null>(null);
   const contacts = contactsQuery.data?.contacts ?? [];
   const visible = contacts;
+  const allPageSelected = contacts.length > 0 && contacts.every(contact => selectedContactIds.includes(contact.id));
   const resultStart = contacts.length && contactsQuery.data
     ? (contactsQuery.data.page - 1) * contactsQuery.data.pageSize + 1
     : 0;
@@ -959,6 +963,7 @@ export function ContactsPage() {
   const segments = segmentsQuery.data ?? [];
   const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
   const updateFilters = (next: ContactDirectoryFilterValues) => {
+    setSelectedContactIds([]);
     setFilters(next);
     if (next.companyId === 'all') setSelectedCompanyName(null);
     setPage(1);
@@ -1002,6 +1007,23 @@ export function ContactsPage() {
     downloadWorkbook(workbook, 'contacts');
   };
   const reload = () => { void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
+  const applyBulkAction = (action: Omit<ContactBulkUpdate, 'contactIds'>) => {
+    const contactIds = [...selectedContactIds];
+    dismiss();
+    bulkUpdate.mutate({ data: { ...action, contactIds } }, {
+      onSuccess: result => {
+        setSelectedContactIds(current => current.filter(id => !contactIds.includes(id)));
+        setNotice({ kind: 'success', text: action.action === 'add_to_list'
+          ? `${result.updatedCount} contacts added to the list.${result.skippedCount ? ` ${result.skippedCount} already belonged to it.` : ''}`
+          : `${result.updatedCount} contacts marked ${action.action === 'subscribe' ? 'subscribed' : 'unsubscribed'}.${result.skippedCount ? ` ${result.skippedCount} bounced addresses skipped; correct them individually before subscribing.` : ''}` });
+        void qc.invalidateQueries({
+          predicate: query => typeof query.queryKey[0] === 'string'
+            && /^\/api\/(contacts|contact-lists|contact-report|campaigns|dashboard)(\/|$)/.test(query.queryKey[0]),
+        });
+      },
+      onError: error => setNotice({ kind: 'error', text: mutationError(error) }),
+    });
+  };
   const moveContactMembership = async (contact: ContactDirectoryItem, targetListId: string) => {
     const targetList = lists.find(list => list.id === targetListId);
     if (!targetList || contact.listIds.length === 1 && contact.listIds[0] === targetListId) return;
@@ -1060,7 +1082,7 @@ export function ContactsPage() {
     if (!contactToDelete) return;
     const contact = contactToDelete;
     remove.mutate({ contactId: contact.id }, {
-      onSuccess: () => { setContactToDelete(null); reload(); setNotice({ kind: 'success', text: 'Contact deleted.' }); },
+      onSuccess: () => { setSelectedContactIds(current => current.filter(id => id !== contact.id)); setContactToDelete(null); reload(); setNotice({ kind: 'success', text: 'Contact deleted.' }); },
       onError: error => { setContactToDelete(null); setNotice({ kind: 'error', text: mutationError(error) }); },
     });
   };
@@ -1269,8 +1291,30 @@ export function ContactsPage() {
           leadSources={leadSources}
         />
       </div>
-        {visible.length ? <div className="overflow-x-auto"><p className="px-5 pb-2 text-[10px] text-[#788392]">Changing Membership moves the contact to one list and removes its other list memberships.</p><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
-        <td className="px-5 py-3.5"><div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="block text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
+        {selectedContactIds.length > 0 && <ContactBulkActions count={selectedContactIds.length}
+          lists={lists} listsUnavailable={listsQuery.isLoading || listsQuery.isError}
+          pending={bulkUpdate.isPending || update.isPending || remove.isPending}
+          onClear={() => { setSelectedContactIds([]); dismiss(); }} onApply={applyBulkAction}/>}
+        {bulkUpdate.isPending && <p role="status" className="px-5 py-3 text-[12px] text-[#315879]">Updating selected contacts…</p>}
+        {visible.length > 0 && <label className="flex items-center gap-2 px-5 py-3 text-[11px] text-[#53677b]">
+          <input type="checkbox" aria-label="Select all contacts on this page" checked={allPageSelected}
+            ref={input => { if (input) input.indeterminate = !allPageSelected && contacts.some(contact => selectedContactIds.includes(contact.id)); }}
+            disabled={bulkUpdate.isPending || remove.isPending || contactsQuery.isFetching}
+            onChange={event => {
+              const checked = event.currentTarget.checked;
+              setSelectedContactIds(current => checked
+                ? [...new Set([...current, ...contacts.map(contact => contact.id)])].slice(0, 1000)
+                : current.filter(id => !contacts.some(contact => contact.id === id)));
+            }} className="accent-[#174f99]"/>
+          Select this page ({visible.length})
+        </label>}
+        {visible.length ? <div className="overflow-x-auto"><p className="px-5 pb-2 text-[10px] text-[#788392]">Changing Membership moves the contact to one list and removes its other list memberships. Bulk “Add to list” keeps other memberships.</p><table className="w-full min-w-[1050px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Contact</th><th className="px-4 py-3 font-semibold">Membership</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last email</th><th className="px-4 py-3 font-semibold">Added</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{visible.map(contact => <tr key={contact.id} data-testid={`row-contact-${contact.id}`} className="hover:bg-[#fbfcfd]">
+        <td className="px-5 py-3.5"><div className="flex items-center gap-3">
+          <input type="checkbox" aria-label={`Select ${contact.email}`} checked={selectedContactIds.includes(contact.id)}
+            disabled={bulkUpdate.isPending || remove.isPending || contactsQuery.isFetching || (!selectedContactIds.includes(contact.id) && selectedContactIds.length >= 1000)}
+            onChange={event => { const checked = event.currentTarget.checked; setSelectedContactIds(current => checked ? [...current, contact.id] : current.filter(id => id !== contact.id)); }}
+            className="shrink-0 accent-[#174f99]"/>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="block text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
         <td className="px-4 py-3.5"><select
           data-testid={`select-contact-membership-${contact.id}`}
           aria-label={`Membership for ${[contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email}`}

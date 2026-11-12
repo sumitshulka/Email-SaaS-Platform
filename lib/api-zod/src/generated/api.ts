@@ -1929,6 +1929,26 @@ export const CreateContactResponse = zod.object({
 
 
 /**
+ * @summary Add selected tenant contacts to a list or update their subscription status
+ */
+export const bulkUpdateContactsBodyContactIdsMax = 1000;
+
+
+
+export const BulkUpdateContactsBody = zod.object({
+  "contactIds": zod.array(zod.string().uuid()).min(1).max(bulkUpdateContactsBodyContactIdsMax),
+  "action": zod.enum(['add_to_list', 'subscribe', 'unsubscribe']),
+  "listId": zod.string().uuid().optional(),
+  "consentConfirmed": zod.boolean().optional().describe('Must be true when subscribing; confirms permission to email the selected contacts.')
+})
+
+export const BulkUpdateContactsResponse = zod.object({
+  "updatedCount": zod.number().int(),
+  "skippedCount": zod.number().int()
+})
+
+
+/**
  * @summary Stream a tenant contact report as an Excel workbook
  */
 export const exportContactsBodyColumnsMax = 40;

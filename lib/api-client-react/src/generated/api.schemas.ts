@@ -2901,6 +2901,32 @@ export interface ContactInput {
   listIds?: string[];
 }
 
+export type ContactBulkUpdateAction = typeof ContactBulkUpdateAction[keyof typeof ContactBulkUpdateAction];
+
+
+export const ContactBulkUpdateAction = {
+  add_to_list: 'add_to_list',
+  subscribe: 'subscribe',
+  unsubscribe: 'unsubscribe',
+} as const;
+
+export interface ContactBulkUpdate {
+  /**
+     * @minItems 1
+     * @maxItems 1000
+     */
+  contactIds: string[];
+  action: ContactBulkUpdateAction;
+  listId?: string;
+  /** Must be true when subscribing; confirms permission to email the selected contacts. */
+  consentConfirmed?: boolean;
+}
+
+export interface ContactBulkResult {
+  updatedCount: number;
+  skippedCount: number;
+}
+
 export interface ContactUpdate {
   /** @maxLength 254 */
   email?: string;

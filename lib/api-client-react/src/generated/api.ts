@@ -109,6 +109,8 @@ import type {
   ContactAudienceSegment,
   ContactAudienceSegmentInput,
   ContactAudienceSegmentUpdate,
+  ContactBulkResult,
+  ContactBulkUpdate,
   ContactCollection,
   ContactEmailHistoryItem,
   ContactEmailVerification,
@@ -4398,6 +4400,94 @@ export const useCreateContact = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateContactMutationOptions(options));
+    }
+
+export const getBulkUpdateContactsUrl = () => {
+
+
+
+
+  return `/api/contacts/bulk`
+}
+
+/**
+ * @summary Add selected tenant contacts to a list or update their subscription status
+ */
+export const bulkUpdateContacts = async (contactBulkUpdate: ContactBulkUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ContactBulkResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactBulkResult>(getBulkUpdateContactsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactBulkUpdate)
+  }
+);}
+
+
+
+
+
+export const getBulkUpdateContactsMutationKey = () => ['bulkUpdateContacts'] as const;
+
+export const getBulkUpdateContactsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateContacts>>, TError,BulkUpdateContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateContacts>>, TError,BulkUpdateContactsMutationVariables, TContext> => {
+
+const mutationKey = getBulkUpdateContactsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkUpdateContacts>>, BulkUpdateContactsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkUpdateContacts(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkUpdateContactsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpdateContacts>>>
+    export type BulkUpdateContactsMutationBody = BodyType<ContactBulkUpdate>
+    export type BulkUpdateContactsMutationError = ErrorType<ApiError>
+    export type BulkUpdateContactsMutationVariables = {data: BodyType<ContactBulkUpdate>}
+
+    /**
+ * @summary Add selected tenant contacts to a list or update their subscription status
+ */
+export const useBulkUpdateContacts = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateContacts>>, TError,BulkUpdateContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkUpdateContacts>>,
+        TError,
+        BulkUpdateContactsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBulkUpdateContactsMutationOptions(options));
     }
 
 export const getExportContactsUrl = () => {

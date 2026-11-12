@@ -1,3 +1,5 @@
+import { BulkUpdateContactsBody, BulkUpdateContactsResponse } from "@workspace/api-zod";
+import { bulkUpdateTenantContacts } from "../lib/contact-bulk";
 import {
   and,
   asc,
@@ -3424,6 +3426,32 @@ router.get("/campaigns/:campaignId/replies", requireUserRole, async (req, res): 
     .where(and(eq(emailCampaignsTable.id, params.data.campaignId), eq(emailCampaignsTable.userId, userId))).limit(1);
   if (!campaign) { res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" }); return; }
   res.json(ListCampaignRepliesResponse.parse(await getSavedCampaignReplies(userId, campaign.id)));
+});
+
+router.post("/contacts/bulk", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = BulkUpdateContactsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Select between 1 and 1,000 contacts and a valid bulk action." });
+    return;
+  }
+  if (parsed.data.action === "add_to_list" && !parsed.data.listId) {
+    res.status(400).json({ error: "Choose a contact list." });
+    return;
+  }
+  if (parsed.data.action === "subscribe" && parsed.data.consentConfirmed !== true) {
+    res.status(400).json({ error: "Confirm that the selected contacts have given permission to receive emails." });
+    return;
+  }
+  const userId = req.authUser!.id;
+  const result = await bulkUpdateTenantContacts(db, userId, parsed.data);
+  if (result.kind === "not_found") {
+    res.status(404).json({ error: "A selected contact or list is no longer available in your account. Refresh and select again." });
+    return;
+  }
+  for (const campaignId of new Set(result.campaignIds)) {
+    await completeCampaignIfFinished(userId, campaignId);
+  }
+  res.json(BulkUpdateContactsResponse.parse(result));
 });
 
 router.get("/contacts/:contactId/replies", requireUserRole, async (req, res): Promise<void> => {
