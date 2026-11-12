@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
-import { getSearchCompaniesQueryKey, useSearchCompanies } from '@workspace/api-client-react';
+import { getSearchCompaniesQueryKey, useSearchCompanies, useListContactTags, getListContactTagsQueryKey } from '@workspace/api-client-react';
 import type { CompanySearchResultItem, ContactDirectoryFilters, ContactList } from '@workspace/api-client-react';
 
 export const CONTACT_FILTER_NONE = '__none__';
@@ -18,6 +18,7 @@ export const emptyContactDirectoryFilters: ContactDirectoryFilterValues = {
   leadStatus: 'all',
   leadSource: 'all',
   addedWithin: 'any',
+  tagId: 'all',
 };
 
 type FilterOption = { value: string; label: string };
@@ -299,6 +300,9 @@ export function ContactDirectoryFiltersPanel({
   leadSources: string[];
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const tagsQuery = useListContactTags({ query: { queryKey: getListContactTagsQueryKey(), staleTime: 0, refetchOnWindowFocus: true } });
+  const tags = tagsQuery.data ?? [];
+  const selectedTag = filters.tagId ?? 'all';
   const setFilter = <K extends keyof ContactDirectoryFilterValues>(
     key: K,
     value: ContactDirectoryFilterValues[K],
@@ -307,6 +311,7 @@ export function ContactDirectoryFiltersPanel({
   };
 
   const activeLabels: string[] = [];
+  if (selectedTag !== 'all') activeLabels.push(`Tag: ${selectedTag === '__none__' ? 'No tags' : tags.find(tag => tag.id === selectedTag)?.name ?? 'Unavailable tag'}`);
   if (filters.search.trim()) activeLabels.push(`Search: ${filters.search.trim()}`);
   if (filters.status !== 'all') activeLabels.push(`Status: ${filters.status === 'subscribed' ? 'Subscribed' : 'Unsubscribed'}`);
   if (filters.listId === CONTACT_FILTER_NONE) activeLabels.push('List: No list');
@@ -414,7 +419,21 @@ export function ContactDirectoryFiltersPanel({
           }}
           selectedCompanyName={selectedCompanyName}
         />
+        <FilterSelect
+          label="Contact tag"
+          value={selectedTag}
+          testId="select-contact-tag-filter"
+          onChange={value => setFilter('tagId', value)}
+          options={[
+            { value: 'all', label: 'Any tag' },
+            { value: '__none__', label: 'No tags' },
+            ...tags.map(tag => ({ value: tag.id, label: tag.name })),
+            ...(!['all', '__none__'].includes(selectedTag) && !tags.some(tag => tag.id === selectedTag)
+              ? [{ value: selectedTag, label: 'Unavailable tag' }] : []),
+          ]}
+        />
       </div>
+      {tagsQuery.isError && <p role="alert" className="mt-2 text-[11px] text-[#a84926]">Tag filters could not be loaded. <button type="button" className="underline" onClick={() => void tagsQuery.refetch()}>Retry tags</button></p>}
 
       {advancedOpen && (
         <div data-testid="contact-advanced-filters" className="mt-3 grid gap-3 border-t border-[#dce5ef] pt-3 sm:grid-cols-2 xl:grid-cols-4">

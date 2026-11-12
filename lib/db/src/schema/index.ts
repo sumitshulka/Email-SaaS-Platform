@@ -29,6 +29,7 @@ export * from "./company-intelligence";
 export * from "./company-research-requests";
 export * from "./companies";
 export * from "./contacts";
+export * from "./contact-tags";
 export * from "./contact-lead-status-updates";
 export * from "./contact-notes";
 export * from "./contact-intent";

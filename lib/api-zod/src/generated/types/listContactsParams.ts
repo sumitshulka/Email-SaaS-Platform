@@ -22,6 +22,11 @@ pageSize?: number;
  * @maxLength 200
  */
 search?: string;
+/**
+ * A tag UUID, all, or __none__ for untagged contacts
+ * @maxLength 64
+ */
+tagId?: string;
 status?: ListContactsStatus;
 /**
  * @maxLength 64

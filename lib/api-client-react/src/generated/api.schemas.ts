@@ -2311,6 +2311,28 @@ export interface ContactNavigation {
   total: number;
 }
 
+export interface ContactTag {
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  name: string;
+}
+
+export interface ContactTagInput {
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  name: string;
+}
+
+export interface ContactTagSelection {
+  /** @maxItems 2 */
+  tagIds: string[];
+}
+
 /**
  * @nullable
  */
@@ -2348,6 +2370,8 @@ export const ContactEmailVerificationRiskFlagsItem = {
 
 export interface Contact {
   id: string;
+  /** @maxItems 2 */
+  tags?: ContactTag[];
   email: string;
   name: string;
   firstName: string;
@@ -2779,6 +2803,8 @@ export const ContactExportFiltersAddedWithin = {
 } as const;
 
 export interface ContactExportFilters {
+  /** @maxLength 64 */
+  tagId?: string;
   /** @maxLength 200 */
   search?: string;
   status?: ContactExportFiltersStatus;
@@ -3273,6 +3299,8 @@ export const ContactDirectoryFiltersAddedWithin = {
 } as const;
 
 export interface ContactDirectoryFilters {
+  /** @maxLength 64 */
+  tagId?: string;
   /** @maxLength 200 */
   search: string;
   status: ContactDirectoryFiltersStatus;
@@ -5574,6 +5602,11 @@ pageSize?: number;
  * @maxLength 200
  */
 search?: string;
+/**
+ * A tag UUID, all, or __none__ for untagged contacts
+ * @maxLength 64
+ */
+tagId?: string;
 status?: ListContactsStatus;
 /**
  * @maxLength 64

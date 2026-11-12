@@ -9,9 +9,12 @@ import type { Company } from './company';
 import type { ContactEmailStatus } from './contactEmailStatus';
 import type { ContactEmailVerificationRiskFlagsItem } from './contactEmailVerificationRiskFlagsItem';
 import type { ContactEmailVerificationStatus } from './contactEmailVerificationStatus';
+import type { ContactTag } from './contactTag';
 
 export interface Contact {
   id: string;
+  /** @maxItems 2 */
+  tags?: ContactTag[];
   email: string;
   name: string;
   firstName: string;

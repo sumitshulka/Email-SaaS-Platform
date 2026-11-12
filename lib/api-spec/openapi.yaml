@@ -1089,6 +1089,10 @@ paths:
           name: search
           schema: { type: string, maxLength: 200 }
         - in: query
+          name: tagId
+          description: A tag UUID, all, or __none__ for untagged contacts
+          schema: { type: string, maxLength: 64 }
+        - in: query
           name: status
           schema: { type: string, enum: [all, subscribed, unsubscribed], default: all }
         - in: query
@@ -1154,6 +1158,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /contact-tags:
+    get:
+      operationId: listContactTags
+      tags: [sending]
+      summary: List the authenticated user's private tag library
+      responses:
+        "200":
+          description: Private contact tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContactTag" }
+    post:
+      operationId: createContactTag
+      tags: [sending]
+      summary: Create a tag in the authenticated user's library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactTagInput" }
+      responses:
+        "201":
+          description: Created tag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactTag" }
+        "400":
+          description: Invalid name
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: This tag name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /contact-tags/{tagId}:
+    parameters:
+      - in: path
+        name: tagId
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateContactTag
+      tags: [sending]
+      summary: Rename an owned tag everywhere it is used
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactTagInput" }
+      responses:
+        "200":
+          description: Renamed tag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactTag" }
+        "400":
+          description: Invalid name
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Tag not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: This tag name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+    delete:
+      operationId: deleteContactTag
+      tags: [sending]
+      summary: Delete an owned library tag and remove its contact assignments
+      responses:
+        "204":
+          description: Tag deleted
+        "404":
+          description: Tag not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /contacts/{contactId}/tags:
+    parameters:
+      - in: path
+        name: contactId
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      operationId: setContactTags
+      tags: [sending]
+      summary: Replace a contact's tags with zero, one or two tags from the user's library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactTagSelection" }
+      responses:
+        "200":
+          description: Saved tag selection
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContactTag" }
+        "400":
+          description: Select up to two distinct tags
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Contact or tag not found in this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /contacts/bulk:
     post:
       operationId: bulkUpdateContacts
@@ -6109,10 +6232,34 @@ components:
         nextContactId: { type: ["string", "null"], format: uuid }
         position: { type: integer, minimum: 1, description: 1-based position in the tenant contact directory }
         total: { type: integer, minimum: 1, description: Total contacts in the tenant directory }
+    ContactTag:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 40 }
+    ContactTagInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+    ContactTagSelection:
+      type: object
+      required: [tagIds]
+      properties:
+        tagIds:
+          type: array
+          maxItems: 2
+          uniqueItems: true
+          items: { type: string, format: uuid }
     Contact:
       type: object
       properties:
         id: { type: string, format: uuid }
+        tags:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/ContactTag" }
         email: { type: string, format: email }
         name: { type: string }
         firstName: { type: string }
@@ -6276,6 +6423,7 @@ components:
     ContactExportFilters:
       type: object
       properties:
+        tagId: { type: string, maxLength: 64 }
         search: { type: string, maxLength: 200 }
         status: { type: string, enum: [all, subscribed, unsubscribed], default: all }
         listId: { type: string, maxLength: 64 }
@@ -6527,6 +6675,7 @@ components:
       type: object
       additionalProperties: false
       properties:
+        tagId: { type: string, maxLength: 64 }
         search: { type: string, maxLength: 200 }
         status: { type: string, enum: [all, subscribed, unsubscribed] }
         listId: { type: string, minLength: 1, maxLength: 255 }

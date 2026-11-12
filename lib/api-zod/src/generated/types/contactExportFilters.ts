@@ -9,6 +9,8 @@ import type { ContactExportFiltersAddedWithin } from './contactExportFiltersAdde
 import type { ContactExportFiltersStatus } from './contactExportFiltersStatus';
 
 export interface ContactExportFilters {
+  /** @maxLength 64 */
+  tagId?: string;
   /** @maxLength 200 */
   search?: string;
   status?: ContactExportFiltersStatus;

@@ -1,5 +1,6 @@
 import { BulkUpdateContactsBody, BulkUpdateContactsResponse } from "@workspace/api-zod";
 import { bulkUpdateTenantContacts } from "../lib/contact-bulk";
+import { contactTagCondition, readContactTags } from "../lib/contact-tags";
 import {
   and,
   asc,
@@ -556,6 +557,7 @@ async function getContactPayload(
   ]);
   return {
     ...contact,
+    tags: (await readContactTags(userId, [contact.id])).get(contact.id) ?? [],
     company: companyRows[0] ? publicCompanyPayload(companyRows[0]) : null,
     name:
       [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
@@ -2158,7 +2160,7 @@ router.post(
       parsed.data.scope === "all"
         ? { status: "all", addedWithin: "any" }
         : (parsed.data.filters ?? { status: "all", addedWithin: "any" });
-    for (const id of [filters.listId, filters.companyId]) {
+    for (const id of [filters.listId, filters.companyId, filters.tagId]) {
       if (id && id !== "all" && id !== "__none__" && !isContactFilterUuid(id)) {
         res.status(400).json({
           error: "A contact filter contains an invalid identifier.",
@@ -2169,6 +2171,8 @@ router.post(
     }
 
     const conditions = [eq(contactsTable.userId, userId)];
+    const tagCondition = contactTagCondition(userId, filters.tagId);
+    if (tagCondition) conditions.push(tagCondition);
     if (filters.status === "subscribed") {
       conditions.push(eq(contactsTable.subscribed, true));
     } else if (filters.status === "unsubscribed") {
@@ -2540,7 +2544,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     return;
   }
   const params = parsed.data;
-  for (const id of [params.listId, params.companyId]) {
+  for (const id of [params.listId, params.companyId, params.tagId]) {
     if (id && id !== "all" && id !== "__none__" && !isContactFilterUuid(id)) {
       res.status(400).json({
         error: "A contact filter contains an invalid identifier.",
@@ -2552,6 +2556,8 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
 
   const userId = req.authUser!.id;
   const conditions = [eq(contactsTable.userId, userId)];
+  const tagCondition = contactTagCondition(userId, params.tagId);
+  if (tagCondition) conditions.push(tagCondition);
   if (params.status === "subscribed") {
     conditions.push(eq(contactsTable.subscribed, true));
   } else if (params.status === "unsubscribed") {
@@ -2636,6 +2642,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     .limit(pageSize)
     .offset((page - 1) * pageSize);
   const contactIds = contacts.map((contact) => contact.id);
+  const tagsByContact = await readContactTags(userId, contactIds);
   const companyIds = [
     ...new Set(
       contacts
@@ -2695,6 +2702,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     ListContactsResponse.parse({
       contacts: contacts.map((contact) => ({
         ...contact,
+        tags: tagsByContact.get(contact.id) ?? [],
         company: contact.companyId
           ? publicCompanyPayload(companiesById.get(contact.companyId)!)
           : null,

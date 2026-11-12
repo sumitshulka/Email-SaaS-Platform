@@ -134,6 +134,9 @@ import type {
   ContactNoteInput,
   ContactOptionsResponse,
   ContactReportResponse,
+  ContactTag,
+  ContactTagInput,
+  ContactTagSelection,
   ContactUpdate,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
@@ -4400,6 +4403,423 @@ export const useCreateContact = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateContactMutationOptions(options));
+    }
+
+export const getListContactTagsUrl = () => {
+
+
+
+
+  return `/api/contact-tags`
+}
+
+/**
+ * @summary List the authenticated user's private tag library
+ */
+export const listContactTags = async ( options?: Parameters<typeof customFetch>[1]): Promise<ContactTag[]> => {
+
+  return customFetch<ContactTag[]>(getListContactTagsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactTagsQueryKey = () => {
+    return [
+    `/api/contact-tags`
+    ] as const;
+    }
+
+
+export const getListContactTagsQueryOptions = <TData = Awaited<ReturnType<typeof listContactTags>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactTags>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactTagsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactTags>>> = ({ signal }) => listContactTags({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactTags>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactTagsQueryResult = NonNullable<Awaited<ReturnType<typeof listContactTags>>>
+export type ListContactTagsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated user's private tag library
+ */
+
+export function useListContactTags<TData = Awaited<ReturnType<typeof listContactTags>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactTags>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactTagsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactTagUrl = () => {
+
+
+
+
+  return `/api/contact-tags`
+}
+
+/**
+ * @summary Create a tag in the authenticated user's library
+ */
+export const createContactTag = async (contactTagInput: ContactTagInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactTag> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactTag>(getCreateContactTagUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactTagInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactTagMutationKey = () => ['createContactTag'] as const;
+
+export const getCreateContactTagMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactTag>>, TError,CreateContactTagMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContactTag>>, TError,CreateContactTagMutationVariables, TContext> => {
+
+const mutationKey = getCreateContactTagMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContactTag>>, CreateContactTagMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createContactTag(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactTagMutationResult = NonNullable<Awaited<ReturnType<typeof createContactTag>>>
+    export type CreateContactTagMutationBody = BodyType<ContactTagInput>
+    export type CreateContactTagMutationError = ErrorType<ApiError>
+    export type CreateContactTagMutationVariables = {data: BodyType<ContactTagInput>}
+
+    /**
+ * @summary Create a tag in the authenticated user's library
+ */
+export const useCreateContactTag = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContactTag>>, TError,CreateContactTagMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContactTag>>,
+        TError,
+        CreateContactTagMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateContactTagMutationOptions(options));
+    }
+
+export const getUpdateContactTagUrl = (tagId: string,) => {
+
+
+
+
+  return `/api/contact-tags/${tagId}`
+}
+
+/**
+ * @summary Rename an owned tag everywhere it is used
+ */
+export const updateContactTag = async (tagId: string,
+    contactTagInput: ContactTagInput, options?: Parameters<typeof customFetch>[1]): Promise<ContactTag> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactTag>(getUpdateContactTagUrl(tagId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactTagInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateContactTagMutationKey = () => ['updateContactTag'] as const;
+
+export const getUpdateContactTagMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContactTag>>, TError,UpdateContactTagMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateContactTag>>, TError,UpdateContactTagMutationVariables, TContext> => {
+
+const mutationKey = getUpdateContactTagMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateContactTag>>, UpdateContactTagMutationVariables> = (props) => {
+          const {tagId,data} = props ?? {};
+
+          return  updateContactTag(tagId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateContactTagMutationResult = NonNullable<Awaited<ReturnType<typeof updateContactTag>>>
+    export type UpdateContactTagMutationBody = BodyType<ContactTagInput>
+    export type UpdateContactTagMutationError = ErrorType<ApiError>
+    export type UpdateContactTagMutationVariables = {tagId: string;data: BodyType<ContactTagInput>}
+
+    /**
+ * @summary Rename an owned tag everywhere it is used
+ */
+export const useUpdateContactTag = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContactTag>>, TError,UpdateContactTagMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateContactTag>>,
+        TError,
+        UpdateContactTagMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateContactTagMutationOptions(options));
+    }
+
+export const getDeleteContactTagUrl = (tagId: string,) => {
+
+
+
+
+  return `/api/contact-tags/${tagId}`
+}
+
+/**
+ * @summary Delete an owned library tag and remove its contact assignments
+ */
+export const deleteContactTag = async (tagId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteContactTagUrl(tagId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteContactTagMutationKey = () => ['deleteContactTag'] as const;
+
+export const getDeleteContactTagMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactTag>>, TError,DeleteContactTagMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContactTag>>, TError,DeleteContactTagMutationVariables, TContext> => {
+
+const mutationKey = getDeleteContactTagMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContactTag>>, DeleteContactTagMutationVariables> = (props) => {
+          const {tagId} = props ?? {};
+
+          return  deleteContactTag(tagId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContactTagMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContactTag>>>
+
+    export type DeleteContactTagMutationError = ErrorType<ApiError>
+    export type DeleteContactTagMutationVariables = {tagId: string}
+
+    /**
+ * @summary Delete an owned library tag and remove its contact assignments
+ */
+export const useDeleteContactTag = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContactTag>>, TError,DeleteContactTagMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContactTag>>,
+        TError,
+        DeleteContactTagMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteContactTagMutationOptions(options));
+    }
+
+export const getSetContactTagsUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/tags`
+}
+
+/**
+ * @summary Replace a contact's tags with zero, one or two tags from the user's library
+ */
+export const setContactTags = async (contactId: string,
+    contactTagSelection: ContactTagSelection, options?: Parameters<typeof customFetch>[1]): Promise<ContactTag[]> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactTag[]>(getSetContactTagsUrl(contactId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(contactTagSelection)
+  }
+);}
+
+
+
+
+
+export const getSetContactTagsMutationKey = () => ['setContactTags'] as const;
+
+export const getSetContactTagsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setContactTags>>, TError,SetContactTagsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setContactTags>>, TError,SetContactTagsMutationVariables, TContext> => {
+
+const mutationKey = getSetContactTagsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setContactTags>>, SetContactTagsMutationVariables> = (props) => {
+          const {contactId,data} = props ?? {};
+
+          return  setContactTags(contactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetContactTagsMutationResult = NonNullable<Awaited<ReturnType<typeof setContactTags>>>
+    export type SetContactTagsMutationBody = BodyType<ContactTagSelection>
+    export type SetContactTagsMutationError = ErrorType<ApiError>
+    export type SetContactTagsMutationVariables = {contactId: string;data: BodyType<ContactTagSelection>}
+
+    /**
+ * @summary Replace a contact's tags with zero, one or two tags from the user's library
+ */
+export const useSetContactTags = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setContactTags>>, TError,SetContactTagsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setContactTags>>,
+        TError,
+        SetContactTagsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetContactTagsMutationOptions(options));
     }
 
 export const getBulkUpdateContactsUrl = () => {

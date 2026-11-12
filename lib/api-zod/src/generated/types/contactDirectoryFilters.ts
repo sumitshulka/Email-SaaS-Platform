@@ -9,6 +9,8 @@ import type { ContactDirectoryFiltersAddedWithin } from './contactDirectoryFilte
 import type { ContactDirectoryFiltersStatus } from './contactDirectoryFiltersStatus';
 
 export interface ContactDirectoryFilters {
+  /** @maxLength 64 */
+  tagId?: string;
   /** @maxLength 200 */
   search: string;
   status: ContactDirectoryFiltersStatus;

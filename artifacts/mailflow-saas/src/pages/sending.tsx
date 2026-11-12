@@ -48,6 +48,7 @@ import {
 } from '@/lib/analytics';
 import { downloadWorkbook } from '@/lib/download-workbook';
 import { ContactBulkActions } from '@/components/contact-bulk-actions';
+import { ContactTagBadges, ContactTagEditor, ContactTagLibrary } from '@/components/contact-tags';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 const inputClass = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -887,6 +888,8 @@ const contactDownloadColumns: DownloadListColumn<ContactExportInput['columns'][n
 ];
 
 export function ContactsPage() {
+  const [tagLibraryOpen, setTagLibraryOpen] = useState(false);
+  const [tagContact, setTagContact] = useState<ContactDirectoryItem | null>(null);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const bulkUpdate = useBulkUpdateContacts();
   const [filters, setFilters] = useState<ContactDirectoryFilterValues>(emptyContactDirectoryFilters);
@@ -902,6 +905,7 @@ export function ContactsPage() {
     pageSize: 50,
     includeHistory: true,
     search: debouncedSearch,
+    tagId: filters.tagId,
     status: filters.status,
     listId: filters.listId,
     companyId: filters.companyId,
@@ -974,10 +978,12 @@ export function ContactsPage() {
     }
   }, [contactsQuery.data?.page, contactsQuery.isFetching, page]);
   const hasActiveFilters = filters.search.trim() !== '' || filters.status !== 'all'
+    || (!!filters.tagId && filters.tagId !== 'all')
     || filters.listId !== 'all' || filters.companyId !== 'all'
     || filters.lifecycleStage !== 'all' || filters.leadStatus !== 'all'
     || filters.leadSource !== 'all' || filters.addedWithin !== 'any';
   const contactFilterSummary = [
+    filters.tagId && filters.tagId !== 'all' ? `Tag: ${filters.tagId === '__none__' ? 'No tags' : 'Selected tag'}` : null,
     filters.search.trim() ? `Search: ${filters.search.trim()}` : null,
     filters.status !== 'all' ? `Status: ${filters.status}` : null,
     filters.listId !== 'all' ? `List: ${lists.find(list => list.id === filters.listId)?.name ?? (filters.listId === '__none__' ? 'No list' : 'Selected list')}` : null,
@@ -995,6 +1001,7 @@ export function ContactsPage() {
         filters: {
           search: filters.search,
           status: filters.status,
+          tagId: filters.tagId,
           listId: filters.listId,
           companyId: filters.companyId,
           lifecycleStage: filters.lifecycleStage,
@@ -1146,7 +1153,11 @@ export function ContactsPage() {
   const toggleSub = (contact: Contact) => update.mutate({ contactId: contact.id, data: { subscribed: !contact.subscribed } }, { onSuccess: () => { reload(); setNotice({ kind: 'success', text: contact.subscribed ? 'Contact unsubscribed.' : 'Contact subscribed.' }); }, onError: error => setNotice({ kind: 'error', text: mutationError(error) }) });
   const busy = create.isPending || update.isPending;
   return <QueryState loading={contactsQuery.isLoading || listsQuery.isLoading} error={contactsQuery.isError || listsQuery.isError} retry={() => { void contactsQuery.refetch(); void listsQuery.refetch(); }} label="contacts"><>
-    <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-download-contacts" disabled={contactsQuery.isFetching || debouncedSearch !== filters.search} onClick={() => setDownloadOpen(true)}><Download className="h-4 w-4"/>Download list</Button><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
+    <Heading eyebrow="AUDIENCE / CONTACTS" title="Contacts" detail="Keep your audience accurate, opted-in, and organized by the lists you send to." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-manage-contact-tags" onClick={() => setTagLibraryOpen(true)}>Manage tags</Button><Button variant="outline" testId="button-download-contacts" disabled={contactsQuery.isFetching || debouncedSearch !== filters.search} onClick={() => setDownloadOpen(true)}><Download className="h-4 w-4"/>Download list</Button><Button variant="outline" testId="button-import-contacts" onClick={() => setImporting(true)}><Upload className="h-4 w-4"/>Import contacts</Button><Button testId="button-add-contact" onClick={openNew}><CirclePlus className="h-4 w-4"/>Add contact</Button></div>}/>
+    <ContactTagLibrary open={tagLibraryOpen} onClose={() => setTagLibraryOpen(false)}/>
+    {tagContact && <ContactTagEditor key={tagContact.id} contactId={tagContact.id}
+      contactName={[tagContact.firstName, tagContact.lastName].filter(Boolean).join(' ') || tagContact.email}
+      tags={tagContact.tags ?? []} onClose={() => setTagContact(null)}/>}
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     {emailVerification && <Modal
       title="Email verification"
@@ -1314,7 +1325,7 @@ export function ContactsPage() {
             disabled={bulkUpdate.isPending || remove.isPending || contactsQuery.isFetching || (!selectedContactIds.includes(contact.id) && selectedContactIds.length >= 1000)}
             onChange={event => { const checked = event.currentTarget.checked; setSelectedContactIds(current => checked ? [...current, contact.id] : current.filter(id => id !== contact.id)); }}
             className="shrink-0 accent-[#174f99]"/>
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="block text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[#edf4fc] text-[11px] font-bold text-[#245b9b]">{(contact.firstName?.[0] || contact.email[0] || '?').toUpperCase()}{contact.lastName?.[0]?.toUpperCase() || ''}</span><span className="min-w-0"><span className="flex flex-wrap items-center gap-1.5"><Link href={`/contacts/${contact.id}`} data-testid={`link-contact-${contact.id}`} className="text-[12px] font-semibold text-[#26364a] no-underline hover:text-[#245b9b] hover:underline">{contact.firstName} {contact.lastName}</Link><ContactTagBadges tags={contact.tags}/></span><span className="mt-0.5 block text-[11px] text-[#7c8794]">{contact.email}</span></span></div></td>
         <td className="px-4 py-3.5"><select
           data-testid={`select-contact-membership-${contact.id}`}
           aria-label={`Membership for ${[contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email}`}
@@ -1335,6 +1346,7 @@ export function ContactsPage() {
          <td data-testid={`cell-contact-last-email-${contact.id}`} className="px-4 py-3.5">{contact.lastEmail ? <div className="max-w-[230px]"><div data-testid={`contact-last-email-campaign-${contact.id}`} className="truncate text-[11px] font-semibold text-[#354458]" title={contact.lastEmail.campaignName}>{contact.lastEmail.campaignName}</div><div data-testid={`contact-last-email-date-${contact.id}`} className="mt-1 truncate whitespace-nowrap text-[10px] text-[#7c8794]">{formatDate(contact.lastEmail.lastAttemptAt)}</div></div> : <span className="text-[11px] text-[#9aa3ad]">No email sent</span>}</td>
         <td className="px-4 py-3.5 text-[11px] text-[#7c8794]">{new Date(contact.createdAt).toLocaleDateString()}</td>
           <td className="px-5 py-3.5"><div className="flex justify-end gap-1">
+            <Button variant="quiet" testId={`button-edit-contact-tags-${contact.id}`} title="Edit contact tags" ariaLabel={`Edit tags for ${contact.email}`} onClick={() => setTagContact(contact)}>Tags</Button>
             {(() => {
               const linkedinHref = getLinkedInProfileHref(contact.linkedinUrl);
               const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email;

@@ -24,6 +24,7 @@ import adminNotificationsRouter from "./admin-notifications";
 import supportRouter from "./support";
 import maintenanceRouter from "./maintenance";
 import contactIntentRouter from "./contact-intent";
+import contactTagsRouter from "./contact-tags";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -36,6 +37,7 @@ router.use(companyBusinessAreasRouter);
 router.use(globalCompaniesRouter);
 router.use(companyIntelligenceRouter);
 router.use(contactIntentRouter);
+router.use(contactTagsRouter);
 router.use(contactFieldOptionsRouter);
 router.use(notificationsRouter);
 router.use(contactImportRouter);

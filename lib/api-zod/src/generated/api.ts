@@ -1395,6 +1395,8 @@ export const listContactsQueryPageSizeMax = 100;
 
 export const listContactsQuerySearchMax = 200;
 
+export const listContactsQueryTagIdMax = 64;
+
 export const listContactsQueryStatusDefault = `all`;
 export const listContactsQueryListIdMax = 64;
 
@@ -1413,6 +1415,7 @@ export const ListContactsQueryParams = zod.object({
   "page": zod.coerce.number().int().min(1).default(listContactsQueryPageDefault),
   "pageSize": zod.coerce.number().int().min(1).max(listContactsQueryPageSizeMax).default(listContactsQueryPageSizeDefault),
   "search": zod.coerce.string().max(listContactsQuerySearchMax).optional(),
+  "tagId": zod.coerce.string().max(listContactsQueryTagIdMax).optional().describe('A tag UUID, all, or __none__ for untagged contacts'),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']).default(listContactsQueryStatusDefault),
   "listId": zod.coerce.string().max(listContactsQueryListIdMax).optional(),
   "companyId": zod.coerce.string().max(listContactsQueryCompanyIdMax).optional(),
@@ -1422,6 +1425,10 @@ export const ListContactsQueryParams = zod.object({
   "addedWithin": zod.enum(['any', '7', '30', '90']).default(listContactsQueryAddedWithinDefault),
   "includeHistory": zod.coerce.boolean().default(listContactsQueryIncludeHistoryDefault)
 })
+
+export const listContactsResponseContactsItemOneTagsItemNameMax = 40;
+
+export const listContactsResponseContactsItemOneTagsMax = 2;
 
 export const listContactsResponseContactsItemOneCompanyOneCompanyNameMax = 200;
 
@@ -1540,6 +1547,10 @@ export const listContactsResponseWorkspaceSubscribedMin = 0;
 export const ListContactsResponse = zod.object({
   "contacts": zod.array(zod.object({
   "id": zod.string().uuid(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactsResponseContactsItemOneTagsItemNameMax)
+})).max(listContactsResponseContactsItemOneTagsMax).optional(),
   "email": zod.string().email(),
   "name": zod.string(),
   "firstName": zod.string(),
@@ -1767,6 +1778,10 @@ export const CreateContactBody = zod.object({
   "listIds": zod.array(zod.string().uuid()).max(createContactBodyListIdsMax).optional()
 })
 
+export const createContactResponseTagsItemNameMax = 40;
+
+export const createContactResponseTagsMax = 2;
+
 export const createContactResponseCompanyOneCompanyNameMax = 200;
 
 export const createContactResponseCompanyOneCompanyWebsiteUrlMax = 2048;
@@ -1861,6 +1876,10 @@ export const createContactResponseEmailVerificationSuggestedEmailMax = 254;
 
 export const CreateContactResponse = zod.object({
   "id": zod.string().uuid(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createContactResponseTagsItemNameMax)
+})).max(createContactResponseTagsMax).optional(),
   "email": zod.string().email(),
   "name": zod.string(),
   "firstName": zod.string(),
@@ -1929,6 +1948,102 @@ export const CreateContactResponse = zod.object({
 
 
 /**
+ * @summary List the authenticated user's private tag library
+ */
+export const listContactTagsResponseNameMax = 40;
+
+
+
+export const ListContactTagsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactTagsResponseNameMax)
+})
+export const ListContactTagsResponse = zod.array(ListContactTagsResponseItem)
+
+
+/**
+ * @summary Create a tag in the authenticated user's library
+ */
+export const createContactTagBodyNameMax = 40;
+
+
+
+export const CreateContactTagBody = zod.object({
+  "name": zod.string().min(1).max(createContactTagBodyNameMax)
+})
+
+export const createContactTagResponseNameMax = 40;
+
+
+
+export const CreateContactTagResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createContactTagResponseNameMax)
+})
+
+
+/**
+ * @summary Rename an owned tag everywhere it is used
+ */
+export const UpdateContactTagParams = zod.object({
+  "tagId": zod.coerce.string().uuid()
+})
+
+export const updateContactTagBodyNameMax = 40;
+
+
+
+export const UpdateContactTagBody = zod.object({
+  "name": zod.string().min(1).max(updateContactTagBodyNameMax)
+})
+
+export const updateContactTagResponseNameMax = 40;
+
+
+
+export const UpdateContactTagResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateContactTagResponseNameMax)
+})
+
+
+/**
+ * @summary Delete an owned library tag and remove its contact assignments
+ */
+export const DeleteContactTagParams = zod.object({
+  "tagId": zod.coerce.string().uuid()
+})
+
+export const DeleteContactTagResponse = zod.void()
+
+
+/**
+ * @summary Replace a contact's tags with zero, one or two tags from the user's library
+ */
+export const SetContactTagsParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const setContactTagsBodyTagIdsMax = 2;
+
+
+
+export const SetContactTagsBody = zod.object({
+  "tagIds": zod.array(zod.string().uuid()).max(setContactTagsBodyTagIdsMax)
+})
+
+export const setContactTagsResponseNameMax = 40;
+
+
+
+export const SetContactTagsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(setContactTagsResponseNameMax)
+})
+export const SetContactTagsResponse = zod.array(SetContactTagsResponseItem)
+
+
+/**
  * @summary Add selected tenant contacts to a list or update their subscription status
  */
 export const bulkUpdateContactsBodyContactIdsMax = 1000;
@@ -1953,6 +2068,8 @@ export const BulkUpdateContactsResponse = zod.object({
  */
 export const exportContactsBodyColumnsMax = 40;
 
+export const exportContactsBodyFiltersTagIdMax = 64;
+
 export const exportContactsBodyFiltersSearchMax = 200;
 
 export const exportContactsBodyFiltersStatusDefault = `all`;
@@ -1972,6 +2089,7 @@ export const ExportContactsBody = zod.object({
   "scope": zod.enum(['filtered', 'all']),
   "columns": zod.array(zod.enum(['id', 'name', 'email', 'subscribed', 'listNames', 'companyName', 'companyWebsiteUrl', 'companyDomain', 'companyIndustry', 'companySize', 'companyRevenueRange', 'companyDescription', 'companyPhoneNumber', 'companyLinkedinUrl', 'companyLocation', 'phoneNumber', 'mobilePhone', 'jobTitle', 'department', 'seniority', 'location', 'lifecycleStage', 'leadStatus', 'leadSource', 'preferredLanguage', 'timeZone', 'linkedinUrl', 'websiteUrl', 'twitterUrl', 'facebookUrl', 'instagramUrl', 'interests', 'goals', 'painPoints', 'personalizationContext', 'notes', 'createdAt', 'updatedAt'])).min(1).max(exportContactsBodyColumnsMax),
   "filters": zod.object({
+  "tagId": zod.string().max(exportContactsBodyFiltersTagIdMax).optional(),
   "search": zod.string().max(exportContactsBodyFiltersSearchMax).optional(),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']).default(exportContactsBodyFiltersStatusDefault),
   "listId": zod.string().max(exportContactsBodyFiltersListIdMax).optional(),
@@ -4241,6 +4359,10 @@ export const GetContactParams = zod.object({
   "contactId": zod.coerce.string().uuid()
 })
 
+export const getContactResponseTagsItemNameMax = 40;
+
+export const getContactResponseTagsMax = 2;
+
 export const getContactResponseCompanyOneCompanyNameMax = 200;
 
 export const getContactResponseCompanyOneCompanyWebsiteUrlMax = 2048;
@@ -4335,6 +4457,10 @@ export const getContactResponseEmailVerificationSuggestedEmailMax = 254;
 
 export const GetContactResponse = zod.object({
   "id": zod.string().uuid(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(getContactResponseTagsItemNameMax)
+})).max(getContactResponseTagsMax).optional(),
   "email": zod.string().email(),
   "name": zod.string(),
   "firstName": zod.string(),
@@ -4531,6 +4657,10 @@ export const UpdateContactBody = zod.object({
   "listIds": zod.array(zod.string().uuid()).max(updateContactBodyListIdsMax).optional()
 })
 
+export const updateContactResponseTagsItemNameMax = 40;
+
+export const updateContactResponseTagsMax = 2;
+
 export const updateContactResponseCompanyOneCompanyNameMax = 200;
 
 export const updateContactResponseCompanyOneCompanyWebsiteUrlMax = 2048;
@@ -4625,6 +4755,10 @@ export const updateContactResponseEmailVerificationSuggestedEmailMax = 254;
 
 export const UpdateContactResponse = zod.object({
   "id": zod.string().uuid(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateContactResponseTagsItemNameMax)
+})).max(updateContactResponseTagsMax).optional(),
   "email": zod.string().email(),
   "name": zod.string(),
   "firstName": zod.string(),
@@ -5006,6 +5140,8 @@ export const DeleteContactListResponse = zod.void()
  */
 export const listContactSegmentsResponseNameMax = 100;
 
+export const listContactSegmentsResponseFiltersTagIdMax = 64;
+
 export const listContactSegmentsResponseFiltersSearchMax = 200;
 
 export const listContactSegmentsResponseFiltersListIdMax = 255;
@@ -5024,6 +5160,7 @@ export const ListContactSegmentsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(listContactSegmentsResponseNameMax),
   "filters": zod.object({
+  "tagId": zod.string().max(listContactSegmentsResponseFiltersTagIdMax).optional(),
   "search": zod.string().max(listContactSegmentsResponseFiltersSearchMax),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
   "listId": zod.string().min(1).max(listContactSegmentsResponseFiltersListIdMax),
@@ -5044,6 +5181,8 @@ export const ListContactSegmentsResponse = zod.array(ListContactSegmentsResponse
  */
 export const createContactSegmentBodyNameMax = 100;
 
+export const createContactSegmentBodyFiltersTagIdMax = 64;
+
 export const createContactSegmentBodyFiltersSearchMax = 200;
 
 export const createContactSegmentBodyFiltersListIdMax = 255;
@@ -5061,6 +5200,7 @@ export const createContactSegmentBodyFiltersLeadSourceMax = 120;
 export const CreateContactSegmentBody = zod.object({
   "name": zod.string().min(1).max(createContactSegmentBodyNameMax),
   "filters": zod.object({
+  "tagId": zod.string().max(createContactSegmentBodyFiltersTagIdMax).optional(),
   "search": zod.string().max(createContactSegmentBodyFiltersSearchMax),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
   "listId": zod.string().min(1).max(createContactSegmentBodyFiltersListIdMax),
@@ -5073,6 +5213,8 @@ export const CreateContactSegmentBody = zod.object({
 })
 
 export const createContactSegmentResponseNameMax = 100;
+
+export const createContactSegmentResponseFiltersTagIdMax = 64;
 
 export const createContactSegmentResponseFiltersSearchMax = 200;
 
@@ -5092,6 +5234,7 @@ export const CreateContactSegmentResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(createContactSegmentResponseNameMax),
   "filters": zod.object({
+  "tagId": zod.string().max(createContactSegmentResponseFiltersTagIdMax).optional(),
   "search": zod.string().max(createContactSegmentResponseFiltersSearchMax),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
   "listId": zod.string().min(1).max(createContactSegmentResponseFiltersListIdMax),
@@ -5123,6 +5266,8 @@ export const UpdateContactSegmentBody = zod.object({
 
 export const updateContactSegmentResponseNameMax = 100;
 
+export const updateContactSegmentResponseFiltersTagIdMax = 64;
+
 export const updateContactSegmentResponseFiltersSearchMax = 200;
 
 export const updateContactSegmentResponseFiltersListIdMax = 255;
@@ -5141,6 +5286,7 @@ export const UpdateContactSegmentResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(updateContactSegmentResponseNameMax),
   "filters": zod.object({
+  "tagId": zod.string().max(updateContactSegmentResponseFiltersTagIdMax).optional(),
   "search": zod.string().max(updateContactSegmentResponseFiltersSearchMax),
   "status": zod.enum(['all', 'subscribed', 'unsubscribed']),
   "listId": zod.string().min(1).max(updateContactSegmentResponseFiltersListIdMax),

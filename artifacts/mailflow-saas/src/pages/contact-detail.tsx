@@ -12,6 +12,7 @@ import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConf
 import { ContactFieldSelect } from '@/components/contact-field-select';
 import { ContactReportEvidence } from '@/components/delivery-evidence';
 import { ContactIntentAnalyzer } from '@/components/contact-intent-analyzer';
+import { ContactTagBadges, ContactTagEditor } from '@/components/contact-tags';
 
 const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const input = 'h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[13px] text-[#182333] outline-none transition focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7] placeholder:text-[#a0a8b3]';
@@ -244,6 +245,7 @@ export function ContactDetailPage() {
   const update = useUpdateContact();
   const qc = useQueryClient();
   const [form, setForm] = useState<Editable | null>(null);
+  const [tagEditorOpen, setTagEditorOpen] = useState(false);
   const [editingProfiles, setEditingProfiles] = useState<Set<NullableField>>(() => new Set());
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [companyChoice, setCompanyChoice] = useState('');
@@ -257,6 +259,7 @@ export function ContactDetailPage() {
 
   // Clear record-specific feedback and selections when route navigation reuses this page.
   useEffect(() => {
+    setTagEditorOpen(false);
     setNotice(null);
     setCompanyNotice(null);
     setCompanyChoice('');
@@ -428,6 +431,11 @@ export function ContactDetailPage() {
       <div className={`${panel} p-4`}><div className="text-[10px] uppercase tracking-wide text-[#84909e]">Record created</div><div className="mt-2 text-[13px] font-semibold text-[#29384a]">{date(contact.createdAt)}</div><p className="mt-1 text-[10px] text-[#8993a0]">In this workspace</p></div>
       <div className={`${panel} p-4`}><div className="text-[10px] uppercase tracking-wide text-[#84909e]">Last updated</div><div className="mt-2 text-[13px] font-semibold text-[#29384a]">{date(contact.updatedAt)}</div><p className="mt-1 text-[10px] text-[#8993a0]">Contact record revision</p></div>
     </div>
+    <section className={`${panel} mb-5 flex flex-wrap items-center justify-between gap-3 p-4`} aria-label="Contact tags">
+      <div className="flex flex-wrap items-center gap-2"><span className="text-[12px] font-semibold text-[#344154]">Tags</span><ContactTagBadges tags={contact.tags}/>{!contact.tags?.length && <span className="text-[11px] text-[#7c8794]">No tags assigned</span>}</div>
+      <button type="button" onClick={() => setTagEditorOpen(true)} className="rounded-md border border-[#d8dde4] px-3 py-2 text-[11px] font-semibold text-[#245b9b]">Edit tags</button>
+    </section>
+    {tagEditorOpen && <ContactTagEditor key={contact.id} contactId={contact.id} contactName={displayName} tags={contact.tags ?? []} onClose={() => setTagEditorOpen(false)}/>}
     <form onSubmit={save} className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(330px,.88fr)]">
       <div className="space-y-5">
         <Section title="Contact details" eyebrow="PERSON / IDENTITY">
