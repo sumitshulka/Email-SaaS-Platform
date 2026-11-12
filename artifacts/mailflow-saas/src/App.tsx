@@ -1844,7 +1844,8 @@ function Routes() {
     <Route path="/companies">{() => <RouteGate>{u => u.role === 'USER' ? <CompaniesPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : u.role === 'SUPERADMIN' ? <AdminGlobalCompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/lists">{() => <RouteGate>{() => <ListsPage/>}</RouteGate>}</Route>
-    <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
+    <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage key="campaign-list" maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
+    <Route path="/campaigns/new">{() => <RouteGate>{() => <CampaignsPage key="campaign-create" createPage maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/admin">{() => <RouteGate admin>{() => <AdminDashboardPage/>}</RouteGate>}</Route>
     <Route path="/admin/notifications">{() => <RouteGate admin>{() => <AdminNotificationsPage/>}</RouteGate>}</Route>

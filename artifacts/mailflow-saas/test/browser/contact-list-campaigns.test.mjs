@@ -999,6 +999,8 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('heading', { name: 'Campaigns', exact: true }).waitFor();
       await page.getByTestId('button-create-campaign').click();
+      await page.waitForURL('**/campaigns/new');
+      assert.equal(await page.getByRole('dialog', { name: 'New campaign draft' }).count(), 0, 'new campaigns must use a page, not a dialog');
       await page.getByTestId('input-campaign-name').fill('Audience regression');
       await page.getByTestId('button-campaign-step-next').click();
       await page.getByText('No contacts match this list and search.', { exact: true }).waitFor();
@@ -1012,6 +1014,69 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     } finally {
       await context.close();
       listMemberContactFixtures = [];
+    }
+  });
+
+  it('creates a campaign from the left-aligned page and preserves fields on a failed save', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    let submitted;
+    let attempts = 0;
+    try {
+      await installApiFixtures(context);
+      await context.route('**/api/campaigns', async route => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        submitted = route.request().postDataJSON();
+        attempts += 1;
+        await route.fulfill(attempts === 1
+          ? { status: 400, json: { error: 'Please retry this draft.' } }
+          : { status: 201, json: { ...campaign('page-created-campaign', submitted.name, submitted.listIds), ...submitted } });
+      });
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/campaigns/new`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-campaign-name').fill('Page campaign');
+      assert.equal(await page.getByRole('dialog').count(), 0);
+      const alignment = await page.getByTestId('page-new-campaign').evaluate(element => ({
+        left: element.getBoundingClientRect().left,
+        parentLeft: element.parentElement.getBoundingClientRect().left + parseFloat(getComputedStyle(element.parentElement).paddingLeft || '0'),
+      }));
+      assert.ok(Math.abs(alignment.left - alignment.parentLeft) < 2, 'the wizard page must sit at the content area’s left edge');
+      await page.screenshot({ path: '/tmp/mailflow-new-campaign-desktop.png' });
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('campaign-audience-summary').waitFor();
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('input-campaign-subject').fill('Page subject');
+      await page.getByRole('textbox', { name: 'Formatted email message' }).fill('Hello from the campaign page.');
+      await page.getByTestId('button-campaign-step-back').click();
+      await page.getByTestId('button-campaign-step-next').click();
+      assert.equal(await page.getByTestId('input-campaign-subject').inputValue(), 'Page subject');
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByRole('heading', { name: 'Confirm campaign setup' }).waitFor();
+      assert.equal(attempts, 0, 'Continue must never submit a draft');
+      await page.getByTestId('button-submit-campaign').click();
+      await page.getByText(/Please retry this draft\./).waitFor();
+      assert.ok(page.url().endsWith('/campaigns/new'), 'a rejected save must stay on the wizard page');
+      await page.getByTestId('button-submit-campaign').click();
+      await page.waitForURL('**/campaigns');
+      await page.getByText('Campaign draft created.', { exact: true }).waitFor();
+      assert.equal(attempts, 2);
+      assert.equal(submitted.subject, 'Page subject');
+      assert.deepEqual(submitted.attachments, [], 'PDF attachments must remain optional');
+      assert.deepEqual(submitted.listIds, [listOneId]);
+      // A fresh entry must not restore fields from the previous saved draft.
+      await page.getByTestId('button-create-campaign').click();
+      await page.waitForURL('**/campaigns/new');
+      await page.getByTestId('input-campaign-name').waitFor();
+      assert.equal(await page.getByTestId('input-campaign-name').inputValue(), '');
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'the basics page should fit a phone viewport');
+      await page.screenshot({ path: '/tmp/mailflow-new-campaign-mobile.png' });
+      await page.getByTestId('button-cancel-campaign').click();
+      await page.waitForURL('**/campaigns');
+      assert.deepEqual(pageErrors, []);
+    } finally {
+      await context.close();
     }
   });
 
