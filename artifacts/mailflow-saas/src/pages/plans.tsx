@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Sparkles, Upload, Users } from 'lucide-react';
+import { OpenCampaignEntitlement } from '@/components/open-campaign-audience';
 import {
   getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getGetSubscriptionAddOnsQueryKey, getListAvailableSubscriptionPackagesQueryKey, getListContactsQueryKey,
   getListTenantSendingAccountsQueryKey,
@@ -92,6 +93,8 @@ const primaryLimitFields = [
   'emailAccountLimit',
   'researchAllowance',
   'aiEmailAssistAllowance',
+  'openCampaignAllowance',
+  'openCampaignRecipientLimit',
 ] as const;
 
 type PlanAction = {
@@ -110,9 +113,9 @@ type PlanSubscription = {
 };
 
 function comparePrimaryPlans(current: SubscriptionPackage, target: SubscriptionPackage) {
-  const targetAtLeastAsHigh = primaryLimitFields.every(field => target[field] >= current[field]);
-  const targetAtMostAsHigh = primaryLimitFields.every(field => target[field] <= current[field]);
-  const exactlyEqual = primaryLimitFields.every(field => target[field] === current[field]);
+  const targetAtLeastAsHigh = primaryLimitFields.every(field => (target[field] ?? 0) >= (current[field] ?? 0));
+  const targetAtMostAsHigh = primaryLimitFields.every(field => (target[field] ?? 0) <= (current[field] ?? 0));
+  const exactlyEqual = primaryLimitFields.every(field => (target[field] ?? 0) === (current[field] ?? 0));
   if (exactlyEqual) return 'same' as const;
   if (targetAtLeastAsHigh) return 'upgrade' as const;
   if (targetAtMostAsHigh) return 'downgrade' as const;
@@ -228,6 +231,10 @@ function PackageCard({ item, featured, scheduled, pending, disabled, action, onl
         <div data-testid={`text-plan-research-allowance-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
           <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
           <span className="min-w-0 break-words">{item.researchAllowance === 0 ? 'Company research is not included in this package' : `${item.researchAllowance} company research run${item.researchAllowance === 1 ? '' : 's'} per term; queued retries count, and unused runs expire at term end`}</span>
+        </div>
+        <div data-testid={`text-plan-open-campaigns-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">{(item.openCampaignAllowance ?? 0) > 0 && (item.openCampaignRecipientLimit ?? 0) > 0 ? `${(item.openCampaignAllowance ?? 0).toLocaleString()} open campaign${item.openCampaignAllowance === 1 ? '' : 's'} per term to uploaded recipients, up to ${(item.openCampaignRecipientLimit ?? 0).toLocaleString()} each` : 'Open campaigns to uploaded recipients are not included'}</span>
         </div>
         <div data-testid={`text-plan-hourly-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
           <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
@@ -704,6 +711,7 @@ export default function PlansPage() {
           <p data-testid="text-current-subscription-contact-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Users className="h-3.5 w-3.5"/>Up to {activeSubscription.package.contactLimit.toLocaleString()} contacts</p>
           <p data-testid="text-current-subscription-sender-limit" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Mail className="h-3.5 w-3.5"/>Up to {currentEmailAccountLimit} SMTP sender account{currentEmailAccountLimit === 1 ? '' : 's'} (including active mailbox add-ons)</p>
           <p data-testid="text-current-subscription-research-allowance" className="mt-1 flex items-center gap-1.5 text-[11px] text-[#647b6b]"><Clock3 className="h-3.5 w-3.5"/>{activeSubscription.package.researchAllowance === 0 ? 'No company research runs are included this term' : `Up to ${activeSubscription.package.researchAllowance} company research run${activeSubscription.package.researchAllowance === 1 ? '' : 's'} this term; unused runs expire at term end`}</p>
+          <OpenCampaignEntitlement allowance={activeSubscription.package.openCampaignAllowance ?? 0} recipientLimit={activeSubscription.package.openCampaignRecipientLimit ?? 0}/>
         </div>
         <span data-testid="status-current-subscription" className="flex items-center gap-2 rounded-md border border-[#dce9e0] bg-white px-3 py-2 text-[11px] font-semibold text-[#477154]"><Clock3 className="h-4 w-4"/>Active through {new Date(activeSubscription.endsAt).toLocaleDateString()}</span>
       </section>

@@ -3,6 +3,7 @@ import { and, desc, eq, type SQL } from "drizzle-orm";
 import {
   db,
   contactsTable,
+  campaignEmailSuppressionsTable,
   emailCampaignRecipientsTable,
   emailCampaignsTable,
   emailDeliveryReportsTable,
@@ -300,7 +301,6 @@ export async function ingestDeliveryReports(options: {
           .limit(1);
         if (
           report.outcome === "bounced" &&
-          recipient.contactId &&
           latestAttempt?.id === attempt.id &&
           shouldApplyReportProjection(
             recipient,
@@ -309,6 +309,12 @@ export async function ingestDeliveryReports(options: {
             verification,
           )
         ) {
+          if (!recipient.contactId) {
+            await tx.insert(campaignEmailSuppressionsTable).values({ userId, email: recipientEmail.toLowerCase(), reason: "bounced" }).onConflictDoNothing();
+            await tx.update(emailCampaignRecipientsTable).set({ status: "suppressed", lastError: "Recipient address bounced.", updatedAt: new Date() })
+              .where(and(eq(emailCampaignRecipientsTable.userId, userId), eq(emailCampaignRecipientsTable.email, recipientEmail), eq(emailCampaignRecipientsTable.status, "queued")));
+            return { status: "duplicate" as const };
+          }
           await tx
             .update(contactsTable)
             .set({
@@ -424,6 +430,11 @@ export async function ingestDeliveryReports(options: {
             eq(emailCampaignRecipientsTable.userId, userId),
           ),
         );
+      if (report.outcome === "bounced" && !recipient.contactId) {
+        await tx.insert(campaignEmailSuppressionsTable).values({ userId, email: recipientEmail.toLowerCase(), reason: "bounced" }).onConflictDoNothing();
+        await tx.update(emailCampaignRecipientsTable).set({ status: "suppressed", lastError: "Recipient address bounced.", updatedAt: now })
+          .where(and(eq(emailCampaignRecipientsTable.userId, userId), eq(emailCampaignRecipientsTable.email, recipientEmail), eq(emailCampaignRecipientsTable.status, "queued")));
+      }
       if (report.outcome === "bounced" && recipient.contactId) {
         await tx
           .update(contactsTable)

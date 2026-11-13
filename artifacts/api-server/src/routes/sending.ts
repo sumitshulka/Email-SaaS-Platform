@@ -1,6 +1,8 @@
 import { BulkUpdateContactsBody, BulkUpdateContactsResponse } from "@workspace/api-zod";
 import { bulkUpdateTenantContacts } from "../lib/contact-bulk";
 import { contactTagCondition, readContactTags } from "../lib/contact-tags";
+import { campaignEmailSuppressionsTable, openCampaignAudienceTable } from "@workspace/db";
+import { normalizeOpenRecipients, openCampaignAllowance, openCampaignPlaceholderError, replaceOpenAudience } from "../lib/open-campaigns";
 import {
   and,
   asc,
@@ -973,6 +975,10 @@ async function campaignPayloads(
     }
     counts.set(recipient.campaignId, total);
   }
+  const openAudienceCounts = new Map((await db.select({
+    campaignId: openCampaignAudienceTable.campaignId, value: count(),
+  }).from(openCampaignAudienceTable).where(eq(openCampaignAudienceTable.userId, userId))
+    .groupBy(openCampaignAudienceTable.campaignId)).map(row => [row.campaignId, Number(row.value)]));
   return campaigns.map((campaign) => {
     const deliveryCounts = counts.get(campaign.id) ?? {
       recipients: 0,
@@ -996,7 +1002,7 @@ async function campaignPayloads(
         : null;
     const recipientCount =
       campaign.status === "draft"
-        ? (eligibleAudience?.uniqueRecipients ?? 0)
+        ? campaign.audienceType === "open" ? (openAudienceCounts.get(campaign.id) ?? 0) : (eligibleAudience?.uniqueRecipients ?? 0)
         : deliveryCounts.recipients;
     const remainingRecipients =
       campaign.status === "draft"
@@ -5757,6 +5763,26 @@ router.post(
   },
 );
 
+router.get("/open-campaigns/allowance", requireUserRole, async (req, res): Promise<void> => {
+  res.json(await openCampaignAllowance(req.authUser!.id));
+});
+
+router.get("/campaigns/:campaignId/open-audience", requireUserRole, async (req, res): Promise<void> => {
+  const params = UpdateCampaignParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid campaign identifier." }); return; }
+  const userId = req.authUser!.id;
+  const [campaign] = await db.select().from(emailCampaignsTable).where(and(
+    eq(emailCampaignsTable.id, params.data.campaignId), eq(emailCampaignsTable.userId, userId),
+  )).limit(1);
+  if (!campaign || campaign.audienceType !== "open") { res.status(404).json({ error: "Open campaign not found." }); return; }
+  const rows = await db.select({
+    email: openCampaignAudienceTable.email, firstName: openCampaignAudienceTable.firstName, lastName: openCampaignAudienceTable.lastName,
+  }).from(openCampaignAudienceTable).where(and(
+    eq(openCampaignAudienceTable.userId, userId), eq(openCampaignAudienceTable.campaignId, campaign.id),
+  )).orderBy(asc(openCampaignAudienceTable.createdAt), asc(openCampaignAudienceTable.id));
+  res.json(rows);
+});
+
 router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   const parsed = CreateCampaignBody.safeParse(req.body);
   if (!parsed.success) {
@@ -5782,9 +5808,23 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   });
   const listIds =
     parsed.data.listIds ?? (parsed.data.listId ? [parsed.data.listId] : []);
+  const isOpen = parsed.data.audienceType === "open";
+  let openRows: ReturnType<typeof normalizeOpenRecipients> = [];
+  if (isOpen) {
+    try { openRows = normalizeOpenRecipients(parsed.data.openRecipients ?? []); }
+    catch (error) { res.status(400).json({ error: (error as Error).message }); return; }
+    const allowance = await openCampaignAllowance(userId);
+    if (!allowance.remaining || openRows.length > allowance.recipientLimit) {
+      res.status(409).json({ error: !allowance.remaining ? "Your package has no open campaign allowance remaining this term." : `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.`, code: "OPEN_CAMPAIGN_ALLOWANCE" }); return;
+    }
+    const placeholderError = openCampaignPlaceholderError(openRows, JSON.stringify([variants, parsed.data.textBody, parsed.data.htmlBody]));
+    if (placeholderError) { res.status(400).json({ error: placeholderError }); return; }
+  } else if (parsed.data.openRecipients?.length) {
+    res.status(400).json({ error: "Uploaded recipients are only supported for open campaigns." }); return;
+  }
   if (
-    listIds.length === 0 ||
-    !(await isValidTenantListSelection(userId, listIds, true))
+    !isOpen && (listIds.length === 0 ||
+    !(await isValidTenantListSelection(userId, listIds, true)))
   ) {
     res.status(400).json({
       error: "Choose one or more active contact lists from your workspace.",
@@ -5827,10 +5867,11 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       .insert(emailCampaignsTable)
       .values({
         userId,
+        audienceType: isOpen ? "open" : "standard",
         senderAccountId: parsed.data.senderAccountId ?? null,
-        listId: listIds[0],
-        listIds,
-        excludedContactIds: parsed.data.excludedContactIds ?? [],
+        listId: isOpen ? null : listIds[0],
+        listIds: isOpen ? [] : listIds,
+        excludedContactIds: isOpen ? [] : (parsed.data.excludedContactIds ?? []),
         name: parsed.data.name.trim(),
         objective: parsed.data.objective?.trim() ?? "",
         subject: variants.subject[0]!,
@@ -5845,6 +5886,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
         attachments,
       })
       .returning();
+    if (isOpen) await replaceOpenAudience(tx, userId, campaign!.id, openRows);
     return { kind: "created" as const, campaign };
   });
   if (outcome.kind === "profanity") {
@@ -5888,9 +5930,11 @@ router.post(
       res.status(409).json({ error: "Follow-ups can only be created from queued or completed campaigns.", code: "CAMPAIGN_NOT_FOLLOW_UP_ELIGIBLE" });
       return;
     }
-    const [child] = await db.insert(emailCampaignsTable).values({
+    const child = await db.transaction(async tx => {
+    const [created] = await tx.insert(emailCampaignsTable).values({
       userId,
       parentCampaignId: source.id,
+      audienceType: source.audienceType,
       senderAccountId: source.senderAccountId,
       listId: source.listId,
       listIds: campaignListIds(source),
@@ -5905,6 +5949,18 @@ router.post(
       attachments: source.attachments,
       unsubscribeOrigin: source.unsubscribeOrigin,
     }).returning();
+    if (source.audienceType === "open") {
+      const rows = await tx.select({
+        email: emailCampaignRecipientsTable.email,
+        firstName: emailCampaignRecipientsTable.firstName,
+        lastName: emailCampaignRecipientsTable.lastName,
+      }).from(emailCampaignRecipientsTable).where(and(
+        eq(emailCampaignRecipientsTable.userId, userId), eq(emailCampaignRecipientsTable.campaignId, source.id),
+      ));
+      if (rows.length) await replaceOpenAudience(tx, userId, created!.id, normalizeOpenRecipients(rows));
+    }
+    return created!;
+    });
     const [summary] = (await campaignPayloads(userId)).filter(item => item.id === child!.id);
     res.status(201).json(summary);
   },
@@ -6007,7 +6063,14 @@ router.patch(
         : parsed.data.listId !== undefined
           ? [parsed.data.listId]
           : undefined;
+    if (campaignBeforeUpdate.audienceType === "open" && (requestedListIds?.length || parsed.data.excludedContactIds?.length)) {
+      res.status(400).json({ error: "Open campaigns use uploaded recipients, not contact lists." }); return;
+    }
+    if (campaignBeforeUpdate.audienceType !== "open" && parsed.data.openRecipients !== undefined) {
+      res.status(400).json({ error: "Uploaded recipients are only supported for open campaigns." }); return;
+    }
     if (
+      campaignBeforeUpdate.audienceType !== "open" &&
       requestedListIds !== undefined &&
       (requestedListIds.length === 0 ||
         !(await isValidTenantListSelection(userId, requestedListIds)))
@@ -6039,6 +6102,26 @@ router.patch(
     }
     const updateOutcome = await db.transaction(async (tx) => {
       const settings = await lockPlatformSettings(tx);
+      const [locked] = await tx.select().from(emailCampaignsTable).where(and(
+        eq(emailCampaignsTable.id, params.data.campaignId), eq(emailCampaignsTable.userId, userId),
+      )).for("update");
+      if (!locked || locked.status !== "draft") return { kind: "not_updated" as const };
+      let openRows;
+      if (locked.audienceType === "open") {
+        try {
+          openRows = parsed.data.openRecipients !== undefined
+            ? normalizeOpenRecipients(parsed.data.openRecipients)
+            : await tx.select().from(openCampaignAudienceTable).where(and(
+              eq(openCampaignAudienceTable.userId, userId), eq(openCampaignAudienceTable.campaignId, locked.id),
+            ));
+        } catch (error) { return { kind: "open_invalid" as const, message: (error as Error).message }; }
+        const allowance = await openCampaignAllowance(userId, tx);
+        if (openRows.length > allowance.recipientLimit || allowance.allowance === 0) {
+          return { kind: "open_invalid" as const, message: `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.` };
+        }
+        const error = openCampaignPlaceholderError(openRows, JSON.stringify([effectiveVariants, parsed.data.textBody ?? locked.textBody, parsed.data.htmlBody ?? locked.htmlBody]));
+        if (error) return { kind: "open_invalid" as const, message: error };
+      }
       const latestBlockedFields = findProhibitedCampaignContent({
         subject: effectiveVariants.subject,
         greeting: effectiveVariants.greeting,
@@ -6103,10 +6186,14 @@ router.patch(
           ),
         )
         .returning();
+      if (updated && openRows && parsed.data.openRecipients !== undefined) await replaceOpenAudience(tx, userId, updated.id, openRows);
       return updated
         ? { kind: "updated" as const, campaign: updated }
         : { kind: "not_updated" as const };
     });
+    if (updateOutcome.kind === "open_invalid") {
+      res.status(400).json({ error: updateOutcome.message, code: "INVALID_OPEN_CAMPAIGN" }); return;
+    }
     if (updateOutcome.kind === "profanity") {
       res.status(422).json({
         error: `The platform policy blocks content in these campaign fields: ${describeBlockedCampaignFields(updateOutcome.fields)}.`,
@@ -6223,6 +6310,11 @@ router.post(
         .for("update");
       if (!campaign) return { error: "not_found" as const };
       if (campaign.status !== "draft") return { error: "not_draft" as const };
+      const isOpen = campaign.audienceType === "open";
+      const openAllowance = isOpen ? await openCampaignAllowance(userId, tx) : null;
+      if (isOpen && (!openAllowance?.subscriptionId || (!campaign.openCampaignCountedAt && !openAllowance.remaining))) {
+        return { error: "open_allowance" as const, message: "Your package has no open campaign allowance remaining this term." };
+      }
       const parentCampaign = campaign.parentCampaignId
         ? (await tx.select().from(emailCampaignsTable).where(and(
             eq(emailCampaignsTable.id, campaign.parentCampaignId),
@@ -6278,7 +6370,7 @@ router.post(
         return { error: "sender_limit" as const, limit: accountLimit };
       }
       const listIds = campaignListIds(campaign);
-      if (listIds.length === 0) return { error: "list_missing" as const };
+      if (!isOpen && listIds.length === 0) return { error: "list_missing" as const };
 
       const activeLists = await tx
         .select({ id: contactListsTable.id })
@@ -6290,7 +6382,7 @@ router.post(
             eq(contactListsTable.active, true),
           ),
         );
-      if (activeLists.length !== listIds.length) {
+      if (!isOpen && activeLists.length !== listIds.length) {
         return { error: "list_missing" as const };
       }
 
@@ -6470,7 +6562,21 @@ router.post(
         sql`lower(${contactsTable.email})`,
         bouncedEmails,
       );
-      const memberships = campaign.parentCampaignId
+      const memberships = isOpen
+        ? await tx.select({
+          id: openCampaignAudienceTable.id,
+          listId: sql<string>`''`,
+          email: openCampaignAudienceTable.email,
+          firstName: openCampaignAudienceTable.firstName,
+          lastName: openCampaignAudienceTable.lastName,
+          createdAt: openCampaignAudienceTable.createdAt,
+        }).from(openCampaignAudienceTable).where(and(
+          eq(openCampaignAudienceTable.userId, userId),
+          eq(openCampaignAudienceTable.campaignId, campaign.id),
+          sql`NOT EXISTS (SELECT 1 FROM ${campaignEmailSuppressionsTable} s WHERE s.user_id = ${userId} AND s.email = lower(${openCampaignAudienceTable.email}))`,
+          sql`NOT EXISTS (SELECT 1 FROM ${contactsTable} c WHERE c.user_id = ${userId} AND lower(c.email) = lower(${openCampaignAudienceTable.email}) AND (c.subscribed = false OR c.email_status IN ('bounced', 'unsubscribed')))`,
+        )).orderBy(asc(openCampaignAudienceTable.createdAt), asc(openCampaignAudienceTable.id))
+        : campaign.parentCampaignId
         ? await tx
         .select({
           id: contactsTable.id,
@@ -6524,7 +6630,16 @@ router.post(
         : memberships.filter((recipient) => !excludedContactIds.has(recipient.id));
       const eligibleRecipients = campaign.parentCampaignId
         ? eligibleMemberships
-        : uniqueCampaignRecipients(eligibleMemberships, listIds);
+        : isOpen ? eligibleMemberships : uniqueCampaignRecipients(eligibleMemberships, listIds);
+      if (isOpen) {
+        // Enforce against the entire upload, not just its currently eligible subset.
+        const uploaded = await tx.select().from(openCampaignAudienceTable).where(and(
+          eq(openCampaignAudienceTable.userId, userId), eq(openCampaignAudienceTable.campaignId, campaign.id),
+        ));
+        if (uploaded.length > (openAllowance?.recipientLimit ?? 0)) return { error: "open_allowance" as const, message: `Your package allows at most ${openAllowance?.recipientLimit ?? 0} recipients per open campaign.` };
+        const error = openCampaignPlaceholderError(uploaded, JSON.stringify([variants, campaign.textBody, campaign.htmlBody]));
+        if (error) return { error: "open_allowance" as const, message: error };
+      }
       if (eligibleRecipients.length === 0) return { error: "empty_list" as const };
       if (eligibleRecipients.length > settings.maxCampaignSize) {
         return { error: "campaign_size_limit" as const };
@@ -6534,6 +6649,10 @@ router.post(
         .update(emailCampaignsTable)
         .set({
           status: "queued",
+          ...(isOpen && !campaign.openCampaignCountedAt ? {
+            openCampaignSubscriptionId: openAllowance!.subscriptionId,
+            openCampaignCountedAt: now,
+          } : {}),
           senderAccountId: sender.id,
           senderEmail: sender.fromEmail,
           unsubscribeOrigin,
@@ -6555,7 +6674,7 @@ router.post(
         eligibleRecipients.map((recipient) => ({
           campaignId: campaign.id,
           userId,
-          contactId: recipient.id,
+          contactId: isOpen ? null : recipient.id,
           email: recipient.email,
           firstName: recipient.firstName,
           lastName: recipient.lastName,
@@ -6576,6 +6695,9 @@ router.post(
     });
 
     if ("error" in outcome) {
+      if (outcome.error === "open_allowance") {
+        res.status(409).json({ error: outcome.message, code: "OPEN_CAMPAIGN_ALLOWANCE" }); return;
+      }
       if (outcome.error === "not_found") {
         res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
       } else if (outcome.error === "followup_parent_pending") {

@@ -8,6 +8,45 @@
 import * as zod from 'zod';
 
 
+export const getOpenCampaignAllowanceResponseAllowanceMin = 0;
+
+export const getOpenCampaignAllowanceResponseUsedMin = 0;
+
+export const getOpenCampaignAllowanceResponseRemainingMin = 0;
+
+export const getOpenCampaignAllowanceResponseRecipientLimitMin = 0;
+
+
+
+export const GetOpenCampaignAllowanceResponse = zod.object({
+  "allowance": zod.number().int().min(getOpenCampaignAllowanceResponseAllowanceMin),
+  "used": zod.number().int().min(getOpenCampaignAllowanceResponseUsedMin),
+  "remaining": zod.number().int().min(getOpenCampaignAllowanceResponseRemainingMin),
+  "recipientLimit": zod.number().int().min(getOpenCampaignAllowanceResponseRecipientLimitMin),
+  "termEndsAt": zod.coerce.date().nullable()
+})
+
+
+export const GetOpenCampaignAudienceParams = zod.object({
+  "campaignId": zod.coerce.string().uuid()
+})
+
+export const getOpenCampaignAudienceResponseEmailMax = 254;
+
+export const getOpenCampaignAudienceResponseFirstNameMax = 100;
+
+export const getOpenCampaignAudienceResponseLastNameMax = 100;
+
+
+
+export const GetOpenCampaignAudienceResponseItem = zod.object({
+  "email": zod.string().email().max(getOpenCampaignAudienceResponseEmailMax),
+  "firstName": zod.string().max(getOpenCampaignAudienceResponseFirstNameMax).optional(),
+  "lastName": zod.string().max(getOpenCampaignAudienceResponseLastNameMax).optional()
+})
+export const GetOpenCampaignAudienceResponse = zod.array(GetOpenCampaignAudienceResponseItem)
+
+
 /**
  * Returns server health status
  * @summary Health check
@@ -5333,6 +5372,7 @@ export const listCampaignsResponseAttachmentsMax = 2;
 
 
 export const ListCampaignsResponseItem = zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -5376,6 +5416,15 @@ export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
 /**
  * @summary Create a draft campaign for one of the tenant's contact lists
  */
+export const createCampaignBodyAudienceTypeDefault = `standard`;
+export const createCampaignBodyOpenRecipientsItemEmailMax = 254;
+
+export const createCampaignBodyOpenRecipientsItemFirstNameMax = 100;
+
+export const createCampaignBodyOpenRecipientsItemLastNameMax = 100;
+
+export const createCampaignBodyOpenRecipientsMax = 100000;
+
 export const createCampaignBodyNameMax = 160;
 
 export const createCampaignBodyObjectiveMax = 500;
@@ -5409,6 +5458,12 @@ export const createCampaignBodyAttachmentsMax = 2;
 
 
 export const CreateCampaignBody = zod.object({
+  "audienceType": zod.enum(['standard', 'open']).default(createCampaignBodyAudienceTypeDefault),
+  "openRecipients": zod.array(zod.object({
+  "email": zod.string().email().max(createCampaignBodyOpenRecipientsItemEmailMax),
+  "firstName": zod.string().max(createCampaignBodyOpenRecipientsItemFirstNameMax).optional(),
+  "lastName": zod.string().max(createCampaignBodyOpenRecipientsItemLastNameMax).optional()
+})).max(createCampaignBodyOpenRecipientsMax).optional(),
   "senderAccountId": zod.string().uuid().nullish(),
   "name": zod.string().min(1).max(createCampaignBodyNameMax),
   "objective": zod.string().max(createCampaignBodyObjectiveMax).optional(),
@@ -5447,6 +5502,7 @@ export const createCampaignResponseAttachmentsMax = 2;
 
 
 export const CreateCampaignResponse = zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -5602,6 +5658,7 @@ export const getCampaignHistoryResponseSummaryActiveCampaignCountMin = 0;
 
 export const GetCampaignHistoryResponse = zod.object({
   "campaigns": zod.array(zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -5898,6 +5955,7 @@ export const getCampaignDashboardResponseVariantResultsSignatureVariantsItemUnkn
 
 export const GetCampaignDashboardResponse = zod.object({
   "campaign": zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -6008,6 +6066,14 @@ export const UpdateCampaignParams = zod.object({
   "campaignId": zod.coerce.string().uuid()
 })
 
+export const updateCampaignBodyOpenRecipientsItemEmailMax = 254;
+
+export const updateCampaignBodyOpenRecipientsItemFirstNameMax = 100;
+
+export const updateCampaignBodyOpenRecipientsItemLastNameMax = 100;
+
+export const updateCampaignBodyOpenRecipientsMax = 100000;
+
 export const updateCampaignBodyNameMax = 160;
 
 export const updateCampaignBodyObjectiveMax = 500;
@@ -6041,6 +6107,11 @@ export const updateCampaignBodyAttachmentsMax = 2;
 
 
 export const UpdateCampaignBody = zod.object({
+  "openRecipients": zod.array(zod.object({
+  "email": zod.string().email().max(updateCampaignBodyOpenRecipientsItemEmailMax),
+  "firstName": zod.string().max(updateCampaignBodyOpenRecipientsItemFirstNameMax).optional(),
+  "lastName": zod.string().max(updateCampaignBodyOpenRecipientsItemLastNameMax).optional()
+})).max(updateCampaignBodyOpenRecipientsMax).optional(),
   "senderAccountId": zod.string().uuid().nullish(),
   "name": zod.string().min(1).max(updateCampaignBodyNameMax).optional(),
   "objective": zod.string().max(updateCampaignBodyObjectiveMax).optional(),
@@ -6079,6 +6150,7 @@ export const updateCampaignResponseAttachmentsMax = 2;
 
 
 export const UpdateCampaignResponse = zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -6178,6 +6250,7 @@ export const createCampaignFollowUpResponseAttachmentsMax = 2;
 
 
 export const CreateCampaignFollowUpResponse = zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -6447,6 +6520,7 @@ export const sendCampaignResponseAttachmentsMax = 2;
 
 
 export const SendCampaignResponse = zod.object({
+  "audienceType": zod.enum(['standard', 'open']).optional(),
   "id": zod.string().uuid(),
   "parentCampaignId": zod.string().uuid().nullable(),
   "campaignType": zod.enum(['primary', 'follow_up']),
@@ -7972,6 +8046,10 @@ export const listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax = 3;
 
 export const listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
 
+export const listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignAllowanceMin = 0;
+
+export const listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin = 0;
+
 export const listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
 
 export const listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin = 0;
@@ -7997,6 +8075,8 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "currency": zod.string().min(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAdminSubscriptionPackagesResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8032,6 +8112,12 @@ export const createSubscriptionPackageBodyPeriodDaysMax = 3660;
 export const createSubscriptionPackageBodyContactLimitMin = 0;
 export const createSubscriptionPackageBodyContactLimitMax = 10000000;
 
+export const createSubscriptionPackageBodyOpenCampaignAllowanceMin = 0;
+export const createSubscriptionPackageBodyOpenCampaignAllowanceMax = 10000;
+
+export const createSubscriptionPackageBodyOpenCampaignRecipientLimitMin = 0;
+export const createSubscriptionPackageBodyOpenCampaignRecipientLimitMax = 100000;
+
 export const createSubscriptionPackageBodyEmailAccountLimitMin = 0;
 export const createSubscriptionPackageBodyEmailAccountLimitMax = 100;
 
@@ -8054,6 +8140,8 @@ export const CreateSubscriptionPackageBody = zod.object({
   "currency": zod.string().regex(createSubscriptionPackageBodyCurrencyRegExp),
   "periodDays": zod.number().int().min(createSubscriptionPackageBodyPeriodDaysMin).max(createSubscriptionPackageBodyPeriodDaysMax),
   "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
+  "openCampaignAllowance": zod.number().int().min(createSubscriptionPackageBodyOpenCampaignAllowanceMin).max(createSubscriptionPackageBodyOpenCampaignAllowanceMax).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(createSubscriptionPackageBodyOpenCampaignRecipientLimitMin).max(createSubscriptionPackageBodyOpenCampaignRecipientLimitMax).optional(),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageBodyResearchAllowanceMin).max(createSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(createSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
@@ -8066,6 +8154,10 @@ export const createSubscriptionPackageResponseCurrencyMin = 3;
 export const createSubscriptionPackageResponseCurrencyMax = 3;
 
 export const createSubscriptionPackageResponseContactLimitMin = 0;
+
+export const createSubscriptionPackageResponseOpenCampaignAllowanceMin = 0;
+
+export const createSubscriptionPackageResponseOpenCampaignRecipientLimitMin = 0;
 
 export const createSubscriptionPackageResponseEmailAccountLimitMin = 0;
 
@@ -8089,6 +8181,8 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "currency": zod.string().min(createSubscriptionPackageResponseCurrencyMin).max(createSubscriptionPackageResponseCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(createSubscriptionPackageResponseOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(createSubscriptionPackageResponseOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageResponseResearchAllowanceMin).max(createSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(createSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8122,6 +8216,12 @@ export const updateSubscriptionPackageBodyPeriodDaysMax = 3660;
 export const updateSubscriptionPackageBodyContactLimitMin = 0;
 export const updateSubscriptionPackageBodyContactLimitMax = 10000000;
 
+export const updateSubscriptionPackageBodyOpenCampaignAllowanceMin = 0;
+export const updateSubscriptionPackageBodyOpenCampaignAllowanceMax = 10000;
+
+export const updateSubscriptionPackageBodyOpenCampaignRecipientLimitMin = 0;
+export const updateSubscriptionPackageBodyOpenCampaignRecipientLimitMax = 100000;
+
 export const updateSubscriptionPackageBodyEmailAccountLimitMin = 0;
 export const updateSubscriptionPackageBodyEmailAccountLimitMax = 100;
 
@@ -8143,6 +8243,8 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "currency": zod.string().regex(updateSubscriptionPackageBodyCurrencyRegExp).optional(),
   "periodDays": zod.number().int().min(updateSubscriptionPackageBodyPeriodDaysMin).max(updateSubscriptionPackageBodyPeriodDaysMax).optional(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
+  "openCampaignAllowance": zod.number().int().min(updateSubscriptionPackageBodyOpenCampaignAllowanceMin).max(updateSubscriptionPackageBodyOpenCampaignAllowanceMax).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(updateSubscriptionPackageBodyOpenCampaignRecipientLimitMin).max(updateSubscriptionPackageBodyOpenCampaignRecipientLimitMax).optional(),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageBodyResearchAllowanceMin).max(updateSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(updateSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
@@ -8155,6 +8257,10 @@ export const updateSubscriptionPackageResponseCurrencyMin = 3;
 export const updateSubscriptionPackageResponseCurrencyMax = 3;
 
 export const updateSubscriptionPackageResponseContactLimitMin = 0;
+
+export const updateSubscriptionPackageResponseOpenCampaignAllowanceMin = 0;
+
+export const updateSubscriptionPackageResponseOpenCampaignRecipientLimitMin = 0;
 
 export const updateSubscriptionPackageResponseEmailAccountLimitMin = 0;
 
@@ -8178,6 +8284,8 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "currency": zod.string().min(updateSubscriptionPackageResponseCurrencyMin).max(updateSubscriptionPackageResponseCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(updateSubscriptionPackageResponseOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(updateSubscriptionPackageResponseOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageResponseResearchAllowanceMin).max(updateSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(updateSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8201,6 +8309,10 @@ export const giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMin = 3;
 export const giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMax = 3;
 
 export const giftAdminSubscriptionResponseOneSubscriptionPackageContactLimitMin = 0;
+
+export const giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignAllowanceMin = 0;
+
+export const giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignRecipientLimitMin = 0;
 
 export const giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin = 0;
 
@@ -8238,6 +8350,8 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
   "currency": zod.string().min(giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8355,6 +8469,10 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax = 
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin = 0;
 
+export const listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignAllowanceMin = 0;
+
+export const listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin = 0;
+
 export const listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin = 0;
@@ -8380,6 +8498,8 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "currency": zod.string().min(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMin).max(listAvailableSubscriptionPackagesResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8414,6 +8534,10 @@ export const getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax = 3
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin = 0;
 
+export const getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignAllowanceMin = 0;
+
+export const getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin = 0;
+
 export const getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin = 0;
@@ -8429,6 +8553,10 @@ export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurren
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMax = 3;
 
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageContactLimitMin = 0;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignAllowanceMin = 0;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignRecipientLimitMin = 0;
 
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin = 0;
 
@@ -8459,6 +8587,8 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "currency": zod.string().min(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8484,6 +8614,8 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "currency": zod.string().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8509,6 +8641,10 @@ export const activateFreeSubscriptionResponseSubscriptionPackageCurrencyMin = 3;
 export const activateFreeSubscriptionResponseSubscriptionPackageCurrencyMax = 3;
 
 export const activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin = 0;
+
+export const activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignAllowanceMin = 0;
+
+export const activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignRecipientLimitMin = 0;
 
 export const activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin = 0;
 
@@ -8539,6 +8675,8 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "currency": zod.string().min(activateFreeSubscriptionResponseSubscriptionPackageCurrencyMin).max(activateFreeSubscriptionResponseSubscriptionPackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8592,6 +8730,10 @@ export const getSubscriptionAddOnsResponsePackagesItemCurrencyMin = 3;
 export const getSubscriptionAddOnsResponsePackagesItemCurrencyMax = 3;
 
 export const getSubscriptionAddOnsResponsePackagesItemContactLimitMin = 0;
+
+export const getSubscriptionAddOnsResponsePackagesItemOpenCampaignAllowanceMin = 0;
+
+export const getSubscriptionAddOnsResponsePackagesItemOpenCampaignRecipientLimitMin = 0;
 
 export const getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin = 0;
 
@@ -8652,6 +8794,8 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "currency": zod.string().min(getSubscriptionAddOnsResponsePackagesItemCurrencyMin).max(getSubscriptionAddOnsResponsePackagesItemCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -8722,6 +8866,10 @@ export const verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax = 3;
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin = 0;
 
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignAllowanceMin = 0;
+
+export const verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin = 0;
+
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin = 0;
@@ -8754,6 +8902,8 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "currency": zod.string().min(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageCurrencyMax),
   "periodDays": zod.number().int(),
   "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
+  "openCampaignAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignAllowanceMin).optional(),
+  "openCampaignRecipientLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin).optional(),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),

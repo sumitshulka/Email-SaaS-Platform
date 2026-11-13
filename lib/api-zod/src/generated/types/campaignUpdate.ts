@@ -6,8 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CampaignAttachment } from './campaignAttachment';
+import type { OpenCampaignRecipientInput } from './openCampaignRecipientInput';
 
 export interface CampaignUpdate {
+  /** @maxItems 100000 */
+  openRecipients?: OpenCampaignRecipientInput[];
   /** @nullable */
   senderAccountId?: string | null;
   /**

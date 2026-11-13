@@ -21,6 +21,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-placeholders';
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
+import { OpenCampaignAudience, openCampaignsEnabled } from '@/components/open-campaign-audience';
+import { findUnavailableOpenPlaceholders, openPlaceholderAvailability, openPlaceholderReason, renderOpenRecipientPreview } from '@/lib/open-campaign';
 import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetCampaignAttachmentAvailabilityQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign, useCancelPausedCampaign,
@@ -32,6 +34,7 @@ import {
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
   useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
   useUpdateContactList, useBulkUpdateContacts,
+  getGetOpenCampaignAllowanceQueryKey, getGetOpenCampaignAudienceQueryKey, useGetOpenCampaignAllowance, useGetOpenCampaignAudience,
 } from '@workspace/api-client-react';
 import type {
   CampaignDashboard, CampaignSummary, CampaignTemplatePreview, Contact, ContactDirectoryItem, ContactEmailHistoryItem, ContactEmailVerification, ContactList, ContactOption,
@@ -39,7 +42,7 @@ import type {
   CampaignHistory, GetCampaignHistoryParams, GmailRecentRescanInput, GmailRecentRescanResult, GmailSyncDiagnosticsOutcome,
   GmailMailboxSyncNowResult,
   SenderInboxCheckResult, UserDashboard,
-  ListContactsQueryResult,
+  ListContactsQueryResult, OpenCampaignRecipientInput,
 } from '@workspace/api-client-react';
 import {
   trackSmtpSenderAccountCreated,
@@ -1909,7 +1912,10 @@ type CampaignForm = {
   senderAccountId: string;
   excludedContactIds: string[];
   attachments: Array<{ objectPath: string; name: string; size: number }>;
+  openRecipients: OpenCampaignRecipientInput[];
 };
+type CampaignAudienceType = 'standard' | 'open';
+const isOpenCampaign = (campaign: CampaignSummary) => campaign.audienceType === 'open';
 type CampaignVariantField = 'subjectVariants' | 'greetingVariants' | 'signatureVariants';
 type CampaignAiBrief = {
   persona: string;
@@ -1951,6 +1957,7 @@ const blankCampaign: CampaignForm = {
   senderAccountId: '',
   excludedContactIds: [],
   attachments: [],
+  openRecipients: [],
 };
 
 let pendingCampaignsNotice: { kind: 'success' | 'error'; text: string } | null = null;
@@ -2002,6 +2009,27 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
   const [editing, setEditing] = useState<CampaignSummary | null | undefined>(undefined); const [form, setForm] = useState<CampaignForm>(blankCampaign);
   const [campaignStep, setCampaignStep] = useState(0);
   const [campaignStepError, setCampaignStepError] = useState('');
+  const [audienceType, setAudienceType] = useState<CampaignAudienceType>(() => createPage && new URLSearchParams(window.location.search).get('audience') === 'open' ? 'open' : 'standard');
+  const isOpen = audienceType === 'open';
+  const openAllowanceQuery = useGetOpenCampaignAllowance({ query: { queryKey: getGetOpenCampaignAllowanceQueryKey(), staleTime: 0 } });
+  const openAllowance = openAllowanceQuery.data;
+  const openEnabled = openCampaignsEnabled(openAllowance);
+  const editingOpenId = editing && isOpenCampaign(editing) ? editing.id : '';
+  const savedOpenAudienceQuery = useGetOpenCampaignAudience(editingOpenId, {
+    query: { queryKey: getGetOpenCampaignAudienceQueryKey(editingOpenId), enabled: Boolean(editingOpenId), staleTime: 0 },
+  });
+  const openAudienceInitializedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editingOpenId || !savedOpenAudienceQuery.data || openAudienceInitializedFor.current === editingOpenId) return;
+    openAudienceInitializedFor.current = editingOpenId;
+    const saved = savedOpenAudienceQuery.data;
+    setForm(current => ({ ...current, openRecipients: [...saved] }));
+  }, [editingOpenId, savedOpenAudienceQuery.data]);
+  const openRecipientsOverLimit = Boolean(openAllowance && form.openRecipients.length > openAllowance.recipientLimit);
+  const openAudienceReady = form.openRecipients.length > 0 && !openRecipientsOverLimit && !(editingOpenId && savedOpenAudienceQuery.isLoading);
+  const openPlaceholders = openPlaceholderAvailability(form.openRecipients);
+  const unavailableOpenPlaceholders = () => findUnavailableOpenPlaceholders([...form.subjectVariants, ...form.greetingVariants, ...form.signatureVariants, form.textBody, form.htmlBody], form.openRecipients);
+  const [openPreviewEmail, setOpenPreviewEmail] = useState('');
   useEffect(() => {
     if (createPage || !pendingCampaignsNotice) return;
     setNotice(pendingCampaignsNotice);
@@ -2165,7 +2193,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
   const contactsQuery = useListContactOptions(sampleContactsParams, {
     query: {
       queryKey: getListContactOptionsQueryKey(sampleContactsParams),
-      enabled: form.listIds.length > 0,
+      enabled: !isOpen && form.listIds.length > 0,
       staleTime: 30_000,
     },
   });
@@ -2193,8 +2221,8 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
   const queueStartDate = queueStartAt ? new Date(queueStartAt) : null;
   const campaignAudienceListIds =
     editing !== undefined
-      ? form.listIds
-      : pendingAction?.kind === 'queue'
+      ? isOpen ? [] : form.listIds
+      : pendingAction?.kind === 'queue' && !isOpenCampaign(pendingAction.campaign)
         ? pendingAction.campaign.listIds?.length
           ? pendingAction.campaign.listIds
           : pendingAction.campaign.listId
@@ -2221,6 +2249,9 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     !campaignAudienceQuery.isFetching &&
     !campaignAudienceQuery.isError,
   );
+  const editorAudienceReady = isOpen ? openAudienceReady : audienceCheckReady;
+  const pendingQueueIsOpen = pendingAction?.kind === 'queue' && isOpenCampaign(pendingAction.campaign);
+  const queueAudienceReady = pendingQueueIsOpen || audienceCheckReady;
   const queueStartIsValid = Boolean(
     queueStartDate &&
     Number.isFinite(queueStartDate.getTime()) &&
@@ -2286,12 +2317,21 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
   const continueCampaignStep = () => {
     setCampaignStepError('');
     if (campaignStep === 0 && !form.name.trim()) return setCampaignStepError('Enter an internal campaign name to continue.');
-    if (campaignStep === 1) {
+    if (campaignStep === 1 && isOpen) {
+      if (editingOpenId && savedOpenAudienceQuery.isLoading) return setCampaignStepError('Wait for the saved recipients to load before continuing.');
+      if (!form.openRecipients.length) return setCampaignStepError('Upload a CSV with at least one valid email address to continue.');
+      if (openRecipientsOverLimit) return setCampaignStepError(`Your plan allows up to ${openAllowance?.recipientLimit.toLocaleString()} recipients per open campaign. Upload a smaller file.`);
+    }
+    if (campaignStep === 1 && !isOpen) {
       if (!form.listIds.length) return setCampaignStepError('Select at least one active list.');
       if (!audienceCheckReady) return setCampaignStepError('Wait for the audience check to finish, or retry it before continuing.');
     }
     if (campaignStep === 2 && (!form.subjectVariants.some(value => value.trim()) || !form.textBody.trim())) {
       return setCampaignStepError('Add at least one subject line and a message body before continuing.');
+    }
+    if (campaignStep === 2 && isOpen) {
+      const unavailable = unavailableOpenPlaceholders();
+      if (unavailable.length) return setCampaignStepError(`These fields aren’t available for every uploaded recipient: ${unavailable.map(key => `{{${key}}}`).join(', ')}. Remove them, or upload a file where every row has the value.`);
     }
     setCampaignStep(step => Math.min(3, step + 1));
   };
@@ -2311,8 +2351,18 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     createInitialized.current = true;
     openNew();
   });
-  const openNew = () => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(null); const listIds = activeLists[0]?.id ? [activeLists[0].id] : []; setForm({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); newDraftBaseline.current = JSON.stringify({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); };
-  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [], attachments: campaign.attachments ?? [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
+  const openNew = (type: CampaignAudienceType = audienceType) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(null); setAudienceType(type); openAudienceInitializedFor.current = null; setOpenPreviewEmail(''); const listIds = type === 'standard' && activeLists[0]?.id ? [activeLists[0].id] : []; setForm({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); newDraftBaseline.current = JSON.stringify({ ...blankCampaign, listIds, senderAccountId: primarySenderAccountId }); };
+  const switchAudienceType = (type: CampaignAudienceType) => {
+    if (type === audienceType) return;
+    setAudienceType(type);
+    setCampaignStepError('');
+    setSampleContactId('');
+    setOpenPreviewEmail('');
+    setPreviewState(null);
+    setPreviewError(null);
+    setForm(current => ({ ...current, listIds: type === 'standard' && activeLists[0]?.id ? [activeLists[0].id] : [], excludedContactIds: [], openRecipients: [] }));
+  };
+  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); setAudienceType(isOpenCampaign(campaign) ? 'open' : 'standard'); openAudienceInitializedFor.current = null; setOpenPreviewEmail(''); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [], attachments: campaign.attachments ?? [], openRecipients: [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
   const uploadCampaignAttachment = async (file: File) => {
     setAttachmentError('');
     if (!campaignPdfUploadAvailable) {
@@ -2478,7 +2528,14 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
   };
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.listIds.length || !audienceCheckReady || audienceActionInProgress.current) return;
+    if ((!isOpen && !form.listIds.length) || !editorAudienceReady || audienceActionInProgress.current) return;
+    if (isOpen) {
+      const unavailable = unavailableOpenPlaceholders();
+      if (unavailable.length) {
+        setNotice({ kind: 'error', text: `Remove personalization fields not available for every uploaded recipient: ${unavailable.map(key => `{{${key}}}`).join(', ')}.` });
+        return;
+      }
+    }
     setCampaignContentError(null);
     audienceActionInProgress.current = true;
     setAudienceActionPending(true);
@@ -2494,18 +2551,22 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
       signatureVariants,
       textBody: form.textBody.trim(),
       htmlBody: form.htmlBody.trim(),
-      listIds: [...form.listIds],
-      excludedContactIds: [...form.excludedContactIds],
       attachments: [...form.attachments],
       senderAccountId: form.senderAccountId || null,
+      ...(isOpen
+        ? { openRecipients: form.openRecipients.map(recipient => ({ ...recipient })) }
+        : { listIds: [...form.listIds], excludedContactIds: [...form.excludedContactIds] }),
     };
+    const createData = isOpen ? { ...data, audienceType: 'open' as const } : data;
     try {
-      const audience = await campaignAudienceQuery.refetch();
-      if (audience.isError || !audience.data) {
-        setNotice({ kind: 'error', text: 'We couldn’t verify the current audience. Retry before saving this campaign.' });
-        return;
+      if (!isOpen) {
+        const audience = await campaignAudienceQuery.refetch();
+        if (audience.isError || !audience.data) {
+          setNotice({ kind: 'error', text: 'We couldn’t verify the current audience. Retry before saving this campaign.' });
+          return;
+        }
       }
-      const success = () => { refresh(); if (createPage && !editing) { newDraftBaseline.current = null; pendingCampaignsNotice = { kind: 'success', text: 'Campaign draft created.' }; setLocation('/campaigns'); return; } closeCampaignEditor(); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
+      const success = () => { refresh(); if (editingOpenId) void qc.invalidateQueries({ queryKey: getGetOpenCampaignAudienceQueryKey(editingOpenId) }); if (createPage && !editing) { newDraftBaseline.current = null; pendingCampaignsNotice = { kind: 'success', text: 'Campaign draft created.' }; setLocation('/campaigns'); return; } closeCampaignEditor(); setNotice({ kind: 'success', text: editing ? 'Draft changes saved.' : 'Campaign draft created.' }); };
       const fail = (error: unknown) => {
         const errorData = error && typeof error === 'object' && 'data' in error && error.data && typeof error.data === 'object'
           ? error.data as { code?: unknown }
@@ -2517,7 +2578,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
         setNotice({ kind: 'error', text: mutationError(error) });
       };
       if (editing) update.mutate({ campaignId: editing.id, data }, { onSuccess: success, onError: fail });
-      else create.mutate({ data: data as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
+      else create.mutate({ data: createData as Parameters<typeof create.mutate>[0]['data'] }, { onSuccess: success, onError: fail });
     } finally {
       audienceActionInProgress.current = false;
       setAudienceActionPending(false);
@@ -2574,7 +2635,8 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
         setQueueStartError('Choose a valid start date and time before queueing this campaign.');
         return;
       }
-      if (!audienceCheckReady) {
+      const queueingOpen = isOpenCampaign(action.campaign);
+      if (!queueingOpen && !audienceCheckReady) {
         setQueueError('The current audience could not be verified. Retry the audience check before queueing.');
         return;
       }
@@ -2582,13 +2644,13 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
       audienceActionInProgress.current = true;
       setAudienceActionPending(true);
       try {
-        const audience = await campaignAudienceQuery.refetch();
-        if (audience.isError || !audience.data) {
+        const audience = queueingOpen ? null : await campaignAudienceQuery.refetch();
+        if (audience && (audience.isError || !audience.data)) {
           setQueueError('We couldn’t verify the current audience. Retry the audience check before queueing this campaign.');
           return;
         }
         send.mutate({ campaignId: action.campaign.id, data: { scheduledAt: queueStartDate.toISOString() } }, {
-          onSuccess: response => { setPendingAction(null); setQueueError(null); setQueuePolicyError(null); refresh(); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
+          onSuccess: response => { setPendingAction(null); setQueueError(null); setQueuePolicyError(null); refresh(); void qc.invalidateQueries({ queryKey: getGetOpenCampaignAllowanceQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactsQueryKey() }); setNotice({ kind: 'success', text: response.scheduledAt ? `Campaign scheduled for ${formatDate(response.scheduledAt)}.` : `Campaign status: ${response.status}.` }); },
           onError: error => {
             const apiError = (error as { data?: { code?: string; earliestStartAt?: string | null } }).data;
             if (apiError?.code === 'CAMPAIGN_START_TOO_EARLY' && apiError.earliestStartAt) {
@@ -2602,6 +2664,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
               setQueuePolicyError(mutationError(error));
               return;
             }
+            if (queueingOpen) void qc.invalidateQueries({ queryKey: getGetOpenCampaignAllowanceQueryKey() });
             setQueueError(mutationError(error));
           },
         });
@@ -2644,6 +2707,19 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
         {campaignStepError && <div role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]">{campaignStepError}</div>}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className={cx('min-w-0 space-y-3', campaignStep === 2 && 'sm:col-span-2')}>
+            {campaignStep === 0 && editing === null && <fieldset data-testid="campaign-audience-type" className="min-w-0">
+              <legend className={labelClass}>Campaign audience</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {([
+                  { value: 'standard' as const, title: 'Contact lists', detail: 'Send to subscribed contacts in your active lists.', disabled: !activeLists.length, disabledNote: 'Activate a contact list first.' },
+                  { value: 'open' as const, title: 'Open campaign', detail: 'Upload a CSV of recipients for this campaign only.', disabled: openAllowanceQuery.isSuccess && !openEnabled, disabledNote: 'Not included in your current plan.' },
+                ]).map(option => <button key={option.value} type="button" data-testid={`button-campaign-audience-${option.value}`} aria-pressed={audienceType === option.value} disabled={option.disabled && audienceType !== option.value} onClick={() => switchAudienceType(option.value)} className={cx('rounded-md border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-55', audienceType === option.value ? 'border-[#245b9b] bg-[#edf4fc]' : 'border-[#e0e5eb] bg-white hover:bg-[#f7f9fb]')}>
+                  <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[#26364a]">{option.value === 'open' ? <Upload className="h-3.5 w-3.5 text-[#245b9b]"/> : <Users className="h-3.5 w-3.5 text-[#245b9b]"/>}{option.title}</span>
+                  <span className="mt-0.5 block text-[10px] leading-4 text-[#6f7b88]">{option.disabled ? option.disabledNote : option.detail}</span>
+                </button>)}
+              </div>
+            </fieldset>}
+            {campaignStep === 0 && editing && isOpen && <p data-testid="text-campaign-audience-type-open" className="flex items-center gap-1.5 rounded-md bg-[#f3f8fd] px-3 py-2 text-[11px] text-[#3f5872]"><Upload className="h-3.5 w-3.5"/>Open campaign · sends to uploaded recipients</p>}
             {campaignStep === 0 && <Field label="Internal campaign name" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="April product notes" required testId="input-campaign-name"/>}
             {campaignStep === 0 && <label className="block min-w-0">
               <span className={labelClass}>SMTP sender account</span>
@@ -2725,7 +2801,19 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
               </div>}
             </section>}
           </div>
-          {campaignStep === 1 && <fieldset className="min-w-0 sm:col-span-2">
+          {campaignStep === 1 && isOpen && <OpenCampaignAudience
+            recipients={form.openRecipients}
+            onChange={openRecipients => { setForm(current => ({ ...current, openRecipients })); setOpenPreviewEmail(''); setCampaignStepError(''); }}
+            allowance={openAllowance}
+            allowanceLoading={openAllowanceQuery.isLoading}
+            allowanceError={openAllowanceQuery.isError}
+            retryAllowance={() => void openAllowanceQuery.refetch()}
+            savedLoading={Boolean(editingOpenId) && savedOpenAudienceQuery.isLoading}
+            savedError={Boolean(editingOpenId) && savedOpenAudienceQuery.isError}
+            retrySaved={() => void savedOpenAudienceQuery.refetch()}
+            isExistingDraft={Boolean(editingOpenId)}
+          />}
+          {campaignStep === 1 && !isOpen && <fieldset className="min-w-0 sm:col-span-2">
             <legend className={labelClass}>Target lists</legend>
             <div className="overflow-hidden rounded-md border border-[#d8dde4] bg-white">
               <div className="border-b border-[#e9edf0] bg-[#fbfcfd] p-2">
@@ -2776,7 +2864,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
             <p className="mt-1.5 text-[10px] leading-4 text-[#808a97]">Choose one or more lists. Inactive lists can’t be newly selected or queued.</p>
           </fieldset>}
         </div>
-        {campaignStep === 1 && <section className="rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-3" aria-label="Campaign list processing order">
+        {campaignStep === 1 && !isOpen && <section className="rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-3" aria-label="Campaign list processing order">
           <div><h3 className="text-[11px] font-semibold text-[#344154]">Processing order</h3><p className="mt-1 text-[10px] leading-4 text-[#788392]">If an email address appears in more than one list, the first list containing it determines the entry used. That address still receives only one email.</p></div>
           {form.listIds.length ? <ol data-testid="campaign-list-order" className="mt-2 max-h-36 space-y-1 overflow-y-auto pr-1">
             {form.listIds.map((listId, index) => {
@@ -2792,7 +2880,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
             })}
           </ol> : <p className="mt-2 text-[11px] text-[#8a5a31]">Select at least one list. You can change the order here.</p>}
         </section>}
-        {campaignStep === 1 && form.listIds.length > 0 && <div data-testid="campaign-audience-summary" className={cx('flex items-start gap-2 rounded-md border px-3 py-2.5 text-[11px] leading-5', campaignAudienceQuery.isError ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : campaignAudienceQuery.data?.overlappingRecipients ? 'border-[#efd9bd] bg-[#fff8ef] text-[#895b2f]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]')}>
+        {campaignStep === 1 && !isOpen && form.listIds.length > 0 && <div data-testid="campaign-audience-summary" className={cx('flex items-start gap-2 rounded-md border px-3 py-2.5 text-[11px] leading-5', campaignAudienceQuery.isError ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : campaignAudienceQuery.data?.overlappingRecipients ? 'border-[#efd9bd] bg-[#fff8ef] text-[#895b2f]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]')}>
           {campaignAudienceQuery.isError ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/> : <Users className="mt-0.5 h-4 w-4 shrink-0"/>}
           <div className="min-w-0 flex-1">
             {campaignAudienceQuery.isFetching && <p>Checking subscribed contacts and list overlap…</p>}
@@ -2814,7 +2902,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
             {campaignAudienceQuery.isError ? 'Retry audience' : 'Refresh audience'}
           </Button>
         </div>}
-        {campaignStep === 1 && <section aria-label="Contact selection" className="space-y-3 rounded-lg border border-[#dce4e9] bg-white p-4">
+        {campaignStep === 1 && !isOpen && <section aria-label="Contact selection" className="space-y-3 rounded-lg border border-[#dce4e9] bg-white p-4">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Review contacts</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Selected lists stay live until queueing. Uncheck contacts to exclude them. Bounced and unsubscribed contacts stay visible but cannot be selected.</p></div><div className="flex items-center gap-2"><Button type="button" variant="quiet" testId="button-refresh-campaign-contacts" disabled={!campaignReviewListId || campaignReviewContactsQuery.isFetching} onClick={() => { void campaignReviewContactsQuery.refetch(); void campaignAudienceQuery.refetch(); }}>{campaignReviewContactsQuery.isFetching ? 'Refreshing contacts…' : 'Refresh contacts'}</Button><span className="rounded-full bg-[#edf4fc] px-2.5 py-1 text-[10px] font-semibold text-[#245b9b]">{form.excludedContactIds.length} excluded</span></div></div>
           <div className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_minmax(180px,2fr)]">
             <label><span className={labelClass}>Review contacts in list</span><select className={inputClass} value={campaignReviewListId} onChange={event => { setCampaignReviewListId(event.target.value); setCampaignReviewPage(1); setCampaignReviewSearch(''); }}><option value="">Choose selected list</option>{form.listIds.map(id => <option key={id} value={id}>{lists.find(list => list.id === id)?.name ?? 'Selected list'}</option>)}</select></label>
@@ -2885,7 +2973,8 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
          </section>
           <section hidden={campaignStep !== 2} className="rounded-md border border-[#e4e9ef] bg-white p-3" aria-label="Insert a contact placeholder">
            <p className="mb-2 text-[10px] leading-4 text-[#687587]">Insert a contact field into the last focused subject, greeting, or signature option.</p>
-           <div className="flex flex-wrap gap-1.5">{CONTACT_PLACEHOLDERS.map(({ token, label }) => <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={`Insert ${token}`}>{label}</button>)}</div>
+           <div className="flex flex-wrap gap-1.5">{CONTACT_PLACEHOLDERS.filter(({ token }) => !isOpen || ['firstName', 'lastName', 'fullName', 'email'].includes(token.slice(2, -2))).map(({ token, label }) => { const unavailable = isOpen && !openPlaceholders[token.slice(2, -2)]; return <button key={token} type="button" disabled={unavailable} onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd] disabled:cursor-not-allowed disabled:border-[#e8ebef] disabled:bg-[#f6f7f9] disabled:text-[#a0a8b3]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={unavailable ? openPlaceholderReason(token) : `Insert ${token}`}>{label}</button>; })}</div>
+           {isOpen && <p className="mt-2 text-[10px] leading-4 text-[#7b8794]">Open campaigns can use email, and name fields only when every uploaded row has them. Company, phone, and profile fields aren’t available for uploaded recipients.</p>}
          </section>
           <label hidden={campaignStep !== 2} className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
           <section hidden={campaignStep !== 2} className="rounded-lg border border-[#dce4e9] bg-white p-4" aria-label="Email attachments">
@@ -2902,7 +2991,24 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
             <p className="mt-2 text-[10px] text-[#808a97]">Total: {(form.attachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(2)} / 5 MB</p>
             {attachmentError && <p role="alert" className="mt-2 text-[11px] text-[#a23f35]">{attachmentError}</p>}
           </section>
-          <section hidden={campaignStep !== 3} className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
+          <section hidden={campaignStep !== 3 || !isOpen} data-testid="panel-open-campaign-preview" className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Uploaded recipient preview">
+            <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for an uploaded recipient</h3><p className="mt-1 text-[11px] text-[#788392]">Local preview using the first subject, greeting, and signature options. Queued recipients receive their fixed test assignments, plus an unsubscribe link.</p></div>
+            <label className="block"><span className={labelClass}>Sample recipient</span><select data-testid="select-open-campaign-preview-recipient" className={inputClass} value={openPreviewEmail} onChange={event => setOpenPreviewEmail(event.target.value)} disabled={!form.openRecipients.length}>
+              <option value="">{form.openRecipients.length ? 'Choose an uploaded recipient' : 'Upload recipients first'}</option>
+              {form.openRecipients.slice(0, 100).map(recipient => <option key={recipient.email} value={recipient.email}>{[recipient.firstName, recipient.lastName].filter(Boolean).join(' ') || recipient.email} · {recipient.email}</option>)}
+            </select>{form.openRecipients.length > 100 && <span className="mt-1 block text-[10px] text-[#788392]">Showing the first 100 of {form.openRecipients.length.toLocaleString()} recipients.</span>}</label>
+            {(() => {
+              const recipient = form.openRecipients.find(item => item.email === openPreviewEmail);
+              if (!recipient) return null;
+              const rendered = renderOpenRecipientPreview({ subject: form.subjectVariants.find(value => value.trim()) ?? '', greeting: form.greetingVariants.find(value => value.trim()) ?? '', signature: form.signatureVariants.find(value => value.trim()) ?? '', textBody: form.textBody, htmlBody: form.htmlBody }, recipient);
+              return <div data-testid="panel-open-campaign-preview-rendered" className="space-y-4 rounded-md border border-[#e2e7ed] bg-white p-4">
+                <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Resolved subject</div><p data-testid="text-open-campaign-preview-subject" className="mt-1 break-words text-[13px] font-semibold text-[#29384a]">{rendered.subject}</p></div>
+                <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Formatted HTML</div>{rendered.htmlBody !== null ? <div className="campaign-message-preview mt-2 rounded-md bg-[#f8fafb] p-4 text-[12px] leading-6 text-[#566476] [&_a]:text-[#245b9b] [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_strong]:font-bold [&_u]:underline [&_ul]:my-2 [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: rendered.htmlBody }}/> : <p className="mt-2 text-[11px] text-[#84909d]">No formatted HTML message.</p>}</div>
+                <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text fallback</div><pre className="mt-2 whitespace-pre-wrap break-words rounded-md bg-[#f8fafb] p-4 font-sans text-[12px] leading-6 text-[#566476]">{rendered.textBody}</pre></div>
+              </div>;
+            })()}
+          </section>
+          <section hidden={campaignStep !== 3 || isOpen} className="space-y-3 rounded-lg border border-[#e0e4e9] bg-[#fbfcfd] p-4" aria-label="Personalized email preview">
             <div><h3 className="text-[12px] font-semibold text-[#344154]">Preview for a contact</h3><p className="mt-1 text-[11px] text-[#788392]">Preview the first subject, greeting, and signature options with a subscribed contact. Queued recipients receive their fixed test assignments.</p></div>
            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                <label className="min-w-0 flex-1"><span className={labelClass}>Sample contact</span><select data-testid="select-campaign-preview-contact" className={inputClass} value={sampleContactId} onChange={e => setSampleContactId(e.target.value)} disabled={!form.listIds.length || contactsQuery.isLoading}>
@@ -2923,38 +3029,39 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
              <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Plain-text fallback</div><pre data-testid="text-campaign-preview-fallback" className="mt-2 whitespace-pre-wrap break-words rounded-md bg-[#f8fafb] p-4 font-sans text-[12px] leading-6 text-[#566476]">{visiblePreview.textBody}</pre></div>
            </div>}
          </section>
-         <div className="flex items-start gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] leading-5 text-[#607186]"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/><span>Only subscribed contacts are eligible. Duplicate email addresses are removed when queued. Each test assignment stays fixed for that recipient throughout the campaign; an unsubscribe link is included automatically.</span></div>
+         <div className="flex items-start gap-2 rounded-md bg-[#f5f8fb] px-3 py-2.5 text-[11px] leading-5 text-[#607186]"><Users className="mt-0.5 h-4 w-4 shrink-0 text-[#245b9b]"/><span>{isOpen ? 'Uploaded addresses are deduplicated, and workspace unsubscribes and bounces are suppressed when queued.' : 'Only subscribed contacts are eligible. Duplicate email addresses are removed when queued.'} Each test assignment stays fixed for that recipient throughout the campaign; an unsubscribe link is included automatically.</span></div>
          {campaignStep === 3 && <section className="rounded-lg border border-[#cfe0ef] bg-[#f4f8fc] p-3" aria-label="Campaign confirmation">
            <h3 className="text-[12px] font-semibold text-[#294e72]">Confirm campaign setup</h3>
            <div className="mt-2 grid gap-2 text-[11px] text-[#4d6073] sm:grid-cols-2">
              <p><strong>Name:</strong> {form.name || 'Not entered'}</p><p><strong>Sender:</strong> {senderAccounts.find(account => account.id === form.senderAccountId)?.fromEmail ?? 'Default sender'}</p>
-             <p><strong>Lists:</strong> {form.listIds.map(id => lists.find(list => list.id === id)?.name ?? 'Removed list').join(', ') || 'None selected'}</p><p><strong>Contact exclusions:</strong> {form.excludedContactIds.length}</p>
+             {isOpen ? <><p><strong>Audience:</strong> Open campaign (uploaded CSV)</p><p><strong>Uploaded recipients:</strong> {form.openRecipients.length.toLocaleString()}</p></> : <><p><strong>Lists:</strong> {form.listIds.map(id => lists.find(list => list.id === id)?.name ?? 'Removed list').join(', ') || 'None selected'}</p><p><strong>Contact exclusions:</strong> {form.excludedContactIds.length}</p></>}
              <p><strong>Subject options:</strong> {form.subjectVariants.filter(value => value.trim()).length}</p><p><strong>Greeting / signature options:</strong> {form.greetingVariants.filter(value => value.trim()).length} / {form.signatureVariants.filter(value => value.trim()).length}</p>
            </div>
-           <p className="mt-2 border-t border-[#dce7f1] pt-2 text-[10px] leading-4 text-[#586d80]">Bounced, unsubscribed, and otherwise ineligible contacts are suppressed again when the campaign is queued. An unsubscribe link is included automatically.</p>
+           <p className="mt-2 border-t border-[#dce7f1] pt-2 text-[10px] leading-4 text-[#586d80]">{isOpen ? `Saving a draft doesn’t use your open campaign allowance. Queueing it the first time uses 1${openAllowance ? ` (${openAllowance.remaining.toLocaleString()} remaining this term)` : ''}; pausing, resuming, and retries don’t use more. Uploaded rows are not added to Contacts.` : 'Bounced, unsubscribed, and otherwise ineligible contacts are suppressed again when the campaign is queued.'} An unsubscribe link is included automatically.</p>
          </section>}
          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf0f2] pt-4">
            <Button variant="outline" testId="button-cancel-campaign" onClick={closeCampaignEditor}>Cancel</Button>
            <div className="flex gap-2">{campaignStep > 0 && <Button variant="outline" testId="button-campaign-step-back" onClick={() => { setCampaignStepError(''); setCampaignStep(step => Math.max(0, step - 1)); }}>Back</Button>}
-              {campaignStep < 3 ? <Button key="campaign-step-continue" type="button" testId="button-campaign-step-next" onClick={event => { event.preventDefault(); continueCampaignStep(); }}>Continue</Button> : <Button key="campaign-step-save" type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || uploadingAttachment || audienceActionPending || !form.listIds.length || !audienceCheckReady || (!editing && !activeLists.length)}>{(create.isPending || update.isPending || uploadingAttachment || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{uploadingAttachment ? 'Uploading PDF…' : audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
+              {campaignStep < 3 ? <Button key="campaign-step-continue" type="button" testId="button-campaign-step-next" onClick={event => { event.preventDefault(); continueCampaignStep(); }}>Continue</Button> : <Button key="campaign-step-save" type="submit" testId="button-submit-campaign" disabled={create.isPending || update.isPending || uploadingAttachment || audienceActionPending || !editorAudienceReady || (!isOpen && (!form.listIds.length || (!editing && !activeLists.length)))}>{(create.isPending || update.isPending || uploadingAttachment || audienceActionPending) && <LoaderCircle className="h-4 w-4 animate-spin"/>}{uploadingAttachment ? 'Uploading PDF…' : audienceActionPending ? 'Checking audience…' : editing ? 'Save draft' : 'Create draft'}</Button>}
            </div>
          </div>
       </form>
   </>;
   if (createPage) return <div data-testid="page-new-campaign" className="w-full max-w-[1040px]">
     <button type="button" data-testid="link-back-to-campaigns" onClick={leaveCreatePage} className="mb-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#245b9b] hover:underline"><ArrowLeft className="h-3.5 w-3.5"/>Back to campaigns</button>
-    <Heading eyebrow="DELIVERY / CAMPAIGNS / NEW" title="New campaign draft" detail="Build and review your campaign in four guided steps. Lists remain live until queueing; contact exclusions are preserved."/>
+    <Heading eyebrow="DELIVERY / CAMPAIGNS / NEW" title={isOpen ? 'New open campaign draft' : 'New campaign draft'} detail={isOpen ? 'Build and review your campaign in four guided steps. Recipients come from an uploaded CSV and are used for this campaign only.' : 'Build and review your campaign in four guided steps. Lists remain live until queueing; contact exclusions are preserved.'}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
     <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading || variantLimitsQuery.isLoading || senderAccountsQuery.isLoading || (createDefaultsReady && editing === undefined)} error={campaignsQuery.isError || listsQuery.isError || variantLimitsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); void variantLimitsQuery.refetch(); void senderAccountsQuery.refetch(); }} label="the campaign editor">
-      {!activeLists.length && <div data-testid="status-new-campaign-no-active-lists" className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before saving this campaign. Drafts can only target active lists.</span></div>}
+      {!isOpen && !activeLists.length && <div data-testid="status-new-campaign-no-active-lists" className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before saving this campaign. Drafts can only target active lists.</span></div>}
       {senderAccountsQuery.isError && <div role="alert" data-testid="status-new-campaign-senders-error" className="mb-5 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-4 py-3 text-[12px] text-[#99501e]"><span>Sender accounts couldn’t be loaded. The default account will be used unless you retry.</span><Button variant="outline" testId="button-retry-new-campaign-senders" onClick={() => { void senderAccountsQuery.refetch(); }}>Retry</Button></div>}
       {editing !== undefined && <section className={`${panelClass} p-5 sm:p-7`}>{renderCampaignEditorForm()}</section>}
     </QueryState>
   </div>;
   return <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading || variantLimitsQuery.isLoading} error={campaignsQuery.isError || listsQuery.isError || variantLimitsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); void variantLimitsQuery.refetch(); }} label="campaigns"><>
-    <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<Button testId="button-create-campaign" onClick={openCreatePage} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button>}/>
+    <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-create-open-campaign" onClick={() => setLocation('/campaigns/new?audience=open')} disabled={!openEnabled}><Upload className="h-4 w-4"/>New open campaign</Button><Button testId="button-create-campaign" onClick={openCreatePage} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button></div>}/>
     {notice && <Notice kind={notice.kind} onDismiss={dismiss}>{notice.text}</Notice>}
-    {!activeLists.length && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>Activate a contact list before creating a campaign. Drafts can only target active lists.</span></div>}
+    {!activeLists.length && <div className="mb-5 flex items-start gap-3 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-4 py-3 text-[12px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{openEnabled ? 'Activate a contact list to create a list campaign. Open campaigns use an uploaded CSV and don’t need a list.' : 'Activate a contact list before creating a campaign. Drafts can only target active lists.'}</span></div>}
+    {openEnabled && openAllowance && <div data-testid="status-open-campaign-allowance-summary" className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-[#d7e4f3] bg-[#f3f8fd] px-4 py-2.5 text-[11px] text-[#3f5872]"><span className="flex items-center gap-1.5 font-semibold"><Upload className="h-3.5 w-3.5"/>Open campaigns</span><span>{openAllowance.used.toLocaleString()} of {openAllowance.allowance.toLocaleString()} used this term · {openAllowance.remaining.toLocaleString()} remaining</span><span>Up to {openAllowance.recipientLimit.toLocaleString()} uploaded recipients each</span></div>}
         <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eef5ff', borderColor: '#d7e4f3' }}><div className="text-[11px] text-[#536d89]">Campaigns</div><div className="display mt-2 text-[26px] font-bold text-[#245b9b]">{(campaignSummary?.campaignCount ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">{(campaignSummary?.draftCount ?? 0).toLocaleString()} drafts · {(campaignSummary?.nonDraftCount ?? 0).toLocaleString()} queued or sent</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#eff8f1', borderColor: '#d5ead9' }}><div className="text-[11px] text-[#5f7c67]">SMTP accepted</div><div className="display mt-2 text-[26px] font-bold text-[#397050]">{totalDelivered.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#6f8092]">Inbox delivery is not confirmed</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#fff5eb', borderColor: '#f0dfcb' }}><div className="text-[11px] text-[#8b6747]">Rejected / failed</div><div className="display mt-2 text-[26px] font-bold text-[#ae642c]">{totalBounced.toLocaleString()}</div><div className="mt-1 text-[10px] text-[#816f5f]">Includes matched provider bounce or failure reports</div></div><div className={`${panelClass} p-4`} style={{ backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' }}><div className="text-[11px] text-[#677484]">Suppressed</div><div className="display mt-2 text-[26px] font-bold text-[#596675]">{(campaignSummary?.suppressed ?? 0).toLocaleString()}</div><div className="mt-1 text-[10px] text-[#738092]">Unsubscribed or removed before send</div></div></div>
          <details data-testid="campaign-best-practices" className={`${panelClass} group mb-5 overflow-hidden bg-[#f7f9fc]`}>
            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 bg-[#fff3e8] px-4 py-3 transition-colors hover:bg-[#ffecdc] marker:hidden [&::-webkit-details-marker]:hidden group-open:border-b group-open:border-[#efd3b5] sm:px-5">
@@ -2988,7 +3095,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf0] px-4 py-4"><div><h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign tree</h2><p className="mt-1 text-[11px] text-[#788392]">{campaignHistory?.total.toLocaleString()} matching campaigns · page {campaignHistoryPage} of {Math.max(1, Math.ceil((campaignHistory?.total ?? 0) / 25))} · follow-ups include their parent context.</p></div>{campaignTree.parentIds.size > 0 && <Button variant="outline" testId="button-toggle-campaign-tree" onClick={() => setCollapsedCampaignIds(current => [...campaignTree.parentIds].every(id => current.has(id)) ? new Set() : new Set(campaignTree.parentIds))}>{[...campaignTree.parentIds].every(id => collapsedCampaignIds.has(id)) ? 'Expand all' : 'Collapse all'}</Button>}</div>
        <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Campaign</th><th className="px-4 py-3 font-semibold">Audience</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Delivery</th><th className="px-4 py-3 font-semibold">Start / end</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{campaignTree.rows.map(({ campaign, depth, hasChildren, contextOnly }) => <tr key={campaign.id} data-testid={`row-campaign-${campaign.id}`} className="hover:bg-[#fbfcfd]">
         <td className="max-w-[280px] px-5 py-4"><div className="flex min-w-0 items-start gap-1" style={{ paddingLeft: `${depth * 20}px` }}>{hasChildren ? <button type="button" aria-label={`${collapsedCampaignIds.has(campaign.id) ? 'Expand' : 'Collapse'} follow-ups for ${campaign.name}`} data-testid={`button-toggle-campaign-${campaign.id}`} className="mt-0.5 rounded p-1 text-[#63758a] hover:bg-[#eef3f8]" onClick={() => setCollapsedCampaignIds(current => { const next = new Set(current); if (next.has(campaign.id)) next.delete(campaign.id); else next.add(campaign.id); return next; })}>{collapsedCampaignIds.has(campaign.id) ? <ChevronRight className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}</button> : <span className="w-6 shrink-0"/>}<button data-testid={`button-campaign-details-${campaign.id}`} onClick={() => setLocation(`/campaigns/${campaign.id}`)} className="min-w-0 text-left"><span className="flex flex-wrap items-center gap-1.5"><span className="truncate text-[12px] font-semibold text-[#26364a] hover:text-[#245b9b]">{campaign.name}</span>{campaign.campaignType === 'follow_up' && <Status tone="blue">Follow-up</Status>}{contextOnly && <span className="text-[9px] text-[#7c8794]">parent context</span>}</span><span className="mt-1 block truncate text-[11px] text-[#7c8794]">{campaign.subject}</span></button></div></td>
-        <td className="px-4 py-4"><span className="block text-[11px] font-medium text-[#536172]">{(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).map(listId => lists.find(list => list.id === listId)?.name || 'Removed list').join(' · ') || 'No target lists selected'}</span><span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
+        <td className="px-4 py-4">{isOpenCampaign(campaign) ? <span data-testid={`text-campaign-open-audience-${campaign.id}`} className="flex items-center gap-1.5 text-[11px] font-medium text-[#536172]"><Status tone="blue">Open</Status>Uploaded recipients</span> : <span className="block text-[11px] font-medium text-[#536172]">{(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).map(listId => lists.find(list => list.id === listId)?.name || 'Removed list').join(' · ') || 'No target lists selected'}</span>}<span className="mt-1 block text-[10px] text-[#8a95a1]">{campaign.recipients.toLocaleString()} {campaign.status === 'draft' ? 'eligible' : 'total'} recipients</span><span className="mt-0.5 block text-[10px] text-[#8a95a1]">Estimated send: {formatDeliveryDuration(campaign.estimatedDurationSeconds)}</span></td>
         <td className="px-4 py-4"><Status tone={maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') || campaign.pausedAt ? 'orange' : statusTone(campaign.status)}>{maintenancePaused && (campaign.status === 'queued' || campaign.status === 'sending') ? 'Maintenance paused' : campaign.pausedAt ? 'Paused' : campaign.status === 'queued' && campaign.scheduledAt && new Date(campaign.scheduledAt).getTime() > Date.now() ? 'scheduled' : campaign.status}</Status></td>
           <td className="px-4 py-4"><div className="flex items-center gap-2 text-[11px]"><span className="font-semibold text-[#397050]">{campaign.delivered.toLocaleString()} accepted</span><span className="text-[#c1c7cd]">/</span><span className="text-[#a85f2a]">{campaign.bounced.toLocaleString()} rejected / failed</span></div><div className="mt-1 text-[10px] text-[#8a95a1]">SMTP acceptance does not confirm inbox delivery · provider bounce/failure reports count as rejected / failed · {campaign.suppressed.toLocaleString()} suppressed · {campaign.unknown.toLocaleString()} unknown · {campaign.queued.toLocaleString()} queued</div></td>
           <td className="px-4 py-4 text-[10px] leading-5 text-[#7b8794]"><span className="block">Start {campaign.scheduledAt || campaign.queuedAt ? formatDate(campaign.scheduledAt || campaign.queuedAt) : '—'}</span><span className="block">End {campaign.completedAt ? formatDate(campaign.completedAt) : '—'}</span>{campaign.pausedAt && <span data-testid={`text-campaign-resume-at-${campaign.id}`} className="block font-semibold text-[#a95218]">{campaign.resumeAt ? `Resume ${formatDate(campaign.resumeAt)}` : 'No automatic resume'}</span>}</td>
@@ -3002,12 +3109,12 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
               </> : <CampaignActionIcon label="Pause campaign" icon={<Pause className="h-4 w-4"/>} testId={`button-list-pause-campaign-${campaign.id}`} disabled={pauseCampaign.isPending} onClick={() => setPauseTarget(campaign)}/>)}
               {campaign.status === 'draft' && <>
                 <CampaignActionIcon label="Edit campaign draft" icon={<Edit3 className="h-4 w-4"/>} testId={`button-edit-campaign-${campaign.id}`} onClick={() => openEdit(campaign)}/>
-                <CampaignActionIcon label="Queue campaign" icon={<Send className="h-4 w-4"/>} testId={`button-queue-campaign-${campaign.id}`} disabled={send.isPending || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active))} onClick={() => queue(campaign)}/>
+                <CampaignActionIcon label="Queue campaign" icon={<Send className="h-4 w-4"/>} testId={`button-queue-campaign-${campaign.id}`} disabled={send.isPending || !isOpenCampaign(campaign) && (!(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).length || !(campaign.listIds?.length ? campaign.listIds : campaign.listId ? [campaign.listId] : []).every(id => lists.some(list => list.id === id && list.active)))} onClick={() => queue(campaign)}/>
                 <CampaignActionIcon label="Delete campaign draft" icon={<Trash2 className="h-4 w-4"/>} testId={`button-delete-campaign-${campaign.id}`} disabled={remove.isPending} danger onClick={() => del(campaign)}/>
               </>}
             </div></td>
        </tr>)}</tbody></table></div>
-     </section> : (campaignSummary?.campaignCount ?? 0) > 0 ? <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setDebouncedCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); setCampaignHistoryPage(1); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length ? <Button testId="button-empty-create-campaign" onClick={openCreatePage}><CirclePlus className="h-4 w-4"/>Create campaign</Button> : undefined}/>}
+     </section> : (campaignSummary?.campaignCount ?? 0) > 0 ? <EmptyState title="No campaigns match these filters" detail="Try a broader search or clear one or more filters to see matching campaigns." action={<Button variant="outline" testId="button-clear-campaign-filters" onClick={() => { setCampaignSearch(''); setDebouncedCampaignSearch(''); setCampaignStatusFilter('all'); setCampaignTypeFilter('all'); setCampaignListFilter('all'); setCampaignDateFilter('all'); setCampaignHistoryPage(1); }}>Clear filters</Button>} /> : <EmptyState title="No campaigns yet" detail={activeLists.length ? 'Create a draft to prepare a message for an active list. Delivery counts will appear here after queueing.' : 'Create and activate a list first. Campaigns are always tied to an audience in this workspace.'} action={activeLists.length || openEnabled ? <div className="flex flex-wrap justify-center gap-2">{openEnabled && <Button variant="outline" testId="button-empty-create-open-campaign" onClick={() => setLocation('/campaigns/new?audience=open')}><Upload className="h-4 w-4"/>Open campaign</Button>}{activeLists.length > 0 && <Button testId="button-empty-create-campaign" onClick={openCreatePage}><CirclePlus className="h-4 w-4"/>Create campaign</Button>}</div> : undefined}/>}
     {(campaignHistory?.total ?? 0) > 0 && <nav aria-label="Campaign history pages" data-testid="campaign-history-pagination" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e0e4e9] bg-white px-4 py-3">
       <span className="text-[11px] text-[#687484]">Showing {((campaignHistoryPage - 1) * 25 + 1).toLocaleString()}–{Math.min(campaignHistoryPage * 25, campaignHistory?.total ?? 0).toLocaleString()} of {(campaignHistory?.total ?? 0).toLocaleString()} matching campaigns</span>
       <div className="flex items-center gap-2">
@@ -3100,19 +3207,23 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
        open={Boolean(pendingAction)}
        title={pendingAction?.kind === 'queue' ? 'Queue this campaign?' : 'Delete this draft?'}
         description={pendingAction?.kind === 'queue'
-            ? `Choose when “${pendingAction.campaign.name}” should start sending to ${campaignAudienceQuery.data?.uniqueRecipients.toLocaleString() ?? pendingAction.campaign.recipients.toLocaleString()} unique email addresses.${pendingAction.campaign.parentCampaignId ? followUpParent?.completedAt ? ` This follow-up must start at least 24 hours after the primary campaign finishes (no earlier than ${formatDate(new Date(new Date(followUpParent.completedAt).getTime() + 24 * 60 * 60 * 1000).toISOString())}).` : ' The primary campaign must finish before this follow-up can be queued; its start must be at least 24 hours after completion.' : ''}`
+            ? `Choose when “${pendingAction.campaign.name}” should start sending to ${(isOpenCampaign(pendingAction.campaign) ? undefined : campaignAudienceQuery.data?.uniqueRecipients.toLocaleString()) ?? pendingAction.campaign.recipients.toLocaleString()} unique email addresses.${pendingAction.campaign.parentCampaignId ? followUpParent?.completedAt ? ` This follow-up must start at least 24 hours after the primary campaign finishes (no earlier than ${formatDate(new Date(new Date(followUpParent.completedAt).getTime() + 24 * 60 * 60 * 1000).toISOString())}).` : ' The primary campaign must finish before this follow-up can be queued; its start must be at least 24 hours after completion.' : ''}`
          : pendingAction ? `Permanently delete the draft “${pendingAction.campaign.name}”? This cannot be undone.` : ''}
        confirmLabel={pendingAction?.kind === 'queue' ? 'Queue campaign' : 'Delete draft'}
        destructive={pendingAction?.kind !== 'queue'}
        pending={audienceActionPending || send.isPending || remove.isPending}
-         confirmDisabled={pendingAction?.kind === 'queue' && (!queueStartIsValid || !audienceCheckReady)}
+         confirmDisabled={pendingAction?.kind === 'queue' && (!queueStartIsValid || !queueAudienceReady)}
          onOpenChange={open => { if (!open && !send.isPending && !remove.isPending) { setPendingAction(null); setQueueError(null); setQueueStartError(null); setQueuePolicyError(null); } }}
        onConfirm={confirmCampaignAction}
        testId="dialog-campaign-action"
       >
         {pendingAction?.kind === 'queue' && <div className="mt-4 space-y-3">
-           {campaignAudienceQuery.isFetching && <p className="text-[11px] text-[#788392]">Refreshing the recipient and overlap counts…</p>}
-           {campaignAudienceQuery.isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]"><span>We couldn’t verify the current audience. Retry before queueing.</span><Button variant="outline" testId="button-retry-queue-audience" onClick={() => void campaignAudienceQuery.refetch()}>Retry</Button></div>}
+           {pendingQueueIsOpen && <div data-testid="queue-open-campaign-summary" className="rounded-md border border-[#d7e4f3] bg-[#f3f8fd] px-3 py-2.5 text-[11px] leading-5 text-[#3f5872]">
+             <p><strong>Open campaign · {pendingAction.campaign.recipients.toLocaleString()} uploaded recipients.</strong> Workspace unsubscribes and confirmed bounces are suppressed when queued.</p>
+             <p>{`Queueing uses 1 open campaign from this term the first time${openAllowance ? ` (${openAllowance.remaining.toLocaleString()} of ${openAllowance.allowance.toLocaleString()} remaining)` : ''}. Resumes and retries don’t use more.`}</p>
+           </div>}
+           {!pendingQueueIsOpen && campaignAudienceQuery.isFetching && <p className="text-[11px] text-[#788392]">Refreshing the recipient and overlap counts…</p>}
+           {!pendingQueueIsOpen && campaignAudienceQuery.isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] leading-5 text-[#99501e]"><span>We couldn’t verify the current audience. Retry before queueing.</span><Button variant="outline" testId="button-retry-queue-audience" onClick={() => void campaignAudienceQuery.refetch()}>Retry</Button></div>}
            {audienceCheckReady && campaignAudienceQuery.data && <div data-testid="queue-audience-summary" className={cx('rounded-md border px-3 py-2.5 text-[11px] leading-5', campaignAudienceQuery.data.overlappingRecipients ? 'border-[#efd9bd] bg-[#fff8ef] text-[#895b2f]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]')}>
              <p><strong>{campaignAudienceQuery.data.uniqueRecipients.toLocaleString()} unique subscribed email addresses</strong> will be queued.</p>
              {campaignAudienceQuery.data.overlappingRecipients > 0
@@ -3282,7 +3393,7 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
       const statusTone = isPausedForMaintenance ? 'orange' : campaign.status === 'completed' ? 'green' : campaign.status === 'queued' || campaign.status === 'sending' ? 'blue' : 'gray';
       const isScheduled = campaign.status === 'queued' && campaign.scheduledAt !== null && new Date(campaign.scheduledAt).getTime() > Date.now();
       const metrics = [
-        { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? 'Unique eligible addresses across selected lists' : 'Captured when queued', surface: { backgroundColor: '#eef5ff', borderColor: '#d7e4f3' } },
+        { label: 'Total emails', value: campaign.recipients, detail: campaign.status === 'draft' ? campaign.audienceType === 'open' ? 'Unique uploaded addresses' : 'Unique eligible addresses across selected lists' : 'Captured when queued', surface: { backgroundColor: '#eef5ff', borderColor: '#d7e4f3' } },
         { label: 'SMTP accepted', value: campaign.delivered, detail: 'Inbox delivery is not confirmed', surface: { backgroundColor: '#eff8f1', borderColor: '#d5ead9' } },
         { label: 'Rejected / failed', value: campaign.bounced, detail: 'SMTP rejection, terminal failure, or matched provider report', surface: { backgroundColor: '#fff5eb', borderColor: '#f0dfcb' } },
         { label: 'Suppressed', value: campaign.suppressed, detail: 'Unsubscribed or removed', surface: { backgroundColor: '#f3f5f8', borderColor: '#dfe4e9' } },
@@ -3330,8 +3441,11 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
           </section>
 
           <section className={`${panelClass} p-5`}>
-            <h2 className="display text-[17px] font-bold text-[#1b293a]">Target lists</h2>
-            {targetLists.length ? <div className="mt-3 space-y-3">
+            <h2 className="display text-[17px] font-bold text-[#1b293a]">{campaign.audienceType === 'open' ? 'Audience' : 'Target lists'}</h2>
+            {campaign.audienceType === 'open' ? <div data-testid="campaign-open-audience-summary" className="mt-3 space-y-2 text-[12px] text-[#536172]">
+              <div className="flex flex-wrap items-center gap-2"><Status tone="blue">Open campaign</Status><span className="flex items-center gap-1.5"><Upload className="h-4 w-4 text-[#245b9b]"/>{campaign.recipients.toLocaleString()} uploaded recipients</span></div>
+              <p className="text-[10px] leading-5 text-[#8993a0]">Recipients came from a CSV upload and are not part of Contacts or any list. Workspace unsubscribes and confirmed bounces are suppressed when queued. The open campaign allowance is used once, the first time this campaign is queued.</p>
+            </div> : targetLists.length ? <div className="mt-3 space-y-3">
               {targetLists.map((targetList, index) => <div key={targetList.id} data-testid={`campaign-target-list-${targetList.id}`} className="rounded-md border border-[#e7ebef] p-3">
                 <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#647183]"><span className="mono text-[10px] text-[#8993a0]">{index + 1}.</span><Users className="h-4 w-4 text-[#245b9b]"/><span className="font-medium text-[#344154]">{targetList.name}</span><Status tone={targetList.active ? 'green' : 'gray'}>{targetList.active ? 'active' : 'inactive'}</Status></div>
                 <div className="mt-3 grid grid-cols-3 gap-2">

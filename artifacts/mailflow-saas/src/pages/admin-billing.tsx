@@ -34,12 +34,14 @@ type PackageDraft = {
   researchAllowance: string;
   aiEmailAssistAllowance: string;
   additionalMailboxCount: string;
+  openCampaignAllowance: string;
+  openCampaignRecipientLimit: string;
   preferred: boolean;
   active: boolean;
 };
 
 const blankDraft: PackageDraft = {
-  packageType: 'primary', name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', aiEmailAssistAllowance: '0', additionalMailboxCount: '0', preferred: false, active: true,
+  packageType: 'primary', name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', aiEmailAssistAllowance: '0', additionalMailboxCount: '0', openCampaignAllowance: '0', openCampaignRecipientLimit: '0', preferred: false, active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -195,7 +197,9 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     (draft.packageType === 'primary'
       ? isIntegerWithin(draft.periodDays, 1, 3660) &&
         isIntegerWithin(draft.contactLimit, 0, 10000000) &&
-        isIntegerWithin(draft.emailAccountLimit, 0, 100)
+        isIntegerWithin(draft.emailAccountLimit, 0, 100) &&
+        isIntegerWithin(draft.openCampaignAllowance, 0, 10000) &&
+        isIntegerWithin(draft.openCampaignRecipientLimit, 0, 100000)
       : isIntegerWithin(draft.aiEmailAssistAllowance, 0, 10000) &&
         isIntegerWithin(draft.additionalMailboxCount, 0, 100) &&
         (Number(draft.researchAllowance) > 0 ||
@@ -220,6 +224,8 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       researchAllowance: String(pkg.researchAllowance),
       aiEmailAssistAllowance: String(pkg.aiEmailAssistAllowance),
       additionalMailboxCount: String(pkg.additionalMailboxCount),
+      openCampaignAllowance: String(pkg.openCampaignAllowance ?? 0),
+      openCampaignRecipientLimit: String(pkg.openCampaignRecipientLimit ?? 0),
       preferred: pkg.preferred, active: pkg.active,
     });
     setNotice(null);
@@ -239,6 +245,8 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       researchAllowance: Number(draft.researchAllowance),
       aiEmailAssistAllowance: isAddon ? Number(draft.aiEmailAssistAllowance) : 0,
       additionalMailboxCount: isAddon ? Number(draft.additionalMailboxCount) : 0,
+      openCampaignAllowance: isAddon ? 0 : Number(draft.openCampaignAllowance),
+      openCampaignRecipientLimit: isAddon ? 0 : Number(draft.openCampaignRecipientLimit),
       preferred: !isAddon && draft.preferred, active: draft.active,
     };
     const isFree = draft.free;
@@ -711,6 +719,8 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
               <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
               <Field label="SMTP sender accounts" value={draft.emailAccountLimit} onChange={emailAccountLimit => setDraft(d => ({ ...d, emailAccountLimit }))} testId="input-package-email-account-limit" type="number" step="1" min={0} max={100} hint="Maximum base SMTP senders; eligible add-ons add mailbox slots."/>
               <Field label="Company research runs per term" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Each queued run, including retries, is used. Resets in a new term; unused runs expire at term end."/>
+              <Field label="Open campaigns per term" value={draft.openCampaignAllowance} onChange={openCampaignAllowance => setDraft(d => ({ ...d, openCampaignAllowance }))} testId="input-package-open-campaign-allowance" type="number" step="1" min={0} max={10000} hint="Campaigns sent to an uploaded CSV audience. Counted once when first queued; 0 disables open campaigns."/>
+              <Field label="Recipients per open campaign" value={draft.openCampaignRecipientLimit} onChange={openCampaignRecipientLimit => setDraft(d => ({ ...d, openCampaignRecipientLimit }))} testId="input-package-open-campaign-recipient-limit" type="number" step="1" min={0} max={100000} hint="Maximum unique uploaded addresses in one open campaign; 0 disables open campaigns."/>
             </>}
             {draft.packageType === 'addon' && <>
               <Field label="Company research credits" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Unused credits pause when the primary plan ends and resume on a later paid plan."/>
@@ -747,6 +757,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
               {pkg.packageType === 'primary' ? <>
                 <div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} base SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div>
                 <div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research run{pkg.researchAllowance === 1 ? '' : 's'} per term</div>
+                <div data-testid={`text-admin-package-open-campaigns-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{(pkg.openCampaignAllowance ?? 0) > 0 && (pkg.openCampaignRecipientLimit ?? 0) > 0 ? `${(pkg.openCampaignAllowance ?? 0).toLocaleString()} open campaign${pkg.openCampaignAllowance === 1 ? '' : 's'} per term · up to ${(pkg.openCampaignRecipientLimit ?? 0).toLocaleString()} recipients each` : 'Open campaigns not included'}</div>
                 {sendingLimits && <div data-testid={`text-admin-package-send-limits-${pkg.id}`} className="mt-1 text-[10px] leading-4 text-[#597086]">{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}/hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()}/24h per SMTP mailbox</div>}
               </> : <>
                 <div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research credit{pkg.researchAllowance === 1 ? '' : 's'}</div>

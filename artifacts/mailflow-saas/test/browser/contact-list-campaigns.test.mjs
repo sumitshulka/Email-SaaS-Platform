@@ -1080,6 +1080,54 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     }
   });
 
+  it('creates an open campaign from a CSV without saved contacts or lists', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      let submitted;
+      await context.route('**/api/open-campaigns/allowance', route => route.fulfill({ status: 200, json: {
+        allowance: 1, used: 0, remaining: 1, recipientLimit: 2, termEndsAt: '2026-12-31T00:00:00.000Z',
+      } }));
+      await context.route('**/api/contact-lists', route => route.fulfill({ status: 200, json: [] }));
+      await context.route('**/api/campaigns', async route => {
+        if (route.request().method() !== 'POST') return route.fallback();
+        submitted = route.request().postDataJSON();
+        await route.fulfill({ status: 201, json: {
+          ...campaign('open-created-fixture', submitted.name, []), ...submitted,
+          audienceType: 'open', recipients: submitted.openRecipients.length,
+        } });
+      });
+      const page = await context.newPage();
+      const pageErrors = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      await page.goto(`${baseUrl}/campaigns/new?audience=open`);
+      await page.getByTestId('input-campaign-name').fill('Uploaded audience campaign');
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('input-open-campaign-csv').setInputFiles({
+        name: 'recipients.csv', mimeType: 'text/csv',
+        buffer: Buffer.from('email\nONE@example.test\none@example.test\ntwo@example.test\ninvalid\n'),
+      });
+      await page.getByTestId('text-open-campaign-recipient-count').filter({ hasText: '2 unique recipients' }).waitFor();
+      assert.match(await page.getByTestId('status-open-campaign-csv-result').innerText(), /1 duplicate.*1 skipped/);
+      assert.match(await page.getByTestId('text-open-campaign-placeholder-availability').innerText(), /email/);
+      assert.equal(await page.getByRole('region', { name: 'Campaign list processing order' }).count(), 0);
+      await page.screenshot({ path: '/tmp/mailflow-open-campaign-audience.png' });
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('input-campaign-subject').fill('Uploaded audience subject');
+      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-firstName').isDisabled(), true);
+      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-lastName').isDisabled(), true);
+      await page.getByRole('textbox', { name: 'Formatted email message' }).fill('Hello {{email}}, this uses uploaded recipients.');
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('button-submit-campaign').click();
+      await page.waitForURL('**/campaigns');
+      assert.equal(submitted.audienceType, 'open');
+      assert.deepEqual(submitted.openRecipients.map(row => row.email), ['one@example.test', 'two@example.test']);
+      assert.equal(submitted.listIds, undefined);
+      assert.deepEqual(submitted.attachments, []);
+      assert.deepEqual(pageErrors, []);
+    } finally { await context.close(); }
+  });
+
   it('keeps the campaign editor open on Review without saving the draft', async () => {
     campaignUpdates.length = 0;
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

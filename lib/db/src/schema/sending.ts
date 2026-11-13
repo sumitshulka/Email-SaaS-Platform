@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { contactsTable } from "./contacts";
 import { usersTable } from "./users";
+import { userSubscriptionsTable } from "./billing";
 
 export const emailCampaignStatusEnum = pgEnum("email_campaign_status", [
   "draft",
@@ -303,6 +304,9 @@ export const emailCampaignsTable = pgTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     parentCampaignId: uuid("parent_campaign_id"),
+    audienceType: varchar("audience_type", { length: 16 }).notNull().default("standard"),
+    openCampaignSubscriptionId: uuid("open_campaign_subscription_id").references(() => userSubscriptionsTable.id, { onDelete: "restrict" }),
+    openCampaignCountedAt: timestamp("open_campaign_counted_at", { withTimezone: true }),
     listId: uuid("list_id").references(() => contactListsTable.id, {
       onDelete: "set null",
     }),
@@ -357,6 +361,7 @@ export const emailCampaignsTable = pgTable(
   (table) => [
     index("email_campaigns_user_created_idx").on(table.userId, table.createdAt),
     index("email_campaigns_user_status_idx").on(table.userId, table.status),
+    index("email_campaigns_open_term_idx").on(table.userId, table.openCampaignSubscriptionId),
     index("email_campaigns_parent_campaign_idx").on(table.parentCampaignId),
     index("email_campaigns_list_idx").on(table.listId),
     index("email_campaigns_sender_account_idx").on(table.senderAccountId),
@@ -364,6 +369,37 @@ export const emailCampaignsTable = pgTable(
       .on(table.resumeAt)
       .where(sql`${table.resumeAt} IS NOT NULL`),
   ],
+);
+
+// Uploaded audiences are campaign-owned, never entries in the contact library.
+export const openCampaignAudienceTable = pgTable(
+  "open_campaign_audience",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id").notNull().references(() => emailCampaignsTable.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 254 }).notNull(),
+    firstName: varchar("first_name", { length: 100 }).notNull().default(""),
+    lastName: varchar("last_name", { length: 100 }).notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("open_campaign_audience_email_unique").on(table.campaignId, table.email),
+    index("open_campaign_audience_owner_idx").on(table.userId, table.campaignId),
+  ],
+);
+
+// Email-level opt-outs survive audience replacement and future uploads.
+export const campaignEmailSuppressionsTable = pgTable(
+  "campaign_email_suppressions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 254 }).notNull(),
+    reason: varchar("reason", { length: 24 }).notNull().default("unsubscribed"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("campaign_email_suppressions_owner_email_unique").on(table.userId, table.email)],
 );
 
 export const emailCampaignRecipientsTable = pgTable(

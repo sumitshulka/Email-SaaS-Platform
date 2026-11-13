@@ -1,15 +1,18 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   contactsTable,
   db,
   emailCampaignRecipientsTable,
+  campaignEmailSuppressionsTable,
+  usersTable,
 } from "@workspace/db";
 import { constantTimeEqual, hmac } from "./security";
 
 type UnsubscribePayload = {
-  version: 1;
+  version: 1 | 2;
   tenantId: string;
-  contactId: string;
+  contactId?: string;
+  recipientId?: string;
   campaignId: string;
 };
 
@@ -35,13 +38,15 @@ function encodePayload(payload: UnsubscribePayload): string {
 
 export function createCampaignUnsubscribeToken(payload: {
   tenantId: string;
-  contactId: string;
+  contactId?: string;
+  recipientId?: string;
   campaignId: string;
 }): string {
   const encoded = encodePayload({
-    version: 1,
+    version: payload.contactId ? 1 : 2,
     tenantId: payload.tenantId,
     contactId: payload.contactId,
+    recipientId: payload.recipientId,
     campaignId: payload.campaignId,
   });
   return `${encoded}.${hmac(encoded, "campaign-unsubscribe-v1")}`;
@@ -74,11 +79,12 @@ function verifyCampaignUnsubscribeToken(token: string): UnsubscribePayload {
     !payload ||
     typeof payload !== "object" ||
     !("version" in payload) ||
-    payload.version !== 1 ||
+    (payload.version !== 1 && payload.version !== 2) ||
     !("tenantId" in payload) ||
     !isUuid(payload.tenantId) ||
-    !("contactId" in payload) ||
-    !isUuid(payload.contactId) ||
+    (payload.version === 1
+      ? !("contactId" in payload) || !isUuid(payload.contactId)
+      : !("recipientId" in payload) || !isUuid(payload.recipientId)) ||
     !("campaignId" in payload) ||
     !isUuid(payload.campaignId)
   ) {
@@ -131,7 +137,7 @@ export function getPublicAppOrigin(requestOrigin?: string | null): string | null
 
 export function createCampaignUnsubscribeUrls(
   origin: string,
-  payload: { tenantId: string; contactId: string; campaignId: string },
+  payload: { tenantId: string; contactId?: string; recipientId?: string; campaignId: string },
 ): { browserUrl: string; oneClickUrl: string } {
   const normalizedOrigin = normalizePublicAppOrigin(origin);
   if (!normalizedOrigin) throw new Error("A valid public app origin is required.");
@@ -145,17 +151,34 @@ export function createCampaignUnsubscribeUrls(
 export async function applyCampaignUnsubscribeToken(token: string): Promise<void> {
   const payload = verifyCampaignUnsubscribeToken(token);
   await db.transaction(async (tx) => {
+    await tx.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, payload.tenantId)).for("update");
+    if (payload.version === 2) {
+      const [recipient] = await tx.select().from(emailCampaignRecipientsTable).where(and(
+        eq(emailCampaignRecipientsTable.id, payload.recipientId!),
+        eq(emailCampaignRecipientsTable.userId, payload.tenantId),
+        eq(emailCampaignRecipientsTable.campaignId, payload.campaignId),
+      )).limit(1);
+      if (!recipient) throw new InvalidUnsubscribeTokenError();
+      const email = recipient.email.trim().toLowerCase();
+      await tx.insert(campaignEmailSuppressionsTable).values({ userId: payload.tenantId, email }).onConflictDoNothing();
+      await tx.update(contactsTable).set({ subscribed: false, emailStatus: "unsubscribed", updatedAt: new Date() })
+        .where(and(eq(contactsTable.userId, payload.tenantId), eq(sql`lower(${contactsTable.email})`, email)));
+      await tx.update(emailCampaignRecipientsTable).set({ status: "suppressed", lastError: "Recipient unsubscribed." })
+        .where(and(eq(emailCampaignRecipientsTable.userId, payload.tenantId), eq(sql`lower(${emailCampaignRecipientsTable.email})`, email), eq(emailCampaignRecipientsTable.status, "queued")));
+      return;
+    }
     const [contact] = await tx
-      .select({ id: contactsTable.id })
+      .select({ id: contactsTable.id, email: contactsTable.email })
       .from(contactsTable)
       .where(
         and(
-          eq(contactsTable.id, payload.contactId),
+          eq(contactsTable.id, payload.contactId!),
           eq(contactsTable.userId, payload.tenantId),
         ),
       )
       .for("update");
     if (!contact) throw new InvalidUnsubscribeTokenError();
+    await tx.insert(campaignEmailSuppressionsTable).values({ userId: payload.tenantId, email: contact.email.trim().toLowerCase() }).onConflictDoNothing();
 
     await tx
       .update(contactsTable)
@@ -166,7 +189,7 @@ export async function applyCampaignUnsubscribeToken(token: string): Promise<void
       })
       .where(
         and(
-          eq(contactsTable.id, payload.contactId),
+          eq(contactsTable.id, payload.contactId!),
           eq(contactsTable.userId, payload.tenantId),
         ),
       );
@@ -176,7 +199,7 @@ export async function applyCampaignUnsubscribeToken(token: string): Promise<void
       .where(
         and(
           eq(emailCampaignRecipientsTable.userId, payload.tenantId),
-          eq(emailCampaignRecipientsTable.contactId, payload.contactId),
+          eq(sql`lower(${emailCampaignRecipientsTable.email})`, contact.email.trim().toLowerCase()),
           eq(emailCampaignRecipientsTable.status, "queued"),
         ),
       );

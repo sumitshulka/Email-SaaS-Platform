@@ -49,6 +49,8 @@ export function createPackageCheckoutSnapshot(
     currency: pkg.currency,
     periodDays: pkg.periodDays,
     contactLimit: pkg.contactLimit,
+    openCampaignAllowance: pkg.openCampaignAllowance,
+    openCampaignRecipientLimit: pkg.openCampaignRecipientLimit,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
@@ -67,6 +69,8 @@ function packageMatchesCheckoutSnapshot(
     snapshot.currency === pkg.currency &&
     snapshot.periodDays === pkg.periodDays &&
     snapshot.contactLimit === pkg.contactLimit &&
+    (snapshot.openCampaignAllowance ?? 0) === pkg.openCampaignAllowance &&
+    (snapshot.openCampaignRecipientLimit ?? 0) === pkg.openCampaignRecipientLimit &&
     snapshot.emailAccountLimit === pkg.emailAccountLimit &&
     snapshot.researchAllowance === pkg.researchAllowance &&
     snapshot.aiEmailAssistAllowance === pkg.aiEmailAssistAllowance &&
@@ -84,6 +88,8 @@ export function serializePackage(pkg: PackageRow) {
     currency: pkg.currency,
     periodDays: pkg.periodDays,
     contactLimit: pkg.contactLimit,
+    openCampaignAllowance: pkg.openCampaignAllowance,
+    openCampaignRecipientLimit: pkg.openCampaignRecipientLimit,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,

@@ -3365,6 +3365,14 @@ export interface CampaignQueueInput {
   scheduledAt?: string;
 }
 
+export type CampaignSummaryAudienceType = typeof CampaignSummaryAudienceType[keyof typeof CampaignSummaryAudienceType];
+
+
+export const CampaignSummaryAudienceType = {
+  standard: 'standard',
+  open: 'open',
+} as const;
+
 export type CampaignSummaryCampaignType = typeof CampaignSummaryCampaignType[keyof typeof CampaignSummaryCampaignType];
 
 
@@ -3402,6 +3410,7 @@ export interface CampaignAttachment {
 }
 
 export interface CampaignSummary {
+  audienceType?: CampaignSummaryAudienceType;
   id: string;
   /** @nullable */
   parentCampaignId: string | null;
@@ -3833,7 +3842,27 @@ export interface CampaignAttachmentAvailability {
   available: boolean;
 }
 
+export type CampaignInputAudienceType = typeof CampaignInputAudienceType[keyof typeof CampaignInputAudienceType];
+
+
+export const CampaignInputAudienceType = {
+  standard: 'standard',
+  open: 'open',
+} as const;
+
+export interface OpenCampaignRecipientInput {
+  /** @maxLength 254 */
+  email: string;
+  /** @maxLength 100 */
+  firstName?: string;
+  /** @maxLength 100 */
+  lastName?: string;
+}
+
 export interface CampaignInput {
+  audienceType?: CampaignInputAudienceType;
+  /** @maxItems 100000 */
+  openRecipients?: OpenCampaignRecipientInput[];
   /** @nullable */
   senderAccountId?: string | null;
   /**
@@ -3886,6 +3915,8 @@ export interface CampaignInput {
 }
 
 export interface CampaignUpdate {
+  /** @maxItems 100000 */
+  openRecipients?: OpenCampaignRecipientInput[];
   /** @nullable */
   senderAccountId?: string | null;
   /**
@@ -3935,6 +3966,19 @@ export interface CampaignUpdate {
      * @deprecated
      */
   listId?: string;
+}
+
+export interface OpenCampaignAllowance {
+  /** @minimum 0 */
+  allowance: number;
+  /** @minimum 0 */
+  used: number;
+  /** @minimum 0 */
+  remaining: number;
+  /** @minimum 0 */
+  recipientLimit: number;
+  /** @nullable */
+  termEndsAt: string | null;
 }
 
 export interface CampaignPreviewInput {
@@ -4973,6 +5017,10 @@ export interface SubscriptionPackage {
   /** @minimum 0 */
   contactLimit: number;
   /** @minimum 0 */
+  openCampaignAllowance?: number;
+  /** @minimum 0 */
+  openCampaignRecipientLimit?: number;
+  /** @minimum 0 */
   emailAccountLimit: number;
   /**
      * Number of company research runs in each subscription term. A run is consumed when queued
@@ -5049,6 +5097,16 @@ export interface SubscriptionPackageInput {
      * @maximum 10000000
      */
   contactLimit: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  openCampaignAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000
+     */
+  openCampaignRecipientLimit?: number;
   /**
      * @minimum 0
      * @maximum 100
@@ -5199,6 +5257,16 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 10000000
      */
   contactLimit?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  openCampaignAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000
+     */
+  openCampaignRecipientLimit?: number;
   /**
      * @minimum 0
      * @maximum 100

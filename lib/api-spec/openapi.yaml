@@ -17,6 +17,30 @@ tags:
   - name: settings
   - name: billing
 paths:
+  /open-campaigns/allowance:
+    get:
+      operationId: getOpenCampaignAllowance
+      tags: [sending]
+      responses:
+        "200":
+          description: Current term open campaign allowance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenCampaignAllowance" }
+  /campaigns/{campaignId}/open-audience:
+    get:
+      operationId: getOpenCampaignAudience
+      tags: [sending]
+      parameters:
+        - { name: campaignId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Private uploaded campaign audience
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OpenCampaignRecipientInput" }
   /healthz:
     get:
       operationId: healthCheck
@@ -6712,6 +6736,7 @@ components:
     CampaignSummary:
       type: object
       properties:
+        audienceType: { type: string, enum: [standard, open] }
         id: { type: string, format: uuid }
         parentCampaignId: { type: ["string", "null"], format: uuid }
         campaignType: { type: string, enum: [primary, follow_up] }
@@ -7019,6 +7044,11 @@ components:
     CampaignInput:
       type: object
       properties:
+        audienceType: { type: string, enum: [standard, open], default: standard }
+        openRecipients:
+          type: array
+          maxItems: 100000
+          items: { $ref: "#/components/schemas/OpenCampaignRecipientInput" }
         senderAccountId: { type: ["string", "null"], format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
         objective: { type: string, maxLength: 500 }
@@ -7059,6 +7089,10 @@ components:
     CampaignUpdate:
       type: object
       properties:
+        openRecipients:
+          type: array
+          maxItems: 100000
+          items: { $ref: "#/components/schemas/OpenCampaignRecipientInput" }
         senderAccountId: { type: ["string", "null"], format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
         objective: { type: string, maxLength: 500 }
@@ -7095,6 +7129,22 @@ components:
           format: uuid
           deprecated: true
           description: Legacy single-list input; use listIds.
+    OpenCampaignRecipientInput:
+      type: object
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+      required: [email]
+    OpenCampaignAllowance:
+      type: object
+      properties:
+        allowance: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+        recipientLimit: { type: integer, minimum: 0 }
+        termEndsAt: { type: ["string", "null"], format: date-time }
+      required: [allowance, used, remaining, recipientLimit, termEndsAt]
     CampaignPreviewInput:
       type: object
       properties:
@@ -7710,6 +7760,8 @@ components:
         currency: { type: string, minLength: 3, maxLength: 3 }
         periodDays: { type: integer }
         contactLimit: { type: integer, minimum: 0 }
+        openCampaignAllowance: { type: integer, minimum: 0 }
+        openCampaignRecipientLimit: { type: integer, minimum: 0 }
         emailAccountLimit: { type: integer, minimum: 0 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign draft or revision results included in this add-on. }
@@ -7749,6 +7801,8 @@ components:
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 0, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
+        openCampaignAllowance: { type: integer, minimum: 0, maximum: 10000 }
+        openCampaignRecipientLimit: { type: integer, minimum: 0, maximum: 100000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
@@ -7837,6 +7891,8 @@ components:
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         periodDays: { type: integer, minimum: 0, maximum: 3660 }
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
+        openCampaignAllowance: { type: integer, minimum: 0, maximum: 10000 }
+        openCampaignRecipientLimit: { type: integer, minimum: 0, maximum: 100000 }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }

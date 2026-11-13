@@ -5,6 +5,8 @@ const PRIMARY_PLAN_LIMIT_FIELDS = [
   "emailAccountLimit",
   "researchAllowance",
   "aiEmailAssistAllowance",
+  "openCampaignAllowance",
+  "openCampaignRecipientLimit",
 ] as const;
 
 export type PrimaryPlanLimits = {
@@ -12,6 +14,8 @@ export type PrimaryPlanLimits = {
   emailAccountLimit: number;
   researchAllowance: number;
   aiEmailAssistAllowance: number;
+  openCampaignAllowance?: number;
+  openCampaignRecipientLimit?: number;
 };
 
 type ProrationPackage = {
@@ -31,13 +35,13 @@ export function comparePrimaryPlanLimits(
   target: PrimaryPlanLimits,
 ): PrimaryPlanChangeKind {
   const targetAtLeastAsHigh = PRIMARY_PLAN_LIMIT_FIELDS.every(
-    (field) => target[field] >= current[field],
+    (field) => (target[field] ?? 0) >= (current[field] ?? 0),
   );
   const targetAtMostAsHigh = PRIMARY_PLAN_LIMIT_FIELDS.every(
-    (field) => target[field] <= current[field],
+    (field) => (target[field] ?? 0) <= (current[field] ?? 0),
   );
   const exactlyEqual = PRIMARY_PLAN_LIMIT_FIELDS.every(
-    (field) => target[field] === current[field],
+    (field) => (target[field] ?? 0) === (current[field] ?? 0),
   );
 
   if (exactlyEqual) return "same";

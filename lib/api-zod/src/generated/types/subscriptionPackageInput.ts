@@ -36,6 +36,16 @@ export interface SubscriptionPackageInput {
   contactLimit: number;
   /**
      * @minimum 0
+     * @maximum 10000
+     */
+  openCampaignAllowance?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000
+     */
+  openCampaignRecipientLimit?: number;
+  /**
+     * @minimum 0
      * @maximum 100
      */
   emailAccountLimit?: number;

@@ -13,9 +13,11 @@ import {
   lte,
   lt,
   or,
+  sql,
 } from "drizzle-orm";
 import {
   contactsTable,
+  campaignEmailSuppressionsTable,
   db,
   emailCampaignRecipientsTable,
   emailCampaignsTable,
@@ -650,6 +652,16 @@ async function claimDelivery(
       .for("update");
     if (!sender?.verifiedAt) return null;
 
+    const [emailOptOut] = campaign.audienceType === "open" ? await tx.select({ id: campaignEmailSuppressionsTable.id })
+      .from(campaignEmailSuppressionsTable).where(and(
+        eq(campaignEmailSuppressionsTable.userId, userId),
+        eq(campaignEmailSuppressionsTable.email, recipient.email.trim().toLowerCase()),
+      )).limit(1) : [];
+    if (emailOptOut && campaign.audienceType === "open") {
+      await tx.update(emailCampaignRecipientsTable).set({ status: "suppressed", lastError: "Recipient unsubscribed.", updatedAt: now })
+        .where(and(eq(emailCampaignRecipientsTable.id, recipient.id), eq(emailCampaignRecipientsTable.userId, userId)));
+      return { completedCampaignId: recipient.campaignId };
+    }
     let personalization: CampaignPersonalization;
     if (recipient.contactId) {
       const [contact] = await tx
@@ -708,6 +720,20 @@ async function claimDelivery(
           );
         return { completedCampaignId: recipient.campaignId };
       }
+    } else if (campaign.audienceType === "open") {
+      const [blockedContact] = await tx.select({ id: contactsTable.id }).from(contactsTable).where(and(
+        eq(contactsTable.userId, userId),
+        eq(sql`lower(${contactsTable.email})`, recipient.email.trim().toLowerCase()),
+        or(eq(contactsTable.subscribed, false), eq(contactsTable.emailStatus, "bounced"), eq(contactsTable.emailStatus, "unsubscribed")),
+      )).limit(1);
+      if (blockedContact) {
+        await tx.update(emailCampaignRecipientsTable).set({ status: "suppressed", lastError: "Recipient is suppressed.", updatedAt: now })
+          .where(and(eq(emailCampaignRecipientsTable.id, recipient.id), eq(emailCampaignRecipientsTable.userId, userId)));
+        return { completedCampaignId: recipient.campaignId };
+      }
+      personalization = { firstName: recipient.firstName, lastName: recipient.lastName,
+        fullName: [recipient.firstName, recipient.lastName].filter(Boolean).join(" "),
+        email: recipient.email, companyName: "", phoneNumber: "", linkedinUrl: "" };
     } else {
       await tx
         .update(emailCampaignRecipientsTable)
@@ -965,7 +991,9 @@ export async function processPendingCampaignDeliveries(
       }
       const unsubscribeUrls = createCampaignUnsubscribeUrls(publicOrigin, {
         tenantId: claimed.campaign.userId,
-        contactId: claimed.recipient.contactId!,
+        ...(claimed.recipient.contactId
+          ? { contactId: claimed.recipient.contactId }
+          : { recipientId: claimed.recipient.id }),
         campaignId: claimed.campaign.id,
       });
       const rendered = renderCampaignForContact(

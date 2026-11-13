@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { once } from "node:events";
 import { createHmac, randomUUID } from "node:crypto";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -676,6 +677,12 @@ memory.public.none(`
   );
 `);
 
+memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0019_open_campaigns.sql", import.meta.url), "utf8"));
+// Match the existing inbox fields used by the sender schema in worker fixtures.
+memory.public.none(`
+  ALTER TABLE tenant_sending_configurations ADD COLUMN IF NOT EXISTS inbox_host varchar(255);
+  ALTER TABLE tenant_sending_configurations ADD COLUMN IF NOT EXISTS inbox_connected_at timestamptz;
+`);
 const schema = await import("@workspace/db/schema");
 const { Pool: MemoryPool } = memory.adapters.createPg();
 const memoryPool = new MemoryPool();

@@ -193,6 +193,8 @@ import type {
   MicrosoftSenderConnection,
   OnlinePaymentSettings,
   OnlinePaymentSettingsInput,
+  OpenCampaignAllowance,
+  OpenCampaignRecipientInput,
   PackageCheckoutCodeInput,
   PackageCheckoutCodeRequestResponse,
   PackageCheckoutCodeVerificationResponse,
@@ -276,6 +278,148 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOpenCampaignAllowanceUrl = () => {
+
+
+
+
+  return `/api/open-campaigns/allowance`
+}
+
+export const getOpenCampaignAllowance = async ( options?: Parameters<typeof customFetch>[1]): Promise<OpenCampaignAllowance> => {
+
+  return customFetch<OpenCampaignAllowance>(getGetOpenCampaignAllowanceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOpenCampaignAllowanceQueryKey = () => {
+    return [
+    `/api/open-campaigns/allowance`
+    ] as const;
+    }
+
+
+export const getGetOpenCampaignAllowanceQueryOptions = <TData = Awaited<ReturnType<typeof getOpenCampaignAllowance>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOpenCampaignAllowance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOpenCampaignAllowanceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOpenCampaignAllowance>>> = ({ signal }) => getOpenCampaignAllowance({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOpenCampaignAllowance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOpenCampaignAllowanceQueryResult = NonNullable<Awaited<ReturnType<typeof getOpenCampaignAllowance>>>
+export type GetOpenCampaignAllowanceQueryError = ErrorType<unknown>
+
+
+
+export function useGetOpenCampaignAllowance<TData = Awaited<ReturnType<typeof getOpenCampaignAllowance>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOpenCampaignAllowance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOpenCampaignAllowanceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetOpenCampaignAudienceUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/open-audience`
+}
+
+export const getOpenCampaignAudience = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<OpenCampaignRecipientInput[]> => {
+
+  return customFetch<OpenCampaignRecipientInput[]>(getGetOpenCampaignAudienceUrl(campaignId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOpenCampaignAudienceQueryKey = (campaignId: string,) => {
+    return [
+    `/api/campaigns/${campaignId}/open-audience`
+    ] as const;
+    }
+
+
+export const getGetOpenCampaignAudienceQueryOptions = <TData = Awaited<ReturnType<typeof getOpenCampaignAudience>>, TError = ErrorType<unknown>>(campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOpenCampaignAudience>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOpenCampaignAudienceQueryKey(campaignId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOpenCampaignAudience>>> = ({ signal }) => getOpenCampaignAudience(campaignId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: campaignId !== null && campaignId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOpenCampaignAudience>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOpenCampaignAudienceQueryResult = NonNullable<Awaited<ReturnType<typeof getOpenCampaignAudience>>>
+export type GetOpenCampaignAudienceQueryError = ErrorType<unknown>
+
+
+
+export function useGetOpenCampaignAudience<TData = Awaited<ReturnType<typeof getOpenCampaignAudience>>, TError = ErrorType<unknown>>(
+ campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOpenCampaignAudience>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOpenCampaignAudienceQueryOptions(campaignId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getHealthCheckUrl = () => {
 

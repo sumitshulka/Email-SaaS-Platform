@@ -38,6 +38,7 @@ app.use(
   "/api/sending/reports/import",
   express.json({ limit: "7mb" }),
 );
+app.use("/api/campaigns", express.json({ limit: "16mb" }));
 app.use(
   express.json({
     limit: "1mb",

@@ -22,6 +22,10 @@ export interface SubscriptionPackage {
   /** @minimum 0 */
   contactLimit: number;
   /** @minimum 0 */
+  openCampaignAllowance?: number;
+  /** @minimum 0 */
+  openCampaignRecipientLimit?: number;
+  /** @minimum 0 */
   emailAccountLimit: number;
   /**
      * Number of company research runs in each subscription term. A run is consumed when queued

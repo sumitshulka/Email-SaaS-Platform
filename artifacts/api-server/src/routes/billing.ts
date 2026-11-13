@@ -564,6 +564,8 @@ function packageConfigurationError(input: {
   packageType: "primary" | "addon";
   periodDays: number;
   contactLimit: number;
+  openCampaignAllowance?: number;
+  openCampaignRecipientLimit?: number;
   emailAccountLimit: number;
   researchAllowance: number;
   aiEmailAssistAllowance: number;
@@ -580,6 +582,8 @@ function packageConfigurationError(input: {
   if (
     input.periodDays !== 0 ||
     input.contactLimit !== 0 ||
+    (input.openCampaignAllowance ?? 0) !== 0 ||
+    (input.openCampaignRecipientLimit ?? 0) !== 0 ||
     input.emailAccountLimit !== 0 ||
     input.preferred
   ) {
@@ -1176,6 +1180,8 @@ router.post(
       packageType,
       periodDays: packageType === "addon" ? 0 : parsed.data.periodDays,
       contactLimit: packageType === "addon" ? 0 : parsed.data.contactLimit,
+      openCampaignAllowance: packageType === "addon" ? 0 : (parsed.data.openCampaignAllowance ?? 0),
+      openCampaignRecipientLimit: packageType === "addon" ? 0 : (parsed.data.openCampaignRecipientLimit ?? 0),
       emailAccountLimit:
         packageType === "addon" ? 0 : (parsed.data.emailAccountLimit ?? 0),
       researchAllowance: parsed.data.researchAllowance ?? 0,
@@ -1288,6 +1294,8 @@ router.patch(
       aiEmailAssistAllowance:
         parsed.data.aiEmailAssistAllowance ??
         currentPackage.aiEmailAssistAllowance,
+      openCampaignAllowance: currentPackage.packageType === "addon" ? 0 : (parsed.data.openCampaignAllowance ?? currentPackage.openCampaignAllowance),
+      openCampaignRecipientLimit: currentPackage.packageType === "addon" ? 0 : (parsed.data.openCampaignRecipientLimit ?? currentPackage.openCampaignRecipientLimit),
       additionalMailboxCount:
         parsed.data.additionalMailboxCount ??
         currentPackage.additionalMailboxCount,
@@ -1337,6 +1345,8 @@ router.patch(
           .update(subscriptionPackagesTable)
           .set({
             ...parsed.data,
+            openCampaignAllowance: effectivePackage.openCampaignAllowance,
+            openCampaignRecipientLimit: effectivePackage.openCampaignRecipientLimit,
             updatedBy: req.authUser!.id,
             updatedAt: now,
           })
