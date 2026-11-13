@@ -267,7 +267,6 @@ async function installApiFixtures(context, {
   companyDirectoryRequests = [],
   businessAreaUpdates = [],
   unlinkedProfiles = [reviewProfile],
-  unlinkedProfileRequests = [],
   globalCompanies = [],
   globalBusinessAreaUpdates = [],
   leadStatusOptions = [],
@@ -394,7 +393,7 @@ async function installApiFixtures(context, {
       return;
     }
     const companyDetailMatch = pathname.match(/^\/api\/companies\/([^/]+)$/);
-    if (companyDetailMatch && method === 'GET') {
+    if (companyDetailMatch && companyDetailMatch[1] !== 'unlinked-profiles' && method === 'GET') {
       const companyId = companyDetailMatch[1];
       const selectedCompany = companies.find(item => item.id === companyId);
       if (!selectedCompany) {
@@ -449,7 +448,6 @@ async function installApiFixtures(context, {
       return;
     }
     if (pathname === '/api/companies/unlinked-profiles' && method === 'GET') {
-      unlinkedProfileRequests.push(request.url());
       await route.fulfill({ status: 200, json: { profiles: unlinkedProfiles } });
       return;
     }
@@ -1040,6 +1038,7 @@ describe('company profile review and contact data preservation', { concurrency: 
         'Seattle, WA',
       );
 
+      await page.getByTestId('button-toggle-company-filters').click();
       await page.getByTestId('select-company-industry-filter').selectOption({ label: 'Biotechnology' });
       assert.equal(await rows.count(), 2, 'industry should narrow the directory');
       await page.getByTestId('select-company-size-filter').selectOption({ label: '51-200' });
@@ -1320,11 +1319,8 @@ describe('company profile review and contact data preservation', { concurrency: 
   it('keeps the empty review area compact and preserves collapsed company filters', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     try {
-      const unlinkedProfileRequests = [];
-      await installApiFixtures(context, { unlinkedProfiles: [], unlinkedProfileRequests });
+      await installApiFixtures(context, { unlinkedProfiles: [] });
       const page = await context.newPage();
-      const browserErrors = [];
-      page.on('pageerror', error => browserErrors.push(error.message));
       await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByTestId('input-identifier').fill(user.username);
       await page.getByTestId('input-password').fill('browser-test-password');
@@ -1334,13 +1330,13 @@ describe('company profile review and contact data preservation', { concurrency: 
 
       const reviewToggle = page.getByTestId('button-toggle-unlinked-company-profiles');
       await reviewToggle.waitFor({ state: 'visible' });
-      console.log(JSON.stringify({ reviewHeader: await page.getByTestId('section-unlinked-company-profiles').innerText(), reviewRequests: unlinkedProfileRequests, browserErrors }));
       await page.getByTestId('text-unlinked-company-count').waitFor({ state: 'visible' });
       assert.equal(await reviewToggle.getAttribute('aria-expanded'), 'false', 'an empty review section should start collapsed');
       assert.equal(await page.getByTestId('text-unlinked-company-count').innerText(), '0 to review');
       assert.equal(await page.getByTestId('empty-unlinked-company-profiles').isVisible(), false);
       const collapsedReview = await page.getByTestId('section-unlinked-company-profiles').boundingBox();
       assert.ok(collapsedReview && collapsedReview.height < 90, 'the empty review area should use a compact summary row');
+      await page.screenshot({ path: '/tmp/mailflow-companies-directory-compact-desktop.png', fullPage: true });
 
       const filtersToggle = page.getByTestId('button-toggle-company-filters');
       assert.equal(await filtersToggle.getAttribute('aria-expanded'), 'false', 'company filters should start collapsed');
@@ -1355,6 +1351,14 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.equal(await page.getByTestId('text-company-filter-count').innerText(), '1 active');
       assert.equal(await page.getByTestId('text-active-company-filters').innerText(), 'Industry: Biotechnology');
       assert.equal(await page.getByTestId(`row-company-${company.id}`).isVisible(), true, 'the active filter remains applied while the panel is closed');
+      const companyCheckbox = page.getByTestId(`checkbox-select-company-${company.id}`);
+      await companyCheckbox.check();
+      await page.getByTestId('panel-bulk-company-business-area').waitFor({ state: 'visible' });
+      await filtersToggle.click();
+      assert.equal(await industryFilter.inputValue(), 'Biotechnology', 'the selected filter remains applied when the pane is reopened');
+      await filtersToggle.click();
+      assert.equal(await companyCheckbox.isChecked(), true, 'bulk selection is preserved while the filters pane is collapsed');
+      assert.equal(await page.getByTestId('panel-bulk-company-business-area').isVisible(), true);
 
       await page.setViewportSize({ width: 390, height: 844 });
       await page.waitForFunction(() => {
