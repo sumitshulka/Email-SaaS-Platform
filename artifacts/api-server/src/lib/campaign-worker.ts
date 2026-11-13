@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { MicrosoftSenderError } from "./microsoft-sender";
+import { fallbackPolicyText, missingCampaignRecipientValue } from "./campaign-personalization";
 import {
   and,
   asc,
@@ -601,7 +602,7 @@ async function claimDelivery(
         subject: variants.subject,
         greeting: variants.greeting,
         signature: variants.signature,
-        body: campaign.textBody,
+        body: fallbackPolicyText(campaign.textBody, campaign.placeholderFallbacks),
         htmlBody: campaign.htmlBody,
       },
       prohibitedKeywordsFromSetting(platformValue),
@@ -746,7 +747,7 @@ async function claimDelivery(
         return { completedCampaignId: recipient.campaignId };
       }
       personalization = { firstName: recipient.firstName, lastName: recipient.lastName,
-        fullName: [recipient.firstName, recipient.lastName].filter(Boolean).join(" "),
+        fullName: recipient.firstName?.trim() && recipient.lastName?.trim() ? `${recipient.firstName} ${recipient.lastName}` : "",
         email: recipient.email, companyName: "", phoneNumber: "", linkedinUrl: "" };
     } else {
       await tx
@@ -765,6 +766,12 @@ async function claimDelivery(
       return { completedCampaignId: recipient.campaignId };
     }
 
+    const missingValue = missingCampaignRecipientValue(campaign, personalization);
+    if (missingValue) {
+      await tx.update(emailCampaignRecipientsTable).set({ status: "suppressed", lastError: missingValue, updatedAt: now })
+        .where(and(eq(emailCampaignRecipientsTable.id, recipient.id), eq(emailCampaignRecipientsTable.userId, userId)));
+      return { completedCampaignId: recipient.campaignId };
+    }
     const rateDelay = await rateLimitDelay(
       tx,
       userId,

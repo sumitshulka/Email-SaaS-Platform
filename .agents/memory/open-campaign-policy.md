@@ -26,13 +26,17 @@ introduced by a replacement upload.
 
 **Why:** The user explicitly confirmed both rules after reviewing the audit.
 
-Name personalization must be unavailable when the relevant uploaded name data is
-absent. Do not silently invent recipient names or create saved contacts to support
+Name personalization must be unavailable when uploaded name data is absent unless
+the user explicitly sets a fallback for that field. Hide contact-only fields in
+open campaigns. The user selected **user-defined fallbacks**, not automatic
+generic defaults, for missing values in both campaign types.
+Do not silently invent recipient names or create saved contacts to support
 personalization, reporting, or unsubscribe behavior.
 
 **Why:** The user introduced open campaigns for direct uploaded audiences and
 explicitly chose term-based allowance accounting while requiring separate
-recipient storage and the existing sending/scheduling logic.
+recipient storage and the existing sending/scheduling logic. The user later
+requested explicit defaults wherever personalization data might be absent.
 
 **How to apply:** Preserve these distinctions when extending package settings,
 audience imports, templates, follow-ups, suppression, and reporting.

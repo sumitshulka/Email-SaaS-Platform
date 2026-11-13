@@ -6753,6 +6753,7 @@ components:
         signatureVariants: { type: array, items: { type: string, maxLength: 4000 } }
         textBody: { type: string }
         htmlBody: { type: ["string", "null"] }
+        placeholderFallbacks: { $ref: "#/components/schemas/CampaignPlaceholderFallbacks" }
         attachments:
           type: array
           maxItems: 2
@@ -7041,6 +7042,17 @@ components:
       properties:
         available: { type: boolean }
       required: [available]
+    CampaignPlaceholderFallbacks:
+      type: object
+      description: User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.
+      additionalProperties: false
+      properties:
+        firstName: { type: string, maxLength: 200 }
+        lastName: { type: string, maxLength: 200 }
+        fullName: { type: string, maxLength: 200 }
+        companyName: { type: string, maxLength: 200 }
+        phoneNumber: { type: string, maxLength: 200 }
+        linkedinUrl: { type: string, maxLength: 200 }
     CampaignInput:
       type: object
       properties:
@@ -7068,6 +7080,7 @@ components:
           items: { type: string, maxLength: 4000 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
+        placeholderFallbacks: { $ref: "#/components/schemas/CampaignPlaceholderFallbacks" }
         attachments:
           type: array
           maxItems: 2
@@ -7112,6 +7125,7 @@ components:
           items: { type: string, maxLength: 4000 }
         textBody: { type: string, minLength: 1, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
+        placeholderFallbacks: { $ref: "#/components/schemas/CampaignPlaceholderFallbacks" }
         attachments:
           type: array
           maxItems: 2
@@ -7174,6 +7188,7 @@ components:
           items: { type: string, maxLength: 4000 }
         textBody: { type: string, maxLength: 100000 }
         htmlBody: { type: string, maxLength: 100000 }
+        placeholderFallbacks: { $ref: "#/components/schemas/CampaignPlaceholderFallbacks" }
       required: [contactId, subject, textBody, htmlBody]
     CampaignTemplatePreview:
       type: object

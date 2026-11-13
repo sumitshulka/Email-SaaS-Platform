@@ -340,6 +340,9 @@ export const emailCampaignsTable = pgTable(
     unsubscribeOrigin: text("unsubscribe_origin"),
     textBody: text("text_body").notNull(),
     htmlBody: text("html_body"),
+    placeholderFallbacks: jsonb("placeholder_fallbacks")
+      .$type<Partial<Record<"firstName" | "lastName" | "fullName" | "companyName" | "phoneNumber" | "linkedinUrl", string>>>()
+      .notNull().default(sql`'{}'::jsonb`),
     attachments: jsonb("attachments")
       .$type<Array<{ objectPath: string; name: string; size: number }>>()
       .notNull()

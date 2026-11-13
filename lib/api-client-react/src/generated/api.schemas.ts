@@ -3391,6 +3391,24 @@ export const CampaignSummaryStatus = {
   completed: 'completed',
 } as const;
 
+/**
+ * User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.
+ */
+export interface CampaignPlaceholderFallbacks {
+  /** @maxLength 200 */
+  firstName?: string;
+  /** @maxLength 200 */
+  lastName?: string;
+  /** @maxLength 200 */
+  fullName?: string;
+  /** @maxLength 200 */
+  companyName?: string;
+  /** @maxLength 200 */
+  phoneNumber?: string;
+  /** @maxLength 200 */
+  linkedinUrl?: string;
+}
+
 export interface CampaignAttachment {
   /**
      * @minLength 1
@@ -3435,6 +3453,7 @@ export interface CampaignSummary {
   textBody: string;
   /** @nullable */
   htmlBody: string | null;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
   /** @maxItems 2 */
   attachments?: CampaignAttachment[];
   /**
@@ -3901,6 +3920,7 @@ export interface CampaignInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
   /** @maxItems 2 */
   attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
@@ -3955,6 +3975,7 @@ export interface CampaignUpdate {
   textBody?: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
   /** @maxItems 2 */
   attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */
@@ -4013,6 +4034,7 @@ export interface CampaignPreviewInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody: string;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
 }
 
 export interface CampaignTemplatePreview {

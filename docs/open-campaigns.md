@@ -76,14 +76,21 @@ uploads. Optional email PDF attachments still use the configured storage provide
 ## Personalization and preview
 
 - `{{email}}` is always available.
-- `{{firstName}}` is available only if every uploaded recipient has a first name.
-- `{{lastName}}` is available only if every recipient has a last name.
-- `{{fullName}}` requires both names on every recipient.
+- `{{firstName}}` is available if every uploaded recipient has a first name, or a first-name fallback is set.
+- `{{lastName}}` is available if every recipient has a last name, or a last-name fallback is set.
+- `{{fullName}}` requires both names on every recipient, or a full-name fallback.
 - Contact-only company, phone, and profile placeholders are unavailable.
 
-The editor disables unavailable placeholder buttons and validates template/AI
-content before saving. The server repeats these checks on create, update, and
-queue. Add the missing names or remove those placeholders before continuing.
+Both editor toolbars hide unavailable placeholders. Contact-only fields (company,
+phone and LinkedIn) are never offered for open campaigns. Name fallback inputs
+remain available so a user can explicitly configure a value and enable a
+previously unavailable name placeholder.
+
+Every optional placeholder used in any message part needs a user-defined
+fallback before continuing or saving in the editor. The API also enforces this
+before queueing. Real values take precedence; only blank or whitespace values
+use the fallback. See [Campaign personalization](campaign-personalization.md)
+for rendering, legacy campaigns and the required production migration.
 The uploaded-recipient preview is labeled as a local preview; it shows the first
 content option and does not include the final unsubscribe footer. The normal
 sending worker adds the unsubscribe footer to delivered email.

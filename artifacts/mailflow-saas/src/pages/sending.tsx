@@ -22,7 +22,8 @@ import { CONTACT_PLACEHOLDERS, plainTextToHtml } from '@/components/campaign-pla
 import { ContactReportEvidence, DeliveryCapabilityNotes, DeliveryEvidenceSection, Microsoft365TraceSettingsPanel } from '@/components/delivery-evidence';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import { OpenCampaignAudience, openCampaignsEnabled } from '@/components/open-campaign-audience';
-import { findUnavailableOpenPlaceholders, openPlaceholderAvailability, openPlaceholderReason, renderOpenRecipientPreview } from '@/lib/open-campaign';
+import { cleanPlaceholderFallbacks, findMissingPlaceholderFallbacks, findUnavailableOpenPlaceholders, openPlaceholderReason, openPlaceholderUsable, renderOpenRecipientPreview, type PlaceholderFallbackMap } from '@/lib/open-campaign';
+import { PlaceholderFallbackFields } from '@/components/placeholder-fallback-fields';
 import {
   exportContacts, getGetCampaignDashboardQueryKey, getGetCampaignHistoryQueryKey, getGetCampaignRecipientSummaryQueryKey, getGetContactFilterOptionsQueryKey, getGetCampaignAttachmentAvailabilityQueryKey, getGetSubscriptionAddOnsQueryKey, getGetTenantSendingSettingsQueryKey, getGetUserDashboardQueryKey, getListCampaignRepliesQueryKey, getListCampaignsQueryKey, getListContactListsQueryKey, getListTenantSendingAccountsQueryKey,
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign, useCancelPausedCampaign,
@@ -1913,6 +1914,7 @@ type CampaignForm = {
   excludedContactIds: string[];
   attachments: Array<{ objectPath: string; name: string; size: number }>;
   openRecipients: OpenCampaignRecipientInput[];
+  placeholderFallbacks: PlaceholderFallbackMap;
 };
 type CampaignAudienceType = 'standard' | 'open';
 const isOpenCampaign = (campaign: CampaignSummary) => campaign.audienceType === 'open';
@@ -1958,6 +1960,7 @@ const blankCampaign: CampaignForm = {
   excludedContactIds: [],
   attachments: [],
   openRecipients: [],
+  placeholderFallbacks: {},
 };
 
 let pendingCampaignsNotice: { kind: 'success' | 'error'; text: string } | null = null;
@@ -2027,8 +2030,11 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
   }, [editingOpenId, savedOpenAudienceQuery.data]);
   const openRecipientsOverLimit = Boolean(openAllowance && form.openRecipients.length > openAllowance.recipientLimit);
   const openAudienceReady = form.openRecipients.length > 0 && !openRecipientsOverLimit && !(editingOpenId && savedOpenAudienceQuery.isLoading);
-  const openPlaceholders = openPlaceholderAvailability(form.openRecipients);
-  const unavailableOpenPlaceholders = () => findUnavailableOpenPlaceholders([...form.subjectVariants, ...form.greetingVariants, ...form.signatureVariants, form.textBody, form.htmlBody], form.openRecipients);
+  const campaignTexts = [...form.subjectVariants, ...form.greetingVariants, ...form.signatureVariants, form.textBody, form.htmlBody];
+  const unavailableOpenPlaceholders = () => findUnavailableOpenPlaceholders(campaignTexts, form.openRecipients, form.placeholderFallbacks);
+  const missingFallbacks = findMissingPlaceholderFallbacks(campaignTexts, form.placeholderFallbacks);
+  const visiblePlaceholders = CONTACT_PLACEHOLDERS.filter(({ token }) => !isOpen || openPlaceholderUsable(token.slice(2, -2), form.openRecipients, form.placeholderFallbacks));
+  const missingFallbackMessage = (keys: string[]) => `Add a fallback value for ${keys.map(key => `{{${key}}}`).join(', ')}. It is used only when a recipient’s value is blank.`;
   const [openPreviewEmail, setOpenPreviewEmail] = useState('');
   useEffect(() => {
     if (createPage || !pendingCampaignsNotice) return;
@@ -2292,7 +2298,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     setCampaignReviewPage(1);
     setCampaignReviewSearch('');
   }, [campaignReviewListId, form.listIds]);
-  const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subjectVariants, form.greetingVariants, form.signatureVariants, form.textBody, form.htmlBody]);
+  const previewKey = JSON.stringify([form.listIds, sampleContactId, form.subjectVariants, form.greetingVariants, form.signatureVariants, form.textBody, form.htmlBody, form.placeholderFallbacks]);
   const visiblePreview = previewState?.key === previewKey ? previewState.rendered : null;
   const visiblePreviewError = previewError?.key === previewKey ? previewError.message : null;
   const refresh = () => { void qc.invalidateQueries({ queryKey: getListCampaignsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetCampaignHistoryQueryKey() }); void qc.invalidateQueries({ queryKey: getListContactListsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }); };
@@ -2336,8 +2342,9 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     }
     if (campaignStep === 2 && isOpen) {
       const unavailable = unavailableOpenPlaceholders();
-      if (unavailable.length) return setCampaignStepError(`These fields aren’t available for every uploaded recipient: ${unavailable.map(key => `{{${key}}}`).join(', ')}. Remove them, or upload a file where every row has the value.`);
+      if (unavailable.length) return setCampaignStepError(`These fields aren’t available for every uploaded recipient: ${unavailable.map(key => `{{${key}}}`).join(', ')}. Remove them, add a name fallback, or upload a file where every row has the value.`);
     }
+    if (campaignStep === 2 && missingFallbacks.length) return setCampaignStepError(missingFallbackMessage(missingFallbacks));
     setCampaignStep(step => Math.min(3, step + 1));
   };
   const toggleCampaignContact = (contactId: string, include: boolean) => {
@@ -2367,7 +2374,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     setPreviewError(null);
     setForm(current => ({ ...current, listIds: type === 'standard' && activeLists[0]?.id ? [activeLists[0].id] : [], excludedContactIds: [], openRecipients: [] }));
   };
-  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); setAudienceType(isOpenCampaign(campaign) ? 'open' : 'standard'); openAudienceInitializedFor.current = null; setOpenPreviewEmail(''); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [], attachments: campaign.attachments ?? [], openRecipients: [] }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
+  const openEdit = (campaign: CampaignSummary) => { dismiss(); setCampaignContentError(null); setAttachmentError(''); setCampaignStepError(''); setCampaignStep(0); setEditing(campaign); setAudienceType(isOpenCampaign(campaign) ? 'open' : 'standard'); openAudienceInitializedFor.current = null; setOpenPreviewEmail(''); const listIds = campaign.listIds?.length ? [...campaign.listIds] : campaign.listId ? [campaign.listId] : []; setForm({ name: campaign.name, objective: campaign.objective ?? '', subjectVariants: campaign.subjectVariants?.length ? [...campaign.subjectVariants] : [campaign.subject], greetingVariants: campaign.greetingVariants?.length ? [...campaign.greetingVariants] : [''], signatureVariants: campaign.signatureVariants?.length ? [...campaign.signatureVariants] : [''], textBody: campaign.textBody, htmlBody: campaign.htmlBody ?? plainTextToHtml(campaign.textBody), listIds, senderAccountId: campaign.senderAccountId ?? primarySenderAccountId, excludedContactIds: campaign.excludedContactIds ?? [], attachments: campaign.attachments ?? [], openRecipients: [], placeholderFallbacks: { ...(campaign.placeholderFallbacks ?? {}) } }); setCampaignReviewListId(listIds[0] ?? ''); setCampaignReviewPage(1); setCampaignReviewSearch(''); setPlaceholderTarget({ field: 'subjectVariants', index: 0 }); setCampaignListSearch(''); setShowSelectedCampaignLists(false); setSampleContactId(''); setPreviewState(null); setPreviewError(null); setAiDraftPreview(null); setAiDraftError(null); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); setAiDraftMaxWords(100); };
   const uploadCampaignAttachment = async (file: File) => {
     setAttachmentError('');
     if (!campaignPdfUploadAvailable) {
@@ -2457,6 +2464,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
         signatureVariants: form.signatureVariants.map(value => value.trim()).filter(Boolean),
         textBody: form.textBody,
         htmlBody: form.htmlBody,
+        placeholderFallbacks: cleanPlaceholderFallbacks(form.placeholderFallbacks),
       },
     }, {
       onSuccess: rendered => setPreviewState({ key, rendered }),
@@ -2541,6 +2549,10 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
         return;
       }
     }
+    if (missingFallbacks.length) {
+      setNotice({ kind: 'error', text: missingFallbackMessage(missingFallbacks) });
+      return;
+    }
     setCampaignContentError(null);
     audienceActionInProgress.current = true;
     setAudienceActionPending(true);
@@ -2558,6 +2570,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
       htmlBody: form.htmlBody.trim(),
       attachments: [...form.attachments],
       senderAccountId: form.senderAccountId || null,
+      placeholderFallbacks: cleanPlaceholderFallbacks(form.placeholderFallbacks),
       ...(isOpen
         ? { openRecipients: form.openRecipients.map(recipient => ({ ...recipient })) }
         : { listIds: [...form.listIds], excludedContactIds: [...form.excludedContactIds] }),
@@ -2979,10 +2992,11 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
          </section>
           <section hidden={campaignStep !== 2} className="rounded-md border border-[#e4e9ef] bg-white p-3" aria-label="Insert a contact placeholder">
            <p className="mb-2 text-[10px] leading-4 text-[#687587]">Insert a contact field into the last focused subject, greeting, or signature option.</p>
-           <div className="flex flex-wrap gap-1.5">{CONTACT_PLACEHOLDERS.filter(({ token }) => !isOpen || ['firstName', 'lastName', 'fullName', 'email'].includes(token.slice(2, -2))).map(({ token, label }) => { const unavailable = isOpen && !openPlaceholders[token.slice(2, -2)]; return <button key={token} type="button" disabled={unavailable} onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd] disabled:cursor-not-allowed disabled:border-[#e8ebef] disabled:bg-[#f6f7f9] disabled:text-[#a0a8b3]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={unavailable ? openPlaceholderReason(token) : `Insert ${token}`}>{label}</button>; })}</div>
-           {isOpen && <p className="mt-2 text-[10px] leading-4 text-[#7b8794]">Open campaigns can use email, and name fields only when every uploaded row has them. Company, phone, and profile fields aren’t available for uploaded recipients.</p>}
+           <div className="flex flex-wrap gap-1.5">{visiblePlaceholders.map(({ token, label }) => { const unavailable = false; return <button key={token} type="button" onMouseDown={event => event.preventDefault()} onClick={() => insertPlaceholder(placeholderTarget.field, placeholderTarget.index, token)} className="rounded border border-[#dce4ec] bg-white px-2 py-1 text-[10px] font-medium text-[#365a7e] hover:border-[#9abbe1] hover:bg-[#f1f7fd] disabled:cursor-not-allowed disabled:border-[#e8ebef] disabled:bg-[#f6f7f9] disabled:text-[#a0a8b3]" data-testid={`button-insert-campaign-placeholder-${token.slice(2, -2)}`} title={unavailable ? openPlaceholderReason(token) : `Insert ${token}`}>{label}</button>; })}</div>
+           {isOpen && <p className="mt-2 text-[10px] leading-4 text-[#7b8794]">Open campaigns can use email, and name fields when every uploaded row has them or a fallback is set below. Company, phone, and profile fields aren’t available for uploaded recipients.</p>}
          </section>
-          <label hidden={campaignStep !== 2} className="block"><span className={labelClass}>Formatted message</span><RichTextEditor value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
+         <div hidden={campaignStep !== 2}><PlaceholderFallbackFields mode={isOpen ? 'open' : 'standard'} values={form.placeholderFallbacks} missing={missingFallbacks} onChange={(key, value) => setForm(current => ({ ...current, placeholderFallbacks: { ...current.placeholderFallbacks, [key]: value } }))}/></div>
+          <label hidden={campaignStep !== 2} className="block"><span className={labelClass}>Formatted message</span><RichTextEditor placeholders={visiblePlaceholders} value={form.htmlBody} onChange={(htmlBody, textBody) => setForm(current => ({ ...current, htmlBody, textBody }))}/><span className="mt-1.5 block text-[11px] leading-relaxed text-[#808a97]">Formatting is preserved in the HTML message submitted to your SMTP provider. A plain-text fallback is included.</span></label>
           <section hidden={campaignStep !== 2} className="rounded-lg border border-[#dce4e9] bg-white p-4" aria-label="Email attachments">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="text-[12px] font-semibold text-[#344154]">PDF attachments</h3><p className="mt-1 text-[11px] leading-5 text-[#687587]">Up to 2 PDFs; each and the combined total must be 5 MB or less.</p></div>
@@ -3006,7 +3020,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
             {(() => {
               const recipient = form.openRecipients.find(item => item.email === openPreviewEmail);
               if (!recipient) return null;
-              const rendered = renderOpenRecipientPreview({ subject: form.subjectVariants.find(value => value.trim()) ?? '', greeting: form.greetingVariants.find(value => value.trim()) ?? '', signature: form.signatureVariants.find(value => value.trim()) ?? '', textBody: form.textBody, htmlBody: form.htmlBody }, recipient);
+              const rendered = renderOpenRecipientPreview({ subject: form.subjectVariants.find(value => value.trim()) ?? '', greeting: form.greetingVariants.find(value => value.trim()) ?? '', signature: form.signatureVariants.find(value => value.trim()) ?? '', textBody: form.textBody, htmlBody: form.htmlBody, placeholderFallbacks: form.placeholderFallbacks }, recipient);
               return <div data-testid="panel-open-campaign-preview-rendered" className="space-y-4 rounded-md border border-[#e2e7ed] bg-white p-4">
                 <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Resolved subject</div><p data-testid="text-open-campaign-preview-subject" className="mt-1 break-words text-[13px] font-semibold text-[#29384a]">{rendered.subject}</p></div>
                 <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Formatted HTML</div>{rendered.htmlBody !== null ? <div className="campaign-message-preview mt-2 rounded-md bg-[#f8fafb] p-4 text-[12px] leading-6 text-[#566476] [&_a]:text-[#245b9b] [&_li]:ml-5 [&_ol]:my-2 [&_ol]:list-decimal [&_p]:my-1 [&_strong]:font-bold [&_u]:underline [&_ul]:my-2 [&_ul]:list-disc" dangerouslySetInnerHTML={{ __html: rendered.htmlBody }}/> : <p className="mt-2 text-[11px] text-[#84909d]">No formatted HTML message.</p>}</div>

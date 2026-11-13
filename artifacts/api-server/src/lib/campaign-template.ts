@@ -1,4 +1,5 @@
 import sanitizeHtml from "sanitize-html";
+import type { CampaignFallbackValues } from "./campaign-personalization";
 
 export type CampaignPersonalization = {
   firstName: string;
@@ -17,6 +18,7 @@ export type CampaignTemplate = {
   signatureVariants?: string[];
   textBody: string;
   htmlBody?: string | null;
+  placeholderFallbacks?: CampaignFallbackValues;
 };
 
 export type CampaignTemplateRenderOptions = {
@@ -69,6 +71,7 @@ function replaceContactTokens(
   template: string,
   personalization: CampaignPersonalization,
   escapeValues: boolean,
+  fallbacks: CampaignFallbackValues = {},
 ): string {
   return template.replace(
     /\{\{\s*([a-zA-Z][a-zA-Z0-9]*)\s*\}\}/g,
@@ -76,7 +79,8 @@ function replaceContactTokens(
       if (!Object.prototype.hasOwnProperty.call(personalization, rawKey)) {
         return token;
       }
-      const value = personalization[rawKey as keyof CampaignPersonalization];
+      const actual = personalization[rawKey as keyof CampaignPersonalization];
+      const value = actual?.trim() ? actual : fallbacks[rawKey as keyof CampaignFallbackValues]?.trim() ?? "";
       return escapeValues
         ? value.replace(/[&<>"']/g, (character) => {
             const entities: Record<string, string> = {
@@ -96,19 +100,22 @@ function replaceContactTokens(
 export function personalizeCampaignText(
   template: string,
   personalization: CampaignPersonalization,
+  fallbacks: CampaignFallbackValues = {},
 ): string {
-  return replaceContactTokens(template, personalization, false);
+  return replaceContactTokens(template, personalization, false, fallbacks);
 }
 
 export function personalizeCampaignHtml(
   template: string,
   personalization: CampaignPersonalization,
+  fallbacks: CampaignFallbackValues = {},
 ): string {
-  return replaceContactTokens(
+  return sanitizeCampaignHtml(replaceContactTokens(
     sanitizeCampaignHtml(template),
     personalization,
     true,
-  );
+    fallbacks,
+  ));
 }
 
 function escapeHtml(value: string): string {
@@ -152,11 +159,12 @@ export function renderCampaignForContact(
     template.signatureVariants,
     options.variantAssignment?.signature?.index,
   );
-  const personalizedGreeting = personalizeCampaignText(greeting, personalization);
-  const personalizedSignature = personalizeCampaignText(signature, personalization);
+  const personalizedGreeting = personalizeCampaignText(greeting, personalization, template.placeholderFallbacks);
+  const personalizedSignature = personalizeCampaignText(signature, personalization, template.placeholderFallbacks);
   const personalizedBody = personalizeCampaignText(
     template.textBody,
     personalization,
+    template.placeholderFallbacks,
   );
   const unsubscribeFooter = options.unsubscribeUrl
     ? `Unsubscribe: ${options.unsubscribeUrl}`
@@ -180,12 +188,12 @@ export function renderCampaignForContact(
     ? `<p><a href="${escapeHtml(options.unsubscribeUrl)}">Unsubscribe</a></p>`
     : "";
   return {
-    subject: personalizeCampaignText(subject, personalization),
+    subject: personalizeCampaignText(subject, personalization, template.placeholderFallbacks),
     textBody,
     htmlBody: template.htmlBody
       ? [
           htmlGreeting,
-          personalizeCampaignHtml(template.htmlBody, personalization),
+          personalizeCampaignHtml(template.htmlBody, personalization, template.placeholderFallbacks),
           htmlSignature,
           htmlUnsubscribe,
         ]

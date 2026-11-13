@@ -14,7 +14,7 @@ export const PUBLIC_PAGE_METADATA = {
     path: '/features',
     title: 'Mailflow Features: Your Sender, Simpler Campaigns & AI',
     description:
-      'Use your own SMTP, keep contact records private, and manage campaigns with stable variants, one-click unsubscribe, company research and optional AI drafts.',
+      'Explore Open Campaigns from CSV or XLSX, private contacts, your own SMTP, personalized fallbacks, campaign scheduling, unsubscribe controls and AI drafts.',
   },
   pricing: {
     path: '/pricing',

@@ -5361,6 +5361,18 @@ export const listCampaignsResponseGreetingVariantsItemMax = 500;
 
 export const listCampaignsResponseSignatureVariantsItemMax = 4000;
 
+export const listCampaignsResponsePlaceholderFallbacksFirstNameMax = 200;
+
+export const listCampaignsResponsePlaceholderFallbacksLastNameMax = 200;
+
+export const listCampaignsResponsePlaceholderFallbacksFullNameMax = 200;
+
+export const listCampaignsResponsePlaceholderFallbacksCompanyNameMax = 200;
+
+export const listCampaignsResponsePlaceholderFallbacksPhoneNumberMax = 200;
+
+export const listCampaignsResponsePlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const listCampaignsResponseAttachmentsItemObjectPathMax = 300;
 
 export const listCampaignsResponseAttachmentsItemNameMax = 180;
@@ -5386,6 +5398,14 @@ export const ListCampaignsResponseItem = zod.object({
   "signatureVariants": zod.array(zod.string().max(listCampaignsResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(listCampaignsResponsePlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(listCampaignsResponsePlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(listCampaignsResponsePlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(listCampaignsResponsePlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(listCampaignsResponsePlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(listCampaignsResponsePlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(listCampaignsResponseAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(listCampaignsResponseAttachmentsItemNameMax),
@@ -5447,6 +5467,18 @@ export const createCampaignBodyTextBodyMax = 100000;
 
 export const createCampaignBodyHtmlBodyMax = 100000;
 
+export const createCampaignBodyPlaceholderFallbacksFirstNameMax = 200;
+
+export const createCampaignBodyPlaceholderFallbacksLastNameMax = 200;
+
+export const createCampaignBodyPlaceholderFallbacksFullNameMax = 200;
+
+export const createCampaignBodyPlaceholderFallbacksCompanyNameMax = 200;
+
+export const createCampaignBodyPlaceholderFallbacksPhoneNumberMax = 200;
+
+export const createCampaignBodyPlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const createCampaignBodyAttachmentsItemObjectPathMax = 300;
 
 export const createCampaignBodyAttachmentsItemNameMax = 180;
@@ -5473,6 +5505,14 @@ export const CreateCampaignBody = zod.object({
   "signatureVariants": zod.array(zod.string().max(createCampaignBodySignatureVariantsItemMax)).max(createCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().min(1).max(createCampaignBodyTextBodyMax),
   "htmlBody": zod.string().max(createCampaignBodyHtmlBodyMax).optional(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(createCampaignBodyPlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(createCampaignBodyPlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(createCampaignBodyPlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(createCampaignBodyPlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(createCampaignBodyPlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(createCampaignBodyPlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(createCampaignBodyAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(createCampaignBodyAttachmentsItemNameMax),
@@ -5490,6 +5530,18 @@ export const createCampaignResponseSubjectVariantsItemMax = 200;
 export const createCampaignResponseGreetingVariantsItemMax = 500;
 
 export const createCampaignResponseSignatureVariantsItemMax = 4000;
+
+export const createCampaignResponsePlaceholderFallbacksFirstNameMax = 200;
+
+export const createCampaignResponsePlaceholderFallbacksLastNameMax = 200;
+
+export const createCampaignResponsePlaceholderFallbacksFullNameMax = 200;
+
+export const createCampaignResponsePlaceholderFallbacksCompanyNameMax = 200;
+
+export const createCampaignResponsePlaceholderFallbacksPhoneNumberMax = 200;
+
+export const createCampaignResponsePlaceholderFallbacksLinkedinUrlMax = 200;
 
 export const createCampaignResponseAttachmentsItemObjectPathMax = 300;
 
@@ -5516,6 +5568,14 @@ export const CreateCampaignResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(createCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(createCampaignResponsePlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(createCampaignResponsePlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(createCampaignResponsePlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(createCampaignResponsePlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(createCampaignResponsePlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(createCampaignResponsePlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(createCampaignResponseAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(createCampaignResponseAttachmentsItemNameMax),
@@ -5627,6 +5687,18 @@ export const getCampaignHistoryResponseCampaignsItemGreetingVariantsItemMax = 50
 
 export const getCampaignHistoryResponseCampaignsItemSignatureVariantsItemMax = 4000;
 
+export const getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksFirstNameMax = 200;
+
+export const getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksLastNameMax = 200;
+
+export const getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksFullNameMax = 200;
+
+export const getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksCompanyNameMax = 200;
+
+export const getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksPhoneNumberMax = 200;
+
+export const getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const getCampaignHistoryResponseCampaignsItemAttachmentsItemObjectPathMax = 300;
 
 export const getCampaignHistoryResponseCampaignsItemAttachmentsItemNameMax = 180;
@@ -5672,6 +5744,14 @@ export const GetCampaignHistoryResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(getCampaignHistoryResponseCampaignsItemSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(getCampaignHistoryResponseCampaignsItemPlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(getCampaignHistoryResponseCampaignsItemAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(getCampaignHistoryResponseCampaignsItemAttachmentsItemNameMax),
@@ -5734,6 +5814,18 @@ export const previewCampaignBodyTextBodyMax = 100000;
 
 export const previewCampaignBodyHtmlBodyMax = 100000;
 
+export const previewCampaignBodyPlaceholderFallbacksFirstNameMax = 200;
+
+export const previewCampaignBodyPlaceholderFallbacksLastNameMax = 200;
+
+export const previewCampaignBodyPlaceholderFallbacksFullNameMax = 200;
+
+export const previewCampaignBodyPlaceholderFallbacksCompanyNameMax = 200;
+
+export const previewCampaignBodyPlaceholderFallbacksPhoneNumberMax = 200;
+
+export const previewCampaignBodyPlaceholderFallbacksLinkedinUrlMax = 200;
+
 
 
 export const PreviewCampaignBody = zod.object({
@@ -5745,7 +5837,15 @@ export const PreviewCampaignBody = zod.object({
   "greetingVariants": zod.array(zod.string().max(previewCampaignBodyGreetingVariantsItemMax)).max(previewCampaignBodyGreetingVariantsMax).optional(),
   "signatureVariants": zod.array(zod.string().max(previewCampaignBodySignatureVariantsItemMax)).max(previewCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().max(previewCampaignBodyTextBodyMax),
-  "htmlBody": zod.string().max(previewCampaignBodyHtmlBodyMax)
+  "htmlBody": zod.string().max(previewCampaignBodyHtmlBodyMax),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(previewCampaignBodyPlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(previewCampaignBodyPlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(previewCampaignBodyPlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(previewCampaignBodyPlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(previewCampaignBodyPlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(previewCampaignBodyPlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.')
 })
 
 export const PreviewCampaignResponse = zod.object({
@@ -5907,6 +6007,18 @@ export const getCampaignDashboardResponseCampaignGreetingVariantsItemMax = 500;
 
 export const getCampaignDashboardResponseCampaignSignatureVariantsItemMax = 4000;
 
+export const getCampaignDashboardResponseCampaignPlaceholderFallbacksFirstNameMax = 200;
+
+export const getCampaignDashboardResponseCampaignPlaceholderFallbacksLastNameMax = 200;
+
+export const getCampaignDashboardResponseCampaignPlaceholderFallbacksFullNameMax = 200;
+
+export const getCampaignDashboardResponseCampaignPlaceholderFallbacksCompanyNameMax = 200;
+
+export const getCampaignDashboardResponseCampaignPlaceholderFallbacksPhoneNumberMax = 200;
+
+export const getCampaignDashboardResponseCampaignPlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const getCampaignDashboardResponseCampaignAttachmentsItemObjectPathMax = 300;
 
 export const getCampaignDashboardResponseCampaignAttachmentsItemNameMax = 180;
@@ -5969,6 +6081,14 @@ export const GetCampaignDashboardResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(getCampaignDashboardResponseCampaignSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(getCampaignDashboardResponseCampaignPlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(getCampaignDashboardResponseCampaignPlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(getCampaignDashboardResponseCampaignPlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(getCampaignDashboardResponseCampaignPlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(getCampaignDashboardResponseCampaignPlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(getCampaignDashboardResponseCampaignPlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(getCampaignDashboardResponseCampaignAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(getCampaignDashboardResponseCampaignAttachmentsItemNameMax),
@@ -6096,6 +6216,18 @@ export const updateCampaignBodyTextBodyMax = 100000;
 
 export const updateCampaignBodyHtmlBodyMax = 100000;
 
+export const updateCampaignBodyPlaceholderFallbacksFirstNameMax = 200;
+
+export const updateCampaignBodyPlaceholderFallbacksLastNameMax = 200;
+
+export const updateCampaignBodyPlaceholderFallbacksFullNameMax = 200;
+
+export const updateCampaignBodyPlaceholderFallbacksCompanyNameMax = 200;
+
+export const updateCampaignBodyPlaceholderFallbacksPhoneNumberMax = 200;
+
+export const updateCampaignBodyPlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const updateCampaignBodyAttachmentsItemObjectPathMax = 300;
 
 export const updateCampaignBodyAttachmentsItemNameMax = 180;
@@ -6121,6 +6253,14 @@ export const UpdateCampaignBody = zod.object({
   "signatureVariants": zod.array(zod.string().max(updateCampaignBodySignatureVariantsItemMax)).max(updateCampaignBodySignatureVariantsMax).optional(),
   "textBody": zod.string().min(1).max(updateCampaignBodyTextBodyMax).optional(),
   "htmlBody": zod.string().max(updateCampaignBodyHtmlBodyMax).optional(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(updateCampaignBodyPlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(updateCampaignBodyPlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(updateCampaignBodyPlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(updateCampaignBodyPlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(updateCampaignBodyPlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(updateCampaignBodyPlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(updateCampaignBodyAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(updateCampaignBodyAttachmentsItemNameMax),
@@ -6138,6 +6278,18 @@ export const updateCampaignResponseSubjectVariantsItemMax = 200;
 export const updateCampaignResponseGreetingVariantsItemMax = 500;
 
 export const updateCampaignResponseSignatureVariantsItemMax = 4000;
+
+export const updateCampaignResponsePlaceholderFallbacksFirstNameMax = 200;
+
+export const updateCampaignResponsePlaceholderFallbacksLastNameMax = 200;
+
+export const updateCampaignResponsePlaceholderFallbacksFullNameMax = 200;
+
+export const updateCampaignResponsePlaceholderFallbacksCompanyNameMax = 200;
+
+export const updateCampaignResponsePlaceholderFallbacksPhoneNumberMax = 200;
+
+export const updateCampaignResponsePlaceholderFallbacksLinkedinUrlMax = 200;
 
 export const updateCampaignResponseAttachmentsItemObjectPathMax = 300;
 
@@ -6164,6 +6316,14 @@ export const UpdateCampaignResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(updateCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(updateCampaignResponsePlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(updateCampaignResponsePlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(updateCampaignResponsePlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(updateCampaignResponsePlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(updateCampaignResponsePlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(updateCampaignResponsePlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(updateCampaignResponseAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(updateCampaignResponseAttachmentsItemNameMax),
@@ -6239,6 +6399,18 @@ export const createCampaignFollowUpResponseGreetingVariantsItemMax = 500;
 
 export const createCampaignFollowUpResponseSignatureVariantsItemMax = 4000;
 
+export const createCampaignFollowUpResponsePlaceholderFallbacksFirstNameMax = 200;
+
+export const createCampaignFollowUpResponsePlaceholderFallbacksLastNameMax = 200;
+
+export const createCampaignFollowUpResponsePlaceholderFallbacksFullNameMax = 200;
+
+export const createCampaignFollowUpResponsePlaceholderFallbacksCompanyNameMax = 200;
+
+export const createCampaignFollowUpResponsePlaceholderFallbacksPhoneNumberMax = 200;
+
+export const createCampaignFollowUpResponsePlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const createCampaignFollowUpResponseAttachmentsItemObjectPathMax = 300;
 
 export const createCampaignFollowUpResponseAttachmentsItemNameMax = 180;
@@ -6264,6 +6436,14 @@ export const CreateCampaignFollowUpResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(createCampaignFollowUpResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(createCampaignFollowUpResponsePlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(createCampaignFollowUpResponsePlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(createCampaignFollowUpResponsePlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(createCampaignFollowUpResponsePlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(createCampaignFollowUpResponsePlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(createCampaignFollowUpResponsePlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(createCampaignFollowUpResponseAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(createCampaignFollowUpResponseAttachmentsItemNameMax),
@@ -6509,6 +6689,18 @@ export const sendCampaignResponseGreetingVariantsItemMax = 500;
 
 export const sendCampaignResponseSignatureVariantsItemMax = 4000;
 
+export const sendCampaignResponsePlaceholderFallbacksFirstNameMax = 200;
+
+export const sendCampaignResponsePlaceholderFallbacksLastNameMax = 200;
+
+export const sendCampaignResponsePlaceholderFallbacksFullNameMax = 200;
+
+export const sendCampaignResponsePlaceholderFallbacksCompanyNameMax = 200;
+
+export const sendCampaignResponsePlaceholderFallbacksPhoneNumberMax = 200;
+
+export const sendCampaignResponsePlaceholderFallbacksLinkedinUrlMax = 200;
+
 export const sendCampaignResponseAttachmentsItemObjectPathMax = 300;
 
 export const sendCampaignResponseAttachmentsItemNameMax = 180;
@@ -6534,6 +6726,14 @@ export const SendCampaignResponse = zod.object({
   "signatureVariants": zod.array(zod.string().max(sendCampaignResponseSignatureVariantsItemMax)),
   "textBody": zod.string(),
   "htmlBody": zod.string().nullable(),
+  "placeholderFallbacks": zod.object({
+  "firstName": zod.string().max(sendCampaignResponsePlaceholderFallbacksFirstNameMax).optional(),
+  "lastName": zod.string().max(sendCampaignResponsePlaceholderFallbacksLastNameMax).optional(),
+  "fullName": zod.string().max(sendCampaignResponsePlaceholderFallbacksFullNameMax).optional(),
+  "companyName": zod.string().max(sendCampaignResponsePlaceholderFallbacksCompanyNameMax).optional(),
+  "phoneNumber": zod.string().max(sendCampaignResponsePlaceholderFallbacksPhoneNumberMax).optional(),
+  "linkedinUrl": zod.string().max(sendCampaignResponsePlaceholderFallbacksLinkedinUrlMax).optional()
+}).optional().describe('User-defined plain-text replacements used only when a recipient value is blank. Required for optional placeholders used in a campaign before queueing.'),
   "attachments": zod.array(zod.object({
   "objectPath": zod.string().min(1).max(sendCampaignResponseAttachmentsItemObjectPathMax),
   "name": zod.string().min(1).max(sendCampaignResponseAttachmentsItemNameMax),

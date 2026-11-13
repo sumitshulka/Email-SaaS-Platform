@@ -211,6 +211,70 @@ test("open drafts queue once per term without contacts and preserve tenant-speci
         assert.notEqual(secondQueued[0].email, queued[0].email);
         const [counted] = await tx.select().from(schema.emailCampaignsTable).where(and(eq(schema.emailCampaignsTable.id, draftTwo.result.id), eq(schema.emailCampaignsTable.openCampaignSubscriptionId, nextTerm.id)));
         assert.ok(counted.openCampaignCountedAt);
+        await tx.update(schema.subscriptionPackagesTable).set({ openCampaignAllowance: 4 }).where(eq(schema.subscriptionPackagesTable.id, pkg.id));
+        const fallbackValues = { firstName: "there", lastName: "<friend & colleague>", fullName: "reader" };
+        const fallbackDraft = await invoke("/campaigns", "post", userId, {
+          ...data, subject: "Hello {{firstName}}", subjectVariants: ["Hello {{firstName}}"],
+          greetingVariants: ["Dear {{fullName}},"], signatureVariants: ["Regards"],
+          textBody: "Hi {{firstName}} {{lastName}}", htmlBody: "<p>Hello {{firstName}} {{lastName}}</p>",
+          placeholderFallbacks: fallbackValues,
+          openRecipients: [{ email: "missing-name@example.test" }, { email: "named@example.test", firstName: "Ada", lastName: "Lovelace" }],
+        });
+        assert.equal(fallbackDraft.status, 201, JSON.stringify(fallbackDraft.result));
+        assert.deepEqual(fallbackDraft.result.placeholderFallbacks, fallbackValues);
+        response = await invoke("/campaigns/:campaignId", "patch", userId, { name: "Retains fallbacks" }, { campaignId: fallbackDraft.result.id });
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.result.placeholderFallbacks, fallbackValues, "unrelated edits preserve saved defaults");
+        response = await invoke("/campaigns/:campaignId", "patch", userId, { placeholderFallbacks: {} }, { campaignId: fallbackDraft.result.id });
+        assert.equal(response.status, 400, "cannot remove defaults required by missing uploaded names");
+        response = await invoke("/campaigns/:campaignId/send", "post", userId, {
+          scheduledAt: new Date(Date.now() + 8 * 86400000).toISOString(),
+        }, { campaignId: fallbackDraft.result.id });
+        assert.equal(response.status, 202, JSON.stringify(response.result));
+        const fallbackQueued = await tx.select().from(schema.emailCampaignRecipientsTable).where(eq(schema.emailCampaignRecipientsTable.campaignId, fallbackDraft.result.id));
+        await tx.update(schema.emailCampaignsTable).set({ scheduledAt: new Date(Date.now() - 1000) }).where(eq(schema.emailCampaignsTable.id, fallbackDraft.result.id));
+        for (const row of fallbackQueued) {
+          const old = new Date(Date.now() - 2 * 86400000);
+          await tx.update(schema.emailSendAttemptsTable).set({ attemptedAt: old, completedAt: old }).where(eq(schema.emailSendAttemptsTable.userId, userId));
+          await tx.update(schema.emailCampaignRecipientsTable).set({ nextAttemptAt: new Date(Date.now() - 1000) }).where(eq(schema.emailCampaignRecipientsTable.id, row.id));
+          workerModule.setCandidateRecipientIdsForTests([row.id]);
+          const before = delivered.length;
+          await workerModule.processPendingCampaignDeliveries(1);
+          assert.equal(delivered.length, before + 1);
+          const message = delivered.at(-1);
+          assert.equal(message.subject, row.firstName ? "Hello Ada" : "Hello there");
+          assert.match(message.text, row.firstName ? /Dear Ada Lovelace/ : /Dear reader/);
+          if (!row.firstName) assert.match(message.html, /&lt;friend &amp; colleague&gt;/);
+        }
+        const copied = await invoke("/campaigns/:campaignId/follow-ups", "post", userId, {}, { campaignId: fallbackDraft.result.id });
+        assert.equal(copied.status, 201);
+        assert.deepEqual(copied.result.placeholderFallbacks, fallbackValues, "follow-ups inherit defaults");
+        const [standardDraft] = await tx.insert(schema.emailCampaignsTable).values({
+          userId, name: "Legacy standard draft", subject: "Hello {{firstName}}", textBody: "Hello {{firstName}}",
+        }).returning();
+        response = await invoke("/campaigns/:campaignId/send", "post", userId, {}, { campaignId: standardDraft.id });
+        assert.equal(response.status, 400);
+        assert.equal(response.result.code, "PLACEHOLDER_FALLBACK_REQUIRED", "standard campaigns also require explicit defaults");
+        const [previewList] = await tx.insert(schema.contactListsTable).values({ userId, name: "Personalization preview" }).returning();
+        const [previewContact] = await tx.insert(schema.contactsTable).values({
+          userId, name: "Unnamed contact", firstName: "", lastName: "", email: "preview-fallback@example.test",
+        }).returning();
+        await tx.insert(schema.contactListMembersTable).values({ userId, listId: previewList.id, contactId: previewContact.id });
+        const previewData = {
+          listIds: [previewList.id], contactId: previewContact.id,
+          subject: "Hello {{firstName}}", textBody: "At {{companyName}}", htmlBody: "<p>At {{companyName}}</p>",
+          placeholderFallbacks: { firstName: "there", companyName: "our & team" },
+        };
+        response = await invoke("/campaigns/preview", "post", userId, previewData);
+        assert.equal(response.status, 200, JSON.stringify(response.result));
+        assert.equal(response.result.subject, "Hello there");
+        assert.equal(response.result.textBody, "At our & team\n\nUnsubscribe: https://mailflow.invalid/unsubscribe?token=preview");
+        assert.match(response.result.htmlBody, /our &amp; team/);
+        await tx.update(schema.contactsTable).set({ firstName: "Ada", companyName: "Acme" }).where(eq(schema.contactsTable.id, previewContact.id));
+        response = await invoke("/campaigns/preview", "post", userId, previewData);
+        assert.equal(response.status, 200);
+        assert.equal(response.result.subject, "Hello Ada");
+        assert.match(response.result.textBody, /At Acme/);
         throw rollback;
       }), error => error === rollback);
     } finally {

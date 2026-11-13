@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CampaignAttachment } from './campaignAttachment';
+import type { CampaignPlaceholderFallbacks } from './campaignPlaceholderFallbacks';
 import type { OpenCampaignRecipientInput } from './openCampaignRecipientInput';
 
 export interface CampaignUpdate {
@@ -49,6 +50,7 @@ export interface CampaignUpdate {
   textBody?: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
   /** @maxItems 2 */
   attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */

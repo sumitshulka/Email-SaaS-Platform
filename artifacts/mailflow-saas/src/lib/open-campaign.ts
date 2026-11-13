@@ -105,45 +105,109 @@ export function openPlaceholderReason(token: string) {
   return 'Uploaded recipients only include email and optional names.';
 }
 
-/** Returns placeholder keys used in the given texts that are not available for this uploaded audience. */
-export function findUnavailableOpenPlaceholders(texts: string[], recipients: OpenCampaignRecipientInput[]) {
-  const available = openPlaceholderAvailability(recipients);
+export const OPTIONAL_PLACEHOLDER_KEYS = ['firstName', 'lastName', 'fullName', 'companyName', 'phoneNumber', 'linkedinUrl'] as const;
+export type OptionalPlaceholderKey = typeof OPTIONAL_PLACEHOLDER_KEYS[number];
+export type PlaceholderFallbackMap = Partial<Record<OptionalPlaceholderKey, string>>;
+export const OPEN_NAME_PLACEHOLDER_KEYS: OptionalPlaceholderKey[] = ['firstName', 'lastName', 'fullName'];
+const TOKEN_PATTERN = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
+
+export function hasFallback(fallbacks: PlaceholderFallbackMap | undefined, key: string) {
+  return Boolean((fallbacks as Record<string, string | undefined> | undefined)?.[key]?.trim());
+}
+
+/** Placeholder keys used anywhere in the given texts, in first-seen order. */
+export function findUsedPlaceholders(texts: string[]) {
   const found = new Set<string>();
   for (const text of texts) {
-    for (const match of text.matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)) {
-      const key = match[1]!;
-      if (!available[key]) found.add(key);
-    }
+    const decoder = document.createElement('textarea');
+    decoder.innerHTML = text;
+    for (const match of decoder.value.matchAll(TOKEN_PATTERN)) found.add(match[1]!);
   }
   return [...found];
 }
 
-function fill(text: string, recipient: OpenCampaignRecipientInput, html: boolean) {
+/** Optional placeholders used in the texts that still need an explicit, non-blank fallback. Email is exempt. */
+export function findMissingPlaceholderFallbacks(texts: string[], fallbacks: PlaceholderFallbackMap = {}) {
+  const optional = new Set<string>(OPTIONAL_PLACEHOLDER_KEYS);
+  return findUsedPlaceholders(texts).filter(key => optional.has(key) && !hasFallback(fallbacks, key)) as OptionalPlaceholderKey[];
+}
+
+/** Trimmed, non-blank fallbacks suitable for API payloads. */
+export function cleanPlaceholderFallbacks(fallbacks: PlaceholderFallbackMap = {}): PlaceholderFallbackMap {
+  const result: PlaceholderFallbackMap = {};
+  for (const key of OPTIONAL_PLACEHOLDER_KEYS) {
+    const value = fallbacks[key]?.trim();
+    if (value) result[key] = value;
+  }
+  return result;
+}
+
+/** Whether a name placeholder may be offered for an uploaded audience (every row has it, or a fallback is set). */
+export function openPlaceholderUsable(key: string, recipients: OpenCampaignRecipientInput[], fallbacks: PlaceholderFallbackMap = {}) {
+  if (key === 'email') return true;
+  if (!OPEN_NAME_PLACEHOLDER_KEYS.includes(key as OptionalPlaceholderKey)) return false;
+  return Boolean(openPlaceholderAvailability(recipients)[key]) || hasFallback(fallbacks, key);
+}
+
+/** Returns placeholder keys used in the given texts that are not available for this uploaded audience. */
+export function findUnavailableOpenPlaceholders(texts: string[], recipients: OpenCampaignRecipientInput[], fallbacks: PlaceholderFallbackMap = {}) {
+  return findUsedPlaceholders(texts).filter(key => !openPlaceholderUsable(key, recipients, fallbacks));
+}
+
+function fill(text: string, recipient: OpenCampaignRecipientInput, html: boolean, fallbacks: PlaceholderFallbackMap) {
+  const first = recipient.firstName?.trim() ?? '';
+  const last = recipient.lastName?.trim() ?? '';
   const values: Record<string, string> = {
     email: recipient.email,
-    firstName: recipient.firstName ?? '',
-    lastName: recipient.lastName ?? '',
-    fullName: [recipient.firstName, recipient.lastName].filter(Boolean).join(' '),
+    firstName: first,
+    lastName: last,
+    fullName: first && last ? `${first} ${last}` : '',
   };
-  return text.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (token, key: string) => {
-    const value = values[key];
+  // Single pass: substituted values are never re-scanned for tokens.
+  return text.replace(TOKEN_PATTERN, (token, key: string) => {
+    const actual = Object.prototype.hasOwnProperty.call(values, key) ? values[key] : undefined;
+    const fallback = Object.prototype.hasOwnProperty.call(fallbacks, key) ? (fallbacks as Record<string, string | undefined>)[key] : undefined;
+    let value: string | undefined;
+    if (actual !== undefined && actual.trim()) value = actual;
+    else if (fallback?.trim()) value = fallback.trim();
+    else if (actual !== undefined) value = actual;
     if (value === undefined) return token;
     return html ? escapeHtml(value) : value;
   });
 }
 
+function safePreviewHtml(html: string) {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const allowed = new Set(['a', 'b', 'blockquote', 'br', 'em', 'h1', 'h2', 'h3', 'i', 'li', 'ol', 'p', 'strong', 'u', 'ul']);
+  for (const element of [...parsed.body.querySelectorAll('*')].reverse()) {
+    const tag = element.tagName.toLowerCase();
+    if (['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math'].includes(tag)) { element.remove(); continue; }
+    if (!allowed.has(tag)) { element.replaceWith(...element.childNodes); continue; }
+    for (const attribute of [...element.attributes]) {
+      if (tag !== 'a' || !['href', 'title', 'target', 'rel'].includes(attribute.name)) element.removeAttribute(attribute.name);
+    }
+    if (tag === 'a') {
+      const href = (element.getAttribute('href') ?? '').replace(/[\u0000-\u0020]/g, '');
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^(https?|mailto):/i.test(href)) element.removeAttribute('href');
+      element.setAttribute('rel', 'noopener noreferrer');
+    }
+  }
+  return parsed.body.innerHTML;
+}
+
 /** Local approximation of the delivered message for an uploaded recipient. */
 export function renderOpenRecipientPreview(
-  content: { subject: string; greeting: string; signature: string; textBody: string; htmlBody: string },
+  content: { subject: string; greeting: string; signature: string; textBody: string; htmlBody: string; placeholderFallbacks?: PlaceholderFallbackMap },
   recipient: OpenCampaignRecipientInput,
 ) {
-  const greeting = fill(content.greeting.trim(), recipient, false);
-  const signature = fill(content.signature.trim(), recipient, false);
-  const textBody = [greeting, fill(content.textBody.trim(), recipient, false), signature].filter(Boolean).join('\n\n');
+  const fb = content.placeholderFallbacks ?? {};
+  const greeting = fill(content.greeting.trim(), recipient, false, fb);
+  const signature = fill(content.signature.trim(), recipient, false, fb);
+  const textBody = [greeting, fill(content.textBody.trim(), recipient, false, fb), signature].filter(Boolean).join('\n\n');
   const htmlParts = [
     greeting ? `<p>${escapeHtml(greeting)}</p>` : '',
-    content.htmlBody.trim() ? fill(content.htmlBody, recipient, true) : '',
+    content.htmlBody.trim() ? fill(safePreviewHtml(content.htmlBody), recipient, true, fb) : '',
     signature ? `<p>${signature.split('\n').map(escapeHtml).join('<br>')}</p>` : '',
   ].filter(Boolean);
-  return { subject: fill(content.subject, recipient, false), htmlBody: htmlParts.length ? htmlParts.join('') : null, textBody };
+  return { subject: fill(content.subject, recipient, false, fb), htmlBody: htmlParts.length ? safePreviewHtml(htmlParts.join('')) : null, textBody };
 }

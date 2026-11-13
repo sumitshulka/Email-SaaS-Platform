@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignPlaceholderFallbacks } from './campaignPlaceholderFallbacks';
 
 export interface CampaignPreviewInput {
   /** Ordered target lists; contactId must be an eligible member of at least one. */
@@ -38,4 +39,5 @@ export interface CampaignPreviewInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody: string;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
 }

@@ -678,6 +678,7 @@ memory.public.none(`
 `);
 
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0019_open_campaigns.sql", import.meta.url), "utf8"));
+memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0020_campaign_placeholder_fallbacks.sql", import.meta.url), "utf8"));
 // Match the existing inbox fields used by the sender schema in worker fixtures.
 memory.public.none(`
   ALTER TABLE tenant_sending_configurations ADD COLUMN IF NOT EXISTS inbox_host varchar(255);

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
   ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, Clock3,
-  ContactRound, Gauge, Layers3, ListChecks, Mail, Menu, Send, Search, SlidersHorizontal,
+  ContactRound, FileSpreadsheet, Gauge, Layers3, ListChecks, Mail, Menu, Send, Search, SlidersHorizontal,
   ShieldCheck, Sparkles, X,
 } from 'lucide-react';
 import {
@@ -260,9 +260,10 @@ export function PublicFeaturesPage() {
             <SectionEyebrow>THE FEATURES / MADE PRACTICAL</SectionEyebrow>
             <p className="ft-hero-index">SMALL-TEAM EMAIL · YOUR SENDER, SIMPLIFIED</p>
             <h1>Your sender.<br/><em>Simpler campaigns.</em></h1>
-            <p className="ft-hero-lede">Keep the email address and SMTP mailbox your team controls. Mailflow brings contacts, company context, campaign planning and honest outcome records together—without moving your sending to a separate bulk-email platform.</p>
+            <p className="ft-hero-lede">Keep the email address and SMTP mailbox your team controls. Plan campaigns from saved contacts or an uploaded audience, with company context and honest outcome records—without moving your sending to a separate bulk-email platform.</p>
             <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register" onClick={() => trackMarketingSignupCta('features', 'hero')}>Start with Mailflow <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
             <div className="ft-hero-note"><ShieldCheck size={16}/> Your configured SMTP account does the sending.</div>
+            <a href="#open-campaigns" className="ft-underlined-cta" data-testid="features-scroll-open-campaigns">Discover Open Campaigns <ArrowDown size={15}/></a>
           </div>
           <div className="ft-hero-art" aria-label="Mailflow campaign prep, from audience to your own sender">
             <div className="ft-art-label"><span>MAILFLOW / THE SENDING ROUTE</span><span>YOU STAY IN CONTROL</span></div>
@@ -307,6 +308,35 @@ export function PublicFeaturesPage() {
             <div className="ft-no-journeys"><span className="ft-no-journeys-dot"/><span><b>Follow up, without drip complexity</b><small>Schedule a follow-up at least 24 hours after the primary campaign completes. Bounced and unsubscribed contacts stay excluded.</small></span></div>
           </div></div>
           <div className="ft-campaign-bottom"><span>MAKE THE DECISIONS THAT MATTER.</span><span>LEAVE THE REST OUT OF THE WAY.</span></div>
+        </div>
+      </section>
+
+      <section className="ft-audience-section" id="open-campaigns" data-testid="section-open-campaigns" aria-labelledby="open-campaigns-heading">
+        <div className="mf-section-wrap ft-audience-layout">
+          <div className="ft-section-copy">
+            <SectionEyebrow>OPEN CAMPAIGNS / SPREADSHEET TO OUTREACH</SectionEyebrow>
+            <h2 id="open-campaigns-heading">Your next audience.<br/><em>Straight from a spreadsheet.</em></h2>
+            <p>Prepare a focused cold-outreach campaign without building a saved contact list first. Upload a CSV or XLSX file, write your message and send through your own configured mailbox.</p>
+            <ul className="ft-check-list">
+              <li><Check size={14}/> Start with email addresses. First and last names are optional; duplicate addresses are removed and invalid rows are flagged for review.</li>
+              <li><Check size={14}/> Keep the uploaded audience linked to its campaign, separate from your saved Contacts.</li>
+              <li><Check size={14}/> Personalize with names when available, and choose your own fallback text when a value is missing.</li>
+              <li><Check size={14}/> Use the same message variants, scheduling and shared mailbox pacing as standard campaigns. Follow-ups stay with the original recipients.</li>
+            </ul>
+            <p>Your plan sets the number of Open Campaigns per package term and the recipient maximum per campaign. Drafts don’t use an allowance; the first successful queue does.</p>
+            <div className="ft-audience-foot"><span className="ft-field-chip">CSV + XLSX</span><span className="ft-field-chip">NO SAVED LIST REQUIRED</span><span className="ft-field-chip">YOUR OWN SENDER</span></div>
+            <Link href="/pricing" className="ft-underlined-cta" data-testid="features-open-campaigns-pricing">Find a plan for your outreach <ArrowRight size={15}/></Link>
+          </div>
+          <div className="ft-preview-stage">
+            <div className="ft-preview-label"><span>FROM FILE TO CAMPAIGN</span><span>OPEN CAMPAIGNS / EXAMPLE</span></div>
+            <div className="ft-campaign-window" aria-label="Illustration of an open campaign upload workflow">
+              <div className="ft-campaign-window-head"><span><span className="ft-campaign-mark"><FileSpreadsheet size={13}/></span> Open campaign</span><span className="ft-draft-badge">CSV / XLSX</span></div>
+              <div className="ft-campaign-field"><small>01 / BRING YOUR AUDIENCE</small><b>Upload your outreach file</b><span>Email is required. Names are optional. No saved contact list needed.</span></div>
+              <div className="ft-campaign-field"><small>02 / MAKE THE MESSAGE PERSONAL</small><b>A name when you have it. A fallback when you don’t.</b><span>Set “there” as your first-name fallback to turn a missing name into “Hello there”.</span></div>
+              <div className="ft-campaign-field"><small>03 / REVIEW AND SCHEDULE</small><b>Your sender. The same sending controls.</b><span>Check your plan’s recipient maximum before uploading, then review and schedule alongside your other campaigns.</span></div>
+            </div>
+            <div className="ft-history-note"><span className="ft-history-pin"><ShieldCheck size={13}/></span><span><b>Outreach with clear boundaries</b><small>Unsubscribe links and suppression checks still apply. Follow applicable outreach rules and your email provider’s policies.</small></span></div>
+          </div>
         </div>
       </section>
 

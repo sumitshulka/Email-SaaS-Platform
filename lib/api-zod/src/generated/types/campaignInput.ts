@@ -7,6 +7,7 @@
  */
 import type { CampaignAttachment } from './campaignAttachment';
 import type { CampaignInputAudienceType } from './campaignInputAudienceType';
+import type { CampaignPlaceholderFallbacks } from './campaignPlaceholderFallbacks';
 import type { OpenCampaignRecipientInput } from './openCampaignRecipientInput';
 
 export interface CampaignInput {
@@ -51,6 +52,7 @@ export interface CampaignInput {
   textBody: string;
   /** @maxLength 100000 */
   htmlBody?: string;
+  placeholderFallbacks?: CampaignPlaceholderFallbacks;
   /** @maxItems 2 */
   attachments?: CampaignAttachment[];
   /** Ordered target lists. The first matching list wins for overlapping email addresses. */

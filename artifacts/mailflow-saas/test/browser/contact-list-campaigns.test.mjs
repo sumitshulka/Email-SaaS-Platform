@@ -1047,11 +1047,15 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.getByTestId('button-campaign-step-next').click();
       await page.getByTestId('campaign-audience-summary').waitFor();
       await page.getByTestId('button-campaign-step-next').click();
-      await page.getByTestId('input-campaign-subject').fill('Page subject');
-      await page.getByRole('textbox', { name: 'Formatted email message' }).fill('Hello from the campaign page.');
+      await page.getByTestId('input-campaign-subject').fill('Hello {{firstName}}');
+      await page.getByRole('textbox', { name: 'Formatted email message' }).fill('Hello from {{companyName}}.');
+      await page.getByTestId('button-campaign-step-next').click();
+      assert.match(await page.getByRole('alert').last().innerText(), /fallback/i);
+      await page.getByTestId('input-placeholder-fallback-firstName').fill('there');
+      await page.getByTestId('input-placeholder-fallback-companyName').fill('our team');
       await page.getByTestId('button-campaign-step-back').click();
       await page.getByTestId('button-campaign-step-next').click();
-      assert.equal(await page.getByTestId('input-campaign-subject').inputValue(), 'Page subject');
+      assert.equal(await page.getByTestId('input-campaign-subject').inputValue(), 'Hello {{firstName}}');
       await page.getByTestId('button-campaign-step-next').click();
       await page.getByRole('heading', { name: 'Confirm campaign setup' }).waitFor();
       assert.equal(attempts, 0, 'Continue must never submit a draft');
@@ -1062,7 +1066,8 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.waitForURL('**/campaigns');
       await page.getByText('Campaign draft created.', { exact: true }).waitFor();
       assert.equal(attempts, 2);
-      assert.equal(submitted.subject, 'Page subject');
+      assert.equal(submitted.subject, 'Hello {{firstName}}');
+      assert.deepEqual(submitted.placeholderFallbacks, { firstName: 'there', companyName: 'our team' });
       assert.deepEqual(submitted.attachments, [], 'PDF attachments must remain optional');
       assert.deepEqual(submitted.listIds, [listOneId]);
       // A fresh entry must not restore fields from the previous saved draft.
@@ -1122,7 +1127,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     try {
       Object.assign(campaigns[0], {
         audienceType: 'open', parentCampaignId: campaigns[1].id, campaignType: 'follow_up',
-        listId: null, listIds: [], recipients: 1,
+        listId: null, listIds: [], recipients: 1, placeholderFallbacks: { firstName: 'reader' },
       });
       await installApiFixtures(context);
       await context.route('**/api/open-campaigns/allowance', route => route.fulfill({ status: 200, json: {
@@ -1140,6 +1145,8 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       assert.equal(await page.getByTestId('button-clear-open-campaign-recipients').count(), 0);
       assert.match(await page.getByTestId('panel-open-campaign-audience').innerText(), /original@example.test/);
       await page.screenshot({ path: '/tmp/mailflow-open-follow-up-fixed-audience.png' });
+      await page.getByTestId('button-campaign-step-next').click();
+      assert.equal(await page.getByTestId('input-placeholder-fallback-firstName').inputValue(), 'reader', 'reopening a saved draft must restore its fallbacks');
     } finally {
       for (const key of Object.keys(campaigns[0])) delete campaigns[0][key];
       Object.assign(campaigns[0], original);
@@ -1233,13 +1240,27 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       }
       await page.getByTestId('button-campaign-step-next').click();
       await page.getByTestId('input-campaign-subject').fill('Uploaded audience subject');
-      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-firstName').isDisabled(), !withNames);
-      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-lastName').isDisabled(), !withNames);
+      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-firstName').count(), withNames ? 1 : 0);
+      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-lastName').count(), withNames ? 1 : 0);
+      for (const key of ['companyName', 'phoneNumber', 'linkedinUrl']) {
+        assert.equal(await page.getByTestId(`button-insert-campaign-placeholder-${key}`).count(), 0);
+        assert.equal(await page.getByTestId(`button-insert-placeholder-${key}`).count(), 0, 'formatted editor must hide contact-only placeholders too');
+      }
       await page.getByRole('textbox', { name: 'Formatted email message' }).fill('Hello {{email}}, this uses uploaded recipients.');
+      await page.getByTestId('input-campaign-subject').fill('Hello {{firstName}}');
       await page.getByTestId('button-campaign-step-next').click();
+      assert.equal(await page.getByTestId('campaign-subject-variants').isVisible(), true, 'missing fallback must keep the content step open');
+      await page.getByTestId('input-placeholder-fallback-firstName').fill('there');
+      await page.getByTestId('button-insert-placeholder-firstName').waitFor();
+      await page.getByTestId('button-insert-campaign-placeholder-firstName').waitFor();
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('select-open-campaign-preview-recipient').selectOption('one@example.test');
+      await page.getByTestId('text-open-campaign-preview-subject').filter({ hasText: withNames ? 'Hello Ada' : 'Hello there' }).waitFor();
+      if (format === 'csv') await page.screenshot({ path: '/tmp/mailflow-campaign-fallback-preview.png' });
       await page.getByTestId('button-submit-campaign').click();
       await page.waitForURL('**/campaigns');
       assert.equal(submitted.audienceType, 'open');
+      assert.deepEqual(submitted.placeholderFallbacks, { firstName: 'there' });
       assert.deepEqual(submitted.openRecipients.map(row => row.email), ['one@example.test', 'two@example.test']);
       if (withNames) {
         assert.equal(submitted.openRecipients[0].firstName, 'Ada');

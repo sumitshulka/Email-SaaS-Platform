@@ -3,6 +3,7 @@ import { bulkUpdateTenantContacts } from "../lib/contact-bulk";
 import { contactTagCondition, readContactTags } from "../lib/contact-tags";
 import { campaignEmailSuppressionsTable, openCampaignAudienceTable } from "@workspace/db";
 import { normalizeOpenRecipients, openCampaignAllowance, openCampaignPlaceholderError, openFollowUpAudienceError, replaceOpenAudience } from "../lib/open-campaigns";
+import { campaignFallbackError, fallbackPolicyText } from "../lib/campaign-personalization";
 import {
   and,
   asc,
@@ -5367,12 +5368,14 @@ router.post(
       return;
     }
 
+    const fallbackError = campaignFallbackError(parsed.data);
+    if (fallbackError) { res.status(400).json({ error: fallbackError, code: "PLACEHOLDER_FALLBACK_REQUIRED" }); return; }
     const policy = await getPlatformSettings();
     const blockedFields = findProhibitedCampaignContent({
       subject: parsed.data.subjectVariants ?? [parsed.data.subject],
       greeting: parsed.data.greetingVariants,
       signature: parsed.data.signatureVariants,
-      body: parsed.data.textBody,
+      body: fallbackPolicyText(parsed.data.textBody, parsed.data.placeholderFallbacks),
       htmlBody: parsed.data.htmlBody,
     }, policy.prohibitedEmailKeywords);
     if (blockedFields.length) {
@@ -5808,6 +5811,8 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   });
   const listIds =
     parsed.data.listIds ?? (parsed.data.listId ? [parsed.data.listId] : []);
+  const fallbackError = campaignFallbackError(parsed.data, false);
+  if (fallbackError) { res.status(400).json({ error: fallbackError, code: "INVALID_PLACEHOLDER_FALLBACK" }); return; }
   const isOpen = parsed.data.audienceType === "open";
   let openRows: ReturnType<typeof normalizeOpenRecipients> = [];
   if (isOpen) {
@@ -5817,7 +5822,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     if (allowance.allowance === 0 || openRows.length > allowance.recipientLimit) {
       res.status(409).json({ error: allowance.allowance === 0 ? "Your package does not include open campaigns." : `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.`, code: "OPEN_CAMPAIGN_ALLOWANCE" }); return;
     }
-    const placeholderError = openCampaignPlaceholderError(openRows, JSON.stringify([variants, parsed.data.textBody, parsed.data.htmlBody]));
+    const placeholderError = openCampaignPlaceholderError(openRows, JSON.stringify([variants, parsed.data.textBody, parsed.data.htmlBody]), parsed.data.placeholderFallbacks);
     if (placeholderError) { res.status(400).json({ error: placeholderError }); return; }
   } else if (parsed.data.openRecipients?.length) {
     res.status(400).json({ error: "Uploaded recipients are only supported for open campaigns." }); return;
@@ -5857,7 +5862,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
       subject: variants.subject,
       greeting: variants.greeting,
       signature: variants.signature,
-      body: parsed.data.textBody,
+      body: fallbackPolicyText(parsed.data.textBody, parsed.data.placeholderFallbacks),
       htmlBody: parsed.data.htmlBody,
     }, settings.prohibitedEmailKeywords);
     if (blockedFields.length) return { kind: "profanity" as const, fields: blockedFields };
@@ -5883,6 +5888,7 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
         htmlBody: parsed.data.htmlBody
           ? sanitizeCampaignHtml(parsed.data.htmlBody)
           : null,
+        placeholderFallbacks: parsed.data.placeholderFallbacks ?? {},
         attachments,
       })
       .returning();
@@ -5946,6 +5952,7 @@ router.post(
       signatureVariants: source.signatureVariants,
       textBody: source.textBody,
       htmlBody: source.htmlBody,
+      placeholderFallbacks: source.placeholderFallbacks,
       attachments: source.attachments,
       unsubscribeOrigin: source.unsubscribeOrigin,
     }).returning();
@@ -6046,7 +6053,7 @@ router.patch(
       subject: effectiveVariants.subject,
       greeting: effectiveVariants.greeting,
       signature: effectiveVariants.signature,
-      body: parsed.data.textBody ?? campaignBeforeUpdate.textBody,
+      body: fallbackPolicyText(parsed.data.textBody ?? campaignBeforeUpdate.textBody, parsed.data.placeholderFallbacks ?? campaignBeforeUpdate.placeholderFallbacks),
       htmlBody: parsed.data.htmlBody ?? campaignBeforeUpdate.htmlBody,
     }, settings.prohibitedEmailKeywords);
     if (blockedFields.length) {
@@ -6106,6 +6113,9 @@ router.patch(
         eq(emailCampaignsTable.id, params.data.campaignId), eq(emailCampaignsTable.userId, userId),
       )).for("update");
       if (!locked || locked.status !== "draft") return { kind: "not_updated" as const };
+      const effectiveFallbacks = parsed.data.placeholderFallbacks ?? locked.placeholderFallbacks;
+      const fallbackError = campaignFallbackError({ ...locked, ...parsed.data, placeholderFallbacks: effectiveFallbacks }, false);
+      if (fallbackError) return { kind: "open_invalid" as const, message: fallbackError };
       let openRows;
       if (locked.audienceType === "open") {
         try {
@@ -6121,14 +6131,14 @@ router.patch(
         if (openRows.length > allowance.recipientLimit || allowance.allowance === 0) {
           return { kind: "open_invalid" as const, message: `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.` };
         }
-        const error = openCampaignPlaceholderError(openRows, JSON.stringify([effectiveVariants, parsed.data.textBody ?? locked.textBody, parsed.data.htmlBody ?? locked.htmlBody]));
+        const error = openCampaignPlaceholderError(openRows, JSON.stringify([effectiveVariants, parsed.data.textBody ?? locked.textBody, parsed.data.htmlBody ?? locked.htmlBody]), effectiveFallbacks);
         if (error) return { kind: "open_invalid" as const, message: error };
       }
       const latestBlockedFields = findProhibitedCampaignContent({
         subject: effectiveVariants.subject,
         greeting: effectiveVariants.greeting,
         signature: effectiveVariants.signature,
-        body: parsed.data.textBody ?? campaignBeforeUpdate.textBody,
+        body: fallbackPolicyText(parsed.data.textBody ?? locked.textBody, effectiveFallbacks),
         htmlBody: parsed.data.htmlBody ?? campaignBeforeUpdate.htmlBody,
       }, settings.prohibitedEmailKeywords);
       if (latestBlockedFields.length) {
@@ -6155,6 +6165,9 @@ router.patch(
             : {}),
           ...(parsed.data.textBody !== undefined
             ? { textBody: parsed.data.textBody }
+            : {}),
+          ...(parsed.data.placeholderFallbacks !== undefined
+            ? { placeholderFallbacks: parsed.data.placeholderFallbacks }
             : {}),
           ...(parsed.data.attachments !== undefined
             ? { attachments: parsed.data.attachments }
@@ -6330,11 +6343,13 @@ router.post(
       const variants = cleanedVariantValues(
         normalizeCampaignVariantValues(campaign),
       );
+      const fallbackError = campaignFallbackError(campaign);
+      if (fallbackError) return { error: "placeholder_fallback" as const, message: fallbackError };
       const blockedFields = findProhibitedCampaignContent({
         subject: variants.subject,
         greeting: variants.greeting,
         signature: variants.signature,
-        body: campaign.textBody,
+        body: fallbackPolicyText(campaign.textBody, campaign.placeholderFallbacks),
         htmlBody: campaign.htmlBody,
       }, settings.prohibitedEmailKeywords);
       if (blockedFields.length) {
@@ -6641,7 +6656,7 @@ router.post(
         const followUpError = await openFollowUpAudienceError(userId, campaign.parentCampaignId, uploaded, tx);
         if (followUpError) return { error: "followup_audience" as const, message: followUpError };
         if (uploaded.length > (openAllowance?.recipientLimit ?? 0)) return { error: "open_allowance" as const, message: `Your package allows at most ${openAllowance?.recipientLimit ?? 0} recipients per open campaign.` };
-        const error = openCampaignPlaceholderError(uploaded, JSON.stringify([variants, campaign.textBody, campaign.htmlBody]));
+        const error = openCampaignPlaceholderError(uploaded, JSON.stringify([variants, campaign.textBody, campaign.htmlBody]), campaign.placeholderFallbacks);
         if (error) return { error: "open_allowance" as const, message: error };
       }
       if (eligibleRecipients.length === 0) return { error: "empty_list" as const };
@@ -6704,6 +6719,8 @@ router.post(
       }
       if (outcome.error === "not_found") {
         res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      } else if (outcome.error === "placeholder_fallback") {
+        res.status(400).json({ error: outcome.message, code: "PLACEHOLDER_FALLBACK_REQUIRED" });
       } else if (outcome.error === "followup_audience") {
         res.status(409).json({ error: outcome.message, code: "FOLLOW_UP_AUDIENCE_INVALID" });
       } else if (outcome.error === "followup_parent_pending") {

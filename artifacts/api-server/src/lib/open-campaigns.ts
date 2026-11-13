@@ -1,4 +1,6 @@
 import { and, count, desc, eq, gt, lte } from "drizzle-orm";
+import sanitizeHtml from "sanitize-html";
+import type { CampaignFallbackValues } from "./campaign-personalization";
 import {
   db, emailCampaignsTable, emailCampaignRecipientsTable, openCampaignAudienceTable,
   subscriptionPackagesTable, userSubscriptionsTable,
@@ -38,7 +40,8 @@ export function normalizeOpenRecipients(rows: OpenRecipient[]): OpenRecipient[] 
   return [...unique.values()];
 }
 
-export function openCampaignPlaceholderError(rows: OpenRecipient[], content: string): string | null {
+export function openCampaignPlaceholderError(rows: OpenRecipient[], content: string, fallbacks: CampaignFallbackValues = {}): string | null {
+  content = sanitizeHtml(content);
   for (const match of content.matchAll(/\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g)) {
     if (!["email", "firstName", "lastName", "fullName"].includes(match[1]!)) {
       return `The {{${match[1]}}} placeholder is not available for uploaded recipients.`;
@@ -50,11 +53,11 @@ export function openCampaignPlaceholderError(rows: OpenRecipient[], content: str
   };
   for (const [field, present] of Object.entries(available)) {
     const alias = field === "firstName" ? "first_name" : "last_name";
-    if (!present && new RegExp(`\\{\\{\\s*(?:${field}|${alias})\\s*\\}\\}`, "i").test(content)) {
+    if (!present && !fallbacks[field as keyof CampaignFallbackValues]?.trim() && new RegExp(`\\{\\{\\s*(?:${field}|${alias})\\s*\\}\\}`, "i").test(content)) {
       return `Remove the ${field} placeholder or provide that name for every uploaded recipient.`;
     }
   }
-  if ((!available.firstName || !available.lastName) && /\{\{\s*fullName\s*\}\}/i.test(content)) {
+  if ((!available.firstName || !available.lastName) && !fallbacks.fullName?.trim() && /\{\{\s*fullName\s*\}\}/i.test(content)) {
     return "Remove the fullName placeholder or provide first and last names for every uploaded recipient.";
   }
   if (/\{\{\s*(?:companyName|company_name|phoneNumber|phone_number|linkedinUrl|linkedin_url)\s*\}\}/i.test(content)) {
