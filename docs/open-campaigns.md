@@ -1,6 +1,6 @@
 # Open campaigns
 
-Open campaigns send to a CSV audience instead of saved contacts or contact lists.
+Open campaigns send to a CSV or XLSX audience instead of saved contacts or contact lists.
 The feature is available to any active primary package, including free and gifted
 packages, when a superadmin gives that package a nonzero allowance and recipient
 limit. Existing package prices and allowances are not changed automatically.
@@ -35,7 +35,7 @@ changes are detected when a pending paid purchase is settled.
 Choose **New open campaign**, or switch the audience type in the new campaign
 wizard. This uses the existing left-aligned campaign creation page.
 
-Upload a CSV file of up to 10 MB:
+Upload a CSV or XLSX file of up to 10 MB. Example CSV:
 
 ```csv
 email,first name,last name
@@ -44,7 +44,10 @@ sam@example.com,Sam,Jones
 ```
 
 Only `email` is required. Common header spellings such as `email id`,
-`firstName`, and `last_name` are recognized. Export Excel spreadsheets as CSV.
+`firstName`, and `last_name` are recognized. XLSX files use the first worksheet,
+with headers in its first row. Additional worksheets are not imported.
+Legacy `.xls` and password-protected workbooks are not supported; save these as
+an unencrypted `.xlsx` or CSV first.
 Addresses are trimmed, lowercased, and deduplicated. The upload summary identifies
 duplicates and invalid rows; invalid rows are skipped explicitly, not sent.
 An upload above the package's unique-recipient limit is rejected without replacing
@@ -52,7 +55,7 @@ the previous audience. The API independently validates the records and limits.
 
 Uploaded recipients have separate campaign-owned storage. They do not create
 Contacts, count against the saved-contact limit, or appear as contact links.
-The original CSV file is not retained; only normalized recipient records are
+The original CSV or XLSX file is not retained; only normalized recipient records are
 saved with the draft. A document-storage provider is not required for recipient
 uploads. Optional email PDF attachments still use the configured storage provider.
 

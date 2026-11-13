@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AlertCircle, CheckCircle2, FileSpreadsheet, LoaderCircle, Upload, X } from 'lucide-react';
 import { getGetOpenCampaignAllowanceQueryKey, useGetOpenCampaignAllowance } from '@workspace/api-client-react';
 import type { OpenCampaignAllowance, OpenCampaignRecipientInput } from '@workspace/api-client-react';
-import { openPlaceholderAvailability, parseOpenRecipientsCsv, type OpenRecipientParseResult } from '@/lib/open-campaign';
+import { openPlaceholderAvailability, parseOpenRecipientsFile, type OpenRecipientParseResult } from '@/lib/open-campaign';
 
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' ');
 
@@ -70,12 +70,14 @@ export function OpenCampaignAudience({
     if (uploadBlocked) return;
     setParsing(true);
     try {
-      const parsed = await parseOpenRecipientsCsv(file);
+      const parsed = await parseOpenRecipientsFile(file);
       if (!parsed.fatal && allowance && parsed.recipients.length > allowance.recipientLimit) {
         parsed.fatal = `This file has ${parsed.recipients.length.toLocaleString()} unique valid addresses, but your plan allows ${allowance.recipientLimit.toLocaleString()} per open campaign. Remove ${(parsed.recipients.length - allowance.recipientLimit).toLocaleString()} rows and upload again.`;
       }
       setResult(parsed);
       if (!parsed.fatal) onChange(parsed.recipients);
+    } catch {
+      setResult({ fileName: file.name, recipients: [], totalRows: 0, blankRows: 0, duplicateCount: 0, invalid: [], fatal: 'This file could not be read. Upload a valid CSV or XLSX file and try again.' });
     } finally {
       setParsing(false);
     }
@@ -95,9 +97,10 @@ export function OpenCampaignAudience({
       className={cx('flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-center transition', uploadBlocked ? 'cursor-not-allowed border-[#dfe4ea] bg-[#fafbfc] opacity-60' : dragging ? 'cursor-pointer border-[#3b73b8] bg-[#eef5fd]' : 'cursor-pointer border-[#c9d7e5] bg-[#fbfcfe] hover:border-[#9abbe1] hover:bg-[#f4f8fc]')}
     >
       <span className="grid h-10 w-10 place-items-center rounded-full bg-[#edf4fc] text-[#245b9b]">{parsing ? <LoaderCircle className="h-5 w-5 animate-spin"/> : <FileSpreadsheet className="h-5 w-5"/>}</span>
-      <span className="text-[12px] font-semibold text-[#26364a]">{parsing ? 'Reading your file…' : recipients.length ? 'Replace recipients with a new CSV' : 'Upload a recipient CSV'}</span>
+      <span className="text-[12px] font-semibold text-[#26364a]">{parsing ? 'Reading your file…' : recipients.length ? 'Replace recipients with a new CSV or XLSX' : 'Upload a recipient CSV or XLSX'}</span>
       <span className="max-w-md text-[11px] leading-5 text-[#6f7b88]">Required column: <strong>email</strong> (or “email id”). Optional: <strong>first name</strong> and <strong>last name</strong>. Addresses are checked and duplicates removed. Uploaded rows are used only for this campaign and are not added to Contacts.</span>
-      <input data-testid="input-open-campaign-csv" type="file" accept=".csv,text/csv" className="sr-only" disabled={uploadBlocked} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void handleFile(file); }}/>
+      <span className="text-[10px] text-[#788392]">CSV or XLSX, up to 10 MB. For XLSX, only the first worksheet is read; put column headers in its first row.</span>
+      <input data-testid="input-open-campaign-csv" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" disabled={uploadBlocked} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void handleFile(file); }}/>
     </label>
 
     {result?.fatal && <div role="alert" data-testid="status-open-campaign-csv-error" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[11px] leading-5 text-[#99501e]"><strong className="block">{result.fileName} wasn’t used.</strong>{result.fatal}{recipients.length > 0 && <span className="block">Your previous {recipients.length.toLocaleString()} recipients are unchanged.</span>}</div>}
@@ -124,7 +127,7 @@ export function OpenCampaignAudience({
       </table>
       {recipients.length > 8 && <p className="border-t border-[#e8edf1] bg-[#fbfcfd] px-3 py-1.5 text-[10px] text-[#788392]">Sample of the first 8 of {recipients.length.toLocaleString()}.</p>}
       <p data-testid="text-open-campaign-placeholder-availability" className="border-t border-[#e8edf1] px-3 py-2 text-[10px] leading-4 text-[#687587]">Personalization available: email{placeholders.firstName ? ', first name' : ''}{placeholders.lastName ? ', last name' : ''}{placeholders.fullName ? ', full name' : ''}. {!placeholders.fullName && 'Name fields are only available when every row has a value.'}</p>
-    </div> : !savedLoading && <p className="rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#6f7b88]">No recipients yet. Upload a CSV to build this campaign’s audience.</p>}
+    </div> : !savedLoading && <p className="rounded-md bg-[#f7f9fb] p-3 text-[11px] text-[#6f7b88]">No recipients yet. Upload a CSV or XLSX to build this campaign’s audience.</p>}
     <p className="flex items-start gap-1.5 text-[10px] leading-4 text-[#7b8794]"><Upload className="mt-0.5 h-3 w-3 shrink-0"/>Unsubscribes and confirmed bounces in this workspace are still suppressed when the campaign is queued. Uploaded recipients share your mailbox pacing with other campaigns.</p>
   </section>;
 }

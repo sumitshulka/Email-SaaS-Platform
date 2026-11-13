@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, it } from 'node:test';
@@ -1080,7 +1081,12 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     }
   });
 
-  it('creates an open campaign from a CSV without saved contacts or lists', async () => {
+  for (const { format, withNames } of [
+    { format: 'csv', withNames: false },
+    { format: 'xlsx', withNames: true },
+    { format: 'xlsx', withNames: false },
+  ]) {
+  it(`creates an open campaign from ${format.toUpperCase()} ${withNames ? 'with names' : 'without names'} and no saved contacts or lists`, async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
       await installApiFixtures(context);
@@ -1103,30 +1109,58 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns/new?audience=open`);
       await page.getByTestId('input-campaign-name').fill('Uploaded audience campaign');
       await page.getByTestId('button-campaign-step-next').click();
+      let buffer = Buffer.from('email\nONE@example.test\none@example.test\ntwo@example.test\ninvalid\n');
+      if (format === 'xlsx') {
+        const ExcelJS = createRequire(new URL('../../../api-server/package.json', import.meta.url))('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        workbook.addWorksheet('Recipients').addRows(withNames ? [
+          ['Email ID', 'First Name', 'Last Name'],
+          ['ONE@example.test', 'Ada', 'Example'],
+          ['one@example.test', 'Duplicate', 'Name'],
+          ['two@example.test', 'Grace', 'Hopper'],
+          ['invalid', 'Invalid', 'Row'],
+        ] : [['email'], ['ONE@example.test'], ['one@example.test'], ['two@example.test'], ['invalid']]);
+        workbook.addWorksheet('Not imported').addRows([['email'], ['ignored@example.test']]);
+        buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+      }
       await page.getByTestId('input-open-campaign-csv').setInputFiles({
-        name: 'recipients.csv', mimeType: 'text/csv',
-        buffer: Buffer.from('email\nONE@example.test\none@example.test\ntwo@example.test\ninvalid\n'),
+        name: `recipients.${format}`,
+        mimeType: format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buffer,
       });
       await page.getByTestId('text-open-campaign-recipient-count').filter({ hasText: '2 unique recipients' }).waitFor();
       assert.match(await page.getByTestId('status-open-campaign-csv-result').innerText(), /1 duplicate.*1 skipped/);
       assert.match(await page.getByTestId('text-open-campaign-placeholder-availability').innerText(), /email/);
       assert.equal(await page.getByRole('region', { name: 'Campaign list processing order' }).count(), 0);
-      await page.screenshot({ path: '/tmp/mailflow-open-campaign-audience.png' });
+      await page.screenshot({ path: `/tmp/mailflow-open-campaign-${format}-${withNames ? 'names' : 'email-only'}.png` });
+      if (format === 'xlsx' && withNames) {
+        await page.getByTestId('input-open-campaign-csv').setInputFiles({
+          name: 'broken.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: Buffer.from('not a workbook'),
+        });
+        await page.getByTestId('status-open-campaign-csv-error').filter({ hasText: 'workbook could not be read' }).waitFor();
+        assert.match(await page.getByTestId('text-open-campaign-recipient-count').innerText(), /2 unique recipients/);
+      }
       await page.getByTestId('button-campaign-step-next').click();
       await page.getByTestId('input-campaign-subject').fill('Uploaded audience subject');
-      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-firstName').isDisabled(), true);
-      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-lastName').isDisabled(), true);
+      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-firstName').isDisabled(), !withNames);
+      assert.equal(await page.getByTestId('button-insert-campaign-placeholder-lastName').isDisabled(), !withNames);
       await page.getByRole('textbox', { name: 'Formatted email message' }).fill('Hello {{email}}, this uses uploaded recipients.');
       await page.getByTestId('button-campaign-step-next').click();
       await page.getByTestId('button-submit-campaign').click();
       await page.waitForURL('**/campaigns');
       assert.equal(submitted.audienceType, 'open');
       assert.deepEqual(submitted.openRecipients.map(row => row.email), ['one@example.test', 'two@example.test']);
+      if (withNames) {
+        assert.equal(submitted.openRecipients[0].firstName, 'Ada');
+        assert.equal(submitted.openRecipients[1].lastName, 'Hopper');
+      }
       assert.equal(submitted.listIds, undefined);
       assert.deepEqual(submitted.attachments, []);
       assert.deepEqual(pageErrors, []);
     } finally { await context.close(); }
   });
+  }
 
   it('keeps the campaign editor open on Review without saving the draft', async () => {
     campaignUpdates.length = 0;

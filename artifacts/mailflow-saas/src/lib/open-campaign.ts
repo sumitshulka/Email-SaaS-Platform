@@ -18,7 +18,7 @@ const EMAIL_HEADERS = new Set(['email', 'emailid', 'emailaddress', 'mail', 'e-ma
 const FIRST_HEADERS = new Set(['firstname', 'first', 'givenname', 'fname']);
 const LAST_HEADERS = new Set(['lastname', 'last', 'surname', 'familyname', 'lname']);
 const EMAIL_PATTERN = /^[^\s@"<>(),;:]+@[^\s@"<>(),;:]+\.[^\s@"<>(),;:]{2,}$/;
-export const OPEN_CAMPAIGN_CSV_MAX_BYTES = 10 * 1024 * 1024;
+export const OPEN_CAMPAIGN_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
 const headerKey = (header: string) => header.replace(/^\uFEFF/, '').trim().toLowerCase().replace(/[\s_.-]+/g, '');
 
@@ -26,15 +26,32 @@ export function normalizeOpenEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-export function parseOpenRecipientsCsv(file: File): Promise<OpenRecipientParseResult> {
+export async function parseOpenRecipientsFile(file: File): Promise<OpenRecipientParseResult> {
   const base: OpenRecipientParseResult = { fileName: file.name, recipients: [], totalRows: 0, blankRows: 0, duplicateCount: 0, invalid: [], fatal: null };
-  if (!/\.csv$/i.test(file.name) && file.type !== 'text/csv') {
-    return Promise.resolve({ ...base, fatal: 'Choose a .csv file. Save spreadsheets as CSV (comma separated) before uploading.' });
+  const isWorkbook = /\.xlsx$/i.test(file.name);
+  if (!isWorkbook && !/\.csv$/i.test(file.name) && file.type !== 'text/csv') {
+    return { ...base, fatal: 'Choose a .csv or .xlsx file. Legacy .xls files are not supported; save them as .xlsx first.' };
   }
-  if (file.size === 0) return Promise.resolve({ ...base, fatal: 'This file is empty. Add a header row with an email column and at least one recipient.' });
-  if (file.size > OPEN_CAMPAIGN_CSV_MAX_BYTES) return Promise.resolve({ ...base, fatal: 'This file is larger than 10 MB. Split it or remove unused columns, then upload again.' });
+  if (file.size === 0) return { ...base, fatal: 'This file is empty. Add a header row with an email column and at least one recipient.' };
+  if (file.size > OPEN_CAMPAIGN_FILE_MAX_BYTES) return { ...base, fatal: 'This file is larger than 10 MB. Split it or remove unused columns, then upload again.' };
+  let text: string;
+  try {
+    if (isWorkbook) {
+      const { readSheet } = await import('read-excel-file/browser');
+      const rows = await readSheet<string>(file, 1, { parseNumber: value => value, trim: true });
+      // Reuse CSV's header mapping, validation and duplicate handling. Workbook
+      // formulas are never executed; unsupported cell types become empty values.
+      text = Papa.unparse(rows.map(row => row.map(cell => typeof cell === 'string' ? cell : '')));
+    } else {
+      text = await file.text();
+    }
+  } catch {
+    return { ...base, fatal: isWorkbook
+      ? 'This workbook could not be read. Upload a valid, unencrypted .xlsx file with recipients on the first worksheet.'
+      : 'The file could not be read. Try uploading it again.' };
+  }
   return new Promise(resolve => {
-    Papa.parse<Record<string, string>>(file, {
+    Papa.parse<Record<string, string>>(text, {
       header: true,
       skipEmptyLines: false,
       complete: results => {
@@ -68,7 +85,7 @@ export function parseOpenRecipientsCsv(file: File): Promise<OpenRecipientParseRe
         else if (!result.recipients.length) result.fatal = 'No valid email addresses were found. Fix the rows listed below and upload again.';
         resolve(result);
       },
-      error: error => resolve({ ...base, fatal: `The file could not be read: ${error.message}` }),
+      error: (error: Error) => resolve({ ...base, fatal: `The file could not be read: ${error.message}` }),
     });
   });
 }
