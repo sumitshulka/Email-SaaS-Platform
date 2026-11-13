@@ -15,6 +15,7 @@ type ConfirmActionDialogProps = {
   title: string;
   description: string;
   confirmLabel: string;
+  cancelLabel?: string;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   destructive?: boolean;
@@ -29,6 +30,7 @@ export function ConfirmActionDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = 'Cancel',
   onOpenChange,
   onConfirm,
   destructive = true,
@@ -58,7 +60,7 @@ export function ConfirmActionDialog({
             disabled={pending}
             className="mt-0 min-h-10 rounded-md border-[#d7dce3] bg-white px-4 text-[13px] font-semibold text-[#283545] hover:bg-[#f7f9fb]"
           >
-            Cancel
+            {cancelLabel}
           </AlertDialogCancel>
           <AlertDialogAction asChild>
             <button

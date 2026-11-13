@@ -1081,6 +1081,41 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     }
   });
 
+  it('confirms cancelling unsaved campaigns in an app dialog without browser alerts', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    try {
+      await installApiFixtures(context);
+      await context.route('**/api/open-campaigns/allowance', route => route.fulfill({ status: 200, json: {
+        allowance: 1, used: 0, remaining: 1, recipientLimit: 2, termEndsAt: '2026-12-31T00:00:00.000Z',
+      } }));
+      const page = await context.newPage();
+      const nativeDialogs = [];
+      page.on('dialog', async dialog => { nativeDialogs.push(dialog.type()); await dialog.dismiss(); });
+      for (const open of [true, false]) {
+        await page.goto(`${baseUrl}/campaigns/new${open ? '?audience=open' : ''}`);
+        await page.getByTestId('input-campaign-name').fill('Unsaved draft to retain');
+        await page.getByTestId('button-cancel-campaign').click();
+        const dialog = page.getByTestId('dialog-discard-campaign-draft');
+        await dialog.waitFor();
+        assert.equal(await dialog.getAttribute('role'), 'alertdialog');
+        await dialog.getByRole('button', { name: 'Keep editing', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        assert.equal(await page.getByTestId('input-campaign-name').inputValue(), 'Unsaved draft to retain');
+        await page.getByTestId('link-back-to-campaigns').click();
+        await dialog.waitFor();
+        await page.keyboard.press('Escape');
+        await dialog.waitFor({ state: 'hidden' });
+        assert.equal(await page.getByTestId('input-campaign-name').inputValue(), 'Unsaved draft to retain');
+        await page.getByTestId('button-cancel-campaign').click();
+        await dialog.waitFor();
+        if (open) await page.screenshot({ path: '/tmp/mailflow-discard-open-campaign-dialog.png' });
+        await dialog.getByRole('button', { name: 'Discard draft', exact: true }).click();
+        await page.waitForURL('**/campaigns');
+      }
+      assert.deepEqual(nativeDialogs, [], 'in-app cancellation must not open native browser dialogs');
+    } finally { await context.close(); }
+  });
+
   for (const { format, withNames } of [
     { format: 'csv', withNames: false },
     { format: 'xlsx', withNames: true },

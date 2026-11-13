@@ -2301,6 +2301,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     if (campaignHistoryPage > lastPage) setCampaignHistoryPage(lastPage);
   }, [campaignHistory?.total, campaignHistoryPage]);
   const newDraftBaseline = useRef<string | null>(null);
+  const [discardDraftOpen, setDiscardDraftOpen] = useState(false);
   const newDraftDirty = createPage && newDraftBaseline.current !== null && JSON.stringify(form) !== newDraftBaseline.current;
   useEffect(() => {
     if (!newDraftDirty) return;
@@ -2308,10 +2309,14 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [newDraftDirty]);
-  const leaveCreatePage = () => {
-    if (newDraftDirty && !window.confirm('Discard this unsaved campaign draft?')) return;
+  const discardNewDraft = () => {
+    setDiscardDraftOpen(false);
     newDraftBaseline.current = null;
     setLocation('/campaigns');
+  };
+  const leaveCreatePage = () => {
+    if (newDraftDirty) { setDiscardDraftOpen(true); return; }
+    discardNewDraft();
   };
   const closeCampaignEditor = () => { if (createPage) { leaveCreatePage(); return; } setEditing(undefined); setCampaignContentError(null); setCampaignStepError(''); setAiBriefFormOpen(false); setAiBrief(emptyCampaignAiBrief); };
   const continueCampaignStep = () => {
@@ -3056,6 +3061,16 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
       {senderAccountsQuery.isError && <div role="alert" data-testid="status-new-campaign-senders-error" className="mb-5 flex items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-4 py-3 text-[12px] text-[#99501e]"><span>Sender accounts couldn’t be loaded. The default account will be used unless you retry.</span><Button variant="outline" testId="button-retry-new-campaign-senders" onClick={() => { void senderAccountsQuery.refetch(); }}>Retry</Button></div>}
       {editing !== undefined && <section className={`${panelClass} p-5 sm:p-7`}>{renderCampaignEditorForm()}</section>}
     </QueryState>
+    <ConfirmActionDialog
+      open={discardDraftOpen}
+      onOpenChange={setDiscardDraftOpen}
+      title="Discard this campaign draft?"
+      description="Your unsaved campaign details and uploaded recipient selection will be lost. Nothing will be sent. Choose Keep editing to return to your draft."
+      confirmLabel="Discard draft"
+      cancelLabel="Keep editing"
+      onConfirm={discardNewDraft}
+      testId="dialog-discard-campaign-draft"
+    />
   </div>;
   return <QueryState loading={campaignsQuery.isLoading || listsQuery.isLoading || variantLimitsQuery.isLoading} error={campaignsQuery.isError || listsQuery.isError || variantLimitsQuery.isError} retry={() => { void campaignsQuery.refetch(); void listsQuery.refetch(); void variantLimitsQuery.refetch(); }} label="campaigns"><>
     <Heading eyebrow="DELIVERY / CAMPAIGNS" title="Campaigns" detail="Manage drafts and delivery. Estimates include current queued work and shared sending limits; SMTP response times and retries can change actual finish times." action={<div className="flex flex-wrap gap-2"><Button variant="outline" testId="button-create-open-campaign" onClick={() => setLocation('/campaigns/new?audience=open')} disabled={!openEnabled}><Upload className="h-4 w-4"/>New open campaign</Button><Button testId="button-create-campaign" onClick={openCreatePage} disabled={!activeLists.length}><CirclePlus className="h-4 w-4"/>New campaign</Button></div>}/>
