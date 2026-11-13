@@ -2808,7 +2808,10 @@ export interface ContactExportFilters {
   /** @maxLength 200 */
   search?: string;
   status?: ContactExportFiltersStatus;
-  /** @maxLength 64 */
+  /**
+     * A list UUID
+     * @maxLength 64
+     */
   listId?: string;
   /** @maxLength 64 */
   companyId?: string;
@@ -3305,6 +3308,7 @@ export interface ContactDirectoryFilters {
   search: string;
   status: ContactDirectoryFiltersStatus;
   /**
+     * Use __multiple__ to match contacts in more than one of the authenticated user's lists
      * @minLength 1
      * @maxLength 255
      */
@@ -5699,6 +5703,7 @@ search?: string;
 tagId?: string;
 status?: ListContactsStatus;
 /**
+ * A list UUID, all, __none__ for contacts without a list, or __multiple__ for contacts in more than one tenant list
  * @maxLength 64
  */
 listId?: string;

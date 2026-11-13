@@ -15,6 +15,7 @@ export interface ContactDirectoryFilters {
   search: string;
   status: ContactDirectoryFiltersStatus;
   /**
+     * Use __multiple__ to match contacts in more than one of the authenticated user's lists
      * @minLength 1
      * @maxLength 255
      */

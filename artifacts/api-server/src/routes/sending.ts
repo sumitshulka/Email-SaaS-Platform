@@ -26,6 +26,7 @@ import {
   sum,
 } from "drizzle-orm";
 import { Router, raw, type IRouter } from "express";
+import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
   CreateCampaignResponse,
@@ -217,6 +218,8 @@ import {
 } from "../lib/company-profile";
 
 const router: IRouter = Router();
+const firstListMembership = alias(contactListMembersTable, "contact_list_membership_first");
+const secondListMembership = alias(contactListMembersTable, "contact_list_membership_second");
 const MASKED_CREDENTIAL = "••••••";
 const contactEnrichmentFields = [
   "jobTitle",
@@ -2168,7 +2171,7 @@ router.post(
         ? { status: "all", addedWithin: "any" }
         : (parsed.data.filters ?? { status: "all", addedWithin: "any" });
     for (const id of [filters.listId, filters.companyId, filters.tagId]) {
-      if (id && id !== "all" && id !== "__none__" && !isContactFilterUuid(id)) {
+      if (id && id !== "all" && id !== "__none__" && id !== "__multiple__" && !isContactFilterUuid(id)) {
         res.status(400).json({
           error: "A contact filter contains an invalid identifier.",
           code: "INVALID_INPUT",
@@ -2186,22 +2189,32 @@ router.post(
       conditions.push(eq(contactsTable.subscribed, false));
     }
     if (filters.listId && filters.listId !== "all") {
-      const members = db
-        .select({ contactId: contactListMembersTable.contactId })
-        .from(contactListMembersTable)
-        .where(
-          and(
-            eq(contactListMembersTable.userId, userId),
-            ...(filters.listId === "__none__"
-              ? []
-              : [eq(contactListMembersTable.listId, filters.listId)]),
-          ),
+      if (filters.listId === "__multiple__") {
+        const membersInMultipleLists = db
+          .select({ contactId: contactListMembersTable.contactId })
+          .from(contactListMembersTable)
+          .where(eq(contactListMembersTable.userId, userId))
+          .groupBy(contactListMembersTable.contactId)
+          .having(gt(count(), 1));
+        conditions.push(inArray(contactsTable.id, membersInMultipleLists));
+      } else {
+        const members = db
+          .select({ contactId: contactListMembersTable.contactId })
+          .from(contactListMembersTable)
+          .where(
+            and(
+              eq(contactListMembersTable.userId, userId),
+              ...(filters.listId === "__none__"
+                ? []
+                : [eq(contactListMembersTable.listId, filters.listId)]),
+            ),
+          );
+        conditions.push(
+          filters.listId === "__none__"
+            ? notInArray(contactsTable.id, members)
+            : inArray(contactsTable.id, members),
         );
-      conditions.push(
-        filters.listId === "__none__"
-          ? notInArray(contactsTable.id, members)
-          : inArray(contactsTable.id, members),
-      );
+      }
     }
     if (filters.companyId === "__none__") {
       conditions.push(
@@ -2552,7 +2565,7 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   }
   const params = parsed.data;
   for (const id of [params.listId, params.companyId, params.tagId]) {
-    if (id && id !== "all" && id !== "__none__" && !isContactFilterUuid(id)) {
+    if (id && id !== "all" && id !== "__none__" && id !== "__multiple__" && !isContactFilterUuid(id)) {
       res.status(400).json({
         error: "A contact filter contains an invalid identifier.",
         code: "INVALID_INPUT",
@@ -2571,22 +2584,32 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
     conditions.push(eq(contactsTable.subscribed, false));
   }
   if (params.listId && params.listId !== "all") {
-    const members = db
-      .select({ contactId: contactListMembersTable.contactId })
-      .from(contactListMembersTable)
-      .where(
-        and(
-          eq(contactListMembersTable.userId, userId),
-          ...(params.listId === "__none__"
-            ? []
-            : [eq(contactListMembersTable.listId, params.listId)]),
-        ),
+    if (params.listId === "__multiple__") {
+      const membersInMultipleLists = db
+        .select({ contactId: contactListMembersTable.contactId })
+        .from(contactListMembersTable)
+        .where(eq(contactListMembersTable.userId, userId))
+        .groupBy(contactListMembersTable.contactId)
+        .having(gt(count(), 1));
+      conditions.push(inArray(contactsTable.id, membersInMultipleLists));
+    } else {
+      const members = db
+        .select({ contactId: contactListMembersTable.contactId })
+        .from(contactListMembersTable)
+        .where(
+          and(
+            eq(contactListMembersTable.userId, userId),
+            ...(params.listId === "__none__"
+              ? []
+              : [eq(contactListMembersTable.listId, params.listId)]),
+          ),
+        );
+      conditions.push(
+        params.listId === "__none__"
+          ? notInArray(contactsTable.id, members)
+          : inArray(contactsTable.id, members),
       );
-    conditions.push(
-      params.listId === "__none__"
-        ? notInArray(contactsTable.id, members)
-        : inArray(contactsTable.id, members),
-    );
+    }
   }
   if (params.companyId === "__none__") {
     conditions.push(
@@ -2760,12 +2783,14 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   } catch (error) {
     const detail = error as {
       name?: string;
+      message?: string;
       code?: string;
       cause?: { code?: string; name?: string };
       issues?: Array<{ code?: string; path?: Array<string | number> }>;
     };
     req.log.error({
       errorName: detail?.name ?? "UnknownError",
+      errorMessage: detail?.message,
       errorCode: detail?.code ?? detail?.cause?.code ?? null,
       causeName: detail?.cause?.name ?? null,
       issueSummary: detail?.issues?.map((issue) => ({

@@ -14,7 +14,10 @@ export interface ContactExportFilters {
   /** @maxLength 200 */
   search?: string;
   status?: ContactExportFiltersStatus;
-  /** @maxLength 64 */
+  /**
+     * A list UUID
+     * @maxLength 64
+     */
   listId?: string;
   /** @maxLength 64 */
   companyId?: string;

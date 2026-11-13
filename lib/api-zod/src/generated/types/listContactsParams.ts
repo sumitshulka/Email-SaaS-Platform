@@ -29,6 +29,7 @@ search?: string;
 tagId?: string;
 status?: ListContactsStatus;
 /**
+ * A list UUID, all, __none__ for contacts without a list, or __multiple__ for contacts in more than one tenant list
  * @maxLength 64
  */
 listId?: string;

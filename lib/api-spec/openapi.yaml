@@ -1121,6 +1121,7 @@ paths:
           schema: { type: string, enum: [all, subscribed, unsubscribed], default: all }
         - in: query
           name: listId
+          description: A list UUID, all, __none__ for contacts without a list, or __multiple__ for contacts in more than one tenant list
           schema: { type: string, maxLength: 64 }
         - in: query
           name: companyId
@@ -6450,7 +6451,7 @@ components:
         tagId: { type: string, maxLength: 64 }
         search: { type: string, maxLength: 200 }
         status: { type: string, enum: [all, subscribed, unsubscribed], default: all }
-        listId: { type: string, maxLength: 64 }
+        listId: { type: string, maxLength: 64, description: A list UUID, all, __none__, or __multiple__ for contacts in more than one tenant list }
         companyId: { type: string, maxLength: 64 }
         lifecycleStage: { type: string, maxLength: 80 }
         leadStatus: { type: string, maxLength: 80 }
@@ -6702,7 +6703,7 @@ components:
         tagId: { type: string, maxLength: 64 }
         search: { type: string, maxLength: 200 }
         status: { type: string, enum: [all, subscribed, unsubscribed] }
-        listId: { type: string, minLength: 1, maxLength: 255 }
+        listId: { type: string, minLength: 1, maxLength: 255, description: Use __multiple__ to match contacts in more than one of the authenticated user's lists }
         companyId: { type: string, minLength: 1, maxLength: 255 }
         lifecycleStage: { type: string, minLength: 1, maxLength: 80 }
         leadStatus: { type: string, minLength: 1, maxLength: 80 }

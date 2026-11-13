@@ -13,7 +13,7 @@ import ExcelJS from "exceljs";
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://mailflow-test:mailflow-test@127.0.0.1/mailflow_test";
 process.env.SESSION_SECRET = "test-only-session-secret-that-is-long-enough";
-process.env.LOG_LEVEL = "silent";
+process.env.LOG_LEVEL = "error";
 
 const memory = newDb({ autoCreateForeignKeyIndices: true });
 memory.public.registerFunction({
@@ -677,6 +677,25 @@ memory.public.none(`
   );
 `);
 
+// Contact tag tables use a test-compatible DDL shim; pg-mem does not implement
+// PostgreSQL's TRIM() check expression used by migration 0018.
+memory.public.none(`
+  CREATE TABLE contact_tags (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name varchar(40) NOT NULL
+  );
+  CREATE UNIQUE INDEX contact_tags_id_user_unique ON contact_tags(id, user_id);
+  CREATE TABLE contact_tag_assignments (
+    user_id uuid NOT NULL,
+    contact_id uuid NOT NULL,
+    tag_id uuid NOT NULL,
+    slot smallint NOT NULL,
+    CONSTRAINT contact_tags_two_slots CHECK (slot IN (1, 2)),
+    UNIQUE (user_id, contact_id, slot),
+    UNIQUE (user_id, contact_id, tag_id)
+  );
+`);
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0019_open_campaigns.sql", import.meta.url), "utf8"));
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0020_campaign_placeholder_fallbacks.sql", import.meta.url), "utf8"));
 // Match the existing inbox fields used by the sender schema in worker fixtures.
@@ -935,6 +954,10 @@ describe("contact and company workbook exports", () => {
       .insert(dbModule.contactListsTable)
       .values({ userId: owner.user.id, name: "Priority list" })
       .returning();
+    const [secondList] = await dbModule.db
+      .insert(dbModule.contactListsTable)
+      .values({ userId: owner.user.id, name: "Secondary list" })
+      .returning();
     const [company] = await dbModule.db
       .insert(dbModule.companiesTable)
       .values({
@@ -975,7 +998,6 @@ describe("contact and company workbook exports", () => {
             lastName: "Filtered",
             email: "charlie@northstar.test",
             location: "Austin, TX",
-            ...(email === "one@owner.test" ? { companyName: "Acme & Sons" } : {}),
             subscribed: true,
           },
           {
@@ -1056,6 +1078,27 @@ describe("contact and company workbook exports", () => {
       "Northstar Systems",
     ]);
     assert.equal(contactSheet.rowCount, 2);
+    await dbModule.db.insert(dbModule.contactListMembersTable).values({
+      userId: owner.user.id,
+      listId: secondList.id,
+      contactId: filteredContact.id,
+    });
+    const multipleListsExport = await apiBinary("/contacts/export", {
+      cookie: owner.cookie,
+      body: {
+        scope: "filtered",
+        columns: ["email"],
+        filters: { listId: "__multiple__" },
+      },
+    });
+    assert.equal(multipleListsExport.response.status, 200);
+    const multipleListsWorkbook = new ExcelJS.Workbook();
+    await multipleListsWorkbook.xlsx.load(multipleListsExport.bytes);
+    assert.deepEqual(
+      multipleListsWorkbook.getWorksheet("Contacts").getColumn(1).values.slice(2),
+      ["charlie@northstar.test"],
+      "filtered exports should apply the same multiple-list membership rule",
+    );
 
     const allContactsExport = await apiBinary("/contacts/export", {
       cookie: owner.cookie,
@@ -5436,6 +5479,10 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       .insert(dbModule.contactListsTable)
       .values({ userId: owner.user.id, name: "Priority contacts" })
       .returning();
+    const [secondList] = await db
+      .insert(dbModule.contactListsTable)
+      .values({ userId: owner.user.id, name: "Secondary contacts" })
+      .returning();
     const ownerCount = 1200;
     const otherCount = 48;
     const idByIndex = new Map();
@@ -5475,6 +5522,15 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         listId: priorityList.id,
         contactId: contact.id,
       }));
+    ownerMemberships.push(
+      ...ownerRows
+        .filter((_, index) => index % 8 === 0)
+        .map((contact) => ({
+          userId: owner.user.id,
+          listId: secondList.id,
+          contactId: contact.id,
+        })),
+    );
     for (let offset = 0; offset < ownerMemberships.length; offset += 200) {
       await db
         .insert(dbModule.contactListMembersTable)
@@ -5534,6 +5590,20 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.deepEqual(
       firstPage.body.contacts.map((contact) => contact.id),
       Array.from({ length: 40 }, (_, index) => idByIndex.get(index)),
+    );
+
+    const multipleListsDirectory = await measuredGet(
+      "contacts in multiple lists",
+      "/contacts?listId=__multiple__&page=1&pageSize=20&includeHistory=false",
+      owner.cookie,
+      "directory",
+    );
+    assert.equal(multipleListsDirectory.response.status, 200, JSON.stringify(multipleListsDirectory.body));
+    assert.equal(multipleListsDirectory.body.total, ownerCount / 8);
+    assert.deepEqual(
+      multipleListsDirectory.body.contacts.map((contact) => contact.id),
+      Array.from({ length: 20 }, (_, index) => idByIndex.get(index * 8)),
+      "the filter should include only owner contacts with memberships in at least two owner lists",
     );
 
     const secondPage = await measuredGet(

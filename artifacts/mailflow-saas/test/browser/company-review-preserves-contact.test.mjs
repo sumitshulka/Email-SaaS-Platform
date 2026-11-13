@@ -111,6 +111,14 @@ const filterList = {
   updatedAt: '2026-01-01T00:00:00.000Z',
   contactCount: 2,
 };
+const secondFilterList = {
+  id: 'browser-filter-list-second',
+  name: 'Other audience',
+  active: true,
+  createdAt: '2026-01-02T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+  contactCount: 1,
+};
 
 function contactDirectoryFixtures() {
   return [
@@ -125,7 +133,7 @@ function contactDirectoryFixtures() {
       company: null,
       companyName: 'Northstar Labs',
       subscribed: true,
-      listIds: [filterList.id],
+      listIds: [filterList.id, secondFilterList.id],
       lifecycleStage: 'Lead',
       leadStatus: 'Qualified',
       leadSource: 'Referral',
@@ -454,7 +462,7 @@ async function installApiFixtures(context, {
       return;
     }
     if (pathname === '/api/contact-lists' && method === 'GET') {
-      await route.fulfill({ status: 200, json: [filterList] });
+      await route.fulfill({ status: 200, json: [filterList, secondFilterList] });
       return;
     }
     if (pathname === '/api/contacts/filter-options' && method === 'GET') {
@@ -508,7 +516,11 @@ async function installApiFixtures(context, {
         if (params.get('status') === 'subscribed' && !candidate.subscribed) return false;
         if (params.get('status') === 'unsubscribed' && candidate.subscribed) return false;
         if (params.get('listId') && params.get('listId') !== 'all'
-          && (params.get('listId') === '__none__' ? candidate.listIds.length > 0 : !candidate.listIds.includes(params.get('listId')))) return false;
+          && (params.get('listId') === '__none__'
+            ? candidate.listIds.length > 0
+            : params.get('listId') === '__multiple__'
+              ? candidate.listIds.length <= 1
+              : !candidate.listIds.includes(params.get('listId')))) return false;
         if (params.get('companyId') && params.get('companyId') !== 'all'
           && (params.get('companyId') === '__none__' ? candidate.companyId || candidate.companyName?.trim() : candidate.companyId !== params.get('companyId'))) return false;
         if (!filterField(params.get('lifecycleStage') || 'all', candidate.lifecycleStage)) return false;
@@ -694,6 +706,15 @@ describe('company profile review and contact data preservation', { concurrency: 
       await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 2);
       assert.equal(await rows.count(), 2, 'list membership narrows the directory');
 
+      await page.getByTestId('select-contact-list-filter').selectOption('__multiple__');
+      await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 1);
+      assert.equal(await rows.count(), 1, 'multiple lists returns only contacts with more than one membership');
+      assert.equal(await page.getByTestId(`row-contact-${contactId}`).isVisible(), true);
+      assert.equal(await page.getByTestId('row-contact-browser-filter-customer-id').count(), 0);
+      assert.equal(await page.getByText('List: Multiple lists').isVisible(), true);
+
+      await page.getByTestId('select-contact-list-filter').selectOption(filterList.id);
+      await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 2);
       await page.getByTestId('select-contact-status-filter').selectOption('unsubscribed');
       await page.waitForFunction(expected => document.querySelectorAll('tr[data-testid^="row-contact-"]').length === expected, 1);
       assert.equal(await rows.count(), 1, 'subscription status combines with list membership');

@@ -11,6 +11,7 @@ import { ContactImportDialog } from '@/components/contact-import-dialog';
 import { DownloadListDialog, type DownloadListColumn, type DownloadScope } from '@/components/download-list-dialog';
 import {
   ContactDirectoryFiltersPanel,
+  CONTACT_FILTER_MULTIPLE,
   emptyContactDirectoryFilters,
   type ContactDirectoryFilterValues,
 } from '@/components/contact-directory-filters';
@@ -990,7 +991,7 @@ export function ContactsPage() {
     filters.tagId && filters.tagId !== 'all' ? `Tag: ${filters.tagId === '__none__' ? 'No tags' : 'Selected tag'}` : null,
     filters.search.trim() ? `Search: ${filters.search.trim()}` : null,
     filters.status !== 'all' ? `Status: ${filters.status}` : null,
-    filters.listId !== 'all' ? `List: ${lists.find(list => list.id === filters.listId)?.name ?? (filters.listId === '__none__' ? 'No list' : 'Selected list')}` : null,
+    filters.listId !== 'all' ? `List: ${filters.listId === '__none__' ? 'No list' : filters.listId === CONTACT_FILTER_MULTIPLE ? 'Multiple lists' : lists.find(list => list.id === filters.listId)?.name ?? 'Selected list'}` : null,
     filters.companyId !== 'all' ? `Company: ${filters.companyId === '__none__' ? 'No company' : selectedCompanyName ?? 'Selected company'}` : null,
     filters.lifecycleStage !== 'all' ? `Lifecycle: ${filters.lifecycleStage === '__unset__' ? 'Not set' : filters.lifecycleStage}` : null,
     filters.leadStatus !== 'all' ? `Lead status: ${filters.leadStatus === '__unset__' ? 'Not set' : filters.leadStatus}` : null,

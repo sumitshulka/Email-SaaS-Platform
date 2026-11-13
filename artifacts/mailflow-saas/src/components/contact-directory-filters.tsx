@@ -4,6 +4,7 @@ import { getSearchCompaniesQueryKey, useSearchCompanies, useListContactTags, get
 import type { CompanySearchResultItem, ContactDirectoryFilters, ContactList } from '@workspace/api-client-react';
 
 export const CONTACT_FILTER_NONE = '__none__';
+export const CONTACT_FILTER_MULTIPLE = '__multiple__';
 export const CONTACT_FILTER_UNSET = '__unset__';
 const COMPANY_SEARCH_PAGE_SIZE = 40;
 
@@ -315,6 +316,7 @@ export function ContactDirectoryFiltersPanel({
   if (filters.search.trim()) activeLabels.push(`Search: ${filters.search.trim()}`);
   if (filters.status !== 'all') activeLabels.push(`Status: ${filters.status === 'subscribed' ? 'Subscribed' : 'Unsubscribed'}`);
   if (filters.listId === CONTACT_FILTER_NONE) activeLabels.push('List: No list');
+  else if (filters.listId === CONTACT_FILTER_MULTIPLE) activeLabels.push('List: Multiple lists');
   else if (filters.listId !== 'all') activeLabels.push(`List: ${lists.find(list => list.id === filters.listId)?.name || 'Selected list'}`);
   if (filters.companyId === CONTACT_FILTER_NONE) activeLabels.push('Company: No company');
   else if (filters.companyId !== 'all') activeLabels.push(`Company: ${selectedCompanyName || 'Selected company'}`);
@@ -408,6 +410,7 @@ export function ContactDirectoryFiltersPanel({
           options={[
             { value: 'all', label: 'Any list' },
             { value: CONTACT_FILTER_NONE, label: 'No list' },
+            { value: CONTACT_FILTER_MULTIPLE, label: 'Multiple lists' },
             ...lists.map(list => ({ value: list.id, label: list.name })),
           ]}
         />
