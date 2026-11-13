@@ -9,6 +9,34 @@ function formatDate(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+function getDiagnosticsFailure(error: unknown): {
+  status: number | null;
+  code: string | null;
+  incidentId: string | null;
+} {
+  if (!error || typeof error !== "object") {
+    return { status: null, code: null, incidentId: null };
+  }
+  const record = error as Record<string, unknown>;
+  const data = record.data && typeof record.data === "object"
+    ? record.data as Record<string, unknown>
+    : null;
+  const headers = record.headers;
+  const headerIncidentId = headers && typeof headers === "object" && "get" in headers &&
+      typeof headers.get === "function"
+    ? headers.get("x-error-id")
+    : null;
+  return {
+    status: typeof record.status === "number" ? record.status : null,
+    code: typeof data?.code === "string" ? data.code : null,
+    incidentId: typeof data?.incidentId === "string"
+      ? data.incidentId
+      : typeof headerIncidentId === "string"
+        ? headerIncidentId
+        : null,
+  };
+}
+
 function DiagnosticRecord({ item }: { item: AdminApiErrorDiagnostic }) {
   return (
     <details
@@ -52,6 +80,14 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
     },
   });
   const items = query.data?.items ?? [];
+  const failure = query.isError ? getDiagnosticsFailure(query.error) : null;
+  const failureMessage = failure?.status === 401
+    ? "Your session may have expired. Sign in again as a superadmin."
+    : failure?.status === 403
+      ? "Superadmin access is required to view these reports."
+      : failure?.status === 404
+        ? "The API serving this page does not have the diagnostics endpoint. Deploy the updated API service."
+        : "The API could not return diagnostic records. Check its logs using the reference ID and confirm the migration ran against the database used by this API.";
 
   return (
     <section
@@ -85,7 +121,21 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
         <p className="mt-4 rounded-md bg-white px-3 py-5 text-center text-[11px] text-[#778291]">Loading diagnostics…</p>
       ) : query.isError ? (
         <div role="alert" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-3 text-[11px] text-[#99501e]">
-          <span>Diagnostics could not be loaded. Confirm the diagnostics migration is applied and the API can reach its database.</span>
+          <span className="space-y-1">
+            <span className="block">{failureMessage}</span>
+            {failure && (failure.status !== null || failure.code) && (
+              <span data-testid="diagnostics-request-status" className="block font-mono text-[10px]">
+                {failure.status !== null ? `HTTP ${failure.status}` : ""}
+                {failure.status !== null && failure.code ? " · " : ""}
+                {failure.code || ""}
+              </span>
+            )}
+            {failure?.incidentId && (
+              <span data-testid="diagnostics-request-incident-id" className="mono block break-all text-[10px]">
+                Reference ID: {failure.incidentId}
+              </span>
+            )}
+          </span>
           <button type="button" onClick={() => void query.refetch()} className="rounded border border-[#e7c9ac] bg-white px-3 py-1.5 font-semibold">Retry</button>
         </div>
       ) : items.length === 0 ? (
