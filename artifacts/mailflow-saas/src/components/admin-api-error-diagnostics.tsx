@@ -188,6 +188,8 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
   const [hmacSecret, setHmacSecret] = useState("");
   const [removeKeyConfirmation, setRemoveKeyConfirmation] = useState(false);
   const [keySettingMessage, setKeySettingMessage] = useState<string | null>(null);
+  const normalizedHmacSecret = hmacSecret.trim();
+  const hmacSecretIsValid = /^[0-9a-f]{64}$/i.test(normalizedHmacSecret);
   const saveKeyMutation = useMutation({
     mutationFn: (secret: string) => requestRemoteDiagnosticsKeyConfig("PUT", secret),
     onSuccess: async () => {
@@ -301,7 +303,7 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
                 onSubmit={(event) => {
                   event.preventDefault();
                   setKeySettingMessage(null);
-                  saveKeyMutation.mutate(hmacSecret);
+                  saveKeyMutation.mutate(normalizedHmacSecret);
                 }}
               >
                 <label className="sr-only" htmlFor="production-diagnostics-hmac-secret">Diagnostics HMAC key</label>
@@ -310,7 +312,7 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
                   data-testid="input-production-diagnostics-hmac-secret"
                   type="password"
                   autoComplete="new-password"
-                  maxLength={64}
+                  maxLength={80}
                   value={hmacSecret}
                   onChange={(event) => setHmacSecret(event.target.value)}
                   placeholder="Paste the 64-character hex key"
@@ -319,7 +321,7 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
                 <button
                   type="submit"
                   data-testid="button-save-production-diagnostics-key"
-                  disabled={!/^[0-9a-f]{64}$/i.test(hmacSecret) || saveKeyMutation.isPending}
+                  disabled={!hmacSecretIsValid || saveKeyMutation.isPending}
                   className="min-h-9 rounded-md bg-[#174f99] px-3 text-[11px] font-semibold text-white disabled:opacity-50"
                 >
                   {saveKeyMutation.isPending ? "Saving…" : keyConfigQuery.data?.configured ? "Replace key" : "Save key"}
@@ -330,6 +332,11 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
                   </button>
                 )}
               </form>
+              {hmacSecret.length > 0 && !hmacSecretIsValid && (
+                <p role="status" className="mt-2 text-[10px] text-[#99501e]">
+                  Enter exactly 64 hexadecimal characters ({normalizedHmacSecret.length}/64 entered). Leading or trailing spaces are ignored; generate a key with <span className="font-mono">openssl rand -hex 32</span>.
+                </p>
+              )}
               {removeKeyConfirmation && (
                 <div role="alertdialog" aria-label="Remove diagnostics key confirmation" className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-[#efd6c0] bg-[#fff8f1] px-3 py-2.5 text-[11px] text-[#81501e]">
                   <span>Removing this key disables signed diagnostics in this environment.</span>
