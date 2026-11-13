@@ -25,6 +25,7 @@ import supportRouter from "./support";
 import maintenanceRouter from "./maintenance";
 import contactIntentRouter from "./contact-intent";
 import contactTagsRouter from "./contact-tags";
+import remoteDiagnosticsRouter from "./remote-diagnostics";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -47,6 +48,7 @@ router.use(microsoft365TraceRouter);
 router.use(gmailMailboxRouter);
 router.use(microsoftSenderRouter);
 router.use(adminRouter);
+router.use(remoteDiagnosticsRouter);
 router.use(adminInactivityRouter);
 router.use(adminGlobalCompaniesRouter);
 router.use(adminAIProviderRouter);

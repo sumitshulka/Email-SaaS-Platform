@@ -21,3 +21,8 @@ timeoutMs = 180000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+MAILFLOW_REMOTE_DIAGNOSTICS_ORIGIN = "https://mailflow.taskone.world"
