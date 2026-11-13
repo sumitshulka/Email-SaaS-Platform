@@ -7,6 +7,7 @@ import { startGmailMailboxWorker } from "./lib/gmail-mailbox";
 import { startCompanyResearchWorker } from "./lib/company-intelligence";
 import { startAiEmailAssistReservationCleanupWorker } from "./lib/add-on-entitlements";
 import { startFreePrimaryPlanRenewalWorker } from "./lib/billing";
+import { initializeRemoteDiagnosticsSecret } from "./lib/remote-diagnostics-auth";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +26,7 @@ if (Number.isNaN(port) || port <= 0) {
 try {
   requireSessionSecret();
   await ensureSeedSuperadmin();
+  await initializeRemoteDiagnosticsSecret();
   startCampaignWorker();
   startGmailMailboxWorker();
   startCompanyResearchWorker();

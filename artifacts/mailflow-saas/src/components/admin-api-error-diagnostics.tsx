@@ -3,7 +3,8 @@ import {
   useListAdminApiErrorDiagnostics,
 } from "@workspace/api-client-react";
 import type { AdminApiErrorDiagnostic } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 type RemoteFailure = {
   errorName: string;
@@ -36,6 +37,34 @@ type RemoteRequestError = Error & {
   upstreamStatus?: number;
 };
 
+type RemoteDiagnosticsKeyConfig = {
+  role: "caller" | "verifier";
+  configured: boolean;
+  updatedAt: string | null;
+};
+
+async function requestRemoteDiagnosticsKeyConfig(
+  method: "GET" | "PUT" | "DELETE",
+  hmacSecret?: string,
+): Promise<RemoteDiagnosticsKeyConfig> {
+  const response = await fetch("/api/admin/remote-diagnostics/configuration", {
+    method,
+    credentials: "include",
+    cache: "no-store",
+    ...(hmacSecret ? {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hmacSecret }),
+    } : {}),
+  });
+  if (response.status === 204) return { role: "verifier", configured: false, updatedAt: null };
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const data = body && typeof body === "object" ? body as Record<string, unknown> : {};
+    throw new Error(typeof data.error === "string" ? data.error : "The diagnostics key setting could not be updated.");
+  }
+  return body as RemoteDiagnosticsKeyConfig;
+}
+
 async function fetchRemoteDiagnostics(): Promise<RemoteDiagnosticsReport> {
   const response = await fetch("/api/admin/remote-diagnostics", {
     credentials: "include",
@@ -57,7 +86,7 @@ async function fetchRemoteDiagnostics(): Promise<RemoteDiagnosticsReport> {
 
 function remoteFailureText(error: RemoteRequestError): string {
   if (error.code === "REMOTE_DIAGNOSTICS_NOT_CONFIGURED") {
-    return "Configure the production origin and matching HMAC secret on the Replit API, and set the same secret on production.";
+    return "Configure the Replit caller key in Tools → Secrets and the matching verifier key in production’s Diagnostics settings.";
   }
   if (error.code === "REMOTE_DIAGNOSTICS_UPSTREAM_ERROR") {
     return `Production rejected the signed request (HTTP ${error.upstreamStatus ?? "unknown"}). Confirm both services use the same secret and the updated API is deployed.`;
@@ -136,6 +165,7 @@ function DiagnosticRecord({ item }: { item: AdminApiErrorDiagnostic }) {
 }
 
 export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean }) {
+  const queryClient = useQueryClient();
   const query = useListAdminApiErrorDiagnostics({
     query: {
       queryKey: getListAdminApiErrorDiagnosticsQueryKey(),
@@ -149,6 +179,33 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
     enabled: false,
     retry: false,
     staleTime: 0,
+  });
+  const keyConfigQuery = useQuery({
+    queryKey: ["admin", "remote-diagnostics-key-config"],
+    queryFn: () => requestRemoteDiagnosticsKeyConfig("GET"),
+    staleTime: 0,
+  });
+  const [hmacSecret, setHmacSecret] = useState("");
+  const [removeKeyConfirmation, setRemoveKeyConfirmation] = useState(false);
+  const [keySettingMessage, setKeySettingMessage] = useState<string | null>(null);
+  const saveKeyMutation = useMutation({
+    mutationFn: (secret: string) => requestRemoteDiagnosticsKeyConfig("PUT", secret),
+    onSuccess: async () => {
+      setHmacSecret("");
+      setKeySettingMessage("Key saved encrypted. Its value will not be shown again.");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "remote-diagnostics-key-config"] });
+    },
+    onError: (error: Error) => setKeySettingMessage(error.message),
+  });
+  const removeKeyMutation = useMutation({
+    mutationFn: () => requestRemoteDiagnosticsKeyConfig("DELETE"),
+    onSuccess: async () => {
+      setRemoveKeyConfirmation(false);
+      setKeySettingMessage("Saved key removed from this environment.");
+      await queryClient.invalidateQueries({ queryKey: ["admin", "remote-diagnostics-key-config"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "remote-production-diagnostics"] });
+    },
+    onError: (error: Error) => setKeySettingMessage(error.message),
   });
   const items = query.data?.items ?? [];
   const failure = query.isError ? getDiagnosticsFailure(query.error) : null;
@@ -221,24 +278,98 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
         </div>
       )}
       <div className="mt-7 border-t border-[#dfe4ea] pt-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-[14px] font-bold text-[#243348]">Self-hosted production check</h3>
-            <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#687587]">
-              Runs a read-only, signed check against the configured production API. It reports database reachability, diagnostics-table readiness, capture status, and recent sanitized errors.
-            </p>
+        <div className="mb-5 rounded-md border border-[#dfe4ea] bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="text-[13px] font-bold text-[#243348]">
+                {keyConfigQuery.data?.role === "caller" ? "Replit diagnostics caller key" : "Production diagnostics verifier key"}
+              </h3>
+              <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#687587]">
+                {keyConfigQuery.data?.role === "caller"
+                  ? "The caller key is read from this Replit project’s Secrets. Save the matching verifier key in the Diagnostics settings of your self-hosted production app."
+                  : "Generate one 64-character hex key and save it here, then add the same value as MAILFLOW_DIAGNOSTICS_HMAC_SECRET in your Replit project’s Secrets. The production copy is encrypted at rest and never returned after saving."}
+              </p>
+            </div>
+            <span data-testid="status-production-diagnostics-key" className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${keyConfigQuery.data?.configured ? "bg-[#e8f4ec] text-[#38684a]" : "bg-[#f1f3f6] text-[#657286]"}`}>
+              {keyConfigQuery.isLoading ? "Checking…" : keyConfigQuery.data?.configured ? "Key saved" : "Not configured"}
+            </span>
           </div>
-          <button
-            type="button"
-            data-testid="button-check-production-diagnostics"
-            onClick={() => void remoteQuery.refetch()}
-            disabled={remoteQuery.isFetching}
-            className="min-h-9 rounded-md border border-[#d7dce3] bg-white px-3 text-[11px] font-semibold text-[#344154] disabled:opacity-55"
-          >
-            {remoteQuery.isFetching ? "Checking…" : "Check production"}
-          </button>
+          {keyConfigQuery.data?.role === "verifier" && (
+            <>
+              <form
+                className="mt-3 flex flex-wrap items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setKeySettingMessage(null);
+                  saveKeyMutation.mutate(hmacSecret);
+                }}
+              >
+                <label className="sr-only" htmlFor="production-diagnostics-hmac-secret">Diagnostics HMAC key</label>
+                <input
+                  id="production-diagnostics-hmac-secret"
+                  data-testid="input-production-diagnostics-hmac-secret"
+                  type="password"
+                  autoComplete="new-password"
+                  maxLength={64}
+                  value={hmacSecret}
+                  onChange={(event) => setHmacSecret(event.target.value)}
+                  placeholder="Paste the 64-character hex key"
+                  className="min-h-9 min-w-[260px] flex-1 rounded-md border border-[#d7dce3] bg-white px-3 text-[11px] text-[#344154] outline-none focus:border-[#467db3]"
+                />
+                <button
+                  type="submit"
+                  data-testid="button-save-production-diagnostics-key"
+                  disabled={!/^[0-9a-f]{64}$/i.test(hmacSecret) || saveKeyMutation.isPending}
+                  className="min-h-9 rounded-md bg-[#174f99] px-3 text-[11px] font-semibold text-white disabled:opacity-50"
+                >
+                  {saveKeyMutation.isPending ? "Saving…" : keyConfigQuery.data?.configured ? "Replace key" : "Save key"}
+                </button>
+                {keyConfigQuery.data?.configured && !removeKeyConfirmation && (
+                  <button type="button" onClick={() => setRemoveKeyConfirmation(true)} className="min-h-9 rounded-md border border-[#d7dce3] px-3 text-[11px] font-semibold text-[#536174]">
+                    Remove key
+                  </button>
+                )}
+              </form>
+              {removeKeyConfirmation && (
+                <div role="alertdialog" aria-label="Remove diagnostics key confirmation" className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-[#efd6c0] bg-[#fff8f1] px-3 py-2.5 text-[11px] text-[#81501e]">
+                  <span>Removing this key disables signed diagnostics in this environment.</span>
+                  <button type="button" disabled={removeKeyMutation.isPending} onClick={() => removeKeyMutation.mutate()} className="rounded bg-[#a9472d] px-2.5 py-1.5 font-semibold text-white disabled:opacity-50">
+                    {removeKeyMutation.isPending ? "Removing…" : "Confirm remove"}
+                  </button>
+                  <button type="button" onClick={() => setRemoveKeyConfirmation(false)} className="rounded border border-[#e4c9b2] bg-white px-2.5 py-1.5 font-semibold">
+                    Keep key
+                  </button>
+                </div>
+              )}
+              {keyConfigQuery.data?.updatedAt && <p className="mt-2 text-[10px] text-[#778291]">Last updated {formatDate(keyConfigQuery.data.updatedAt)}</p>}
+              {keySettingMessage && <p role="status" className="mt-2 text-[11px] text-[#536174]">{keySettingMessage}</p>}
+            </>
+          )}
+          {keyConfigQuery.data?.role === "caller" && !keyConfigQuery.data.configured && (
+            <p className="mt-3 text-[11px] text-[#99501e]">Add MAILFLOW_DIAGNOSTICS_HMAC_SECRET under Tools → Secrets in this Replit project.</p>
+          )}
+          {keyConfigQuery.isError && <p role="alert" className="mt-2 text-[11px] text-[#99501e]">Key status could not be loaded. <button type="button" className="font-semibold underline" onClick={() => void keyConfigQuery.refetch()}>Retry</button></p>}
         </div>
-        {remoteFailure && (
+        {keyConfigQuery.data?.role === "caller" && (
+          <>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[14px] font-bold text-[#243348]">Self-hosted production check</h3>
+                <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#687587]">
+                  Runs a read-only, signed check against the configured production API. It reports database reachability, diagnostics-table readiness, capture status, and recent sanitized errors.
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="button-check-production-diagnostics"
+                onClick={() => void remoteQuery.refetch()}
+                disabled={remoteQuery.isFetching || !keyConfigQuery.data.configured}
+                className="min-h-9 rounded-md border border-[#d7dce3] bg-white px-3 text-[11px] font-semibold text-[#344154] disabled:opacity-55"
+              >
+                {remoteQuery.isFetching ? "Checking…" : "Check production"}
+              </button>
+            </div>
+            {remoteFailure && (
           <div role="alert" data-testid="status-production-diagnostics-error" className="mt-3 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-3 text-[11px] leading-5 text-[#99501e]">
             <p>{remoteFailureText(remoteFailure)}</p>
             <p className="mono mt-1 text-[10px]">
@@ -248,8 +379,8 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
             </p>
             <button type="button" onClick={() => void remoteQuery.refetch()} className="mt-2 rounded border border-[#e7c9ac] bg-white px-2.5 py-1 font-semibold">Retry</button>
           </div>
-        )}
-        {remoteReport && (
+            )}
+            {remoteReport && (
           <div data-testid="panel-production-diagnostics-report" className="mt-3 space-y-3">
             <div className={`rounded-md border px-3 py-3 text-[11px] ${remoteReport.status === "ok" ? "border-[#c8e2d3] bg-[#eff8f2] text-[#315b42]" : "border-[#f0d5bd] bg-[#fff8f1] text-[#81501e]"}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -292,6 +423,8 @@ export function AdminApiErrorDiagnosticsPanel({ enabled }: { enabled: boolean })
               )
             )}
           </div>
+            )}
+          </>
         )}
       </div>
     </section>

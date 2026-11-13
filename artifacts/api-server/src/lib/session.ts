@@ -179,6 +179,13 @@ export async function enforcePlatformMaintenance(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  if (
+    req.method === "GET" &&
+    req.path === "/api/internal/diagnostics/summary"
+  ) {
+    next();
+    return;
+  }
   try {
     const settings = await getPlatformSettings();
     if (

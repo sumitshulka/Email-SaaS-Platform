@@ -46,29 +46,31 @@ reused nonces, and returns only database reachability, diagnostics-table
 readiness, capture status, and recent sanitized error records. It does not
 accept SQL, expose environment variables, or return customer content.
 
-Configure both server environments with the same randomly generated value of at
-least 32 bytes:
+Generate one random 32-byte key:
 
 ```sh
 openssl rand -hex 32
 ```
 
-- On the self-hosted production API, set
-  `MAILFLOW_DIAGNOSTICS_HMAC_SECRET` in your cloud environment and deploy the
-  updated API.
-- In this Replit project, add that same value as the
-  `MAILFLOW_DIAGNOSTICS_HMAC_SECRET` Replit Secret. Never paste it into chat,
-  source code, or this document.
+- In this Replit project, save the key as the `MAILFLOW_DIAGNOSTICS_HMAC_SECRET`
+  Replit Secret. This caller-side key is never sent to the browser.
+- On the self-hosted production app, open **Admin → Settings → Diagnostics**,
+  enter the same key in **Production diagnostics verifier key**, and save. The
+  production copy is encrypted at rest and never returned after saving.
 - In this Replit project, set the non-secret variable
   `MAILFLOW_REMOTE_DIAGNOSTICS_ORIGIN` to
   `https://mailflow.taskone.world`.
-- Open **Admin → Settings → Diagnostics** and select **Check production**.
+- Deploy the updated API to production, then select **Check production** in the
+  Replit Diagnostics tab.
 
 The production endpoint is fixed to `mailflow.taskone.world` and uses HTTPS;
 redirects are rejected. Signatures expire after 60 seconds, and requests use a
 unique nonce to prevent replay on the API process that receives the request.
-Keep the server clocks synchronized. Rotate the key by updating both
-environments and restarting/redeploying both API services.
+Keep the server clocks synchronized. Rotate the key by updating the Replit
+Secret and production Diagnostics setting. The encrypted production key relies
+on the existing stable `APP_ENCRYPTION_KEY` or `SESSION_SECRET` in production.
+Back up that encryption key before rotating it; changing it without
+re-encrypting saved credentials makes them unreadable.
 
 Replit does not provide a stable outbound IP list, so this is authenticated
 server-to-server access rather than a network firewall that makes the route

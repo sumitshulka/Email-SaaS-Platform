@@ -1,13 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
-import { apiErrorDiagnosticsTable, db } from "@workspace/db";
+import { apiErrorDiagnosticsTable, db, systemConfigurationTable } from "@workspace/db";
 import { shouldCaptureApiErrorDiagnostics } from "../lib/platform-settings";
 import { describeApiError } from "../lib/api-error-diagnostics";
+import { encryptSecret } from "../lib/security";
+import { writeAuditLog } from "../lib/audit";
 import {
   createRemoteDiagnosticsSignature,
+  getRemoteDiagnosticsClientSecret,
   getRemoteDiagnosticsSecret,
   REMOTE_DIAGNOSTICS_PATH,
+  REMOTE_DIAGNOSTICS_CONFIGURATION_KEY,
+  updateRemoteDiagnosticsSecretCache,
   verifyRemoteDiagnosticsSignature,
 } from "../lib/remote-diagnostics-auth";
 import { requireSuperadmin } from "../lib/session";
@@ -145,9 +150,9 @@ function consumeNonce(nonce: string, nowMs: number): boolean {
   return true;
 }
 
-function verifyServiceRequest(req: Request, res: Response, next: NextFunction): void {
+async function verifyServiceRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   res.setHeader("Cache-Control", "no-store");
-  const secret = getRemoteDiagnosticsSecret();
+  const secret = await getRemoteDiagnosticsSecret();
   if (!secret) {
     res.status(404).json({ error: "Not found.", code: "NOT_FOUND" });
     return;
@@ -254,11 +259,118 @@ router.get(
 );
 
 router.get(
+  "/admin/remote-diagnostics/configuration",
+  requireSuperadmin,
+  async (_req, res): Promise<void> => {
+    res.setHeader("Cache-Control", "no-store");
+    if (process.env.REPL_ID) {
+      res.json({
+        role: "caller",
+        configured: Boolean(getRemoteDiagnosticsClientSecret()),
+        updatedAt: null,
+      });
+      return;
+    }
+    const [row] = await db
+      .select({
+        value: systemConfigurationTable.value,
+        updatedAt: systemConfigurationTable.updatedAt,
+      })
+      .from(systemConfigurationTable)
+      .where(eq(systemConfigurationTable.key, REMOTE_DIAGNOSTICS_CONFIGURATION_KEY))
+      .limit(1);
+    const value = row?.value && typeof row.value === "object" && !Array.isArray(row.value)
+      ? row.value as Record<string, unknown>
+      : null;
+    res.json({
+      role: "verifier",
+      configured: typeof value?.secretEncrypted === "string" && value.secretEncrypted.length > 0,
+      updatedAt: row?.updatedAt?.toISOString() ?? null,
+    });
+  },
+);
+
+router.put(
+  "/admin/remote-diagnostics/configuration",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    if (process.env.REPL_ID) {
+      res.status(403).json({
+        error: "The production verifier key is managed on the self-hosted production app.",
+        code: "PRODUCTION_VERIFIER_CONFIGURATION_ONLY",
+      });
+      return;
+    }
+    const secret = typeof req.body?.hmacSecret === "string"
+      ? req.body.hmacSecret.trim()
+      : "";
+    if (!/^[0-9a-f]{64}$/i.test(secret)) {
+      res.status(400).json({
+        error: "Enter a 64-character hexadecimal key generated for diagnostics.",
+        code: "INVALID_REMOTE_DIAGNOSTICS_KEY",
+      });
+      return;
+    }
+
+    const value = { secretEncrypted: encryptSecret(secret) };
+    const updatedAt = new Date();
+    await db
+      .insert(systemConfigurationTable)
+      .values({
+        key: REMOTE_DIAGNOSTICS_CONFIGURATION_KEY,
+        value,
+        updatedBy: req.authUser!.id,
+      })
+      .onConflictDoUpdate({
+        target: systemConfigurationTable.key,
+        set: { value, updatedBy: req.authUser!.id, updatedAt },
+      });
+    updateRemoteDiagnosticsSecretCache(secret);
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "remote_diagnostics_key.updated",
+      entity: "system_configuration",
+      entityId: REMOTE_DIAGNOSTICS_CONFIGURATION_KEY,
+      ipAddress: req.ip?.slice(0, 80) ?? null,
+      metadata: { configured: true },
+    });
+    res.json({ configured: true, updatedAt: updatedAt.toISOString() });
+  },
+);
+
+router.delete(
+  "/admin/remote-diagnostics/configuration",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    if (process.env.REPL_ID) {
+      res.status(403).json({
+        error: "The production verifier key is managed on the self-hosted production app.",
+        code: "PRODUCTION_VERIFIER_CONFIGURATION_ONLY",
+      });
+      return;
+    }
+    await db
+      .delete(systemConfigurationTable)
+      .where(eq(systemConfigurationTable.key, REMOTE_DIAGNOSTICS_CONFIGURATION_KEY));
+    updateRemoteDiagnosticsSecretCache(null);
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "remote_diagnostics_key.removed",
+      entity: "system_configuration",
+      entityId: REMOTE_DIAGNOSTICS_CONFIGURATION_KEY,
+      ipAddress: req.ip?.slice(0, 80) ?? null,
+      metadata: {},
+    });
+    res.status(204).end();
+  },
+);
+
+router.get(
   "/admin/remote-diagnostics",
   requireSuperadmin,
   async (req, res): Promise<void> => {
     res.setHeader("Cache-Control", "no-store");
-    const secret = getRemoteDiagnosticsSecret();
+    const secret = getRemoteDiagnosticsClientSecret();
     const origin = process.env.MAILFLOW_REMOTE_DIAGNOSTICS_ORIGIN?.trim();
     let targetUrl: URL;
     try {
