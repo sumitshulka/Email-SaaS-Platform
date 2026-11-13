@@ -789,6 +789,7 @@ const [
   import("../src/lib/logger.ts"),
   import("../src/lib/microsoft365-trace.ts"),
 ]);
+const diagnosticsModule = await import("../src/lib/api-error-diagnostics.ts");
 
 campaignWorkerModule.setCampaignEmailSpacingWindowForTests({
   minimumSeconds: 0,
@@ -8449,9 +8450,27 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const admin = await login("admin@example.test");
     const adminAccess = await api("/admin/settings", { cookie: admin.cookie });
     assert.equal(adminAccess.response.status, 200);
+    const incidentId = randomUUID();
+    const diagnosticDetails = diagnosticsModule.describeApiError(
+      Object.assign(
+        new Error("column missing for private@example.test"),
+        { name: "PostgresError", code: "42703", schema: "public", table: "email_campaigns", column: "missing_column" },
+      ),
+    );
+    await diagnosticsModule.storeApiErrorDiagnostic({
+      id: incidentId,
+      method: "GET",
+      path: "/api/campaigns/history?recipient=private@example.test",
+      statusCode: 500,
+      details: diagnosticDetails,
+    });
     const adminDiagnostics = await api("/admin/error-diagnostics", { cookie: admin.cookie });
     assert.equal(adminDiagnostics.response.status, 200);
-    assert.deepEqual(adminDiagnostics.body, { items: [] });
+    assert.equal(adminDiagnostics.body.items.length, 1);
+    assert.equal(adminDiagnostics.body.items[0].id, incidentId);
+    assert.equal(adminDiagnostics.body.items[0].path, "/api/campaigns/history");
+    assert.match(adminDiagnostics.body.items[0].errorMessage, /\[redacted email\]/);
+    assert.doesNotMatch(adminDiagnostics.body.items[0].errorMessage, /private@example\.test/);
   });
 
   it("persists the detailed API error capture setting for superadmins", async () => {
