@@ -26,6 +26,7 @@ import { ConfirmActionDialog } from '@/components/confirm-action-dialog';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Form } from '@/components/ui/form';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MailflowBrand } from '@/components/brand';
 import { TaskoneAttributionFooter } from '@/components/taskone-footer';
 import { RichTextEditor } from '@/components/rich-text-editor';
@@ -1455,6 +1456,7 @@ function AdminSettingsPage() {
   const [variantLimitsError, setVariantLimitsError] = useState('');
   const [settingsVersion, setSettingsVersion] = useState('');
   const [settingsConflict, setSettingsConflict] = useState('');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'platform' | 'campaigns' | 'email' | 'diagnostics'>('platform');
 
   useEffect(() => {
     if (q.data) {
@@ -1596,32 +1598,57 @@ function AdminSettingsPage() {
           ? 'Uses smtp.zeptomail.com on port 587 with STARTTLS. Enter the SMTP username and token from your ZeptoMail Agent, and use a verified sender address. ZeptoMail permits transactional system email only; its terms prohibit marketing campaigns, newsletters, and mass email.'
           : 'Enter the server, port, encryption, and SMTP credentials provided by your email service.';
 
+  const renderPlatformSettingsForm = (
+    groupTitles: string[],
+    section: 'platform' | 'campaigns' | 'diagnostics',
+  ) => (
+    <form onSubmit={savePlatform} className="space-y-4">
+      {settingGroups.filter(group => groupTitles.includes(group.title)).map(group => (
+        <SettingsGroup key={group.title} {...group} values={settings} setValues={setSettings}/>
+      ))}
+      {section === 'campaigns' && variantLimitsError && <p role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] text-[#99501e]">{variantLimitsError}</p>}
+      <div className="flex justify-end">
+        <Button type="submit" testId={section === 'platform' ? 'button-save-platform-settings' : `button-save-${section}-settings`} disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save platform settings'}<Check className="h-4 w-4"/>
+        </Button>
+      </div>
+      <FormError message={settingsConflict || (save.isError ? getError(save.error) : undefined)}/>
+      {save.isSuccess && <div data-testid={section === 'platform' ? 'status-platform-settings-saved' : `status-${section}-settings-saved`} className="text-right text-[11px] text-[#245b9b]">Platform settings saved.</div>}
+    </form>
+  );
+
   return (
     <>
       <PageHeading
         eyebrow="PLATFORM CONFIGURATION"
         title="Settings"
-        detail="Operational controls are platform-wide. SMTP credentials are write-only and never returned by the API."
+        detail="Manage platform defaults, campaign controls, email delivery, and diagnostics by section."
       />
-      <p className="mb-4 text-right text-xs"><Link href="/admin/object-storage" className="font-semibold text-[#245b9b] hover:underline">Campaign file storage settings</Link></p>
-      <AdminMicrosoftOAuthSettings/>
-      <form onSubmit={savePlatform} className="space-y-4">
-        {settingGroups.map(group => (
-          <SettingsGroup key={group.title} {...group} values={settings} setValues={setSettings}/>
-        ))}
-        {variantLimitsError && <p role="alert" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[12px] text-[#99501e]">{variantLimitsError}</p>}
-        <div className="flex justify-end">
-          <Button type="submit" testId="button-save-platform-settings" disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save platform settings'}<Check className="h-4 w-4"/>
-          </Button>
-        </div>
-        <FormError message={settingsConflict || (save.isError ? getError(save.error) : undefined)}/>
-        {save.isSuccess && <div data-testid="status-platform-settings-saved" className="text-right text-[11px] text-[#245b9b]">Platform settings saved.</div>}
-      </form>
+      <Tabs
+        value={activeSettingsTab}
+        onValueChange={value => setActiveSettingsTab(value as typeof activeSettingsTab)}
+        data-testid="tabs-admin-settings"
+      >
+        <TabsList aria-label="Superadmin settings sections" className="mb-5 grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-[#e0e4e9] bg-white p-1 sm:grid-cols-4">
+          <TabsTrigger data-testid="tab-admin-settings-platform" value="platform" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Platform</TabsTrigger>
+          <TabsTrigger data-testid="tab-admin-settings-campaigns" value="campaigns" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Campaigns &amp; delivery</TabsTrigger>
+          <TabsTrigger data-testid="tab-admin-settings-email" value="email" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Email &amp; integrations</TabsTrigger>
+          <TabsTrigger data-testid="tab-admin-settings-diagnostics" value="diagnostics" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Diagnostics</TabsTrigger>
+        </TabsList>
 
-      <AdminApiErrorDiagnosticsPanel enabled={settings.apiErrorDiagnosticsEnabled === true}/>
+        <TabsContent value="platform" forceMount className="mt-0 space-y-4">
+          {renderPlatformSettingsForm(['Identity & defaults', 'Account & authentication', 'Inactivity lifecycle', 'Subscription rules'], 'platform')}
+        </TabsContent>
 
-      <Panel className="mt-8 p-5 md:p-6">
+        <TabsContent value="campaigns" forceMount className="mt-0 space-y-4">
+          {renderPlatformSettingsForm(['Sending & delivery', 'Campaign content tests', 'Campaign content policy'], 'campaigns')}
+        </TabsContent>
+
+        <TabsContent value="email" forceMount className="mt-0 space-y-4">
+          <p className="text-right text-xs"><Link href="/admin/object-storage" className="font-semibold text-[#245b9b] hover:underline">Campaign file storage settings</Link></p>
+          <AdminMicrosoftOAuthSettings/>
+
+          <Panel className="p-5 md:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="mono text-[10px] uppercase tracking-[.15em] text-[#858f9c]">APPLICATION DELIVERY</div>
@@ -1704,6 +1731,13 @@ function AdminSettingsPage() {
         {testSend.isError && <div className="mt-3"><FormError message={getError(testSend.error)}/></div>}
         {testSend.isSuccess && <div data-testid="status-test-email-sent" className="mt-3 text-[11px] text-[#245b9b]">Test email request completed.</div>}
       </Panel>
+        </TabsContent>
+
+        <TabsContent value="diagnostics" className="mt-0 space-y-4">
+          {renderPlatformSettingsForm(['Error diagnostics'], 'diagnostics')}
+          <AdminApiErrorDiagnosticsPanel enabled={settings.apiErrorDiagnosticsEnabled === true}/>
+        </TabsContent>
+      </Tabs>
     </>
   );
 }
