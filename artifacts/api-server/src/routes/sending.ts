@@ -2191,11 +2191,17 @@ router.post(
     if (filters.listId && filters.listId !== "all") {
       if (filters.listId === "__multiple__") {
         const membersInMultipleLists = db
-          .select({ contactId: contactListMembersTable.contactId })
-          .from(contactListMembersTable)
-          .where(eq(contactListMembersTable.userId, userId))
-          .groupBy(contactListMembersTable.contactId)
-          .having(gt(count(), 1));
+          .selectDistinct({ contactId: firstListMembership.contactId })
+          .from(firstListMembership)
+          .innerJoin(
+            secondListMembership,
+            and(
+              eq(firstListMembership.contactId, secondListMembership.contactId),
+              eq(firstListMembership.userId, secondListMembership.userId),
+              ne(firstListMembership.listId, secondListMembership.listId),
+            ),
+          )
+          .where(eq(firstListMembership.userId, userId));
         conditions.push(inArray(contactsTable.id, membersInMultipleLists));
       } else {
         const members = db
@@ -2586,11 +2592,17 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   if (params.listId && params.listId !== "all") {
     if (params.listId === "__multiple__") {
       const membersInMultipleLists = db
-        .select({ contactId: contactListMembersTable.contactId })
-        .from(contactListMembersTable)
-        .where(eq(contactListMembersTable.userId, userId))
-        .groupBy(contactListMembersTable.contactId)
-        .having(gt(count(), 1));
+        .selectDistinct({ contactId: firstListMembership.contactId })
+        .from(firstListMembership)
+        .innerJoin(
+          secondListMembership,
+          and(
+            eq(firstListMembership.contactId, secondListMembership.contactId),
+            eq(firstListMembership.userId, secondListMembership.userId),
+            ne(firstListMembership.listId, secondListMembership.listId),
+          ),
+        )
+        .where(eq(firstListMembership.userId, userId));
       conditions.push(inArray(contactsTable.id, membersInMultipleLists));
     } else {
       const members = db
@@ -2783,14 +2795,12 @@ router.get("/contacts", requireUserRole, async (req, res): Promise<void> => {
   } catch (error) {
     const detail = error as {
       name?: string;
-      message?: string;
       code?: string;
       cause?: { code?: string; name?: string };
       issues?: Array<{ code?: string; path?: Array<string | number> }>;
     };
     req.log.error({
       errorName: detail?.name ?? "UnknownError",
-      errorMessage: detail?.message,
       errorCode: detail?.code ?? detail?.cause?.code ?? null,
       causeName: detail?.cause?.name ?? null,
       issueSummary: detail?.issues?.map((issue) => ({
