@@ -4178,6 +4178,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/error-diagnostics:
+    get:
+      operationId: listAdminApiErrorDiagnostics
+      tags: [settings]
+      summary: List recent API error diagnostics
+      responses:
+        "200":
+          description: Recent sanitized server errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminApiErrorDiagnosticsList"
   /admin/settings/blocked-terms/preview:
     post:
       operationId: previewBlockedTerms
@@ -4858,6 +4870,9 @@ components:
           type: string
         code:
           type: string
+        incidentId:
+          type: string
+          format: uuid
         similarCompanies:
           type: array
           items: { $ref: "#/components/schemas/SimilarCompanyCandidate" }
@@ -7393,6 +7408,7 @@ components:
         retryDelaySeconds: { type: integer }
         bounceThreshold: { type: integer }
         deliveryTrackingEnabled: { type: boolean }
+        apiErrorDiagnosticsEnabled: { type: boolean }
         queuePollingSeconds: { type: integer }
         subjectVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
         subjectVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
@@ -7409,7 +7425,7 @@ components:
         inactivityRemovalDays: { type: integer, minimum: 1, maximum: 365 }
         updatedAt: { type: ["string", "null"], format: date-time }
         settingsVersion: { type: string, minLength: 1, maxLength: 128 }
-      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, inactiveUserMonths, inactivityWarningDays, inactivityRemovalDays, updatedAt, settingsVersion]
+      required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, apiErrorDiagnosticsEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, prohibitedEmailKeywords, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, inactiveUserMonths, inactivityWarningDays, inactivityRemovalDays, updatedAt, settingsVersion]
     PlatformSettingsInput:
       type: object
       properties:
@@ -7436,6 +7452,7 @@ components:
         retryDelaySeconds: { type: integer, minimum: 1 }
         bounceThreshold: { type: integer, minimum: 1 }
         deliveryTrackingEnabled: { type: boolean }
+        apiErrorDiagnosticsEnabled: { type: boolean }
         queuePollingSeconds: { type: integer, minimum: 1 }
         subjectVariantMinimum: { type: integer, minimum: 2, maximum: 20 }
         subjectVariantMaximum: { type: integer, minimum: 1, maximum: 20 }
@@ -7452,6 +7469,31 @@ components:
         inactivityRemovalDays: { type: integer, minimum: 1, maximum: 365 }
         expectedSettingsVersion: { type: string, minLength: 1, maxLength: 128 }
       required: [applicationName, defaultCurrency, defaultTimezone, dateFormat, supportEmail, supportPhone, maintenanceMode, maxContactsPerUser, maxUploadFileSizeMb, allowedContactFileTypes, passwordMinimumLength, otpExpiryMinutes, maxOtpAttempts, loginAttemptThreshold, sessionDurationHours, defaultEmailsPerHour, maxEmailsPerDay, maxCampaignSize, maxConcurrentCampaigns, retryAttempts, retryDelaySeconds, bounceThreshold, deliveryTrackingEnabled, queuePollingSeconds, subjectVariantMinimum, subjectVariantMaximum, greetingVariantMinimum, greetingVariantMaximum, signatureVariantMinimum, signatureVariantMaximum, allowUserWithoutSubscription, gracePeriodDays, packageVisibility, inactiveUserMonths, inactivityWarningDays, inactivityRemovalDays, expectedSettingsVersion]
+    AdminApiErrorDiagnosticsList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminApiErrorDiagnostic" }
+      required: [items]
+    AdminApiErrorDiagnostic:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        method: { type: string, maxLength: 10 }
+        path: { type: string, maxLength: 255 }
+        statusCode: { type: integer }
+        errorName: { type: string, maxLength: 160 }
+        rootErrorName: { type: ["string", "null"], maxLength: 160 }
+        errorCode: { type: ["string", "null"], maxLength: 40 }
+        databaseSchema: { type: ["string", "null"], maxLength: 128 }
+        databaseTable: { type: ["string", "null"], maxLength: 128 }
+        databaseColumn: { type: ["string", "null"], maxLength: 128 }
+        databaseConstraint: { type: ["string", "null"], maxLength: 128 }
+        errorMessage: { type: ["string", "null"], maxLength: 2000 }
+        stackTrace: { type: ["string", "null"], maxLength: 6000 }
+      required: [id, occurredAt, method, path, statusCode, errorName, rootErrorName, errorCode, databaseSchema, databaseTable, databaseColumn, databaseConstraint, errorMessage, stackTrace]
     BlockedTermPreviewInput:
       type: object
       properties:

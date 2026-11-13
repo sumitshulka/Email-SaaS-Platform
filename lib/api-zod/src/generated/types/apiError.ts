@@ -10,6 +10,7 @@ import type { SimilarCompanyCandidate } from './similarCompanyCandidate';
 export interface ApiError {
   error: string;
   code?: string;
+  incidentId?: string;
   similarCompanies?: SimilarCompanyCandidate[];
   /** @nullable */
   earliestStartAt?: Date | null;

@@ -23,6 +23,7 @@ export * from "./email-templates";
 export * from "./auth";
 export * from "./settings";
 export * from "./audit";
+export * from "./api-error-diagnostics";
 export * from "./billing";
 export * from "./global-companies";
 export * from "./company-intelligence";

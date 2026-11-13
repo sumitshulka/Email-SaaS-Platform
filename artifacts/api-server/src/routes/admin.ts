@@ -23,6 +23,7 @@ import {
   GetGoogleOAuthSettingsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
+  ListAdminApiErrorDiagnosticsResponse,
   PreviewBlockedTermsBody,
   PreviewBlockedTermsResponse,
   SendApplicationEmailTestBody,
@@ -41,6 +42,7 @@ import {
   UpdateGoogleOAuthSettingsResponse,
 } from "@workspace/api-zod";
 import {
+  apiErrorDiagnosticsTable,
   applicationEmailConfigurationTable,
   auditLogsTable,
   contactsTable,
@@ -668,6 +670,34 @@ router.get("/admin/settings", requireSuperadmin, async (_req, res): Promise<void
   res.json(GetAdminSettingsResponse.parse(settings));
 });
 
+router.get(
+  "/admin/error-diagnostics",
+  requireSuperadmin,
+  async (_req, res): Promise<void> => {
+    await db.delete(apiErrorDiagnosticsTable).where(
+      lt(apiErrorDiagnosticsTable.occurredAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+    );
+    await db.execute(sql`
+      DELETE FROM api_error_diagnostics
+      WHERE id IN (
+        SELECT id
+        FROM api_error_diagnostics
+        ORDER BY occurred_at DESC, id DESC
+        OFFSET 500
+      )
+    `);
+    const items = await db
+      .select()
+      .from(apiErrorDiagnosticsTable)
+      .orderBy(
+        desc(apiErrorDiagnosticsTable.occurredAt),
+        desc(apiErrorDiagnosticsTable.id),
+      )
+      .limit(100);
+    res.json(ListAdminApiErrorDiagnosticsResponse.parse({ items }));
+  },
+);
+
 router.post(
   "/admin/settings/blocked-terms/preview",
   requireSuperadmin,
@@ -720,6 +750,9 @@ router.put("/admin/settings", requireSuperadmin, async (req, res): Promise<void>
       prohibitedEmailKeywords:
         submittedSettings.prohibitedEmailKeywords ??
         currentSettings.prohibitedEmailKeywords,
+      apiErrorDiagnosticsEnabled:
+        submittedSettings.apiErrorDiagnosticsEnabled ??
+        currentSettings.apiErrorDiagnosticsEnabled,
     };
     await tx
       .insert(systemConfigurationTable)

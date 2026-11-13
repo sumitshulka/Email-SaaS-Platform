@@ -698,6 +698,7 @@ memory.public.none(`
 `);
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0019_open_campaigns.sql", import.meta.url), "utf8"));
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0020_campaign_placeholder_fallbacks.sql", import.meta.url), "utf8"));
+memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0021_api_error_diagnostics.sql", import.meta.url), "utf8"));
 // Match the existing inbox fields used by the sender schema in worker fixtures.
 memory.public.none(`
   ALTER TABLE tenant_sending_configurations ADD COLUMN IF NOT EXISTS inbox_host varchar(255);
@@ -833,6 +834,7 @@ after(async () => {
 });
 
 beforeEach(async () => {
+  await db.delete(dbModule.apiErrorDiagnosticsTable);
   await db.delete(dbModule.platformNotificationReadsTable);
   await db.delete(dbModule.platformNotificationRecipientsTable);
   await db.delete(dbModule.platformNotificationsTable);
@@ -8429,11 +8431,15 @@ describe("authentication and account recovery", { concurrency: false }, () => {
   it("protects admin routes from anonymous and customer accounts", async () => {
     const anonymous = await api("/admin/settings");
     assert.equal(anonymous.response.status, 401);
+    const anonymousDiagnostics = await api("/admin/error-diagnostics");
+    assert.equal(anonymousDiagnostics.response.status, 401);
 
     await createUser();
     const customer = await login("customer@example.test");
     const customerAccess = await api("/admin/settings", { cookie: customer.cookie });
     assert.equal(customerAccess.response.status, 403);
+    const customerDiagnostics = await api("/admin/error-diagnostics", { cookie: customer.cookie });
+    assert.equal(customerDiagnostics.response.status, 403);
 
     await createUser({
       username: "platform-admin",
@@ -8443,6 +8449,42 @@ describe("authentication and account recovery", { concurrency: false }, () => {
     const admin = await login("admin@example.test");
     const adminAccess = await api("/admin/settings", { cookie: admin.cookie });
     assert.equal(adminAccess.response.status, 200);
+    const adminDiagnostics = await api("/admin/error-diagnostics", { cookie: admin.cookie });
+    assert.equal(adminDiagnostics.response.status, 200);
+    assert.deepEqual(adminDiagnostics.body, { items: [] });
+  });
+
+  it("persists the detailed API error capture setting for superadmins", async () => {
+    await createUser({
+      username: "diagnostics-admin",
+      email: "diagnostics-admin@example.test",
+      role: "SUPERADMIN",
+    });
+    const admin = await login("diagnostics-admin@example.test");
+    const initial = await api("/admin/settings", { cookie: admin.cookie });
+    assert.equal(initial.response.status, 200);
+    assert.equal(initial.body.apiErrorDiagnosticsEnabled, false);
+
+    const {
+      updatedAt: _updatedAt,
+      settingsVersion: expectedSettingsVersion,
+      ...settings
+    } = initial.body;
+    const enabled = await api("/admin/settings", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: {
+        ...settings,
+        apiErrorDiagnosticsEnabled: true,
+        expectedSettingsVersion,
+      },
+    });
+    assert.equal(enabled.response.status, 200, JSON.stringify(enabled.body));
+    assert.equal(enabled.body.apiErrorDiagnosticsEnabled, true);
+
+    const reloaded = await api("/admin/settings", { cookie: admin.cookie });
+    assert.equal(reloaded.response.status, 200);
+    assert.equal(reloaded.body.apiErrorDiagnosticsEnabled, true);
   });
 
   it("exposes only the live password minimum to password forms", async () => {

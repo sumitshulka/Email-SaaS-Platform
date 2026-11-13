@@ -1,9 +1,16 @@
 import express, { type Express, type Request } from "express";
+import { randomUUID } from "node:crypto";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import {
+  describeApiError,
+  sanitizeDiagnosticPath,
+  storeApiErrorDiagnostic,
+} from "./lib/api-error-diagnostics";
+import { shouldCaptureApiErrorDiagnostics } from "./lib/platform-settings";
 import {
   enforcePlatformMaintenance,
   enforceSameOrigin,
@@ -58,17 +65,47 @@ app.use(enforcePlatformMaintenance);
 app.use("/api", router);
 
 app.use(
-  (
+  async (
     error: unknown,
     req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
-  ) => {
+  ): Promise<void> => {
+    const incidentId = randomUUID();
+    const path = sanitizeDiagnosticPath(req.originalUrl.split("?")[0] ?? req.path);
+    const diagnosticsEnabled = shouldCaptureApiErrorDiagnostics();
+    const details = diagnosticsEnabled ? describeApiError(error) : null;
     req.log.error(
-      { errorName: error instanceof Error ? error.name : "UnknownError" },
-      "Unhandled API error",
+      {
+        incidentId,
+        errorName: details?.errorName ?? (error instanceof Error ? error.name : "UnknownError"),
+        ...(details ?? {}),
+        ...(diagnosticsEnabled ? { method: req.method, path, statusCode: 500 } : {}),
+      },
+      diagnosticsEnabled ? "Unhandled API error with diagnostics enabled" : "Unhandled API error",
     );
+    if (details) {
+      try {
+        await storeApiErrorDiagnostic({
+          id: incidentId,
+          method: req.method,
+          path,
+          statusCode: 500,
+          details,
+        });
+      } catch (diagnosticError) {
+        req.log.error(
+          {
+            incidentId,
+            captureErrorName:
+              diagnosticError instanceof Error ? diagnosticError.name : "UnknownError",
+          },
+          "API error diagnostic could not be stored",
+        );
+      }
+    }
     if (res.headersSent) return;
+    res.setHeader("X-Error-Id", incidentId);
     const bodyParserError = error && typeof error === "object" ? error as { type?: unknown } : null;
     if (bodyParserError?.type === "entity.too.large") {
       res.status(413).json({
@@ -82,6 +119,7 @@ app.use(
     res.status(500).json({
       error: "The request could not be completed.",
       code: "INTERNAL_ERROR",
+      incidentId,
     });
   },
 );

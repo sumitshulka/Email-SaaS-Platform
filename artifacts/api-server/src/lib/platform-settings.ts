@@ -35,6 +35,7 @@ export type PlatformSettingsInput = {
   signatureVariantMinimum: number;
   signatureVariantMaximum: number;
   prohibitedEmailKeywords: string[];
+  apiErrorDiagnosticsEnabled?: boolean;
   allowUserWithoutSubscription: boolean;
   gracePeriodDays: number;
   packageVisibility: "public" | "hidden";
@@ -75,6 +76,7 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   signatureVariantMinimum: 3,
   signatureVariantMaximum: 7,
   prohibitedEmailKeywords: [],
+  apiErrorDiagnosticsEnabled: false,
   allowUserWithoutSubscription: false,
   gracePeriodDays: 0,
   packageVisibility: "public",
@@ -82,6 +84,12 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   inactivityWarningDays: 15,
   inactivityRemovalDays: 7,
 };
+
+let apiErrorDiagnosticsEnabled = false;
+
+export function shouldCaptureApiErrorDiagnostics(): boolean {
+  return apiErrorDiagnosticsEnabled;
+}
 
 function withSettingsVersion(settings: unknown) {
   const parsed = GetAdminSettingsResponse.omit({ settingsVersion: true }).parse(settings);
@@ -424,11 +432,13 @@ export async function getPlatformSettings() {
       ? (row.value as Record<string, unknown>)
       : {};
 
-  return withSettingsVersion({
+  const settings = withSettingsVersion({
     ...defaultPlatformSettings,
     ...persisted,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
   });
+  apiErrorDiagnosticsEnabled = settings.apiErrorDiagnosticsEnabled;
+  return settings;
 }
 
 export async function lockPlatformSettings(
@@ -451,9 +461,11 @@ export async function lockPlatformSettings(
       ? (row.value as Record<string, unknown>)
       : {};
 
-  return withSettingsVersion({
+  const settings = withSettingsVersion({
     ...defaultPlatformSettings,
     ...persisted,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
   });
+  apiErrorDiagnosticsEnabled = settings.apiErrorDiagnosticsEnabled;
+  return settings;
 }

@@ -30,6 +30,7 @@ export interface SimilarCompanyCandidate {
 export interface ApiError {
   error: string;
   code?: string;
+  incidentId?: string;
   similarCompanies?: SimilarCompanyCandidate[];
   /** @nullable */
   earliestStartAt?: string | null;
@@ -4320,6 +4321,7 @@ export interface PlatformSettings {
   retryDelaySeconds: number;
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
+  apiErrorDiagnosticsEnabled: boolean;
   queuePollingSeconds: number;
   /**
      * @minimum 2
@@ -4468,6 +4470,7 @@ export interface PlatformSettingsInput {
   /** @minimum 1 */
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
+  apiErrorDiagnosticsEnabled?: boolean;
   /** @minimum 1 */
   queuePollingSeconds: number;
   /**
@@ -4530,6 +4533,62 @@ export interface PlatformSettingsInput {
      * @maxLength 128
      */
   expectedSettingsVersion: string;
+}
+
+export interface AdminApiErrorDiagnostic {
+  id: string;
+  occurredAt: string;
+  /** @maxLength 10 */
+  method: string;
+  /** @maxLength 255 */
+  path: string;
+  statusCode: number;
+  /** @maxLength 160 */
+  errorName: string;
+  /**
+     * @maxLength 160
+     * @nullable
+     */
+  rootErrorName: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  errorCode: string | null;
+  /**
+     * @maxLength 128
+     * @nullable
+     */
+  databaseSchema: string | null;
+  /**
+     * @maxLength 128
+     * @nullable
+     */
+  databaseTable: string | null;
+  /**
+     * @maxLength 128
+     * @nullable
+     */
+  databaseColumn: string | null;
+  /**
+     * @maxLength 128
+     * @nullable
+     */
+  databaseConstraint: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  errorMessage: string | null;
+  /**
+     * @maxLength 6000
+     * @nullable
+     */
+  stackTrace: string | null;
+}
+
+export interface AdminApiErrorDiagnosticsList {
+  items: AdminApiErrorDiagnostic[];
 }
 
 export type BlockedTermPreviewInputSampleFields = {

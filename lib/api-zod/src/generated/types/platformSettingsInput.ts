@@ -83,6 +83,7 @@ export interface PlatformSettingsInput {
   /** @minimum 1 */
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
+  apiErrorDiagnosticsEnabled?: boolean;
   /** @minimum 1 */
   queuePollingSeconds: number;
   /**

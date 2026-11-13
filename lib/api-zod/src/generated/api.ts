@@ -7534,6 +7534,7 @@ export const GetAdminSettingsResponse = zod.object({
   "retryDelaySeconds": zod.number().int(),
   "bounceThreshold": zod.number().int(),
   "deliveryTrackingEnabled": zod.boolean(),
+  "apiErrorDiagnosticsEnabled": zod.boolean(),
   "queuePollingSeconds": zod.number().int(),
   "subjectVariantMinimum": zod.number().int().min(getAdminSettingsResponseSubjectVariantMinimumMin).max(getAdminSettingsResponseSubjectVariantMinimumMax),
   "subjectVariantMaximum": zod.number().int().min(1).max(getAdminSettingsResponseSubjectVariantMaximumMax),
@@ -7647,6 +7648,7 @@ export const UpdateAdminSettingsBody = zod.object({
   "retryDelaySeconds": zod.number().int().min(1),
   "bounceThreshold": zod.number().int().min(1),
   "deliveryTrackingEnabled": zod.boolean(),
+  "apiErrorDiagnosticsEnabled": zod.boolean().optional(),
   "queuePollingSeconds": zod.number().int().min(1),
   "subjectVariantMinimum": zod.number().int().min(updateAdminSettingsBodySubjectVariantMinimumMin).max(updateAdminSettingsBodySubjectVariantMinimumMax),
   "subjectVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsBodySubjectVariantMaximumMax),
@@ -7717,6 +7719,7 @@ export const UpdateAdminSettingsResponse = zod.object({
   "retryDelaySeconds": zod.number().int(),
   "bounceThreshold": zod.number().int(),
   "deliveryTrackingEnabled": zod.boolean(),
+  "apiErrorDiagnosticsEnabled": zod.boolean(),
   "queuePollingSeconds": zod.number().int(),
   "subjectVariantMinimum": zod.number().int().min(updateAdminSettingsResponseSubjectVariantMinimumMin).max(updateAdminSettingsResponseSubjectVariantMinimumMax),
   "subjectVariantMaximum": zod.number().int().min(1).max(updateAdminSettingsResponseSubjectVariantMaximumMax),
@@ -7733,6 +7736,53 @@ export const UpdateAdminSettingsResponse = zod.object({
   "inactivityRemovalDays": zod.number().int().min(1).max(updateAdminSettingsResponseInactivityRemovalDaysMax),
   "updatedAt": zod.coerce.date().nullable(),
   "settingsVersion": zod.string().min(1).max(updateAdminSettingsResponseSettingsVersionMax)
+})
+
+
+/**
+ * @summary List recent API error diagnostics
+ */
+export const listAdminApiErrorDiagnosticsResponseItemsItemMethodMax = 10;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemPathMax = 255;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemErrorNameMax = 160;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemRootErrorNameMax = 160;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemErrorCodeMax = 40;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemDatabaseSchemaMax = 128;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemDatabaseTableMax = 128;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemDatabaseColumnMax = 128;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemDatabaseConstraintMax = 128;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemErrorMessageMax = 2000;
+
+export const listAdminApiErrorDiagnosticsResponseItemsItemStackTraceMax = 6000;
+
+
+
+export const ListAdminApiErrorDiagnosticsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "occurredAt": zod.coerce.date(),
+  "method": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemMethodMax),
+  "path": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemPathMax),
+  "statusCode": zod.number().int(),
+  "errorName": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemErrorNameMax),
+  "rootErrorName": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemRootErrorNameMax).nullable(),
+  "errorCode": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemErrorCodeMax).nullable(),
+  "databaseSchema": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemDatabaseSchemaMax).nullable(),
+  "databaseTable": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemDatabaseTableMax).nullable(),
+  "databaseColumn": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemDatabaseColumnMax).nullable(),
+  "databaseConstraint": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemDatabaseConstraintMax).nullable(),
+  "errorMessage": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemErrorMessageMax).nullable(),
+  "stackTrace": zod.string().max(listAdminApiErrorDiagnosticsResponseItemsItemStackTraceMax).nullable()
+}))
 })
 
 

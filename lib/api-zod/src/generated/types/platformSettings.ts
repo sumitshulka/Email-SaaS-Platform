@@ -31,6 +31,7 @@ export interface PlatformSettings {
   retryDelaySeconds: number;
   bounceThreshold: number;
   deliveryTrackingEnabled: boolean;
+  apiErrorDiagnosticsEnabled: boolean;
   queuePollingSeconds: number;
   /**
      * @minimum 2

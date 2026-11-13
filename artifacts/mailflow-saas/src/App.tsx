@@ -37,6 +37,7 @@ import AdminContactIntentPage from '@/pages/admin-contact-intent';
 import { AdminGlobalCompaniesPage } from '@/pages/admin-global-companies';
 import { AdminCompanyIntelligencePage } from '@/pages/admin-company-intelligence';
 import { AdminMicrosoftOAuthSettings } from '@/components/admin-microsoft-oauth';
+import { AdminApiErrorDiagnosticsPanel } from '@/components/admin-api-error-diagnostics';
 import AdminObjectStoragePage from '@/pages/admin-object-storage';
 import AdminFinancePage from '@/pages/finance';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
@@ -1246,6 +1247,7 @@ const settingGroups: Array<{ title: string; description?: string; fields: Array<
   { title: 'Campaign content tests', description: 'Set the number of subject, greeting, and signature options required to split recipients across a test, and the maximum options allowed. Below the minimum, the first option is used for everyone.', fields: [['subjectVariantMinimum','Minimum subject options','number'],['subjectVariantMaximum','Maximum subject options','number'],['greetingVariantMinimum','Minimum greeting options','number'],['greetingVariantMaximum','Maximum greeting options','number'],['signatureVariantMinimum','Minimum signature options','number'],['signatureVariantMaximum','Maximum signature options','number']] },
   { title: 'Campaign content policy', description: 'Add blocked words or phrases one at a time. They are checked in subject lines, greetings, body text, HTML content, and signatures. Separators such as spaces, dots, brackets, and zero-width characters between letters do not bypass the check.', fields: [['prohibitedEmailKeywords','Blocked words and phrases','list']] },
   { title: 'Subscription rules', fields: [['allowUserWithoutSubscription','Allow accounts without subscription','boolean'],['gracePeriodDays','Grace period (days)','number'],['packageVisibility','Package visibility','select',['public','hidden']]] },
+  { title: 'Error diagnostics', description: 'Capture sanitized details for unexpected API failures. Full reports are available only to superadmins; other users receive a reference ID. Records older than 14 days are trimmed on capture or review and are limited to 500.', fields: [['apiErrorDiagnosticsEnabled','Capture detailed server errors','boolean']] },
 ];
 const blockedTermPreviewFields = [
   { key: 'subject', label: 'Campaign subject', rows: 2 },
@@ -1616,6 +1618,8 @@ function AdminSettingsPage() {
         <FormError message={settingsConflict || (save.isError ? getError(save.error) : undefined)}/>
         {save.isSuccess && <div data-testid="status-platform-settings-saved" className="text-right text-[11px] text-[#245b9b]">Platform settings saved.</div>}
       </form>
+
+      <AdminApiErrorDiagnosticsPanel enabled={settings.apiErrorDiagnosticsEnabled === true}/>
 
       <Panel className="mt-8 p-5 md:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">

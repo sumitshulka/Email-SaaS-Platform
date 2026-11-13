@@ -28,6 +28,7 @@ import type {
   AdminAddOnGiftCorrectionInput,
   AdminAddOnGiftCorrectionResult,
   AdminAddOnGiftEntitlement,
+  AdminApiErrorDiagnosticsList,
   AdminCompanyResearchRequestStart,
   AdminCompanyResearchRequests,
   AdminDashboard,
@@ -14336,6 +14337,83 @@ export const useUpdateAdminSettings = <TError = ErrorType<ApiError>,
       > => {
       return useMutation(getUpdateAdminSettingsMutationOptions(options));
     }
+
+export const getListAdminApiErrorDiagnosticsUrl = () => {
+
+
+
+
+  return `/api/admin/error-diagnostics`
+}
+
+/**
+ * @summary List recent API error diagnostics
+ */
+export const listAdminApiErrorDiagnostics = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminApiErrorDiagnosticsList> => {
+
+  return customFetch<AdminApiErrorDiagnosticsList>(getListAdminApiErrorDiagnosticsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminApiErrorDiagnosticsQueryKey = () => {
+    return [
+    `/api/admin/error-diagnostics`
+    ] as const;
+    }
+
+
+export const getListAdminApiErrorDiagnosticsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminApiErrorDiagnosticsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>> = ({ signal }) => listAdminApiErrorDiagnostics({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminApiErrorDiagnosticsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>>
+export type ListAdminApiErrorDiagnosticsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List recent API error diagnostics
+ */
+
+export function useListAdminApiErrorDiagnostics<TData = Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminApiErrorDiagnostics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminApiErrorDiagnosticsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getPreviewBlockedTermsUrl = () => {
 

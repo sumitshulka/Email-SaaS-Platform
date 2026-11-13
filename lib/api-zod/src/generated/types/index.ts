@@ -15,6 +15,8 @@ export * from './adminAddOnGiftCorrectionResult';
 export * from './adminAddOnGiftEntitlement';
 export * from './adminAddOnGiftResult';
 export * from './adminAddOnGiftResultKind';
+export * from './adminApiErrorDiagnostic';
+export * from './adminApiErrorDiagnosticsList';
 export * from './adminCompanyResearchRequest';
 export * from './adminCompanyResearchRequests';
 export * from './adminCompanyResearchRequestStart';
