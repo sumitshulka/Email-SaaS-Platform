@@ -63,7 +63,7 @@ export function OpenCampaignAudience({
   const enabled = openCampaignsEnabled(allowance);
   const overLimit = Boolean(allowance && recipients.length > allowance.recipientLimit);
   const noneRemaining = Boolean(allowance && enabled && allowance.remaining === 0);
-  const uploadBlocked = !enabled || parsing;
+  const uploadBlocked = !enabled || allowanceLoading || allowanceError || parsing;
   const placeholders = openPlaceholderAvailability(recipients);
 
   const handleFile = async (file: File) => {
@@ -72,7 +72,7 @@ export function OpenCampaignAudience({
     try {
       const parsed = await parseOpenRecipientsFile(file);
       if (!parsed.fatal && allowance && parsed.recipients.length > allowance.recipientLimit) {
-        parsed.fatal = `This file has ${parsed.recipients.length.toLocaleString()} unique valid addresses, but your plan allows ${allowance.recipientLimit.toLocaleString()} per open campaign. Remove ${(parsed.recipients.length - allowance.recipientLimit).toLocaleString()} rows and upload again.`;
+        parsed.fatal = `This file has ${parsed.recipients.length.toLocaleString()} unique valid email addresses. Your package allows a maximum of ${allowance.recipientLimit.toLocaleString()}; this file is ${(parsed.recipients.length - allowance.recipientLimit).toLocaleString()} over the limit. Remove at least that many unique addresses and upload again. The file has not been partially imported.`;
       }
       setResult(parsed);
       if (!parsed.fatal) onChange(parsed.recipients);
@@ -88,6 +88,15 @@ export function OpenCampaignAudience({
     {noneRemaining && <div role="status" data-testid="status-open-campaign-none-remaining" className="flex items-start gap-2 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>You’ve used every open campaign in this term. You can save this draft, but it can only be queued after your allowance resets or your plan changes.</span></div>}
     {savedLoading && <p role="status" className="flex items-center gap-2 rounded-md bg-[#f7f9fb] px-3 py-2 text-[11px] text-[#6f7b88]"><LoaderCircle className="h-3.5 w-3.5 animate-spin"/>Loading the saved recipients for this draft…</p>}
     {savedError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>The saved recipients for this draft couldn’t be loaded. Retry, or upload a replacement file.</span><button type="button" data-testid="button-retry-open-campaign-recipients" onClick={retrySaved} className="rounded border border-[#e7c7a8] bg-white px-2 py-1 text-[10px] font-semibold">Retry</button></div>}
+
+    {enabled && allowance && !allowanceLoading && !allowanceError && <div data-testid="notice-open-campaign-upload-limit" className="rounded-md border border-[#d7e4f3] bg-[#f3f8fd] px-3 py-3 text-[11px] leading-5 text-[#3f5872]">
+      <p className="font-semibold text-[#1f4f84]">Before uploading: your package allows up to {allowance.recipientLimit.toLocaleString()} unique valid email addresses per open campaign.</p>
+      <p>Smaller files are allowed—you do not need to fill the limit. Duplicates count once; invalid email rows are skipped and listed for review. Files above the limit are rejected, not trimmed automatically.</p>
+      <p data-testid="text-open-campaign-upload-usage" className={cx('mt-1 font-semibold', overLimit && 'text-[#a95218]')}>
+        Current audience: {recipients.length.toLocaleString()} / {allowance.recipientLimit.toLocaleString()} recipients
+        {recipients.length > 0 && !overLimit ? ` · Within your package limit${recipients.length === allowance.recipientLimit ? ' (maximum reached)' : ` · ${(allowance.recipientLimit - recipients.length).toLocaleString()} below the maximum`}` : ''}.
+      </p>
+    </div>}
 
     <label
       data-testid="dropzone-open-campaign-csv"

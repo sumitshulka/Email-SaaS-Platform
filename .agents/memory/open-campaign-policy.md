@@ -15,6 +15,10 @@ active-campaign limit. Completing a campaign therefore does not restore allowanc
 Do not assume the user's example Free=1 and Basic=2 authorizes changing existing
 package definitions automatically.
 
+The per-campaign recipient count is a **maximum**, not an exact required count:
+the user clarified that fewer than or equal to the package allowance is allowed.
+Make that maximum visible before upload so users can prepare a suitable file.
+
 Name personalization must be unavailable when the relevant uploaded name data is
 absent. Do not silently invent recipient names or create saved contacts to support
 personalization, reporting, or unsubscribe behavior.

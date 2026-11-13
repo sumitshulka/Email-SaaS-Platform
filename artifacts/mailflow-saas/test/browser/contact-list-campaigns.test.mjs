@@ -1109,6 +1109,28 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns/new?audience=open`);
       await page.getByTestId('input-campaign-name').fill('Uploaded audience campaign');
       await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('notice-open-campaign-upload-limit').filter({ hasText: 'up to 2 unique valid email addresses' }).waitFor();
+      assert.match(await page.getByTestId('notice-open-campaign-upload-limit').innerText(), /Smaller files are allowed/);
+      const uploadEmailRows = async (addresses, name) => {
+        let bytes = Buffer.from(['email', ...addresses].join('\n'));
+        if (format === 'xlsx') {
+          const ExcelJS = createRequire(new URL('../../../api-server/package.json', import.meta.url))('exceljs');
+          const workbook = new ExcelJS.Workbook();
+          workbook.addWorksheet('Recipients').addRows([['email'], ...addresses.map(email => [email])]);
+          bytes = Buffer.from(await workbook.xlsx.writeBuffer());
+        }
+        await page.getByTestId('input-open-campaign-csv').setInputFiles({
+          name: `${name}.${format}`, mimeType: format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: bytes,
+        });
+      };
+      await uploadEmailRows(['smaller@example.test'], 'smaller');
+      await page.getByTestId('text-open-campaign-upload-usage').filter({ hasText: '1 / 2 recipients' }).waitFor();
+      assert.match(await page.getByTestId('text-open-campaign-upload-usage').innerText(), /Within your package limit.*1 below/);
+      await uploadEmailRows(['one@example.test', 'two@example.test', 'three@example.test'], 'oversized');
+      await page.getByTestId('status-open-campaign-csv-error').filter({ hasText: '1 over the limit' }).waitFor();
+      assert.match(await page.getByTestId('status-open-campaign-csv-error').innerText(), /previous 1 recipients are unchanged/);
+      assert.match(await page.getByTestId('text-open-campaign-upload-usage').innerText(), /1 \/ 2 recipients/);
       let buffer = Buffer.from('email\nONE@example.test\none@example.test\ntwo@example.test\ninvalid\n');
       if (format === 'xlsx') {
         const ExcelJS = createRequire(new URL('../../../api-server/package.json', import.meta.url))('exceljs');
@@ -1129,6 +1151,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
         buffer,
       });
       await page.getByTestId('text-open-campaign-recipient-count').filter({ hasText: '2 unique recipients' }).waitFor();
+      assert.match(await page.getByTestId('text-open-campaign-upload-usage').innerText(), /2 \/ 2 recipients.*maximum reached/);
       assert.match(await page.getByTestId('status-open-campaign-csv-result').innerText(), /1 duplicate.*1 skipped/);
       assert.match(await page.getByTestId('text-open-campaign-placeholder-availability').innerText(), /email/);
       assert.equal(await page.getByRole('region', { name: 'Campaign list processing order' }).count(), 0);

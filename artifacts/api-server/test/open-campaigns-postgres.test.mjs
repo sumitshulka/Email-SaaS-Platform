@@ -74,6 +74,13 @@ test("open drafts queue once per term without contacts and preserve tenant-speci
         assert.equal(response.status, 400);
         response = await invoke("/campaigns", "post", userId, { ...data, openRecipients: [...data.openRecipients, { email: "three@example.test" }] });
         assert.equal(response.status, 409, "oversized audiences are rejected");
+        const smaller = await invoke("/campaigns", "post", userId, { ...data, openRecipients: [data.openRecipients[0]] });
+        assert.equal(smaller.status, 201, "fewer recipients than the package maximum must be allowed");
+        assert.equal(smaller.result.recipients, 1);
+        response = await invoke("/campaigns/:campaignId", "patch", userId, {
+          openRecipients: [...data.openRecipients, { email: "three@example.test" }],
+        }, { campaignId: smaller.result.id });
+        assert.equal(response.status, 400, "editing cannot bypass the package maximum");
         const draftOne = await invoke("/campaigns", "post", userId, data);
         assert.equal(draftOne.status, 201, JSON.stringify(draftOne.result));
         assert.equal(draftOne.result.audienceType, "open");

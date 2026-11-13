@@ -50,8 +50,14 @@ Legacy `.xls` and password-protected workbooks are not supported; save these as
 an unencrypted `.xlsx` or CSV first.
 Addresses are trimmed, lowercased, and deduplicated. The upload summary identifies
 duplicates and invalid rows; invalid rows are skipped explicitly, not sent.
-An upload above the package's unique-recipient limit is rejected without replacing
-the previous audience. The API independently validates the records and limits.
+The upload area displays the package maximum before file selection and the current
+audience count against that maximum. Smaller files are allowed: the number of
+unique valid addresses must be **less than or equal to** the package limit, not
+an exact match. Duplicates count once and invalid rows are listed as skipped.
+An oversized upload is rejected in full, with its unique count, the maximum, and
+the excess shown; it is never trimmed automatically and does not replace the
+previous audience. The API independently validates the records and limits when
+creating, updating, and queueing a campaign.
 
 Uploaded recipients have separate campaign-owned storage. They do not create
 Contacts, count against the saved-contact limit, or appear as contact links.
