@@ -44,7 +44,7 @@ export function OpenCampaignEntitlement({ allowance, recipientLimit }: { allowan
 }
 
 export function OpenCampaignAudience({
-  recipients, onChange, allowance, allowanceLoading, allowanceError, retryAllowance, savedLoading, savedError, retrySaved, isExistingDraft,
+  recipients, onChange, allowance, allowanceLoading, allowanceError, retryAllowance, savedLoading, savedError, retrySaved, isExistingDraft, followUp = false,
 }: {
   recipients: OpenCampaignRecipientInput[];
   onChange: (recipients: OpenCampaignRecipientInput[]) => void;
@@ -56,6 +56,7 @@ export function OpenCampaignAudience({
   savedError: boolean;
   retrySaved: () => void;
   isExistingDraft: boolean;
+  followUp?: boolean;
 }) {
   const [parsing, setParsing] = useState(false);
   const [result, setResult] = useState<OpenRecipientParseResult | null>(null);
@@ -63,7 +64,7 @@ export function OpenCampaignAudience({
   const enabled = openCampaignsEnabled(allowance);
   const overLimit = Boolean(allowance && recipients.length > allowance.recipientLimit);
   const noneRemaining = Boolean(allowance && enabled && allowance.remaining === 0);
-  const uploadBlocked = !enabled || allowanceLoading || allowanceError || parsing;
+  const uploadBlocked = followUp || !enabled || allowanceLoading || allowanceError || parsing;
   const placeholders = openPlaceholderAvailability(recipients);
 
   const handleFile = async (file: File) => {
@@ -85,6 +86,7 @@ export function OpenCampaignAudience({
 
   return <section data-testid="panel-open-campaign-audience" aria-label="Uploaded recipients" className="space-y-3 sm:col-span-2">
     <OpenCampaignAllowanceSummary allowance={allowance} loading={allowanceLoading} error={allowanceError} retry={retryAllowance}/>
+    {followUp && <p role="status" data-testid="notice-open-follow-up-audience" className="rounded-md border border-[#d7e4f3] bg-[#f3f8fd] px-3 py-3 text-[11px] leading-5 text-[#3f5872]">Follow-up recipients come from the original campaign. You cannot upload a new audience for this follow-up. Unsubscribed and bounced addresses will still be excluded before sending.</p>}
     {noneRemaining && <div role="status" data-testid="status-open-campaign-none-remaining" className="flex items-start gap-2 rounded-md border border-[#efd9bd] bg-[#fff8ef] px-3 py-2 text-[11px] leading-5 text-[#895b2f]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>You’ve used every open campaign in this term. You can save this draft, but it can only be queued after your allowance resets or your plan changes.</span></div>}
     {savedLoading && <p role="status" className="flex items-center gap-2 rounded-md bg-[#f7f9fb] px-3 py-2 text-[11px] text-[#6f7b88]"><LoaderCircle className="h-3.5 w-3.5 animate-spin"/>Loading the saved recipients for this draft…</p>}
     {savedError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2 text-[11px] text-[#99501e]"><span>The saved recipients for this draft couldn’t be loaded. Retry, or upload a replacement file.</span><button type="button" data-testid="button-retry-open-campaign-recipients" onClick={retrySaved} className="rounded border border-[#e7c7a8] bg-white px-2 py-1 text-[10px] font-semibold">Retry</button></div>}
@@ -128,7 +130,7 @@ export function OpenCampaignAudience({
     {recipients.length > 0 ? <div className="overflow-hidden rounded-md border border-[#e3e8ed]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8edf1] bg-[#fbfcfd] px-3 py-2">
         <span data-testid="text-open-campaign-recipient-count" className="text-[11px] font-semibold text-[#344154]">{recipients.length.toLocaleString()} unique recipient{recipients.length === 1 ? '' : 's'}{isExistingDraft && !result ? ' saved on this draft' : ''}</span>
-        <button type="button" data-testid="button-clear-open-campaign-recipients" onClick={() => { onChange([]); setResult(null); }} className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-semibold text-[#687484] hover:bg-[#eef1f4]"><X className="h-3 w-3"/>Remove all</button>
+        {!followUp && <button type="button" data-testid="button-clear-open-campaign-recipients" onClick={() => { onChange([]); setResult(null); }} className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-semibold text-[#687484] hover:bg-[#eef1f4]"><X className="h-3 w-3"/>Remove all</button>}
       </div>
       <table className="w-full text-left text-[11px]">
         <thead className="bg-[#f6f8fa] text-[9px] uppercase tracking-wide text-[#718091]"><tr><th className="px-3 py-2">Email</th><th className="px-3 py-2">First name</th><th className="px-3 py-2">Last name</th></tr></thead>

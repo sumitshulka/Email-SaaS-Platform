@@ -1,11 +1,26 @@
 import { and, count, desc, eq, gt, lte } from "drizzle-orm";
 import {
-  db, emailCampaignsTable, openCampaignAudienceTable,
+  db, emailCampaignsTable, emailCampaignRecipientsTable, openCampaignAudienceTable,
   subscriptionPackagesTable, userSubscriptionsTable,
 } from "@workspace/db";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type OpenRecipient = { email: string; firstName?: string; lastName?: string };
+
+export async function openFollowUpAudienceError(
+  userId: string, parentCampaignId: string | null, rows: OpenRecipient[], tx: Tx | typeof db = db,
+): Promise<string | null> {
+  if (!parentCampaignId) return null;
+  const original = await tx.select({ email: emailCampaignRecipientsTable.email })
+    .from(emailCampaignRecipientsTable).where(and(
+      eq(emailCampaignRecipientsTable.userId, userId),
+      eq(emailCampaignRecipientsTable.campaignId, parentCampaignId),
+    ));
+  const emails = new Set(original.map(row => row.email.trim().toLowerCase()));
+  return rows.some(row => !emails.has(row.email.trim().toLowerCase()))
+    ? "Follow-ups can only target recipients from the original campaign. Remove any new email addresses."
+    : null;
+}
 
 export function normalizeOpenRecipients(rows: OpenRecipient[]): OpenRecipient[] {
   const unique = new Map<string, OpenRecipient>();

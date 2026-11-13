@@ -19,6 +19,13 @@ The per-campaign recipient count is a **maximum**, not an exact required count:
 the user clarified that fewer than or equal to the package allowance is allowed.
 Make that maximum visible before upload so users can prepare a suitable file.
 
+Exhausted term allowance must not prevent creating or editing open-campaign
+drafts; it only prevents queueing/scheduling until allowance becomes available.
+Follow-ups must only target original campaign recipients, never new addresses
+introduced by a replacement upload.
+
+**Why:** The user explicitly confirmed both rules after reviewing the audit.
+
 Name personalization must be unavailable when the relevant uploaded name data is
 absent. Do not silently invent recipient names or create saved contacts to support
 personalization, reporting, or unsubscribe behavior.

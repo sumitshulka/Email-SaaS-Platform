@@ -2,7 +2,7 @@ import { BulkUpdateContactsBody, BulkUpdateContactsResponse } from "@workspace/a
 import { bulkUpdateTenantContacts } from "../lib/contact-bulk";
 import { contactTagCondition, readContactTags } from "../lib/contact-tags";
 import { campaignEmailSuppressionsTable, openCampaignAudienceTable } from "@workspace/db";
-import { normalizeOpenRecipients, openCampaignAllowance, openCampaignPlaceholderError, replaceOpenAudience } from "../lib/open-campaigns";
+import { normalizeOpenRecipients, openCampaignAllowance, openCampaignPlaceholderError, openFollowUpAudienceError, replaceOpenAudience } from "../lib/open-campaigns";
 import {
   and,
   asc,
@@ -5814,8 +5814,8 @@ router.post("/campaigns", requireUserRole, async (req, res): Promise<void> => {
     try { openRows = normalizeOpenRecipients(parsed.data.openRecipients ?? []); }
     catch (error) { res.status(400).json({ error: (error as Error).message }); return; }
     const allowance = await openCampaignAllowance(userId);
-    if (!allowance.remaining || openRows.length > allowance.recipientLimit) {
-      res.status(409).json({ error: !allowance.remaining ? "Your package has no open campaign allowance remaining this term." : `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.`, code: "OPEN_CAMPAIGN_ALLOWANCE" }); return;
+    if (allowance.allowance === 0 || openRows.length > allowance.recipientLimit) {
+      res.status(409).json({ error: allowance.allowance === 0 ? "Your package does not include open campaigns." : `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.`, code: "OPEN_CAMPAIGN_ALLOWANCE" }); return;
     }
     const placeholderError = openCampaignPlaceholderError(openRows, JSON.stringify([variants, parsed.data.textBody, parsed.data.htmlBody]));
     if (placeholderError) { res.status(400).json({ error: placeholderError }); return; }
@@ -6115,6 +6115,8 @@ router.patch(
               eq(openCampaignAudienceTable.userId, userId), eq(openCampaignAudienceTable.campaignId, locked.id),
             ));
         } catch (error) { return { kind: "open_invalid" as const, message: (error as Error).message }; }
+        const followUpError = await openFollowUpAudienceError(userId, locked.parentCampaignId, openRows, tx);
+        if (followUpError) return { kind: "open_invalid" as const, message: followUpError };
         const allowance = await openCampaignAllowance(userId, tx);
         if (openRows.length > allowance.recipientLimit || allowance.allowance === 0) {
           return { kind: "open_invalid" as const, message: `Your package allows at most ${allowance.recipientLimit} recipients per open campaign.` };
@@ -6636,6 +6638,8 @@ router.post(
         const uploaded = await tx.select().from(openCampaignAudienceTable).where(and(
           eq(openCampaignAudienceTable.userId, userId), eq(openCampaignAudienceTable.campaignId, campaign.id),
         ));
+        const followUpError = await openFollowUpAudienceError(userId, campaign.parentCampaignId, uploaded, tx);
+        if (followUpError) return { error: "followup_audience" as const, message: followUpError };
         if (uploaded.length > (openAllowance?.recipientLimit ?? 0)) return { error: "open_allowance" as const, message: `Your package allows at most ${openAllowance?.recipientLimit ?? 0} recipients per open campaign.` };
         const error = openCampaignPlaceholderError(uploaded, JSON.stringify([variants, campaign.textBody, campaign.htmlBody]));
         if (error) return { error: "open_allowance" as const, message: error };
@@ -6700,6 +6704,8 @@ router.post(
       }
       if (outcome.error === "not_found") {
         res.status(404).json({ error: "Campaign not found.", code: "CAMPAIGN_NOT_FOUND" });
+      } else if (outcome.error === "followup_audience") {
+        res.status(409).json({ error: outcome.message, code: "FOLLOW_UP_AUDIENCE_INVALID" });
       } else if (outcome.error === "followup_parent_pending") {
         res.status(409).json({ error: "A follow-up can be queued only after the primary campaign has completed.", code: "FOLLOW_UP_PRIMARY_NOT_COMPLETED" });
       } else if (outcome.error === "followup_too_early") {

@@ -1116,18 +1116,49 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
     } finally { await context.close(); }
   });
 
-  for (const { format, withNames } of [
-    { format: 'csv', withNames: false },
+  it('keeps open follow-up recipients fixed to the original campaign in the editor', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const original = { ...campaigns[0] };
+    try {
+      Object.assign(campaigns[0], {
+        audienceType: 'open', parentCampaignId: campaigns[1].id, campaignType: 'follow_up',
+        listId: null, listIds: [], recipients: 1,
+      });
+      await installApiFixtures(context);
+      await context.route('**/api/open-campaigns/allowance', route => route.fulfill({ status: 200, json: {
+        allowance: 1, used: 1, remaining: 0, recipientLimit: 2, termEndsAt: '2026-12-31T00:00:00.000Z',
+      } }));
+      await context.route('**/api/campaigns/browser-campaign-one/open-audience', route => route.fulfill({ status: 200, json: [
+        { email: 'original@example.test', firstName: 'Original', lastName: '' },
+      ] }));
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/campaigns`);
+      await page.getByTestId('button-edit-campaign-browser-campaign-one').click();
+      await page.getByTestId('button-campaign-step-next').click();
+      await page.getByTestId('notice-open-follow-up-audience').waitFor();
+      assert.equal(await page.getByTestId('input-open-campaign-csv').isDisabled(), true);
+      assert.equal(await page.getByTestId('button-clear-open-campaign-recipients').count(), 0);
+      assert.match(await page.getByTestId('panel-open-campaign-audience').innerText(), /original@example.test/);
+      await page.screenshot({ path: '/tmp/mailflow-open-follow-up-fixed-audience.png' });
+    } finally {
+      for (const key of Object.keys(campaigns[0])) delete campaigns[0][key];
+      Object.assign(campaigns[0], original);
+      await context.close();
+    }
+  });
+
+  for (const { format, withNames, exhausted = false } of [
+    { format: 'csv', withNames: false, exhausted: true },
     { format: 'xlsx', withNames: true },
     { format: 'xlsx', withNames: false },
   ]) {
-  it(`creates an open campaign from ${format.toUpperCase()} ${withNames ? 'with names' : 'without names'} and no saved contacts or lists`, async () => {
+  it(`creates an open campaign from ${format.toUpperCase()} ${withNames ? 'with names' : 'without names'} and no saved contacts or lists${exhausted ? ' after allowance exhaustion' : ''}`, async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
       await installApiFixtures(context);
       let submitted;
       await context.route('**/api/open-campaigns/allowance', route => route.fulfill({ status: 200, json: {
-        allowance: 1, used: 0, remaining: 1, recipientLimit: 2, termEndsAt: '2026-12-31T00:00:00.000Z',
+        allowance: 1, used: exhausted ? 1 : 0, remaining: exhausted ? 0 : 1, recipientLimit: 2, termEndsAt: '2026-12-31T00:00:00.000Z',
       } }));
       await context.route('**/api/contact-lists', route => route.fulfill({ status: 200, json: [] }));
       await context.route('**/api/campaigns', async route => {
@@ -1144,6 +1175,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
       await page.goto(`${baseUrl}/campaigns/new?audience=open`);
       await page.getByTestId('input-campaign-name').fill('Uploaded audience campaign');
       await page.getByTestId('button-campaign-step-next').click();
+      if (exhausted) await page.getByTestId('status-open-campaign-none-remaining').filter({ hasText: 'You can save this draft' }).waitFor();
       await page.getByTestId('notice-open-campaign-upload-limit').filter({ hasText: 'up to 2 unique valid email addresses' }).waitFor();
       assert.match(await page.getByTestId('notice-open-campaign-upload-limit').innerText(), /Smaller files are allowed/);
       const uploadEmailRows = async (addresses, name) => {

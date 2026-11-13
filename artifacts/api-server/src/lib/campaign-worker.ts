@@ -652,6 +652,20 @@ async function claimDelivery(
       .for("update");
     if (!sender?.verifiedAt) return null;
 
+    if (campaign.audienceType === "open" && campaign.parentCampaignId) {
+      const [originalRecipient] = await tx.select({ id: emailCampaignRecipientsTable.id })
+        .from(emailCampaignRecipientsTable).where(and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          eq(emailCampaignRecipientsTable.campaignId, campaign.parentCampaignId),
+          eq(sql`lower(trim(${emailCampaignRecipientsTable.email}))`, recipient.email.trim().toLowerCase()),
+        )).limit(1);
+      if (!originalRecipient) {
+        await tx.update(emailCampaignRecipientsTable).set({
+          status: "suppressed", lastError: "Follow-up recipient was not in the original campaign.", updatedAt: now,
+        }).where(and(eq(emailCampaignRecipientsTable.id, recipient.id), eq(emailCampaignRecipientsTable.userId, userId)));
+        return { completedCampaignId: recipient.campaignId };
+      }
+    }
     const [emailOptOut] = campaign.audienceType === "open" ? await tx.select({ id: campaignEmailSuppressionsTable.id })
       .from(campaignEmailSuppressionsTable).where(and(
         eq(campaignEmailSuppressionsTable.userId, userId),

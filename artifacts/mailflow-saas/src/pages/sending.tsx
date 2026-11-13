@@ -2817,6 +2817,7 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
             savedError={Boolean(editingOpenId) && savedOpenAudienceQuery.isError}
             retrySaved={() => void savedOpenAudienceQuery.refetch()}
             isExistingDraft={Boolean(editingOpenId)}
+            followUp={Boolean(editing?.parentCampaignId)}
           />}
           {campaignStep === 1 && !isOpen && <fieldset className="min-w-0 sm:col-span-2">
             <legend className={labelClass}>Target lists</legend>

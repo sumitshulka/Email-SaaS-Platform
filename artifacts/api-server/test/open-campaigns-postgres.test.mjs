@@ -97,6 +97,19 @@ test("open drafts queue once per term without contacts and preserve tenant-speci
         const quota = await openCampaignAllowance(userId);
         assert.equal(quota.used, 1);
         assert.equal(quota.remaining, 0);
+        const exhaustedDraft = await invoke("/campaigns", "post", userId, { ...data, name: "Saved after exhaustion" });
+        assert.equal(exhaustedDraft.status, 201, JSON.stringify(exhaustedDraft.result));
+        response = await invoke("/campaigns/:campaignId", "patch", userId, { name: "Edited after exhaustion" }, { campaignId: exhaustedDraft.result.id });
+        assert.equal(response.status, 200, "exhaustion must not prevent editing a draft");
+        response = await invoke("/campaigns/:campaignId/send", "post", userId, {
+          scheduledAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+        }, { campaignId: exhaustedDraft.result.id });
+        assert.equal(response.status, 409, "a future schedule must not bypass exhausted allowance");
+        assert.equal(response.result.code, "OPEN_CAMPAIGN_ALLOWANCE");
+        const [unscheduled] = await tx.select().from(schema.emailCampaignsTable).where(eq(schema.emailCampaignsTable.id, exhaustedDraft.result.id));
+        assert.equal(unscheduled.status, "draft");
+        assert.equal(unscheduled.openCampaignCountedAt, null);
+        assert.equal((await openCampaignAllowance(userId)).used, 1);
         const queued = await tx.select().from(schema.emailCampaignRecipientsTable).where(eq(schema.emailCampaignRecipientsTable.campaignId, draftOne.result.id));
         assert.equal(queued.length, 2);
         assert.ok(queued.every(row => row.contactId === null && row.status === "queued"));
@@ -129,6 +142,63 @@ test("open drafts queue once per term without contacts and preserve tenant-speci
         const [accepted] = await tx.select().from(schema.emailCampaignRecipientsTable).where(eq(schema.emailCampaignRecipientsTable.id, queued[1].id));
         assert.equal(accepted.status, "delivered");
         assert.equal((await openCampaignAllowance(userId)).used, 1, "completion does not restore allowance");
+        const followUp = await invoke("/campaigns/:campaignId/follow-ups", "post", userId, {}, { campaignId: draftOne.result.id });
+        assert.equal(followUp.status, 201, JSON.stringify(followUp.result));
+        const originalFollowUp = await invoke("/campaigns/:campaignId/open-audience", "get", userId, {}, { campaignId: followUp.result.id });
+        assert.equal(originalFollowUp.result.length, 2, "follow-up starts with the parent snapshot");
+        response = await invoke("/campaigns/:campaignId", "patch", userId, {
+          openRecipients: [{ email: "new-person@example.test" }],
+        }, { campaignId: followUp.result.id });
+        assert.equal(response.status, 400, "API replacements cannot introduce new recipients");
+        assert.match(response.result.error, /only target recipients from the original campaign/);
+        response = await invoke("/campaigns/:campaignId", "patch", userId, {
+          openRecipients: [{ email: queued[1].email.toUpperCase() }],
+        }, { campaignId: followUp.result.id });
+        assert.equal(response.status, 200, "original-recipient subsets are valid, including normalized email case");
+        const [foreignParent] = await tx.insert(schema.emailCampaignsTable).values({
+          userId: users[1].id, name: "Other tenant campaign", subject: "Other tenant", textBody: "Other tenant",
+        }).returning();
+        await tx.insert(schema.emailCampaignRecipientsTable).values({
+          campaignId: foreignParent.id, userId: users[1].id, email: "new-person@example.test",
+        });
+        await tx.update(schema.subscriptionPackagesTable).set({ openCampaignAllowance: 2 }).where(eq(schema.subscriptionPackagesTable.id, pkg.id));
+        const [legacyAudienceRow] = await tx.insert(schema.openCampaignAudienceTable).values({
+          userId, campaignId: followUp.result.id, email: "new-person@example.test",
+        }).returning();
+        response = await invoke("/campaigns/:campaignId/send", "post", userId, {
+          scheduledAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+        }, { campaignId: followUp.result.id });
+        assert.equal(response.status, 409, "queue must revalidate legacy audience data, not trust prior saves");
+        assert.equal(response.result.code, "FOLLOW_UP_AUDIENCE_INVALID");
+        assert.equal((await openCampaignAllowance(userId)).used, 1, "invalid audience cannot consume allowance");
+        await tx.delete(schema.openCampaignAudienceTable).where(eq(schema.openCampaignAudienceTable.id, legacyAudienceRow.id));
+        response = await invoke("/campaigns/:campaignId/send", "post", userId, {
+          scheduledAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+        }, { campaignId: followUp.result.id });
+        assert.equal(response.status, 202, "opening up allowance permits scheduling an original-audience follow-up");
+        const childRecipients = await tx.select().from(schema.emailCampaignRecipientsTable).where(eq(schema.emailCampaignRecipientsTable.campaignId, followUp.result.id));
+        assert.deepEqual(childRecipients.map(row => row.email), [queued[1].email]);
+        const [legacyRecipient] = await tx.insert(schema.emailCampaignRecipientsTable).values({
+          userId, campaignId: followUp.result.id, email: "new-person@example.test",
+          status: "queued", nextAttemptAt: new Date(Date.now() - 1000),
+        }).returning();
+        await tx.update(schema.emailCampaignsTable).set({ scheduledAt: new Date(Date.now() - 1000) }).where(eq(schema.emailCampaignsTable.id, followUp.result.id));
+        workerModule.setCandidateRecipientIdsForTests([legacyRecipient.id]);
+        await workerModule.processPendingCampaignDeliveries(1);
+        const [suppressedLegacyRecipient] = await tx.select().from(schema.emailCampaignRecipientsTable).where(eq(schema.emailCampaignRecipientsTable.id, legacyRecipient.id));
+        assert.equal(suppressedLegacyRecipient.status, "suppressed", "worker must not send non-original legacy recipients");
+        assert.equal(delivered.length, 1, "legacy audience protection must prevent any transport call");
+        const earlierAttempt = new Date(Date.now() - 2 * 86400000);
+        await tx.update(schema.emailSendAttemptsTable).set({
+          attemptedAt: earlierAttempt, completedAt: earlierAttempt,
+        }).where(eq(schema.emailSendAttemptsTable.userId, userId));
+        await tx.update(schema.emailCampaignRecipientsTable).set({ nextAttemptAt: new Date(Date.now() - 1000) })
+          .where(eq(schema.emailCampaignRecipientsTable.id, childRecipients[0].id));
+        workerModule.setCandidateRecipientIdsForTests([childRecipients[0].id]);
+        await workerModule.processPendingCampaignDeliveries(1);
+        assert.equal(delivered.length, 2, "an eligible original recipient must still receive the follow-up");
+        assert.equal(delivered[1].to, queued[1].email);
+        await tx.update(schema.subscriptionPackagesTable).set({ openCampaignAllowance: 1 }).where(eq(schema.subscriptionPackagesTable.id, pkg.id));
         await tx.update(schema.userSubscriptionsTable).set({ endsAt: new Date() }).where(eq(schema.userSubscriptionsTable.id, term.id));
         const [nextTerm] = await tx.insert(schema.userSubscriptionsTable).values({
           userId, packageId: pkg.id, startsAt: new Date(Date.now() - 1000), endsAt: new Date(Date.now() + 30 * 86400000),

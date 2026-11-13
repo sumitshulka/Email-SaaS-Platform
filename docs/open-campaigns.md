@@ -19,9 +19,17 @@ allowance displays open campaigns as not included.
 
 The allowance is consumed **once, on the first successful queue operation**.
 Creating, editing, or deleting an unsent draft does not consume allowance.
+Exhausting the term allowance does not block creating or editing a draft when
+the package includes open campaigns. Queueing or scheduling that draft remains
+blocked until allowance becomes available again; recipient limits still apply.
 Pausing, resuming, rescheduling, and retrying interrupted recipients do not use
 another allowance. Completion or cancellation does not refund an allowance.
 Follow-ups are separate campaigns and use an allowance when first queued.
+Their audience is restricted to the original parent campaign's queued recipient
+snapshot. The editor does not allow replacing that audience with a new upload.
+API updates cannot introduce new addresses, queueing revalidates the saved
+audience, and the worker suppresses any non-original recipient left by older
+data. Opt-outs and bounces can reduce the original audience before delivery.
 Unused allowances expire at term end. The next term, including an automatically
 renewed free term, has its own allowance. Server-side checks enforce both limits;
 concurrent queue requests are serialized with the existing per-account lock.
