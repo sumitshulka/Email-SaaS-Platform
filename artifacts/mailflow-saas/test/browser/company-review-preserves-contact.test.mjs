@@ -266,6 +266,8 @@ async function installApiFixtures(context, {
   companySearchRequests = [],
   companyDirectoryRequests = [],
   businessAreaUpdates = [],
+  unlinkedProfiles = [reviewProfile],
+  unlinkedProfileRequests = [],
   globalCompanies = [],
   globalBusinessAreaUpdates = [],
   leadStatusOptions = [],
@@ -447,7 +449,8 @@ async function installApiFixtures(context, {
       return;
     }
     if (pathname === '/api/companies/unlinked-profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, json: { profiles: [reviewProfile] } });
+      unlinkedProfileRequests.push(request.url());
+      await route.fulfill({ status: 200, json: { profiles: unlinkedProfiles } });
       return;
     }
     if (pathname === '/api/companies/backfill' && method === 'POST') {
@@ -1314,6 +1317,57 @@ describe('company profile review and contact data preservation', { concurrency: 
     }
   });
 
+  it('keeps the empty review area compact and preserves collapsed company filters', async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    try {
+      const unlinkedProfileRequests = [];
+      await installApiFixtures(context, { unlinkedProfiles: [], unlinkedProfileRequests });
+      const page = await context.newPage();
+      const browserErrors = [];
+      page.on('pageerror', error => browserErrors.push(error.message));
+      await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('input-identifier').fill(user.username);
+      await page.getByTestId('input-password').fill('browser-test-password');
+      await page.getByTestId('button-sign-in').click();
+      await page.waitForURL('**/dashboard');
+      await page.goto(`${baseUrl}/companies`);
+
+      const reviewToggle = page.getByTestId('button-toggle-unlinked-company-profiles');
+      await reviewToggle.waitFor({ state: 'visible' });
+      console.log(JSON.stringify({ reviewHeader: await page.getByTestId('section-unlinked-company-profiles').innerText(), reviewRequests: unlinkedProfileRequests, browserErrors }));
+      await page.getByTestId('text-unlinked-company-count').waitFor({ state: 'visible' });
+      assert.equal(await reviewToggle.getAttribute('aria-expanded'), 'false', 'an empty review section should start collapsed');
+      assert.equal(await page.getByTestId('text-unlinked-company-count').innerText(), '0 to review');
+      assert.equal(await page.getByTestId('empty-unlinked-company-profiles').isVisible(), false);
+      const collapsedReview = await page.getByTestId('section-unlinked-company-profiles').boundingBox();
+      assert.ok(collapsedReview && collapsedReview.height < 90, 'the empty review area should use a compact summary row');
+
+      const filtersToggle = page.getByTestId('button-toggle-company-filters');
+      assert.equal(await filtersToggle.getAttribute('aria-expanded'), 'false', 'company filters should start collapsed');
+      assert.equal(await page.getByTestId('input-search-companies').isVisible(), true, 'directory search stays visible');
+      assert.equal(await page.getByTestId('select-company-industry-filter').isVisible(), false);
+      await filtersToggle.click();
+      const industryFilter = page.getByTestId('select-company-industry-filter');
+      await industryFilter.waitFor({ state: 'visible' });
+      await industryFilter.selectOption('Biotechnology');
+      await filtersToggle.click();
+      assert.equal(await filtersToggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(await page.getByTestId('text-company-filter-count').innerText(), '1 active');
+      assert.equal(await page.getByTestId('text-active-company-filters').innerText(), 'Industry: Biotechnology');
+      assert.equal(await page.getByTestId(`row-company-${company.id}`).isVisible(), true, 'the active filter remains applied while the panel is closed');
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForFunction(() => {
+        const sidebar = document.querySelector('aside');
+        return !sidebar || sidebar.getBoundingClientRect().right <= 1;
+      });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, 'the compact company directory should not create page-level horizontal overflow on mobile');
+      await page.screenshot({ path: '/tmp/mailflow-companies-directory-compact-mobile.png', fullPage: true });
+    } finally {
+      await context.close();
+    }
+  });
+
   it('shows the unlinked profile and reason, preserves it on save, and links only after an explicit choice', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     try {
@@ -1339,7 +1393,15 @@ describe('company profile review and contact data preservation', { concurrency: 
       assert.match(reviewText, /Company domain and website are missing, so an automatic match could not be confirmed\./);
       assert.match(reviewText, /Compare and review/);
       assert.equal(await page.getByTestId('text-unlinked-company-count').innerText(), '1 to review');
+      const reviewToggle = page.getByTestId('button-toggle-unlinked-company-profiles');
+      assert.equal(await reviewToggle.getAttribute('aria-expanded'), 'true', 'profiles needing review should be expanded by default');
       assert.match(await page.getByTestId('status-company-backfill').innerText(), /0 contacts linked/);
+      await reviewToggle.click();
+      assert.equal(await reviewToggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(await reviewRow.isVisible(), false, 'the review count remains visible while details are collapsed');
+      assert.equal(await page.getByTestId('text-unlinked-company-count').innerText(), '1 to review');
+      await reviewToggle.click();
+      await reviewRow.waitFor({ state: 'visible' });
 
       await reviewRow.getByTestId(`link-review-unlinked-company-${contactId}`).click();
       await page.waitForURL(`**/contacts/${contactId}`);

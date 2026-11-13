@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { ArrowUpRight, Building2, Check, CircleAlert, Download, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { ArrowUpRight, Building2, Check, CircleAlert, Download, Plus, RefreshCw, Search, Users, X, ChevronLeft, ChevronRight, ChevronDown, Upload } from 'lucide-react';
 import {
   exportCompanies, getGetCompanyQueryKey, getListCompaniesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey, getSearchGlobalCompaniesQueryKey,
   useBackfillCompanyProfiles, useBulkUpdateCompanyBusinessArea, useCreateCompany, useListCompanies, useListUnlinkedCompanyProfiles, useUpdateCompany,
@@ -133,6 +133,8 @@ export function CompaniesPage() {
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [unlinkedProfilesOpenOverride, setUnlinkedProfilesOpenOverride] = useState<boolean | null>(null);
+  const [companyFiltersOpen, setCompanyFiltersOpen] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ linkedContacts: number; createdCompanies: number; skippedContacts: number } | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<string>>(() => new Set());
@@ -147,6 +149,16 @@ export function CompaniesPage() {
     revenueRanges: uniqueCompanyFilterOptions(companies.map(company => company.companyRevenueRange)),
   }), [companies]);
   const hasActiveCompanyFilters = Object.values(companyFilters).some(value => value.trim().length > 0);
+  const activeCompanyFilterSummary = [
+    companyFilters.industry ? `Industry: ${companyFilters.industry}` : null,
+    companyFilters.size ? `Size: ${companyFilters.size}` : null,
+    companyFilters.revenueRange ? `Revenue: ${companyFilters.revenueRange}` : null,
+    companyFilters.location.trim() ? `Location: ${companyFilters.location.trim()}` : null,
+  ].filter((value): value is string => Boolean(value)).join(' · ');
+  const activeCompanyFilterCount = Object.values(companyFilters).filter(value => value.trim().length > 0).length;
+  const unlinkedProfileCount = unlinkedProfilesQuery.data?.profiles.length ?? 0;
+  const unlinkedProfilesPanelOpen = unlinkedProfilesQuery.isLoading || unlinkedProfilesQuery.isError
+    || (unlinkedProfilesOpenOverride ?? unlinkedProfileCount > 0);
   const hasCompanySearchOrFilters = Boolean(search.trim() || hasActiveCompanyFilters);
   const companyFilterSummary = [
     search.trim() ? `Search: ${search.trim()}` : null,
@@ -167,6 +179,11 @@ export function CompaniesPage() {
     setPage(1);
   };
   const clearCompanyFilters = () => { setCompanyFilters(emptyCompanyDirectoryFilters()); setPage(1); };
+
+  useEffect(() => {
+    if (activeCompanyFilterCount > 0) setCompanyFiltersOpen(true);
+  }, [activeCompanyFilterSummary, activeCompanyFilterCount]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     const locationQuery = companyFilters.location.trim().toLowerCase();
@@ -292,24 +309,68 @@ export function CompaniesPage() {
     {backfillRunning && <div className="mb-5 flex items-center gap-2 rounded-lg border border-[#dce5ec] bg-[#f7fafc] px-4 py-3 text-[11px] text-[#64768b]"><RefreshCw className="h-3.5 w-3.5 animate-spin"/>Checking legacy company profiles…</div>}
     {notice && <div role={notice.tone === 'error' ? 'alert' : 'status'} data-testid="status-company-notice" className={`mb-5 rounded-md border px-4 py-3 text-[12px] ${notice.tone === 'error' ? 'border-[#f0d5bd] bg-[#fff8f1] text-[#99501e]' : 'border-[#cfe4d8] bg-[#f1f8f4] text-[#31674b]'}`}>{notice.text}</div>}
     <section data-testid="section-unlinked-company-profiles" className={`${card} mb-5 overflow-hidden`}>
-      <header className="border-b border-[#e8edf1] px-4 py-4 sm:px-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-[14px] font-bold text-[#223247]">Company profiles to review</h2><p className="mt-1 text-[11px] leading-5 text-[#788697]">Profiles that could not be safely linked stay on their contact. Automatic linking requires compatible details and a matching domain; names alone are never used.</p></div>{!unlinkedProfilesQuery.isLoading && !unlinkedProfilesQuery.isError && <span data-testid="text-unlinked-company-count" className="rounded-full bg-[#f3f5f7] px-2.5 py-1 text-[10px] font-semibold text-[#647386]">{unlinkedProfilesQuery.data?.profiles.length ?? 0} to review</span>}</div></header>
-      {unlinkedProfilesQuery.isLoading ? <div className="px-5 py-7 text-[11px] text-[#8390a0]">Loading unlinked profiles…</div>
-        : unlinkedProfilesQuery.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 px-5 py-5"><p className="text-[11px] text-[#8b6044]">Unlinked profiles could not be loaded.</p><button type="button" data-testid="button-retry-unlinked-profiles" onClick={() => void unlinkedProfilesQuery.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-[11px] font-semibold text-[#52667b]">Retry</button></div>
-          : unlinkedProfilesQuery.data?.profiles.length ? <div className="max-h-[500px] divide-y divide-[#edf0f2] overflow-y-auto">{unlinkedProfilesQuery.data.profiles.map(profile => <UnlinkedProfileRow key={profile.contactId} profile={profile}/>)}</div>
-            : <div data-testid="empty-unlinked-company-profiles" className="px-5 py-7"><p className="text-[12px] font-semibold text-[#405166]">No unlinked profiles need review</p><p className="mt-1 text-[11px] text-[#84909e]">When a legacy profile is incomplete or conflicts with another record, it will appear here.</p></div>}
-      <footer className="border-t border-[#edf0f2] bg-[#fbfcfd] px-4 py-3 text-[10px] leading-4 text-[#778596] sm:px-5">To keep a profile unchanged, leave it as-is. It remains on the contact and in this list until you correct or link it.</footer>
+      <button
+        type="button"
+        data-testid="button-toggle-unlinked-company-profiles"
+        aria-controls="unlinked-company-profiles-content"
+        aria-expanded={unlinkedProfilesPanelOpen}
+        disabled={unlinkedProfilesQuery.isLoading || unlinkedProfilesQuery.isError}
+        onClick={() => setUnlinkedProfilesOpenOverride(!unlinkedProfilesPanelOpen)}
+        className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default sm:px-5"
+      >
+        <span className="min-w-0">
+          <span className="block text-[14px] font-bold text-[#223247]">Company profiles to review</span>
+          <span className="mt-1 block text-[11px] leading-5 text-[#788697]">Legacy profiles that could not be safely linked.</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          {!unlinkedProfilesQuery.isLoading && !unlinkedProfilesQuery.isError && <span data-testid="text-unlinked-company-count" className="rounded-full bg-[#f3f5f7] px-2.5 py-1 text-[10px] font-semibold text-[#647386]">{unlinkedProfileCount} to review</span>}
+          {unlinkedProfilesQuery.isLoading && <span className="text-[10px] text-[#8390a0]">Loading…</span>}
+          <ChevronDown aria-hidden="true" className={`h-4 w-4 text-[#647386] transition-transform ${unlinkedProfilesPanelOpen ? 'rotate-180' : ''}`}/>
+        </span>
+      </button>
+      <div id="unlinked-company-profiles-content" hidden={!unlinkedProfilesPanelOpen}>
+        <div className="border-t border-[#e8edf1] px-4 py-4 sm:px-5">
+          <p className="text-[11px] leading-5 text-[#788697]">Profiles that could not be safely linked stay on their contact. Automatic linking requires compatible details and a matching domain; names alone are never used.</p>
+        </div>
+        {unlinkedProfilesQuery.isLoading ? <div className="px-5 py-7 text-[11px] text-[#8390a0]">Loading unlinked profiles…</div>
+          : unlinkedProfilesQuery.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 px-5 py-5"><p className="text-[11px] text-[#8b6044]">Unlinked profiles could not be loaded.</p><button type="button" data-testid="button-retry-unlinked-profiles" onClick={() => void unlinkedProfilesQuery.refetch()} className="rounded-md border border-[#d7dce3] px-3 py-2 text-[11px] font-semibold text-[#52667b]">Retry</button></div>
+            : unlinkedProfilesQuery.data?.profiles.length ? <div className="max-h-[500px] divide-y divide-[#edf0f2] overflow-y-auto">{unlinkedProfilesQuery.data.profiles.map(profile => <UnlinkedProfileRow key={profile.contactId} profile={profile}/>)}</div>
+              : <div data-testid="empty-unlinked-company-profiles" className="px-5 py-7"><p className="text-[12px] font-semibold text-[#405166]">No unlinked profiles need review</p><p className="mt-1 text-[11px] text-[#84909e]">When a legacy profile is incomplete or conflicts with another record, it will appear here.</p></div>}
+        <footer className="border-t border-[#edf0f2] bg-[#fbfcfd] px-4 py-3 text-[10px] leading-4 text-[#778596] sm:px-5">To keep a profile unchanged, leave it as-is. It remains on the contact and in this list until you correct or link it.</footer>
+      </div>
     </section>
     <section className={`${card} overflow-hidden`}>
       <div className="flex flex-col gap-3 border-b border-[#e8edf1] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><h2 className="text-[14px] font-bold text-[#223247]">Company directory</h2><p data-testid="text-company-result-count" className="mt-1 text-[11px] text-[#84909e]">{filtered.length} {filtered.length === 1 ? 'record' : 'records'} in this workspace</p><p className="mt-1 text-[10px] text-[#84909e]">Select workspace-owned companies to set one shared business area. Global catalog profiles are managed there.</p></div><label className="relative block w-full sm:max-w-[280px]"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b96a3]"/><input aria-label="Search companies" data-testid="input-search-companies" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search name, domain, industry…" className="h-9 w-full rounded-md border border-[#dce2e8] bg-[#fbfcfd] pl-9 pr-3 text-[11px] outline-none focus:border-[#3b73b8]"/></label></div>
-      <section data-testid="section-company-filters" aria-label="Smart company filters" className="border-b border-[#e8edf1] bg-[#fbfcfd] px-4 py-4 sm:px-5">
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Smart filters</h3><p className="mt-1 text-[10px] text-[#7d8997]">Combine company profile filters; all selected values must match.</p></div>{hasActiveCompanyFilters && <button type="button" data-testid="button-clear-company-filters" onClick={clearCompanyFilters} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Clear filters</button>}</div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <label className="block"><span className={labelClass}>Industry</span><select data-testid="select-company-industry-filter" className={input} value={companyFilters.industry} onChange={event => updateCompanyFilter('industry', event.target.value)}><option value="">All industries</option>{companyFilterOptions.industries.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="block"><span className={labelClass}>Company size</span><select data-testid="select-company-size-filter" className={input} value={companyFilters.size} onChange={event => updateCompanyFilter('size', event.target.value)}><option value="">All sizes</option>{companyFilterOptions.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="block"><span className={labelClass}>Revenue range</span><select data-testid="select-company-revenue-filter" className={input} value={companyFilters.revenueRange} onChange={event => updateCompanyFilter('revenueRange', event.target.value)}><option value="">Any revenue</option>{companyFilterOptions.revenueRanges.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="block"><span className={labelClass}>Location</span><input data-testid="input-company-location-filter" className={input} value={companyFilters.location} onChange={event => updateCompanyFilter('location', event.target.value)} placeholder="City, region, or country"/></label>
-        </div>
-      </section>
+      <div className="border-b border-[#e8edf1] bg-[#fbfcfd]">
+        <button
+          type="button"
+          data-testid="button-toggle-company-filters"
+          aria-controls="company-filter-controls"
+          aria-expanded={companyFiltersOpen}
+          onClick={() => setCompanyFiltersOpen(open => !open)}
+          className="flex min-h-11 w-full flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-left sm:px-5"
+        >
+          <span className="min-w-0">
+            <span className="block text-[12px] font-semibold text-[#344154]">Smart filters</span>
+            {activeCompanyFilterSummary
+              ? <span data-testid="text-active-company-filters" className="mt-0.5 block truncate text-[10px] text-[#647386]">{activeCompanyFilterSummary}</span>
+              : <span className="mt-0.5 block text-[10px] text-[#7d8997]">Filter by industry, size, revenue, or location.</span>}
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            {activeCompanyFilterCount > 0 && <span data-testid="text-company-filter-count" className="rounded-full bg-[#eaf2fb] px-2.5 py-1 text-[10px] font-semibold text-[#245b9b]">{activeCompanyFilterCount} active</span>}
+            <ChevronDown aria-hidden="true" className={`h-4 w-4 text-[#647386] transition-transform ${companyFiltersOpen ? 'rotate-180' : ''}`}/>
+          </span>
+        </button>
+        <section id="company-filter-controls" data-testid="section-company-filters" aria-label="Smart company filters" hidden={!companyFiltersOpen} className="border-t border-[#e8edf1] px-4 py-4 sm:px-5">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-[12px] font-semibold text-[#344154]">Smart filters</h3><p className="mt-1 text-[10px] text-[#7d8997]">Combine company profile filters; all selected values must match.</p></div>{hasActiveCompanyFilters && <button type="button" data-testid="button-clear-company-filters" onClick={clearCompanyFilters} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Clear filters</button>}</div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="block"><span className={labelClass}>Industry</span><select data-testid="select-company-industry-filter" className={input} value={companyFilters.industry} onChange={event => updateCompanyFilter('industry', event.target.value)}><option value="">All industries</option>{companyFilterOptions.industries.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label className="block"><span className={labelClass}>Company size</span><select data-testid="select-company-size-filter" className={input} value={companyFilters.size} onChange={event => updateCompanyFilter('size', event.target.value)}><option value="">All sizes</option>{companyFilterOptions.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label className="block"><span className={labelClass}>Revenue range</span><select data-testid="select-company-revenue-filter" className={input} value={companyFilters.revenueRange} onChange={event => updateCompanyFilter('revenueRange', event.target.value)}><option value="">Any revenue</option>{companyFilterOptions.revenueRanges.map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label className="block"><span className={labelClass}>Location</span><input data-testid="input-company-location-filter" className={input} value={companyFilters.location} onChange={event => updateCompanyFilter('location', event.target.value)} placeholder="City, region, or country"/></label>
+          </div>
+        </section>
+      </div>
       {selectedCompanyIds.size > 0 && <div data-testid="panel-bulk-company-business-area" className="flex flex-col gap-3 border-b border-[#e8edf1] bg-[#f5f9fd] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div><p className="text-[11px] font-semibold text-[#344154]">{selectedCompanyIds.size} {selectedCompanyIds.size === 1 ? 'company' : 'companies'} selected</p><p className="mt-1 text-[10px] text-[#778596]">Selection is kept across pages and filters; up to {MAX_BULK_COMPANY_SELECTION} companies can be updated at once.</p>{businessAreasError && <p role="alert" className="mt-1 text-[10px] text-[#a45335]">{businessAreasError}</p>}</div><div className="flex flex-wrap items-center gap-2"><select data-testid="select-bulk-company-business-area" value={bulkBusinessArea} onChange={event => setBulkBusinessArea(event.target.value)} disabled={businessAreasLoading || Boolean(businessAreasError) || bulkBusinessAreaUpdate.isPending} className="h-9 min-w-[190px] rounded-md border border-[#d8dde4] bg-white px-3 text-[11px] text-[#344154] disabled:opacity-60"><option value="">{businessAreasLoading ? 'Loading business areas…' : 'Choose business area'}</option>{businessAreas.map(area => <option key={area} value={area}>{area}</option>)}</select><button type="button" data-testid="button-apply-bulk-company-business-area" disabled={!bulkBusinessArea || businessAreasLoading || bulkBusinessAreaUpdate.isPending} onClick={applyBulkBusinessArea} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-[#174f99] px-3.5 text-[11px] font-semibold text-white disabled:opacity-50">{bulkBusinessAreaUpdate.isPending ? 'Updating…' : 'Apply to selected'}</button><button type="button" data-testid="button-clear-company-selection" disabled={bulkBusinessAreaUpdate.isPending} onClick={() => { setSelectedCompanyIds(new Set()); setBulkBusinessArea(''); }} className="min-h-9 rounded-md px-2.5 text-[11px] font-semibold text-[#5b6b7d] hover:bg-white disabled:opacity-50">Clear selection</button></div></div>}
       {pageItems.length ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead className="bg-[#f8fafb]"><tr className="mono text-[9px] uppercase tracking-[.11em] text-[#84909e]"><th className="w-10 px-3 py-3"><input ref={selectPageCheckboxRef} type="checkbox" aria-label="Select editable companies on this page" data-testid="checkbox-select-company-page" checked={pageFullySelected} disabled={!pageSelectableIds.length || (selectedCompanyIds.size >= MAX_BULK_COMPANY_SELECTION && !pageFullySelected) || bulkBusinessAreaUpdate.isPending} onChange={event => togglePageSelection(event.currentTarget.checked)} className="h-4 w-4 accent-[#174f99]"/></th><th className="px-5 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Business area (Domain)</th><th className="px-4 py-3 font-medium">Location</th><th className="px-5 py-3 font-medium">Contacts</th></tr></thead><tbody className="divide-y divide-[#edf0f2]">{pageItems.map(company => <tr key={company.id} data-testid={`row-company-${company.id}`} className="group hover:bg-[#f8fafb]"><td className="px-3 py-3.5"><input type="checkbox" aria-label={`Select ${company.companyName}`} data-testid={`checkbox-select-company-${company.id}`} checked={selectedCompanyIds.has(company.id)} disabled={Boolean(company.globalCompanyId) || (!selectedCompanyIds.has(company.id) && selectedCompanyIds.size >= MAX_BULK_COMPANY_SELECTION) || bulkBusinessAreaUpdate.isPending} title={company.globalCompanyId ? 'Managed by the Global Company DB' : undefined} onChange={event => toggleCompanySelection(company.id, event.currentTarget.checked)} className="h-4 w-4 accent-[#174f99] disabled:cursor-not-allowed disabled:opacity-40"/></td><td className="px-5 py-3.5"><Link href={companyDetailHref(company.id, search, companyFilters)} data-testid={`link-company-detail-${company.id}`} className="flex items-center gap-3 no-underline"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[#dbe5ef] bg-[#eef4fa] text-[#245b9b]"><Building2 className="h-4 w-4"/></span><span className="min-w-0 truncate text-[12px] font-semibold text-[#26364a] group-hover:text-[#174f99]">{company.companyName}</span></Link></td><td className="px-4 py-3.5 text-[11px] text-[#536477]">{company.companyBusinessArea || '—'}</td><td className="max-w-[220px] px-4 py-3.5 text-[11px] text-[#536477]"><span data-testid={`text-company-location-${company.id}`} title={company.companyLocation || undefined} className="block truncate">{company.companyLocation || '—'}</span></td><td className="px-5 py-3.5"><span data-testid={`text-company-contact-count-${company.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f0f4f7] px-2.5 py-1 text-[10px] font-semibold text-[#607184]"><Users className="h-3 w-3"/>{company.contactCount}</span></td></tr>)}</tbody></table></div>
         : <div data-testid="empty-company-directory" className="px-5 py-14 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#eef4fa] text-[#51789f]"><Building2 className="h-5 w-5"/></span><h3 className="mt-4 text-[13px] font-semibold text-[#344154]">{hasCompanySearchOrFilters ? 'No matching companies' : 'No shared companies yet'}</h3><p className="mx-auto mt-1 max-w-xs text-[11px] leading-5 text-[#818d9b]">{hasCompanySearchOrFilters ? 'Adjust your search or clear one or more filters to see results.' : 'Add a company profile or let the legacy profile check link safe domain matches.'}</p>{!hasCompanySearchOrFilters && <button type="button" data-testid="button-empty-add-company" onClick={() => setEditor('new')} className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#245b9b]"><Plus className="h-3.5 w-3.5"/>Add first company</button>}</div>}
