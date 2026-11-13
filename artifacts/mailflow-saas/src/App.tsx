@@ -1636,15 +1636,15 @@ function AdminSettingsPage() {
           <TabsTrigger data-testid="tab-admin-settings-diagnostics" value="diagnostics" className="min-h-10 whitespace-normal rounded-md px-3 py-2 text-[12px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm">Diagnostics</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="platform" forceMount className="mt-0 space-y-4">
+        <TabsContent value="platform" forceMount className="mt-0 space-y-4 data-[state=inactive]:hidden">
           {renderPlatformSettingsForm(['Identity & defaults', 'Account & authentication', 'Inactivity lifecycle', 'Subscription rules'], 'platform')}
         </TabsContent>
 
-        <TabsContent value="campaigns" forceMount className="mt-0 space-y-4">
+        <TabsContent value="campaigns" forceMount className="mt-0 space-y-4 data-[state=inactive]:hidden">
           {renderPlatformSettingsForm(['Sending & delivery', 'Campaign content tests', 'Campaign content policy'], 'campaigns')}
         </TabsContent>
 
-        <TabsContent value="email" forceMount className="mt-0 space-y-4">
+        <TabsContent value="email" forceMount className="mt-0 space-y-4 data-[state=inactive]:hidden">
           <p className="text-right text-xs"><Link href="/admin/object-storage" className="font-semibold text-[#245b9b] hover:underline">Campaign file storage settings</Link></p>
           <AdminMicrosoftOAuthSettings/>
 
