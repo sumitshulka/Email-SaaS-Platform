@@ -49,6 +49,7 @@ import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
 import { ProspectAnalyticsOverview } from '@/components/prospect-analytics-overview';
+import { FollowUpsTodayPanel, ProspectFollowUpsPage } from '@/pages/prospect-follow-ups';
 import { clearPackageCheckoutCredentials, getPackageCheckoutTerms, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import ContactReportPage from '@/pages/contact-report';
@@ -360,6 +361,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Prospect Management',
     items: [
       { href: '/prospects', label: 'Prospects', icon: Activity },
+      { href: '/prospect-follow-ups', label: 'Follow-ups', icon: Clock3 },
       { href: '/prospect-products', label: 'Prospect Fields', icon: Settings2 },
     ],
   },
@@ -533,6 +535,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/contact-report',
     '/contact-field-settings',
     '/prospects',
+    '/prospect-follow-ups',
     '/prospect-products',
     '/prospect-stages',
     '/prospect-actions',
@@ -823,6 +826,7 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
     <PageHeading eyebrow="WORKSPACE / OVERVIEW" title="Good to see you, again." detail="A clear view of the audience, account, and campaigns in this workspace."
       trailing={<div className="flex items-center gap-2 rounded-full border border-[#dce5e2] bg-[#f2f7f4] px-3 py-1.5 text-[11px] font-semibold text-[#426c5d]"><span className="h-1.5 w-1.5 rounded-full bg-[#538a70]"/><span className="capitalize">{data.subscriptionStatus}</span> plan</div>}/>
 
+    <FollowUpsTodayPanel/>
     <section aria-label="Workspace summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard label="Contacts" value={data.contacts.toLocaleString()} note="All contacts in this workspace" icon={Users} tint="blue"/>
       <SummaryCard label="Companies" value={data.companies.toLocaleString()} note="Workspace company records" icon={Building2} tint="sage"/>
@@ -1899,6 +1903,7 @@ function Routes() {
     <Route path="/contacts/:contactId">{params => <RouteGate>{u => u.role === 'USER' ? <ContactDetailPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospects">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectsPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospects/new">{() => <RouteGate>{u => u.role === 'USER' ? <NewProspectPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/prospect-follow-ups">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectFollowUpsPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospects/:prospectId">{params => <RouteGate>{u => u.role === 'USER' ? <ProspectDetailPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospect-products">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectProductsPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospect-stages">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectStagesPage/> : <NotFound/>}</RouteGate>}</Route>
@@ -2023,7 +2028,7 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
   const hasExistingFooter = path === '/'
     || ['/features', '/pricing', '/terms-and-conditions', '/privacy-policy', '/shipping-refund'].includes(path)
     || path.startsWith('/package-checkout')
-    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile', '/prospects', '/prospect-products', '/prospect-stages', '/prospect-actions', '/prospect-currencies'].some(
+    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile', '/prospects', '/prospect-follow-ups', '/prospect-products', '/prospect-stages', '/prospect-actions', '/prospect-currencies'].some(
       route => path === route || path.startsWith(`${route}/`),
     );
   const showStandaloneFooter = path !== '/login' && !hasExistingFooter;

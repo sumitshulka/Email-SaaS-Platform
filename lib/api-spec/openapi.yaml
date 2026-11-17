@@ -1313,6 +1313,97 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProspectDashboard" }
+  /prospect-follow-ups/today:
+    get:
+      operationId: getProspectFollowUpsToday
+      tags: [sending]
+      summary: List tenant follow-ups due today in the user's timezone
+      responses:
+        "200":
+          description: Today's pending follow-ups and overdue count
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectFollowUpsToday" }
+  /prospect-follow-ups:
+    get:
+      operationId: listProspectFollowUps
+      tags: [sending]
+      summary: List tenant prospect follow-ups in a date range
+      parameters:
+        - { name: fromDate, in: query, schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" } }
+        - { name: toDate, in: query, schema: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" } }
+        - { name: status, in: query, schema: { type: string, enum: [pending, completed, cancelled, all] } }
+      responses:
+        "200":
+          description: Matching follow-ups with linked prospect and contact details
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectFollowUp" }
+        "400":
+          description: Invalid date range or status filter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+    post:
+      operationId: createProspectFollowUp
+      tags: [sending]
+      summary: Schedule a follow-up for an active tenant prospect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProspectFollowUpInput" }
+      responses:
+        "201":
+          description: Scheduled follow-up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectFollowUp" }
+        "400":
+          description: Invalid follow-up input or inactive action type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Prospect or action type not found in this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-follow-ups/{followUpId}:
+    parameters:
+      - { name: followUpId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateProspectFollowUp
+      tags: [sending]
+      summary: Edit, complete, reschedule, or cancel a pending follow-up
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProspectFollowUpInput" }
+      responses:
+        "200":
+          description: Updated follow-up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectFollowUp" }
+        "400":
+          description: Invalid follow-up update
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Follow-up not found in this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Follow-up is no longer pending or prospect history is unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /prospects:
     get:
       operationId: listProspects
@@ -9130,6 +9221,50 @@ components:
         recordedByName: { type: string }
         createdAt: { type: string, format: date-time }
       required: [id, actionType, stageHistoryId, stageNameAtAction, actionDate, notes, recordedByName, createdAt]
+    ProspectFollowUpStatus:
+      type: string
+      enum: [pending, completed, cancelled]
+    ProspectFollowUp:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        prospectId: { type: string, format: uuid }
+        prospectName: { type: string }
+        currentStageName: { type: string }
+        contactName: { type: string }
+        contactEmail: { type: string, format: email }
+        actionType: { $ref: "#/components/schemas/ProspectActionType" }
+        followUpDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        notes: { type: string }
+        status: { $ref: "#/components/schemas/ProspectFollowUpStatus" }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, prospectId, prospectName, currentStageName, contactName, contactEmail, actionType, followUpDate, notes, status, completedAt, createdAt, updatedAt]
+    ProspectFollowUpsToday:
+      type: object
+      properties:
+        date: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectFollowUp" }
+        overdueCount: { type: integer, minimum: 0 }
+      required: [date, items, overdueCount]
+    CreateProspectFollowUpInput:
+      type: object
+      properties:
+        prospectId: { type: string, format: uuid }
+        actionTypeId: { type: string, format: uuid }
+        followUpDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        notes: { type: string, minLength: 1, maxLength: 10000 }
+      required: [prospectId, actionTypeId, followUpDate, notes]
+    UpdateProspectFollowUpInput:
+      type: object
+      properties:
+        actionTypeId: { type: string, format: uuid }
+        followUpDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        notes: { type: string, minLength: 1, maxLength: 10000 }
+        status: { $ref: "#/components/schemas/ProspectFollowUpStatus" }
     ProspectTagSelection:
       type: object
       properties:

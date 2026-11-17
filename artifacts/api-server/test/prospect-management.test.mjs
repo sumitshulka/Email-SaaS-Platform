@@ -13,14 +13,16 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     { db, usersTable, contactsTable, contactTagsTable, contactTagAssignmentsTable,
       prospectsTable, prospectProductsTable, prospectCurrenciesTable, prospectStagesTable,
       prospectStageTransitionsTable, prospectActionTypesTable, prospectStageHistoryTable,
-      prospectActionsTable, prospectTagAssignmentsTable },
+      prospectActionsTable, prospectFollowUpsTable, prospectTagAssignmentsTable },
     { default: prospectSettingsRouter },
     { default: prospectsRouter },
+    { default: prospectFollowUpsRouter },
     { default: sendingRouter },
   ] = await Promise.all([
     import("@workspace/db"),
     import("../src/routes/prospect-settings.ts"),
     import("../src/routes/prospects.ts"),
+    import("../src/routes/prospect-follow-ups.ts"),
     import("../src/routes/sending.ts"),
   ]);
   const tenantIds = [randomUUID(), randomUUID()];
@@ -52,6 +54,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
       next();
     });
     app.use(prospectSettingsRouter);
+    app.use(prospectFollowUpsRouter);
     app.use(prospectsRouter);
     app.use(sendingRouter);
     const server = app.listen(0);
@@ -80,6 +83,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     }
     await db.transaction(async tx => {
       for (const userId of tenantIds) {
+        await tx.delete(prospectFollowUpsTable).where(eq(prospectFollowUpsTable.userId, userId));
         await tx.delete(prospectActionsTable).where(eq(prospectActionsTable.userId, userId));
         await tx.delete(prospectTagAssignmentsTable).where(eq(prospectTagAssignmentsTable.userId, userId));
         await tx.delete(prospectStageHistoryTable).where(eq(prospectStageHistoryTable.userId, userId));
@@ -279,6 +283,48 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     const filteredAction = await call(mainServer, `/prospects/${first.id}/actions?fromDate=2026-02-01&toDate=2026-02-28`);
     assert.equal(filteredAction.status, 200);
     assert.equal(filteredAction.data.length, 1);
+
+    const followUp = await call(mainServer, "/prospect-follow-ups", "POST", {
+      prospectId: first.id,
+      actionTypeId: actionTypeResponse.data.id,
+      followUpDate: "2026-02-20",
+      notes: "Check whether procurement approved the revised proposal.",
+    });
+    assert.equal(followUp.status, 201, JSON.stringify(followUp.data));
+    assert.equal(followUp.data.status, "pending");
+    assert.equal(followUp.data.prospectName, "First deal");
+    const followUpRange = await call(mainServer, "/prospect-follow-ups?fromDate=2026-02-01&toDate=2026-02-28&status=pending");
+    assert.equal(followUpRange.status, 200);
+    assert.equal(followUpRange.data.some(item => item.id === followUp.data.id), true);
+    const otherTenantFollowUps = await call(otherTenantServer, "/prospect-follow-ups?status=all");
+    assert.equal(otherTenantFollowUps.status, 200);
+    assert.equal(otherTenantFollowUps.data.some(item => item.id === followUp.data.id), false);
+    const crossTenantUpdate = await call(otherTenantServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
+      status: "completed",
+    });
+    assert.equal(crossTenantUpdate.status, 404);
+    const rescheduledFollowUp = await call(mainServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
+      followUpDate: "2026-02-23",
+      notes: "Procurement review moved to Monday.",
+    });
+    assert.equal(rescheduledFollowUp.status, 200);
+    assert.equal(rescheduledFollowUp.data.followUpDate, "2026-02-23");
+    const completedFollowUp = await call(mainServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
+      status: "completed",
+    });
+    assert.equal(completedFollowUp.status, 200, JSON.stringify(completedFollowUp.data));
+    assert.equal(completedFollowUp.data.completedAt !== null, true);
+    const completedHistory = await call(mainServer, `/prospects/${first.id}/history`);
+    assert.equal(completedHistory.data.at(-1).actions.some(item =>
+      item.notes === "Procurement review moved to Monday."), true);
+    const duplicateCompletion = await call(mainServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
+      status: "completed",
+    });
+    assert.equal(duplicateCompletion.status, 409);
+    const todayFollowUps = await call(mainServer, "/prospect-follow-ups/today");
+    assert.equal(todayFollowUps.status, 200);
+    assert.match(todayFollowUps.data.date, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(Number.isInteger(todayFollowUps.data.overdueCount), true);
 
     const updatedProposal = await call(mainServer, `/prospect-stages/${proposal.id}`, "PATCH", {
       name: "Proposal",

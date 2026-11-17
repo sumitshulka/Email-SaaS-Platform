@@ -40,6 +40,7 @@ export * from "./global-company-import-templates";
 export * from "./company-import-templates";
 export * from "./contact-segments";
 export * from "./prospect-management";
+export * from "./prospect-follow-ups";
 export * from "./sending";
 export * from "./notifications";
 export * from "./support";

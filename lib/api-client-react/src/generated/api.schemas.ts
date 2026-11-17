@@ -6176,6 +6176,61 @@ export interface CreateProspectActionInput {
   notes: string;
 }
 
+export type ProspectFollowUpStatus = typeof ProspectFollowUpStatus[keyof typeof ProspectFollowUpStatus];
+
+
+export const ProspectFollowUpStatus = {
+  pending: 'pending',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ProspectFollowUp {
+  id: string;
+  prospectId: string;
+  prospectName: string;
+  currentStageName: string;
+  contactName: string;
+  contactEmail: string;
+  actionType: ProspectActionType;
+  followUpDate: string;
+  notes: string;
+  status: ProspectFollowUpStatus;
+  /** @nullable */
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProspectFollowUpsToday {
+  date: string;
+  items: ProspectFollowUp[];
+  /** @minimum 0 */
+  overdueCount: number;
+}
+
+export interface CreateProspectFollowUpInput {
+  prospectId: string;
+  actionTypeId: string;
+  followUpDate: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  notes: string;
+}
+
+export interface UpdateProspectFollowUpInput {
+  actionTypeId?: string;
+  followUpDate?: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  notes?: string;
+  status?: ProspectFollowUpStatus;
+}
+
 export interface ProspectTagSelection {
   /** @maxItems 20 */
   tagIds: string[];
@@ -6337,6 +6392,22 @@ export const ListContactsAddedWithin = {
   NUMBER_7: '7',
   NUMBER_30: '30',
   NUMBER_90: '90',
+} as const;
+
+export type ListProspectFollowUpsParams = {
+fromDate?: string;
+toDate?: string;
+status?: ListProspectFollowUpsStatus;
+};
+
+export type ListProspectFollowUpsStatus = typeof ListProspectFollowUpsStatus[keyof typeof ListProspectFollowUpsStatus];
+
+
+export const ListProspectFollowUpsStatus = {
+  pending: 'pending',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  all: 'all',
 } as const;
 
 export type ListProspectsParams = {

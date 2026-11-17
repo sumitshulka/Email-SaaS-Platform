@@ -24,6 +24,7 @@ import type {
   CreateProspectInput, ListProspectsParams, ProspectActionTypeInput, ProspectProductInput,
   ProspectProductCategory, ProspectRecord, ProspectStageInput,
 } from '@workspace/api-client-react';
+import { ScheduleProspectFollowUpButton } from '@/pages/prospect-follow-ups';
 
 const panel = 'rounded-xl border border-[#dce4ed] bg-white shadow-[0_4px_18px_rgba(19,43,70,.035)]';
 const field = 'h-10 w-full rounded-lg border border-[#d7e0e9] bg-[#fff] px-3 text-[12px] text-[#1a2b40] outline-none transition focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6] disabled:bg-[#f3f6f8]';
@@ -270,7 +271,7 @@ export function ProspectDetailPage() {
   if (prospectQuery.isError || !record) return <PageFrame><ErrorState retry={() => void prospectQuery.refetch()}/></PageFrame>;
   if (edit) return <PageFrame><Heading eyebrow="PIPELINE / EDIT OPPORTUNITY" title="Edit prospect" detail="Update deal-specific details and tags. The linked contact stays unchanged."/><ProspectForm key={id} prospectId={id}/></PageFrame>;
   return <PageFrame>
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Link href="/prospects" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#526d86] no-underline hover:text-[#174f91]"><ArrowLeft className="h-3.5 w-3.5"/>All prospects</Link><div className="flex gap-2"><button type="button" onClick={() => setEdit(true)} className={smallBtn} data-testid="button-edit-prospect">Edit prospect</button><ArchiveProspect record={record}/></div></div>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Link href="/prospects" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#526d86] no-underline hover:text-[#174f91]"><ArrowLeft className="h-3.5 w-3.5"/>All prospects</Link><div className="flex flex-wrap gap-2"><ScheduleProspectFollowUpButton prospectId={id} className={`${smallBtn} border-[#bcd1e2] bg-[#edf4fb] text-[#285e8d] hover:bg-[#e5f0f9]`}/><button type="button" onClick={() => setEdit(true)} className={smallBtn} data-testid="button-edit-prospect">Edit prospect</button><ArchiveProspect record={record}/></div></div>
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.16em] text-[#70859a]">PROSPECT / {record.id.slice(0, 8)}</div><h1 className="display break-words text-[29px] font-bold text-[#172b43] sm:text-[35px]">{record.name}</h1><p className="mt-2 text-[12px] text-[#718093]">{record.product.itemType === 'service' ? 'Service' : 'Product'} · {record.product.name}{record.product.category ? ` · ${record.product.category}` : ''} · created {dateLabel(record.createdAt)} · updated {dateLabel(record.updatedAt)}</p></div><span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${record.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{record.currentStage.name} · {record.currentProbability}%</span></div>
     {record.archivedAt && <div className="mb-4"><Notice>Archived {dateLabel(record.archivedAt)}. This record is retained for history.</Notice></div>}
     <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

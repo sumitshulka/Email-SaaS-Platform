@@ -141,6 +141,7 @@ import type {
   ContactTagSelection,
   ContactUpdate,
   CreateProspectActionInput,
+  CreateProspectFollowUpInput,
   CreateProspectInput,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
@@ -187,6 +188,7 @@ import type {
   ListContactOptionsParams,
   ListContactsParams,
   ListProspectActionsParams,
+  ListProspectFollowUpsParams,
   ListProspectsParams,
   LoginInput,
   MaintenanceStatus,
@@ -221,6 +223,8 @@ import type {
   ProspectCurrencySettingsInput,
   ProspectDashboard,
   ProspectDetail,
+  ProspectFollowUp,
+  ProspectFollowUpsToday,
   ProspectGrowthAuditEntry,
   ProspectProduct,
   ProspectProductCategory,
@@ -270,6 +274,7 @@ import type {
   TestEmailInput,
   TestRazorpayConnectionInput,
   UnlinkedCompanyProfileCollection,
+  UpdateProspectFollowUpInput,
   UpdateProspectInput,
   UploadCampaignAttachmentParams,
   UserDashboard,
@@ -5070,6 +5075,344 @@ export function useGetProspectDashboard<TData = Awaited<ReturnType<typeof getPro
 
 
 
+
+export const getGetProspectFollowUpsTodayUrl = () => {
+
+
+
+
+  return `/api/prospect-follow-ups/today`
+}
+
+/**
+ * @summary List tenant follow-ups due today in the user's timezone
+ */
+export const getProspectFollowUpsToday = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectFollowUpsToday> => {
+
+  return customFetch<ProspectFollowUpsToday>(getGetProspectFollowUpsTodayUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProspectFollowUpsTodayQueryKey = () => {
+    return [
+    `/api/prospect-follow-ups/today`
+    ] as const;
+    }
+
+
+export const getGetProspectFollowUpsTodayQueryOptions = <TData = Awaited<ReturnType<typeof getProspectFollowUpsToday>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectFollowUpsToday>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProspectFollowUpsTodayQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProspectFollowUpsToday>>> = ({ signal }) => getProspectFollowUpsToday({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProspectFollowUpsToday>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProspectFollowUpsTodayQueryResult = NonNullable<Awaited<ReturnType<typeof getProspectFollowUpsToday>>>
+export type GetProspectFollowUpsTodayQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List tenant follow-ups due today in the user's timezone
+ */
+
+export function useGetProspectFollowUpsToday<TData = Awaited<ReturnType<typeof getProspectFollowUpsToday>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectFollowUpsToday>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProspectFollowUpsTodayQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListProspectFollowUpsUrl = (params?: ListProspectFollowUpsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/prospect-follow-ups?${stringifiedParams}` : `/api/prospect-follow-ups`
+}
+
+/**
+ * @summary List tenant prospect follow-ups in a date range
+ */
+export const listProspectFollowUps = async (params?: ListProspectFollowUpsParams, options?: Parameters<typeof customFetch>[1]): Promise<ProspectFollowUp[]> => {
+
+  return customFetch<ProspectFollowUp[]>(getListProspectFollowUpsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectFollowUpsQueryKey = (params?: ListProspectFollowUpsParams,) => {
+    return [
+    `/api/prospect-follow-ups`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProspectFollowUpsQueryOptions = <TData = Awaited<ReturnType<typeof listProspectFollowUps>>, TError = ErrorType<ApiError>>(params?: ListProspectFollowUpsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectFollowUps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectFollowUpsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectFollowUps>>> = ({ signal }) => listProspectFollowUps(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectFollowUps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectFollowUpsQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectFollowUps>>>
+export type ListProspectFollowUpsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List tenant prospect follow-ups in a date range
+ */
+
+export function useListProspectFollowUps<TData = Awaited<ReturnType<typeof listProspectFollowUps>>, TError = ErrorType<ApiError>>(
+ params?: ListProspectFollowUpsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectFollowUps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectFollowUpsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectFollowUpUrl = () => {
+
+
+
+
+  return `/api/prospect-follow-ups`
+}
+
+/**
+ * @summary Schedule a follow-up for an active tenant prospect
+ */
+export const createProspectFollowUp = async (createProspectFollowUpInput: CreateProspectFollowUpInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectFollowUp> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectFollowUp>(getCreateProspectFollowUpUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createProspectFollowUpInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectFollowUpMutationKey = () => ['createProspectFollowUp'] as const;
+
+export const getCreateProspectFollowUpMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectFollowUp>>, TError,CreateProspectFollowUpMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspectFollowUp>>, TError,CreateProspectFollowUpMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectFollowUpMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspectFollowUp>>, CreateProspectFollowUpMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProspectFollowUp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectFollowUpMutationResult = NonNullable<Awaited<ReturnType<typeof createProspectFollowUp>>>
+    export type CreateProspectFollowUpMutationBody = BodyType<CreateProspectFollowUpInput>
+    export type CreateProspectFollowUpMutationError = ErrorType<ApiError>
+    export type CreateProspectFollowUpMutationVariables = {data: BodyType<CreateProspectFollowUpInput>}
+
+    /**
+ * @summary Schedule a follow-up for an active tenant prospect
+ */
+export const useCreateProspectFollowUp = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectFollowUp>>, TError,CreateProspectFollowUpMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspectFollowUp>>,
+        TError,
+        CreateProspectFollowUpMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectFollowUpMutationOptions(options));
+    }
+
+export const getUpdateProspectFollowUpUrl = (followUpId: string,) => {
+
+
+
+
+  return `/api/prospect-follow-ups/${followUpId}`
+}
+
+/**
+ * @summary Edit, complete, reschedule, or cancel a pending follow-up
+ */
+export const updateProspectFollowUp = async (followUpId: string,
+    updateProspectFollowUpInput: UpdateProspectFollowUpInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectFollowUp> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectFollowUp>(getUpdateProspectFollowUpUrl(followUpId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateProspectFollowUpInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProspectFollowUpMutationKey = () => ['updateProspectFollowUp'] as const;
+
+export const getUpdateProspectFollowUpMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectFollowUp>>, TError,UpdateProspectFollowUpMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProspectFollowUp>>, TError,UpdateProspectFollowUpMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProspectFollowUpMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProspectFollowUp>>, UpdateProspectFollowUpMutationVariables> = (props) => {
+          const {followUpId,data} = props ?? {};
+
+          return  updateProspectFollowUp(followUpId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProspectFollowUpMutationResult = NonNullable<Awaited<ReturnType<typeof updateProspectFollowUp>>>
+    export type UpdateProspectFollowUpMutationBody = BodyType<UpdateProspectFollowUpInput>
+    export type UpdateProspectFollowUpMutationError = ErrorType<ApiError>
+    export type UpdateProspectFollowUpMutationVariables = {followUpId: string;data: BodyType<UpdateProspectFollowUpInput>}
+
+    /**
+ * @summary Edit, complete, reschedule, or cancel a pending follow-up
+ */
+export const useUpdateProspectFollowUp = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectFollowUp>>, TError,UpdateProspectFollowUpMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProspectFollowUp>>,
+        TError,
+        UpdateProspectFollowUpMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProspectFollowUpMutationOptions(options));
+    }
 
 export const getListProspectsUrl = (params?: ListProspectsParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -2166,6 +2166,185 @@ export const GetProspectDashboardResponse = zod.object({
 
 
 /**
+ * @summary List tenant follow-ups due today in the user's timezone
+ */
+export const getProspectFollowUpsTodayResponseItemsItemActionTypeNameMax = 100;
+
+export const getProspectFollowUpsTodayResponseItemsItemActionTypeDescriptionMax = 10000;
+
+export const getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMin = -32768;
+export const getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMax = 32767;
+
+export const getProspectFollowUpsTodayResponseOverdueCountMin = 0;
+
+
+
+export const GetProspectFollowUpsTodayResponse = zod.object({
+  "date": zod.coerce.date(),
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "prospectId": zod.string().uuid(),
+  "prospectName": zod.string(),
+  "currentStageName": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string().email(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(getProspectFollowUpsTodayResponseItemsItemActionTypeNameMax),
+  "description": zod.string().max(getProspectFollowUpsTodayResponseItemsItemActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMin).max(getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMax)
+}),
+  "followUpDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'cancelled']),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "overdueCount": zod.number().int().min(getProspectFollowUpsTodayResponseOverdueCountMin)
+})
+
+
+/**
+ * @summary List tenant prospect follow-ups in a date range
+ */
+export const ListProspectFollowUpsQueryParams = zod.object({
+  "fromDate": zod.date().optional(),
+  "toDate": zod.date().optional(),
+  "status": zod.enum(['pending', 'completed', 'cancelled', 'all']).optional()
+})
+
+export const listProspectFollowUpsResponseActionTypeNameMax = 100;
+
+export const listProspectFollowUpsResponseActionTypeDescriptionMax = 10000;
+
+export const listProspectFollowUpsResponseActionTypeDisplayOrderMin = -32768;
+export const listProspectFollowUpsResponseActionTypeDisplayOrderMax = 32767;
+
+
+
+export const ListProspectFollowUpsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "prospectId": zod.string().uuid(),
+  "prospectName": zod.string(),
+  "currentStageName": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string().email(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectFollowUpsResponseActionTypeNameMax),
+  "description": zod.string().max(listProspectFollowUpsResponseActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listProspectFollowUpsResponseActionTypeDisplayOrderMin).max(listProspectFollowUpsResponseActionTypeDisplayOrderMax)
+}),
+  "followUpDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'cancelled']),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListProspectFollowUpsResponse = zod.array(ListProspectFollowUpsResponseItem)
+
+
+/**
+ * @summary Schedule a follow-up for an active tenant prospect
+ */
+export const createProspectFollowUpBodyNotesMax = 10000;
+
+
+
+export const CreateProspectFollowUpBody = zod.object({
+  "prospectId": zod.string().uuid(),
+  "actionTypeId": zod.string().uuid(),
+  "followUpDate": zod.coerce.date(),
+  "notes": zod.string().min(1).max(createProspectFollowUpBodyNotesMax)
+})
+
+export const createProspectFollowUpResponseActionTypeNameMax = 100;
+
+export const createProspectFollowUpResponseActionTypeDescriptionMax = 10000;
+
+export const createProspectFollowUpResponseActionTypeDisplayOrderMin = -32768;
+export const createProspectFollowUpResponseActionTypeDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectFollowUpResponse = zod.object({
+  "id": zod.string().uuid(),
+  "prospectId": zod.string().uuid(),
+  "prospectName": zod.string(),
+  "currentStageName": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string().email(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectFollowUpResponseActionTypeNameMax),
+  "description": zod.string().max(createProspectFollowUpResponseActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectFollowUpResponseActionTypeDisplayOrderMin).max(createProspectFollowUpResponseActionTypeDisplayOrderMax)
+}),
+  "followUpDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'cancelled']),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Edit, complete, reschedule, or cancel a pending follow-up
+ */
+export const UpdateProspectFollowUpParams = zod.object({
+  "followUpId": zod.coerce.string().uuid()
+})
+
+export const updateProspectFollowUpBodyNotesMax = 10000;
+
+
+
+export const UpdateProspectFollowUpBody = zod.object({
+  "actionTypeId": zod.string().uuid().optional(),
+  "followUpDate": zod.coerce.date().optional(),
+  "notes": zod.string().min(1).max(updateProspectFollowUpBodyNotesMax).optional(),
+  "status": zod.enum(['pending', 'completed', 'cancelled']).optional()
+})
+
+export const updateProspectFollowUpResponseActionTypeNameMax = 100;
+
+export const updateProspectFollowUpResponseActionTypeDescriptionMax = 10000;
+
+export const updateProspectFollowUpResponseActionTypeDisplayOrderMin = -32768;
+export const updateProspectFollowUpResponseActionTypeDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectFollowUpResponse = zod.object({
+  "id": zod.string().uuid(),
+  "prospectId": zod.string().uuid(),
+  "prospectName": zod.string(),
+  "currentStageName": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string().email(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectFollowUpResponseActionTypeNameMax),
+  "description": zod.string().max(updateProspectFollowUpResponseActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(updateProspectFollowUpResponseActionTypeDisplayOrderMin).max(updateProspectFollowUpResponseActionTypeDisplayOrderMax)
+}),
+  "followUpDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'cancelled']),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Search, filter, sort, and paginate tenant-owned prospects
  */
 export const listProspectsQueryPageDefault = 1;
