@@ -48,6 +48,7 @@ import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingS
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
+import { ProspectAnalyticsOverview } from '@/components/prospect-analytics-overview';
 import { clearPackageCheckoutCredentials, getPackageCheckoutTerms, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
 import ContactReportPage from '@/pages/contact-report';
@@ -847,6 +848,8 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
         </BarChart></ResponsiveContainer></div> : <ChartEmpty title="No lead status data yet" body="Lead status counts will appear as contacts are categorized."/>}
       </Panel>
     </section>
+
+    <ProspectAnalyticsOverview/>
 
     <Panel className="overflow-hidden">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8ece8] px-5 py-5 sm:px-6">
