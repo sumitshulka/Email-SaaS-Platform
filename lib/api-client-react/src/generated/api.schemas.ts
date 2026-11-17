@@ -2466,6 +2466,11 @@ export interface Contact {
      */
   leadSource: string | null;
   /**
+     * @maxLength 255
+     * @nullable
+     */
+  importedContact: string | null;
+  /**
      * @maxLength 10000
      * @nullable
      */
@@ -3795,7 +3800,11 @@ export const DeliveryRecipientEvidenceVerification = {
 
 export interface DeliveryRecipient {
   id: string;
+  /** @nullable */
+  contactId: string | null;
   email: string;
+  firstName: string;
+  lastName: string;
   status: DeliveryRecipientStatus;
   /** @minimum 0 */
   attempts: number;
@@ -3842,6 +3851,24 @@ export interface CampaignDeliveryReport {
   limit: number;
   /** @minimum 0 */
   offset: number;
+}
+
+export interface OpenCampaignContactConversionInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  firstName: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  lastName: string;
+}
+
+export interface OpenCampaignContactConversionResult {
+  contact: Contact;
+  created: boolean;
 }
 
 export interface CampaignAttachmentUploadInput {

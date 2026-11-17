@@ -108,6 +108,11 @@ export interface Contact {
      */
   leadSource: string | null;
   /**
+     * @maxLength 255
+     * @nullable
+     */
+  importedContact: string | null;
+  /**
      * @maxLength 10000
      * @nullable
      */

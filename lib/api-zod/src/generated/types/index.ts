@@ -353,6 +353,8 @@ export * from './notificationAudience';
 export * from './onlinePaymentSettings';
 export * from './onlinePaymentSettingsInput';
 export * from './openCampaignAllowance';
+export * from './openCampaignContactConversionInput';
+export * from './openCampaignContactConversionResult';
 export * from './openCampaignRecipientInput';
 export * from './packageCheckoutCodeInput';
 export * from './packageCheckoutCodeRequestResponse';

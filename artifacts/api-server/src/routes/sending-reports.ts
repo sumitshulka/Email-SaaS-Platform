@@ -136,7 +136,10 @@ router.get(
           latestAttemptByRecipient.get(recipient.id)?.[0] ?? null;
         return {
           id: recipient.id,
+          contactId: recipient.contactId,
           email: recipient.email,
+          firstName: recipient.firstName,
+          lastName: recipient.lastName,
           status: recipient.status,
           attempts: recipient.attempts,
           rateLimitDeferred:

@@ -3573,7 +3573,13 @@ export function CampaignDashboardPage({ campaignId, maintenancePaused = false }:
           </div>
         </section>
 
-        <DeliveryEvidenceSection campaignId={campaignId} active={campaign.status === 'queued' || campaign.status === 'sending'}/>
+        <DeliveryEvidenceSection
+          campaignId={campaignId}
+          active={campaign.status === 'queued' || campaign.status === 'sending'}
+          campaignName={campaign.name}
+          campaignInitiatedAt={campaign.queuedAt}
+          allowOpenCampaignConversion={campaign.audienceType === 'open' && campaign.status === 'completed'}
+        />
 
         <section className={`${panelClass} p-5`}>
           <h2 className="display text-[17px] font-bold text-[#1b293a]">Campaign message</h2>

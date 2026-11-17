@@ -3571,6 +3571,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/{campaignId}/recipients/{recipientId}/convert-contact:
+    parameters:
+      - name: campaignId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: recipientId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: convertOpenCampaignRecipientToContact
+      tags: [sending]
+      summary: Convert a completed open-campaign recipient into a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OpenCampaignContactConversionInput" }
+      responses:
+        "200":
+          description: Contact created or existing contact linked to the campaign recipient
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenCampaignContactConversionResult" }
+        "400":
+          description: Invalid contact name
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "403":
+          description: An active subscription is required to add a contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Campaign or recipient not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Campaign has not completed or the contact limit was reached
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /sending/reports/import:
     post:
       operationId: importDeliveryReport
@@ -6326,6 +6371,7 @@ components:
         lifecycleStage: { type: ["string", "null"], maxLength: 80 }
         leadStatus: { type: ["string", "null"], maxLength: 80 }
         leadSource: { type: ["string", "null"], maxLength: 120 }
+        importedContact: { type: ["string", "null"], maxLength: 255 }
         interests: { type: ["string", "null"], maxLength: 10000 }
         goals: { type: ["string", "null"], maxLength: 10000 }
         painPoints: { type: ["string", "null"], maxLength: 10000 }
@@ -6364,7 +6410,7 @@ components:
         listIds: { type: array, items: { type: string, format: uuid } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyBusinessArea, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, emailVerificationRiskFlags, emailVerificationSuggestedEmail, listIds, createdAt, updatedAt]
+      required: [id, email, name, firstName, lastName, companyId, company, companyName, linkedinUrl, phoneNumber, jobTitle, department, seniority, mobilePhone, websiteUrl, twitterUrl, facebookUrl, instagramUrl, location, preferredLanguage, timeZone, lifecycleStage, leadStatus, leadSource, importedContact, interests, goals, painPoints, personalizationContext, notes, companyWebsiteUrl, companyDomain, companyBusinessArea, companyIndustry, companySize, companyRevenueRange, companyDescription, companyPhoneNumber, companyLinkedinUrl, companyLocation, subscribed, emailStatus, emailVerificationStatus, emailVerificationCheckedAt, emailVerificationProvider, emailVerificationMethod, emailVerificationRiskFlags, emailVerificationSuggestedEmail, listIds, createdAt, updatedAt]
     ContactNote:
       type: object
       properties:
@@ -6994,7 +7040,10 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
+        contactId: { type: ["string", "null"], format: uuid }
         email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
         status: { type: string, enum: [queued, sending, delivered, bounced, suppressed, unknown] }
         attempts: { type: integer, minimum: 0 }
         rateLimitDeferred: { type: boolean, description: True when the queued recipient was deferred by its SMTP mailbox's shared sending limit. }
@@ -7012,7 +7061,19 @@ components:
         latestSmtpCode: { type: ["integer", "null"] }
         dsnRequested: { type: boolean }
         evidenceVerification: { type: ["string", "null"], enum: [user_imported, gmail_authorized, microsoft365_authorized, null] }
-      required: [id, email, status, attempts, rateLimitDeferred, nextAttemptAt, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
+      required: [id, contactId, email, firstName, lastName, status, attempts, rateLimitDeferred, nextAttemptAt, smtpAcceptedAt, lastError, reportOutcome, reportSource, reportDiagnostic, reportStatusCode, reportAt, reportDeliveryScope, latestMessageId, latestSmtpResponse, latestSmtpCode, dsnRequested, evidenceVerification]
+    OpenCampaignContactConversionInput:
+      type: object
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+      required: [firstName, lastName]
+    OpenCampaignContactConversionResult:
+      type: object
+      properties:
+        contact: { $ref: "#/components/schemas/Contact" }
+        created: { type: boolean }
+      required: [contact, created]
     CampaignTargetList:
       type: object
       properties:

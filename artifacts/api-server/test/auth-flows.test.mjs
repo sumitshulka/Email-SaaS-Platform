@@ -699,6 +699,7 @@ memory.public.none(`
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0019_open_campaigns.sql", import.meta.url), "utf8"));
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0020_campaign_placeholder_fallbacks.sql", import.meta.url), "utf8"));
 memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0021_api_error_diagnostics.sql", import.meta.url), "utf8"));
+memory.public.none(readFileSync(new URL("../../../lib/db/migrations/0022_imported_contact_source.sql", import.meta.url), "utf8"));
 // Match the existing inbox fields used by the sender schema in worker fixtures.
 memory.public.none(`
   ALTER TABLE tenant_sending_configurations ADD COLUMN IF NOT EXISTS inbox_host varchar(255);
@@ -11626,6 +11627,155 @@ describe("Gmail OAuth consent and token lifecycle", { concurrency: false }, () =
 });
 
 describe("tenant sending and campaign delivery", { concurrency: false }, () => {
+  it("converts completed open-campaign recipients into contacts with campaign history", async () => {
+    const owner = await loggedInUser({ username: "open-recipient-conversion-owner" });
+    const [pkg] = await db.insert(dbModule.subscriptionPackagesTable).values({
+      name: "Open Recipient Conversion Package",
+      description: "",
+      amountMinor: 1000,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 10,
+    }).returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: pkg.id,
+      paymentId: randomUUID(),
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const initiatedAt = new Date(Date.now() - 60 * 60_000);
+    const [campaign] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      audienceType: "open",
+      name: "Research follow-up",
+      subject: "Thanks for your time",
+      textBody: "Thank you for reading.",
+      status: "completed",
+      queuedAt: initiatedAt,
+      completedAt: new Date(),
+    }).returning();
+    const [recipient] = await db.insert(dbModule.emailCampaignRecipientsTable).values({
+      campaignId: campaign.id,
+      userId: owner.user.id,
+      email: "new-open-recipient@example.test",
+      firstName: "",
+      lastName: "",
+      status: "delivered",
+      attempts: 1,
+      deliveredAt: new Date(),
+    }).returning();
+    const [attempt] = await db.insert(dbModule.emailSendAttemptsTable).values({
+      userId: owner.user.id,
+      recipientId: recipient.id,
+      messageId: "<open-recipient-conversion@example.test>",
+      outcome: "sent",
+      attemptedAt: initiatedAt,
+    }).returning();
+
+    const converted = await api(
+      `/campaigns/${campaign.id}/recipients/${recipient.id}/convert-contact`,
+      {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { firstName: "Morgan", lastName: "Lee" },
+      },
+    );
+    assert.equal(converted.response.status, 200, JSON.stringify(converted.body));
+    assert.equal(converted.body.created, true);
+    assert.equal(converted.body.contact.email, recipient.email);
+    assert.equal(converted.body.contact.firstName, "Morgan");
+    assert.equal(
+      converted.body.contact.importedContact,
+      `Converted from Open Campaign ${campaign.name} initiated on ${initiatedAt.toISOString().slice(0, 10)}`,
+    );
+
+    const [linkedRecipient] = await db.select().from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
+    assert.equal(linkedRecipient.contactId, converted.body.contact.id);
+    const history = await api(`/contacts/${converted.body.contact.id}/email-history`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(history.response.status, 200, JSON.stringify(history.body));
+    assert.equal(history.body.length, 1);
+    assert.equal(history.body[0].campaignId, campaign.id);
+    assert.equal(history.body[0].campaignName, campaign.name);
+    assert.equal(history.body[0].messageId, attempt.messageId);
+  });
+
+  it("links an existing contact without replacing its details and blocks drafts", async () => {
+    const owner = await loggedInUser({ username: "open-recipient-existing-contact-owner" });
+    const [existingContact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      email: "existing-open-recipient@example.test",
+      firstName: "Saved",
+      lastName: "Name",
+      name: "Saved Name",
+      subscribed: false,
+      emailStatus: "unsubscribed",
+    }).returning();
+    const [completedCampaign] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      audienceType: "open",
+      name: "Existing contact campaign",
+      subject: "A message",
+      textBody: "Campaign content",
+      status: "completed",
+      queuedAt: new Date(Date.now() - 60 * 60_000),
+      completedAt: new Date(),
+    }).returning();
+    const [existingRecipient] = await db.insert(dbModule.emailCampaignRecipientsTable).values({
+      campaignId: completedCampaign.id,
+      userId: owner.user.id,
+      email: existingContact.email,
+      firstName: "Uploaded",
+      lastName: "Name",
+      status: "suppressed",
+    }).returning();
+    const linked = await api(
+      `/campaigns/${completedCampaign.id}/recipients/${existingRecipient.id}/convert-contact`,
+      {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { firstName: "Different", lastName: "Person" },
+      },
+    );
+    assert.equal(linked.response.status, 200, JSON.stringify(linked.body));
+    assert.equal(linked.body.created, false);
+    assert.equal(linked.body.contact.id, existingContact.id);
+    assert.equal(linked.body.contact.firstName, "Saved");
+    assert.equal(linked.body.contact.lastName, "Name");
+    assert.equal(linked.body.contact.subscribed, false);
+    assert.equal(linked.body.contact.importedContact, null);
+    const [linkedRecipient] = await db.select().from(dbModule.emailCampaignRecipientsTable)
+      .where(eq(dbModule.emailCampaignRecipientsTable.id, existingRecipient.id));
+    assert.equal(linkedRecipient.contactId, existingContact.id);
+
+    const [draft] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      audienceType: "open",
+      name: "Not finished",
+      subject: "A message",
+      textBody: "Campaign content",
+    }).returning();
+    const [draftRecipient] = await db.insert(dbModule.emailCampaignRecipientsTable).values({
+      campaignId: draft.id,
+      userId: owner.user.id,
+      email: "not-finished@example.test",
+    }).returning();
+    const blocked = await api(
+      `/campaigns/${draft.id}/recipients/${draftRecipient.id}/convert-contact`,
+      {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { firstName: "Draft", lastName: "Recipient" },
+      },
+    );
+    assert.equal(blocked.response.status, 409);
+    assert.equal(blocked.body.code, "CAMPAIGN_NOT_COMPLETED");
+  });
+
   it("cancels only a paused campaign's unsent recipients and keeps sent history follow-up eligible", async () => {
     const owner = await loggedInUser({ username: "campaign-cancel-owner" });
     const pausedAt = new Date(Date.now() - 60_000);

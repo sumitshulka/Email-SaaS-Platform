@@ -1525,6 +1525,8 @@ export const listContactsResponseContactsItemOneLeadStatusMax = 80;
 
 export const listContactsResponseContactsItemOneLeadSourceMax = 120;
 
+export const listContactsResponseContactsItemOneImportedContactMax = 255;
+
 export const listContactsResponseContactsItemOneInterestsMax = 10000;
 
 export const listContactsResponseContactsItemOneGoalsMax = 10000;
@@ -1629,6 +1631,7 @@ export const ListContactsResponse = zod.object({
   "lifecycleStage": zod.string().max(listContactsResponseContactsItemOneLifecycleStageMax).nullable(),
   "leadStatus": zod.string().max(listContactsResponseContactsItemOneLeadStatusMax).nullable(),
   "leadSource": zod.string().max(listContactsResponseContactsItemOneLeadSourceMax).nullable(),
+  "importedContact": zod.string().max(listContactsResponseContactsItemOneImportedContactMax).nullable(),
   "interests": zod.string().max(listContactsResponseContactsItemOneInterestsMax).nullable(),
   "goals": zod.string().max(listContactsResponseContactsItemOneGoalsMax).nullable(),
   "painPoints": zod.string().max(listContactsResponseContactsItemOnePainPointsMax).nullable(),
@@ -1877,6 +1880,8 @@ export const createContactResponseLeadStatusMax = 80;
 
 export const createContactResponseLeadSourceMax = 120;
 
+export const createContactResponseImportedContactMax = 255;
+
 export const createContactResponseInterestsMax = 10000;
 
 export const createContactResponseGoalsMax = 10000;
@@ -1958,6 +1963,7 @@ export const CreateContactResponse = zod.object({
   "lifecycleStage": zod.string().max(createContactResponseLifecycleStageMax).nullable(),
   "leadStatus": zod.string().max(createContactResponseLeadStatusMax).nullable(),
   "leadSource": zod.string().max(createContactResponseLeadSourceMax).nullable(),
+  "importedContact": zod.string().max(createContactResponseImportedContactMax).nullable(),
   "interests": zod.string().max(createContactResponseInterestsMax).nullable(),
   "goals": zod.string().max(createContactResponseGoalsMax).nullable(),
   "painPoints": zod.string().max(createContactResponsePainPointsMax).nullable(),
@@ -4458,6 +4464,8 @@ export const getContactResponseLeadStatusMax = 80;
 
 export const getContactResponseLeadSourceMax = 120;
 
+export const getContactResponseImportedContactMax = 255;
+
 export const getContactResponseInterestsMax = 10000;
 
 export const getContactResponseGoalsMax = 10000;
@@ -4539,6 +4547,7 @@ export const GetContactResponse = zod.object({
   "lifecycleStage": zod.string().max(getContactResponseLifecycleStageMax).nullable(),
   "leadStatus": zod.string().max(getContactResponseLeadStatusMax).nullable(),
   "leadSource": zod.string().max(getContactResponseLeadSourceMax).nullable(),
+  "importedContact": zod.string().max(getContactResponseImportedContactMax).nullable(),
   "interests": zod.string().max(getContactResponseInterestsMax).nullable(),
   "goals": zod.string().max(getContactResponseGoalsMax).nullable(),
   "painPoints": zod.string().max(getContactResponsePainPointsMax).nullable(),
@@ -4756,6 +4765,8 @@ export const updateContactResponseLeadStatusMax = 80;
 
 export const updateContactResponseLeadSourceMax = 120;
 
+export const updateContactResponseImportedContactMax = 255;
+
 export const updateContactResponseInterestsMax = 10000;
 
 export const updateContactResponseGoalsMax = 10000;
@@ -4837,6 +4848,7 @@ export const UpdateContactResponse = zod.object({
   "lifecycleStage": zod.string().max(updateContactResponseLifecycleStageMax).nullable(),
   "leadStatus": zod.string().max(updateContactResponseLeadStatusMax).nullable(),
   "leadSource": zod.string().max(updateContactResponseLeadSourceMax).nullable(),
+  "importedContact": zod.string().max(updateContactResponseImportedContactMax).nullable(),
   "interests": zod.string().max(updateContactResponseInterestsMax).nullable(),
   "goals": zod.string().max(updateContactResponseGoalsMax).nullable(),
   "painPoints": zod.string().max(updateContactResponsePainPointsMax).nullable(),
@@ -6611,7 +6623,10 @@ export const GetCampaignDeliveryReportResponse = zod.object({
 }),
   "recipients": zod.array(zod.object({
   "id": zod.string().uuid(),
+  "contactId": zod.string().uuid().nullable(),
   "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
   "status": zod.enum(['queued', 'sending', 'delivered', 'bounced', 'suppressed', 'unknown']),
   "attempts": zod.number().int().min(getCampaignDeliveryReportResponseRecipientsItemAttemptsMin),
   "rateLimitDeferred": zod.boolean().describe('True when the queued recipient was deferred by its SMTP mailbox\'s shared sending limit.'),
@@ -6633,6 +6648,200 @@ export const GetCampaignDeliveryReportResponse = zod.object({
   "total": zod.number().int().min(getCampaignDeliveryReportResponseTotalMin),
   "limit": zod.number().int().min(1).max(getCampaignDeliveryReportResponseLimitMax),
   "offset": zod.number().int().min(getCampaignDeliveryReportResponseOffsetMin)
+})
+
+
+/**
+ * @summary Convert a completed open-campaign recipient into a contact
+ */
+export const ConvertOpenCampaignRecipientToContactParams = zod.object({
+  "campaignId": zod.coerce.string().uuid(),
+  "recipientId": zod.coerce.string().uuid()
+})
+
+export const convertOpenCampaignRecipientToContactBodyFirstNameMax = 100;
+
+export const convertOpenCampaignRecipientToContactBodyLastNameMax = 100;
+
+
+
+export const ConvertOpenCampaignRecipientToContactBody = zod.object({
+  "firstName": zod.string().min(1).max(convertOpenCampaignRecipientToContactBodyFirstNameMax),
+  "lastName": zod.string().min(1).max(convertOpenCampaignRecipientToContactBodyLastNameMax)
+})
+
+export const convertOpenCampaignRecipientToContactResponseContactTagsItemNameMax = 40;
+
+export const convertOpenCampaignRecipientToContactResponseContactTagsMax = 2;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyNameMax = 200;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyWebsiteUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyDomainMax = 255;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyBusinessAreaMax = 120;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyIndustryMax = 120;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanySizeMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyRevenueRangeMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyDescriptionMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyPhoneNumberMax = 40;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyLinkedinUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyLocationMax = 200;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyNameMax = 200;
+
+export const convertOpenCampaignRecipientToContactResponseContactLinkedinUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactPhoneNumberMax = 40;
+
+export const convertOpenCampaignRecipientToContactResponseContactJobTitleMax = 200;
+
+export const convertOpenCampaignRecipientToContactResponseContactDepartmentMax = 120;
+
+export const convertOpenCampaignRecipientToContactResponseContactSeniorityMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactMobilePhoneMax = 40;
+
+export const convertOpenCampaignRecipientToContactResponseContactWebsiteUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactTwitterUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactFacebookUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactInstagramUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactLocationMax = 200;
+
+export const convertOpenCampaignRecipientToContactResponseContactPreferredLanguageMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactTimeZoneMax = 100;
+
+export const convertOpenCampaignRecipientToContactResponseContactLifecycleStageMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactLeadStatusMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactLeadSourceMax = 120;
+
+export const convertOpenCampaignRecipientToContactResponseContactImportedContactMax = 255;
+
+export const convertOpenCampaignRecipientToContactResponseContactInterestsMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactGoalsMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactPainPointsMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactPersonalizationContextMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactNotesMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyWebsiteUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyDomainMax = 255;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyIndustryMax = 120;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanySizeMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyRevenueRangeMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyDescriptionMax = 10000;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyPhoneNumberMax = 40;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyLinkedinUrlMax = 2048;
+
+export const convertOpenCampaignRecipientToContactResponseContactCompanyLocationMax = 200;
+
+export const convertOpenCampaignRecipientToContactResponseContactEmailVerificationProviderMax = 80;
+
+export const convertOpenCampaignRecipientToContactResponseContactEmailVerificationMethodMax = 120;
+
+export const convertOpenCampaignRecipientToContactResponseContactEmailVerificationSuggestedEmailMax = 254;
+
+
+
+export const ConvertOpenCampaignRecipientToContactResponse = zod.object({
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(convertOpenCampaignRecipientToContactResponseContactTagsItemNameMax)
+})).max(convertOpenCampaignRecipientToContactResponseContactTagsMax).optional(),
+  "email": zod.string().email(),
+  "name": zod.string(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyId": zod.string().uuid().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "globalCompanyId": zod.string().uuid().nullable(),
+  "companyName": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyNameMax),
+  "companyWebsiteUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyDomainMax).nullable(),
+  "companyBusinessArea": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyBusinessAreaMax).nullable(),
+  "companyIndustry": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyOneCompanyLocationMax).nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),zod.null()]),
+  "companyName": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyNameMax).nullable(),
+  "linkedinUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactLinkedinUrlMax).nullable(),
+  "phoneNumber": zod.string().max(convertOpenCampaignRecipientToContactResponseContactPhoneNumberMax).nullable(),
+  "jobTitle": zod.string().max(convertOpenCampaignRecipientToContactResponseContactJobTitleMax).nullable(),
+  "department": zod.string().max(convertOpenCampaignRecipientToContactResponseContactDepartmentMax).nullable(),
+  "seniority": zod.string().max(convertOpenCampaignRecipientToContactResponseContactSeniorityMax).nullable(),
+  "mobilePhone": zod.string().max(convertOpenCampaignRecipientToContactResponseContactMobilePhoneMax).nullable(),
+  "websiteUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactWebsiteUrlMax).nullable(),
+  "twitterUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactTwitterUrlMax).nullable(),
+  "facebookUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactFacebookUrlMax).nullable(),
+  "instagramUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactInstagramUrlMax).nullable(),
+  "location": zod.string().max(convertOpenCampaignRecipientToContactResponseContactLocationMax).nullable(),
+  "preferredLanguage": zod.string().max(convertOpenCampaignRecipientToContactResponseContactPreferredLanguageMax).nullable(),
+  "timeZone": zod.string().max(convertOpenCampaignRecipientToContactResponseContactTimeZoneMax).nullable(),
+  "lifecycleStage": zod.string().max(convertOpenCampaignRecipientToContactResponseContactLifecycleStageMax).nullable(),
+  "leadStatus": zod.string().max(convertOpenCampaignRecipientToContactResponseContactLeadStatusMax).nullable(),
+  "leadSource": zod.string().max(convertOpenCampaignRecipientToContactResponseContactLeadSourceMax).nullable(),
+  "importedContact": zod.string().max(convertOpenCampaignRecipientToContactResponseContactImportedContactMax).nullable(),
+  "interests": zod.string().max(convertOpenCampaignRecipientToContactResponseContactInterestsMax).nullable(),
+  "goals": zod.string().max(convertOpenCampaignRecipientToContactResponseContactGoalsMax).nullable(),
+  "painPoints": zod.string().max(convertOpenCampaignRecipientToContactResponseContactPainPointsMax).nullable(),
+  "personalizationContext": zod.string().max(convertOpenCampaignRecipientToContactResponseContactPersonalizationContextMax).nullable(),
+  "notes": zod.string().max(convertOpenCampaignRecipientToContactResponseContactNotesMax).nullable(),
+  "companyWebsiteUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyWebsiteUrlMax).nullable(),
+  "companyDomain": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyDomainMax).nullable(),
+  "companyIndustry": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyIndustryMax).nullable(),
+  "companySize": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanySizeMax).nullable(),
+  "companyRevenueRange": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyRevenueRangeMax).nullable(),
+  "companyDescription": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyDescriptionMax).nullable(),
+  "companyPhoneNumber": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyPhoneNumberMax).nullable(),
+  "companyLinkedinUrl": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyLinkedinUrlMax).nullable(),
+  "companyLocation": zod.string().max(convertOpenCampaignRecipientToContactResponseContactCompanyLocationMax).nullable(),
+  "subscribed": zod.boolean(),
+  "emailStatus": zod.union([zod.literal('subscribed'),zod.literal('bounced'),zod.literal('unsubscribed'),zod.literal(null)]).nullable(),
+  "emailVerificationStatus": zod.union([zod.literal('accepted'),zod.literal('rejected'),zod.literal('catch_all'),zod.literal('no_mail_server'),zod.literal('inconclusive'),zod.literal(null)]).nullable(),
+  "emailVerificationCheckedAt": zod.coerce.date().nullable(),
+  "emailVerificationProvider": zod.string().max(convertOpenCampaignRecipientToContactResponseContactEmailVerificationProviderMax).nullable(),
+  "emailVerificationMethod": zod.string().max(convertOpenCampaignRecipientToContactResponseContactEmailVerificationMethodMax).nullable(),
+  "emailVerificationRiskFlags": zod.array(zod.enum(['disposable_domain', 'role_based_address', 'likely_domain_typo'])).nullable(),
+  "emailVerificationSuggestedEmail": zod.string().email().max(convertOpenCampaignRecipientToContactResponseContactEmailVerificationSuggestedEmailMax).nullable(),
+  "listIds": zod.array(zod.string().uuid()),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "created": zod.boolean()
 })
 
 

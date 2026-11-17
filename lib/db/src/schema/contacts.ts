@@ -47,6 +47,7 @@ export const contactsTable = pgTable(
     lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
     leadStatus: varchar("lead_status", { length: 80 }),
     leadSource: varchar("lead_source", { length: 120 }),
+    importedContact: varchar("imported_contact", { length: 255 }),
     interests: text("interests"),
     goals: text("goals"),
     painPoints: text("pain_points"),

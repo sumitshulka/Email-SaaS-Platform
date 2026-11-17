@@ -128,6 +128,9 @@ import {
   UpdateTenantSendingAccountResponse,
   CheckSenderMailboxBody,
   CheckSenderMailboxResponse,
+  ConvertOpenCampaignRecipientToContactBody,
+  ConvertOpenCampaignRecipientToContactParams,
+  ConvertOpenCampaignRecipientToContactResponse,
 } from "@workspace/api-zod";
 import type { TenantSendingSettingsInput } from "@workspace/api-zod";
 import { smtpConnectionDiagnostic } from "../lib/smtp-diagnostics";
@@ -3503,6 +3506,290 @@ router.post("/contacts/bulk", requireUserRole, async (req, res): Promise<void> =
   }
   res.json(BulkUpdateContactsResponse.parse(result));
 });
+
+router.post(
+  "/campaigns/:campaignId/recipients/:recipientId/convert-contact",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const params = ConvertOpenCampaignRecipientToContactParams.safeParse(req.params);
+    const parsed = ConvertOpenCampaignRecipientToContactBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: "Enter a first and last name for this contact.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const firstName = parsed.data.firstName.trim();
+    const lastName = parsed.data.lastName.trim();
+    if (!firstName || !lastName) {
+      res.status(400).json({
+        error: "First and last name are required.",
+        code: "INVALID_INPUT",
+      });
+      return;
+    }
+
+    const userId = req.authUser!.id;
+    const settings = await getPlatformSettings();
+    const result = await db.transaction(async (tx) => {
+      const [lockedUser] = await tx
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1)
+        .for("update");
+      if (!lockedUser) return { kind: "user_missing" as const };
+
+      const [campaign] = await tx
+        .select()
+        .from(emailCampaignsTable)
+        .where(
+          and(
+            eq(emailCampaignsTable.id, params.data.campaignId),
+            eq(emailCampaignsTable.userId, userId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!campaign) return { kind: "campaign_missing" as const };
+      if (campaign.audienceType !== "open") {
+        return { kind: "not_open_campaign" as const };
+      }
+      if (campaign.status !== "completed" || !campaign.queuedAt) {
+        return { kind: "campaign_not_completed" as const };
+      }
+
+      const [recipient] = await tx
+        .select()
+        .from(emailCampaignRecipientsTable)
+        .where(
+          and(
+            eq(emailCampaignRecipientsTable.id, params.data.recipientId),
+            eq(emailCampaignRecipientsTable.campaignId, campaign.id),
+            eq(emailCampaignRecipientsTable.userId, userId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!recipient) return { kind: "recipient_missing" as const };
+
+      if (recipient.contactId) {
+        const [linkedContact] = await tx
+          .select()
+          .from(contactsTable)
+          .where(
+            and(
+              eq(contactsTable.id, recipient.contactId),
+              eq(contactsTable.userId, userId),
+            ),
+          )
+          .limit(1);
+        if (!linkedContact) return { kind: "linked_contact_missing" as const };
+        return {
+          kind: "converted" as const,
+          contact: linkedContact,
+          created: false,
+        };
+      }
+
+      const email = recipient.email.trim().toLowerCase();
+      const [existingContact] = await tx
+        .select()
+        .from(contactsTable)
+        .where(and(eq(contactsTable.userId, userId), eq(contactsTable.email, email)))
+        .limit(1)
+        .for("update");
+      if (existingContact) {
+        const [linkedRecipient] = await tx
+          .update(emailCampaignRecipientsTable)
+          .set({ contactId: existingContact.id })
+          .where(
+            and(
+              eq(emailCampaignRecipientsTable.id, recipient.id),
+              isNull(emailCampaignRecipientsTable.contactId),
+            ),
+          )
+          .returning({ id: emailCampaignRecipientsTable.id });
+        if (!linkedRecipient) return { kind: "recipient_already_linked" as const };
+        return {
+          kind: "converted" as const,
+          contact: existingContact,
+          created: false,
+        };
+      }
+
+      const now = new Date();
+      const [activeSubscription] = await tx
+        .select({ contactLimit: subscriptionPackagesTable.contactLimit })
+        .from(userSubscriptionsTable)
+        .innerJoin(
+          subscriptionPackagesTable,
+          eq(userSubscriptionsTable.packageId, subscriptionPackagesTable.id),
+        )
+        .where(
+          and(
+            eq(userSubscriptionsTable.userId, userId),
+            eq(userSubscriptionsTable.status, "active"),
+            lte(userSubscriptionsTable.startsAt, now),
+            gt(userSubscriptionsTable.endsAt, now),
+          ),
+        )
+        .orderBy(desc(userSubscriptionsTable.endsAt))
+        .limit(1);
+      if (!activeSubscription && !settings.allowUserWithoutSubscription) {
+        return { kind: "subscription_required" as const };
+      }
+
+      const contactLimit = Math.min(
+        activeSubscription?.contactLimit ?? settings.maxContactsPerUser,
+        settings.maxContactsPerUser,
+      );
+      const [{ value: used }] = await tx
+        .select({ value: count() })
+        .from(contactsTable)
+        .where(eq(contactsTable.userId, userId));
+      if (Number(used) >= contactLimit) {
+        return { kind: "contact_limit_reached" as const };
+      }
+
+      const [suppression] = await tx
+        .select({ reason: campaignEmailSuppressionsTable.reason })
+        .from(campaignEmailSuppressionsTable)
+        .where(
+          and(
+            eq(campaignEmailSuppressionsTable.userId, userId),
+            eq(campaignEmailSuppressionsTable.email, email),
+          ),
+        )
+        .limit(1);
+      const isBounced = suppression?.reason === "bounced";
+      const isUnsubscribed = Boolean(suppression && !isBounced);
+      const initiatedDate = campaign.queuedAt.toISOString().slice(0, 10);
+      const [createdContact] = await tx
+        .insert(contactsTable)
+        .values({
+          userId,
+          name: `${firstName} ${lastName}`,
+          email,
+          firstName,
+          lastName,
+          importedContact: `Converted from Open Campaign ${campaign.name} initiated on ${initiatedDate}`,
+          subscribed: !isUnsubscribed,
+          emailStatus: isBounced ? "bounced" : isUnsubscribed ? "unsubscribed" : "subscribed",
+        })
+        .onConflictDoNothing({
+          target: [contactsTable.userId, contactsTable.email],
+        })
+        .returning();
+
+      if (!createdContact) {
+        const [racedContact] = await tx
+          .select()
+          .from(contactsTable)
+          .where(and(eq(contactsTable.userId, userId), eq(contactsTable.email, email)))
+          .limit(1)
+          .for("update");
+        if (!racedContact) return { kind: "contact_create_failed" as const };
+        const [linkedRecipient] = await tx
+          .update(emailCampaignRecipientsTable)
+          .set({ contactId: racedContact.id })
+          .where(
+            and(
+              eq(emailCampaignRecipientsTable.id, recipient.id),
+              isNull(emailCampaignRecipientsTable.contactId),
+            ),
+          )
+          .returning({ id: emailCampaignRecipientsTable.id });
+        if (!linkedRecipient) return { kind: "recipient_already_linked" as const };
+        return {
+          kind: "converted" as const,
+          contact: racedContact,
+          created: false,
+        };
+      }
+
+      const [linkedRecipient] = await tx
+        .update(emailCampaignRecipientsTable)
+        .set({ contactId: createdContact.id })
+        .where(
+          and(
+            eq(emailCampaignRecipientsTable.id, recipient.id),
+            isNull(emailCampaignRecipientsTable.contactId),
+          ),
+        )
+        .returning({ id: emailCampaignRecipientsTable.id });
+      if (!linkedRecipient) return { kind: "recipient_already_linked" as const };
+      return {
+        kind: "converted" as const,
+        contact: createdContact,
+        created: true,
+      };
+    });
+
+    if (result.kind === "user_missing") {
+      res.status(401).json({ error: "Please sign in to continue.", code: "UNAUTHENTICATED" });
+      return;
+    }
+    if (result.kind === "campaign_missing" || result.kind === "recipient_missing") {
+      res.status(404).json({
+        error: "The campaign recipient is not available in this workspace.",
+        code: "CAMPAIGN_RECIPIENT_NOT_FOUND",
+      });
+      return;
+    }
+    if (result.kind === "not_open_campaign") {
+      res.status(409).json({
+        error: "Only open-campaign recipients can be converted this way.",
+        code: "NOT_OPEN_CAMPAIGN",
+      });
+      return;
+    }
+    if (result.kind === "campaign_not_completed") {
+      res.status(409).json({
+        error: "Wait until the open campaign has finished before converting recipients.",
+        code: "CAMPAIGN_NOT_COMPLETED",
+      });
+      return;
+    }
+    if (result.kind === "linked_contact_missing" || result.kind === "recipient_already_linked") {
+      res.status(409).json({
+        error: "This campaign recipient has already been linked. Refresh the delivery details.",
+        code: "CAMPAIGN_RECIPIENT_ALREADY_LINKED",
+      });
+      return;
+    }
+    if (result.kind === "subscription_required") {
+      res.status(403).json({
+        error: "An active subscription is required to add contacts.",
+        code: "SUBSCRIPTION_REQUIRED",
+      });
+      return;
+    }
+    if (result.kind === "contact_limit_reached") {
+      res.status(409).json({
+        error: "Your workspace contact limit has been reached.",
+        code: "CONTACT_LIMIT_REACHED",
+      });
+      return;
+    }
+    if (result.kind === "contact_create_failed") {
+      res.status(409).json({
+        error: "The contact could not be created. Refresh the campaign and try again.",
+        code: "CONTACT_CREATE_FAILED",
+      });
+      return;
+    }
+
+    res.json(
+      ConvertOpenCampaignRecipientToContactResponse.parse({
+        contact: await getContactPayload(userId, result.contact),
+        created: result.created,
+      }),
+    );
+  },
+);
 
 router.get("/contacts/:contactId/replies", requireUserRole, async (req, res): Promise<void> => {
   const params = ListContactCampaignRepliesParams.safeParse(req.params);

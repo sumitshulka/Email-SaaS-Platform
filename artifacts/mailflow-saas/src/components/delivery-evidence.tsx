@@ -7,8 +7,11 @@ import {
   getListCampaignsQueryKey, getListContactsQueryKey, useBackfillMicrosoft365Traces,
   useConnectMicrosoft365Trace, useDisconnectMicrosoft365Trace,
   useGetCampaignDeliveryReport, useGetMicrosoft365TraceConnection,
-  useImportDeliveryReport, useTriggerMicrosoft365TraceSync,
+  useConvertOpenCampaignRecipientToContact, useImportDeliveryReport, useTriggerMicrosoft365TraceSync,
 } from '@workspace/api-client-react';
+import type { CampaignDeliveryReport } from '@workspace/api-client-react';
+import { Link } from 'wouter';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 const MAX_BYTES = 1024 * 1024;
@@ -24,6 +27,7 @@ const inputCls = 'w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[
 const MICROSOFT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MICROSOFT_TRACE_GUIDE = 'https://learn.microsoft.com/en-us/exchange/monitoring/trace-an-email-message/graph-api-message-trace';
 const MICROSOFT_TRACE_RESOURCE = 'https://learn.microsoft.com/en-us/graph/api/resources/exchangemessagetrace?view=graph-rest-1.0';
+type DeliveryRecipient = CampaignDeliveryReport['recipients'][number];
 
 type MicrosoftTraceConnectGuidance = { title: string; detail: string; nextSteps: string[]; providerCode?: string };
 
@@ -491,13 +495,71 @@ export function Microsoft365TraceSettingsPanel() {
   </section>;
 }
 
-export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: string; active: boolean }) {
+export function DeliveryEvidenceSection({
+  campaignId,
+  active,
+  campaignName,
+  campaignInitiatedAt,
+  allowOpenCampaignConversion,
+}: {
+  campaignId: string;
+  active: boolean;
+  campaignName: string;
+  campaignInitiatedAt: string | null;
+  allowOpenCampaignConversion: boolean;
+}) {
+  const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [conversionRecipient, setConversionRecipient] = useState<DeliveryRecipient | null>(null);
+  const [conversionNames, setConversionNames] = useState({ firstName: '', lastName: '' });
+  const [conversionError, setConversionError] = useState<string | null>(null);
+  const [conversionNotice, setConversionNotice] = useState<{ contactId: string; created: boolean } | null>(null);
+  const convertRecipient = useConvertOpenCampaignRecipientToContact();
   const params = { limit: PAGE, offset };
   const query = useGetCampaignDeliveryReport(campaignId, params, {
     query: { queryKey: getGetCampaignDeliveryReportQueryKey(campaignId, params), refetchInterval: active ? 10_000 : 60_000, staleTime: active ? 0 : 30_000 },
   });
+  const startConversion = (recipient: DeliveryRecipient) => {
+    setConversionRecipient(recipient);
+    setConversionNames({ firstName: recipient.firstName, lastName: recipient.lastName });
+    setConversionError(null);
+  };
+  const submitConversion = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!conversionRecipient) return;
+    setConversionError(null);
+    convertRecipient.mutate({
+      campaignId,
+      recipientId: conversionRecipient.id,
+      data: {
+        firstName: conversionNames.firstName.trim(),
+        lastName: conversionNames.lastName.trim(),
+      },
+    }, {
+      onSuccess: result => {
+        setConversionNotice({ contactId: result.contact.id, created: result.created });
+        setConversionRecipient(null);
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: getGetCampaignDeliveryReportQueryKey(campaignId, params) }),
+          queryClient.invalidateQueries({ queryKey: getListContactsQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getGetUserDashboardQueryKey() }),
+          queryClient.invalidateQueries({ queryKey: getGetCampaignDashboardQueryKey(campaignId) }),
+          queryClient.invalidateQueries({ queryKey: getListCampaignsQueryKey() }),
+        ]);
+      },
+      onError: error => {
+        const value = error as { message?: unknown; data?: { error?: unknown } };
+        setConversionError(
+          typeof value.data?.error === 'string'
+            ? value.data.error
+            : typeof value.message === 'string'
+              ? value.message
+              : 'The recipient could not be converted. Please try again.',
+        );
+      },
+    });
+  };
   const data = query.data;
   const s = data?.summary;
   const total = data?.total ?? 0;
@@ -513,12 +575,16 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
   return <section data-testid="section-delivery-evidence" className="mb-5 overflow-hidden rounded-lg border border-[#e0e4e9] bg-white">
     <div className="border-b border-[#e9edf0] px-5 py-4"><h2 className="display text-[17px] font-bold text-[#1b293a]">Delivery evidence</h2>
       <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#788392]">SMTP acceptance means your provider took the message, not that it reached an inbox. DSN requests are best effort and providers may ignore them. Authorized Gmail and Microsoft 365 trace connections can collect provider events; the absence of an event never means delivered, placed in an inbox, or read. Recipients held by a shared SMTP mailbox limit show when another send attempt becomes eligible.</p></div>
+    {conversionNotice && <div role="status" data-testid="status-open-recipient-conversion" className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#cfe4d8] bg-[#f1f8f4] px-3 py-2.5 text-[11px] text-[#31674b]">
+      <span>{conversionNotice.created ? 'Contact created and linked to this campaign.' : 'Existing contact linked to this campaign; saved contact details were left unchanged.'}</span>
+      <Link href={`/contacts/${conversionNotice.contactId}`} className="font-semibold underline">Open contact</Link>
+    </div>}
     {query.isLoading ? <div aria-label="Loading delivery evidence" className="space-y-3 p-5"><div className="h-16 animate-pulse rounded-md bg-[#edf0f3]"/><div className="h-40 animate-pulse rounded-md bg-[#f1f3f5]"/></div>
       : query.isError || !data ? <div role="alert" className="m-5 flex items-center justify-between gap-4 rounded-md border border-[#f0d5bd] bg-[#fff8f1] p-4"><p className="text-[12px] text-[#99501e]">We couldn't load delivery evidence for this campaign.</p><button type="button" data-testid="button-retry-delivery-report" className={outlineBtn} onClick={() => void query.refetch()}>Retry</button></div>
       : <>
         <div className="grid gap-px bg-[#edf0f2] sm:grid-cols-2 lg:grid-cols-4">{cells.map(([l, v, d]) => <div key={l} className="bg-white px-5 py-4" data-testid={`summary-evidence-${l.toLowerCase().replace(/[^a-z]+/g, '-')}`}><div className="text-[11px] font-semibold text-[#5c6877]">{l}</div><div className="display mt-1 text-[22px] font-bold text-[#192638]">{(v ?? 0).toLocaleString()}</div><div className="mt-0.5 text-[10px] text-[#8a95a2]">{d}</div></div>)}</div>
         {data.recipients.length === 0 ? <div data-testid="empty-delivery-report" className="m-5 rounded-lg border border-dashed border-[#d9dfe6] bg-[#fbfcfd] px-5 py-10 text-center"><div className="text-[14px] font-semibold text-[#26364a]">No recipient evidence yet</div><p className="mt-1 text-[12px] text-[#738091]">Recipients appear here once the campaign has queued messages.</p></div>
-          : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Recipient</th><th className="px-4 py-3 font-semibold">Transport</th><th className="px-4 py-3 font-semibold">Report evidence</th><th className="px-4 py-3 font-semibold">DSN</th><th className="px-5 py-3 text-right font-semibold">Details</th></tr></thead>
+          : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-left"><thead className="bg-[#fafbfc] text-[10px] uppercase tracking-[.12em] text-[#8a95a2]"><tr><th className="px-5 py-3 font-semibold">Recipient</th><th className="px-4 py-3 font-semibold">Transport</th><th className="px-4 py-3 font-semibold">Report evidence</th><th className="px-4 py-3 font-semibold">DSN</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead>
             <tbody className="divide-y divide-[#edf0f2]">{data.recipients.map(r => {
               const meta = reportOutcomeMeta(r.reportOutcome); const isOpen = openId === r.id;
               const accepted = !!r.smtpAcceptedAt;
@@ -526,11 +592,16 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
               const eligibleAt = new Date(r.nextAttemptAt);
               const isEligible = eligibleAt.getTime() <= Date.now();
               return <Fragment key={r.id}><tr data-testid={`row-evidence-${r.id}`} className="align-top">
-                <td className="px-5 py-3 text-[12px] font-semibold text-[#26364a]">{r.email}<div className="mt-0.5 text-[10px] font-normal text-[#8a95a2]">{r.attempts} {r.attempts === 1 ? 'attempt' : 'attempts'}</div></td>
+                <td className="px-5 py-3 text-[12px] font-semibold text-[#26364a]">{r.email}<div className="mt-0.5 text-[10px] font-normal text-[#8a95a2]">{[r.firstName, r.lastName].filter(Boolean).join(' ') || 'Name not provided'} · {r.attempts} {r.attempts === 1 ? 'attempt' : 'attempts'}</div></td>
                 <td className="px-4 py-3"><EvidencePill label={accepted ? 'SMTP accepted' : r.status === 'bounced' ? 'Send failed' : r.status.charAt(0).toUpperCase() + r.status.slice(1)} tone={accepted ? 'green' : r.status === 'bounced' ? 'orange' : r.status === 'queued' || r.status === 'sending' ? 'blue' : 'gray'}/>{r.smtpAcceptedAt && <div className="mt-1 text-[10px] text-[#8a95a2]">{new Date(r.smtpAcceptedAt).toLocaleString()}</div>}{rateLimitDeferred && <div data-testid={`rate-limit-eligibility-${r.id}`} className="mt-2 rounded-md bg-[#fff8ef] px-2.5 py-2 text-[10px] leading-4 text-[#895b2f]"><div className="font-semibold">Shared SMTP mailbox limit</div><div>{isEligible ? 'Eligible since ' : 'Eligible at '}<time dateTime={r.nextAttemptAt}>{eligibleAt.toLocaleString()}</time></div><div className="mt-0.5 text-[#9b7552]">This is the next attempt eligibility time, not an SMTP acceptance or delivery confirmation.</div></div>}</td>
                 <td className="px-4 py-3">{meta ? <><EvidencePill label={meta.label} tone={meta.tone}/><div className="mt-1 text-[10px] text-[#8a95a2]">{evidenceSourceLabel(r.evidenceVerification)} · {r.reportAt ? new Date(r.reportAt).toLocaleString() : 'Report time unavailable'}</div></> : <EvidencePill label="Unconfirmed" tone="gray"/>}</td>
                 <td className="px-4 py-3 text-[11px] text-[#66717e]">{r.dsnRequested ? 'Requested (best effort)' : 'Not requested'}</td>
-                <td className="px-5 py-3 text-right"><button type="button" data-testid={`button-inspect-evidence-${r.id}`} aria-expanded={isOpen} className={outlineBtn} onClick={() => setOpenId(isOpen ? null : r.id)}>{isOpen ? 'Hide' : 'Inspect'}</button></td></tr>
+                <td className="px-5 py-3"><div className="flex flex-wrap justify-end gap-2">
+                  {allowOpenCampaignConversion && (r.contactId
+                    ? <Link href={`/contacts/${r.contactId}`} data-testid={`link-converted-contact-${r.id}`} className={`${outlineBtn} text-[#397050]`}>Contact linked</Link>
+                    : <button type="button" data-testid={`button-convert-open-recipient-${r.id}`} className={outlineBtn} disabled={convertRecipient.isPending} onClick={() => startConversion(r)}>Convert to Contact</button>)}
+                  <button type="button" data-testid={`button-inspect-evidence-${r.id}`} aria-expanded={isOpen} className={outlineBtn} onClick={() => setOpenId(isOpen ? null : r.id)}>{isOpen ? 'Hide' : 'Inspect'}</button>
+                </div></td></tr>
                 {isOpen && <tr key={`${r.id}-d`} data-testid={`detail-evidence-${r.id}`} className="bg-[#f9fafb]"><td colSpan={5} className="px-5 py-4"><dl className="grid gap-x-8 gap-y-2 text-[11px] text-[#5c6877] md:grid-cols-2">
                   {([['Message-ID', r.latestMessageId], ['SMTP response', [r.latestSmtpCode, r.latestSmtpResponse].filter(Boolean).join(' ') || null], ['Last send error', r.lastError], ['Report diagnostic', r.reportDiagnostic], ['Report status code', r.reportStatusCode], ['Report source', r.reportSource ? r.reportSource.replace(/_/g, ' ') : null], ['Delivery scope', r.reportDeliveryScope === 'mailbox' ? 'Mailbox, as reported by the provider (not a guaranteed inbox folder or read)' : r.reportDeliveryScope === 'receiving_server' ? 'Receiving server only' : r.reportDeliveryScope], ['Verification', r.evidenceVerification ? evidenceSourceLabel(r.evidenceVerification) : null]] as Array<[string, string | null | undefined]>).map(([k, v]) => <div key={k}><dt className="font-semibold text-[#344154]">{k}</dt><dd className="mono mt-0.5 break-all">{v || 'None recorded'}</dd></div>)}
                 </dl></td></tr>}</Fragment>;
@@ -539,6 +610,41 @@ export function DeliveryEvidenceSection({ campaignId, active }: { campaignId: st
           <div className="flex gap-2"><button type="button" data-testid="button-evidence-prev" className={outlineBtn} disabled={offset === 0 || query.isFetching} onClick={() => { setOpenId(null); setOffset(Math.max(0, offset - PAGE)); }}><ChevronLeft className="h-4 w-4"/>Previous</button><button type="button" data-testid="button-evidence-next" className={outlineBtn} disabled={offset + PAGE >= total || query.isFetching} onClick={() => { setOpenId(null); setOffset(offset + PAGE); }}>Next<ChevronRight className="h-4 w-4"/></button></div></div>
       </>}
       <ImportPanel campaignId={campaignId}/>
+      <Dialog open={conversionRecipient !== null} onOpenChange={open => { if (!open && !convertRecipient.isPending) { setConversionRecipient(null); setConversionError(null); } }}>
+        <DialogContent className="max-w-[480px]" data-testid="dialog-convert-open-campaign-contact">
+          <DialogHeader>
+            <div className="mono text-[10px] uppercase tracking-[.16em] text-[#7d8794]">Open campaign / recipient</div>
+            <DialogTitle className="display text-[21px] font-bold text-[#172334]">Convert to Contact</DialogTitle>
+            <DialogDescription className="text-[12px] leading-5 text-[#687484]">Create a contact from this recipient or link the existing contact without overwriting its details.</DialogDescription>
+          </DialogHeader>
+          {conversionRecipient && <form onSubmit={submitConversion} className="space-y-4">
+            <div className="rounded-md border border-[#e2e7ed] bg-[#f8fafc] p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c8794]">Email address</div>
+              <div className="mt-1 break-all text-[12px] font-semibold text-[#29384a]">{conversionRecipient.email}</div>
+              <p className="mt-2 text-[10px] leading-4 text-[#7c8794]">This address stays fixed so campaign history remains linked to the right recipient.</p>
+            </div>
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold text-[#465568]">First name <span className="text-[#a95218]">(required)</span></span>
+              <input data-testid="input-convert-contact-first-name" autoComplete="given-name" required maxLength={100} value={conversionNames.firstName} onChange={event => setConversionNames(value => ({ ...value, firstName: event.target.value }))} className={inputCls}/>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-semibold text-[#465568]">Last name <span className="text-[#a95218]">(required)</span></span>
+              <input data-testid="input-convert-contact-last-name" autoComplete="family-name" required maxLength={100} value={conversionNames.lastName} onChange={event => setConversionNames(value => ({ ...value, lastName: event.target.value }))} className={inputCls}/>
+            </label>
+            <div className="rounded-md border border-[#dce6ef] bg-[#f6f9fc] px-3 py-2.5 text-[10px] leading-4 text-[#536477]">
+              <span className="font-semibold text-[#344154]">Imported contact source:</span> Mailflow will record “Converted from Open Campaign {campaignName} initiated on {campaignInitiatedAt ? new Date(campaignInitiatedAt).toISOString().slice(0, 10) : 'the campaign queue date'}”. This source is saved automatically and cannot be edited.
+            </div>
+            {conversionError && <p role="alert" data-testid="error-convert-open-recipient" className="rounded-md border border-[#f0d5bd] bg-[#fff8f1] px-3 py-2.5 text-[11px] leading-5 text-[#99501e]">{conversionError}</p>}
+            <div className="flex justify-end gap-2 border-t border-[#edf0f2] pt-3">
+              <button type="button" className={outlineBtn} disabled={convertRecipient.isPending} onClick={() => { setConversionRecipient(null); setConversionError(null); }}>Cancel</button>
+              <button type="submit" data-testid="button-submit-convert-open-recipient" className={primaryBtn} disabled={convertRecipient.isPending || !conversionNames.firstName.trim() || !conversionNames.lastName.trim()}>
+                {convertRecipient.isPending && <LoaderCircle className="h-4 w-4 animate-spin"/>}
+                {convertRecipient.isPending ? 'Saving contact…' : 'Save and link contact'}
+              </button>
+            </div>
+          </form>}
+        </DialogContent>
+      </Dialog>
   </section>;
 }
 

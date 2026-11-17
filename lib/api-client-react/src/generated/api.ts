@@ -195,6 +195,8 @@ import type {
   OnlinePaymentSettings,
   OnlinePaymentSettingsInput,
   OpenCampaignAllowance,
+  OpenCampaignContactConversionInput,
+  OpenCampaignContactConversionResult,
   OpenCampaignRecipientInput,
   PackageCheckoutCodeInput,
   PackageCheckoutCodeRequestResponse,
@@ -12344,6 +12346,97 @@ export function useGetCampaignDeliveryReport<TData = Awaited<ReturnType<typeof g
 
 
 
+
+export const getConvertOpenCampaignRecipientToContactUrl = (campaignId: string,
+    recipientId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/recipients/${recipientId}/convert-contact`
+}
+
+/**
+ * @summary Convert a completed open-campaign recipient into a contact
+ */
+export const convertOpenCampaignRecipientToContact = async (campaignId: string,
+    recipientId: string,
+    openCampaignContactConversionInput: OpenCampaignContactConversionInput, options?: Parameters<typeof customFetch>[1]): Promise<OpenCampaignContactConversionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<OpenCampaignContactConversionResult>(getConvertOpenCampaignRecipientToContactUrl(campaignId,recipientId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(openCampaignContactConversionInput)
+  }
+);}
+
+
+
+
+
+export const getConvertOpenCampaignRecipientToContactMutationKey = () => ['convertOpenCampaignRecipientToContact'] as const;
+
+export const getConvertOpenCampaignRecipientToContactMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof convertOpenCampaignRecipientToContact>>, TError,ConvertOpenCampaignRecipientToContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof convertOpenCampaignRecipientToContact>>, TError,ConvertOpenCampaignRecipientToContactMutationVariables, TContext> => {
+
+const mutationKey = getConvertOpenCampaignRecipientToContactMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof convertOpenCampaignRecipientToContact>>, ConvertOpenCampaignRecipientToContactMutationVariables> = (props) => {
+          const {campaignId,recipientId,data} = props ?? {};
+
+          return  convertOpenCampaignRecipientToContact(campaignId,recipientId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConvertOpenCampaignRecipientToContactMutationResult = NonNullable<Awaited<ReturnType<typeof convertOpenCampaignRecipientToContact>>>
+    export type ConvertOpenCampaignRecipientToContactMutationBody = BodyType<OpenCampaignContactConversionInput>
+    export type ConvertOpenCampaignRecipientToContactMutationError = ErrorType<ApiError>
+    export type ConvertOpenCampaignRecipientToContactMutationVariables = {campaignId: string;recipientId: string;data: BodyType<OpenCampaignContactConversionInput>}
+
+    /**
+ * @summary Convert a completed open-campaign recipient into a contact
+ */
+export const useConvertOpenCampaignRecipientToContact = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof convertOpenCampaignRecipientToContact>>, TError,ConvertOpenCampaignRecipientToContactMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof convertOpenCampaignRecipientToContact>>,
+        TError,
+        ConvertOpenCampaignRecipientToContactMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConvertOpenCampaignRecipientToContactMutationOptions(options));
+    }
 
 export const getImportDeliveryReportUrl = () => {
 

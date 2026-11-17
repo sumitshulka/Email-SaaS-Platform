@@ -13,7 +13,11 @@ import type { DeliveryRecipientStatus } from './deliveryRecipientStatus';
 
 export interface DeliveryRecipient {
   id: string;
+  /** @nullable */
+  contactId: string | null;
   email: string;
+  firstName: string;
+  lastName: string;
   status: DeliveryRecipientStatus;
   /** @minimum 0 */
   attempts: number;

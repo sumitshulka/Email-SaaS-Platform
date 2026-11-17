@@ -464,6 +464,7 @@ export function ContactDetailPage() {
               {leadStatusReasonError && <span id="detail-lead-status-reason-error" role="alert" className="mt-1 block text-[11px] text-[#a95218]">Enter a reason before saving this status change.</span>}
             </label>}
             <ContactFieldSelect field="leadSource" title="Lead source" value={form.leadSource} options={fieldOptionsQuery.data?.options ?? []} onChange={setString('leadSource')} testId="input-detail-lead-source"/>
+            <DataField label="Imported contact" value={contact.importedContact} testId="text-detail-imported-contact"/>
             <TextAreaField title="Interests" value={form.interests} onChange={setString('interests')} testId="input-detail-interests"/>
             <TextAreaField title="Goals" value={form.goals} onChange={setString('goals')} testId="input-detail-goals"/>
             <TextAreaField title="Pain points" value={form.painPoints} onChange={setString('painPoints')} testId="input-detail-pain-points"/>
