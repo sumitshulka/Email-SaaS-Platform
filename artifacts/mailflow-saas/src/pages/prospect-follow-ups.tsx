@@ -5,7 +5,7 @@ import { Link } from 'wouter';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleAlert,
-  Clock3, Mail, MessageSquare, Pencil, Plus, RefreshCw, X,
+  Clock3, Mail, MessageSquare, Pencil, Plus, RefreshCw, Search, X,
 } from 'lucide-react';
 import {
   getGetProspectDashboardQueryKey, getGetProspectFollowUpsTodayQueryKey, getGetProspectQueryKey,
@@ -53,30 +53,57 @@ export function FollowUpForm({ open, onClose, prospectId, prospectName, initial,
   const create = useCreateProspectFollowUp();
   const update = useUpdateProspectFollowUp();
   const types = useListProspectActionTypes({ query: { enabled: open, queryKey: getListProspectActionTypesQueryKey() } });
-  const prospects = useListProspects({ page: 1, pageSize: 100, status: 'active' }, { query: { enabled: open && !prospectId && !initial, queryKey: getListProspectsQueryKey({ page: 1, pageSize: 100, status: 'active' }) } });
   const refresh = useRefreshFollowUps();
   const [selectedProspect, setSelectedProspect] = useState(initial?.prospectId ?? prospectId ?? '');
+  const [selectedProspectName, setSelectedProspectName] = useState(initial?.prospectName ?? prospectName ?? '');
+  const [prospectSearch, setProspectSearch] = useState('');
+  const [debouncedProspectSearch, setDebouncedProspectSearch] = useState('');
+  const [prospectPage, setProspectPage] = useState(1);
+  const [prospectPickerOpen, setProspectPickerOpen] = useState(false);
   const [actionTypeId, setActionTypeId] = useState(initial?.actionType.id ?? '');
   const [date, setDate] = useState(initial?.followUpDate ?? initialDate ?? localDate(new Date()));
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
-  const prospectSelectRef = useRef<HTMLSelectElement>(null);
+  const prospectSelectRef = useRef<HTMLInputElement>(null);
   const actionTypeSelectRef = useRef<HTMLSelectElement>(null);
   useEffect(() => {
     if (!open) return;
     setSelectedProspect(initial?.prospectId ?? prospectId ?? '');
+    setSelectedProspectName(initial?.prospectName ?? prospectName ?? '');
+    setProspectSearch('');
+    setDebouncedProspectSearch('');
+    setProspectPage(1);
+    setProspectPickerOpen(false);
     setActionTypeId(initial?.actionType.id ?? '');
     setDate(initial?.followUpDate ?? initialDate ?? localDate(new Date()));
     setNotes(initial?.notes ?? '');
     setError('');
     setSaved(false);
-  }, [open, prospectId, initial?.id, initialDate]);
+  }, [open, prospectId, prospectName, initial?.id, initialDate]);
+  useEffect(() => {
+    if (!open || !prospectPickerOpen || selectedProspect) return;
+    const timer = window.setTimeout(() => setDebouncedProspectSearch(prospectSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [open, prospectPickerOpen, selectedProspect, prospectSearch]);
+  const prospectParams = useMemo(() => ({
+    page: prospectPage,
+    pageSize: 10,
+    status: 'active' as const,
+    ...(debouncedProspectSearch ? { search: debouncedProspectSearch } : {}),
+  }), [prospectPage, debouncedProspectSearch]);
+  const prospects = useListProspects(prospectParams, {
+    query: {
+      enabled: open && !prospectId && !initial && !selectedProspect,
+      queryKey: getListProspectsQueryKey(prospectParams),
+    },
+  });
   const activeTypes = (types.data ?? []).filter(type => type.active);
   const availableTypes = initial && !activeTypes.some(type => type.id === initial.actionType.id)
     ? [...activeTypes, { ...initial.actionType, name: `${initial.actionType.name} (inactive)` }]
     : activeTypes;
   const items = prospects.data?.prospects ?? [];
+  const isProspectSearchPending = prospectSearch.trim() !== debouncedProspectSearch;
   if (!open) return null;
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -120,7 +147,63 @@ export function FollowUpForm({ open, onClose, prospectId, prospectName, initial,
         <button type="button" onClick={onClose} disabled={pending} aria-label="Close dialog" className="grid h-8 w-8 place-items-center rounded-lg text-[#718398] hover:bg-white" data-testid="button-close-follow-up-dialog"><X className="h-4 w-4"/></button>
       </header>
       <form onSubmit={submit} className="space-y-4 p-5 sm:p-6">
-        {!prospectId && !initial && <label className="block"><span className={label}>Prospect</span><select ref={prospectSelectRef} className={field} value={selectedProspect} onChange={event => setSelectedProspect(event.target.value)} required data-testid="select-follow-up-prospect"><option value="">Choose an active prospect</option>{items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.contact.name}</option>)}</select>{prospects.isError && <span className="mt-1 flex items-center gap-2 text-[10px] text-[#a04d3b]">Prospects could not be loaded.<button type="button" onClick={() => void prospects.refetch()} className="font-bold underline">Retry</button></span>}</label>}
+        {!prospectId && !initial && (selectedProspect ? <div className="flex items-center gap-3 rounded-lg border border-[#d5e4ef] bg-[#f4f8fb] px-3.5 py-3" data-testid="selected-follow-up-prospect">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-[#46769d]"><Check className="h-4 w-4"/></span>
+          <div className="min-w-0 flex-1"><div className="text-[9px] font-bold uppercase tracking-[.1em] text-[#71869a]">Selected prospect</div><div className="mt-1 truncate text-[12px] font-bold text-[#304a63]">{selectedProspectName || 'Selected prospect'}</div></div>
+          <button type="button" className={secondary} onClick={() => {
+            setSelectedProspect('');
+            setSelectedProspectName('');
+            setProspectSearch('');
+            setDebouncedProspectSearch('');
+            setProspectPage(1);
+            setProspectPickerOpen(true);
+            window.requestAnimationFrame(() => prospectSelectRef.current?.focus());
+          }} data-testid="button-change-follow-up-prospect">Change</button>
+        </div> : <div className="relative">
+          <label className="block"><span className={label}>Find prospect</span><span className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8795a5]"/>
+            <input
+              ref={prospectSelectRef}
+              className={`${field} pl-9`}
+              type="search"
+              role="combobox"
+              aria-label="Search active prospects"
+              aria-expanded={prospectPickerOpen}
+              aria-controls="follow-up-prospect-results"
+              aria-autocomplete="list"
+              value={prospectSearch}
+              onFocus={() => setProspectPickerOpen(true)}
+              onChange={event => {
+                setProspectSearch(event.target.value);
+                setProspectPage(1);
+                setProspectPickerOpen(true);
+              }}
+              maxLength={200}
+              placeholder="Search by prospect, contact, or email"
+              data-testid="input-follow-up-prospect-search"
+            />
+          </span></label>
+          {prospectPickerOpen && <div id="follow-up-prospect-results" className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-[#d7e0e9] bg-white shadow-[0_14px_34px_rgba(24,45,67,.16)]" data-testid="list-follow-up-prospect-results">
+            {prospects.isFetching || isProspectSearchPending ? <div className="px-3.5 py-3 text-[10px] text-[#718398]" role="status">Searching active prospects…</div>
+              : prospects.isError ? <div className="flex items-center justify-between gap-2 px-3.5 py-3 text-[10px] text-[#9b4837]" role="alert"><span>Prospects could not be loaded.</span><button type="button" onClick={() => void prospects.refetch()} className="font-bold underline" data-testid="button-retry-follow-up-prospects">Retry</button></div>
+              : items.length === 0 ? <div className="px-3.5 py-4 text-[10px] text-[#718398]" role="status">{prospectSearch.trim() ? 'No active prospects match this search.' : 'No active prospects are available.'}</div>
+                : <div className="max-h-64 overflow-y-auto p-1" role="group" aria-label="Matching prospects">{items.map(item => <button key={item.id} type="button" onClick={() => {
+                  setSelectedProspect(item.id);
+                  setSelectedProspectName(item.name);
+                  setProspectSearch('');
+                  setDebouncedProspectSearch('');
+                  setProspectPickerOpen(false);
+                }} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition hover:bg-[#f2f7fb] focus:bg-[#f2f7fb] focus:outline-none" data-testid={`option-follow-up-prospect-${item.id}`}>
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#edf4fb] text-[#47769c]"><Check className="h-4 w-4"/></span>
+                  <span className="min-w-0 flex-1"><strong className="block truncate text-[11px] text-[#2b435c]">{item.name}</strong><span className="mt-0.5 block truncate text-[10px] text-[#748698]">{item.contact.name} · {item.contact.email}</span></span>
+                  <span className="max-w-28 shrink-0 truncate rounded-full bg-[#f2f5f7] px-2 py-1 text-[9px] font-semibold text-[#697d8f]">{item.currentStage.name}</span>
+                </button>)}</div>}
+            {prospects.data && prospects.data.pageCount > 1 && <div className="flex items-center justify-between border-t border-[#e8edf2] bg-[#f8fafc] px-3 py-2">
+              <span className="text-[9px] text-[#718398]">{prospects.data.total.toLocaleString()} matches</span>
+              <div className="flex items-center gap-2"><button type="button" className={secondary} disabled={prospectPage <= 1 || prospects.isFetching || isProspectSearchPending} onClick={() => setProspectPage(page => Math.max(1, page - 1))} data-testid="button-follow-up-prospect-previous">Previous</button><span className="text-[9px] text-[#718398]">{prospects.data.page} / {prospects.data.pageCount}</span><button type="button" className={secondary} disabled={prospectPage >= prospects.data.pageCount || prospects.isFetching || isProspectSearchPending} onClick={() => setProspectPage(page => Math.min(prospects.data!.pageCount, page + 1))} data-testid="button-follow-up-prospect-next">Next</button></div>
+            </div>}
+          </div>}
+        </div>)}
         {(prospectId || initial) && <div className="rounded-lg border border-[#e2e9ef] bg-white px-3.5 py-3" data-testid="text-follow-up-prospect"><div className={label}>Prospect</div><div className="text-[12px] font-bold text-[#304a63]">{initial?.prospectName ?? prospectName ?? items.find(item => item.id === prospectId)?.name ?? 'Selected prospect'}</div></div>}
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className={label}>Action type</span><select ref={actionTypeSelectRef} className={field} value={actionTypeId} onChange={event => setActionTypeId(event.target.value)} required data-testid="select-follow-up-action-type"><option value="">Choose an action</option>{availableTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>

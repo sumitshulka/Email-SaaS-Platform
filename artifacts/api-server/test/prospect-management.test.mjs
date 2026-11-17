@@ -224,6 +224,15 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     assert.deepEqual(tagFilter.data.prospects.map(item => item.id), [first.id]);
     const contactTagFilter = await call(mainServer, `/prospects?contactTagId=${tagIds[0]}`);
     assert.equal(contactTagFilter.data.total, 2, "contact tags remain searchable separately");
+    const prospectSearch = `/prospects?search=${encodeURIComponent(`prospect-contact-${contactId}@example.invalid`)}&pageSize=1&status=active`;
+    const firstSearchPage = await call(mainServer, prospectSearch);
+    assert.equal(firstSearchPage.status, 200);
+    assert.equal(firstSearchPage.data.total, 2);
+    assert.equal(firstSearchPage.data.pageCount, 2);
+    const secondSearchPage = await call(mainServer, `${prospectSearch}&page=2`);
+    assert.equal(secondSearchPage.status, 200);
+    assert.equal(secondSearchPage.data.prospects.length, 1);
+    assert.notEqual(secondSearchPage.data.prospects[0].id, firstSearchPage.data.prospects[0].id);
 
     const blockedCurrencyRemoval = await call(mainServer, "/prospect-currencies", "PUT", {
       currencies: ["USD"],
