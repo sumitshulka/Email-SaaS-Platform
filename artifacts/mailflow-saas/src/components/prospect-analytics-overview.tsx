@@ -69,6 +69,7 @@ function ChartCard({
   detail,
   csvName,
   csvRows,
+  toolbar,
   children,
 }: {
   eyebrow: string;
@@ -76,29 +77,35 @@ function ChartCard({
   detail: string;
   csvName: string;
   csvRows: CsvRow[];
+  toolbar?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="overflow-hidden rounded-xl border bg-white shadow-sm" style={{ borderColor: palette.border }} aria-label={title}>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b px-5 py-4 sm:px-6" style={{ borderColor: palette.grid }}>
+      <div className="border-b px-5 py-3 sm:px-6" style={{ borderColor: palette.grid }}>
         <div>
           <div className="mono text-[9px] uppercase tracking-[.16em]" style={{ color: "#8a969d" }}>{eyebrow}</div>
           <h3 className="display mt-1 text-[17px] font-bold" style={{ color: palette.ink }}>{title}</h3>
           <p className="mt-1 max-w-xl text-[11px] leading-5" style={{ color: palette.muted }}>{detail}</p>
         </div>
-        <button
-          type="button"
-          data-testid={`button-download-${csvName.replace(".csv", "")}`}
-          onClick={() => downloadCsv(csvName, csvRows)}
-          disabled={!csvRows.length}
-          aria-label={`Download ${title} chart data as CSV`}
-          className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border bg-white px-3 text-[11px] font-semibold transition hover:bg-[#f5f8f6] disabled:cursor-not-allowed disabled:opacity-45"
-          style={{ borderColor: "#dce4df", color: "#526b63" }}
-        >
-          <Download className="h-3.5 w-3.5" aria-hidden="true" /> CSV
-        </button>
       </div>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className="p-4 sm:p-5">
+        <div className="mb-2 flex min-h-9 flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">{toolbar}</div>
+          <button
+            type="button"
+            data-testid={`button-download-${csvName.replace(".csv", "")}`}
+            onClick={() => downloadCsv(csvName, csvRows)}
+            disabled={!csvRows.length}
+            aria-label={`Download ${title} chart data as CSV`}
+            className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-md border bg-white px-3 text-[11px] font-semibold transition hover:bg-[#f5f8f6] disabled:cursor-not-allowed disabled:opacity-45"
+            style={{ borderColor: "#dce4df", color: "#526b63" }}
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" /> CSV
+          </button>
+        </div>
+        {children}
+      </div>
     </section>
   );
 }
@@ -306,11 +313,10 @@ export function ProspectAnalyticsOverview() {
               ) : <ChartEmpty title="Stage counts are not available" body="The workspace has prospects, but no stage breakdown was returned for this snapshot." />}
             </ChartCard>
 
-            <ChartCard eyebrow="ACTIVE PIPELINE" title="Weighted value by stage" detail={`Expected deal value × current probability, in ${activeCurrency || "a selected currency"}. Terminal stages are excluded from active pipeline.`} csvName="weighted-active-pipeline-by-stage.csv" csvRows={pipelineCsv}>
-              <CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-stage-pipeline-currency" />
+            <ChartCard eyebrow="ACTIVE PIPELINE" title="Weighted value by stage" detail={`Expected deal value × current probability, in ${activeCurrency || "a selected currency"}. Terminal stages are excluded from active pipeline.`} csvName="weighted-active-pipeline-by-stage.csv" csvRows={pipelineCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-stage-pipeline-currency" />}>
               {!activeCurrency ? <ChartEmpty title="No currency values to chart" body="Currency totals are not available for this snapshot. Stage counts remain available in the chart beside this one." />
                 : activeStagePipeline.length ? activeStagePipeline.some(row => row.weightedValue !== 0) ? (
-                  <div className="mt-2 h-[230px]" role="img" aria-label={`Bar chart showing weighted active pipeline by stage in ${activeCurrency}`}>
+                  <div className="h-[230px]" role="img" aria-label={`Bar chart showing weighted active pipeline by stage in ${activeCurrency}`}>
                     <ResponsiveContainer width="100%" height="100%" debounce={0}>
                       <BarChart data={activeStagePipeline} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }} accessibilityLayer>
                         <CartesianGrid horizontal={false} stroke={palette.grid} />
@@ -325,12 +331,11 @@ export function ProspectAnalyticsOverview() {
                   : <ChartEmpty title="No active stages in the breakdown" body="Won and lost terminal stages do not count as active pipeline." />}
             </ChartCard>
 
-            <ChartCard eyebrow="EXPECTED CLOSURE" title="Monthly outlook" detail={`Expected weighted deal value by close month, in ${activeCurrency || "a selected currency"}. Counts include opportunities with a closure period.`} csvName="expected-closure-outlook.csv" csvRows={closureCsv}>
-              <CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-closure-currency" />
+            <ChartCard eyebrow="EXPECTED CLOSURE" title="Monthly outlook" detail={`Expected weighted deal value by close month, in ${activeCurrency || "a selected currency"}. Counts include opportunities with a closure period.`} csvName="expected-closure-outlook.csv" csvRows={closureCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-closure-currency" />}>
               {!activeCurrency ? <ChartEmpty title="No currency values to chart" body="Choose a currency after pipeline currency totals become available." />
                 : closureOutlook.length ? closureOutlook.some(row => row.weightedValue !== 0) ? (
                   <>
-                    <div className="mt-2 h-[230px]" role="img" aria-label={`Area chart showing weighted expected deal value by closure month in ${activeCurrency}`}>
+                    <div className="h-[230px]" role="img" aria-label={`Area chart showing weighted expected deal value by closure month in ${activeCurrency}`}>
                       <ResponsiveContainer width="100%" height="100%" debounce={0}>
                         <AreaChart data={closureOutlook} margin={{ top: 8, right: 12, left: 4, bottom: 0 }} accessibilityLayer>
                           <defs><linearGradient id="prospectClosureFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={palette.teal} stopOpacity={0.28} /><stop offset="100%" stopColor={palette.teal} stopOpacity={0.03} /></linearGradient></defs>
