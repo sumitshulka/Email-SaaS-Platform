@@ -1,5 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { getGetProspectDashboardQueryKey, useGetProspectDashboard, type ProspectDashboard } from "@workspace/api-client-react";
+import {
+  getGetProspectCurrenciesQueryKey,
+  getGetProspectDashboardQueryKey,
+  getListProspectStagesQueryKey,
+  useGetProspectCurrencies,
+  useGetProspectDashboard,
+  useListProspectStages,
+  type ProspectDashboard,
+} from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Activity, ArrowRight, Download, RefreshCw, TrendingUp } from "lucide-react";
 import {
@@ -9,6 +17,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -162,6 +171,8 @@ function MetricCard({ label, value, note, tone = "blue" }: { label: string; valu
 
 export function ProspectAnalyticsOverview() {
   const query = useGetProspectDashboard({ query: { queryKey: getGetProspectDashboardQueryKey() } });
+  const stagesQuery = useListProspectStages({ query: { queryKey: getListProspectStagesQueryKey() } });
+  const currenciesQuery = useGetProspectCurrencies({ query: { queryKey: getGetProspectCurrenciesQueryKey() } });
   const [selectedCurrency, setSelectedCurrency] = useState("");
 
   if (query.isLoading && !query.data) return <SkeletonOverview />;
@@ -180,27 +191,61 @@ export function ProspectAnalyticsOverview() {
   const data = query.data;
   if (!data) return null;
   const hasProspects = data.byStage.some(stage => stage.count > 0);
-  const currencies = data.currencyTotals.map(row => row.currencyCode);
-  const activeCurrency = currencies.includes(selectedCurrency) ? selectedCurrency : currencies[0] ?? "";
+  const stageMetricsById = new Map(data.byStage.map(stage => [stage.stageId, stage]));
+  const stageRowsById = new Map(data.byStage.map(stage => [stage.stageId, {
+    id: stage.stageId,
+    name: stage.stageName,
+    stageType: stage.stageType,
+    terminalOutcome: stage.terminalOutcome,
+    probability: stage.probability,
+    count: stage.count,
+    currencyTotals: stage.currencyTotals,
+    displayOrder: Number.MAX_SAFE_INTEGER,
+    active: false,
+  }]));
+  for (const stage of stagesQuery.data ?? []) {
+    const metric = stageMetricsById.get(stage.id);
+    stageRowsById.set(stage.id, {
+      id: stage.id,
+      name: stage.name,
+      stageType: stage.stageType,
+      terminalOutcome: stage.terminalOutcome,
+      probability: stage.probability,
+      count: metric?.count ?? 0,
+      currencyTotals: metric?.currencyTotals ?? [],
+      displayOrder: stage.displayOrder,
+      active: stage.active,
+    });
+  }
+  const chartStages = [...stageRowsById.values()]
+    .filter(stage => stage.active || stage.count > 0)
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
+  const currencies = [...new Set([
+    ...(currenciesQuery.data?.currencies.map(currency => currency.code) ?? []),
+    ...data.currencyTotals.map(row => row.currencyCode),
+  ])].sort();
+  const preferredCurrency = currenciesQuery.data?.defaultCurrencyCode;
+  const activeCurrency = currencies.includes(selectedCurrency)
+    ? selectedCurrency
+    : preferredCurrency && currencies.includes(preferredCurrency)
+      ? preferredCurrency
+      : currencies[0] ?? "";
   const decided = data.totalWon + data.totalLost;
   const winRate = decided > 0 ? (data.totalWon / decided) * 100 : null;
 
-  const stageCounts = [...data.byStage]
-    .sort((a, b) => b.count - a.count || a.stageName.localeCompare(b.stageName))
-    .map(stage => ({
-      stage: stage.stageName,
+  const stageCounts = chartStages.map(stage => ({
+      stage: stage.name,
       count: stage.count,
       kind: stage.stageType === "terminal" ? (stage.terminalOutcome || "Terminal") : "Active",
     }));
-  const activeStagePipeline = [...data.byStage]
+  const activeStagePipeline = chartStages
     .filter(stage => stage.stageType === "active")
     .map(stage => ({
-      stage: stage.stageName,
+      stage: stage.name,
       weightedValue: currencyMetric(stage.currencyTotals, activeCurrency)?.weightedValue ?? 0,
       count: stage.count,
       probability: stage.probability,
-    }))
-    .sort((a, b) => b.weightedValue - a.weightedValue || a.stage.localeCompare(b.stage));
+    }));
   const closureOutlook = [...data.byClosurePeriod]
     .sort((a, b) => a.period.localeCompare(b.period))
     .map(period => ({
@@ -256,6 +301,7 @@ export function ProspectAnalyticsOverview() {
           </Link>
         </div>
         {query.isError && <div role="status" className="mt-4 rounded-md border border-[#ecd9c3] bg-[#fffaf3] px-3 py-2 text-[10px] text-[#7b5e3d]">Could not refresh this snapshot. Showing the last loaded figures. <button type="button" onClick={() => void query.refetch()} className="ml-1 font-bold underline underline-offset-2">Retry</button></div>}
+        {stagesQuery.isError && <div role="status" className="mt-3 rounded-md border border-[#ecd9c3] bg-[#fffaf3] px-3 py-2 text-[10px] text-[#7b5e3d]">Configured stages could not be loaded, so zero-count stages may be missing. <button type="button" onClick={() => void stagesQuery.refetch()} className="ml-1 font-bold underline underline-offset-2">Retry</button></div>}
       </section>
 
       {!hasProspects ? (
@@ -317,16 +363,18 @@ export function ProspectAnalyticsOverview() {
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: palette.muted }} axisLine={false} tickLine={false} />
                       <YAxis type="category" dataKey="stage" width={116} tick={{ fontSize: 11, fill: "#566474" }} axisLine={false} tickLine={false} />
                       <Tooltip isAnimationActive={false} cursor={{ fill: "#f4f6f3" }} contentStyle={{ borderRadius: 8, border: `1px solid ${palette.border}`, background: "#fffefa", fontSize: 12 }} formatter={(value: number) => [value.toLocaleString(), "Opportunities"]} />
-                      <Bar dataKey="count" name="Opportunities" fill={palette.teal} radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={26} />
+                      <Bar dataKey="count" name="Opportunities" fill={palette.teal} radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={26}>
+                        <LabelList dataKey="count" position="right" fill="#526b63" fontSize={10} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : <ChartEmpty title="Stage counts are not available" body="The workspace has prospects, but no stage breakdown was returned for this snapshot." />}
             </ChartCard>
 
-            <ChartCard tone="blue" eyebrow="ACTIVE PIPELINE" title="Weighted value by stage" detail={`Expected deal value × current probability, in ${activeCurrency || "a selected currency"}. Terminal stages are excluded from active pipeline.`} csvName="weighted-active-pipeline-by-stage.csv" csvRows={pipelineCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-stage-pipeline-currency" />}>
+            <ChartCard tone="blue" eyebrow="ACTIVE PIPELINE" title="Weighted value by stage" detail={`Expected deal value × current probability, in ${activeCurrency || "a selected currency"}. End labels show opportunity counts; terminal stages are excluded.`} csvName="weighted-active-pipeline-by-stage.csv" csvRows={pipelineCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-stage-pipeline-currency" />}>
               {!activeCurrency ? <ChartEmpty title="No currency values to chart" body="Currency totals are not available for this snapshot. Stage counts remain available in the chart beside this one." />
-                : activeStagePipeline.length ? activeStagePipeline.some(row => row.weightedValue !== 0) ? (
+                : activeStagePipeline.length ? (
                   <div className="h-[230px]" role="img" aria-label={`Bar chart showing weighted active pipeline by stage in ${activeCurrency}`}>
                     <ResponsiveContainer width="100%" height="100%" debounce={0}>
                       <BarChart data={activeStagePipeline} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }} accessibilityLayer>
@@ -334,12 +382,13 @@ export function ProspectAnalyticsOverview() {
                         <XAxis type="number" tickFormatter={value => compactMoney(value, activeCurrency)} tick={{ fontSize: 10, fill: palette.muted }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="stage" width={116} tick={{ fontSize: 11, fill: "#566474" }} axisLine={false} tickLine={false} />
                         <Tooltip isAnimationActive={false} cursor={{ fill: "#f4f6f3" }} contentStyle={{ borderRadius: 8, border: `1px solid ${palette.border}`, background: "#fffefa", fontSize: 12 }} formatter={(value: number, _name: string, item) => [formatMoney(value, activeCurrency), `Weighted · ${item.payload.probability}% probability`]} />
-                        <Bar dataKey="weightedValue" name="Weighted active value" fill={palette.blue} radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={26} />
+                        <Bar dataKey="weightedValue" name="Weighted active value" fill={palette.blue} radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={26}>
+                          <LabelList dataKey="count" position="right" fill="#426b92" fontSize={10} formatter={(count: number) => `${count} opp${count === 1 ? "" : "s"}`} />
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                ) : <ChartEmpty title="No weighted value in this currency" body={`Active stages exist, but no ${activeCurrency} weighted values were returned.`} />
-                  : <ChartEmpty title="No active stages in the breakdown" body="Won and lost terminal stages do not count as active pipeline." />}
+                ) : <ChartEmpty title="No active stages configured" body="Active pipeline stages will appear here when they are available." />}
             </ChartCard>
 
             <ChartCard tone="indigo" eyebrow="EXPECTED CLOSURE" title="Monthly outlook" detail={`Expected weighted deal value by close month, in ${activeCurrency || "a selected currency"}. Counts include opportunities with a closure period.`} csvName="expected-closure-outlook.csv" csvRows={closureCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-closure-currency" />}>
