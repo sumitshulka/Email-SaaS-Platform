@@ -130,14 +130,28 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
       defaultCurrencyCode: "INR",
     });
     assert.equal(currencySave.status, 200);
+    const categoryList = await call(mainServer, "/prospect-product-categories");
+    assert.equal(categoryList.status, 200);
+    assert.ok(categoryList.data.some(category => category.isSystem && category.name === "Consulting"));
+    const systemCategory = categoryList.data.find(category => category.isSystem);
+    assert.equal((await call(mainServer, `/prospect-product-categories/${systemCategory.id}`, "DELETE")).status, 400);
+    const customCategory = await call(mainServer, "/prospect-product-categories", "POST", { name: "Services" });
+    assert.equal(customCategory.status, 201);
+    assert.equal(customCategory.data.isSystem, false);
+    const otherTenantCategories = await call(otherTenantServer, "/prospect-product-categories");
+    assert.ok(!otherTenantCategories.data.some(category => category.name === "Services"));
+    const duplicateCategory = await call(mainServer, "/prospect-product-categories", "POST", { name: "services" });
+    assert.equal(duplicateCategory.status, 409);
     const productResponse = await call(mainServer, "/prospect-products", "POST", {
       name: "Consulting",
+      itemType: "service",
       description: "Commercial consulting",
-      category: "Services",
+      category: customCategory.data.name,
       active: true,
       displayOrder: 1,
     });
     assert.equal(productResponse.status, 201);
+    assert.equal(productResponse.data.itemType, "service");
     const productId = productResponse.data.id;
 
     async function createStage(name, probability, stageType = "active", terminalOutcome = null, displayOrder = 1) {
@@ -300,12 +314,26 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
 
     const inactiveProduct = await call(mainServer, `/prospect-products/${productId}`, "PATCH", {
       name: "Consulting",
+      itemType: "service",
       description: "Commercial consulting",
-      category: "Services",
+      category: customCategory.data.name,
       active: false,
       displayOrder: 1,
     });
     assert.equal(inactiveProduct.status, 200);
+    const usedCategoryDelete = await call(mainServer, `/prospect-product-categories/${customCategory.data.id}`, "DELETE");
+    assert.equal(usedCategoryDelete.status, 409);
+    const reclassifiedProduct = await call(mainServer, `/prospect-products/${productId}`, "PATCH", {
+      name: "Consulting",
+      itemType: "service",
+      description: "Commercial consulting",
+      category: "Consulting",
+      active: false,
+      displayOrder: 1,
+    });
+    assert.equal(reclassifiedProduct.status, 200);
+    const removedCategory = await call(mainServer, `/prospect-product-categories/${customCategory.data.id}`, "DELETE");
+    assert.equal(removedCategory.status, 204);
     const newDealWithInactiveProduct = await call(mainServer, "/prospects", "POST", {
       contactId,
       name: "Blocked deal",

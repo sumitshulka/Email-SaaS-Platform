@@ -25,6 +25,7 @@ export const prospectProductsTable = pgTable("prospect_products", {
   id: uuid("id").defaultRandom().notNull(),
   userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 160 }).notNull(),
+  itemType: varchar("item_type", { length: 16 }).notNull().default("product"),
   description: text("description").notNull().default(""),
   category: varchar("category", { length: 100 }),
   active: boolean("active").notNull().default(true),
@@ -37,6 +38,19 @@ export const prospectProductsTable = pgTable("prospect_products", {
   uniqueIndex("prospect_products_user_name_unique").on(table.userId, sql`lower(${table.name})`),
   index("prospect_products_user_active_order_idx").on(table.userId, table.active, table.displayOrder),
   check("prospect_products_name_nonempty", sql`length(trim(${table.name})) > 0`),
+  check("prospect_products_item_type_valid", sql`${table.itemType} in ('product', 'service')`),
+]);
+
+export const prospectProductCategoriesTable = pgTable("prospect_product_categories", {
+  id: uuid("id").defaultRandom().notNull(),
+  userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  primaryKey({ columns: [table.id, table.userId], name: "prospect_product_categories_pkey" }),
+  uniqueIndex("prospect_product_categories_id_unique").on(table.id),
+  uniqueIndex("prospect_product_categories_user_name_unique").on(table.userId, sql`lower(${table.name})`),
+  check("prospect_product_categories_name_nonempty", sql`length(trim(${table.name})) > 0`),
 ]);
 
 export const prospectCurrenciesTable = pgTable("prospect_currencies", {
@@ -252,6 +266,7 @@ export const prospectTagAssignmentsTable = pgTable("prospect_tag_assignments", {
 ]);
 
 export const insertProspectProductSchema = createInsertSchema(prospectProductsTable);
+export const insertProspectProductCategorySchema = createInsertSchema(prospectProductCategoriesTable);
 export const insertProspectCurrencySchema = createInsertSchema(prospectCurrenciesTable);
 export const insertProspectStageSchema = createInsertSchema(prospectStagesTable);
 export const insertProspectActionTypeSchema = createInsertSchema(prospectActionTypesTable);
@@ -259,6 +274,7 @@ export const insertProspectSchema = createInsertSchema(prospectsTable);
 export const insertProspectStageHistorySchema = createInsertSchema(prospectStageHistoryTable);
 export const insertProspectActionSchema = createInsertSchema(prospectActionsTable);
 export type ProspectProduct = typeof prospectProductsTable.$inferSelect;
+export type ProspectProductCategory = typeof prospectProductCategoriesTable.$inferSelect;
 export type ProspectCurrency = typeof prospectCurrenciesTable.$inferSelect;
 export type ProspectStage = typeof prospectStagesTable.$inferSelect;
 export type ProspectStageTransition = typeof prospectStageTransitionsTable.$inferSelect;

@@ -237,6 +237,7 @@ async function buildRecords(userId: string, ids: string[]) {
     contactJobTitle: contactsTable.jobTitle,
     productId: prospectProductsTable.id,
     productName: prospectProductsTable.name,
+    productItemType: prospectProductsTable.itemType,
     productDescription: prospectProductsTable.description,
     productCategory: prospectProductsTable.category,
     productActive: prospectProductsTable.active,
@@ -307,6 +308,7 @@ async function buildRecords(userId: string, ids: string[]) {
     product: {
       id: row.productId,
       name: row.productName,
+      itemType: row.productItemType,
       description: row.productDescription,
       category: row.productCategory,
       active: row.productActive,

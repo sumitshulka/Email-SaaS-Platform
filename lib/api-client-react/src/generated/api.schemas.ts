@@ -5736,6 +5736,14 @@ export interface ContactIntentQuestionsInput {
   questions: ContactIntentQuestionsInputQuestionsItem[];
 }
 
+export type ProspectProductItemType = typeof ProspectProductItemType[keyof typeof ProspectProductItemType];
+
+
+export const ProspectProductItemType = {
+  product: 'product',
+  service: 'service',
+} as const;
+
 export interface ProspectProduct {
   id: string;
   /**
@@ -5743,6 +5751,7 @@ export interface ProspectProduct {
      * @maxLength 160
      */
   name: string;
+  itemType: ProspectProductItemType;
   /** @maxLength 10000 */
   description: string;
   /**
@@ -5758,12 +5767,21 @@ export interface ProspectProduct {
   displayOrder: number;
 }
 
+export type ProspectProductInputItemType = typeof ProspectProductInputItemType[keyof typeof ProspectProductInputItemType];
+
+
+export const ProspectProductInputItemType = {
+  product: 'product',
+  service: 'service',
+} as const;
+
 export interface ProspectProductInput {
   /**
      * @minLength 1
      * @maxLength 160
      */
   name: string;
+  itemType: ProspectProductInputItemType;
   /** @maxLength 10000 */
   description: string;
   /**
@@ -5777,6 +5795,24 @@ export interface ProspectProductInput {
      * @maximum 32767
      */
   displayOrder: number;
+}
+
+export interface ProspectProductCategory {
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  isSystem: boolean;
+}
+
+export interface ProspectProductCategoryInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
 }
 
 export interface ProspectCurrency {

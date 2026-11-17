@@ -2260,6 +2260,7 @@ export const ListProspectsResponse = zod.object({
   "product": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(listProspectsResponseProspectsItemProductNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(listProspectsResponseProspectsItemProductDescriptionMax),
   "category": zod.string().max(listProspectsResponseProspectsItemProductCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -2379,6 +2380,7 @@ export const CreateProspectResponse = zod.object({
   "product": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(createProspectResponseProspectProductNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(createProspectResponseProspectProductDescriptionMax),
   "category": zod.string().max(createProspectResponseProspectProductCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -2477,6 +2479,7 @@ export const GetProspectResponse = zod.object({
   "product": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(getProspectResponseProspectProductNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(getProspectResponseProspectProductDescriptionMax),
   "category": zod.string().max(getProspectResponseProspectProductCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -2598,6 +2601,7 @@ export const UpdateProspectResponse = zod.object({
   "product": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(updateProspectResponseProspectProductNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(updateProspectResponseProspectProductDescriptionMax),
   "category": zod.string().max(updateProspectResponseProspectProductCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -2695,6 +2699,7 @@ export const ListContactProspectsResponseItem = zod.object({
   "product": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(listContactProspectsResponseProductNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(listContactProspectsResponseProductDescriptionMax),
   "category": zod.string().max(listContactProspectsResponseProductCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -2803,6 +2808,7 @@ export const ChangeProspectStageResponse = zod.object({
   "product": zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(changeProspectStageResponseProspectProductNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(changeProspectStageResponseProspectProductDescriptionMax),
   "category": zod.string().max(changeProspectStageResponseProspectProductCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -3064,6 +3070,7 @@ export const listProspectProductsResponseDisplayOrderMax = 32767;
 export const ListProspectProductsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(listProspectProductsResponseNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(listProspectProductsResponseDescriptionMax),
   "category": zod.string().max(listProspectProductsResponseCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -3088,6 +3095,7 @@ export const createProspectProductBodyDisplayOrderMax = 32767;
 
 export const CreateProspectProductBody = zod.object({
   "name": zod.string().min(1).max(createProspectProductBodyNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(createProspectProductBodyDescriptionMax),
   "category": zod.string().max(createProspectProductBodyCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -3108,11 +3116,59 @@ export const createProspectProductResponseDisplayOrderMax = 32767;
 export const CreateProspectProductResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(createProspectProductResponseNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(createProspectProductResponseDescriptionMax),
   "category": zod.string().max(createProspectProductResponseCategoryMax).nullable(),
   "active": zod.boolean(),
   "displayOrder": zod.number().int().min(createProspectProductResponseDisplayOrderMin).max(createProspectProductResponseDisplayOrderMax)
 })
+
+
+/**
+ * @summary List built-in and tenant-defined product/service categories
+ */
+export const listProspectProductCategoriesResponseNameMax = 100;
+
+
+
+export const ListProspectProductCategoriesResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1).max(listProspectProductCategoriesResponseNameMax),
+  "isSystem": zod.boolean()
+})
+export const ListProspectProductCategoriesResponse = zod.array(ListProspectProductCategoriesResponseItem)
+
+
+/**
+ * @summary Add a tenant-defined product/service category
+ */
+export const createProspectProductCategoryBodyNameMax = 100;
+
+
+
+export const CreateProspectProductCategoryBody = zod.object({
+  "name": zod.string().min(1).max(createProspectProductCategoryBodyNameMax)
+})
+
+export const createProspectProductCategoryResponseNameMax = 100;
+
+
+
+export const CreateProspectProductCategoryResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string().min(1).max(createProspectProductCategoryResponseNameMax),
+  "isSystem": zod.boolean()
+})
+
+
+/**
+ * @summary Remove an unused tenant-defined category
+ */
+export const DeleteProspectProductCategoryParams = zod.object({
+  "categoryId": zod.coerce.string().uuid()
+})
+
+export const DeleteProspectProductCategoryResponse = zod.void()
 
 
 /**
@@ -3135,6 +3191,7 @@ export const updateProspectProductBodyDisplayOrderMax = 32767;
 
 export const UpdateProspectProductBody = zod.object({
   "name": zod.string().min(1).max(updateProspectProductBodyNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(updateProspectProductBodyDescriptionMax),
   "category": zod.string().max(updateProspectProductBodyCategoryMax).nullable(),
   "active": zod.boolean(),
@@ -3155,6 +3212,7 @@ export const updateProspectProductResponseDisplayOrderMax = 32767;
 export const UpdateProspectProductResponse = zod.object({
   "id": zod.string().uuid(),
   "name": zod.string().min(1).max(updateProspectProductResponseNameMax),
+  "itemType": zod.enum(['product', 'service']),
   "description": zod.string().max(updateProspectProductResponseDescriptionMax),
   "category": zod.string().max(updateProspectProductResponseCategoryMax).nullable(),
   "active": zod.boolean(),

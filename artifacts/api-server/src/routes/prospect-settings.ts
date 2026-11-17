@@ -3,6 +3,7 @@ import {
   db,
   prospectActionTypesTable,
   prospectCurrenciesTable,
+  prospectProductCategoriesTable,
   prospectProductsTable,
   prospectStageTransitionsTable,
   prospectStagesTable,
@@ -13,10 +14,14 @@ import {
   CreateProspectActionTypeBody,
   CreateProspectActionTypeResponse,
   CreateProspectProductBody,
+  CreateProspectProductCategoryBody,
+  CreateProspectProductCategoryResponse,
   CreateProspectProductResponse,
+  DeleteProspectProductCategoryParams,
   CreateProspectStageBody,
   CreateProspectStageResponse,
   GetProspectCurrenciesResponse,
+  ListProspectProductCategoriesResponse,
   ListProspectActionTypesResponse,
   ListProspectProductsResponse,
   ListProspectStagesResponse,
@@ -40,6 +45,30 @@ import { requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
 const iso4217CurrencyCodes = new Set(Intl.supportedValuesOf("currency"));
+const systemProductCategories = [
+  "Software & SaaS",
+  "Hardware & Equipment",
+  "Professional Services",
+  "Consulting",
+  "Implementation",
+  "Training",
+  "Support & Maintenance",
+  "Managed Services",
+  "Marketing",
+  "Financial Services",
+  "Office Supplies",
+  "Other",
+] as const;
+
+async function isKnownProductCategory(userId: string, category: string | null): Promise<boolean> {
+  if (category === null) return true;
+  const normalized = category.trim().toLocaleLowerCase();
+  if (systemProductCategories.some(name => name.toLocaleLowerCase() === normalized)) return true;
+  const custom = await db.select({ name: prospectProductCategoriesTable.name })
+    .from(prospectProductCategoriesTable)
+    .where(eq(prospectProductCategoriesTable.userId, userId));
+  return custom.some(item => item.name.toLocaleLowerCase() === normalized);
+}
 
 function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -76,6 +105,79 @@ async function stagesWithTransitions(userId: string) {
   }));
 }
 
+router.get("/prospect-product-categories", requireUserRole, async (req, res): Promise<void> => {
+  const custom = await db.select().from(prospectProductCategoriesTable)
+    .where(eq(prospectProductCategoriesTable.userId, req.authUser!.id))
+    .orderBy(asc(prospectProductCategoriesTable.name));
+  const categories = [
+    ...systemProductCategories.map(name => ({
+      id: `system:${name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+      name,
+      isSystem: true,
+    })),
+    ...custom.map(category => ({ id: category.id, name: category.name, isSystem: false })),
+  ];
+  res.json(ListProspectProductCategoriesResponse.parse(categories));
+});
+
+router.post("/prospect-product-categories", requireUserRole, async (req, res): Promise<void> => {
+  const input = CreateProspectProductCategoryBody.safeParse(req.body);
+  const name = input.success ? input.data.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "Enter a valid category name." });
+    return;
+  }
+  if (systemProductCategories.some(category => category.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    res.status(409).json({ error: "That name is reserved for a built-in category." });
+    return;
+  }
+  try {
+    const [category] = await db.insert(prospectProductCategoriesTable).values({
+      userId: req.authUser!.id,
+      name,
+    }).returning();
+    res.status(201).json(CreateProspectProductCategoryResponse.parse({
+      id: category!.id,
+      name: category!.name,
+      isSystem: false,
+    }));
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    res.status(409).json({ error: "A category with this name already exists in your account." });
+  }
+});
+
+router.delete("/prospect-product-categories/:categoryId", requireUserRole, async (req, res): Promise<void> => {
+  const params = DeleteProspectProductCategoryParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid category." });
+    return;
+  }
+  const [category] = await db.select().from(prospectProductCategoriesTable)
+    .where(and(
+      eq(prospectProductCategoriesTable.id, params.data.categoryId),
+      eq(prospectProductCategoriesTable.userId, req.authUser!.id),
+    )).limit(1);
+  if (!category) {
+    res.status(404).json({ error: "Custom category not found." });
+    return;
+  }
+  const [used] = await db.select({ id: prospectProductsTable.id }).from(prospectProductsTable)
+    .where(and(
+      eq(prospectProductsTable.userId, req.authUser!.id),
+      eq(sql`lower(${prospectProductsTable.category})`, category.name.toLocaleLowerCase()),
+    )).limit(1);
+  if (used) {
+    res.status(409).json({ error: "This category is assigned to a product or service. Reassign those items before removing it." });
+    return;
+  }
+  await db.delete(prospectProductCategoriesTable).where(and(
+    eq(prospectProductCategoriesTable.id, category.id),
+    eq(prospectProductCategoriesTable.userId, req.authUser!.id),
+  ));
+  res.sendStatus(204);
+});
+
 router.get("/prospect-products", requireUserRole, async (req, res): Promise<void> => {
   const products = await db.select().from(prospectProductsTable)
     .where(eq(prospectProductsTable.userId, req.authUser!.id))
@@ -89,10 +191,15 @@ router.post("/prospect-products", requireUserRole, async (req, res): Promise<voi
     res.status(400).json({ error: "Enter a valid product or service name." });
     return;
   }
+  if (!(await isKnownProductCategory(req.authUser!.id, input.data.category))) {
+    res.status(400).json({ error: "Choose a built-in category or add it to your category library first." });
+    return;
+  }
   try {
     const [product] = await db.insert(prospectProductsTable).values({
       userId: req.authUser!.id,
       name: input.data.name.trim(),
+      itemType: input.data.itemType,
       description: input.data.description.trim(),
       category: input.data.category?.trim() || null,
       active: input.data.active,
@@ -112,9 +219,14 @@ router.patch("/prospect-products/:productId", requireUserRole, async (req, res):
     res.status(400).json({ error: "Enter valid product or service details." });
     return;
   }
+  if (!(await isKnownProductCategory(req.authUser!.id, input.data.category))) {
+    res.status(400).json({ error: "Choose a built-in category or add it to your category library first." });
+    return;
+  }
   try {
     const [product] = await db.update(prospectProductsTable).set({
       name: input.data.name.trim(),
+      itemType: input.data.itemType,
       description: input.data.description.trim(),
       category: input.data.category?.trim() || null,
       active: input.data.active,

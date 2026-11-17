@@ -223,6 +223,8 @@ import type {
   ProspectDetail,
   ProspectGrowthAuditEntry,
   ProspectProduct,
+  ProspectProductCategory,
+  ProspectProductCategoryInput,
   ProspectProductInput,
   ProspectRecord,
   ProspectStage,
@@ -6080,6 +6082,245 @@ export const useCreateProspectProduct = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getCreateProspectProductMutationOptions(options));
+    }
+
+export const getListProspectProductCategoriesUrl = () => {
+
+
+
+
+  return `/api/prospect-product-categories`
+}
+
+/**
+ * @summary List built-in and tenant-defined product/service categories
+ */
+export const listProspectProductCategories = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectProductCategory[]> => {
+
+  return customFetch<ProspectProductCategory[]>(getListProspectProductCategoriesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectProductCategoriesQueryKey = () => {
+    return [
+    `/api/prospect-product-categories`
+    ] as const;
+    }
+
+
+export const getListProspectProductCategoriesQueryOptions = <TData = Awaited<ReturnType<typeof listProspectProductCategories>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectProductCategories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectProductCategoriesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectProductCategories>>> = ({ signal }) => listProspectProductCategories({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectProductCategories>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectProductCategoriesQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectProductCategories>>>
+export type ListProspectProductCategoriesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List built-in and tenant-defined product/service categories
+ */
+
+export function useListProspectProductCategories<TData = Awaited<ReturnType<typeof listProspectProductCategories>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectProductCategories>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectProductCategoriesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectProductCategoryUrl = () => {
+
+
+
+
+  return `/api/prospect-product-categories`
+}
+
+/**
+ * @summary Add a tenant-defined product/service category
+ */
+export const createProspectProductCategory = async (prospectProductCategoryInput: ProspectProductCategoryInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectProductCategory> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectProductCategory>(getCreateProspectProductCategoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectProductCategoryInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectProductCategoryMutationKey = () => ['createProspectProductCategory'] as const;
+
+export const getCreateProspectProductCategoryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectProductCategory>>, TError,CreateProspectProductCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspectProductCategory>>, TError,CreateProspectProductCategoryMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectProductCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspectProductCategory>>, CreateProspectProductCategoryMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProspectProductCategory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectProductCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof createProspectProductCategory>>>
+    export type CreateProspectProductCategoryMutationBody = BodyType<ProspectProductCategoryInput>
+    export type CreateProspectProductCategoryMutationError = ErrorType<ApiError>
+    export type CreateProspectProductCategoryMutationVariables = {data: BodyType<ProspectProductCategoryInput>}
+
+    /**
+ * @summary Add a tenant-defined product/service category
+ */
+export const useCreateProspectProductCategory = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectProductCategory>>, TError,CreateProspectProductCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspectProductCategory>>,
+        TError,
+        CreateProspectProductCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectProductCategoryMutationOptions(options));
+    }
+
+export const getDeleteProspectProductCategoryUrl = (categoryId: string,) => {
+
+
+
+
+  return `/api/prospect-product-categories/${categoryId}`
+}
+
+/**
+ * @summary Remove an unused tenant-defined category
+ */
+export const deleteProspectProductCategory = async (categoryId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteProspectProductCategoryUrl(categoryId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteProspectProductCategoryMutationKey = () => ['deleteProspectProductCategory'] as const;
+
+export const getDeleteProspectProductCategoryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProspectProductCategory>>, TError,DeleteProspectProductCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteProspectProductCategory>>, TError,DeleteProspectProductCategoryMutationVariables, TContext> => {
+
+const mutationKey = getDeleteProspectProductCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteProspectProductCategory>>, DeleteProspectProductCategoryMutationVariables> = (props) => {
+          const {categoryId} = props ?? {};
+
+          return  deleteProspectProductCategory(categoryId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteProspectProductCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProspectProductCategory>>>
+
+    export type DeleteProspectProductCategoryMutationError = ErrorType<ApiError>
+    export type DeleteProspectProductCategoryMutationVariables = {categoryId: string}
+
+    /**
+ * @summary Remove an unused tenant-defined category
+ */
+export const useDeleteProspectProductCategory = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProspectProductCategory>>, TError,DeleteProspectProductCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteProspectProductCategory>>,
+        TError,
+        DeleteProspectProductCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteProspectProductCategoryMutationOptions(options));
     }
 
 export const getUpdateProspectProductUrl = (productId: string,) => {

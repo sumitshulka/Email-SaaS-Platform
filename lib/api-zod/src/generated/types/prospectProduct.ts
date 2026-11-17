@@ -5,6 +5,7 @@
  * Multi-tenant email SaaS API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProspectProductItemType } from './prospectProductItemType';
 
 export interface ProspectProduct {
   id: string;
@@ -13,6 +14,7 @@ export interface ProspectProduct {
      * @maxLength 160
      */
   name: string;
+  itemType: ProspectProductItemType;
   /** @maxLength 10000 */
   description: string;
   /**

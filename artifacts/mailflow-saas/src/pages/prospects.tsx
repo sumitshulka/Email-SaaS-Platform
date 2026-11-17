@@ -2,25 +2,27 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
-  Activity, ArrowLeft, ArrowRight, Archive, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight,
+  Activity, ArrowLeft, ArrowRight, Archive, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Trash2,
   CircleAlert, Clock3, DollarSign, ExternalLink, Filter, History, Layers3, Plus, Search, Settings2,
   Tag, UserRound,
 } from 'lucide-react';
 import {
   getGetProspectDashboardQueryKey, getGetProspectQueryKey, getGetProspectCurrenciesQueryKey, getGetContactQueryKey,
   getListContactProspectsQueryKey, getListProspectActionsQueryKey, getListProspectActionTypesQueryKey,
+  getListProspectProductCategoriesQueryKey,
   getListProspectGrowthAuditQueryKey, getListProspectProductsQueryKey, getListProspectStagesQueryKey,
-  getListProspectsQueryKey, useChangeProspectStage, useCreateProspect,
+  getListProspectsQueryKey, useChangeProspectStage, useCreateProspect, useCreateProspectProductCategory,
+  useDeleteProspectProductCategory,
   useCreateProspectAction, useCreateProspectActionType, useCreateProspectProduct, useCreateProspectStage,
   useGetProspect, useGetProspectCurrencies, useGetProspectDashboard, useGetContact, useListContactOptions, useListContactProspects,
   useListContactTags, useListProspectActions, useListProspectActionTypes, useListProspectGrowthAudit,
-  useListProspectProducts, useListProspectStages, useListProspects, useSetProspectStageTransitions,
+  useListProspectProductCategories, useListProspectProducts, useListProspectStages, useListProspects, useSetProspectStageTransitions,
   useSetProspectTags, useUpdateProspect, useUpdateProspectActionType, useUpdateProspectCurrencies,
   useUpdateProspectProduct, useUpdateProspectStage,
 } from '@workspace/api-client-react';
 import type {
   CreateProspectInput, ListProspectsParams, ProspectActionTypeInput, ProspectProductInput,
-  ProspectRecord, ProspectStageInput,
+  ProspectProductCategory, ProspectRecord, ProspectStageInput,
 } from '@workspace/api-client-react';
 
 const panel = 'rounded-xl border border-[#dce4ed] bg-white shadow-[0_4px_18px_rgba(19,43,70,.035)]';
@@ -99,7 +101,7 @@ export function ProspectsPage() {
       <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <label className="sm:col-span-2 xl:col-span-2"><span className={label}>Search</span><span className="relative block"><Search className="absolute left-3 top-3 h-3.5 w-3.5 text-[#8796a5]"/><input className={`${field} pl-9`} value={filters.search} onChange={e => { setPage(1); setFilters(f => ({ ...f, search: e.target.value })); }} placeholder="Prospect, contact, email or company" data-testid="input-prospect-search"/></span></label>
         <label><span className={label}>Stage</span><select className={field} value={filters.stageId} onChange={e => { setPage(1); setFilters(f => ({ ...f, stageId: e.target.value })); }} data-testid="select-prospect-stage-filter"><option value="">All stages</option>{stages.data?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-        <label><span className={label}>Product / service</span><select className={field} value={filters.productId} onChange={e => { setPage(1); setFilters(f => ({ ...f, productId: e.target.value })); }} data-testid="select-prospect-product-filter"><option value="">All products</option>{products.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        <label><span className={label}>Product / service</span><select className={field} value={filters.productId} onChange={e => { setPage(1); setFilters(f => ({ ...f, productId: e.target.value })); }} data-testid="select-prospect-product-filter"><option value="">All products and services</option>{products.data?.map(p => <option key={p.id} value={p.id}>{p.itemType === 'service' ? 'Service' : 'Product'} · {p.name}</option>)}</select></label>
         <label><span className={label}>Currency</span><select className={field} value={filters.currencyCode} onChange={e => { setPage(1); setFilters(f => ({ ...f, currencyCode: e.target.value })); }} data-testid="select-prospect-currency-filter"><option value="">All currencies</option>{currencies.data?.currencies.map(c => <option key={c.code} value={c.code}>{c.code}{c.isDefault ? ' · default' : ''}</option>)}</select></label>
         <label><span className={label}>Status</span><select className={field} value={filters.status} onChange={e => { setPage(1); setFilters(f => ({ ...f, status: e.target.value })); }} data-testid="select-prospect-status-filter"><option value="active">Active</option><option value="won">Won</option><option value="lost">Lost</option><option value="other_terminal">Other terminal</option><option value="all">All statuses</option></select></label>
         <label><span className={label}>Contact tag</span><select className={field} value={filters.contactTagId} onChange={e => { setPage(1); setFilters(f => ({ ...f, contactTagId: e.target.value })); }} data-testid="select-prospect-contact-tag-filter"><option value="">Any contact tag</option>{tags.data?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
@@ -125,7 +127,7 @@ export function ProspectsPage() {
   function ProspectRow({ prospect }: { prospect: ProspectRecord }) {
     const link = `/prospects/${encodeURIComponent(prospect.id)}`;
     return <tr className="align-top transition-colors hover:bg-[#fbfcfe]" data-testid={`row-prospect-${prospect.id}`}>
-      <td className="px-4 py-3.5"><Link href={link} className="text-[12px] font-bold text-[#1e4f7f] no-underline hover:underline" data-testid={`link-prospect-${prospect.id}`}>{prospect.name}</Link><div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#65778a]"><UserRound className="h-3 w-3"/>{prospect.contact.name}</div><div className="mt-0.5 text-[10px] text-[#8b98a6]">{prospect.contact.email}{prospect.contact.companyName ? ` · ${prospect.contact.companyName}` : ''}</div><div className="mt-2 text-[9px] text-[#8290a0]">{prospect.product.name}</div></td>
+      <td className="px-4 py-3.5"><Link href={link} className="text-[12px] font-bold text-[#1e4f7f] no-underline hover:underline" data-testid={`link-prospect-${prospect.id}`}>{prospect.name}</Link><div className="mt-1 flex items-center gap-1.5 text-[10px] text-[#65778a]"><UserRound className="h-3 w-3"/>{prospect.contact.name}</div><div className="mt-0.5 text-[10px] text-[#8b98a6]">{prospect.contact.email}{prospect.contact.companyName ? ` · ${prospect.contact.companyName}` : ''}</div><div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] text-[#8290a0]"><span className="rounded-full bg-[#edf4fb] px-2 py-0.5 font-semibold uppercase text-[#3a668e]">{prospect.product.itemType}</span>{prospect.product.name}<span>· {prospect.product.category ?? 'Uncategorized'}</span></div></td>
       <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${prospect.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}><span className={`h-1.5 w-1.5 rounded-full ${prospect.currentStage.stageType === 'terminal' ? 'bg-[#ce755f]' : 'bg-[#4784bd]'}`}/>{prospect.currentStage.name}</span>{prospect.archivedAt && <div className="mt-1 text-[9px] text-[#8996a2]">Archived</div>}</td>
       <td className="px-4 py-3.5"><div className="text-[12px] font-bold text-[#243b53]">{money(prospect.expectedDealValue, prospect.currencyCode)}</div><div className="mt-1 text-[9px] text-[#8391a0]">{prospect.currencyCode}</div></td>
       <td className="px-4 py-3.5 text-[11px] text-[#51667b]">{dateLabel(prospect.expectedClosureDate)}</td>
@@ -212,7 +214,7 @@ function ProspectForm({ prospectId, initialContactId }: { prospectId?: string; i
         <label className="sm:col-span-2"><span className={label}>Prospect name <em className="not-italic text-[#b45743]">*</em></span><input required maxLength={180} className={field} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Spring campaign retainer" data-testid="input-prospect-name"/></label>
         {!prospectId && <div className="sm:col-span-2"><span className={label}>Existing contact <em className="not-italic text-[#b45743]">*</em></span><div className="grid gap-2 sm:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]"><input className={field} value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Search by name, email or company" aria-label="Search contacts" data-testid="input-prospect-contact-search"/><select required className={field} value={contactId} onChange={e => setContactId(e.target.value)} data-testid="select-prospect-contact"><option value="">Choose a contact</option>{initialContactId && initialContactQuery.data && !contacts.data?.contacts.some(c => c.id === initialContactId) && <option value={initialContactQuery.data.id}>{initialContactQuery.data.name} · {initialContactQuery.data.email}</option>}{contacts.data?.contacts.map(c => <option key={c.id} value={c.id}>{c.name} · {c.email}{c.companyName ? ` · ${c.companyName}` : ''}</option>)}</select></div>{contacts.isLoading && <span className="mt-1 block text-[10px] text-[#77899b]">Searching contacts…</span>}{!contacts.data?.contacts.length && !initialContactQuery.data && <span className="mt-1 block text-[10px] text-[#9a6247]">No contacts match. Add a contact before creating a prospect.</span>}</div>}
         {prospectId && selectedContact && <div className="sm:col-span-2 rounded-lg bg-[#f5f8fb] p-3"><span className={label}>Linked contact · unchanged</span><div className="text-[12px] font-semibold text-[#344d66]">{selectedContact.name} · {selectedContact.email}</div></div>}
-        <label><span className={label}>Product or service <em className="not-italic text-[#b45743]">*</em></span><select required className={field} value={productId} onChange={e => setProductId(e.target.value)} data-testid="select-prospect-product"><option value="">Choose a product</option>{activeProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+         <label><span className={label}>Product or service <em className="not-italic text-[#b45743]">*</em></span><select required className={field} value={productId} onChange={e => setProductId(e.target.value)} data-testid="select-prospect-product"><option value="">Choose a product or service</option>{activeProducts.map(p => <option key={p.id} value={p.id}>{p.itemType === 'service' ? 'Service' : 'Product'} · {p.name}{p.category ? ` · ${p.category}` : ''}</option>)}</select></label>
         {!prospectId && <label><span className={label}>Initial stage <em className="not-italic text-[#b45743]">*</em></span><select required className={field} value={stageId} onChange={e => setStageId(e.target.value)} data-testid="select-prospect-initial-stage"><option value="">Choose a stage</option>{availableStages.map(s => <option key={s.id} value={s.id}>{s.name} · {s.probability}%</option>)}</select></label>}
         <label><span className={label}>Expected deal value <em className="not-italic text-[#b45743]">*</em></span><input required min="0" step="0.0001" type="number" className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" data-testid="input-prospect-value"/></label>
         <label><span className={label}>Currency <em className="not-italic text-[#b45743]">*</em></span><select required className={field} value={currency || currencies.data?.defaultCurrencyCode || ''} onChange={e => setCurrency(e.target.value)} data-testid="select-prospect-currency"><option value="">Choose a currency</option>{currencies.data?.currencies.map(c => <option key={c.code} value={c.code}>{c.code}{c.isDefault ? ' · default' : ''}</option>)}</select></label>
@@ -243,7 +245,7 @@ export function ProspectDetailPage() {
   if (edit) return <PageFrame><Heading eyebrow="PIPELINE / EDIT OPPORTUNITY" title="Edit prospect" detail="Update deal-specific details and tags. The linked contact stays unchanged."/><ProspectForm key={id} prospectId={id}/></PageFrame>;
   return <PageFrame>
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Link href="/prospects" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#526d86] no-underline hover:text-[#174f91]"><ArrowLeft className="h-3.5 w-3.5"/>All prospects</Link><div className="flex gap-2"><button type="button" onClick={() => setEdit(true)} className={smallBtn} data-testid="button-edit-prospect">Edit prospect</button><ArchiveProspect record={record}/></div></div>
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.16em] text-[#70859a]">PROSPECT / {record.id.slice(0, 8)}</div><h1 className="display break-words text-[29px] font-bold text-[#172b43] sm:text-[35px]">{record.name}</h1><p className="mt-2 text-[12px] text-[#718093]">{record.product.name} · created {dateLabel(record.createdAt)} · updated {dateLabel(record.updatedAt)}</p></div><span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${record.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{record.currentStage.name} · {record.currentProbability}%</span></div>
+    <div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.16em] text-[#70859a]">PROSPECT / {record.id.slice(0, 8)}</div><h1 className="display break-words text-[29px] font-bold text-[#172b43] sm:text-[35px]">{record.name}</h1><p className="mt-2 text-[12px] text-[#718093]">{record.product.itemType === 'service' ? 'Service' : 'Product'} · {record.product.name}{record.product.category ? ` · ${record.product.category}` : ''} · created {dateLabel(record.createdAt)} · updated {dateLabel(record.updatedAt)}</p></div><span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${record.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{record.currentStage.name} · {record.currentProbability}%</span></div>
     {record.archivedAt && <div className="mb-4"><Notice>Archived {dateLabel(record.archivedAt)}. This record is retained for history.</Notice></div>}
     <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric title="Expected deal value" value={money(record.expectedDealValue, record.currencyCode)} note={record.currencyCode} icon={<DollarSign className="h-4 w-4"/>}/>
@@ -359,40 +361,44 @@ function AuditPanel({ prospectId }: { prospectId: string }) {
 
 export function ContactProspectsPanel({ contactId, contactName }: { contactId: string; contactName: string }) {
   const query = useListContactProspects(contactId, { query: { enabled: !!contactId, queryKey: getListContactProspectsQueryKey(contactId), refetchOnMount: 'always' } });
-  return <section className={`${panel} overflow-hidden`} data-testid="section-contact-prospects"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf2] bg-[#fbfcfd] px-5 py-4"><div><div className="mono text-[9px] tracking-[.14em] text-[#71869a]">COMMERCIAL OPPORTUNITIES</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Linked prospects</h2></div><Link href={`/prospects/new?contactId=${encodeURIComponent(contactId)}`} className={primaryBtn} data-testid="link-convert-contact-to-prospect"><Plus className="h-3.5 w-3.5"/>Convert to Prospect</Link></header><div className="p-5">{query.isLoading ? <div className="h-20 animate-pulse rounded-lg bg-[#edf2f7]"/> : query.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-[#9b4837]"><span>Linked prospects could not be loaded.</span><button type="button" onClick={() => void query.refetch()} className="font-semibold underline">Retry</button></div> : query.data?.length ? <div className="divide-y divide-[#edf1f4]">{query.data.map(p => <Link key={p.id} href={`/prospects/${encodeURIComponent(p.id)}`} className="flex flex-wrap items-center justify-between gap-3 py-3 no-underline first:pt-0 last:pb-0 hover:bg-[#fbfcfd]" data-testid={`link-contact-prospect-${p.id}`}><span><span className="block text-[12px] font-bold text-[#2b4d70]">{p.name}</span><span className="mt-1 block text-[10px] text-[#7d8b99]">{p.product.name} · {p.currentStage.name} · {p.currentProbability}%</span></span><span className="text-right"><strong className="block text-[12px] text-[#334a61]">{money(p.expectedDealValue, p.currencyCode)}</strong><span className="mt-1 block text-[9px] text-[#8794a1]">Expected {dateLabel(p.expectedClosureDate)}</span></span></Link>)}</div> : <div className="rounded-lg border border-dashed border-[#dbe3ea] bg-[#fafbfd] px-4 py-6 text-center"><div className="text-[12px] font-bold text-[#3b5066]">No prospect linked to {contactName}</div><p className="mt-1 text-[10px] text-[#84919f]">Create a separate deal without changing this contact’s record.</p></div>}</div></section>;
+  return <section className={`${panel} overflow-hidden`} data-testid="section-contact-prospects"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf2] bg-[#fbfcfd] px-5 py-4"><div><div className="mono text-[9px] tracking-[.14em] text-[#71869a]">COMMERCIAL OPPORTUNITIES</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Linked prospects</h2></div><Link href={`/prospects/new?contactId=${encodeURIComponent(contactId)}`} className={primaryBtn} data-testid="link-convert-contact-to-prospect"><Plus className="h-3.5 w-3.5"/>Convert to Prospect</Link></header><div className="p-5">{query.isLoading ? <div className="h-20 animate-pulse rounded-lg bg-[#edf2f7]"/> : query.isError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-[#9b4837]"><span>Linked prospects could not be loaded.</span><button type="button" onClick={() => void query.refetch()} className="font-semibold underline">Retry</button></div> : query.data?.length ? <div className="divide-y divide-[#edf1f4]">{query.data.map(p => <Link key={p.id} href={`/prospects/${encodeURIComponent(p.id)}`} className="flex flex-wrap items-center justify-between gap-3 py-3 no-underline first:pt-0 last:pb-0 hover:bg-[#fbfcfd]" data-testid={`link-contact-prospect-${p.id}`}><span><span className="block text-[12px] font-bold text-[#2b4d70]">{p.name}</span><span className="mt-1 block text-[10px] text-[#7d8b99]">{p.product.itemType === 'service' ? 'Service' : 'Product'} · {p.product.name} · {p.currentStage.name} · {p.currentProbability}%</span></span><span className="text-right"><strong className="block text-[12px] text-[#334a61]">{money(p.expectedDealValue, p.currencyCode)}</strong><span className="mt-1 block text-[9px] text-[#8794a1]">Expected {dateLabel(p.expectedClosureDate)}</span></span></Link>)}</div> : <div className="rounded-lg border border-dashed border-[#dbe3ea] bg-[#fafbfd] px-4 py-6 text-center"><div className="text-[12px] font-bold text-[#3b5066]">No prospect linked to {contactName}</div><p className="mt-1 text-[10px] text-[#84919f]">Create a separate deal without changing this contact’s record.</p></div>}</div></section>;
 }
 
 function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'currencies' }) {
   const qc = useQueryClient();
   const productQuery = useListProspectProducts();
+  const productCategoriesQuery = useListProspectProductCategories({ query: { queryKey: getListProspectProductCategoriesQueryKey(), enabled: kind === 'products' } });
   const stageQuery = useListProspectStages();
   const actionQuery = useListProspectActionTypes();
   const currenciesQuery = useGetProspectCurrencies();
   const productCreate = useCreateProspectProduct(); const productUpdate = useUpdateProspectProduct();
+  const categoryCreate = useCreateProspectProductCategory(); const categoryDelete = useDeleteProspectProductCategory();
   const stageCreate = useCreateProspectStage(); const stageUpdate = useUpdateProspectStage();
   const transitionUpdate = useSetProspectStageTransitions();
   const actionCreate = useCreateProspectActionType(); const actionUpdate = useUpdateProspectActionType();
   const currencyUpdate = useUpdateProspectCurrencies();
   const [name, setName] = useState(''); const [description, setDescription] = useState(''); const [category, setCategory] = useState('');
+  const [itemType, setItemType] = useState<'product' | 'service'>('product'); const [categoryDraft, setCategoryDraft] = useState('');
   const [probability, setProbability] = useState(''); const [outcome, setOutcome] = useState(''); const [stageType, setStageType] = useState<'active' | 'terminal'>('active');
   const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]); const [defaultCurrency, setDefaultCurrency] = useState('');
   const [currencyDraft, setCurrencyDraft] = useState('');
   const [currencyInitialized, setCurrencyInitialized] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
-  const loading = kind === 'products' ? productQuery.isLoading : kind === 'stages' ? stageQuery.isLoading : kind === 'actions' ? actionQuery.isLoading : currenciesQuery.isLoading;
-  const failed = kind === 'products' ? productQuery.isError : kind === 'stages' ? stageQuery.isError : kind === 'actions' ? actionQuery.isError : currenciesQuery.isError;
+  const loading = kind === 'products' ? productQuery.isLoading || productCategoriesQuery.isLoading : kind === 'stages' ? stageQuery.isLoading : kind === 'actions' ? actionQuery.isLoading : currenciesQuery.isLoading;
+  const failed = kind === 'products' ? productQuery.isError || productCategoriesQuery.isError : kind === 'stages' ? stageQuery.isError : kind === 'actions' ? actionQuery.isError : currenciesQuery.isError;
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: getListProspectProductsQueryKey() }); void qc.invalidateQueries({ queryKey: getListProspectStagesQueryKey() });
+    void qc.invalidateQueries({ queryKey: getListProspectProductCategoriesQueryKey() });
     void qc.invalidateQueries({ queryKey: getListProspectActionTypesQueryKey() }); void qc.invalidateQueries({ queryKey: getGetProspectCurrenciesQueryKey() });
     void qc.invalidateQueries({ queryKey: getGetProspectDashboardQueryKey() }); void qc.invalidateQueries({ queryKey: getListProspectsQueryKey() });
   };
   const title = { products: 'Products & services', stages: 'Pipeline stages', actions: 'Action types', currencies: 'Currencies' }[kind];
-  const descriptions = { products: 'Maintain the tenant’s commercial offer catalog. Inactive items remain part of past prospect history.', stages: 'Define stage probabilities, terminal outcomes, display order, and allowed transitions.', actions: 'Name the repeatable activity types your team records against stage periods.', currencies: 'Control permitted ISO 4217 currency codes. Values remain separate in every pipeline summary.' };
+  const descriptions = { products: 'Choose whether each catalog item is a Product or Service, then group it with a built-in or custom category. Inactive items remain in past prospect history.', stages: 'Define stage probabilities, terminal outcomes, display order, and allowed transitions.', actions: 'Name the repeatable activity types your team records against stage periods.', currencies: 'Control permitted ISO 4217 currency codes. Values remain separate in every pipeline summary.' };
   const saveItem = (e: FormEvent) => {
     e.preventDefault(); setNotice(null);
     if (kind === 'products') {
-      const data: ProspectProductInput = { name: name.trim(), description, category: category.trim() || null, active: true, displayOrder: (productQuery.data?.length ?? 0) };
-      productCreate.mutate({ data }, { onSuccess: () => { setName(''); setDescription(''); setCategory(''); setNotice({ kind: 'success', text: 'Product or service added.' }); refresh(); }, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
+      const data: ProspectProductInput = { name: name.trim(), itemType, description, category: category.trim() || null, active: true, displayOrder: (productQuery.data?.length ?? 0) };
+      productCreate.mutate({ data }, { onSuccess: () => { setName(''); setDescription(''); setCategory(''); setItemType('product'); setNotice({ kind: 'success', text: 'Product or service added.' }); refresh(); }, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
     } else if (kind === 'stages') {
       const data: ProspectStageInput = { name: name.trim(), description, probability: Number(probability), stageType, terminalOutcome: stageType === 'terminal' ? outcome.trim() || null : null, active: true, displayOrder: stageQuery.data?.length ?? 0 };
       stageCreate.mutate({ data }, { onSuccess: () => { setName(''); setDescription(''); setProbability(''); setOutcome(''); setNotice({ kind: 'success', text: 'Stage created. Configure its outgoing transitions below.' }); refresh(); }, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
@@ -408,7 +414,7 @@ function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'curren
   };
   const toggleActive = (id: string, active: boolean) => {
     if (kind === 'products') {
-      const p = productQuery.data?.find(x => x.id === id); if (p) productUpdate.mutate({ productId: id, data: { name: p.name, description: p.description, category: p.category, active, displayOrder: p.displayOrder } }, { onSuccess: refresh, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
+      const p = productQuery.data?.find(x => x.id === id); if (p) productUpdate.mutate({ productId: id, data: { name: p.name, itemType: p.itemType, description: p.description, category: p.category, active, displayOrder: p.displayOrder } }, { onSuccess: refresh, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
     } else if (kind === 'stages') {
       const s = stageQuery.data?.find(x => x.id === id); if (s) stageUpdate.mutate({ stageId: id, data: { name: s.name, description: s.description, probability: s.probability, stageType: s.stageType, terminalOutcome: s.terminalOutcome, active, displayOrder: s.displayOrder } }, { onSuccess: refresh, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
     } else {
@@ -422,6 +428,29 @@ function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'curren
     stageUpdate.mutate({ stageId: b.id, data: { name: b.name, description: b.description, probability: b.probability, stageType: b.stageType, terminalOutcome: b.terminalOutcome, active: b.active, displayOrder: a.displayOrder } }, { onSuccess: refresh, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
   };
   const currentCurrencies = currenciesQuery.data?.currencies ?? [];
+  const addProductCategory = (e: FormEvent) => {
+    e.preventDefault();
+    const value = categoryDraft.trim();
+    if (!value) return;
+    categoryCreate.mutate({ data: { name: value } }, {
+      onSuccess: () => {
+        setCategoryDraft('');
+        setNotice({ kind: 'success', text: 'Custom category added.' });
+        void qc.invalidateQueries({ queryKey: getListProspectProductCategoriesQueryKey() });
+      },
+      onError: error => setNotice({ kind: 'error', text: errText(error) }),
+    });
+  };
+  const removeProductCategory = (customCategory: ProspectProductCategory) => {
+    categoryDelete.mutate({ categoryId: customCategory.id }, {
+      onSuccess: () => {
+        if (category === customCategory.name) setCategory('');
+        setNotice({ kind: 'success', text: 'Custom category removed.' });
+        void qc.invalidateQueries({ queryKey: getListProspectProductCategoriesQueryKey() });
+      },
+      onError: error => setNotice({ kind: 'error', text: errText(error) }),
+    });
+  };
   useEffect(() => {
     if (kind === 'currencies' && currenciesQuery.data && !currencyInitialized) {
       setSelectedCurrencies(currenciesQuery.data.currencies.map(c => c.code));
@@ -489,10 +518,23 @@ function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'curren
             <span className={masterFieldLabel}>Name</span>
             <input required maxLength={160} className={field} value={name} onChange={e => setName(e.target.value)} data-testid={`input-new-${kind}-name`}/>
           </label>
-          {kind === 'products' && <label className={masterFieldGroup}>
-            <span className={masterFieldLabel}>Category</span>
-            <input maxLength={100} className={field} value={category} onChange={e => setCategory(e.target.value)} placeholder="Optional"/>
-          </label>}
+          {kind === 'products' && <>
+            <label className={masterFieldGroup}>
+              <span className={masterFieldLabel}>Item type</span>
+              <select required className={field} value={itemType} onChange={e => setItemType(e.target.value as 'product' | 'service')} data-testid="select-prospect-item-type">
+                <option value="product">Product</option><option value="service">Service</option>
+              </select>
+            </label>
+            <label className={masterFieldGroup}>
+              <span className={masterFieldLabel}>Category</span>
+              <select required className={field} value={category} onChange={e => setCategory(e.target.value)} data-testid="select-prospect-product-category">
+                <option value="">Choose a category</option>
+                <optgroup label="Built-in categories">{productCategoriesQuery.data?.filter(item => item.isSystem).map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</optgroup>
+                {!!productCategoriesQuery.data?.some(item => !item.isSystem) && <optgroup label="My categories">{productCategoriesQuery.data.filter(item => !item.isSystem).map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</optgroup>}
+              </select>
+              <span className="text-[10px] leading-4 text-[#8290a0]">Built-in categories are always available. Add your own below.</span>
+            </label>
+          </>}
           {kind === 'stages' && <>
             <div className="grid grid-cols-2 gap-4">
               <label className={masterFieldGroup}>
@@ -515,9 +557,24 @@ function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'curren
           </label>
           <button type="submit" disabled={productCreate.isPending || stageCreate.isPending || actionCreate.isPending} className={primaryBtn}><Plus className="h-3.5 w-3.5"/>Add {kind === 'products' ? 'item' : kind === 'stages' ? 'stage' : 'action type'}</button>
         </form>
+        {kind === 'products' && <div className="mt-6 border-t border-[#e8edf2] pt-5">
+          <div className="text-[11px] font-bold text-[#344b63]">Your custom categories</div>
+          <p className="mt-1 text-[10px] leading-4 text-[#8290a0]">Add categories for your business. Built-in categories cannot be removed.</p>
+          <form onSubmit={addProductCategory} className="mt-3 flex gap-2">
+            <input maxLength={100} className={field} value={categoryDraft} onChange={e => setCategoryDraft(e.target.value)} placeholder="e.g. Data analytics" aria-label="New custom category"/>
+            <button type="submit" className={smallBtn} disabled={categoryCreate.isPending || !categoryDraft.trim()}>{categoryCreate.isPending ? 'Adding…' : 'Add'}</button>
+          </form>
+          <div className="mt-3 space-y-2">
+            {productCategoriesQuery.data?.filter(item => !item.isSystem).map(item => <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#f7f9fb] px-3 py-2">
+              <span className="text-[10px] font-semibold text-[#52677c]">{item.name}</span>
+              <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#9a5245] hover:bg-[#fff0ec] disabled:opacity-50" aria-label={`Remove ${item.name}`} title="Remove custom category" disabled={categoryDelete.isPending} onClick={() => removeProductCategory(item)}><Trash2 className="h-3.5 w-3.5"/></button>
+            </div>)}
+            {!productCategoriesQuery.data?.some(item => !item.isSystem) && <div className="rounded-lg border border-dashed border-[#e1e7ed] px-3 py-3 text-center text-[10px] text-[#8996a3]">No custom categories yet.</div>}
+          </div>
+        </div>}
       </section>
       <section className={`${panel} overflow-hidden`}><header className="flex items-center justify-between border-b border-[#e8edf2] bg-[#fbfcfd] px-5 py-4"><div><div className="mono text-[9px] tracking-[.14em] text-[#71869a]">SAVED SETTINGS</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Configured {title.toLowerCase()}</h2></div><Settings2 className="h-4 w-4 text-[#65819b]"/></header>
-        {kind === 'products' ? <div className="divide-y divide-[#edf1f4]">{productQuery.data?.length ? productQuery.data.map(p => <ProductSetupRow key={p.id} product={p} onToggle={() => toggleActive(p.id, !p.active)} onError={e => setNotice({ kind: 'error', text: e })} onSaved={() => { setNotice({ kind: 'success', text: 'Product or service updated.' }); refresh(); }}/>) : <EmptySetup text="No products or services configured yet."/>}</div> :
+        {kind === 'products' ? <div className="divide-y divide-[#edf1f4]">{productQuery.data?.length ? productQuery.data.map(p => <ProductSetupRow key={p.id} product={p} categories={productCategoriesQuery.data ?? []} onToggle={() => toggleActive(p.id, !p.active)} onError={e => setNotice({ kind: 'error', text: e })} onSaved={() => { setNotice({ kind: 'success', text: 'Product or service updated.' }); refresh(); }}/>) : <EmptySetup text="No products or services configured yet."/>}</div> :
         kind === 'actions' ? <div className="divide-y divide-[#edf1f4]">{actionQuery.data?.length ? actionQuery.data.map(a => <ActionTypeSetupRow key={a.id} action={a} onToggle={() => toggleActive(a.id, !a.active)} onError={e => setNotice({ kind: 'error', text: e })} onSaved={() => { setNotice({ kind: 'success', text: 'Action type updated.' }); refresh(); }}/>) : <EmptySetup text="No action types configured yet."/>}</div> :
         <div className="divide-y divide-[#edf1f4]">{stageQuery.data?.length ? stageQuery.data.map((s, index) => <StageSetupRow key={s.id} stage={s} index={index} allStages={stageQuery.data ?? []} onToggle={() => toggleActive(s.id, !s.active)} onOrder={direction => stageOrder(s.id, direction)} onSave={data => stageUpdate.mutate({ stageId: s.id, data }, { onSuccess: () => { setNotice({ kind: 'success', text: 'Stage settings updated.' }); refresh(); }, onError: e => setNotice({ kind: 'error', text: errText(e) }) })} onTransitions={(ids) => transitionUpdate.mutate({ stageId: s.id, data: { toStageIds: ids } }, { onSuccess: refresh, onError: e => setNotice({ kind: 'error', text: errText(e) }) })} busy={stageUpdate.isPending || transitionUpdate.isPending}/>) : <EmptySetup text="No stages configured yet."/>}</div>}
       </section>
@@ -527,17 +584,18 @@ function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'curren
 function EmptySetup({ text }: { text: string }) {
   return <div className="px-5 py-12 text-center"><div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-[#f0f4f7] text-[#69839b]"><Layers3 className="h-4 w-4"/></div><p className="mt-3 text-[11px] text-[#8290a0]">{text}</p></div>;
 }
-function ProductSetupRow({ product, onToggle, onError, onSaved }: { product: { id: string; name: string; description: string; category: string | null; active: boolean; displayOrder: number }; onToggle: () => void; onError: (message: string) => void; onSaved: () => void }) {
+function ProductSetupRow({ product, categories, onToggle, onError, onSaved }: { product: { id: string; name: string; itemType: 'product' | 'service'; description: string; category: string | null; active: boolean; displayOrder: number }; categories: ProspectProductCategory[]; onToggle: () => void; onError: (message: string) => void; onSaved: () => void }) {
   const update = useUpdateProspectProduct();
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(product.name); const [description, setDescription] = useState(product.description); const [category, setCategory] = useState(product.category ?? '');
-  const save = (e: FormEvent) => { e.preventDefault(); update.mutate({ productId: product.id, data: { name: name.trim(), description, category: category.trim() || null, active: product.active, displayOrder: product.displayOrder } }, { onSuccess: () => { setEditing(false); onSaved(); }, onError: e => onError(errText(e)) }); };
+  const [name, setName] = useState(product.name); const [description, setDescription] = useState(product.description); const [category, setCategory] = useState(product.category ?? ''); const [itemType, setItemType] = useState<'product' | 'service'>(product.itemType);
+  const save = (e: FormEvent) => { e.preventDefault(); update.mutate({ productId: product.id, data: { name: name.trim(), itemType, description, category: category.trim() || null, active: product.active, displayOrder: product.displayOrder } }, { onSuccess: () => { setEditing(false); onSaved(); }, onError: e => onError(errText(e)) }); };
    return <div className="px-5 py-4">{editing ? <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
-     <label className={masterFieldGroup}><span className={masterFieldLabel}>Product name</span><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Product name"/></label>
-     <label className={masterFieldGroup}><span className={masterFieldLabel}>Category</span><input className={field} value={category} onChange={e => setCategory(e.target.value)} aria-label="Product category" placeholder="Category"/></label>
-     <label className={`${masterFieldGroup} sm:col-span-2`}><span className={masterFieldLabel}>Description</span><textarea className="min-h-[64px] rounded-lg border border-[#d7e0e9] p-2.5 text-[11px]" value={description} onChange={e => setDescription(e.target.value)} aria-label="Product description"/></label>
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Item name</span><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Item name"/></label>
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Item type</span><select required className={field} value={itemType} onChange={e => setItemType(e.target.value as 'product' | 'service')} aria-label="Item type"><option value="product">Product</option><option value="service">Service</option></select></label>
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Category</span><select required className={field} value={category} onChange={e => setCategory(e.target.value)} aria-label="Item category"><option value="">Choose a category</option><optgroup label="Built-in categories">{categories.filter(item => item.isSystem).map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</optgroup>{categories.some(item => !item.isSystem) && <optgroup label="My categories">{categories.filter(item => !item.isSystem).map(item => <option key={item.id} value={item.name}>{item.name}</option>)}</optgroup>}</select></label>
+     <label className={`${masterFieldGroup} sm:col-span-2`}><span className={masterFieldLabel}>Description</span><textarea className="min-h-[64px] rounded-lg border border-[#d7e0e9] p-2.5 text-[11px]" value={description} onChange={e => setDescription(e.target.value)} aria-label="Item description"/></label>
      <div className="flex gap-2 sm:col-span-2"><button className={primaryBtn} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save item'}</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div>
-   </form> : <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[12px] font-bold text-[#344b63]">{product.name}</div><div className="mt-1 text-[10px] text-[#8190a0]">{product.category || 'Uncategorized'}{product.description ? ` · ${product.description}` : ''}</div></div><div className="flex gap-2"><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={product.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={update.isPending}>{product.active ? 'Active · deactivate' : 'Inactive · activate'}</button></div></div>}</div>;
+   </form> : <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2 text-[12px] font-bold text-[#344b63]">{product.name}<span className="rounded-full bg-[#edf4fb] px-2 py-0.5 text-[9px] font-semibold uppercase text-[#3a668e]">{product.itemType}</span></div><div className="mt-1 text-[10px] text-[#8190a0]">{product.category || 'Uncategorized'}{product.description ? ` · ${product.description}` : ''}</div></div><div className="flex gap-2"><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={product.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={update.isPending}>{product.active ? 'Active · deactivate' : 'Inactive · activate'}</button></div></div>}</div>;
 }
 function ActionTypeSetupRow({ action, onToggle, onError, onSaved }: { action: { id: string; name: string; description: string; active: boolean; displayOrder: number }; onToggle: () => void; onError: (message: string) => void; onSaved: () => void }) {
   const update = useUpdateProspectActionType();

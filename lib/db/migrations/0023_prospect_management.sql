@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS prospect_products (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name varchar(160) NOT NULL,
+  item_type varchar(16) NOT NULL DEFAULT 'product',
   description text NOT NULL DEFAULT '',
   category varchar(100),
   active boolean NOT NULL DEFAULT true,
@@ -9,6 +10,7 @@ CREATE TABLE IF NOT EXISTS prospect_products (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT prospect_products_name_nonempty CHECK (length(trim(name)) > 0),
+  CONSTRAINT prospect_products_item_type_valid CHECK (item_type IN ('product', 'service')),
   CONSTRAINT prospect_products_pkey PRIMARY KEY (id, user_id),
   CONSTRAINT prospect_products_id_unique UNIQUE (id)
 );

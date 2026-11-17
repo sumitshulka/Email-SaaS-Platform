@@ -1587,6 +1587,64 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-product-categories:
+    get:
+      operationId: listProspectProductCategories
+      tags: [sending]
+      summary: List built-in and tenant-defined product/service categories
+      responses:
+        "200":
+          description: Available categories; built-in entries cannot be removed
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectProductCategory" }
+    post:
+      operationId: createProspectProductCategory
+      tags: [sending]
+      summary: Add a tenant-defined product/service category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectProductCategoryInput" }
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectProductCategory" }
+        "400":
+          description: Invalid category
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Category already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-product-categories/{categoryId}:
+    parameters:
+      - { name: categoryId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteProspectProductCategory
+      tags: [sending]
+      summary: Remove an unused tenant-defined category
+      responses:
+        "204":
+          description: Category removed
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Category is assigned to a product or service
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /prospect-products/{productId}:
     parameters:
       - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -8797,20 +8855,34 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
+        itemType: { type: string, enum: [product, service] }
         description: { type: string, maxLength: 10000 }
         category: { type: ["string", "null"], maxLength: 100 }
         active: { type: boolean }
         displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
-      required: [id, name, description, category, active, displayOrder]
+      required: [id, name, itemType, description, category, active, displayOrder]
     ProspectProductInput:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 160 }
+        itemType: { type: string, enum: [product, service] }
         description: { type: string, maxLength: 10000 }
         category: { type: ["string", "null"], maxLength: 100 }
         active: { type: boolean }
         displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
-      required: [name, description, category, active, displayOrder]
+      required: [name, itemType, description, category, active, displayOrder]
+    ProspectProductCategory:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        isSystem: { type: boolean }
+      required: [id, name, isSystem]
+    ProspectProductCategoryInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+      required: [name]
     ProspectCurrency:
       type: object
       properties:
