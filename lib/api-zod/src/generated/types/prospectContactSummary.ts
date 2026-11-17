@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ContactTag } from './contactTag';
+import type { ProspectCompanySummary } from './prospectCompanySummary';
 
 export interface ProspectContactSummary {
   id: string;
@@ -15,6 +16,7 @@ export interface ProspectContactSummary {
   lastName: string;
   /** @nullable */
   companyName: string | null;
+  company: ProspectCompanySummary | null;
   /** @nullable */
   jobTitle: string | null;
   /** @maxItems 2 */

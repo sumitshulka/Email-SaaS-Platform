@@ -7,8 +7,12 @@
  */
 import type { Company } from './company';
 import type { CompanyContact } from './companyContact';
+import type { CompanyProspect } from './companyProspect';
+import type { CompanyProspectValueTotals } from './companyProspectValueTotals';
 
 export interface CompanyDetail {
   company: Company;
   contacts: CompanyContact[];
+  prospects: CompanyProspect[];
+  prospectValueTotals: CompanyProspectValueTotals[];
 }

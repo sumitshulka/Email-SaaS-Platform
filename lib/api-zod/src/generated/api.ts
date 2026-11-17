@@ -2251,6 +2251,11 @@ export const ListProspectsResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "companyName": zod.string().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "domain": zod.string().nullable()
+}),zod.null()]),
   "jobTitle": zod.string().nullable(),
   "tags": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -2371,6 +2376,11 @@ export const CreateProspectResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "companyName": zod.string().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "domain": zod.string().nullable()
+}),zod.null()]),
   "jobTitle": zod.string().nullable(),
   "tags": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -2470,6 +2480,11 @@ export const GetProspectResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "companyName": zod.string().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "domain": zod.string().nullable()
+}),zod.null()]),
   "jobTitle": zod.string().nullable(),
   "tags": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -2592,6 +2607,11 @@ export const UpdateProspectResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "companyName": zod.string().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "domain": zod.string().nullable()
+}),zod.null()]),
   "jobTitle": zod.string().nullable(),
   "tags": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -2690,6 +2710,11 @@ export const ListContactProspectsResponseItem = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "companyName": zod.string().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "domain": zod.string().nullable()
+}),zod.null()]),
   "jobTitle": zod.string().nullable(),
   "tags": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -2799,6 +2824,11 @@ export const ChangeProspectStageResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "companyName": zod.string().nullable(),
+  "company": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "domain": zod.string().nullable()
+}),zod.null()]),
   "jobTitle": zod.string().nullable(),
   "tags": zod.array(zod.object({
   "id": zod.string().uuid(),
@@ -5470,7 +5500,7 @@ export const ListUnlinkedCompanyProfilesResponse = zod.object({
 
 
 /**
- * @summary Get a company and its linked contacts
+ * @summary Get a company, linked contacts, and linked prospects
  */
 export const GetCompanyParams = zod.object({
   "companyId": zod.coerce.string().uuid()
@@ -5498,6 +5528,14 @@ export const getCompanyResponseCompanyCompanyLinkedinUrlMax = 2048;
 
 export const getCompanyResponseCompanyCompanyLocationMax = 200;
 
+export const getCompanyResponseProspectsItemExpectedDealValueMin = 0;
+
+export const getCompanyResponseProspectsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getCompanyResponseProspectValueTotalsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getCompanyResponseProspectValueTotalsItemTotalProspectValueMin = 0;
+
+export const getCompanyResponseProspectValueTotalsItemTotalRevenueValueMin = 0;
+
 
 
 export const GetCompanyResponse = zod.object({
@@ -5523,6 +5561,23 @@ export const GetCompanyResponse = zod.object({
   "name": zod.string(),
   "email": zod.string().email(),
   "jobTitle": zod.string().nullable()
+})),
+  "prospects": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contactId": zod.string().uuid(),
+  "contactName": zod.string(),
+  "expectedDealValue": zod.number().min(getCompanyResponseProspectsItemExpectedDealValueMin),
+  "currencyCode": zod.string().regex(getCompanyResponseProspectsItemCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "stageName": zod.string(),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().nullable()
+})),
+  "prospectValueTotals": zod.array(zod.object({
+  "currencyCode": zod.string().regex(getCompanyResponseProspectValueTotalsItemCurrencyCodeRegExp),
+  "totalProspectValue": zod.number().min(getCompanyResponseProspectValueTotalsItemTotalProspectValueMin),
+  "totalRevenueValue": zod.number().min(getCompanyResponseProspectValueTotalsItemTotalRevenueValueMin)
 }))
 })
 

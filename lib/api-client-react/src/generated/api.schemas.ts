@@ -1931,6 +1931,39 @@ export interface CompanyContact {
   jobTitle: string | null;
 }
 
+export type CompanyProspectStageType = typeof CompanyProspectStageType[keyof typeof CompanyProspectStageType];
+
+
+export const CompanyProspectStageType = {
+  active: 'active',
+  terminal: 'terminal',
+} as const;
+
+export interface CompanyProspect {
+  id: string;
+  name: string;
+  contactId: string;
+  contactName: string;
+  /** @minimum 0 */
+  expectedDealValue: number;
+  /** @pattern ^[A-Z]{3}$ */
+  currencyCode: string;
+  expectedClosureDate: string;
+  stageName: string;
+  stageType: CompanyProspectStageType;
+  /** @nullable */
+  terminalOutcome: string | null;
+}
+
+export interface CompanyProspectValueTotals {
+  /** @pattern ^[A-Z]{3}$ */
+  currencyCode: string;
+  /** @minimum 0 */
+  totalProspectValue: number;
+  /** @minimum 0 */
+  totalRevenueValue: number;
+}
+
 export type ContactFieldKey = typeof ContactFieldKey[keyof typeof ContactFieldKey];
 
 
@@ -1973,6 +2006,8 @@ export interface ContactFieldOptionResponse {
 export interface CompanyDetail {
   company: Company;
   contacts: CompanyContact[];
+  prospects: CompanyProspect[];
+  prospectValueTotals: CompanyProspectValueTotals[];
 }
 
 export interface CompanyCollection {
@@ -5956,6 +5991,13 @@ export interface ProspectActionTypeInput {
   displayOrder: number;
 }
 
+export interface ProspectCompanySummary {
+  id: string;
+  name: string;
+  /** @nullable */
+  domain: string | null;
+}
+
 export interface ProspectContactSummary {
   id: string;
   name: string;
@@ -5964,6 +6006,7 @@ export interface ProspectContactSummary {
   lastName: string;
   /** @nullable */
   companyName: string | null;
+  company: ProspectCompanySummary | null;
   /** @nullable */
   jobTitle: string | null;
   /** @maxItems 2 */

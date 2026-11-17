@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
-  ArrowLeft, Building2, Check, ChevronLeft, ChevronRight, CircleAlert, Globe2, Link2, LoaderCircle, MapPin, Pencil,
+  ArrowLeft, Briefcase, Building2, Check, ChevronLeft, ChevronRight, CircleAlert, Globe2, Link2, LoaderCircle, MapPin, Pencil,
   Search, Sparkles, Trash2, Users,
 } from 'lucide-react';
 import {
@@ -20,6 +20,13 @@ const panel = 'rounded-lg border border-[#e0e4e9] bg-white';
 const errorText = (error: unknown) => error && typeof error === 'object' && 'message' in error
   ? String(error.message) : 'Something went wrong. Please try again.';
 const prettyDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const formatCurrency = (value: number, currencyCode: string) => {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyCode, maximumFractionDigits: 4 }).format(value);
+  } catch {
+    return `${currencyCode} ${value.toLocaleString()}`;
+  }
+};
 const profileFromContact = (contact: ContactOption): CompanyProfileSnapshot => ({
   companyName: contact.companyName,
   companyWebsiteUrl: contact.companyWebsiteUrl,
@@ -81,6 +88,8 @@ export function CompanyDetailPage() {
   const [replacement, setReplacement] = useState<CompanyLinkReplacement | null>(null);
   const company = query.data?.company;
   const linked = query.data?.contacts ?? [];
+  const linkedProspects = query.data?.prospects ?? [];
+  const prospectValueTotals = query.data?.prospectValueTotals ?? [];
   const unlinked = contactsQuery.data?.contacts ?? [];
   const locationQuery = new URLSearchParams(location.split('?')[1] ?? '');
   const directorySearch = (locationQuery.get('listSearch') ?? '').trim().toLowerCase();
@@ -235,6 +244,32 @@ export function CompanyDetailPage() {
         <section className={`${panel} overflow-hidden`} data-testid="panel-linked-contacts">
           <header className="flex items-center justify-between border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">CONTACT RELATIONSHIPS</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Associated contacts <span data-testid="text-linked-contact-count" className="ml-1 text-[11px] font-medium text-[#8793a0]">({linked.length})</span></h2></div><Users className="h-4 w-4 text-[#8a96a4]"/></header>
           {linked.length ? <div className="divide-y divide-[#edf0f2]">{linked.map(contact => <Link key={contact.id} href={`/contacts/${contact.id}`} data-testid={`link-company-contact-${contact.id}`} className="flex items-center gap-3 px-5 py-3 no-underline hover:bg-[#f8fafb]"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#edf2f7] text-[10px] font-bold text-[#526a82]">{(contact.name[0] || '?').toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#36495d]">{contact.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#8793a0]">{contact.email}{contact.jobTitle ? ` · ${contact.jobTitle}` : ''}</span></span><span className="text-[10px] font-semibold text-[#55708e]">View</span></Link>)}</div> : <div data-testid="empty-company-contacts" className="px-5 py-8 text-center"><p className="text-[12px] font-semibold text-[#45566a]">No contacts associated</p><p className="mt-1 text-[10px] text-[#8995a2]">Attach an existing unlinked contact below.</p></div>}
+        </section>
+        <section className={`${panel} overflow-hidden`} data-testid="panel-linked-prospects">
+          <header className="flex items-center justify-between border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4">
+            <div><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">OPPORTUNITY RELATIONSHIPS</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Linked prospects <span data-testid="text-linked-prospect-count" className="ml-1 text-[11px] font-medium text-[#8793a0]">({linkedProspects.length})</span></h2></div>
+            <Briefcase className="h-4 w-4 text-[#8a96a4]"/>
+          </header>
+          {linkedProspects.length ? <>
+            <div className="space-y-3 p-4">
+              {prospectValueTotals.length ? <div className="space-y-3">
+                {prospectValueTotals.map(total => <div key={total.currencyCode} className="rounded-lg border border-[#e4ebf1] bg-[#f7fafc] p-3" data-testid={`panel-prospect-values-${total.currencyCode}`}>
+                  <div className="mb-2 text-[9px] font-bold uppercase tracking-[.12em] text-[#71869a]">{total.currencyCode}</div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div><div className="text-[9px] text-[#758394]">TPV · Total Prospect Value</div><div className="mt-1 text-[14px] font-bold text-[#245b91]" data-testid={`text-company-tpv-${total.currencyCode}`}>{formatCurrency(total.totalProspectValue, total.currencyCode)}</div></div>
+                    <div><div className="text-[9px] text-[#758394]">TRV · Total Revenue Value</div><div className="mt-1 text-[14px] font-bold text-[#286d5b]" data-testid={`text-company-trv-${total.currencyCode}`}>{formatCurrency(total.totalRevenueValue, total.currencyCode)}</div></div>
+                  </div>
+                </div>)}
+                <p className="text-[9px] leading-4 text-[#8793a0]">TPV sums expected values for linked, non-archived prospects. TRV uses expected values from won prospects only. Archived prospects are excluded; currencies are kept separate.</p>
+              </div> : <p className="rounded-md bg-[#f7f9fb] px-3 py-2 text-[10px] leading-4 text-[#7f8b99]">No non-archived prospect values to total. Archived prospects are excluded from these totals.</p>}
+            </div>
+            <div className="divide-y divide-[#edf0f2]">
+              {linkedProspects.map(prospect => <Link key={prospect.id} href={`/prospects/${encodeURIComponent(prospect.id)}`} data-testid={`link-company-prospect-${prospect.id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 no-underline hover:bg-[#f8fafb]">
+                <span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#36495d]">{prospect.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#8793a0]">{prospect.contactName} · {prospect.stageName} · Expected {prettyDate(prospect.expectedClosureDate)}</span></span>
+                <span className="text-right"><strong className="block text-[11px] text-[#3b4d61]">{formatCurrency(prospect.expectedDealValue, prospect.currencyCode)}</strong><span className="mt-0.5 block text-[9px] text-[#8793a0]">Expected value</span></span>
+              </Link>)}
+            </div>
+          </> : <div data-testid="empty-company-prospects" className="px-5 py-8 text-center"><p className="text-[12px] font-semibold text-[#45566a]">No prospects linked</p><p className="mt-1 text-[10px] text-[#8995a2]">Prospects connected to this company’s contacts will appear here.</p></div>}
         </section>
         <section className={`${panel} overflow-hidden`} data-testid="panel-attach-contact">
           <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">SAFE ASSOCIATION</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Attach an existing contact</h2><p className="mt-1 text-[11px] text-[#7f8b99]">Only unlinked contacts are eligible. Compatible legacy details merge into this profile. Conflicting legacy details can be replaced only after you confirm.</p></header>

@@ -2824,10 +2824,10 @@ paths:
     get:
       operationId: getCompany
       tags: [contacts]
-      summary: Get a company and its linked contacts
+      summary: Get a company, linked contacts, and linked prospects
       responses:
         "200":
-          description: Company profile and associated contacts
+          description: Company profile and associated contacts and prospects, with currency-specific prospect value totals
           content:
             application/json:
               schema:
@@ -6652,6 +6652,27 @@ components:
         email: { type: string, format: email }
         jobTitle: { type: ["string", "null"] }
       required: [id, name, email, jobTitle]
+    CompanyProspect:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        contactId: { type: string, format: uuid }
+        contactName: { type: string }
+        expectedDealValue: { type: number, minimum: 0 }
+        currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        expectedClosureDate: { type: string, format: date }
+        stageName: { type: string }
+        stageType: { type: string, enum: [active, terminal] }
+        terminalOutcome: { type: ["string", "null"] }
+      required: [id, name, contactId, contactName, expectedDealValue, currencyCode, expectedClosureDate, stageName, stageType, terminalOutcome]
+    CompanyProspectValueTotals:
+      type: object
+      properties:
+        currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        totalProspectValue: { type: number, minimum: 0 }
+        totalRevenueValue: { type: number, minimum: 0 }
+      required: [currencyCode, totalProspectValue, totalRevenueValue]
     ContactFieldKey:
       type: string
       enum: [jobTitle, preferredLanguage, lifecycleStage, leadStatus, leadSource]
@@ -6688,7 +6709,13 @@ components:
         contacts:
           type: array
           items: { $ref: "#/components/schemas/CompanyContact" }
-      required: [company, contacts]
+        prospects:
+          type: array
+          items: { $ref: "#/components/schemas/CompanyProspect" }
+        prospectValueTotals:
+          type: array
+          items: { $ref: "#/components/schemas/CompanyProspectValueTotals" }
+      required: [company, contacts, prospects, prospectValueTotals]
     CompanyCollection:
       type: object
       properties:
@@ -8976,12 +9003,20 @@ components:
         firstName: { type: string }
         lastName: { type: string }
         companyName: { type: ["string", "null"] }
+        company: { oneOf: [{ $ref: "#/components/schemas/ProspectCompanySummary" }, { type: "null" }] }
         jobTitle: { type: ["string", "null"] }
         tags:
           type: array
           maxItems: 2
           items: { $ref: "#/components/schemas/ContactTag" }
-      required: [id, name, email, firstName, lastName, companyName, jobTitle, tags]
+      required: [id, name, email, firstName, lastName, companyName, company, jobTitle, tags]
+    ProspectCompanySummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        domain: { type: ["string", "null"] }
+      required: [id, name, domain]
     ProspectRecord:
       type: object
       properties:

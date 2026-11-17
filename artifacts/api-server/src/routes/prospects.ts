@@ -17,6 +17,7 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   contactTagAssignmentsTable,
   contactTagsTable,
+  companiesTable,
   contactsTable,
   db,
   prospectActionTypesTable,
@@ -234,6 +235,9 @@ async function buildRecords(userId: string, ids: string[]) {
     contactFirstName: contactsTable.firstName,
     contactLastName: contactsTable.lastName,
     contactCompanyName: contactsTable.companyName,
+    linkedCompanyId: companiesTable.id,
+    linkedCompanyName: companiesTable.companyName,
+    linkedCompanyDomain: companiesTable.companyDomain,
     contactJobTitle: contactsTable.jobTitle,
     productId: prospectProductsTable.id,
     productName: prospectProductsTable.name,
@@ -266,6 +270,10 @@ async function buildRecords(userId: string, ids: string[]) {
     .innerJoin(contactsTable, and(
       eq(contactsTable.id, prospectsTable.contactId),
       eq(contactsTable.userId, prospectsTable.userId),
+    ))
+    .leftJoin(companiesTable, and(
+      eq(companiesTable.id, contactsTable.companyId),
+      eq(companiesTable.userId, contactsTable.userId),
     ))
     .innerJoin(prospectProductsTable, and(
       eq(prospectProductsTable.id, prospectsTable.productId),
@@ -302,6 +310,11 @@ async function buildRecords(userId: string, ids: string[]) {
       firstName: row.contactFirstName,
       lastName: row.contactLastName,
       companyName: row.contactCompanyName,
+      company: row.linkedCompanyId ? {
+        id: row.linkedCompanyId,
+        name: row.linkedCompanyName!,
+        domain: row.linkedCompanyDomain,
+      } : null,
       jobTitle: row.contactJobTitle,
       tags: contactTags.get(row.contactId) ?? [],
     },

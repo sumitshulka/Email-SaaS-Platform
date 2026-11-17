@@ -10381,7 +10381,7 @@ export const getGetCompanyUrl = (companyId: string,) => {
 }
 
 /**
- * @summary Get a company and its linked contacts
+ * @summary Get a company, linked contacts, and linked prospects
  */
 export const getCompany = async (companyId: string, options?: Parameters<typeof customFetch>[1]): Promise<CompanyDetail> => {
 
@@ -10428,7 +10428,7 @@ export type GetCompanyQueryError = ErrorType<ApiError>
 
 
 /**
- * @summary Get a company and its linked contacts
+ * @summary Get a company, linked contacts, and linked prospects
  */
 
 export function useGetCompany<TData = Awaited<ReturnType<typeof getCompany>>, TError = ErrorType<ApiError>>(

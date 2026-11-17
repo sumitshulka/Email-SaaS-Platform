@@ -58,3 +58,4 @@
 - [Inactivity lifecycle](inactivity-lifecycle.md) — inactivity checks and notices are admin-initiated; suspension disables access, and delayed removal stays recoverable through soft delete.
 - [Production object storage](production-object-storage.md) — production is self-hosted outside Replit; superadmins configure S3-compatible storage and credentials remain encrypted.
 - [Open campaign policy](open-campaign-policy.md) — uploaded audiences stay separate from Contacts; package allowances are per term, not concurrent campaigns.
+- [Company prospect value totals](company-prospect-value-totals.md) — TPV sums non-archived linked prospects; TRV sums won expected deal values, grouped by currency.

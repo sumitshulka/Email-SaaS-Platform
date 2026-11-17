@@ -7,6 +7,7 @@ import {
   gt,
   ilike,
   inArray,
+  isNull,
   isNotNull,
   lt,
   ne,
@@ -40,6 +41,8 @@ import {
   db,
   globalCompaniesTable,
   companyImportTemplatesTable,
+  prospectStagesTable,
+  prospectsTable,
   usersTable,
 } from "@workspace/db";
 import ExcelJS from "exceljs";
@@ -56,6 +59,7 @@ import {
 } from "../lib/company-backfill";
 import { requireUserRole } from "../lib/session";
 import { getCompanyBusinessAreaValues } from "../lib/company-business-areas";
+import { summarizeCompanyProspectValues } from "../lib/company-prospect-summary";
 
 const router: IRouter = Router();
 const COMPANY_EXPORT_BATCH_SIZE = 250;
@@ -731,20 +735,56 @@ router.get(
       res.status(404).json({ error: "Company not found.", code: "COMPANY_NOT_FOUND" });
       return;
     }
-    const contacts = await db
-      .select({
-        id: contactsTable.id,
-        name: contactsTable.name,
-        email: contactsTable.email,
-        jobTitle: contactsTable.jobTitle,
-      })
-      .from(contactsTable)
-      .where(and(eq(contactsTable.companyId, company.id), eq(contactsTable.userId, userId)))
-      .orderBy(asc(contactsTable.firstName), asc(contactsTable.lastName));
+    const [contacts, prospectRows] = await Promise.all([
+      db
+        .select({
+          id: contactsTable.id,
+          name: contactsTable.name,
+          email: contactsTable.email,
+          jobTitle: contactsTable.jobTitle,
+        })
+        .from(contactsTable)
+        .where(and(eq(contactsTable.companyId, company.id), eq(contactsTable.userId, userId)))
+        .orderBy(asc(contactsTable.firstName), asc(contactsTable.lastName)),
+      db
+        .select({
+          id: prospectsTable.id,
+          name: prospectsTable.name,
+          contactId: contactsTable.id,
+          contactName: contactsTable.name,
+          expectedDealValue: prospectsTable.expectedDealValue,
+          currencyCode: prospectsTable.currencyCode,
+          expectedClosureDate: prospectsTable.expectedClosureDate,
+          stageName: prospectStagesTable.name,
+          stageType: prospectStagesTable.stageType,
+          terminalOutcome: prospectStagesTable.terminalOutcome,
+        })
+        .from(prospectsTable)
+        .innerJoin(contactsTable, and(
+          eq(contactsTable.id, prospectsTable.contactId),
+          eq(contactsTable.userId, prospectsTable.userId),
+        ))
+        .innerJoin(prospectStagesTable, and(
+          eq(prospectStagesTable.id, prospectsTable.currentStageId),
+          eq(prospectStagesTable.userId, prospectsTable.userId),
+        ))
+        .where(and(
+          eq(prospectsTable.userId, userId),
+          eq(contactsTable.companyId, company.id),
+          isNull(prospectsTable.archivedAt),
+        ))
+        .orderBy(desc(prospectsTable.updatedAt), asc(prospectsTable.name)),
+    ]);
+    const prospects = prospectRows.map(row => ({
+      ...row,
+      expectedDealValue: Number(row.expectedDealValue),
+    }));
     res.json(
       GetCompanyResponse.parse({
         company: presentCompany(company),
         contacts,
+        prospects,
+        prospectValueTotals: summarizeCompanyProspectValues(prospectRows),
       }),
     );
   },

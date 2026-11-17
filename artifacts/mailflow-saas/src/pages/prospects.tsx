@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
-  Activity, ArrowLeft, ArrowRight, Archive, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Trash2,
+  Activity, ArrowLeft, ArrowRight, Archive, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Trash2,
   CircleAlert, Clock3, DollarSign, ExternalLink, Filter, History, Layers3, Plus, Search, Settings2,
   Tag, UserRound,
 } from 'lucide-react';
@@ -274,10 +274,10 @@ export function ProspectDetailPage() {
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.16em] text-[#70859a]">PROSPECT / {record.id.slice(0, 8)}</div><h1 className="display break-words text-[29px] font-bold text-[#172b43] sm:text-[35px]">{record.name}</h1><p className="mt-2 text-[12px] text-[#718093]">{record.product.itemType === 'service' ? 'Service' : 'Product'} · {record.product.name}{record.product.category ? ` · ${record.product.category}` : ''} · created {dateLabel(record.createdAt)} · updated {dateLabel(record.updatedAt)}</p></div><span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${record.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{record.currentStage.name} · {record.currentProbability}%</span></div>
     {record.archivedAt && <div className="mb-4"><Notice>Archived {dateLabel(record.archivedAt)}. This record is retained for history.</Notice></div>}
     <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric title="Expected deal value" value={money(record.expectedDealValue, record.currencyCode)} note={record.currencyCode} icon={<DollarSign className="h-4 w-4"/>}/>
-      <Metric title="Expected closure" value={dateLabel(record.expectedClosureDate)} note={record.actualClosureDate ? `Closed ${dateLabel(record.actualClosureDate)}` : 'Target date'} icon={<CalendarDays className="h-4 w-4"/>}/>
-      <Metric title="Current probability" value={`${record.currentProbability}%`} note={record.currentStage.name} icon={<Activity className="h-4 w-4"/>}/>
-      <Metric title="Last activity" value={dateLabel(record.lastActivityAt)} note="Most recent recorded touch" icon={<Clock3 className="h-4 w-4"/>}/>
+      <Metric tone="blue" title="Expected deal value" value={money(record.expectedDealValue, record.currencyCode)} note={record.currencyCode} icon={<DollarSign className="h-4 w-4"/>}/>
+      <Metric tone="amber" title="Expected closure" value={dateLabel(record.expectedClosureDate)} note={record.actualClosureDate ? `Closed ${dateLabel(record.actualClosureDate)}` : 'Target date'} icon={<CalendarDays className="h-4 w-4"/>}/>
+      <Metric tone="green" title="Current probability" value={`${record.currentProbability}%`} note={record.currentStage.name} icon={<Activity className="h-4 w-4"/>}/>
+      <Metric tone="violet" title="Last activity" value={dateLabel(record.lastActivityAt)} note="Most recent recorded touch" icon={<Clock3 className="h-4 w-4"/>}/>
     </div>
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)]">
       <div className="space-y-5">
@@ -286,15 +286,21 @@ export function ProspectDetailPage() {
         <section className={`${panel} p-5`}><div className="mono text-[9px] font-semibold tracking-[.14em] text-[#71869a]">OPPORTUNITY CONTEXT</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Prospect notes</h2><p className="mt-3 whitespace-pre-wrap break-words text-[12px] leading-6 text-[#52667b]">{record.notes}</p></section>
       </div>
       <aside className="space-y-5">
-        <section className={`${panel} overflow-hidden`}><header className="border-b border-[#d6e3ef] bg-[#edf4fb] px-4 py-3"><div className="mono text-[9px] tracking-[.14em] text-[#52718f]">LINKED CONTACT / AUTHORITATIVE</div><h2 className="mt-1 text-[13px] font-bold text-[#263c53]">Contact record</h2></header><div className="p-4"><Link href={`/contacts/${encodeURIComponent(record.contact.id)}`} className="flex items-center gap-3 rounded-lg border border-[#e5ebf0] p-3 no-underline transition hover:bg-[#f7f9fb]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf3f8] text-[#355c80]"><UserRound className="h-4 w-4"/></span><span className="min-w-0 flex-1"><strong className="block truncate text-[12px] text-[#2b4259]">{record.contact.name}</strong><span className="block truncate text-[10px] text-[#7b8997]">{record.contact.email}</span>{record.contact.companyName && <span className="block truncate text-[10px] text-[#7b8997]">{record.contact.companyName}</span>}</span><ExternalLink className="h-3.5 w-3.5 text-[#7b8c9c]"/></Link><div className="mt-4"><div className="mb-2 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Contact tags</div><TagStack tags={record.contact.tags} kind="Contact"/></div><div className="mt-4 border-t border-[#edf1f4] pt-4"><div className="mb-2 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Prospect tags</div><TagStack tags={record.prospectTags} kind="Prospect"/></div><p className="mt-4 border-t border-[#edf1f4] pt-3 text-[9px] leading-4 text-[#8996a3]">Contact name, email, company, phone, notes, tags and campaign history are managed on the contact record.</p></div></section>
+        <section className={`${panel} overflow-hidden`}><header className="border-b border-[#d6e3ef] bg-[#edf4fb] px-4 py-3"><div className="mono text-[9px] tracking-[.14em] text-[#52718f]">LINKED CONTACT / AUTHORITATIVE</div><h2 className="mt-1 text-[13px] font-bold text-[#263c53]">Contact record</h2></header><div className="p-4"><Link href={`/contacts/${encodeURIComponent(record.contact.id)}`} className="flex items-center gap-3 rounded-lg border border-[#e5ebf0] p-3 no-underline transition hover:bg-[#f7f9fb]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf3f8] text-[#355c80]"><UserRound className="h-4 w-4"/></span><span className="min-w-0 flex-1"><strong className="block truncate text-[12px] text-[#2b4259]">{record.contact.name}</strong><span className="block truncate text-[10px] text-[#7b8997]">{record.contact.email}</span></span><ExternalLink className="h-3.5 w-3.5 text-[#7b8c9c]"/></Link><div className="mt-3"><div className="mb-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Associated company</div>{record.contact.company ? <Link href={`/companies/${encodeURIComponent(record.contact.company.id)}`} data-testid="link-prospect-company" className="flex items-center gap-2 rounded-lg border border-[#e5ebf0] bg-[#f8fafc] p-3 no-underline hover:bg-[#f2f6fa]"><Building2 className="h-4 w-4 shrink-0 text-[#52718f]"/><span className="min-w-0 flex-1"><strong className="block truncate text-[11px] text-[#2b4259]">{record.contact.company.name}</strong><span className="block truncate text-[10px] text-[#7b8997]">{record.contact.company.domain || 'Domain not provided'}</span></span><ExternalLink className="h-3.5 w-3.5 text-[#7b8c9c]"/></Link> : record.contact.companyName ? <div className="rounded-lg border border-[#e5ebf0] bg-[#f8fafc] p-3"><div className="text-[11px] font-semibold text-[#2b4259]">{record.contact.companyName}</div><div className="mt-0.5 text-[9px] text-[#7b8997]">Company name on contact · no workspace company linked</div></div> : <div className="rounded-lg border border-dashed border-[#e5ebf0] p-3 text-[10px] text-[#7b8997]">No company is linked to this contact.</div>}</div><div className="mt-4"><div className="mb-2 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Contact tags</div><TagStack tags={record.contact.tags} kind="Contact"/></div><div className="mt-4 border-t border-[#edf1f4] pt-4"><div className="mb-2 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Prospect tags</div><TagStack tags={record.prospectTags} kind="Prospect"/></div><p className="mt-4 border-t border-[#edf1f4] pt-3 text-[9px] leading-4 text-[#8996a3]">Contact name, email, company, phone, notes, tags and campaign history are managed on the contact record.</p></div></section>
         <ClosurePanel record={record}/>
       </aside>
     </div>
   </PageFrame>;
 }
 
-function Metric({ title, value, note, icon }: { title: string; value: string; note: string; icon: ReactNode }) {
-  return <div className={`${panel} p-4`}><div className="flex items-center justify-between text-[#6e8398]"><span className="text-[9px] font-bold uppercase tracking-[.1em]">{title}</span>{icon}</div><div className="mt-3 truncate text-[18px] font-bold tracking-[-.04em] text-[#213a55]">{value}</div><div className="mt-1 text-[9px] text-[#8391a0]">{note}</div></div>;
+function Metric({ tone, title, value, note, icon }: { tone: 'blue' | 'amber' | 'green' | 'violet'; title: string; value: string; note: string; icon: ReactNode }) {
+  const tones = {
+    blue: 'border-[#d6e6f5] bg-[#eff6fd] text-[#3f6f9d]',
+    amber: 'border-[#efe1c8] bg-[#fff8ed] text-[#92713d]',
+    green: 'border-[#d7e9dc] bg-[#f0f8f2] text-[#4d7c5a]',
+    violet: 'border-[#e4dcf0] bg-[#f6f3fb] text-[#705b91]',
+  };
+  return <div className={`rounded-xl border p-4 shadow-[0_4px_18px_rgba(19,43,70,.035)] ${tones[tone]}`}><div className="flex items-center justify-between"><span className="text-[9px] font-bold uppercase tracking-[.1em] text-[#536a80]">{title}</span>{icon}</div><div className="mt-3 truncate text-[18px] font-bold tracking-[-.04em] text-[#213a55]">{value}</div><div className="mt-1 text-[9px] text-[#718093]">{note}</div></div>;
 }
 function StageChangePanel({ record }: { record: ProspectRecord }) {
   const qc = useQueryClient();
