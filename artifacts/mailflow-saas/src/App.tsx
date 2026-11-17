@@ -359,10 +359,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     title: 'Prospect Management',
     items: [
       { href: '/prospects', label: 'Prospects', icon: Activity },
-      { href: '/prospect-products', label: 'Products & services', icon: Package },
-      { href: '/prospect-stages', label: 'Prospect Stages', icon: SlidersHorizontal },
-      { href: '/prospect-actions', label: 'Prospect Actions', icon: Clock3 },
-      { href: '/prospect-currencies', label: 'Currency Configuration', icon: CreditCard },
+      { href: '/prospect-products', label: 'Prospect Fields', icon: Settings2 },
     ],
   },
   {
@@ -647,7 +644,9 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
                 {group.title && <div className="mono mt-3 border-t border-[#eef0f2] px-2 pb-1 pt-3 text-[9px] uppercase tracking-[.14em] text-[#99a1aa]">{group.title}</div>}
                 {group.items.map(item => {
                   const Icon = item.icon;
-                  const active = location === item.href || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href));
+                  const active = location === item.href
+                    || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href))
+                    || (item.href === '/prospect-products' && ['/prospect-stages', '/prospect-actions', '/prospect-currencies'].includes(location));
                   return (
                     <Link
                       key={item.href}
