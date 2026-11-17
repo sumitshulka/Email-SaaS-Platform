@@ -1302,6 +1302,505 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-dashboard:
+    get:
+      operationId: getProspectDashboard
+      tags: [sending]
+      summary: Summarize the tenant's prospect pipeline without combining currencies
+      responses:
+        "200":
+          description: Tenant prospect dashboard totals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectDashboard" }
+  /prospects:
+    get:
+      operationId: listProspects
+      tags: [sending]
+      summary: Search, filter, sort, and paginate tenant-owned prospects
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: stageId, in: query, schema: { type: string, format: uuid } }
+        - { name: productId, in: query, schema: { type: string, format: uuid } }
+        - { name: currencyCode, in: query, schema: { type: string, pattern: "^[A-Z]{3}$" } }
+        - { name: closeFrom, in: query, schema: { type: string, format: date } }
+        - { name: closeTo, in: query, schema: { type: string, format: date } }
+        - { name: contactTagId, in: query, schema: { type: string, format: uuid } }
+        - { name: prospectTagId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string, enum: [active, won, lost, other_terminal, all], default: active } }
+        - { name: includeArchived, in: query, schema: { type: boolean, default: false } }
+        - { name: sortBy, in: query, schema: { type: string, enum: [name, expectedDealValue, expectedClosureDate, lastActivityAt, updatedAt], default: updatedAt } }
+        - { name: sortDirection, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+      responses:
+        "200":
+          description: Matching tenant prospects
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectCollection" }
+    post:
+      operationId: createProspect
+      tags: [sending]
+      summary: Create a prospect linked to an existing contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProspectInput" }
+      responses:
+        "201":
+          description: Created prospect and initial audit entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectDetail" }
+        "400":
+          description: Invalid prospect or unconfigured field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Contact or configured option not found in this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospects/{prospectId}:
+    parameters:
+      - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getProspect
+      tags: [sending]
+      summary: Get a tenant-owned prospect and its linked contact
+      responses:
+        "200":
+          description: Prospect detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectDetail" }
+        "404":
+          description: Prospect not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+    patch:
+      operationId: updateProspect
+      tags: [sending]
+      summary: Update commercial prospect fields or archive it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProspectInput" }
+      responses:
+        "200":
+          description: Updated prospect
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectDetail" }
+        "400":
+          description: Invalid update
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Prospect or configured option not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /contacts/{contactId}/prospects:
+    parameters:
+      - { name: contactId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listContactProspects
+      tags: [sending]
+      summary: List prospects linked to an owned contact
+      responses:
+        "200":
+          description: Prospects linked to the contact
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectRecord" }
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospects/{prospectId}/stage:
+    parameters:
+      - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: changeProspectStage
+      tags: [sending]
+      summary: Change a prospect stage with a mandatory reason and audit snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeProspectStageInput" }
+      responses:
+        "200":
+          description: Updated prospect and created stage history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectDetail" }
+        "400":
+          description: Missing reason or transition is not allowed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Prospect or stage not found in this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospects/{prospectId}/history:
+    parameters:
+      - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listProspectGrowthAudit
+      tags: [sending]
+      summary: Read the immutable prospect stage history and actions per stage period
+      responses:
+        "200":
+          description: Chronological growth audit
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectGrowthAuditEntry" }
+        "404":
+          description: Prospect not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospects/{prospectId}/actions:
+    parameters:
+      - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listProspectActions
+      tags: [sending]
+      summary: List prospect actions with their associated stage period
+      parameters:
+        - { name: actionTypeId, in: query, schema: { type: string, format: uuid } }
+        - { name: fromDate, in: query, schema: { type: string, format: date } }
+        - { name: toDate, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Prospect action history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectActionRecord" }
+    post:
+      operationId: createProspectAction
+      tags: [sending]
+      summary: Record an action in the prospect's current stage period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProspectActionInput" }
+      responses:
+        "201":
+          description: Created action
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectActionRecord" }
+        "400":
+          description: Invalid action or inactive action type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Prospect or action type not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospects/{prospectId}/tags:
+    parameters:
+      - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setProspectTags
+      tags: [sending]
+      summary: Replace a prospect's private tag associations using the existing tag library
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectTagSelection" }
+      responses:
+        "200":
+          description: Saved prospect tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ContactTag" }
+        "400":
+          description: One or more tags are not in this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Prospect not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-products:
+    get:
+      operationId: listProspectProducts
+      tags: [sending]
+      summary: List the tenant's product and service catalogue
+      responses:
+        "200":
+          description: Tenant products and services
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectProduct" }
+    post:
+      operationId: createProspectProduct
+      tags: [sending]
+      summary: Add a product or service to the tenant catalogue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectProductInput" }
+      responses:
+        "201":
+          description: Created product/service
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectProduct" }
+        "400":
+          description: Invalid product/service
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Product/service name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-products/{productId}:
+    parameters:
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateProspectProduct
+      tags: [sending]
+      summary: Edit or deactivate a product without removing historical references
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectProductInput" }
+      responses:
+        "200":
+          description: Updated product/service
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectProduct" }
+        "404":
+          description: Product/service not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-currencies:
+    get:
+      operationId: getProspectCurrencies
+      tags: [sending]
+      summary: Get the tenant's permitted currencies and default selling currency
+      responses:
+        "200":
+          description: Tenant currency configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectCurrencySettings" }
+    put:
+      operationId: updateProspectCurrencies
+      tags: [sending]
+      summary: Replace permitted currencies and select exactly one default
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectCurrencySettingsInput" }
+      responses:
+        "200":
+          description: Saved currency configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectCurrencySettings" }
+        "400":
+          description: Invalid or duplicate ISO currency codes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: A currency is used by an active prospect and cannot be removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-stages:
+    get:
+      operationId: listProspectStages
+      tags: [sending]
+      summary: List the tenant's configurable pipeline stages
+      responses:
+        "200":
+          description: Tenant stages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectStage" }
+    post:
+      operationId: createProspectStage
+      tags: [sending]
+      summary: Add a tenant-defined pipeline stage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectStageInput" }
+      responses:
+        "201":
+          description: Created stage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectStage" }
+        "400":
+          description: Invalid stage configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Stage name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-stages/{stageId}:
+    parameters:
+      - { name: stageId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateProspectStage
+      tags: [sending]
+      summary: Edit or deactivate a stage while retaining its history references
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectStageInput" }
+      responses:
+        "200":
+          description: Updated stage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectStage" }
+        "404":
+          description: Stage not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Stage type change conflicts with active prospects
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-stages/{stageId}/transitions:
+    parameters:
+      - { name: stageId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setProspectStageTransitions
+      tags: [sending]
+      summary: Configure permitted next stages from a stage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectStageTransitionsInput" }
+      responses:
+        "200":
+          description: Saved outgoing transitions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectStageTransitions" }
+        "400":
+          description: Invalid stage transition set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Stage not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-action-types:
+    get:
+      operationId: listProspectActionTypes
+      tags: [sending]
+      summary: List the tenant's configurable action catalogue
+      responses:
+        "200":
+          description: Tenant action types
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectActionType" }
+    post:
+      operationId: createProspectActionType
+      tags: [sending]
+      summary: Add an action type for the tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectActionTypeInput" }
+      responses:
+        "201":
+          description: Created action type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectActionType" }
+        "400":
+          description: Invalid action type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Action type name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /prospect-action-types/{actionTypeId}:
+    parameters:
+      - { name: actionTypeId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateProspectActionType
+      tags: [sending]
+      summary: Edit or deactivate an action type while retaining history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProspectActionTypeInput" }
+      responses:
+        "200":
+          description: Updated action type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProspectActionType" }
+        "404":
+          description: Action type not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /contacts/bulk:
     post:
       operationId: bulkUpdateContacts
@@ -8293,3 +8792,303 @@ components:
               text: { type: string, minLength: 8, maxLength: 240 }
             required: [id, text]
       required: [questions]
+    ProspectProduct:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 10000 }
+        category: { type: ["string", "null"], maxLength: 100 }
+        active: { type: boolean }
+        displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
+      required: [id, name, description, category, active, displayOrder]
+    ProspectProductInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 10000 }
+        category: { type: ["string", "null"], maxLength: 100 }
+        active: { type: boolean }
+        displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
+      required: [name, description, category, active, displayOrder]
+    ProspectCurrency:
+      type: object
+      properties:
+        code: { type: string, pattern: "^[A-Z]{3}$" }
+        isDefault: { type: boolean }
+      required: [code, isDefault]
+    ProspectCurrencySettings:
+      type: object
+      properties:
+        currencies:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectCurrency" }
+        defaultCurrencyCode: { type: ["string", "null"], pattern: "^[A-Z]{3}$" }
+      required: [currencies, defaultCurrencyCode]
+    ProspectCurrencySettingsInput:
+      type: object
+      properties:
+        currencies:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, pattern: "^[A-Z]{3}$" }
+        defaultCurrencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+      required: [currencies, defaultCurrencyCode]
+    ProspectStage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 10000 }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        stageType: { type: string, enum: [active, terminal] }
+        terminalOutcome: { type: ["string", "null"], maxLength: 80 }
+        displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
+        active: { type: boolean }
+        allowedNextStageIds:
+          type: array
+          items: { type: string, format: uuid }
+      required: [id, name, description, probability, stageType, terminalOutcome, displayOrder, active, allowedNextStageIds]
+    ProspectStageInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 10000 }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        stageType: { type: string, enum: [active, terminal] }
+        terminalOutcome: { type: ["string", "null"], maxLength: 80 }
+        displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
+        active: { type: boolean }
+      required: [name, description, probability, stageType, terminalOutcome, displayOrder, active]
+    ProspectStageTransitionsInput:
+      type: object
+      properties:
+        toStageIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+      required: [toStageIds]
+    ProspectStageTransitions:
+      type: object
+      properties:
+        fromStageId: { type: string, format: uuid }
+        toStageIds:
+          type: array
+          items: { type: string, format: uuid }
+        unrestricted: { type: boolean, description: True when no explicit outgoing transitions are configured and any active stage is allowed. }
+      required: [fromStageId, toStageIds, unrestricted]
+    ProspectActionType:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 10000 }
+        active: { type: boolean }
+        displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
+      required: [id, name, description, active, displayOrder]
+    ProspectActionTypeInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 10000 }
+        active: { type: boolean }
+        displayOrder: { type: integer, minimum: -32768, maximum: 32767 }
+      required: [name, description, active, displayOrder]
+    ProspectContactSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        companyName: { type: ["string", "null"] }
+        jobTitle: { type: ["string", "null"] }
+        tags:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/ContactTag" }
+      required: [id, name, email, firstName, lastName, companyName, jobTitle, tags]
+    ProspectRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        contact: { $ref: "#/components/schemas/ProspectContactSummary" }
+        product: { $ref: "#/components/schemas/ProspectProduct" }
+        expectedDealValue: { type: number, minimum: 0 }
+        currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        expectedClosureDate: { type: string, format: date }
+        currentStage: { $ref: "#/components/schemas/ProspectStage" }
+        currentProbability: { type: integer, minimum: 0, maximum: 100 }
+        notes: { type: string }
+        actualClosureDate: { type: ["string", "null"], format: date }
+        closureOutcome: { type: ["string", "null"] }
+        closureRemarks: { type: ["string", "null"] }
+        archivedAt: { type: ["string", "null"], format: date-time }
+        lastActivityAt: { type: ["string", "null"], format: date-time }
+        prospectTags:
+          type: array
+          items: { $ref: "#/components/schemas/ContactTag" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, contact, product, expectedDealValue, currencyCode, expectedClosureDate, currentStage, currentProbability, notes, actualClosureDate, closureOutcome, closureRemarks, archivedAt, lastActivityAt, prospectTags, createdAt, updatedAt]
+    ProspectDetail:
+      type: object
+      properties:
+        prospect: { $ref: "#/components/schemas/ProspectRecord" }
+      required: [prospect]
+    ProspectCollection:
+      type: object
+      properties:
+        prospects:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectRecord" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        pageCount: { type: integer, minimum: 0 }
+      required: [prospects, page, pageSize, total, pageCount]
+    CreateProspectInput:
+      type: object
+      properties:
+        contactId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 180 }
+        productId: { type: string, format: uuid }
+        expectedDealValue: { type: number, minimum: 0 }
+        currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        expectedClosureDate: { type: string, format: date }
+        stageId: { type: string, format: uuid }
+        notes: { type: string, minLength: 1, maxLength: 20000 }
+        prospectTagIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+      required: [contactId, name, productId, expectedDealValue, currencyCode, expectedClosureDate, stageId, notes, prospectTagIds]
+    UpdateProspectInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 180 }
+        productId: { type: string, format: uuid }
+        expectedDealValue: { type: number, minimum: 0 }
+        currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        expectedClosureDate: { type: string, format: date }
+        notes: { type: string, minLength: 1, maxLength: 20000 }
+        archived: { type: boolean }
+        actualClosureDate: { type: ["string", "null"], format: date }
+        closureRemarks: { type: ["string", "null"], maxLength: 20000 }
+    ChangeProspectStageInput:
+      type: object
+      properties:
+        newStageId: { type: string, format: uuid }
+        reason: { type: string, minLength: 3, maxLength: 4000 }
+      required: [newStageId, reason]
+    ProspectGrowthAuditEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string, enum: [created, stage_change] }
+        previousStage:
+          anyOf:
+            - $ref: "#/components/schemas/ProspectStage"
+            - type: "null"
+        newStage: { $ref: "#/components/schemas/ProspectStage" }
+        previousProbability: { type: ["integer", "null"], minimum: 0, maximum: 100 }
+        newProbability: { type: integer, minimum: 0, maximum: 100 }
+        reason: { type: ["string", "null"] }
+        notesSnapshot: { type: ["string", "null"] }
+        changedByName: { type: string }
+        createdAt: { type: string, format: date-time }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectActionRecord" }
+      required: [id, eventType, previousStage, newStage, previousProbability, newProbability, reason, notesSnapshot, changedByName, createdAt, actions]
+    CreateProspectActionInput:
+      type: object
+      properties:
+        actionTypeId: { type: string, format: uuid }
+        actionDate: { type: string, format: date }
+        notes: { type: string, minLength: 1, maxLength: 10000 }
+      required: [actionTypeId, actionDate, notes]
+    ProspectActionRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actionType: { $ref: "#/components/schemas/ProspectActionType" }
+        stageHistoryId: { type: string, format: uuid }
+        stageNameAtAction: { type: string }
+        actionDate: { type: string, format: date }
+        notes: { type: string }
+        recordedByName: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, actionType, stageHistoryId, stageNameAtAction, actionDate, notes, recordedByName, createdAt]
+    ProspectTagSelection:
+      type: object
+      properties:
+        tagIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, format: uuid }
+      required: [tagIds]
+    ProspectCurrencyTotal:
+      type: object
+      properties:
+        currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        activeValue: { type: number }
+        weightedValue: { type: number }
+        wonValue: { type: number }
+        lostValue: { type: number }
+      required: [currencyCode, activeValue, weightedValue, wonValue, lostValue]
+    ProspectStageMetric:
+      type: object
+      properties:
+        stageId: { type: string, format: uuid }
+        stageName: { type: string }
+        stageType: { type: string, enum: [active, terminal] }
+        terminalOutcome: { type: ["string", "null"] }
+        probability: { type: integer, minimum: 0, maximum: 100 }
+        count: { type: integer, minimum: 0 }
+        currencyTotals:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectCurrencyTotal" }
+      required: [stageId, stageName, stageType, terminalOutcome, probability, count, currencyTotals]
+    ProspectProductMetric:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        productName: { type: string }
+        count: { type: integer, minimum: 0 }
+        currencyTotals:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectCurrencyTotal" }
+      required: [productId, productName, count, currencyTotals]
+    ProspectClosurePeriodMetric:
+      type: object
+      properties:
+        period: { type: string, pattern: "^\\d{4}-\\d{2}$" }
+        count: { type: integer, minimum: 0 }
+        currencyTotals:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectCurrencyTotal" }
+      required: [period, count, currencyTotals]
+    ProspectDashboard:
+      type: object
+      properties:
+        totalActive: { type: integer, minimum: 0 }
+        totalWon: { type: integer, minimum: 0 }
+        totalLost: { type: integer, minimum: 0 }
+        currencyTotals:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectCurrencyTotal" }
+        byStage:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectStageMetric" }
+        byProduct:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectProductMetric" }
+        byClosurePeriod:
+          type: array
+          items: { $ref: "#/components/schemas/ProspectClosurePeriodMetric" }
+      required: [totalActive, totalWon, totalLost, currencyTotals, byStage, byProduct, byClosurePeriod]

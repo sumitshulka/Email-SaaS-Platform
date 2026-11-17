@@ -24,6 +24,7 @@
 - [SMTP setup versus campaign readiness](smtp-setup-verification.md) — a saved-settings connection check completes onboarding, but campaign sending still requires an accepted SMTP test email.
 - [Password reset email origin](password-reset-email-origin.md) — recovery mail uses superadmin-managed application SMTP and the currently hosted app origin.
 - [Generated API schema ordering](generated-api-schema-ordering.md) — generated Zod response constants must be declared before schemas that use them; rebuild shared types before app checks.
+- [OpenAPI date query coercion](openapi-date-query-coercion.md) — convert Express date query strings before generated Zod `z.date()` parsing and reject invalid calendar dates.
 - [Settings snapshot concurrency](settings-snapshot-concurrency.md) — full settings replacements need a version of the locked current values; timestamps can be absent or imprecise.
 - [Browser test reliability](browser-test-resource-contention.md) — reuse managed Vite and stub shared app-shell APIs so missing fixtures do not look like blank-page regressions.
 - [Git secret cleanup](git-secret-history.md) — sanitize only outgoing commits and verify the unchanged upstream remains an ancestor before pushing.

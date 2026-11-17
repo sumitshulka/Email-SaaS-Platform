@@ -5736,6 +5736,434 @@ export interface ContactIntentQuestionsInput {
   questions: ContactIntentQuestionsInputQuestionsItem[];
 }
 
+export interface ProspectProduct {
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /** @maxLength 10000 */
+  description: string;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  category: string | null;
+  active: boolean;
+  /**
+     * @minimum -32768
+     * @maximum 32767
+     */
+  displayOrder: number;
+}
+
+export interface ProspectProductInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /** @maxLength 10000 */
+  description: string;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  category: string | null;
+  active: boolean;
+  /**
+     * @minimum -32768
+     * @maximum 32767
+     */
+  displayOrder: number;
+}
+
+export interface ProspectCurrency {
+  /** @pattern ^[A-Z]{3}$ */
+  code: string;
+  isDefault: boolean;
+}
+
+export interface ProspectCurrencySettings {
+  currencies: ProspectCurrency[];
+  /**
+     * @nullable
+     * @pattern ^[A-Z]{3}$
+     */
+  defaultCurrencyCode: string | null;
+}
+
+export interface ProspectCurrencySettingsInput {
+  /**
+     * @minItems 1
+     * @items.pattern ^[A-Z]{3}$
+     */
+  currencies: string[];
+  /** @pattern ^[A-Z]{3}$ */
+  defaultCurrencyCode: string;
+}
+
+export type ProspectStageStageType = typeof ProspectStageStageType[keyof typeof ProspectStageStageType];
+
+
+export const ProspectStageStageType = {
+  active: 'active',
+  terminal: 'terminal',
+} as const;
+
+export interface ProspectStage {
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  /** @maxLength 10000 */
+  description: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  probability: number;
+  stageType: ProspectStageStageType;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  terminalOutcome: string | null;
+  /**
+     * @minimum -32768
+     * @maximum 32767
+     */
+  displayOrder: number;
+  active: boolean;
+  allowedNextStageIds: string[];
+}
+
+export type ProspectStageInputStageType = typeof ProspectStageInputStageType[keyof typeof ProspectStageInputStageType];
+
+
+export const ProspectStageInputStageType = {
+  active: 'active',
+  terminal: 'terminal',
+} as const;
+
+export interface ProspectStageInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  /** @maxLength 10000 */
+  description: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  probability: number;
+  stageType: ProspectStageInputStageType;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  terminalOutcome: string | null;
+  /**
+     * @minimum -32768
+     * @maximum 32767
+     */
+  displayOrder: number;
+  active: boolean;
+}
+
+export interface ProspectStageTransitionsInput {
+  toStageIds: string[];
+}
+
+export interface ProspectStageTransitions {
+  fromStageId: string;
+  toStageIds: string[];
+  /** True when no explicit outgoing transitions are configured and any active stage is allowed. */
+  unrestricted: boolean;
+}
+
+export interface ProspectActionType {
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  /** @maxLength 10000 */
+  description: string;
+  active: boolean;
+  /**
+     * @minimum -32768
+     * @maximum 32767
+     */
+  displayOrder: number;
+}
+
+export interface ProspectActionTypeInput {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+  /** @maxLength 10000 */
+  description: string;
+  active: boolean;
+  /**
+     * @minimum -32768
+     * @maximum 32767
+     */
+  displayOrder: number;
+}
+
+export interface ProspectContactSummary {
+  id: string;
+  name: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  /** @nullable */
+  companyName: string | null;
+  /** @nullable */
+  jobTitle: string | null;
+  /** @maxItems 2 */
+  tags: ContactTag[];
+}
+
+export interface ProspectRecord {
+  id: string;
+  name: string;
+  contact: ProspectContactSummary;
+  product: ProspectProduct;
+  /** @minimum 0 */
+  expectedDealValue: number;
+  /** @pattern ^[A-Z]{3}$ */
+  currencyCode: string;
+  expectedClosureDate: string;
+  currentStage: ProspectStage;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  currentProbability: number;
+  notes: string;
+  /** @nullable */
+  actualClosureDate: string | null;
+  /** @nullable */
+  closureOutcome: string | null;
+  /** @nullable */
+  closureRemarks: string | null;
+  /** @nullable */
+  archivedAt: string | null;
+  /** @nullable */
+  lastActivityAt: string | null;
+  prospectTags: ContactTag[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProspectDetail {
+  prospect: ProspectRecord;
+}
+
+export interface ProspectCollection {
+  prospects: ProspectRecord[];
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize: number;
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  pageCount: number;
+}
+
+export interface CreateProspectInput {
+  contactId: string;
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  name: string;
+  productId: string;
+  /** @minimum 0 */
+  expectedDealValue: number;
+  /** @pattern ^[A-Z]{3}$ */
+  currencyCode: string;
+  expectedClosureDate: string;
+  stageId: string;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  notes: string;
+  prospectTagIds: string[];
+}
+
+export interface UpdateProspectInput {
+  /**
+     * @minLength 1
+     * @maxLength 180
+     */
+  name?: string;
+  productId?: string;
+  /** @minimum 0 */
+  expectedDealValue?: number;
+  /** @pattern ^[A-Z]{3}$ */
+  currencyCode?: string;
+  expectedClosureDate?: string;
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  notes?: string;
+  archived?: boolean;
+  /** @nullable */
+  actualClosureDate?: string | null;
+  /**
+     * @maxLength 20000
+     * @nullable
+     */
+  closureRemarks?: string | null;
+}
+
+export interface ChangeProspectStageInput {
+  newStageId: string;
+  /**
+     * @minLength 3
+     * @maxLength 4000
+     */
+  reason: string;
+}
+
+export type ProspectGrowthAuditEntryEventType = typeof ProspectGrowthAuditEntryEventType[keyof typeof ProspectGrowthAuditEntryEventType];
+
+
+export const ProspectGrowthAuditEntryEventType = {
+  created: 'created',
+  stage_change: 'stage_change',
+} as const;
+
+export interface ProspectActionRecord {
+  id: string;
+  actionType: ProspectActionType;
+  stageHistoryId: string;
+  stageNameAtAction: string;
+  actionDate: string;
+  notes: string;
+  recordedByName: string;
+  createdAt: string;
+}
+
+export interface ProspectGrowthAuditEntry {
+  id: string;
+  eventType: ProspectGrowthAuditEntryEventType;
+  previousStage: ProspectStage | null;
+  newStage: ProspectStage;
+  /**
+     * @minimum 0
+     * @maximum 100
+     * @nullable
+     */
+  previousProbability: number | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  newProbability: number;
+  /** @nullable */
+  reason: string | null;
+  /** @nullable */
+  notesSnapshot: string | null;
+  changedByName: string;
+  createdAt: string;
+  actions: ProspectActionRecord[];
+}
+
+export interface CreateProspectActionInput {
+  actionTypeId: string;
+  actionDate: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  notes: string;
+}
+
+export interface ProspectTagSelection {
+  /** @maxItems 20 */
+  tagIds: string[];
+}
+
+export interface ProspectCurrencyTotal {
+  /** @pattern ^[A-Z]{3}$ */
+  currencyCode: string;
+  activeValue: number;
+  weightedValue: number;
+  wonValue: number;
+  lostValue: number;
+}
+
+export type ProspectStageMetricStageType = typeof ProspectStageMetricStageType[keyof typeof ProspectStageMetricStageType];
+
+
+export const ProspectStageMetricStageType = {
+  active: 'active',
+  terminal: 'terminal',
+} as const;
+
+export interface ProspectStageMetric {
+  stageId: string;
+  stageName: string;
+  stageType: ProspectStageMetricStageType;
+  /** @nullable */
+  terminalOutcome: string | null;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  probability: number;
+  /** @minimum 0 */
+  count: number;
+  currencyTotals: ProspectCurrencyTotal[];
+}
+
+export interface ProspectProductMetric {
+  productId: string;
+  productName: string;
+  /** @minimum 0 */
+  count: number;
+  currencyTotals: ProspectCurrencyTotal[];
+}
+
+export interface ProspectClosurePeriodMetric {
+  /** @pattern ^\d{4}-\d{2}$ */
+  period: string;
+  /** @minimum 0 */
+  count: number;
+  currencyTotals: ProspectCurrencyTotal[];
+}
+
+export interface ProspectDashboard {
+  /** @minimum 0 */
+  totalActive: number;
+  /** @minimum 0 */
+  totalWon: number;
+  /** @minimum 0 */
+  totalLost: number;
+  currencyTotals: ProspectCurrencyTotal[];
+  byStage: ProspectStageMetric[];
+  byProduct: ProspectProductMetric[];
+  byClosurePeriod: ProspectClosurePeriodMetric[];
+}
+
 export type AuthorizeMicrosoftSender200 = {
   authorizationUrl: string;
 };
@@ -5831,6 +6259,72 @@ export const ListContactsAddedWithin = {
   NUMBER_30: '30',
   NUMBER_90: '90',
 } as const;
+
+export type ListProspectsParams = {
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: number;
+/**
+ * @maxLength 200
+ */
+search?: string;
+stageId?: string;
+productId?: string;
+/**
+ * @pattern ^[A-Z]{3}$
+ */
+currencyCode?: string;
+closeFrom?: string;
+closeTo?: string;
+contactTagId?: string;
+prospectTagId?: string;
+status?: ListProspectsStatus;
+includeArchived?: boolean;
+sortBy?: ListProspectsSortBy;
+sortDirection?: ListProspectsSortDirection;
+};
+
+export type ListProspectsStatus = typeof ListProspectsStatus[keyof typeof ListProspectsStatus];
+
+
+export const ListProspectsStatus = {
+  active: 'active',
+  won: 'won',
+  lost: 'lost',
+  other_terminal: 'other_terminal',
+  all: 'all',
+} as const;
+
+export type ListProspectsSortBy = typeof ListProspectsSortBy[keyof typeof ListProspectsSortBy];
+
+
+export const ListProspectsSortBy = {
+  name: 'name',
+  expectedDealValue: 'expectedDealValue',
+  expectedClosureDate: 'expectedClosureDate',
+  lastActivityAt: 'lastActivityAt',
+  updatedAt: 'updatedAt',
+} as const;
+
+export type ListProspectsSortDirection = typeof ListProspectsSortDirection[keyof typeof ListProspectsSortDirection];
+
+
+export const ListProspectsSortDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export type ListProspectActionsParams = {
+actionTypeId?: string;
+fromDate?: string;
+toDate?: string;
+};
 
 export type ListContactOptionsParams = {
 /**

@@ -26,6 +26,8 @@ import maintenanceRouter from "./maintenance";
 import contactIntentRouter from "./contact-intent";
 import contactTagsRouter from "./contact-tags";
 import remoteDiagnosticsRouter from "./remote-diagnostics";
+import prospectSettingsRouter from "./prospect-settings";
+import prospectsRouter from "./prospects";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -39,6 +41,8 @@ router.use(globalCompaniesRouter);
 router.use(companyIntelligenceRouter);
 router.use(contactIntentRouter);
 router.use(contactTagsRouter);
+router.use(prospectSettingsRouter);
+router.use(prospectsRouter);
 router.use(contactFieldOptionsRouter);
 router.use(notificationsRouter);
 router.use(contactImportRouter);

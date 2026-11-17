@@ -152,6 +152,7 @@ import {
   emailCampaignsTable,
   emailSendAttemptsTable,
   paymentsTable,
+  prospectsTable,
   subscriptionPackagesTable,
   tenantSendingConfigurationTable,
   userSubscriptionsTable,
@@ -4642,7 +4643,23 @@ router.delete(
       res.status(404).json({ error: "Contact not found.", code: "CONTACT_NOT_FOUND" });
       return;
     }
-    const affectedCampaignIds = await db.transaction(async (tx) => {
+    const [linkedProspect] = await db.select({ id: prospectsTable.id })
+      .from(prospectsTable)
+      .where(and(
+        eq(prospectsTable.userId, userId),
+        eq(prospectsTable.contactId, contact.id),
+      ))
+      .limit(1);
+    if (linkedProspect) {
+      res.status(409).json({
+        error: "This contact is linked to one or more prospects and cannot be deleted. Keep the contact to preserve its prospect history.",
+        code: "CONTACT_HAS_PROSPECTS",
+      });
+      return;
+    }
+    let affectedCampaignIds: string[];
+    try {
+      affectedCampaignIds = await db.transaction(async (tx) => {
       const affected = await tx
         .update(emailCampaignRecipientsTable)
         .set({
@@ -4667,7 +4684,17 @@ router.delete(
           ),
         );
       return affected.map((recipient) => recipient.campaignId);
-    });
+      });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23503") {
+        res.status(409).json({
+          error: "This contact is linked to one or more prospects and cannot be deleted. Keep the contact to preserve its prospect history.",
+          code: "CONTACT_HAS_PROSPECTS",
+        });
+        return;
+      }
+      throw error;
+    }
     for (const campaignId of new Set(affectedCampaignIds)) {
       await completeCampaignIfFinished(userId, campaignId);
     }

@@ -2089,6 +2089,1383 @@ export const SetContactTagsResponse = zod.array(SetContactTagsResponseItem)
 
 
 /**
+ * @summary Summarize the tenant's prospect pipeline without combining currencies
+ */
+export const getProspectDashboardResponseTotalActiveMin = 0;
+
+export const getProspectDashboardResponseTotalWonMin = 0;
+
+export const getProspectDashboardResponseTotalLostMin = 0;
+
+export const getProspectDashboardResponseCurrencyTotalsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectDashboardResponseByStageItemProbabilityMin = 0;
+export const getProspectDashboardResponseByStageItemProbabilityMax = 100;
+
+export const getProspectDashboardResponseByStageItemCountMin = 0;
+
+export const getProspectDashboardResponseByStageItemCurrencyTotalsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectDashboardResponseByProductItemCountMin = 0;
+
+export const getProspectDashboardResponseByProductItemCurrencyTotalsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectDashboardResponseByClosurePeriodItemPeriodRegExp = new RegExp('^\\d{4}-\\d{2}$');
+export const getProspectDashboardResponseByClosurePeriodItemCountMin = 0;
+
+export const getProspectDashboardResponseByClosurePeriodItemCurrencyTotalsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const GetProspectDashboardResponse = zod.object({
+  "totalActive": zod.number().int().min(getProspectDashboardResponseTotalActiveMin),
+  "totalWon": zod.number().int().min(getProspectDashboardResponseTotalWonMin),
+  "totalLost": zod.number().int().min(getProspectDashboardResponseTotalLostMin),
+  "currencyTotals": zod.array(zod.object({
+  "currencyCode": zod.string().regex(getProspectDashboardResponseCurrencyTotalsItemCurrencyCodeRegExp),
+  "activeValue": zod.number(),
+  "weightedValue": zod.number(),
+  "wonValue": zod.number(),
+  "lostValue": zod.number()
+})),
+  "byStage": zod.array(zod.object({
+  "stageId": zod.string().uuid(),
+  "stageName": zod.string(),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().nullable(),
+  "probability": zod.number().int().min(getProspectDashboardResponseByStageItemProbabilityMin).max(getProspectDashboardResponseByStageItemProbabilityMax),
+  "count": zod.number().int().min(getProspectDashboardResponseByStageItemCountMin),
+  "currencyTotals": zod.array(zod.object({
+  "currencyCode": zod.string().regex(getProspectDashboardResponseByStageItemCurrencyTotalsItemCurrencyCodeRegExp),
+  "activeValue": zod.number(),
+  "weightedValue": zod.number(),
+  "wonValue": zod.number(),
+  "lostValue": zod.number()
+}))
+})),
+  "byProduct": zod.array(zod.object({
+  "productId": zod.string().uuid(),
+  "productName": zod.string(),
+  "count": zod.number().int().min(getProspectDashboardResponseByProductItemCountMin),
+  "currencyTotals": zod.array(zod.object({
+  "currencyCode": zod.string().regex(getProspectDashboardResponseByProductItemCurrencyTotalsItemCurrencyCodeRegExp),
+  "activeValue": zod.number(),
+  "weightedValue": zod.number(),
+  "wonValue": zod.number(),
+  "lostValue": zod.number()
+}))
+})),
+  "byClosurePeriod": zod.array(zod.object({
+  "period": zod.string().regex(getProspectDashboardResponseByClosurePeriodItemPeriodRegExp),
+  "count": zod.number().int().min(getProspectDashboardResponseByClosurePeriodItemCountMin),
+  "currencyTotals": zod.array(zod.object({
+  "currencyCode": zod.string().regex(getProspectDashboardResponseByClosurePeriodItemCurrencyTotalsItemCurrencyCodeRegExp),
+  "activeValue": zod.number(),
+  "weightedValue": zod.number(),
+  "wonValue": zod.number(),
+  "lostValue": zod.number()
+}))
+}))
+})
+
+
+/**
+ * @summary Search, filter, sort, and paginate tenant-owned prospects
+ */
+export const listProspectsQueryPageDefault = 1;
+
+export const listProspectsQueryPageSizeDefault = 25;
+export const listProspectsQueryPageSizeMax = 100;
+
+export const listProspectsQuerySearchMax = 200;
+
+export const listProspectsQueryCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const listProspectsQueryStatusDefault = `active`;
+export const listProspectsQueryIncludeArchivedDefault = false;
+export const listProspectsQuerySortByDefault = `updatedAt`;
+export const listProspectsQuerySortDirectionDefault = `desc`;
+
+export const ListProspectsQueryParams = zod.object({
+  "page": zod.coerce.number().int().min(1).default(listProspectsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(1).max(listProspectsQueryPageSizeMax).default(listProspectsQueryPageSizeDefault),
+  "search": zod.coerce.string().max(listProspectsQuerySearchMax).optional(),
+  "stageId": zod.coerce.string().uuid().optional(),
+  "productId": zod.coerce.string().uuid().optional(),
+  "currencyCode": zod.coerce.string().regex(listProspectsQueryCurrencyCodeRegExp).optional(),
+  "closeFrom": zod.date().optional(),
+  "closeTo": zod.date().optional(),
+  "contactTagId": zod.coerce.string().uuid().optional(),
+  "prospectTagId": zod.coerce.string().uuid().optional(),
+  "status": zod.enum(['active', 'won', 'lost', 'other_terminal', 'all']).default(listProspectsQueryStatusDefault),
+  "includeArchived": zod.coerce.boolean().default(listProspectsQueryIncludeArchivedDefault),
+  "sortBy": zod.enum(['name', 'expectedDealValue', 'expectedClosureDate', 'lastActivityAt', 'updatedAt']).default(listProspectsQuerySortByDefault),
+  "sortDirection": zod.enum(['asc', 'desc']).default(listProspectsQuerySortDirectionDefault)
+})
+
+export const listProspectsResponseProspectsItemContactTagsItemNameMax = 40;
+
+export const listProspectsResponseProspectsItemContactTagsMax = 2;
+
+export const listProspectsResponseProspectsItemProductNameMax = 160;
+
+export const listProspectsResponseProspectsItemProductDescriptionMax = 10000;
+
+export const listProspectsResponseProspectsItemProductCategoryMax = 100;
+
+export const listProspectsResponseProspectsItemProductDisplayOrderMin = -32768;
+export const listProspectsResponseProspectsItemProductDisplayOrderMax = 32767;
+
+export const listProspectsResponseProspectsItemExpectedDealValueMin = 0;
+
+export const listProspectsResponseProspectsItemCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const listProspectsResponseProspectsItemCurrentStageNameMax = 100;
+
+export const listProspectsResponseProspectsItemCurrentStageDescriptionMax = 10000;
+
+export const listProspectsResponseProspectsItemCurrentStageProbabilityMin = 0;
+export const listProspectsResponseProspectsItemCurrentStageProbabilityMax = 100;
+
+export const listProspectsResponseProspectsItemCurrentStageTerminalOutcomeMax = 80;
+
+export const listProspectsResponseProspectsItemCurrentStageDisplayOrderMin = -32768;
+export const listProspectsResponseProspectsItemCurrentStageDisplayOrderMax = 32767;
+
+export const listProspectsResponseProspectsItemCurrentProbabilityMin = 0;
+export const listProspectsResponseProspectsItemCurrentProbabilityMax = 100;
+
+export const listProspectsResponseProspectsItemProspectTagsItemNameMax = 40;
+
+
+export const listProspectsResponsePageSizeMax = 100;
+
+export const listProspectsResponseTotalMin = 0;
+
+export const listProspectsResponsePageCountMin = 0;
+
+
+
+export const ListProspectsResponse = zod.object({
+  "prospects": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectsResponseProspectsItemContactTagsItemNameMax)
+})).max(listProspectsResponseProspectsItemContactTagsMax)
+}),
+  "product": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectsResponseProspectsItemProductNameMax),
+  "description": zod.string().max(listProspectsResponseProspectsItemProductDescriptionMax),
+  "category": zod.string().max(listProspectsResponseProspectsItemProductCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listProspectsResponseProspectsItemProductDisplayOrderMin).max(listProspectsResponseProspectsItemProductDisplayOrderMax)
+}),
+  "expectedDealValue": zod.number().min(listProspectsResponseProspectsItemExpectedDealValueMin),
+  "currencyCode": zod.string().regex(listProspectsResponseProspectsItemCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "currentStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectsResponseProspectsItemCurrentStageNameMax),
+  "description": zod.string().max(listProspectsResponseProspectsItemCurrentStageDescriptionMax),
+  "probability": zod.number().int().min(listProspectsResponseProspectsItemCurrentStageProbabilityMin).max(listProspectsResponseProspectsItemCurrentStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(listProspectsResponseProspectsItemCurrentStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(listProspectsResponseProspectsItemCurrentStageDisplayOrderMin).max(listProspectsResponseProspectsItemCurrentStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "currentProbability": zod.number().int().min(listProspectsResponseProspectsItemCurrentProbabilityMin).max(listProspectsResponseProspectsItemCurrentProbabilityMax),
+  "notes": zod.string(),
+  "actualClosureDate": zod.coerce.date().nullable(),
+  "closureOutcome": zod.string().nullable(),
+  "closureRemarks": zod.string().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "lastActivityAt": zod.coerce.date().nullable(),
+  "prospectTags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectsResponseProspectsItemProspectTagsItemNameMax)
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1).max(listProspectsResponsePageSizeMax),
+  "total": zod.number().int().min(listProspectsResponseTotalMin),
+  "pageCount": zod.number().int().min(listProspectsResponsePageCountMin)
+})
+
+
+/**
+ * @summary Create a prospect linked to an existing contact
+ */
+export const createProspectBodyNameMax = 180;
+
+export const createProspectBodyExpectedDealValueMin = 0;
+
+export const createProspectBodyCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const createProspectBodyNotesMax = 20000;
+
+
+
+export const CreateProspectBody = zod.object({
+  "contactId": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectBodyNameMax),
+  "productId": zod.string().uuid(),
+  "expectedDealValue": zod.number().min(createProspectBodyExpectedDealValueMin),
+  "currencyCode": zod.string().regex(createProspectBodyCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "stageId": zod.string().uuid(),
+  "notes": zod.string().min(1).max(createProspectBodyNotesMax),
+  "prospectTagIds": zod.array(zod.string().uuid())
+})
+
+export const createProspectResponseProspectContactTagsItemNameMax = 40;
+
+export const createProspectResponseProspectContactTagsMax = 2;
+
+export const createProspectResponseProspectProductNameMax = 160;
+
+export const createProspectResponseProspectProductDescriptionMax = 10000;
+
+export const createProspectResponseProspectProductCategoryMax = 100;
+
+export const createProspectResponseProspectProductDisplayOrderMin = -32768;
+export const createProspectResponseProspectProductDisplayOrderMax = 32767;
+
+export const createProspectResponseProspectExpectedDealValueMin = 0;
+
+export const createProspectResponseProspectCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const createProspectResponseProspectCurrentStageNameMax = 100;
+
+export const createProspectResponseProspectCurrentStageDescriptionMax = 10000;
+
+export const createProspectResponseProspectCurrentStageProbabilityMin = 0;
+export const createProspectResponseProspectCurrentStageProbabilityMax = 100;
+
+export const createProspectResponseProspectCurrentStageTerminalOutcomeMax = 80;
+
+export const createProspectResponseProspectCurrentStageDisplayOrderMin = -32768;
+export const createProspectResponseProspectCurrentStageDisplayOrderMax = 32767;
+
+export const createProspectResponseProspectCurrentProbabilityMin = 0;
+export const createProspectResponseProspectCurrentProbabilityMax = 100;
+
+export const createProspectResponseProspectProspectTagsItemNameMax = 40;
+
+
+
+export const CreateProspectResponse = zod.object({
+  "prospect": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectResponseProspectContactTagsItemNameMax)
+})).max(createProspectResponseProspectContactTagsMax)
+}),
+  "product": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectResponseProspectProductNameMax),
+  "description": zod.string().max(createProspectResponseProspectProductDescriptionMax),
+  "category": zod.string().max(createProspectResponseProspectProductCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectResponseProspectProductDisplayOrderMin).max(createProspectResponseProspectProductDisplayOrderMax)
+}),
+  "expectedDealValue": zod.number().min(createProspectResponseProspectExpectedDealValueMin),
+  "currencyCode": zod.string().regex(createProspectResponseProspectCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "currentStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectResponseProspectCurrentStageNameMax),
+  "description": zod.string().max(createProspectResponseProspectCurrentStageDescriptionMax),
+  "probability": zod.number().int().min(createProspectResponseProspectCurrentStageProbabilityMin).max(createProspectResponseProspectCurrentStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(createProspectResponseProspectCurrentStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(createProspectResponseProspectCurrentStageDisplayOrderMin).max(createProspectResponseProspectCurrentStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "currentProbability": zod.number().int().min(createProspectResponseProspectCurrentProbabilityMin).max(createProspectResponseProspectCurrentProbabilityMax),
+  "notes": zod.string(),
+  "actualClosureDate": zod.coerce.date().nullable(),
+  "closureOutcome": zod.string().nullable(),
+  "closureRemarks": zod.string().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "lastActivityAt": zod.coerce.date().nullable(),
+  "prospectTags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectResponseProspectProspectTagsItemNameMax)
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Get a tenant-owned prospect and its linked contact
+ */
+export const GetProspectParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const getProspectResponseProspectContactTagsItemNameMax = 40;
+
+export const getProspectResponseProspectContactTagsMax = 2;
+
+export const getProspectResponseProspectProductNameMax = 160;
+
+export const getProspectResponseProspectProductDescriptionMax = 10000;
+
+export const getProspectResponseProspectProductCategoryMax = 100;
+
+export const getProspectResponseProspectProductDisplayOrderMin = -32768;
+export const getProspectResponseProspectProductDisplayOrderMax = 32767;
+
+export const getProspectResponseProspectExpectedDealValueMin = 0;
+
+export const getProspectResponseProspectCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectResponseProspectCurrentStageNameMax = 100;
+
+export const getProspectResponseProspectCurrentStageDescriptionMax = 10000;
+
+export const getProspectResponseProspectCurrentStageProbabilityMin = 0;
+export const getProspectResponseProspectCurrentStageProbabilityMax = 100;
+
+export const getProspectResponseProspectCurrentStageTerminalOutcomeMax = 80;
+
+export const getProspectResponseProspectCurrentStageDisplayOrderMin = -32768;
+export const getProspectResponseProspectCurrentStageDisplayOrderMax = 32767;
+
+export const getProspectResponseProspectCurrentProbabilityMin = 0;
+export const getProspectResponseProspectCurrentProbabilityMax = 100;
+
+export const getProspectResponseProspectProspectTagsItemNameMax = 40;
+
+
+
+export const GetProspectResponse = zod.object({
+  "prospect": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(getProspectResponseProspectContactTagsItemNameMax)
+})).max(getProspectResponseProspectContactTagsMax)
+}),
+  "product": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(getProspectResponseProspectProductNameMax),
+  "description": zod.string().max(getProspectResponseProspectProductDescriptionMax),
+  "category": zod.string().max(getProspectResponseProspectProductCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(getProspectResponseProspectProductDisplayOrderMin).max(getProspectResponseProspectProductDisplayOrderMax)
+}),
+  "expectedDealValue": zod.number().min(getProspectResponseProspectExpectedDealValueMin),
+  "currencyCode": zod.string().regex(getProspectResponseProspectCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "currentStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(getProspectResponseProspectCurrentStageNameMax),
+  "description": zod.string().max(getProspectResponseProspectCurrentStageDescriptionMax),
+  "probability": zod.number().int().min(getProspectResponseProspectCurrentStageProbabilityMin).max(getProspectResponseProspectCurrentStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(getProspectResponseProspectCurrentStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(getProspectResponseProspectCurrentStageDisplayOrderMin).max(getProspectResponseProspectCurrentStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "currentProbability": zod.number().int().min(getProspectResponseProspectCurrentProbabilityMin).max(getProspectResponseProspectCurrentProbabilityMax),
+  "notes": zod.string(),
+  "actualClosureDate": zod.coerce.date().nullable(),
+  "closureOutcome": zod.string().nullable(),
+  "closureRemarks": zod.string().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "lastActivityAt": zod.coerce.date().nullable(),
+  "prospectTags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(getProspectResponseProspectProspectTagsItemNameMax)
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Update commercial prospect fields or archive it
+ */
+export const UpdateProspectParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const updateProspectBodyNameMax = 180;
+
+export const updateProspectBodyExpectedDealValueMin = 0;
+
+export const updateProspectBodyCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const updateProspectBodyNotesMax = 20000;
+
+export const updateProspectBodyClosureRemarksMax = 20000;
+
+
+
+export const UpdateProspectBody = zod.object({
+  "name": zod.string().min(1).max(updateProspectBodyNameMax).optional(),
+  "productId": zod.string().uuid().optional(),
+  "expectedDealValue": zod.number().min(updateProspectBodyExpectedDealValueMin).optional(),
+  "currencyCode": zod.string().regex(updateProspectBodyCurrencyCodeRegExp).optional(),
+  "expectedClosureDate": zod.coerce.date().optional(),
+  "notes": zod.string().min(1).max(updateProspectBodyNotesMax).optional(),
+  "archived": zod.boolean().optional(),
+  "actualClosureDate": zod.coerce.date().nullish(),
+  "closureRemarks": zod.string().max(updateProspectBodyClosureRemarksMax).nullish()
+})
+
+export const updateProspectResponseProspectContactTagsItemNameMax = 40;
+
+export const updateProspectResponseProspectContactTagsMax = 2;
+
+export const updateProspectResponseProspectProductNameMax = 160;
+
+export const updateProspectResponseProspectProductDescriptionMax = 10000;
+
+export const updateProspectResponseProspectProductCategoryMax = 100;
+
+export const updateProspectResponseProspectProductDisplayOrderMin = -32768;
+export const updateProspectResponseProspectProductDisplayOrderMax = 32767;
+
+export const updateProspectResponseProspectExpectedDealValueMin = 0;
+
+export const updateProspectResponseProspectCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const updateProspectResponseProspectCurrentStageNameMax = 100;
+
+export const updateProspectResponseProspectCurrentStageDescriptionMax = 10000;
+
+export const updateProspectResponseProspectCurrentStageProbabilityMin = 0;
+export const updateProspectResponseProspectCurrentStageProbabilityMax = 100;
+
+export const updateProspectResponseProspectCurrentStageTerminalOutcomeMax = 80;
+
+export const updateProspectResponseProspectCurrentStageDisplayOrderMin = -32768;
+export const updateProspectResponseProspectCurrentStageDisplayOrderMax = 32767;
+
+export const updateProspectResponseProspectCurrentProbabilityMin = 0;
+export const updateProspectResponseProspectCurrentProbabilityMax = 100;
+
+export const updateProspectResponseProspectProspectTagsItemNameMax = 40;
+
+
+
+export const UpdateProspectResponse = zod.object({
+  "prospect": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectResponseProspectContactTagsItemNameMax)
+})).max(updateProspectResponseProspectContactTagsMax)
+}),
+  "product": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectResponseProspectProductNameMax),
+  "description": zod.string().max(updateProspectResponseProspectProductDescriptionMax),
+  "category": zod.string().max(updateProspectResponseProspectProductCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(updateProspectResponseProspectProductDisplayOrderMin).max(updateProspectResponseProspectProductDisplayOrderMax)
+}),
+  "expectedDealValue": zod.number().min(updateProspectResponseProspectExpectedDealValueMin),
+  "currencyCode": zod.string().regex(updateProspectResponseProspectCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "currentStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectResponseProspectCurrentStageNameMax),
+  "description": zod.string().max(updateProspectResponseProspectCurrentStageDescriptionMax),
+  "probability": zod.number().int().min(updateProspectResponseProspectCurrentStageProbabilityMin).max(updateProspectResponseProspectCurrentStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(updateProspectResponseProspectCurrentStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(updateProspectResponseProspectCurrentStageDisplayOrderMin).max(updateProspectResponseProspectCurrentStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "currentProbability": zod.number().int().min(updateProspectResponseProspectCurrentProbabilityMin).max(updateProspectResponseProspectCurrentProbabilityMax),
+  "notes": zod.string(),
+  "actualClosureDate": zod.coerce.date().nullable(),
+  "closureOutcome": zod.string().nullable(),
+  "closureRemarks": zod.string().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "lastActivityAt": zod.coerce.date().nullable(),
+  "prospectTags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectResponseProspectProspectTagsItemNameMax)
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary List prospects linked to an owned contact
+ */
+export const ListContactProspectsParams = zod.object({
+  "contactId": zod.coerce.string().uuid()
+})
+
+export const listContactProspectsResponseContactTagsItemNameMax = 40;
+
+export const listContactProspectsResponseContactTagsMax = 2;
+
+export const listContactProspectsResponseProductNameMax = 160;
+
+export const listContactProspectsResponseProductDescriptionMax = 10000;
+
+export const listContactProspectsResponseProductCategoryMax = 100;
+
+export const listContactProspectsResponseProductDisplayOrderMin = -32768;
+export const listContactProspectsResponseProductDisplayOrderMax = 32767;
+
+export const listContactProspectsResponseExpectedDealValueMin = 0;
+
+export const listContactProspectsResponseCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const listContactProspectsResponseCurrentStageNameMax = 100;
+
+export const listContactProspectsResponseCurrentStageDescriptionMax = 10000;
+
+export const listContactProspectsResponseCurrentStageProbabilityMin = 0;
+export const listContactProspectsResponseCurrentStageProbabilityMax = 100;
+
+export const listContactProspectsResponseCurrentStageTerminalOutcomeMax = 80;
+
+export const listContactProspectsResponseCurrentStageDisplayOrderMin = -32768;
+export const listContactProspectsResponseCurrentStageDisplayOrderMax = 32767;
+
+export const listContactProspectsResponseCurrentProbabilityMin = 0;
+export const listContactProspectsResponseCurrentProbabilityMax = 100;
+
+export const listContactProspectsResponseProspectTagsItemNameMax = 40;
+
+
+
+export const ListContactProspectsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactProspectsResponseContactTagsItemNameMax)
+})).max(listContactProspectsResponseContactTagsMax)
+}),
+  "product": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactProspectsResponseProductNameMax),
+  "description": zod.string().max(listContactProspectsResponseProductDescriptionMax),
+  "category": zod.string().max(listContactProspectsResponseProductCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listContactProspectsResponseProductDisplayOrderMin).max(listContactProspectsResponseProductDisplayOrderMax)
+}),
+  "expectedDealValue": zod.number().min(listContactProspectsResponseExpectedDealValueMin),
+  "currencyCode": zod.string().regex(listContactProspectsResponseCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "currentStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactProspectsResponseCurrentStageNameMax),
+  "description": zod.string().max(listContactProspectsResponseCurrentStageDescriptionMax),
+  "probability": zod.number().int().min(listContactProspectsResponseCurrentStageProbabilityMin).max(listContactProspectsResponseCurrentStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(listContactProspectsResponseCurrentStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(listContactProspectsResponseCurrentStageDisplayOrderMin).max(listContactProspectsResponseCurrentStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "currentProbability": zod.number().int().min(listContactProspectsResponseCurrentProbabilityMin).max(listContactProspectsResponseCurrentProbabilityMax),
+  "notes": zod.string(),
+  "actualClosureDate": zod.coerce.date().nullable(),
+  "closureOutcome": zod.string().nullable(),
+  "closureRemarks": zod.string().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "lastActivityAt": zod.coerce.date().nullable(),
+  "prospectTags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listContactProspectsResponseProspectTagsItemNameMax)
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListContactProspectsResponse = zod.array(ListContactProspectsResponseItem)
+
+
+/**
+ * @summary Change a prospect stage with a mandatory reason and audit snapshot
+ */
+export const ChangeProspectStageParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const changeProspectStageBodyReasonMin = 3;
+export const changeProspectStageBodyReasonMax = 4000;
+
+
+
+export const ChangeProspectStageBody = zod.object({
+  "newStageId": zod.string().uuid(),
+  "reason": zod.string().min(changeProspectStageBodyReasonMin).max(changeProspectStageBodyReasonMax)
+})
+
+export const changeProspectStageResponseProspectContactTagsItemNameMax = 40;
+
+export const changeProspectStageResponseProspectContactTagsMax = 2;
+
+export const changeProspectStageResponseProspectProductNameMax = 160;
+
+export const changeProspectStageResponseProspectProductDescriptionMax = 10000;
+
+export const changeProspectStageResponseProspectProductCategoryMax = 100;
+
+export const changeProspectStageResponseProspectProductDisplayOrderMin = -32768;
+export const changeProspectStageResponseProspectProductDisplayOrderMax = 32767;
+
+export const changeProspectStageResponseProspectExpectedDealValueMin = 0;
+
+export const changeProspectStageResponseProspectCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const changeProspectStageResponseProspectCurrentStageNameMax = 100;
+
+export const changeProspectStageResponseProspectCurrentStageDescriptionMax = 10000;
+
+export const changeProspectStageResponseProspectCurrentStageProbabilityMin = 0;
+export const changeProspectStageResponseProspectCurrentStageProbabilityMax = 100;
+
+export const changeProspectStageResponseProspectCurrentStageTerminalOutcomeMax = 80;
+
+export const changeProspectStageResponseProspectCurrentStageDisplayOrderMin = -32768;
+export const changeProspectStageResponseProspectCurrentStageDisplayOrderMax = 32767;
+
+export const changeProspectStageResponseProspectCurrentProbabilityMin = 0;
+export const changeProspectStageResponseProspectCurrentProbabilityMax = 100;
+
+export const changeProspectStageResponseProspectProspectTagsItemNameMax = 40;
+
+
+
+export const ChangeProspectStageResponse = zod.object({
+  "prospect": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "contact": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "email": zod.string().email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "companyName": zod.string().nullable(),
+  "jobTitle": zod.string().nullable(),
+  "tags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(changeProspectStageResponseProspectContactTagsItemNameMax)
+})).max(changeProspectStageResponseProspectContactTagsMax)
+}),
+  "product": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(changeProspectStageResponseProspectProductNameMax),
+  "description": zod.string().max(changeProspectStageResponseProspectProductDescriptionMax),
+  "category": zod.string().max(changeProspectStageResponseProspectProductCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(changeProspectStageResponseProspectProductDisplayOrderMin).max(changeProspectStageResponseProspectProductDisplayOrderMax)
+}),
+  "expectedDealValue": zod.number().min(changeProspectStageResponseProspectExpectedDealValueMin),
+  "currencyCode": zod.string().regex(changeProspectStageResponseProspectCurrencyCodeRegExp),
+  "expectedClosureDate": zod.coerce.date(),
+  "currentStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(changeProspectStageResponseProspectCurrentStageNameMax),
+  "description": zod.string().max(changeProspectStageResponseProspectCurrentStageDescriptionMax),
+  "probability": zod.number().int().min(changeProspectStageResponseProspectCurrentStageProbabilityMin).max(changeProspectStageResponseProspectCurrentStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(changeProspectStageResponseProspectCurrentStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(changeProspectStageResponseProspectCurrentStageDisplayOrderMin).max(changeProspectStageResponseProspectCurrentStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "currentProbability": zod.number().int().min(changeProspectStageResponseProspectCurrentProbabilityMin).max(changeProspectStageResponseProspectCurrentProbabilityMax),
+  "notes": zod.string(),
+  "actualClosureDate": zod.coerce.date().nullable(),
+  "closureOutcome": zod.string().nullable(),
+  "closureRemarks": zod.string().nullable(),
+  "archivedAt": zod.coerce.date().nullable(),
+  "lastActivityAt": zod.coerce.date().nullable(),
+  "prospectTags": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(changeProspectStageResponseProspectProspectTagsItemNameMax)
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+})
+
+
+/**
+ * @summary Read the immutable prospect stage history and actions per stage period
+ */
+export const ListProspectGrowthAuditParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const listProspectGrowthAuditResponsePreviousStageOneNameMax = 100;
+
+export const listProspectGrowthAuditResponsePreviousStageOneDescriptionMax = 10000;
+
+export const listProspectGrowthAuditResponsePreviousStageOneProbabilityMin = 0;
+export const listProspectGrowthAuditResponsePreviousStageOneProbabilityMax = 100;
+
+export const listProspectGrowthAuditResponsePreviousStageOneTerminalOutcomeMax = 80;
+
+export const listProspectGrowthAuditResponsePreviousStageOneDisplayOrderMin = -32768;
+export const listProspectGrowthAuditResponsePreviousStageOneDisplayOrderMax = 32767;
+
+export const listProspectGrowthAuditResponseNewStageNameMax = 100;
+
+export const listProspectGrowthAuditResponseNewStageDescriptionMax = 10000;
+
+export const listProspectGrowthAuditResponseNewStageProbabilityMin = 0;
+export const listProspectGrowthAuditResponseNewStageProbabilityMax = 100;
+
+export const listProspectGrowthAuditResponseNewStageTerminalOutcomeMax = 80;
+
+export const listProspectGrowthAuditResponseNewStageDisplayOrderMin = -32768;
+export const listProspectGrowthAuditResponseNewStageDisplayOrderMax = 32767;
+
+export const listProspectGrowthAuditResponsePreviousProbabilityMin = 0;
+export const listProspectGrowthAuditResponsePreviousProbabilityMax = 100;
+
+export const listProspectGrowthAuditResponseNewProbabilityMin = 0;
+export const listProspectGrowthAuditResponseNewProbabilityMax = 100;
+
+export const listProspectGrowthAuditResponseActionsItemActionTypeNameMax = 100;
+
+export const listProspectGrowthAuditResponseActionsItemActionTypeDescriptionMax = 10000;
+
+export const listProspectGrowthAuditResponseActionsItemActionTypeDisplayOrderMin = -32768;
+export const listProspectGrowthAuditResponseActionsItemActionTypeDisplayOrderMax = 32767;
+
+
+
+export const ListProspectGrowthAuditResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "eventType": zod.enum(['created', 'stage_change']),
+  "previousStage": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectGrowthAuditResponsePreviousStageOneNameMax),
+  "description": zod.string().max(listProspectGrowthAuditResponsePreviousStageOneDescriptionMax),
+  "probability": zod.number().int().min(listProspectGrowthAuditResponsePreviousStageOneProbabilityMin).max(listProspectGrowthAuditResponsePreviousStageOneProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(listProspectGrowthAuditResponsePreviousStageOneTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(listProspectGrowthAuditResponsePreviousStageOneDisplayOrderMin).max(listProspectGrowthAuditResponsePreviousStageOneDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),zod.null()]),
+  "newStage": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectGrowthAuditResponseNewStageNameMax),
+  "description": zod.string().max(listProspectGrowthAuditResponseNewStageDescriptionMax),
+  "probability": zod.number().int().min(listProspectGrowthAuditResponseNewStageProbabilityMin).max(listProspectGrowthAuditResponseNewStageProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(listProspectGrowthAuditResponseNewStageTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(listProspectGrowthAuditResponseNewStageDisplayOrderMin).max(listProspectGrowthAuditResponseNewStageDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+}),
+  "previousProbability": zod.number().int().min(listProspectGrowthAuditResponsePreviousProbabilityMin).max(listProspectGrowthAuditResponsePreviousProbabilityMax).nullable(),
+  "newProbability": zod.number().int().min(listProspectGrowthAuditResponseNewProbabilityMin).max(listProspectGrowthAuditResponseNewProbabilityMax),
+  "reason": zod.string().nullable(),
+  "notesSnapshot": zod.string().nullable(),
+  "changedByName": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "actions": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectGrowthAuditResponseActionsItemActionTypeNameMax),
+  "description": zod.string().max(listProspectGrowthAuditResponseActionsItemActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listProspectGrowthAuditResponseActionsItemActionTypeDisplayOrderMin).max(listProspectGrowthAuditResponseActionsItemActionTypeDisplayOrderMax)
+}),
+  "stageHistoryId": zod.string().uuid(),
+  "stageNameAtAction": zod.string(),
+  "actionDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "recordedByName": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+export const ListProspectGrowthAuditResponse = zod.array(ListProspectGrowthAuditResponseItem)
+
+
+/**
+ * @summary List prospect actions with their associated stage period
+ */
+export const ListProspectActionsParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const ListProspectActionsQueryParams = zod.object({
+  "actionTypeId": zod.coerce.string().uuid().optional(),
+  "fromDate": zod.date().optional(),
+  "toDate": zod.date().optional()
+})
+
+export const listProspectActionsResponseActionTypeNameMax = 100;
+
+export const listProspectActionsResponseActionTypeDescriptionMax = 10000;
+
+export const listProspectActionsResponseActionTypeDisplayOrderMin = -32768;
+export const listProspectActionsResponseActionTypeDisplayOrderMax = 32767;
+
+
+
+export const ListProspectActionsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectActionsResponseActionTypeNameMax),
+  "description": zod.string().max(listProspectActionsResponseActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listProspectActionsResponseActionTypeDisplayOrderMin).max(listProspectActionsResponseActionTypeDisplayOrderMax)
+}),
+  "stageHistoryId": zod.string().uuid(),
+  "stageNameAtAction": zod.string(),
+  "actionDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "recordedByName": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListProspectActionsResponse = zod.array(ListProspectActionsResponseItem)
+
+
+/**
+ * @summary Record an action in the prospect's current stage period
+ */
+export const CreateProspectActionParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const createProspectActionBodyNotesMax = 10000;
+
+
+
+export const CreateProspectActionBody = zod.object({
+  "actionTypeId": zod.string().uuid(),
+  "actionDate": zod.coerce.date(),
+  "notes": zod.string().min(1).max(createProspectActionBodyNotesMax)
+})
+
+export const createProspectActionResponseActionTypeNameMax = 100;
+
+export const createProspectActionResponseActionTypeDescriptionMax = 10000;
+
+export const createProspectActionResponseActionTypeDisplayOrderMin = -32768;
+export const createProspectActionResponseActionTypeDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectActionResponse = zod.object({
+  "id": zod.string().uuid(),
+  "actionType": zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectActionResponseActionTypeNameMax),
+  "description": zod.string().max(createProspectActionResponseActionTypeDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectActionResponseActionTypeDisplayOrderMin).max(createProspectActionResponseActionTypeDisplayOrderMax)
+}),
+  "stageHistoryId": zod.string().uuid(),
+  "stageNameAtAction": zod.string(),
+  "actionDate": zod.coerce.date(),
+  "notes": zod.string(),
+  "recordedByName": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Replace a prospect's private tag associations using the existing tag library
+ */
+export const SetProspectTagsParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const setProspectTagsBodyTagIdsMax = 20;
+
+
+
+export const SetProspectTagsBody = zod.object({
+  "tagIds": zod.array(zod.string().uuid()).max(setProspectTagsBodyTagIdsMax)
+})
+
+export const setProspectTagsResponseNameMax = 40;
+
+
+
+export const SetProspectTagsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(setProspectTagsResponseNameMax)
+})
+export const SetProspectTagsResponse = zod.array(SetProspectTagsResponseItem)
+
+
+/**
+ * @summary List the tenant's product and service catalogue
+ */
+export const listProspectProductsResponseNameMax = 160;
+
+export const listProspectProductsResponseDescriptionMax = 10000;
+
+export const listProspectProductsResponseCategoryMax = 100;
+
+export const listProspectProductsResponseDisplayOrderMin = -32768;
+export const listProspectProductsResponseDisplayOrderMax = 32767;
+
+
+
+export const ListProspectProductsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectProductsResponseNameMax),
+  "description": zod.string().max(listProspectProductsResponseDescriptionMax),
+  "category": zod.string().max(listProspectProductsResponseCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listProspectProductsResponseDisplayOrderMin).max(listProspectProductsResponseDisplayOrderMax)
+})
+export const ListProspectProductsResponse = zod.array(ListProspectProductsResponseItem)
+
+
+/**
+ * @summary Add a product or service to the tenant catalogue
+ */
+export const createProspectProductBodyNameMax = 160;
+
+export const createProspectProductBodyDescriptionMax = 10000;
+
+export const createProspectProductBodyCategoryMax = 100;
+
+export const createProspectProductBodyDisplayOrderMin = -32768;
+export const createProspectProductBodyDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectProductBody = zod.object({
+  "name": zod.string().min(1).max(createProspectProductBodyNameMax),
+  "description": zod.string().max(createProspectProductBodyDescriptionMax),
+  "category": zod.string().max(createProspectProductBodyCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectProductBodyDisplayOrderMin).max(createProspectProductBodyDisplayOrderMax)
+})
+
+export const createProspectProductResponseNameMax = 160;
+
+export const createProspectProductResponseDescriptionMax = 10000;
+
+export const createProspectProductResponseCategoryMax = 100;
+
+export const createProspectProductResponseDisplayOrderMin = -32768;
+export const createProspectProductResponseDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectProductResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectProductResponseNameMax),
+  "description": zod.string().max(createProspectProductResponseDescriptionMax),
+  "category": zod.string().max(createProspectProductResponseCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectProductResponseDisplayOrderMin).max(createProspectProductResponseDisplayOrderMax)
+})
+
+
+/**
+ * @summary Edit or deactivate a product without removing historical references
+ */
+export const UpdateProspectProductParams = zod.object({
+  "productId": zod.coerce.string().uuid()
+})
+
+export const updateProspectProductBodyNameMax = 160;
+
+export const updateProspectProductBodyDescriptionMax = 10000;
+
+export const updateProspectProductBodyCategoryMax = 100;
+
+export const updateProspectProductBodyDisplayOrderMin = -32768;
+export const updateProspectProductBodyDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectProductBody = zod.object({
+  "name": zod.string().min(1).max(updateProspectProductBodyNameMax),
+  "description": zod.string().max(updateProspectProductBodyDescriptionMax),
+  "category": zod.string().max(updateProspectProductBodyCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(updateProspectProductBodyDisplayOrderMin).max(updateProspectProductBodyDisplayOrderMax)
+})
+
+export const updateProspectProductResponseNameMax = 160;
+
+export const updateProspectProductResponseDescriptionMax = 10000;
+
+export const updateProspectProductResponseCategoryMax = 100;
+
+export const updateProspectProductResponseDisplayOrderMin = -32768;
+export const updateProspectProductResponseDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectProductResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectProductResponseNameMax),
+  "description": zod.string().max(updateProspectProductResponseDescriptionMax),
+  "category": zod.string().max(updateProspectProductResponseCategoryMax).nullable(),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(updateProspectProductResponseDisplayOrderMin).max(updateProspectProductResponseDisplayOrderMax)
+})
+
+
+/**
+ * @summary Get the tenant's permitted currencies and default selling currency
+ */
+export const getProspectCurrenciesResponseCurrenciesItemCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectCurrenciesResponseDefaultCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const GetProspectCurrenciesResponse = zod.object({
+  "currencies": zod.array(zod.object({
+  "code": zod.string().regex(getProspectCurrenciesResponseCurrenciesItemCodeRegExp),
+  "isDefault": zod.boolean()
+})),
+  "defaultCurrencyCode": zod.string().regex(getProspectCurrenciesResponseDefaultCurrencyCodeRegExp).nullable()
+})
+
+
+/**
+ * @summary Replace permitted currencies and select exactly one default
+ */
+export const updateProspectCurrenciesBodyCurrenciesItemRegExp = new RegExp('^[A-Z]{3}$');
+
+export const updateProspectCurrenciesBodyDefaultCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const UpdateProspectCurrenciesBody = zod.object({
+  "currencies": zod.array(zod.string().regex(updateProspectCurrenciesBodyCurrenciesItemRegExp)).min(1),
+  "defaultCurrencyCode": zod.string().regex(updateProspectCurrenciesBodyDefaultCurrencyCodeRegExp)
+})
+
+export const updateProspectCurrenciesResponseCurrenciesItemCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const updateProspectCurrenciesResponseDefaultCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const UpdateProspectCurrenciesResponse = zod.object({
+  "currencies": zod.array(zod.object({
+  "code": zod.string().regex(updateProspectCurrenciesResponseCurrenciesItemCodeRegExp),
+  "isDefault": zod.boolean()
+})),
+  "defaultCurrencyCode": zod.string().regex(updateProspectCurrenciesResponseDefaultCurrencyCodeRegExp).nullable()
+})
+
+
+/**
+ * @summary List the tenant's configurable pipeline stages
+ */
+export const listProspectStagesResponseNameMax = 100;
+
+export const listProspectStagesResponseDescriptionMax = 10000;
+
+export const listProspectStagesResponseProbabilityMin = 0;
+export const listProspectStagesResponseProbabilityMax = 100;
+
+export const listProspectStagesResponseTerminalOutcomeMax = 80;
+
+export const listProspectStagesResponseDisplayOrderMin = -32768;
+export const listProspectStagesResponseDisplayOrderMax = 32767;
+
+
+
+export const ListProspectStagesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectStagesResponseNameMax),
+  "description": zod.string().max(listProspectStagesResponseDescriptionMax),
+  "probability": zod.number().int().min(listProspectStagesResponseProbabilityMin).max(listProspectStagesResponseProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(listProspectStagesResponseTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(listProspectStagesResponseDisplayOrderMin).max(listProspectStagesResponseDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+})
+export const ListProspectStagesResponse = zod.array(ListProspectStagesResponseItem)
+
+
+/**
+ * @summary Add a tenant-defined pipeline stage
+ */
+export const createProspectStageBodyNameMax = 100;
+
+export const createProspectStageBodyDescriptionMax = 10000;
+
+export const createProspectStageBodyProbabilityMin = 0;
+export const createProspectStageBodyProbabilityMax = 100;
+
+export const createProspectStageBodyTerminalOutcomeMax = 80;
+
+export const createProspectStageBodyDisplayOrderMin = -32768;
+export const createProspectStageBodyDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectStageBody = zod.object({
+  "name": zod.string().min(1).max(createProspectStageBodyNameMax),
+  "description": zod.string().max(createProspectStageBodyDescriptionMax),
+  "probability": zod.number().int().min(createProspectStageBodyProbabilityMin).max(createProspectStageBodyProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(createProspectStageBodyTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(createProspectStageBodyDisplayOrderMin).max(createProspectStageBodyDisplayOrderMax),
+  "active": zod.boolean()
+})
+
+export const createProspectStageResponseNameMax = 100;
+
+export const createProspectStageResponseDescriptionMax = 10000;
+
+export const createProspectStageResponseProbabilityMin = 0;
+export const createProspectStageResponseProbabilityMax = 100;
+
+export const createProspectStageResponseTerminalOutcomeMax = 80;
+
+export const createProspectStageResponseDisplayOrderMin = -32768;
+export const createProspectStageResponseDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectStageResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectStageResponseNameMax),
+  "description": zod.string().max(createProspectStageResponseDescriptionMax),
+  "probability": zod.number().int().min(createProspectStageResponseProbabilityMin).max(createProspectStageResponseProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(createProspectStageResponseTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(createProspectStageResponseDisplayOrderMin).max(createProspectStageResponseDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+})
+
+
+/**
+ * @summary Edit or deactivate a stage while retaining its history references
+ */
+export const UpdateProspectStageParams = zod.object({
+  "stageId": zod.coerce.string().uuid()
+})
+
+export const updateProspectStageBodyNameMax = 100;
+
+export const updateProspectStageBodyDescriptionMax = 10000;
+
+export const updateProspectStageBodyProbabilityMin = 0;
+export const updateProspectStageBodyProbabilityMax = 100;
+
+export const updateProspectStageBodyTerminalOutcomeMax = 80;
+
+export const updateProspectStageBodyDisplayOrderMin = -32768;
+export const updateProspectStageBodyDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectStageBody = zod.object({
+  "name": zod.string().min(1).max(updateProspectStageBodyNameMax),
+  "description": zod.string().max(updateProspectStageBodyDescriptionMax),
+  "probability": zod.number().int().min(updateProspectStageBodyProbabilityMin).max(updateProspectStageBodyProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(updateProspectStageBodyTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(updateProspectStageBodyDisplayOrderMin).max(updateProspectStageBodyDisplayOrderMax),
+  "active": zod.boolean()
+})
+
+export const updateProspectStageResponseNameMax = 100;
+
+export const updateProspectStageResponseDescriptionMax = 10000;
+
+export const updateProspectStageResponseProbabilityMin = 0;
+export const updateProspectStageResponseProbabilityMax = 100;
+
+export const updateProspectStageResponseTerminalOutcomeMax = 80;
+
+export const updateProspectStageResponseDisplayOrderMin = -32768;
+export const updateProspectStageResponseDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectStageResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectStageResponseNameMax),
+  "description": zod.string().max(updateProspectStageResponseDescriptionMax),
+  "probability": zod.number().int().min(updateProspectStageResponseProbabilityMin).max(updateProspectStageResponseProbabilityMax),
+  "stageType": zod.enum(['active', 'terminal']),
+  "terminalOutcome": zod.string().max(updateProspectStageResponseTerminalOutcomeMax).nullable(),
+  "displayOrder": zod.number().int().min(updateProspectStageResponseDisplayOrderMin).max(updateProspectStageResponseDisplayOrderMax),
+  "active": zod.boolean(),
+  "allowedNextStageIds": zod.array(zod.string().uuid())
+})
+
+
+/**
+ * @summary Configure permitted next stages from a stage
+ */
+export const SetProspectStageTransitionsParams = zod.object({
+  "stageId": zod.coerce.string().uuid()
+})
+
+export const SetProspectStageTransitionsBody = zod.object({
+  "toStageIds": zod.array(zod.string().uuid())
+})
+
+export const SetProspectStageTransitionsResponse = zod.object({
+  "fromStageId": zod.string().uuid(),
+  "toStageIds": zod.array(zod.string().uuid()),
+  "unrestricted": zod.boolean().describe('True when no explicit outgoing transitions are configured and any active stage is allowed.')
+})
+
+
+/**
+ * @summary List the tenant's configurable action catalogue
+ */
+export const listProspectActionTypesResponseNameMax = 100;
+
+export const listProspectActionTypesResponseDescriptionMax = 10000;
+
+export const listProspectActionTypesResponseDisplayOrderMin = -32768;
+export const listProspectActionTypesResponseDisplayOrderMax = 32767;
+
+
+
+export const ListProspectActionTypesResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(listProspectActionTypesResponseNameMax),
+  "description": zod.string().max(listProspectActionTypesResponseDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(listProspectActionTypesResponseDisplayOrderMin).max(listProspectActionTypesResponseDisplayOrderMax)
+})
+export const ListProspectActionTypesResponse = zod.array(ListProspectActionTypesResponseItem)
+
+
+/**
+ * @summary Add an action type for the tenant
+ */
+export const createProspectActionTypeBodyNameMax = 100;
+
+export const createProspectActionTypeBodyDescriptionMax = 10000;
+
+export const createProspectActionTypeBodyDisplayOrderMin = -32768;
+export const createProspectActionTypeBodyDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectActionTypeBody = zod.object({
+  "name": zod.string().min(1).max(createProspectActionTypeBodyNameMax),
+  "description": zod.string().max(createProspectActionTypeBodyDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectActionTypeBodyDisplayOrderMin).max(createProspectActionTypeBodyDisplayOrderMax)
+})
+
+export const createProspectActionTypeResponseNameMax = 100;
+
+export const createProspectActionTypeResponseDescriptionMax = 10000;
+
+export const createProspectActionTypeResponseDisplayOrderMin = -32768;
+export const createProspectActionTypeResponseDisplayOrderMax = 32767;
+
+
+
+export const CreateProspectActionTypeResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(createProspectActionTypeResponseNameMax),
+  "description": zod.string().max(createProspectActionTypeResponseDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(createProspectActionTypeResponseDisplayOrderMin).max(createProspectActionTypeResponseDisplayOrderMax)
+})
+
+
+/**
+ * @summary Edit or deactivate an action type while retaining history
+ */
+export const UpdateProspectActionTypeParams = zod.object({
+  "actionTypeId": zod.coerce.string().uuid()
+})
+
+export const updateProspectActionTypeBodyNameMax = 100;
+
+export const updateProspectActionTypeBodyDescriptionMax = 10000;
+
+export const updateProspectActionTypeBodyDisplayOrderMin = -32768;
+export const updateProspectActionTypeBodyDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectActionTypeBody = zod.object({
+  "name": zod.string().min(1).max(updateProspectActionTypeBodyNameMax),
+  "description": zod.string().max(updateProspectActionTypeBodyDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(updateProspectActionTypeBodyDisplayOrderMin).max(updateProspectActionTypeBodyDisplayOrderMax)
+})
+
+export const updateProspectActionTypeResponseNameMax = 100;
+
+export const updateProspectActionTypeResponseDescriptionMax = 10000;
+
+export const updateProspectActionTypeResponseDisplayOrderMin = -32768;
+export const updateProspectActionTypeResponseDisplayOrderMax = 32767;
+
+
+
+export const UpdateProspectActionTypeResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string().min(1).max(updateProspectActionTypeResponseNameMax),
+  "description": zod.string().max(updateProspectActionTypeResponseDescriptionMax),
+  "active": zod.boolean(),
+  "displayOrder": zod.number().int().min(updateProspectActionTypeResponseDisplayOrderMin).max(updateProspectActionTypeResponseDisplayOrderMax)
+})
+
+
+/**
  * @summary Add selected tenant contacts to a list or update their subscription status
  */
 export const bulkUpdateContactsBodyContactIdsMax = 1000;

@@ -53,6 +53,7 @@ import { ContactDetailPage } from '@/pages/contact-detail';
 import ContactReportPage from '@/pages/contact-report';
 import { CompaniesPage } from '@/pages/companies';
 import { CompanyDetailPage } from '@/pages/company-detail';
+import { ProspectsPage, NewProspectPage, ProspectDetailPage, ProspectProductsPage, ProspectStagesPage, ProspectActionsPage, ProspectCurrenciesPage } from '@/pages/prospects';
 import { AdminGlobalCompanyDetailPage } from '@/pages/admin-global-company-detail';
 import PlansPage from '@/pages/plans';
 import NotFound from '@/pages/not-found';
@@ -355,6 +356,16 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     ],
   },
   {
+    title: 'Prospect Management',
+    items: [
+      { href: '/prospects', label: 'Prospects', icon: Activity },
+      { href: '/prospect-products', label: 'Products & services', icon: Package },
+      { href: '/prospect-stages', label: 'Prospect Stages', icon: SlidersHorizontal },
+      { href: '/prospect-actions', label: 'Prospect Actions', icon: Clock3 },
+      { href: '/prospect-currencies', label: 'Currency Configuration', icon: CreditCard },
+    ],
+  },
+  {
     title: 'Email marketing',
     items: [
       { href: '/lists', label: 'Lists', icon: Activity },
@@ -523,13 +534,18 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/contacts',
     '/contact-report',
     '/contact-field-settings',
+    '/prospects',
+    '/prospect-products',
+    '/prospect-stages',
+    '/prospect-actions',
+    '/prospect-currencies',
     '/lists',
     '/campaigns',
     '/notifications',
     '/support',
     '/plans',
     '/profile',
-  ].includes(location);
+  ].includes(location) || location.startsWith('/prospects/');
   const leave = () => logout.mutate(undefined, { onSuccess: () => { clearUserActivity(user.id); qc.clear(); setLocation('/'); } });
 
   useEffect(() => {
@@ -1879,6 +1895,13 @@ function Routes() {
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contact-report">{() => <RouteGate>{u => u.role === 'USER' ? <ContactReportPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts/:contactId">{params => <RouteGate>{u => u.role === 'USER' ? <ContactDetailPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospects">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectsPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospects/new">{() => <RouteGate>{u => u.role === 'USER' ? <NewProspectPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospects/:prospectId">{params => <RouteGate>{u => u.role === 'USER' ? <ProspectDetailPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospect-products">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectProductsPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospect-stages">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectStagesPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospect-actions">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectActionsPage/> : <NotFound/>}</RouteGate>}</Route>
+     <Route path="/prospect-currencies">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectCurrenciesPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/companies">{() => <RouteGate>{u => u.role === 'USER' ? <CompaniesPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : u.role === 'SUPERADMIN' ? <AdminGlobalCompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/lists">{() => <RouteGate>{() => <ListsPage/>}</RouteGate>}</Route>
@@ -1998,7 +2021,7 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
   const hasExistingFooter = path === '/'
     || ['/features', '/pricing', '/terms-and-conditions', '/privacy-policy', '/shipping-refund'].includes(path)
     || path.startsWith('/package-checkout')
-    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile'].some(
+    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile', '/prospects', '/prospect-products', '/prospect-stages', '/prospect-actions', '/prospect-currencies'].some(
       route => path === route || path.startsWith(`${route}/`),
     );
   const showStandaloneFooter = path !== '/login' && !hasExistingFooter;

@@ -39,6 +39,7 @@ export * from "./contact-import-templates";
 export * from "./global-company-import-templates";
 export * from "./company-import-templates";
 export * from "./contact-segments";
+export * from "./prospect-management";
 export * from "./sending";
 export * from "./notifications";
 export * from "./support";

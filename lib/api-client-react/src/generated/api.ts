@@ -82,6 +82,7 @@ import type {
   CampaignUpdate,
   CampaignVariantLimits,
   ChangePasswordInput,
+  ChangeProspectStageInput,
   Company,
   CompanyBackfillResult,
   CompanyBulkImportInput,
@@ -139,6 +140,8 @@ import type {
   ContactTagInput,
   ContactTagSelection,
   ContactUpdate,
+  CreateProspectActionInput,
+  CreateProspectInput,
   CreateSubscriptionOrderInput,
   CurrentSubscription,
   DeliveryReportImportResult,
@@ -183,6 +186,8 @@ import type {
   ListAdminUsersParams,
   ListContactOptionsParams,
   ListContactsParams,
+  ListProspectActionsParams,
+  ListProspectsParams,
   LoginInput,
   MaintenanceStatus,
   MessageResponse,
@@ -208,6 +213,23 @@ import type {
   PlatformSettingsInput,
   PostContactIntentAnalysis200,
   ProfileUpdateInput,
+  ProspectActionRecord,
+  ProspectActionType,
+  ProspectActionTypeInput,
+  ProspectCollection,
+  ProspectCurrencySettings,
+  ProspectCurrencySettingsInput,
+  ProspectDashboard,
+  ProspectDetail,
+  ProspectGrowthAuditEntry,
+  ProspectProduct,
+  ProspectProductInput,
+  ProspectRecord,
+  ProspectStage,
+  ProspectStageInput,
+  ProspectStageTransitions,
+  ProspectStageTransitionsInput,
+  ProspectTagSelection,
   PutContactIntentQuestions200,
   RazorpaySettings,
   RazorpaySettingsInput,
@@ -246,6 +268,7 @@ import type {
   TestEmailInput,
   TestRazorpayConnectionInput,
   UnlinkedCompanyProfileCollection,
+  UpdateProspectInput,
   UploadCampaignAttachmentParams,
   UserDashboard,
   UserNotificationReadResponse,
@@ -4967,6 +4990,1947 @@ export const useSetContactTags = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getSetContactTagsMutationOptions(options));
+    }
+
+export const getGetProspectDashboardUrl = () => {
+
+
+
+
+  return `/api/prospect-dashboard`
+}
+
+/**
+ * @summary Summarize the tenant's prospect pipeline without combining currencies
+ */
+export const getProspectDashboard = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectDashboard> => {
+
+  return customFetch<ProspectDashboard>(getGetProspectDashboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProspectDashboardQueryKey = () => {
+    return [
+    `/api/prospect-dashboard`
+    ] as const;
+    }
+
+
+export const getGetProspectDashboardQueryOptions = <TData = Awaited<ReturnType<typeof getProspectDashboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProspectDashboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProspectDashboard>>> = ({ signal }) => getProspectDashboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProspectDashboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProspectDashboardQueryResult = NonNullable<Awaited<ReturnType<typeof getProspectDashboard>>>
+export type GetProspectDashboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Summarize the tenant's prospect pipeline without combining currencies
+ */
+
+export function useGetProspectDashboard<TData = Awaited<ReturnType<typeof getProspectDashboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectDashboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProspectDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListProspectsUrl = (params?: ListProspectsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/prospects?${stringifiedParams}` : `/api/prospects`
+}
+
+/**
+ * @summary Search, filter, sort, and paginate tenant-owned prospects
+ */
+export const listProspects = async (params?: ListProspectsParams, options?: Parameters<typeof customFetch>[1]): Promise<ProspectCollection> => {
+
+  return customFetch<ProspectCollection>(getListProspectsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectsQueryKey = (params?: ListProspectsParams,) => {
+    return [
+    `/api/prospects`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProspectsQueryOptions = <TData = Awaited<ReturnType<typeof listProspects>>, TError = ErrorType<unknown>>(params?: ListProspectsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspects>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspects>>> = ({ signal }) => listProspects(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspects>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectsQueryResult = NonNullable<Awaited<ReturnType<typeof listProspects>>>
+export type ListProspectsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Search, filter, sort, and paginate tenant-owned prospects
+ */
+
+export function useListProspects<TData = Awaited<ReturnType<typeof listProspects>>, TError = ErrorType<unknown>>(
+ params?: ListProspectsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspects>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectUrl = () => {
+
+
+
+
+  return `/api/prospects`
+}
+
+/**
+ * @summary Create a prospect linked to an existing contact
+ */
+export const createProspect = async (createProspectInput: CreateProspectInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectDetail> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectDetail>(getCreateProspectUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createProspectInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectMutationKey = () => ['createProspect'] as const;
+
+export const getCreateProspectMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspect>>, TError,CreateProspectMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspect>>, TError,CreateProspectMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspect>>, CreateProspectMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProspect(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectMutationResult = NonNullable<Awaited<ReturnType<typeof createProspect>>>
+    export type CreateProspectMutationBody = BodyType<CreateProspectInput>
+    export type CreateProspectMutationError = ErrorType<ApiError>
+    export type CreateProspectMutationVariables = {data: BodyType<CreateProspectInput>}
+
+    /**
+ * @summary Create a prospect linked to an existing contact
+ */
+export const useCreateProspect = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspect>>, TError,CreateProspectMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspect>>,
+        TError,
+        CreateProspectMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectMutationOptions(options));
+    }
+
+export const getGetProspectUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}`
+}
+
+/**
+ * @summary Get a tenant-owned prospect and its linked contact
+ */
+export const getProspect = async (prospectId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProspectDetail> => {
+
+  return customFetch<ProspectDetail>(getGetProspectUrl(prospectId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProspectQueryKey = (prospectId: string,) => {
+    return [
+    `/api/prospects/${prospectId}`
+    ] as const;
+    }
+
+
+export const getGetProspectQueryOptions = <TData = Awaited<ReturnType<typeof getProspect>>, TError = ErrorType<ApiError>>(prospectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspect>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProspectQueryKey(prospectId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProspect>>> = ({ signal }) => getProspect(prospectId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: prospectId !== null && prospectId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProspect>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProspectQueryResult = NonNullable<Awaited<ReturnType<typeof getProspect>>>
+export type GetProspectQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get a tenant-owned prospect and its linked contact
+ */
+
+export function useGetProspect<TData = Awaited<ReturnType<typeof getProspect>>, TError = ErrorType<ApiError>>(
+ prospectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspect>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProspectQueryOptions(prospectId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateProspectUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}`
+}
+
+/**
+ * @summary Update commercial prospect fields or archive it
+ */
+export const updateProspect = async (prospectId: string,
+    updateProspectInput: UpdateProspectInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectDetail> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectDetail>(getUpdateProspectUrl(prospectId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateProspectInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProspectMutationKey = () => ['updateProspect'] as const;
+
+export const getUpdateProspectMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspect>>, TError,UpdateProspectMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProspect>>, TError,UpdateProspectMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProspectMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProspect>>, UpdateProspectMutationVariables> = (props) => {
+          const {prospectId,data} = props ?? {};
+
+          return  updateProspect(prospectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProspectMutationResult = NonNullable<Awaited<ReturnType<typeof updateProspect>>>
+    export type UpdateProspectMutationBody = BodyType<UpdateProspectInput>
+    export type UpdateProspectMutationError = ErrorType<ApiError>
+    export type UpdateProspectMutationVariables = {prospectId: string;data: BodyType<UpdateProspectInput>}
+
+    /**
+ * @summary Update commercial prospect fields or archive it
+ */
+export const useUpdateProspect = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspect>>, TError,UpdateProspectMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProspect>>,
+        TError,
+        UpdateProspectMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProspectMutationOptions(options));
+    }
+
+export const getListContactProspectsUrl = (contactId: string,) => {
+
+
+
+
+  return `/api/contacts/${contactId}/prospects`
+}
+
+/**
+ * @summary List prospects linked to an owned contact
+ */
+export const listContactProspects = async (contactId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProspectRecord[]> => {
+
+  return customFetch<ProspectRecord[]>(getListContactProspectsUrl(contactId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactProspectsQueryKey = (contactId: string,) => {
+    return [
+    `/api/contacts/${contactId}/prospects`
+    ] as const;
+    }
+
+
+export const getListContactProspectsQueryOptions = <TData = Awaited<ReturnType<typeof listContactProspects>>, TError = ErrorType<ApiError>>(contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactProspects>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactProspectsQueryKey(contactId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContactProspects>>> = ({ signal }) => listContactProspects(contactId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: contactId !== null && contactId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContactProspects>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactProspectsQueryResult = NonNullable<Awaited<ReturnType<typeof listContactProspects>>>
+export type ListContactProspectsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List prospects linked to an owned contact
+ */
+
+export function useListContactProspects<TData = Awaited<ReturnType<typeof listContactProspects>>, TError = ErrorType<ApiError>>(
+ contactId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContactProspects>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactProspectsQueryOptions(contactId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getChangeProspectStageUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}/stage`
+}
+
+/**
+ * @summary Change a prospect stage with a mandatory reason and audit snapshot
+ */
+export const changeProspectStage = async (prospectId: string,
+    changeProspectStageInput: ChangeProspectStageInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectDetail> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectDetail>(getChangeProspectStageUrl(prospectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(changeProspectStageInput)
+  }
+);}
+
+
+
+
+
+export const getChangeProspectStageMutationKey = () => ['changeProspectStage'] as const;
+
+export const getChangeProspectStageMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeProspectStage>>, TError,ChangeProspectStageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeProspectStage>>, TError,ChangeProspectStageMutationVariables, TContext> => {
+
+const mutationKey = getChangeProspectStageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeProspectStage>>, ChangeProspectStageMutationVariables> = (props) => {
+          const {prospectId,data} = props ?? {};
+
+          return  changeProspectStage(prospectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeProspectStageMutationResult = NonNullable<Awaited<ReturnType<typeof changeProspectStage>>>
+    export type ChangeProspectStageMutationBody = BodyType<ChangeProspectStageInput>
+    export type ChangeProspectStageMutationError = ErrorType<ApiError>
+    export type ChangeProspectStageMutationVariables = {prospectId: string;data: BodyType<ChangeProspectStageInput>}
+
+    /**
+ * @summary Change a prospect stage with a mandatory reason and audit snapshot
+ */
+export const useChangeProspectStage = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeProspectStage>>, TError,ChangeProspectStageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeProspectStage>>,
+        TError,
+        ChangeProspectStageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getChangeProspectStageMutationOptions(options));
+    }
+
+export const getListProspectGrowthAuditUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}/history`
+}
+
+/**
+ * @summary Read the immutable prospect stage history and actions per stage period
+ */
+export const listProspectGrowthAudit = async (prospectId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProspectGrowthAuditEntry[]> => {
+
+  return customFetch<ProspectGrowthAuditEntry[]>(getListProspectGrowthAuditUrl(prospectId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectGrowthAuditQueryKey = (prospectId: string,) => {
+    return [
+    `/api/prospects/${prospectId}/history`
+    ] as const;
+    }
+
+
+export const getListProspectGrowthAuditQueryOptions = <TData = Awaited<ReturnType<typeof listProspectGrowthAudit>>, TError = ErrorType<ApiError>>(prospectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectGrowthAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectGrowthAuditQueryKey(prospectId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectGrowthAudit>>> = ({ signal }) => listProspectGrowthAudit(prospectId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: prospectId !== null && prospectId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectGrowthAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectGrowthAuditQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectGrowthAudit>>>
+export type ListProspectGrowthAuditQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Read the immutable prospect stage history and actions per stage period
+ */
+
+export function useListProspectGrowthAudit<TData = Awaited<ReturnType<typeof listProspectGrowthAudit>>, TError = ErrorType<ApiError>>(
+ prospectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectGrowthAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectGrowthAuditQueryOptions(prospectId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListProspectActionsUrl = (prospectId: string,
+    params?: ListProspectActionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/prospects/${prospectId}/actions?${stringifiedParams}` : `/api/prospects/${prospectId}/actions`
+}
+
+/**
+ * @summary List prospect actions with their associated stage period
+ */
+export const listProspectActions = async (prospectId: string,
+    params?: ListProspectActionsParams, options?: Parameters<typeof customFetch>[1]): Promise<ProspectActionRecord[]> => {
+
+  return customFetch<ProspectActionRecord[]>(getListProspectActionsUrl(prospectId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectActionsQueryKey = (prospectId: string,
+    params?: ListProspectActionsParams,) => {
+    return [
+    `/api/prospects/${prospectId}/actions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProspectActionsQueryOptions = <TData = Awaited<ReturnType<typeof listProspectActions>>, TError = ErrorType<unknown>>(prospectId: string,
+    params?: ListProspectActionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectActions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectActionsQueryKey(prospectId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectActions>>> = ({ signal }) => listProspectActions(prospectId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: prospectId !== null && prospectId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectActions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectActionsQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectActions>>>
+export type ListProspectActionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List prospect actions with their associated stage period
+ */
+
+export function useListProspectActions<TData = Awaited<ReturnType<typeof listProspectActions>>, TError = ErrorType<unknown>>(
+ prospectId: string,
+    params?: ListProspectActionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectActions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectActionsQueryOptions(prospectId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectActionUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}/actions`
+}
+
+/**
+ * @summary Record an action in the prospect's current stage period
+ */
+export const createProspectAction = async (prospectId: string,
+    createProspectActionInput: CreateProspectActionInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectActionRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectActionRecord>(getCreateProspectActionUrl(prospectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createProspectActionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectActionMutationKey = () => ['createProspectAction'] as const;
+
+export const getCreateProspectActionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectAction>>, TError,CreateProspectActionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspectAction>>, TError,CreateProspectActionMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectActionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspectAction>>, CreateProspectActionMutationVariables> = (props) => {
+          const {prospectId,data} = props ?? {};
+
+          return  createProspectAction(prospectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectActionMutationResult = NonNullable<Awaited<ReturnType<typeof createProspectAction>>>
+    export type CreateProspectActionMutationBody = BodyType<CreateProspectActionInput>
+    export type CreateProspectActionMutationError = ErrorType<ApiError>
+    export type CreateProspectActionMutationVariables = {prospectId: string;data: BodyType<CreateProspectActionInput>}
+
+    /**
+ * @summary Record an action in the prospect's current stage period
+ */
+export const useCreateProspectAction = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectAction>>, TError,CreateProspectActionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspectAction>>,
+        TError,
+        CreateProspectActionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectActionMutationOptions(options));
+    }
+
+export const getSetProspectTagsUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}/tags`
+}
+
+/**
+ * @summary Replace a prospect's private tag associations using the existing tag library
+ */
+export const setProspectTags = async (prospectId: string,
+    prospectTagSelection: ProspectTagSelection, options?: Parameters<typeof customFetch>[1]): Promise<ContactTag[]> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ContactTag[]>(getSetProspectTagsUrl(prospectId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectTagSelection)
+  }
+);}
+
+
+
+
+
+export const getSetProspectTagsMutationKey = () => ['setProspectTags'] as const;
+
+export const getSetProspectTagsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setProspectTags>>, TError,SetProspectTagsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setProspectTags>>, TError,SetProspectTagsMutationVariables, TContext> => {
+
+const mutationKey = getSetProspectTagsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setProspectTags>>, SetProspectTagsMutationVariables> = (props) => {
+          const {prospectId,data} = props ?? {};
+
+          return  setProspectTags(prospectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetProspectTagsMutationResult = NonNullable<Awaited<ReturnType<typeof setProspectTags>>>
+    export type SetProspectTagsMutationBody = BodyType<ProspectTagSelection>
+    export type SetProspectTagsMutationError = ErrorType<ApiError>
+    export type SetProspectTagsMutationVariables = {prospectId: string;data: BodyType<ProspectTagSelection>}
+
+    /**
+ * @summary Replace a prospect's private tag associations using the existing tag library
+ */
+export const useSetProspectTags = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setProspectTags>>, TError,SetProspectTagsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setProspectTags>>,
+        TError,
+        SetProspectTagsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetProspectTagsMutationOptions(options));
+    }
+
+export const getListProspectProductsUrl = () => {
+
+
+
+
+  return `/api/prospect-products`
+}
+
+/**
+ * @summary List the tenant's product and service catalogue
+ */
+export const listProspectProducts = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectProduct[]> => {
+
+  return customFetch<ProspectProduct[]>(getListProspectProductsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectProductsQueryKey = () => {
+    return [
+    `/api/prospect-products`
+    ] as const;
+    }
+
+
+export const getListProspectProductsQueryOptions = <TData = Awaited<ReturnType<typeof listProspectProducts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectProductsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectProducts>>> = ({ signal }) => listProspectProducts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectProducts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectProductsQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectProducts>>>
+export type ListProspectProductsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the tenant's product and service catalogue
+ */
+
+export function useListProspectProducts<TData = Awaited<ReturnType<typeof listProspectProducts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectProducts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectProductsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectProductUrl = () => {
+
+
+
+
+  return `/api/prospect-products`
+}
+
+/**
+ * @summary Add a product or service to the tenant catalogue
+ */
+export const createProspectProduct = async (prospectProductInput: ProspectProductInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectProduct> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectProduct>(getCreateProspectProductUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectProductInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectProductMutationKey = () => ['createProspectProduct'] as const;
+
+export const getCreateProspectProductMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectProduct>>, TError,CreateProspectProductMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspectProduct>>, TError,CreateProspectProductMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectProductMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspectProduct>>, CreateProspectProductMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProspectProduct(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectProductMutationResult = NonNullable<Awaited<ReturnType<typeof createProspectProduct>>>
+    export type CreateProspectProductMutationBody = BodyType<ProspectProductInput>
+    export type CreateProspectProductMutationError = ErrorType<ApiError>
+    export type CreateProspectProductMutationVariables = {data: BodyType<ProspectProductInput>}
+
+    /**
+ * @summary Add a product or service to the tenant catalogue
+ */
+export const useCreateProspectProduct = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectProduct>>, TError,CreateProspectProductMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspectProduct>>,
+        TError,
+        CreateProspectProductMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectProductMutationOptions(options));
+    }
+
+export const getUpdateProspectProductUrl = (productId: string,) => {
+
+
+
+
+  return `/api/prospect-products/${productId}`
+}
+
+/**
+ * @summary Edit or deactivate a product without removing historical references
+ */
+export const updateProspectProduct = async (productId: string,
+    prospectProductInput: ProspectProductInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectProduct> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectProduct>(getUpdateProspectProductUrl(productId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectProductInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProspectProductMutationKey = () => ['updateProspectProduct'] as const;
+
+export const getUpdateProspectProductMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectProduct>>, TError,UpdateProspectProductMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProspectProduct>>, TError,UpdateProspectProductMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProspectProductMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProspectProduct>>, UpdateProspectProductMutationVariables> = (props) => {
+          const {productId,data} = props ?? {};
+
+          return  updateProspectProduct(productId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProspectProductMutationResult = NonNullable<Awaited<ReturnType<typeof updateProspectProduct>>>
+    export type UpdateProspectProductMutationBody = BodyType<ProspectProductInput>
+    export type UpdateProspectProductMutationError = ErrorType<ApiError>
+    export type UpdateProspectProductMutationVariables = {productId: string;data: BodyType<ProspectProductInput>}
+
+    /**
+ * @summary Edit or deactivate a product without removing historical references
+ */
+export const useUpdateProspectProduct = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectProduct>>, TError,UpdateProspectProductMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProspectProduct>>,
+        TError,
+        UpdateProspectProductMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProspectProductMutationOptions(options));
+    }
+
+export const getGetProspectCurrenciesUrl = () => {
+
+
+
+
+  return `/api/prospect-currencies`
+}
+
+/**
+ * @summary Get the tenant's permitted currencies and default selling currency
+ */
+export const getProspectCurrencies = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectCurrencySettings> => {
+
+  return customFetch<ProspectCurrencySettings>(getGetProspectCurrenciesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProspectCurrenciesQueryKey = () => {
+    return [
+    `/api/prospect-currencies`
+    ] as const;
+    }
+
+
+export const getGetProspectCurrenciesQueryOptions = <TData = Awaited<ReturnType<typeof getProspectCurrencies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectCurrencies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProspectCurrenciesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProspectCurrencies>>> = ({ signal }) => getProspectCurrencies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProspectCurrencies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProspectCurrenciesQueryResult = NonNullable<Awaited<ReturnType<typeof getProspectCurrencies>>>
+export type GetProspectCurrenciesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the tenant's permitted currencies and default selling currency
+ */
+
+export function useGetProspectCurrencies<TData = Awaited<ReturnType<typeof getProspectCurrencies>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectCurrencies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProspectCurrenciesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateProspectCurrenciesUrl = () => {
+
+
+
+
+  return `/api/prospect-currencies`
+}
+
+/**
+ * @summary Replace permitted currencies and select exactly one default
+ */
+export const updateProspectCurrencies = async (prospectCurrencySettingsInput: ProspectCurrencySettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectCurrencySettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectCurrencySettings>(getUpdateProspectCurrenciesUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectCurrencySettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProspectCurrenciesMutationKey = () => ['updateProspectCurrencies'] as const;
+
+export const getUpdateProspectCurrenciesMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectCurrencies>>, TError,UpdateProspectCurrenciesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProspectCurrencies>>, TError,UpdateProspectCurrenciesMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProspectCurrenciesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProspectCurrencies>>, UpdateProspectCurrenciesMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateProspectCurrencies(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProspectCurrenciesMutationResult = NonNullable<Awaited<ReturnType<typeof updateProspectCurrencies>>>
+    export type UpdateProspectCurrenciesMutationBody = BodyType<ProspectCurrencySettingsInput>
+    export type UpdateProspectCurrenciesMutationError = ErrorType<ApiError>
+    export type UpdateProspectCurrenciesMutationVariables = {data: BodyType<ProspectCurrencySettingsInput>}
+
+    /**
+ * @summary Replace permitted currencies and select exactly one default
+ */
+export const useUpdateProspectCurrencies = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectCurrencies>>, TError,UpdateProspectCurrenciesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProspectCurrencies>>,
+        TError,
+        UpdateProspectCurrenciesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProspectCurrenciesMutationOptions(options));
+    }
+
+export const getListProspectStagesUrl = () => {
+
+
+
+
+  return `/api/prospect-stages`
+}
+
+/**
+ * @summary List the tenant's configurable pipeline stages
+ */
+export const listProspectStages = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectStage[]> => {
+
+  return customFetch<ProspectStage[]>(getListProspectStagesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectStagesQueryKey = () => {
+    return [
+    `/api/prospect-stages`
+    ] as const;
+    }
+
+
+export const getListProspectStagesQueryOptions = <TData = Awaited<ReturnType<typeof listProspectStages>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectStages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectStagesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectStages>>> = ({ signal }) => listProspectStages({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectStages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectStagesQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectStages>>>
+export type ListProspectStagesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the tenant's configurable pipeline stages
+ */
+
+export function useListProspectStages<TData = Awaited<ReturnType<typeof listProspectStages>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectStages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectStagesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectStageUrl = () => {
+
+
+
+
+  return `/api/prospect-stages`
+}
+
+/**
+ * @summary Add a tenant-defined pipeline stage
+ */
+export const createProspectStage = async (prospectStageInput: ProspectStageInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectStage> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectStage>(getCreateProspectStageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectStageInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectStageMutationKey = () => ['createProspectStage'] as const;
+
+export const getCreateProspectStageMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectStage>>, TError,CreateProspectStageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspectStage>>, TError,CreateProspectStageMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectStageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspectStage>>, CreateProspectStageMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProspectStage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectStageMutationResult = NonNullable<Awaited<ReturnType<typeof createProspectStage>>>
+    export type CreateProspectStageMutationBody = BodyType<ProspectStageInput>
+    export type CreateProspectStageMutationError = ErrorType<ApiError>
+    export type CreateProspectStageMutationVariables = {data: BodyType<ProspectStageInput>}
+
+    /**
+ * @summary Add a tenant-defined pipeline stage
+ */
+export const useCreateProspectStage = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectStage>>, TError,CreateProspectStageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspectStage>>,
+        TError,
+        CreateProspectStageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectStageMutationOptions(options));
+    }
+
+export const getUpdateProspectStageUrl = (stageId: string,) => {
+
+
+
+
+  return `/api/prospect-stages/${stageId}`
+}
+
+/**
+ * @summary Edit or deactivate a stage while retaining its history references
+ */
+export const updateProspectStage = async (stageId: string,
+    prospectStageInput: ProspectStageInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectStage> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectStage>(getUpdateProspectStageUrl(stageId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectStageInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProspectStageMutationKey = () => ['updateProspectStage'] as const;
+
+export const getUpdateProspectStageMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectStage>>, TError,UpdateProspectStageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProspectStage>>, TError,UpdateProspectStageMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProspectStageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProspectStage>>, UpdateProspectStageMutationVariables> = (props) => {
+          const {stageId,data} = props ?? {};
+
+          return  updateProspectStage(stageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProspectStageMutationResult = NonNullable<Awaited<ReturnType<typeof updateProspectStage>>>
+    export type UpdateProspectStageMutationBody = BodyType<ProspectStageInput>
+    export type UpdateProspectStageMutationError = ErrorType<ApiError>
+    export type UpdateProspectStageMutationVariables = {stageId: string;data: BodyType<ProspectStageInput>}
+
+    /**
+ * @summary Edit or deactivate a stage while retaining its history references
+ */
+export const useUpdateProspectStage = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectStage>>, TError,UpdateProspectStageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProspectStage>>,
+        TError,
+        UpdateProspectStageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProspectStageMutationOptions(options));
+    }
+
+export const getSetProspectStageTransitionsUrl = (stageId: string,) => {
+
+
+
+
+  return `/api/prospect-stages/${stageId}/transitions`
+}
+
+/**
+ * @summary Configure permitted next stages from a stage
+ */
+export const setProspectStageTransitions = async (stageId: string,
+    prospectStageTransitionsInput: ProspectStageTransitionsInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectStageTransitions> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectStageTransitions>(getSetProspectStageTransitionsUrl(stageId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectStageTransitionsInput)
+  }
+);}
+
+
+
+
+
+export const getSetProspectStageTransitionsMutationKey = () => ['setProspectStageTransitions'] as const;
+
+export const getSetProspectStageTransitionsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setProspectStageTransitions>>, TError,SetProspectStageTransitionsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setProspectStageTransitions>>, TError,SetProspectStageTransitionsMutationVariables, TContext> => {
+
+const mutationKey = getSetProspectStageTransitionsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setProspectStageTransitions>>, SetProspectStageTransitionsMutationVariables> = (props) => {
+          const {stageId,data} = props ?? {};
+
+          return  setProspectStageTransitions(stageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetProspectStageTransitionsMutationResult = NonNullable<Awaited<ReturnType<typeof setProspectStageTransitions>>>
+    export type SetProspectStageTransitionsMutationBody = BodyType<ProspectStageTransitionsInput>
+    export type SetProspectStageTransitionsMutationError = ErrorType<ApiError>
+    export type SetProspectStageTransitionsMutationVariables = {stageId: string;data: BodyType<ProspectStageTransitionsInput>}
+
+    /**
+ * @summary Configure permitted next stages from a stage
+ */
+export const useSetProspectStageTransitions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setProspectStageTransitions>>, TError,SetProspectStageTransitionsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setProspectStageTransitions>>,
+        TError,
+        SetProspectStageTransitionsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetProspectStageTransitionsMutationOptions(options));
+    }
+
+export const getListProspectActionTypesUrl = () => {
+
+
+
+
+  return `/api/prospect-action-types`
+}
+
+/**
+ * @summary List the tenant's configurable action catalogue
+ */
+export const listProspectActionTypes = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProspectActionType[]> => {
+
+  return customFetch<ProspectActionType[]>(getListProspectActionTypesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProspectActionTypesQueryKey = () => {
+    return [
+    `/api/prospect-action-types`
+    ] as const;
+    }
+
+
+export const getListProspectActionTypesQueryOptions = <TData = Awaited<ReturnType<typeof listProspectActionTypes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectActionTypes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProspectActionTypesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProspectActionTypes>>> = ({ signal }) => listProspectActionTypes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProspectActionTypes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProspectActionTypesQueryResult = NonNullable<Awaited<ReturnType<typeof listProspectActionTypes>>>
+export type ListProspectActionTypesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the tenant's configurable action catalogue
+ */
+
+export function useListProspectActionTypes<TData = Awaited<ReturnType<typeof listProspectActionTypes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProspectActionTypes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProspectActionTypesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProspectActionTypeUrl = () => {
+
+
+
+
+  return `/api/prospect-action-types`
+}
+
+/**
+ * @summary Add an action type for the tenant
+ */
+export const createProspectActionType = async (prospectActionTypeInput: ProspectActionTypeInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectActionType> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectActionType>(getCreateProspectActionTypeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectActionTypeInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProspectActionTypeMutationKey = () => ['createProspectActionType'] as const;
+
+export const getCreateProspectActionTypeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectActionType>>, TError,CreateProspectActionTypeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProspectActionType>>, TError,CreateProspectActionTypeMutationVariables, TContext> => {
+
+const mutationKey = getCreateProspectActionTypeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProspectActionType>>, CreateProspectActionTypeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProspectActionType(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProspectActionTypeMutationResult = NonNullable<Awaited<ReturnType<typeof createProspectActionType>>>
+    export type CreateProspectActionTypeMutationBody = BodyType<ProspectActionTypeInput>
+    export type CreateProspectActionTypeMutationError = ErrorType<ApiError>
+    export type CreateProspectActionTypeMutationVariables = {data: BodyType<ProspectActionTypeInput>}
+
+    /**
+ * @summary Add an action type for the tenant
+ */
+export const useCreateProspectActionType = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProspectActionType>>, TError,CreateProspectActionTypeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProspectActionType>>,
+        TError,
+        CreateProspectActionTypeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProspectActionTypeMutationOptions(options));
+    }
+
+export const getUpdateProspectActionTypeUrl = (actionTypeId: string,) => {
+
+
+
+
+  return `/api/prospect-action-types/${actionTypeId}`
+}
+
+/**
+ * @summary Edit or deactivate an action type while retaining history
+ */
+export const updateProspectActionType = async (actionTypeId: string,
+    prospectActionTypeInput: ProspectActionTypeInput, options?: Parameters<typeof customFetch>[1]): Promise<ProspectActionType> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProspectActionType>(getUpdateProspectActionTypeUrl(actionTypeId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(prospectActionTypeInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProspectActionTypeMutationKey = () => ['updateProspectActionType'] as const;
+
+export const getUpdateProspectActionTypeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectActionType>>, TError,UpdateProspectActionTypeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProspectActionType>>, TError,UpdateProspectActionTypeMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProspectActionTypeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProspectActionType>>, UpdateProspectActionTypeMutationVariables> = (props) => {
+          const {actionTypeId,data} = props ?? {};
+
+          return  updateProspectActionType(actionTypeId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProspectActionTypeMutationResult = NonNullable<Awaited<ReturnType<typeof updateProspectActionType>>>
+    export type UpdateProspectActionTypeMutationBody = BodyType<ProspectActionTypeInput>
+    export type UpdateProspectActionTypeMutationError = ErrorType<ApiError>
+    export type UpdateProspectActionTypeMutationVariables = {actionTypeId: string;data: BodyType<ProspectActionTypeInput>}
+
+    /**
+ * @summary Edit or deactivate an action type while retaining history
+ */
+export const useUpdateProspectActionType = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProspectActionType>>, TError,UpdateProspectActionTypeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProspectActionType>>,
+        TError,
+        UpdateProspectActionTypeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProspectActionTypeMutationOptions(options));
     }
 
 export const getBulkUpdateContactsUrl = () => {
