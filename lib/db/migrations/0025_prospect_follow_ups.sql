@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS prospect_follow_ups (
   notes text NOT NULL,
   status varchar(16) NOT NULL DEFAULT 'pending',
   completed_at timestamptz,
-  created_by uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_by uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT prospect_follow_ups_prospect_tenant_fk

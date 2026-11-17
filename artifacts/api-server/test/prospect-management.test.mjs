@@ -293,6 +293,13 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     assert.equal(followUp.status, 201, JSON.stringify(followUp.data));
     assert.equal(followUp.data.status, "pending");
     assert.equal(followUp.data.prospectName, "First deal");
+    const invalidCalendarDate = await call(mainServer, "/prospect-follow-ups", "POST", {
+      prospectId: first.id,
+      actionTypeId: actionTypeResponse.data.id,
+      followUpDate: "2026-02-30",
+      notes: "This date does not exist.",
+    });
+    assert.equal(invalidCalendarDate.status, 400);
     const followUpRange = await call(mainServer, "/prospect-follow-ups?fromDate=2026-02-01&toDate=2026-02-28&status=pending");
     assert.equal(followUpRange.status, 200);
     assert.equal(followUpRange.data.some(item => item.id === followUp.data.id), true);
@@ -309,6 +316,15 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     });
     assert.equal(rescheduledFollowUp.status, 200);
     assert.equal(rescheduledFollowUp.data.followUpDate, "2026-02-23");
+    await db.update(prospectActionTypesTable).set({ active: false })
+      .where(eq(prospectActionTypesTable.id, actionTypeResponse.data.id));
+    const editWithInactiveActionType = await call(mainServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
+      actionTypeId: actionTypeResponse.data.id,
+      notes: "Procurement review is still pending.",
+    });
+    assert.equal(editWithInactiveActionType.status, 200);
+    await db.update(prospectActionTypesTable).set({ active: true })
+      .where(eq(prospectActionTypesTable.id, actionTypeResponse.data.id));
     const completedFollowUp = await call(mainServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
       status: "completed",
     });
@@ -316,11 +332,24 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     assert.equal(completedFollowUp.data.completedAt !== null, true);
     const completedHistory = await call(mainServer, `/prospects/${first.id}/history`);
     assert.equal(completedHistory.data.at(-1).actions.some(item =>
-      item.notes === "Procurement review moved to Monday."), true);
+      item.notes === "Procurement review is still pending."), true);
     const duplicateCompletion = await call(mainServer, `/prospect-follow-ups/${followUp.data.id}`, "PATCH", {
       status: "completed",
     });
     assert.equal(duplicateCompletion.status, 409);
+    const cancellableFollowUp = await call(mainServer, "/prospect-follow-ups", "POST", {
+      prospectId: first.id,
+      actionTypeId: actionTypeResponse.data.id,
+      followUpDate: "2026-02-24",
+      notes: "Cancel this test follow-up.",
+    });
+    assert.equal(cancellableFollowUp.status, 201);
+    const cancelledFollowUp = await call(mainServer, `/prospect-follow-ups/${cancellableFollowUp.data.id}`, "PATCH", {
+      status: "cancelled",
+    });
+    assert.equal(cancelledFollowUp.status, 200);
+    assert.equal(cancelledFollowUp.data.status, "cancelled");
+    assert.equal(cancelledFollowUp.data.completedAt, null);
     const todayFollowUps = await call(mainServer, "/prospect-follow-ups/today");
     assert.equal(todayFollowUps.status, 200);
     assert.match(todayFollowUps.data.date, /^\d{4}-\d{2}-\d{2}$/);

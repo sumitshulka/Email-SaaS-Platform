@@ -16,7 +16,8 @@ export interface ProspectFollowUp {
   contactName: string;
   contactEmail: string;
   actionType: ProspectActionType;
-  followUpDate: Date;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  followUpDate: string;
   notes: string;
   status: ProspectFollowUpStatus;
   /** @nullable */

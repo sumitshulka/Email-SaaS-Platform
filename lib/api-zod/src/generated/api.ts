@@ -2168,6 +2168,7 @@ export const GetProspectDashboardResponse = zod.object({
 /**
  * @summary List tenant follow-ups due today in the user's timezone
  */
+export const getProspectFollowUpsTodayResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const getProspectFollowUpsTodayResponseItemsItemActionTypeNameMax = 100;
 
 export const getProspectFollowUpsTodayResponseItemsItemActionTypeDescriptionMax = 10000;
@@ -2175,12 +2176,13 @@ export const getProspectFollowUpsTodayResponseItemsItemActionTypeDescriptionMax 
 export const getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMin = -32768;
 export const getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMax = 32767;
 
+export const getProspectFollowUpsTodayResponseItemsItemFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const getProspectFollowUpsTodayResponseOverdueCountMin = 0;
 
 
 
 export const GetProspectFollowUpsTodayResponse = zod.object({
-  "date": zod.coerce.date(),
+  "date": zod.string().regex(getProspectFollowUpsTodayResponseDateRegExp),
   "items": zod.array(zod.object({
   "id": zod.string().uuid(),
   "prospectId": zod.string().uuid(),
@@ -2195,7 +2197,7 @@ export const GetProspectFollowUpsTodayResponse = zod.object({
   "active": zod.boolean(),
   "displayOrder": zod.number().int().min(getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMin).max(getProspectFollowUpsTodayResponseItemsItemActionTypeDisplayOrderMax)
 }),
-  "followUpDate": zod.coerce.date(),
+  "followUpDate": zod.string().regex(getProspectFollowUpsTodayResponseItemsItemFollowUpDateRegExp),
   "notes": zod.string(),
   "status": zod.enum(['pending', 'completed', 'cancelled']),
   "completedAt": zod.coerce.date().nullable(),
@@ -2209,9 +2211,13 @@ export const GetProspectFollowUpsTodayResponse = zod.object({
 /**
  * @summary List tenant prospect follow-ups in a date range
  */
+export const listProspectFollowUpsQueryFromDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listProspectFollowUpsQueryToDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const ListProspectFollowUpsQueryParams = zod.object({
-  "fromDate": zod.date().optional(),
-  "toDate": zod.date().optional(),
+  "fromDate": zod.coerce.string().regex(listProspectFollowUpsQueryFromDateRegExp).optional(),
+  "toDate": zod.coerce.string().regex(listProspectFollowUpsQueryToDateRegExp).optional(),
   "status": zod.enum(['pending', 'completed', 'cancelled', 'all']).optional()
 })
 
@@ -2222,6 +2228,7 @@ export const listProspectFollowUpsResponseActionTypeDescriptionMax = 10000;
 export const listProspectFollowUpsResponseActionTypeDisplayOrderMin = -32768;
 export const listProspectFollowUpsResponseActionTypeDisplayOrderMax = 32767;
 
+export const listProspectFollowUpsResponseFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const ListProspectFollowUpsResponseItem = zod.object({
@@ -2238,7 +2245,7 @@ export const ListProspectFollowUpsResponseItem = zod.object({
   "active": zod.boolean(),
   "displayOrder": zod.number().int().min(listProspectFollowUpsResponseActionTypeDisplayOrderMin).max(listProspectFollowUpsResponseActionTypeDisplayOrderMax)
 }),
-  "followUpDate": zod.coerce.date(),
+  "followUpDate": zod.string().regex(listProspectFollowUpsResponseFollowUpDateRegExp),
   "notes": zod.string(),
   "status": zod.enum(['pending', 'completed', 'cancelled']),
   "completedAt": zod.coerce.date().nullable(),
@@ -2251,6 +2258,7 @@ export const ListProspectFollowUpsResponse = zod.array(ListProspectFollowUpsResp
 /**
  * @summary Schedule a follow-up for an active tenant prospect
  */
+export const createProspectFollowUpBodyFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createProspectFollowUpBodyNotesMax = 10000;
 
 
@@ -2258,7 +2266,7 @@ export const createProspectFollowUpBodyNotesMax = 10000;
 export const CreateProspectFollowUpBody = zod.object({
   "prospectId": zod.string().uuid(),
   "actionTypeId": zod.string().uuid(),
-  "followUpDate": zod.coerce.date(),
+  "followUpDate": zod.string().regex(createProspectFollowUpBodyFollowUpDateRegExp),
   "notes": zod.string().min(1).max(createProspectFollowUpBodyNotesMax)
 })
 
@@ -2269,6 +2277,7 @@ export const createProspectFollowUpResponseActionTypeDescriptionMax = 10000;
 export const createProspectFollowUpResponseActionTypeDisplayOrderMin = -32768;
 export const createProspectFollowUpResponseActionTypeDisplayOrderMax = 32767;
 
+export const createProspectFollowUpResponseFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const CreateProspectFollowUpResponse = zod.object({
@@ -2285,7 +2294,7 @@ export const CreateProspectFollowUpResponse = zod.object({
   "active": zod.boolean(),
   "displayOrder": zod.number().int().min(createProspectFollowUpResponseActionTypeDisplayOrderMin).max(createProspectFollowUpResponseActionTypeDisplayOrderMax)
 }),
-  "followUpDate": zod.coerce.date(),
+  "followUpDate": zod.string().regex(createProspectFollowUpResponseFollowUpDateRegExp),
   "notes": zod.string(),
   "status": zod.enum(['pending', 'completed', 'cancelled']),
   "completedAt": zod.coerce.date().nullable(),
@@ -2301,13 +2310,14 @@ export const UpdateProspectFollowUpParams = zod.object({
   "followUpId": zod.coerce.string().uuid()
 })
 
+export const updateProspectFollowUpBodyFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const updateProspectFollowUpBodyNotesMax = 10000;
 
 
 
 export const UpdateProspectFollowUpBody = zod.object({
   "actionTypeId": zod.string().uuid().optional(),
-  "followUpDate": zod.coerce.date().optional(),
+  "followUpDate": zod.string().regex(updateProspectFollowUpBodyFollowUpDateRegExp).optional(),
   "notes": zod.string().min(1).max(updateProspectFollowUpBodyNotesMax).optional(),
   "status": zod.enum(['pending', 'completed', 'cancelled']).optional()
 })
@@ -2319,6 +2329,7 @@ export const updateProspectFollowUpResponseActionTypeDescriptionMax = 10000;
 export const updateProspectFollowUpResponseActionTypeDisplayOrderMin = -32768;
 export const updateProspectFollowUpResponseActionTypeDisplayOrderMax = 32767;
 
+export const updateProspectFollowUpResponseFollowUpDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdateProspectFollowUpResponse = zod.object({
@@ -2335,7 +2346,7 @@ export const UpdateProspectFollowUpResponse = zod.object({
   "active": zod.boolean(),
   "displayOrder": zod.number().int().min(updateProspectFollowUpResponseActionTypeDisplayOrderMin).max(updateProspectFollowUpResponseActionTypeDisplayOrderMax)
 }),
-  "followUpDate": zod.coerce.date(),
+  "followUpDate": zod.string().regex(updateProspectFollowUpResponseFollowUpDateRegExp),
   "notes": zod.string(),
   "status": zod.enum(['pending', 'completed', 'cancelled']),
   "completedAt": zod.coerce.date().nullable(),

@@ -8,7 +8,13 @@
 import type { ListProspectFollowUpsStatus } from './listProspectFollowUpsStatus';
 
 export type ListProspectFollowUpsParams = {
-fromDate?: Date;
-toDate?: Date;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+fromDate?: string;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+toDate?: string;
 status?: ListProspectFollowUpsStatus;
 };

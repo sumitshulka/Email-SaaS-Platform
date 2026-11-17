@@ -254,7 +254,7 @@ router.patch("/prospect-follow-ups/:followUpId", requireUserRole, async (req, re
     if (existing.status !== "pending") return { kind: "not_pending" as const };
 
     const nextActionTypeId = input.data.actionTypeId ?? existing.actionTypeId;
-    if (input.data.actionTypeId) {
+    if (input.data.actionTypeId && input.data.actionTypeId !== existing.actionTypeId) {
       const [actionType] = await tx.select({ id: prospectActionTypesTable.id }).from(prospectActionTypesTable)
         .where(and(
           eq(prospectActionTypesTable.id, input.data.actionTypeId),

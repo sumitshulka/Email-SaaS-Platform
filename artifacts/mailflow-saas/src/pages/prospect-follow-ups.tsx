@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import {
@@ -45,13 +45,13 @@ function useRefreshFollowUps() {
   };
 }
 
-export function FollowUpForm({ open, onClose, prospectId, initial, initialDate }: {
-  open: boolean; onClose: () => void; prospectId?: string; initial?: ProspectFollowUp; initialDate?: string;
+export function FollowUpForm({ open, onClose, prospectId, prospectName, initial, initialDate }: {
+  open: boolean; onClose: () => void; prospectId?: string; prospectName?: string; initial?: ProspectFollowUp; initialDate?: string;
 }) {
   const create = useCreateProspectFollowUp();
   const update = useUpdateProspectFollowUp();
-  const types = useListProspectActionTypes({ query: { queryKey: getListProspectActionTypesQueryKey() } });
-  const prospects = useListProspects({ page: 1, pageSize: 100, status: 'active' }, { query: { enabled: !prospectId && !initial, queryKey: getListProspectsQueryKey({ page: 1, pageSize: 100, status: 'active' }) } });
+  const types = useListProspectActionTypes({ query: { enabled: open, queryKey: getListProspectActionTypesQueryKey() } });
+  const prospects = useListProspects({ page: 1, pageSize: 100, status: 'active' }, { query: { enabled: open && !prospectId && !initial, queryKey: getListProspectsQueryKey({ page: 1, pageSize: 100, status: 'active' }) } });
   const refresh = useRefreshFollowUps();
   const [selectedProspect, setSelectedProspect] = useState(initial?.prospectId ?? prospectId ?? '');
   const [actionTypeId, setActionTypeId] = useState(initial?.actionType.id ?? '');
@@ -59,7 +59,19 @@ export function FollowUpForm({ open, onClose, prospectId, initial, initialDate }
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setSelectedProspect(initial?.prospectId ?? prospectId ?? '');
+    setActionTypeId(initial?.actionType.id ?? '');
+    setDate(initial?.followUpDate ?? initialDate ?? localDate(new Date()));
+    setNotes(initial?.notes ?? '');
+    setError('');
+    setSaved(false);
+  }, [open, prospectId, initial?.id, initialDate]);
   const activeTypes = (types.data ?? []).filter(type => type.active);
+  const availableTypes = initial && !activeTypes.some(type => type.id === initial.actionType.id)
+    ? [...activeTypes, { ...initial.actionType, name: `${initial.actionType.name} (inactive)` }]
+    : activeTypes;
   const items = prospects.data?.prospects ?? [];
   if (!open) return null;
   const submit = (event: FormEvent) => {
@@ -92,17 +104,19 @@ export function FollowUpForm({ open, onClose, prospectId, initial, initialDate }
         <button type="button" onClick={onClose} disabled={pending} aria-label="Close dialog" className="grid h-8 w-8 place-items-center rounded-lg text-[#718398] hover:bg-white" data-testid="button-close-follow-up-dialog"><X className="h-4 w-4"/></button>
       </header>
       <form onSubmit={submit} className="space-y-4 p-5 sm:p-6">
-        {!prospectId && !initial && <label className="block"><span className={label}>Prospect</span><select className={field} value={selectedProspect} onChange={event => setSelectedProspect(event.target.value)} required data-testid="select-follow-up-prospect"><option value="">Choose an active prospect</option>{items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.contact.name}</option>)}</select>{prospects.isError && <span className="mt-1 block text-[10px] text-[#a04d3b]">Prospects could not be loaded. Retry the page and try again.</span>}</label>}
-        {(prospectId || initial) && <div className="rounded-lg border border-[#e2e9ef] bg-white px-3.5 py-3" data-testid="text-follow-up-prospect"><div className={label}>Prospect</div><div className="text-[12px] font-bold text-[#304a63]">{initial?.prospectName ?? items.find(item => item.id === prospectId)?.name ?? 'Selected prospect'}</div></div>}
+        {!prospectId && !initial && <label className="block"><span className={label}>Prospect</span><select className={field} value={selectedProspect} onChange={event => setSelectedProspect(event.target.value)} required data-testid="select-follow-up-prospect"><option value="">Choose an active prospect</option>{items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.contact.name}</option>)}</select>{prospects.isError && <span className="mt-1 flex items-center gap-2 text-[10px] text-[#a04d3b]">Prospects could not be loaded.<button type="button" onClick={() => void prospects.refetch()} className="font-bold underline">Retry</button></span>}</label>}
+        {(prospectId || initial) && <div className="rounded-lg border border-[#e2e9ef] bg-white px-3.5 py-3" data-testid="text-follow-up-prospect"><div className={label}>Prospect</div><div className="text-[12px] font-bold text-[#304a63]">{initial?.prospectName ?? prospectName ?? items.find(item => item.id === prospectId)?.name ?? 'Selected prospect'}</div></div>}
         <div className="grid gap-4 sm:grid-cols-2">
-          <label><span className={label}>Action type</span><select className={field} value={actionTypeId} onChange={event => setActionTypeId(event.target.value)} required data-testid="select-follow-up-action-type"><option value="">Choose an action</option>{activeTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
+          <label><span className={label}>Action type</span><select className={field} value={actionTypeId} onChange={event => setActionTypeId(event.target.value)} required data-testid="select-follow-up-action-type"><option value="">Choose an action</option>{availableTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
           <label><span className={label}>Follow-up date</span><input className={field} type="date" value={date} onChange={event => setDate(event.target.value)} required data-testid="input-follow-up-date"/></label>
         </div>
         <label className="block"><span className={label}>Note</span><textarea className="min-h-[104px] w-full resize-y rounded-lg border border-[#d7e0e9] bg-white px-3 py-2.5 text-[12px] leading-5 text-[#253b51] outline-none focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]" value={notes} onChange={event => setNotes(event.target.value)} maxLength={10000} required placeholder="What should happen next?" data-testid="input-follow-up-notes"/></label>
         {types.isError && <div role="alert" className="text-[11px] text-[#a04d3b]">Action types could not be loaded. <button type="button" onClick={() => void types.refetch()} className="font-bold underline">Retry</button></div>}
+        {!initial && !types.isLoading && !types.isError && activeTypes.length === 0 && <div role="status" className="rounded-lg border border-[#eadfc9] bg-[#fff9ed] px-3 py-2.5 text-[10px] leading-4 text-[#80613a]">Add an active action type in <Link href="/prospect-actions" className="font-bold underline">Prospect Actions</Link> before scheduling follow-ups.</div>}
+        {!prospectId && !initial && prospects.data && items.length === 0 && <div role="status" className="rounded-lg border border-[#e2e9ef] bg-[#f7f9fb] px-3 py-2.5 text-[10px] leading-4 text-[#718398]">There are no active prospects to schedule. <Link href="/prospects/new" className="font-bold text-[#245b91] underline">Create a prospect</Link> first.</div>}
         {error && <Notice error>{error}</Notice>}
         {saved && <Notice>Follow-up saved. The calendar and prospect history are refreshing.</Notice>}
-        <div className="flex flex-col-reverse gap-2 border-t border-[#e7edf2] pt-4 sm:flex-row sm:justify-end"><button type="button" className={secondary} onClick={onClose} disabled={pending}>Cancel</button><button type="submit" className={primary} disabled={pending || types.isLoading || (!initial && !prospectId && prospects.isLoading)} data-testid="button-save-follow-up">{pending ? 'Saving follow-up…' : initial ? 'Save changes' : 'Schedule follow-up'}{pending ? <RefreshCw className="h-3.5 w-3.5 animate-spin"/> : <ArrowRight className="h-3.5 w-3.5"/>}</button></div>
+        <div className="flex flex-col-reverse gap-2 border-t border-[#e7edf2] pt-4 sm:flex-row sm:justify-end"><button type="button" className={secondary} onClick={onClose} disabled={pending}>Cancel</button><button type="submit" className={primary} disabled={pending || types.isLoading || (!initial && !prospectId && (!prospects.data || prospects.isLoading || prospects.isError))} data-testid="button-save-follow-up">{pending ? 'Saving follow-up…' : initial ? 'Save changes' : 'Schedule follow-up'}{pending ? <RefreshCw className="h-3.5 w-3.5 animate-spin"/> : <ArrowRight className="h-3.5 w-3.5"/>}</button></div>
       </form>
     </section>
   </div>;
@@ -159,15 +173,15 @@ export function FollowUpsTodayPanel() {
   </section>;
 }
 
-export function ScheduleProspectFollowUpButton({ prospectId, className }: { prospectId: string; className?: string }) {
+export function ScheduleProspectFollowUpButton({ prospectId, prospectName, className }: { prospectId: string; prospectName: string; className?: string }) {
   const [open, setOpen] = useState(false);
-  return <><button type="button" className={className ?? primary} onClick={() => setOpen(true)} data-testid="button-schedule-prospect-follow-up"><CalendarDays className="h-3.5 w-3.5"/>Schedule follow-up</button><FollowUpForm key={`${open}-${prospectId}`} open={open} onClose={() => setOpen(false)} prospectId={prospectId}/></>;
+  return <><button type="button" className={className ?? primary} onClick={() => setOpen(true)} data-testid="button-schedule-prospect-follow-up"><CalendarDays className="h-3.5 w-3.5"/>Schedule follow-up</button><FollowUpForm key={`${open}-${prospectId}`} open={open} onClose={() => setOpen(false)} prospectId={prospectId} prospectName={prospectName}/></>;
 }
 
 export function ProspectFollowUpsPage() {
-  const today = localDate(new Date());
+  const browserToday = localDate(new Date());
   const [mode, setMode] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
-  const [selected, setSelected] = useState(today);
+  const [selected, setSelected] = useState(browserToday);
   const [dialogDate, setDialogDate] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const range = useMemo(() => {
@@ -177,18 +191,28 @@ export function ProspectFollowUpsPage() {
       return { fromDate: localDate(start), toDate: shift(localDate(start), 6) };
     }
     const date = fromISO(selected);
-    return { fromDate: localDate(new Date(date.getFullYear(), date.getMonth(), 1)), toDate: localDate(new Date(date.getFullYear(), date.getMonth() + 1, 0)) };
+    const first = new Date(date.getFullYear(), date.getMonth(), 1);
+    const offset = (first.getDay() + 6) % 7;
+    const dayCount = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    const count = Math.ceil((offset + dayCount) / 7) * 7;
+    const gridStart = new Date(date.getFullYear(), date.getMonth(), 1 - offset);
+    return { fromDate: localDate(gridStart), toDate: shift(localDate(gridStart), count - 1) };
   }, [mode, selected]);
   const queryParams = useMemo(() => ({ ...range, status: 'all' as const }), [range]);
   const calendar = useListProspectFollowUps(queryParams, { query: { queryKey: getListProspectFollowUpsQueryKey(queryParams) } });
   const todayQuery = useGetProspectFollowUpsToday({ query: { queryKey: getGetProspectFollowUpsTodayQueryKey() } });
+  const today = todayQuery.data?.date ?? browserToday;
+  useEffect(() => {
+    if (todayQuery.data?.date && selected === browserToday) setSelected(todayQuery.data.date);
+  }, [todayQuery.data?.date, browserToday, selected]);
   const dates = useMemo(() => {
-    const start = fromISO(range.fromDate);
     if (mode === 'monthly') {
-      const offset = (start.getDay() + 6) % 7;
-      const days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+      const month = fromISO(selected);
+      const first = new Date(month.getFullYear(), month.getMonth(), 1);
+      const offset = (first.getDay() + 6) % 7;
+      const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
       const count = Math.ceil((offset + days) / 7) * 7;
-      return Array.from({ length: count }, (_, i) => shift(range.fromDate, i - offset));
+      return Array.from({ length: count }, (_, i) => shift(range.fromDate, i));
     }
     const count = mode === 'daily' ? 1 : 7;
     return Array.from({ length: count }, (_, i) => shift(range.fromDate, i));
@@ -204,7 +228,6 @@ export function ProspectFollowUpsPage() {
     setSelected(localDate(d));
   };
   const dayItems = forDate(mode === 'daily' ? selected : dialogDate);
-  const isToday = selected === today;
   return <main className="prospect-page fade-in mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-9 lg:py-8" data-testid="page-prospect-follow-ups">
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Link href="/prospects" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#526d86] no-underline hover:text-[#174f91]" data-testid="link-follow-ups-prospects"><ArrowLeft className="h-3.5 w-3.5"/>All prospects</Link><button type="button" className={primary} onClick={() => setFormOpen(true)} data-testid="button-new-follow-up"><Plus className="h-3.5 w-3.5"/>Schedule follow-up</button></div>
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.17em] text-[#66809a]">PROSPECT MANAGEMENT / DAILY WORK</div><h1 className="display text-[30px] font-bold leading-tight text-[#172b43] sm:text-[35px]">Follow-ups</h1><p className="mt-2 max-w-xl text-[12px] leading-5 text-[#6b7b8e]">Keep each opportunity moving with a visible next step.</p></div><div className="flex items-center gap-2 rounded-lg border border-[#dce4ed] bg-white px-3 py-2 text-[10px] text-[#65788b]"><CalendarDays className="h-4 w-4 text-[#4e7da7]"/>Today <strong className="text-[#34516b]">{todayQuery.isLoading ? '—' : todayQuery.data?.items.filter(item => item.status === 'pending').length ?? 0} pending</strong><span className="mx-1 h-3 w-px bg-[#dce4ed]"/><strong className="text-[#9a6837]">{todayQuery.isLoading ? '—' : todayQuery.data?.overdueCount ?? 0} overdue</strong></div></div>

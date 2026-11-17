@@ -6193,6 +6193,7 @@ export interface ProspectFollowUp {
   contactName: string;
   contactEmail: string;
   actionType: ProspectActionType;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   followUpDate: string;
   notes: string;
   status: ProspectFollowUpStatus;
@@ -6203,6 +6204,7 @@ export interface ProspectFollowUp {
 }
 
 export interface ProspectFollowUpsToday {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
   items: ProspectFollowUp[];
   /** @minimum 0 */
@@ -6212,6 +6214,7 @@ export interface ProspectFollowUpsToday {
 export interface CreateProspectFollowUpInput {
   prospectId: string;
   actionTypeId: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   followUpDate: string;
   /**
      * @minLength 1
@@ -6222,6 +6225,7 @@ export interface CreateProspectFollowUpInput {
 
 export interface UpdateProspectFollowUpInput {
   actionTypeId?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   followUpDate?: string;
   /**
      * @minLength 1
@@ -6395,7 +6399,13 @@ export const ListContactsAddedWithin = {
 } as const;
 
 export type ListProspectFollowUpsParams = {
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
 fromDate?: string;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
 toDate?: string;
 status?: ListProspectFollowUpsStatus;
 };

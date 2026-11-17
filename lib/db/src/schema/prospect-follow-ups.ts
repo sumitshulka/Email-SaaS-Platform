@@ -22,7 +22,7 @@ export const prospectFollowUpsTable = pgTable("prospect_follow_ups", {
   notes: text("notes").notNull(),
   status: varchar("status", { length: 16 }).notNull().default("pending"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
-  createdBy: uuid("created_by").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdBy: uuid("created_by").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, table => [

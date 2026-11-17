@@ -8,7 +8,8 @@
 import type { ProspectFollowUp } from './prospectFollowUp';
 
 export interface ProspectFollowUpsToday {
-  date: Date;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
   items: ProspectFollowUp[];
   /** @minimum 0 */
   overdueCount: number;
