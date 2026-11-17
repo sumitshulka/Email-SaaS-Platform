@@ -29,6 +29,12 @@ const palette = {
   plum: "#8875a4",
 };
 const productColors = [palette.blue, palette.teal, palette.amber, palette.plum, palette.sage, "#aab5ae"];
+const chartSurfaces = {
+  blue: { header: "#edf4fa", plot: "#f6f9fd", border: "#d9e5f0", accent: "#38668e" },
+  sage: { header: "#eaf3ef", plot: "#f3f8f5", border: "#d6e6df", accent: "#3d766c" },
+  indigo: { header: "#eff0f7", plot: "#f7f7fb", border: "#dfe2ed", accent: "#656f9c" },
+  amber: { header: "#f4eee3", plot: "#fbf7f1", border: "#e9dfd0", accent: "#9b7448" },
+};
 
 type CsvCell = string | number;
 type CsvRow = Record<string, CsvCell>;
@@ -70,6 +76,7 @@ function ChartCard({
   csvName,
   csvRows,
   toolbar,
+  tone = "blue",
   children,
 }: {
   eyebrow: string;
@@ -78,13 +85,15 @@ function ChartCard({
   csvName: string;
   csvRows: CsvRow[];
   toolbar?: ReactNode;
+  tone?: keyof typeof chartSurfaces;
   children: ReactNode;
 }) {
+  const surface = chartSurfaces[tone];
   return (
-    <section className="overflow-hidden rounded-xl border bg-white shadow-sm" style={{ borderColor: palette.border }} aria-label={title}>
-      <div className="border-b px-5 py-3 sm:px-6" style={{ borderColor: palette.grid }}>
+    <section className="overflow-hidden rounded-xl border bg-white shadow-sm" style={{ borderColor: surface.border }} aria-label={title}>
+      <div className="border-b px-5 py-3 sm:px-6" style={{ backgroundColor: surface.header, borderColor: surface.border }}>
         <div>
-          <div className="mono text-[9px] uppercase tracking-[.16em]" style={{ color: "#8a969d" }}>{eyebrow}</div>
+          <div className="mono text-[9px] font-semibold uppercase tracking-[.16em]" style={{ color: surface.accent }}>{eyebrow}</div>
           <h3 className="display mt-1 text-[17px] font-bold" style={{ color: palette.ink }}>{title}</h3>
           <p className="mt-1 max-w-xl text-[11px] leading-5" style={{ color: palette.muted }}>{detail}</p>
         </div>
@@ -104,7 +113,9 @@ function ChartCard({
             <Download className="h-3.5 w-3.5" aria-hidden="true" /> CSV
           </button>
         </div>
-        {children}
+        <div className="rounded-xl border p-2.5 sm:p-3" style={{ backgroundColor: surface.plot, borderColor: surface.border }}>
+          {children}
+        </div>
       </div>
     </section>
   );
@@ -297,7 +308,7 @@ export function ProspectAnalyticsOverview() {
           </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <ChartCard eyebrow="STAGE DISTRIBUTION" title="Opportunity count by stage" detail="Counts include active and terminal stages so outcomes remain visible." csvName="opportunity-count-by-stage.csv" csvRows={countsCsv}>
+            <ChartCard tone="sage" eyebrow="STAGE DISTRIBUTION" title="Opportunity count by stage" detail="Counts include active and terminal stages so outcomes remain visible." csvName="opportunity-count-by-stage.csv" csvRows={countsCsv}>
               {stageCounts.length ? (
                 <div className="h-[265px]" role="img" aria-label={`Bar chart showing opportunity count by stage across ${stageCounts.length} stages`}>
                   <ResponsiveContainer width="100%" height="100%" debounce={0}>
@@ -313,7 +324,7 @@ export function ProspectAnalyticsOverview() {
               ) : <ChartEmpty title="Stage counts are not available" body="The workspace has prospects, but no stage breakdown was returned for this snapshot." />}
             </ChartCard>
 
-            <ChartCard eyebrow="ACTIVE PIPELINE" title="Weighted value by stage" detail={`Expected deal value × current probability, in ${activeCurrency || "a selected currency"}. Terminal stages are excluded from active pipeline.`} csvName="weighted-active-pipeline-by-stage.csv" csvRows={pipelineCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-stage-pipeline-currency" />}>
+            <ChartCard tone="blue" eyebrow="ACTIVE PIPELINE" title="Weighted value by stage" detail={`Expected deal value × current probability, in ${activeCurrency || "a selected currency"}. Terminal stages are excluded from active pipeline.`} csvName="weighted-active-pipeline-by-stage.csv" csvRows={pipelineCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-stage-pipeline-currency" />}>
               {!activeCurrency ? <ChartEmpty title="No currency values to chart" body="Currency totals are not available for this snapshot. Stage counts remain available in the chart beside this one." />
                 : activeStagePipeline.length ? activeStagePipeline.some(row => row.weightedValue !== 0) ? (
                   <div className="h-[230px]" role="img" aria-label={`Bar chart showing weighted active pipeline by stage in ${activeCurrency}`}>
@@ -331,7 +342,7 @@ export function ProspectAnalyticsOverview() {
                   : <ChartEmpty title="No active stages in the breakdown" body="Won and lost terminal stages do not count as active pipeline." />}
             </ChartCard>
 
-            <ChartCard eyebrow="EXPECTED CLOSURE" title="Monthly outlook" detail={`Expected weighted deal value by close month, in ${activeCurrency || "a selected currency"}. Counts include opportunities with a closure period.`} csvName="expected-closure-outlook.csv" csvRows={closureCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-closure-currency" />}>
+            <ChartCard tone="indigo" eyebrow="EXPECTED CLOSURE" title="Monthly outlook" detail={`Expected weighted deal value by close month, in ${activeCurrency || "a selected currency"}. Counts include opportunities with a closure period.`} csvName="expected-closure-outlook.csv" csvRows={closureCsv} toolbar={<CurrencySelect currencies={currencies} value={activeCurrency} onChange={setSelectedCurrency} testId="select-closure-currency" />}>
               {!activeCurrency ? <ChartEmpty title="No currency values to chart" body="Choose a currency after pipeline currency totals become available." />
                 : closureOutlook.length ? closureOutlook.some(row => row.weightedValue !== 0) ? (
                   <>
@@ -353,7 +364,7 @@ export function ProspectAnalyticsOverview() {
                   : <ChartEmpty title="No expected closure dates yet" body="Monthly outlook appears when prospects have an expected closure period." />}
             </ChartCard>
 
-            <ChartCard eyebrow="OFFERING MIX" title="Opportunities by product or service" detail="Opportunity count by offering; this is a count mix, not a revenue comparison." csvName="opportunities-by-product-service.csv" csvRows={productCsv}>
+            <ChartCard tone="amber" eyebrow="OFFERING MIX" title="Opportunities by product or service" detail="Opportunity count by offering; this is a count mix, not a revenue comparison." csvName="opportunities-by-product-service.csv" csvRows={productCsv}>
               {productMix.length ? (
                 <div className="grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(150px,.9fr)]">
                 <div className="h-[235px]" role="img" aria-label={`Donut chart showing opportunity counts across ${productChartData.length} product or service groups`}>
