@@ -20,6 +20,8 @@ export function ContactIntentAnalyzer({ contactId }: { contactId: string }) {
       return response.json() as Promise<Snapshot>;
     },
   });
+  const hasResearchCredit = (state.data?.allowance?.remaining ?? 0) > 0;
+  const canShowQuestionnaire = Boolean(state.data?.eligible && hasResearchCredit);
   useEffect(() => { setAnswers({}); }, [state.data?.questions.map(q => q.id).join("|")]);
   const analyze = async () => {
     if (pending) return;
@@ -51,13 +53,16 @@ export function ContactIntentAnalyzer({ contactId }: { contactId: string }) {
         {state.data.sentEmailCount} eligible sent emails · {state.data.noteCount} dated notes · {state.data.allowance?.remaining ?? 0} research credits remaining
       </div>
       {!state.data.eligible && <p className="mt-3 text-[12px] text-[#8a5b25]">Add at least 2 SMTP-accepted emails that were not reported bounced and 3 dated notes to enable analysis.</p>}
-      {state.data.eligible && state.data.questions.map(question => <label key={question.id} className="mt-3 block">
+      {!hasResearchCredit && <p role="status" data-testid="intent-no-research-credit" className="mt-3 rounded-md border border-[#f0d9b5] bg-[#fff8ed] px-3 py-2 text-[12px] leading-5 text-[#80521e]">
+        Buying-intent analysis uses one company research credit. No credit is currently available, so the questionnaire is unavailable. It will open when your account has an available research credit.
+      </p>}
+      {canShowQuestionnaire && state.data.questions.map(question => <label key={question.id} className="mt-3 block">
         <span className="mb-1 block text-[12px] font-medium text-[#35465b]">{question.text}</span>
         <textarea maxLength={1000} rows={2} value={answers[question.id] ?? ""} onChange={e => setAnswers(prev => ({ ...prev, [question.id]: e.target.value }))} className="w-full rounded-md border border-[#d8dde4] px-3 py-2 text-[12px] text-[#26364a] focus:border-[#3b73b8] focus:outline-none" placeholder="Use only facts the contact shared."/>
       </label>)}
-      <button type="button" disabled={pending || !state.data.eligible || !state.data.aiConfigured || !state.data.allowance?.remaining || state.data.questions.some(q => !answers[q.id]?.trim())} onClick={() => void analyze()} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
+      {canShowQuestionnaire && <button type="button" disabled={pending || !state.data.aiConfigured || state.data.questions.some(q => !answers[q.id]?.trim())} onClick={() => void analyze()} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
         {pending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <BrainCircuit className="h-4 w-4"/>} {pending ? "Analyzing…" : "Analyze intent"}
-      </button>
+      </button>}
       {!state.data.aiConfigured && <p className="mt-2 text-[12px] text-amber-800">AI analysis is unavailable until the superadmin configures a provider.</p>}
       {state.data.latest && <div className="mt-5 border-t border-[#e7ebef] pt-4">
         <div className="mb-3 text-[12px] font-semibold text-[#35465b]">Latest analysis · {new Date(state.data.latest.analyzedAt).toLocaleString()}</div>
