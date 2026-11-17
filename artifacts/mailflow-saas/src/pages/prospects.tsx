@@ -283,13 +283,17 @@ export function ProspectDetailPage() {
       <StageChangePanel record={record}/>
       <aside className="space-y-5">
         <section className={`${panel} overflow-hidden`}><header className="border-b border-[#d6e3ef] bg-[#edf4fb] px-4 py-3"><div className="mono text-[9px] tracking-[.14em] text-[#52718f]">LINKED CONTACT / AUTHORITATIVE</div><h2 className="mt-1 text-[13px] font-bold text-[#263c53]">Contact record</h2></header><div className="p-4"><Link href={`/contacts/${encodeURIComponent(record.contact.id)}`} className="flex items-center gap-3 rounded-lg border border-[#e5ebf0] p-3 no-underline transition hover:bg-[#f7f9fb]"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf3f8] text-[#355c80]"><UserRound className="h-4 w-4"/></span><span className="min-w-0 flex-1"><strong className="block truncate text-[12px] text-[#2b4259]">{record.contact.name}</strong><span className="block truncate text-[10px] text-[#7b8997]">{record.contact.email}</span></span><ExternalLink className="h-3.5 w-3.5 text-[#7b8c9c]"/></Link><div className="mt-3"><div className="mb-1.5 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Associated company</div>{record.contact.company ? <Link href={`/companies/${encodeURIComponent(record.contact.company.id)}`} data-testid="link-prospect-company" className="flex items-center gap-2 rounded-lg border border-[#e5ebf0] bg-[#f8fafc] p-3 no-underline hover:bg-[#f2f6fa]"><Building2 className="h-4 w-4 shrink-0 text-[#52718f]"/><span className="min-w-0 flex-1"><strong className="block truncate text-[11px] text-[#2b4259]">{record.contact.company.name}</strong><span className="block truncate text-[10px] text-[#7b8997]">{record.contact.company.domain || 'Domain not provided'}</span></span><ExternalLink className="h-3.5 w-3.5 text-[#7b8c9c]"/></Link> : record.contact.companyName ? <div className="rounded-lg border border-[#e5ebf0] bg-[#f8fafc] p-3"><div className="text-[11px] font-semibold text-[#2b4259]">{record.contact.companyName}</div><div className="mt-0.5 text-[9px] text-[#7b8997]">Company name on contact · no workspace company linked</div></div> : <div className="rounded-lg border border-dashed border-[#e5ebf0] p-3 text-[10px] text-[#7b8997]">No company is linked to this contact.</div>}</div><div className="mt-4"><div className="mb-2 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Contact tags</div><TagStack tags={record.contact.tags} kind="Contact"/></div><div className="mt-4 border-t border-[#edf1f4] pt-4"><div className="mb-2 text-[9px] font-bold uppercase tracking-[.1em] text-[#76899c]">Prospect tags</div><TagStack tags={record.prospectTags} kind="Prospect"/></div><p className="mt-4 border-t border-[#edf1f4] pt-3 text-[9px] leading-4 text-[#8996a3]">Contact name, email, company, phone, notes, tags and campaign history are managed on the contact record.</p></div></section>
-        <ClosurePanel record={record}/>
       </aside>
+      <div className="grid gap-5 lg:grid-cols-2 xl:col-span-2">
+        <ClosurePanel record={record}/>
+        <section className={`${panel} p-5`}><div className="mono text-[9px] font-semibold tracking-[.14em] text-[#71869a]">OPPORTUNITY CONTEXT</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Prospect notes</h2><p className="mt-3 whitespace-pre-wrap break-words text-[12px] leading-6 text-[#52667b]">{record.notes}</p></section>
+      </div>
       <div className="xl:col-span-2">
         <ActionPanel prospectId={id} stageName={record.currentStage.name}/>
       </div>
-      <AuditPanel prospectId={id}/>
-      <section className={`${panel} p-5`}><div className="mono text-[9px] font-semibold tracking-[.14em] text-[#71869a]">OPPORTUNITY CONTEXT</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Prospect notes</h2><p className="mt-3 whitespace-pre-wrap break-words text-[12px] leading-6 text-[#52667b]">{record.notes}</p></section>
+      <div className="xl:col-span-2">
+        <AuditPanel prospectId={id}/>
+      </div>
     </div>
   </PageFrame>;
 }
