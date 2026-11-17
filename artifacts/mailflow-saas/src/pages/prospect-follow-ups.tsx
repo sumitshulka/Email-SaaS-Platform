@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
+import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleAlert,
   Clock3, Mail, MessageSquare, Pencil, Plus, RefreshCw, X,
@@ -59,6 +61,8 @@ export function FollowUpForm({ open, onClose, prospectId, prospectName, initial,
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const prospectSelectRef = useRef<HTMLSelectElement>(null);
+  const actionTypeSelectRef = useRef<HTMLSelectElement>(null);
   useEffect(() => {
     if (!open) return;
     setSelectedProspect(initial?.prospectId ?? prospectId ?? '');
@@ -97,17 +101,29 @@ export function FollowUpForm({ open, onClose, prospectId, prospectName, initial,
     }
   };
   const pending = create.isPending || update.isPending;
-  return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#13273d]/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !pending) onClose(); }}>
-    <section role="dialog" aria-modal="true" aria-labelledby="follow-up-dialog-title" className="max-h-[92dvh] w-full max-w-[540px] overflow-y-auto rounded-t-2xl border border-[#dce4ed] bg-[#fbfcfd] shadow-[0_24px_70px_rgba(20,42,64,.22)] sm:rounded-2xl" data-testid="dialog-follow-up-form">
+  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen && !pending) onClose(); }}>
+    <DialogPortal>
+      <DialogOverlay className="z-[100] bg-[#13273d]/40 backdrop-blur-[2px]"/>
+      <DialogPrimitive.Content
+        aria-labelledby="follow-up-dialog-title"
+        onOpenAutoFocus={event => {
+          event.preventDefault();
+          (prospectSelectRef.current ?? actionTypeSelectRef.current)?.focus();
+        }}
+        onEscapeKeyDown={event => { if (pending) event.preventDefault(); }}
+        onPointerDownOutside={event => { if (pending) event.preventDefault(); }}
+        className="fixed left-1/2 top-1/2 z-[101] max-h-[92dvh] w-[calc(100%-2rem)] max-w-[540px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-[#dce4ed] bg-[#fbfcfd] shadow-[0_24px_70px_rgba(20,42,64,.22)]"
+        data-testid="dialog-follow-up-form"
+      >
       <header className="flex items-start justify-between border-b border-[#e3eaf0] bg-[#f1f6fa] px-5 py-4 sm:px-6">
         <div><div className="mono text-[9px] tracking-[.16em] text-[#66809a]">PROSPECT MANAGEMENT / FOLLOW-UP</div><h2 id="follow-up-dialog-title" className="display mt-1 text-[20px] font-bold text-[#1d344d]">{initial ? 'Edit follow-up' : 'Schedule a follow-up'}</h2><p className="mt-1 text-[11px] text-[#6d7f90]">A clear next step, attached to the right opportunity.</p></div>
         <button type="button" onClick={onClose} disabled={pending} aria-label="Close dialog" className="grid h-8 w-8 place-items-center rounded-lg text-[#718398] hover:bg-white" data-testid="button-close-follow-up-dialog"><X className="h-4 w-4"/></button>
       </header>
       <form onSubmit={submit} className="space-y-4 p-5 sm:p-6">
-        {!prospectId && !initial && <label className="block"><span className={label}>Prospect</span><select className={field} value={selectedProspect} onChange={event => setSelectedProspect(event.target.value)} required data-testid="select-follow-up-prospect"><option value="">Choose an active prospect</option>{items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.contact.name}</option>)}</select>{prospects.isError && <span className="mt-1 flex items-center gap-2 text-[10px] text-[#a04d3b]">Prospects could not be loaded.<button type="button" onClick={() => void prospects.refetch()} className="font-bold underline">Retry</button></span>}</label>}
+        {!prospectId && !initial && <label className="block"><span className={label}>Prospect</span><select ref={prospectSelectRef} className={field} value={selectedProspect} onChange={event => setSelectedProspect(event.target.value)} required data-testid="select-follow-up-prospect"><option value="">Choose an active prospect</option>{items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.contact.name}</option>)}</select>{prospects.isError && <span className="mt-1 flex items-center gap-2 text-[10px] text-[#a04d3b]">Prospects could not be loaded.<button type="button" onClick={() => void prospects.refetch()} className="font-bold underline">Retry</button></span>}</label>}
         {(prospectId || initial) && <div className="rounded-lg border border-[#e2e9ef] bg-white px-3.5 py-3" data-testid="text-follow-up-prospect"><div className={label}>Prospect</div><div className="text-[12px] font-bold text-[#304a63]">{initial?.prospectName ?? prospectName ?? items.find(item => item.id === prospectId)?.name ?? 'Selected prospect'}</div></div>}
         <div className="grid gap-4 sm:grid-cols-2">
-          <label><span className={label}>Action type</span><select className={field} value={actionTypeId} onChange={event => setActionTypeId(event.target.value)} required data-testid="select-follow-up-action-type"><option value="">Choose an action</option>{availableTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
+          <label><span className={label}>Action type</span><select ref={actionTypeSelectRef} className={field} value={actionTypeId} onChange={event => setActionTypeId(event.target.value)} required data-testid="select-follow-up-action-type"><option value="">Choose an action</option>{availableTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
           <label><span className={label}>Follow-up date</span><input className={field} type="date" value={date} onChange={event => setDate(event.target.value)} required data-testid="input-follow-up-date"/></label>
         </div>
         <label className="block"><span className={label}>Note</span><textarea className="min-h-[104px] w-full resize-y rounded-lg border border-[#d7e0e9] bg-white px-3 py-2.5 text-[12px] leading-5 text-[#253b51] outline-none focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]" value={notes} onChange={event => setNotes(event.target.value)} maxLength={10000} required placeholder="What should happen next?" data-testid="input-follow-up-notes"/></label>
@@ -118,8 +134,9 @@ export function FollowUpForm({ open, onClose, prospectId, prospectName, initial,
         {saved && <Notice>Follow-up saved. The calendar and prospect history are refreshing.</Notice>}
         <div className="flex flex-col-reverse gap-2 border-t border-[#e7edf2] pt-4 sm:flex-row sm:justify-end"><button type="button" className={secondary} onClick={onClose} disabled={pending}>Cancel</button><button type="submit" className={primary} disabled={pending || types.isLoading || (!initial && !prospectId && (!prospects.data || prospects.isLoading || prospects.isError))} data-testid="button-save-follow-up">{pending ? 'Saving follow-up…' : initial ? 'Save changes' : 'Schedule follow-up'}{pending ? <RefreshCw className="h-3.5 w-3.5 animate-spin"/> : <ArrowRight className="h-3.5 w-3.5"/>}</button></div>
       </form>
-    </section>
-  </div>;
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  </Dialog>;
 }
 
 function FollowUpRow({ item, compact = false }: { item: ProspectFollowUp; compact?: boolean }) {
