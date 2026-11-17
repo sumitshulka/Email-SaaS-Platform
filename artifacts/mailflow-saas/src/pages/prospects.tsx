@@ -26,6 +26,8 @@ import type {
 const panel = 'rounded-xl border border-[#dce4ed] bg-white shadow-[0_4px_18px_rgba(19,43,70,.035)]';
 const field = 'h-10 w-full rounded-lg border border-[#d7e0e9] bg-[#fff] px-3 text-[12px] text-[#1a2b40] outline-none transition focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6] disabled:bg-[#f3f6f8]';
 const label = 'mb-1.5 block text-[10px] font-bold uppercase tracking-[.1em] text-[#66778a]';
+const masterFieldLabel = 'text-[10px] font-bold uppercase tracking-[.1em] text-[#66778a]';
+const masterFieldGroup = 'flex flex-col gap-2';
 const smallBtn = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#d7e0e9] bg-white px-3 text-[11px] font-semibold text-[#39516b] transition hover:border-[#b9cadb] hover:bg-[#f5f8fb] disabled:cursor-not-allowed disabled:opacity-50';
 const primaryBtn = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#164f91] bg-[#164f91] px-4 text-[12px] font-bold text-white transition hover:-translate-y-px hover:bg-[#103e76] disabled:cursor-not-allowed disabled:opacity-50';
 const dangerBtn = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#efd0c9] bg-[#fff9f7] px-3 text-[11px] font-semibold text-[#a14638] transition hover:bg-[#fff0ec]';
@@ -445,14 +447,72 @@ function SetupPage({ kind }: { kind: 'products' | 'stages' | 'actions' | 'curren
     <div className="mb-4 flex flex-wrap gap-2">{[['/prospect-products','Products'],['/prospect-stages','Stages'],['/prospect-actions','Action types'],['/prospect-currencies','Currencies']].map(([href, text]) => <Link key={href} href={href} className={`rounded-lg border px-3 py-2 text-[10px] font-semibold no-underline ${href === ({ products: '/prospect-products', stages: '/prospect-stages', actions: '/prospect-actions', currencies: '/prospect-currencies' }[kind]) ? 'border-[#a8c1d9] bg-[#edf4fb] text-[#235687]' : 'border-[#dce4ed] bg-white text-[#64788c] hover:bg-[#f7f9fb]'}`}>{text}</Link>)}</div>
     {notice && <div className="mb-4"><Notice kind={notice.kind}>{notice.text}</Notice></div>}
     {kind === 'currencies' ? <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,.72fr)]">
-      <section className={`${panel} p-5`}><div className="mono text-[9px] tracking-[.14em] text-[#71869a]">TENANT CURRENCY POLICY</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Permitted codes</h2><p className="mt-1 text-[10px] leading-5 text-[#8290a0]">Select ISO 4217 currency codes your team can use on prospects. The server validates codes when saved.</p><form onSubmit={saveCurrencies} className="mt-4 space-y-4"><div className="grid gap-2 sm:grid-cols-2">{[...new Set([...currentCurrencies.map(c => c.code), ...selectedCurrencies, 'USD','EUR','GBP','CAD','AUD','NZD','JPY','CHF','SGD','INR','AED','ZAR'])].map(code => <label key={code} className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-[11px] font-semibold ${selectedCurrencies.includes(code) ? 'border-[#a4bfd8] bg-[#f0f6fb] text-[#2a5a84]' : 'border-[#e3e9ee] text-[#5e7081]'}`}><span>{code}</span><input type="checkbox" checked={selectedCurrencies.includes(code)} onChange={e => { setSelectedCurrencies(v => e.target.checked ? [...new Set([...v, code])] : v.filter(c => c !== code)); if (!e.target.checked && defaultCurrency === code) setDefaultCurrency(''); }} className="accent-[#174f91]" data-testid={`checkbox-currency-${code}`}/></label>)}</div><div className="flex items-end gap-2"><label className="min-w-0 flex-1"><span className={label}>Add another ISO code</span><input className={field} maxLength={3} value={currencyDraft} onChange={e => setCurrencyDraft(e.target.value.toUpperCase())} placeholder="e.g. SEK" data-testid="input-custom-currency"/></label><button type="button" className={smallBtn} onClick={addCurrency}>Add code</button></div><label><span className={label}>Default currency</span><select className={field} value={defaultCurrency} onChange={e => setDefaultCurrency(e.target.value)}><option value="">Choose a default</option>{selectedCurrencies.map(code => <option key={code} value={code}>{code}</option>)}</select></label><button type="submit" className={primaryBtn} disabled={currencyUpdate.isPending || !currenciesReady}>{currencyUpdate.isPending ? 'Saving…' : 'Save currency settings'}<Check className="h-3.5 w-3.5"/></button></form></section>
-      <section className={`${panel} p-5`}><div className="mono text-[9px] tracking-[.14em] text-[#71869a]">CURRENT SETTINGS</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Active currency set</h2><div className="mt-4 space-y-2">{currentCurrencies.length ? currentCurrencies.map(c => <div key={c.code} className="flex justify-between rounded-lg bg-[#f7f9fb] px-3 py-2 text-[11px]"><span className="font-semibold text-[#40576e]">{c.code}</span>{c.isDefault && <span className="rounded-full bg-[#eaf3ec] px-2 py-0.5 text-[9px] font-bold text-[#477255]">Default</span>}</div>) : <div className="rounded-lg border border-dashed border-[#dce4ed] px-3 py-6 text-center text-[10px] text-[#8290a0]">No currency settings yet.</div>}</div><p className="mt-4 text-[10px] leading-5 text-[#8290a0]">Changing the default affects new prospect forms only; historical prospect values retain their currency code.</p></section>
+      <section className={`${panel} p-5`}>
+        <div className="mono text-[9px] tracking-[.14em] text-[#71869a]">TENANT CURRENCY POLICY</div>
+        <h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Permitted codes</h2>
+        <p className="mt-1 text-[10px] leading-5 text-[#8290a0]">Select ISO 4217 currency codes your team can use on prospects. The server validates codes when saved.</p>
+        <form onSubmit={saveCurrencies} className="mt-5 space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[...new Set([...currentCurrencies.map(c => c.code), ...selectedCurrencies, 'USD','EUR','GBP','CAD','AUD','NZD','JPY','CHF','SGD','INR','AED','ZAR'])].map(code => (
+              <label key={code} className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-3 text-[11px] font-semibold ${selectedCurrencies.includes(code) ? 'border-[#a4bfd8] bg-[#f0f6fb] text-[#2a5a84]' : 'border-[#e3e9ee] text-[#5e7081]'}`}>
+                <span>{code}</span>
+                <input type="checkbox" checked={selectedCurrencies.includes(code)} onChange={e => { setSelectedCurrencies(v => e.target.checked ? [...new Set([...v, code])] : v.filter(c => c !== code)); if (!e.target.checked && defaultCurrency === code) setDefaultCurrency(''); }} className="accent-[#174f91]" data-testid={`checkbox-currency-${code}`}/>
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-end">
+            <label className={`${masterFieldGroup} min-w-0 flex-1`}>
+              <span className={masterFieldLabel}>Add another ISO code</span>
+              <input className={field} maxLength={3} value={currencyDraft} onChange={e => setCurrencyDraft(e.target.value.toUpperCase())} placeholder="e.g. SEK" data-testid="input-custom-currency"/>
+            </label>
+            <button type="button" className={smallBtn} onClick={addCurrency}>Add code</button>
+          </div>
+          <label className={masterFieldGroup}>
+            <span className={masterFieldLabel}>Default currency</span>
+            <select className={field} value={defaultCurrency} onChange={e => setDefaultCurrency(e.target.value)}><option value="">Choose a default</option>{selectedCurrencies.map(code => <option key={code} value={code}>{code}</option>)}</select>
+          </label>
+          <button type="submit" className={primaryBtn} disabled={currencyUpdate.isPending || !currenciesReady}>{currencyUpdate.isPending ? 'Saving…' : 'Save currency settings'}<Check className="h-3.5 w-3.5"/></button>
+        </form>
+      </section>
+      <section className={`${panel} p-5`}>
+        <div className="mono text-[9px] tracking-[.14em] text-[#71869a]">CURRENT SETTINGS</div>
+        <h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Active currency set</h2>
+        <div className="mt-4 space-y-2">{currentCurrencies.length ? currentCurrencies.map(c => <div key={c.code} className="flex justify-between rounded-lg bg-[#f7f9fb] px-3 py-2 text-[11px]"><span className="font-semibold text-[#40576e]">{c.code}</span>{c.isDefault && <span className="rounded-full bg-[#eaf3ec] px-2 py-0.5 text-[9px] font-bold text-[#477255]">Default</span>}</div>) : <div className="rounded-lg border border-dashed border-[#dce4ed] px-3 py-6 text-center text-[10px] text-[#8290a0]">No currency settings yet.</div>}</div>
+        <p className="mt-4 text-[10px] leading-5 text-[#8290a0]">Changing the default affects new prospect forms only; historical prospect values retain their currency code.</p>
+      </section>
     </div> : <div className="grid items-start gap-5 xl:grid-cols-[minmax(290px,.7fr)_minmax(0,1.3fr)]">
-      <section className={`${panel} p-5`}><div className="mono text-[9px] tracking-[.14em] text-[#71869a]">NEW TENANT CONFIGURATION</div><h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Add {kind === 'products' ? 'a product or service' : kind === 'stages' ? 'a stage' : 'an action type'}</h2>
-        <form onSubmit={saveItem} className="mt-4 space-y-3"><label><span className={label}>Name</span><input required maxLength={160} className={field} value={name} onChange={e => setName(e.target.value)} data-testid={`input-new-${kind}-name`}/></label>
-          {kind === 'products' && <label><span className={label}>Category</span><input maxLength={100} className={field} value={category} onChange={e => setCategory(e.target.value)} placeholder="Optional"/></label>}
-          {kind === 'stages' && <><div className="grid grid-cols-2 gap-2"><label><span className={label}>Probability</span><input required min="0" max="100" type="number" className={field} value={probability} onChange={e => setProbability(e.target.value)} placeholder="0–100"/></label><label><span className={label}>Stage kind</span><select className={field} value={stageType} onChange={e => setStageType(e.target.value as 'active' | 'terminal')}><option value="active">Active</option><option value="terminal">Terminal</option></select></label></div>{stageType === 'terminal' && <label><span className={label}>Terminal outcome</span><input required className={field} value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="Won, lost, disqualified"/></label>}</>}
-          <label><span className={label}>Description</span><textarea maxLength={10000} className="min-h-[80px] w-full rounded-lg border border-[#d7e0e9] p-3 text-[11px] leading-5 outline-none focus:border-[#4c80b8]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional context for your team"/></label>
+      <section className={`${panel} p-5`}>
+        <div className="mono text-[9px] tracking-[.14em] text-[#71869a]">NEW TENANT CONFIGURATION</div>
+        <h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Add {kind === 'products' ? 'a product or service' : kind === 'stages' ? 'a stage' : 'an action type'}</h2>
+        <form onSubmit={saveItem} className="mt-5 space-y-5">
+          <label className={masterFieldGroup}>
+            <span className={masterFieldLabel}>Name</span>
+            <input required maxLength={160} className={field} value={name} onChange={e => setName(e.target.value)} data-testid={`input-new-${kind}-name`}/>
+          </label>
+          {kind === 'products' && <label className={masterFieldGroup}>
+            <span className={masterFieldLabel}>Category</span>
+            <input maxLength={100} className={field} value={category} onChange={e => setCategory(e.target.value)} placeholder="Optional"/>
+          </label>}
+          {kind === 'stages' && <>
+            <div className="grid grid-cols-2 gap-4">
+              <label className={masterFieldGroup}>
+                <span className={masterFieldLabel}>Probability</span>
+                <input required min="0" max="100" type="number" className={field} value={probability} onChange={e => setProbability(e.target.value)} placeholder="0–100"/>
+              </label>
+              <label className={masterFieldGroup}>
+                <span className={masterFieldLabel}>Stage kind</span>
+                <select className={field} value={stageType} onChange={e => setStageType(e.target.value as 'active' | 'terminal')}><option value="active">Active</option><option value="terminal">Terminal</option></select>
+              </label>
+            </div>
+            {stageType === 'terminal' && <label className={masterFieldGroup}>
+              <span className={masterFieldLabel}>Terminal outcome</span>
+              <input required className={field} value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="Won, lost, disqualified"/>
+            </label>}
+          </>}
+          <label className={masterFieldGroup}>
+            <span className={masterFieldLabel}>Description</span>
+            <textarea maxLength={10000} className="min-h-[80px] w-full rounded-lg border border-[#d7e0e9] p-3 text-[11px] leading-5 outline-none focus:border-[#4c80b8]" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional context for your team"/>
+          </label>
           <button type="submit" disabled={productCreate.isPending || stageCreate.isPending || actionCreate.isPending} className={primaryBtn}><Plus className="h-3.5 w-3.5"/>Add {kind === 'products' ? 'item' : kind === 'stages' ? 'stage' : 'action type'}</button>
         </form>
       </section>
@@ -472,14 +532,23 @@ function ProductSetupRow({ product, onToggle, onError, onSaved }: { product: { i
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(product.name); const [description, setDescription] = useState(product.description); const [category, setCategory] = useState(product.category ?? '');
   const save = (e: FormEvent) => { e.preventDefault(); update.mutate({ productId: product.id, data: { name: name.trim(), description, category: category.trim() || null, active: product.active, displayOrder: product.displayOrder } }, { onSuccess: () => { setEditing(false); onSaved(); }, onError: e => onError(errText(e)) }); };
-  return <div className="px-5 py-4">{editing ? <form onSubmit={save} className="grid gap-2 sm:grid-cols-2"><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Product name"/><input className={field} value={category} onChange={e => setCategory(e.target.value)} aria-label="Product category" placeholder="Category"/><textarea className="min-h-[64px] rounded-lg border border-[#d7e0e9] p-2.5 text-[11px] sm:col-span-2" value={description} onChange={e => setDescription(e.target.value)} aria-label="Product description"/><div className="flex gap-2 sm:col-span-2"><button className={primaryBtn} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save item'}</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[12px] font-bold text-[#344b63]">{product.name}</div><div className="mt-1 text-[10px] text-[#8190a0]">{product.category || 'Uncategorized'}{product.description ? ` · ${product.description}` : ''}</div></div><div className="flex gap-2"><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={product.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={update.isPending}>{product.active ? 'Active · deactivate' : 'Inactive · activate'}</button></div></div>}</div>;
+   return <div className="px-5 py-4">{editing ? <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Product name</span><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Product name"/></label>
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Category</span><input className={field} value={category} onChange={e => setCategory(e.target.value)} aria-label="Product category" placeholder="Category"/></label>
+     <label className={`${masterFieldGroup} sm:col-span-2`}><span className={masterFieldLabel}>Description</span><textarea className="min-h-[64px] rounded-lg border border-[#d7e0e9] p-2.5 text-[11px]" value={description} onChange={e => setDescription(e.target.value)} aria-label="Product description"/></label>
+     <div className="flex gap-2 sm:col-span-2"><button className={primaryBtn} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save item'}</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div>
+   </form> : <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[12px] font-bold text-[#344b63]">{product.name}</div><div className="mt-1 text-[10px] text-[#8190a0]">{product.category || 'Uncategorized'}{product.description ? ` · ${product.description}` : ''}</div></div><div className="flex gap-2"><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={product.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={update.isPending}>{product.active ? 'Active · deactivate' : 'Inactive · activate'}</button></div></div>}</div>;
 }
 function ActionTypeSetupRow({ action, onToggle, onError, onSaved }: { action: { id: string; name: string; description: string; active: boolean; displayOrder: number }; onToggle: () => void; onError: (message: string) => void; onSaved: () => void }) {
   const update = useUpdateProspectActionType();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(action.name); const [description, setDescription] = useState(action.description);
   const save = (e: FormEvent) => { e.preventDefault(); update.mutate({ actionTypeId: action.id, data: { name: name.trim(), description, active: action.active, displayOrder: action.displayOrder } }, { onSuccess: () => { setEditing(false); onSaved(); }, onError: e => onError(errText(e)) }); };
-  return <div className="px-5 py-4">{editing ? <form onSubmit={save} className="space-y-2"><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Action type name"/><textarea className="min-h-[64px] w-full rounded-lg border border-[#d7e0e9] p-2.5 text-[11px]" value={description} onChange={e => setDescription(e.target.value)} aria-label="Action type description"/><div className="flex gap-2"><button className={primaryBtn} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save action type'}</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div></form> : <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[12px] font-bold text-[#344b63]">{action.name}</div><div className="mt-1 text-[10px] text-[#8190a0]">{action.description || 'No description'}</div></div><div className="flex gap-2"><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={action.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={update.isPending}>{action.active ? 'Active · deactivate' : 'Inactive · activate'}</button></div></div>}</div>;
+   return <div className="px-5 py-4">{editing ? <form onSubmit={save} className="space-y-5">
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Action type name</span><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Action type name"/></label>
+     <label className={masterFieldGroup}><span className={masterFieldLabel}>Description</span><textarea className="min-h-[64px] w-full rounded-lg border border-[#d7e0e9] p-2.5 text-[11px]" value={description} onChange={e => setDescription(e.target.value)} aria-label="Action type description"/></label>
+     <div className="flex gap-2"><button className={primaryBtn} disabled={update.isPending}>{update.isPending ? 'Saving…' : 'Save action type'}</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div>
+   </form> : <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[12px] font-bold text-[#344b63]">{action.name}</div><div className="mt-1 text-[10px] text-[#8190a0]">{action.description || 'No description'}</div></div><div className="flex gap-2"><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={action.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={update.isPending}>{action.active ? 'Active · deactivate' : 'Inactive · activate'}</button></div></div>}</div>;
 }
 function StageSetupRow({ stage, index, allStages, onToggle, onOrder, onSave, onTransitions, busy }: { stage: { id: string; name: string; description: string; probability: number; stageType: 'active' | 'terminal'; terminalOutcome: string | null; displayOrder: number; active: boolean; allowedNextStageIds: string[] }; index: number; allStages: Array<{ id: string; name: string; active: boolean }>; onToggle: () => void; onOrder: (direction: -1 | 1) => void; onSave: (data: ProspectStageInput) => void; onTransitions: (ids: string[]) => void; busy: boolean }) {
   const [open, setOpen] = useState(false);
@@ -487,9 +556,42 @@ function StageSetupRow({ stage, index, allStages, onToggle, onOrder, onSave, onT
   const [nextIds, setNextIds] = useState(stage.allowedNextStageIds);
   const [name, setName] = useState(stage.name); const [description, setDescription] = useState(stage.description); const [probability, setProbability] = useState(String(stage.probability)); const [stageType, setStageType] = useState<'active' | 'terminal'>(stage.stageType); const [outcome, setOutcome] = useState(stage.terminalOutcome ?? '');
   const save = (e: FormEvent) => { e.preventDefault(); onSave({ name: name.trim(), description, probability: Number(probability), stageType, terminalOutcome: stageType === 'terminal' ? outcome.trim() || null : null, active: stage.active, displayOrder: stage.displayOrder }); setEditing(false); };
-  return <div className="px-5 py-4">{editing ? <form onSubmit={save} className="grid gap-2 sm:grid-cols-2"><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Stage name"/><input required min="0" max="100" type="number" className={field} value={probability} onChange={e => setProbability(e.target.value)} aria-label="Stage probability"/><select className={field} value={stageType} onChange={e => setStageType(e.target.value as 'active' | 'terminal')} aria-label="Stage type"><option value="active">Active</option><option value="terminal">Terminal</option></select>{stageType === 'terminal' && <input required className={field} value={outcome} onChange={e => setOutcome(e.target.value)} aria-label="Terminal outcome"/>}<textarea className="min-h-[64px] rounded-lg border border-[#d7e0e9] p-2.5 text-[11px] sm:col-span-2" value={description} onChange={e => setDescription(e.target.value)} aria-label="Stage description"/><div className="flex gap-2 sm:col-span-2"><button className={primaryBtn} disabled={busy}>Save stage</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div></form> : <><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="text-[12px] font-bold text-[#344b63]">{stage.name}</span><span className="mono rounded bg-[#f1f5f8] px-2 py-1 text-[9px] text-[#5f7890]">{stage.probability}%</span><span className={`rounded-full px-2 py-1 text-[8px] font-bold ${stage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{stage.stageType === 'terminal' ? stage.terminalOutcome || 'Terminal' : 'Active stage'}</span>{!stage.active && <span className="text-[9px] text-[#9a604b]">Inactive</span>}</div><div className="mt-1 text-[10px] text-[#8190a0]">Order {stage.displayOrder}{stage.description ? ` · ${stage.description}` : ''}</div></div><div className="flex flex-wrap gap-1.5"><button type="button" className={smallBtn} aria-label="Move stage up" disabled={busy || index === 0} onClick={() => onOrder(-1)}>↑</button><button type="button" className={smallBtn} aria-label="Move stage down" disabled={busy || index === allStages.length - 1} onClick={() => onOrder(1)}>↓</button><button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button><button type="button" className={smallBtn} onClick={() => setOpen(v => !v)}><ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`}/>Transitions</button><button type="button" className={stage.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={busy}>{stage.active ? 'Deactivate' : 'Activate'}</button></div></div>
-     {open && <div className="mt-4 rounded-lg border border-[#e5ebf0] bg-[#fafbfd] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-[10px] font-bold text-[#40566c]">Allowed next stages</div><p className="mt-1 text-[9px] text-[#8290a0]">No selected stages means any active stage is allowed.</p></div><button type="button" className={primaryBtn} disabled={busy} onClick={() => onTransitions(nextIds.filter(id => allStages.some(s => s.id === id && s.active)))}>Save transitions</button></div><div className="mt-3 flex flex-wrap gap-2">{allStages.filter(s => s.active && s.id !== stage.id).map(s => <label key={s.id} className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-2 text-[9px] ${nextIds.includes(s.id) ? 'border-[#a8bfd6] bg-[#edf4fb] text-[#2c5d87]' : 'border-[#e1e7ed] text-[#697b8d]'}`}><input type="checkbox" checked={nextIds.includes(s.id)} onChange={e => setNextIds(v => e.target.checked ? [...v, s.id] : v.filter(x => x !== s.id))} className="accent-[#174f91]"/>{s.name}</label>)}</div></div>}
-  </>}</div>;
+   return <div className="px-5 py-4">
+     {editing ? <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
+       <label className={masterFieldGroup}><span className={masterFieldLabel}>Stage name</span><input required className={field} value={name} onChange={e => setName(e.target.value)} aria-label="Stage name"/></label>
+       <label className={masterFieldGroup}><span className={masterFieldLabel}>Probability</span><input required min="0" max="100" type="number" className={field} value={probability} onChange={e => setProbability(e.target.value)} aria-label="Stage probability"/></label>
+       <label className={masterFieldGroup}><span className={masterFieldLabel}>Stage kind</span><select className={field} value={stageType} onChange={e => setStageType(e.target.value as 'active' | 'terminal')} aria-label="Stage type"><option value="active">Active</option><option value="terminal">Terminal</option></select></label>
+       {stageType === 'terminal' && <label className={masterFieldGroup}><span className={masterFieldLabel}>Terminal outcome</span><input required className={field} value={outcome} onChange={e => setOutcome(e.target.value)} aria-label="Terminal outcome"/></label>}
+       <label className={`${masterFieldGroup} sm:col-span-2`}><span className={masterFieldLabel}>Description</span><textarea className="min-h-[64px] rounded-lg border border-[#d7e0e9] p-2.5 text-[11px]" value={description} onChange={e => setDescription(e.target.value)} aria-label="Stage description"/></label>
+       <div className="flex gap-2 sm:col-span-2"><button className={primaryBtn} disabled={busy}>Save stage</button><button type="button" className={smallBtn} onClick={() => setEditing(false)}>Cancel</button></div>
+     </form> : <>
+       <div className="flex flex-wrap items-start justify-between gap-3">
+         <div className="min-w-0">
+           <div className="flex flex-wrap items-center gap-2">
+             <span className="text-[12px] font-bold text-[#344b63]">{stage.name}</span>
+             <span className="mono rounded bg-[#f1f5f8] px-2 py-1 text-[9px] text-[#5f7890]">{stage.probability}%</span>
+             <span className={`rounded-full px-2 py-1 text-[8px] font-bold ${stage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{stage.stageType === 'terminal' ? stage.terminalOutcome || 'Terminal' : 'Active stage'}</span>
+             {!stage.active && <span className="text-[9px] text-[#9a604b]">Inactive</span>}
+           </div>
+           <div className="mt-1 text-[10px] text-[#8190a0]">Order {stage.displayOrder}{stage.description ? ` · ${stage.description}` : ''}</div>
+         </div>
+         <div className="flex flex-wrap gap-1.5">
+           <button type="button" className={smallBtn} aria-label="Move stage up" disabled={busy || index === 0} onClick={() => onOrder(-1)}>↑</button>
+           <button type="button" className={smallBtn} aria-label="Move stage down" disabled={busy || index === allStages.length - 1} onClick={() => onOrder(1)}>↓</button>
+           <button type="button" className={smallBtn} onClick={() => setEditing(true)}>Edit</button>
+           <button type="button" className={smallBtn} onClick={() => setOpen(v => !v)}><ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`}/>Transitions</button>
+           <button type="button" className={stage.active ? smallBtn : dangerBtn} onClick={onToggle} disabled={busy}>{stage.active ? 'Deactivate' : 'Activate'}</button>
+         </div>
+       </div>
+       {open && <div className="mt-4 rounded-lg border border-[#e5ebf0] bg-[#fafbfd] p-3">
+         <div className="flex flex-wrap items-center justify-between gap-2">
+           <div><div className="text-[10px] font-bold text-[#40566c]">Allowed next stages</div><p className="mt-1 text-[9px] text-[#8290a0]">No selected stages means any active stage is allowed.</p></div>
+           <button type="button" className={primaryBtn} disabled={busy} onClick={() => onTransitions(nextIds.filter(id => allStages.some(s => s.id === id && s.active)))}>Save transitions</button>
+         </div>
+         <div className="mt-3 flex flex-wrap gap-2">{allStages.filter(s => s.active && s.id !== stage.id).map(s => <label key={s.id} className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-2 text-[9px] ${nextIds.includes(s.id) ? 'border-[#a8bfd6] bg-[#edf4fb] text-[#2c5d87]' : 'border-[#e1e7ed] text-[#697b8d]'}`}><input type="checkbox" checked={nextIds.includes(s.id)} onChange={e => setNextIds(v => e.target.checked ? [...v, s.id] : v.filter(x => x !== s.id))} className="accent-[#174f91]"/>{s.name}</label>)}</div>
+       </div>}
+     </>}
+   </div>;
 }
 export function ProspectProductsPage() { return <SetupPage kind="products"/>; }
 export function ProspectStagesPage() { return <SetupPage kind="stages"/>; }
