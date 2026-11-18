@@ -619,10 +619,10 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     </Panel>}
 
     {isBillingPage && <>
-    <Panel className="overflow-hidden" testId="online-payment-settings-panel">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9edf1] px-5 py-4 md:px-6">
+    <Panel className="overflow-hidden !border-[#cfe3e7]" testId="online-payment-settings-panel">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#d5e8e9] bg-[#edf7f7] px-5 py-4 md:px-6">
         <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><CreditCard className="h-[17px] w-[17px]"/></span>
+          <span className="grid h-9 w-9 place-items-center rounded-md bg-[#d9eeee] text-[#237078]"><CreditCard className="h-[17px] w-[17px]"/></span>
           <div>
             <h2 className="text-[15px] font-bold text-[#1d2d40]">Online payment availability</h2>
             <p className="mt-0.5 text-[11px] text-[#788696]">Control whether customers can start paid subscription checkouts.</p>
@@ -632,8 +632,8 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
           {onlinePaymentsEnabled ? 'Enabled' : 'Disabled'}
         </span>
       </div>
-      <div className="space-y-3 p-5 md:p-6">
-        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#dfe7ed] bg-[#f8fafb] p-4">
+      <div className="space-y-3 bg-[#f8fcfc] p-5 md:p-6">
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-[#d3e7e7] bg-[#f0f8f8] p-4">
           <input
             data-testid="checkbox-enable-online-payments"
             type="checkbox"
@@ -654,22 +654,25 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       </div>
     </Panel>
 
-    <Panel className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e9edf1] px-5 py-4 md:px-6">
-        <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><KeyRound className="h-[17px] w-[17px]"/></span><div><h2 className="text-[15px] font-bold text-[#1d2d40]">Razorpay gateway</h2><p className="mt-0.5 text-[11px] text-[#788696]">Store separate test and live credentials; select one mode for new orders.</p></div></div>
+    <Panel className="overflow-hidden !border-[#d9d6ef]">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e1def2] bg-[#f3f1fb] px-5 py-4 md:px-6">
+        <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-md bg-[#e3e0f5] text-[#635ca0]"><KeyRound className="h-[17px] w-[17px]"/></span><div><h2 className="text-[15px] font-bold text-[#1d2d40]">Razorpay gateway</h2><p className="mt-0.5 text-[11px] text-[#788696]">Store separate test and live credentials; select one mode for new orders.</p></div></div>
         <span data-testid="status-gateway-config" className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${settings?.activeEnvironment ? 'bg-[#eaf5ef] text-[#347452]' : 'bg-[#fff3e8] text-[#a85c21]'}`}>{settings?.activeEnvironment ? `Active · ${gatewayLabels[settings.activeEnvironment]}` : 'No active environment'}</span>
       </div>
-      <div className="border-b border-[#e9edf1] bg-[#f8fafb] px-5 py-3 text-[11px] leading-5 text-[#687b8d] md:px-6">
+      <div className="border-b border-[#e7e3f3] bg-[#f9f8fd] px-5 py-3 text-[11px] leading-5 text-[#687b8d] md:px-6">
         Only the active environment is used for new payments. Existing orders continue to use the environment and credentials saved when they were created.
       </div>
-      <div className="grid gap-4 p-5 md:grid-cols-2 md:p-6">
+      <div className="grid gap-4 bg-[#fcfbff] p-5 md:grid-cols-2 md:p-6">
         {gatewayEnvironments.map(environment => {
           const saved = settings?.[environment];
           const draft = gatewayDrafts[environment];
           const active = settings?.activeEnvironment === environment;
           const complete = Boolean(saved?.configured);
-          return <section key={environment} data-testid={`section-razorpay-${environment}`} className="min-w-0 rounded-lg border border-[#e1e6eb] bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf1] px-4 py-3.5">
+          const environmentTint = environment === 'sandbox'
+            ? 'border-[#cfe0f2] bg-[#f0f6fd]'
+            : 'border-[#cfe8dc] bg-[#eff8f3]';
+          return <section key={environment} data-testid={`section-razorpay-${environment}`} className="min-w-0 rounded-lg border border-[#dcd9ef] bg-white">
+            <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-[#e9edf1] px-4 py-3.5 ${environmentTint}`}>
               <div><h3 className="text-[13px] font-bold text-[#1d2d40]">{gatewayLabels[environment]}</h3><p className="mt-1 text-[10px] text-[#788696]">{environment === 'sandbox' ? 'For test transactions' : 'For customer payments'}</p></div>
               <span data-testid={`status-razorpay-${environment}`} className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${complete ? 'bg-[#eaf5ef] text-[#347452]' : 'bg-[#fff3e8] text-[#a85c21]'}`}>{complete ? 'Ready' : 'Setup required'}</span>
             </div>

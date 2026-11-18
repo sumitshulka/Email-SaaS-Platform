@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleAlert, CreditCard,
+  ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, CalendarDays, Check, ChevronDown, CircleAlert, CreditCard,
   Filter, Landmark, RefreshCw, Search, ShieldCheck, SlidersHorizontal,
 } from 'lucide-react';
 import {
@@ -91,6 +91,7 @@ function SortControl({ label, field, active, direction, onSort, disabled = false
 
 export default function AdminFinancePage() {
   const [filters, setFilters] = useState<FinanceFilters>(defaults);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<AdminFinancePayment | null>(null);
   const params = useMemo<ListAdminFinancePaymentsParams>(() => ({
     ...(filters.search.trim() ? { search: filters.search.trim() } : {}),
@@ -132,6 +133,15 @@ export default function AdminFinancePage() {
   };
   const resetFilters = () => setFilters(defaults);
   const hasFilters = Boolean(filters.search || filters.packageId || filters.fromDate || filters.toDate || filters.minAmountMinor || filters.maxAmountMinor || filters.currency || filters.environment || filters.accountStatus !== 'any' || filters.status !== 'captured');
+  const moreFilterCount = [
+    filters.fromDate,
+    filters.toDate,
+    filters.minAmountMinor,
+    filters.maxAmountMinor,
+    filters.currency,
+    filters.environment,
+    filters.accountStatus !== 'any',
+  ].filter(Boolean).length;
   const page = data?.page ?? filters.page;
   const pageCount = data?.pageCount ?? 0;
   const firstItem = data && data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
@@ -167,13 +177,27 @@ export default function AdminFinancePage() {
     <section className="rounded-lg border border-[#dfe6e1] bg-[#fffefa]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8ece7] px-4 py-3.5 md:px-5">
         <div className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-md bg-[#eaf2ec] text-[#34786a]"><SlidersHorizontal className="h-4 w-4"/></span><div><h2 className="text-[13px] font-bold text-[#2a3e38]">Ledger filters</h2><p className="mt-0.5 text-[10px] text-[#7f8983]">Every change is applied server-side.</p></div></div>
-        <button type="button" onClick={resetFilters} data-testid="button-reset-finance-filters" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#dce4de] px-2.5 text-[10px] font-semibold text-[#5d7068] transition hover:bg-[#f2f6f1]"><RefreshCw className="h-3 w-3"/>Reset filters</button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMoreFiltersOpen(open => !open)}
+            aria-expanded={moreFiltersOpen}
+            aria-controls="finance-more-filters"
+            data-testid="button-toggle-finance-more-filters"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#cfe1d7] bg-[#f0f7f2] px-2.5 text-[10px] font-semibold text-[#3e7162] transition hover:bg-[#e7f2eb]"
+          >
+            {moreFiltersOpen ? 'Fewer filters' : 'More filters'}
+            {moreFilterCount > 0 && <span className="rounded-full bg-[#dcece2] px-1.5 py-0.5 text-[9px]">{moreFilterCount}</span>}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${moreFiltersOpen ? 'rotate-180' : ''}`}/>
+          </button>
+          <button type="button" onClick={resetFilters} data-testid="button-reset-finance-filters" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#dce4de] px-2.5 text-[10px] font-semibold text-[#5d7068] transition hover:bg-[#f2f6f1]"><RefreshCw className="h-3 w-3"/>Reset filters</button>
+        </div>
       </div>
       <div className="space-y-5 p-4 md:p-5">
         <section aria-labelledby="finance-filter-search-heading">
           <div className="mb-3">
             <h3 id="finance-filter-search-heading" className="text-[10px] font-bold uppercase tracking-[.12em] text-[#526a60]">Search & payment</h3>
-            <p className="mt-1 text-[10px] text-[#7f8983]">Find records, then narrow by package, payment, currency, gateway, or account.</p>
+            <p className="mt-1 text-[10px] text-[#7f8983]">Find records by account, subscription package, or payment state.</p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="sm:col-span-2 lg:col-span-2">
@@ -195,56 +219,66 @@ export default function AdminFinancePage() {
                 <option value="captured">Captured only</option><option value="refunded">Refunded</option><option value="all">All recorded</option>
               </select>
             </label>
-            <label>
-              <span className={smallLabel}>Currency</span>
-              <select data-testid="select-finance-currency" value={filters.currency} onChange={event => setCurrency(event.target.value)} className={inputClass}>
-                <option value="">All currencies</option>{(data?.currencies ?? []).map(currency => <option value={currency} key={currency}>{currency}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className={smallLabel}>Gateway mode</span>
-              <select data-testid="select-finance-environment" value={filters.environment} onChange={event => setFilter('environment', event.target.value as FinanceFilters['environment'])} className={inputClass}>
-                <option value="">All environments</option><option value="sandbox">Sandbox</option><option value="production">Production</option><option value="unrecorded">Unrecorded</option>
-              </select>
-            </label>
-            <label>
-              <span className={smallLabel}>Account state</span>
-              <select data-testid="select-finance-account-status" value={filters.accountStatus} onChange={event => setFilter('accountStatus', event.target.value as FinanceFilters['accountStatus'])} className={inputClass}>
-                <option value="any">Any status</option><option value="active">Active</option><option value="disabled">Disabled</option><option value="deleted">Deleted</option>
-              </select>
-            </label>
           </div>
         </section>
-        <section aria-labelledby="finance-filter-range-heading" className="border-t border-[#e8ece7] pt-4">
-          <div className="mb-3">
-            <h3 id="finance-filter-range-heading" className="text-[10px] font-bold uppercase tracking-[.12em] text-[#526a60]">Captured date & amount</h3>
-            <p className="mt-1 text-[10px] text-[#7f8983]">Dates use UTC. Amount bounds use the selected currency’s smallest unit (for example, INR paise or USD cents).</p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label>
-              <span className={smallLabel}>Captured from (UTC)</span>
-              <span className="relative block">
-                <CalendarDays className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#89958e]"/>
-                <input data-testid="input-finance-from-date" type="date" value={filters.fromDate} max={filters.toDate || undefined} onChange={event => setFilter('fromDate', event.target.value)} className={`${inputClass} pl-9`}/>
-              </span>
-            </label>
-            <label>
-              <span className={smallLabel}>Captured through (UTC)</span>
-              <span className="relative block">
-                <CalendarDays className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#89958e]"/>
-                <input data-testid="input-finance-to-date" type="date" value={filters.toDate} min={filters.fromDate || undefined} onChange={event => setFilter('toDate', event.target.value)} className={`${inputClass} pl-9`}/>
-              </span>
-            </label>
-            <label>
-              <span className={smallLabel}>Minimum amount</span>
-              <input data-testid="input-finance-min-amount" type="number" min="0" step="1" disabled={!filters.currency} value={filters.minAmountMinor} onChange={event => setFilter('minAmountMinor', event.target.value)} placeholder={filters.currency ? 'Minor units' : 'Select currency first'} className={inputClass}/>
-            </label>
-            <label>
-              <span className={smallLabel}>Maximum amount</span>
-              <input data-testid="input-finance-max-amount" type="number" min="0" step="1" disabled={!filters.currency} value={filters.maxAmountMinor} onChange={event => setFilter('maxAmountMinor', event.target.value)} placeholder={filters.currency ? 'Minor units' : 'Select currency first'} className={inputClass}/>
-            </label>
-          </div>
-        </section>
+        <div id="finance-more-filters" hidden={!moreFiltersOpen} className="space-y-5 border-t border-[#e8ece7] pt-4">
+          <section aria-labelledby="finance-filter-account-heading">
+            <div className="mb-3">
+              <h3 id="finance-filter-account-heading" className="text-[10px] font-bold uppercase tracking-[.12em] text-[#526a60]">Currency, gateway & account</h3>
+              <p className="mt-1 text-[10px] text-[#7f8983]">Narrow records by payment environment, currency, or account state.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label>
+                <span className={smallLabel}>Currency</span>
+                <select data-testid="select-finance-currency" value={filters.currency} onChange={event => setCurrency(event.target.value)} className={inputClass}>
+                  <option value="">All currencies</option>{(data?.currencies ?? []).map(currency => <option value={currency} key={currency}>{currency}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className={smallLabel}>Gateway mode</span>
+                <select data-testid="select-finance-environment" value={filters.environment} onChange={event => setFilter('environment', event.target.value as FinanceFilters['environment'])} className={inputClass}>
+                  <option value="">All environments</option><option value="sandbox">Sandbox</option><option value="production">Production</option><option value="unrecorded">Unrecorded</option>
+                </select>
+              </label>
+              <label>
+                <span className={smallLabel}>Account state</span>
+                <select data-testid="select-finance-account-status" value={filters.accountStatus} onChange={event => setFilter('accountStatus', event.target.value as FinanceFilters['accountStatus'])} className={inputClass}>
+                  <option value="any">Any status</option><option value="active">Active</option><option value="disabled">Disabled</option><option value="deleted">Deleted</option>
+                </select>
+              </label>
+            </div>
+          </section>
+          <section aria-labelledby="finance-filter-range-heading" className="border-t border-[#e8ece7] pt-4">
+            <div className="mb-3">
+              <h3 id="finance-filter-range-heading" className="text-[10px] font-bold uppercase tracking-[.12em] text-[#526a60]">Captured date & amount</h3>
+              <p className="mt-1 text-[10px] text-[#7f8983]">Dates use UTC. Amount bounds use the selected currency’s smallest unit (for example, INR paise or USD cents).</p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label>
+                <span className={smallLabel}>Captured from (UTC)</span>
+                <span className="relative block">
+                  <CalendarDays className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#89958e]"/>
+                  <input data-testid="input-finance-from-date" type="date" value={filters.fromDate} max={filters.toDate || undefined} onChange={event => setFilter('fromDate', event.target.value)} className={`${inputClass} pl-9`}/>
+                </span>
+              </label>
+              <label>
+                <span className={smallLabel}>Captured through (UTC)</span>
+                <span className="relative block">
+                  <CalendarDays className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#89958e]"/>
+                  <input data-testid="input-finance-to-date" type="date" value={filters.toDate} min={filters.fromDate || undefined} onChange={event => setFilter('toDate', event.target.value)} className={`${inputClass} pl-9`}/>
+                </span>
+              </label>
+              <label>
+                <span className={smallLabel}>Minimum amount</span>
+                <input data-testid="input-finance-min-amount" type="number" min="0" step="1" disabled={!filters.currency} value={filters.minAmountMinor} onChange={event => setFilter('minAmountMinor', event.target.value)} placeholder={filters.currency ? 'Minor units' : 'Select currency first'} className={inputClass}/>
+              </label>
+              <label>
+                <span className={smallLabel}>Maximum amount</span>
+                <input data-testid="input-finance-max-amount" type="number" min="0" step="1" disabled={!filters.currency} value={filters.maxAmountMinor} onChange={event => setFilter('maxAmountMinor', event.target.value)} placeholder={filters.currency ? 'Minor units' : 'Select currency first'} className={inputClass}/>
+              </label>
+            </div>
+          </section>
+        </div>
       </div>
       {packagesQuery.isError && <div role="status" className="border-t border-[#eee8db] bg-[#fbf8f0] px-5 py-2 text-[10px] text-[#816c46]">Package options could not be loaded. Other ledger filters remain available.</div>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8ece7] bg-[#f7f9f5] px-4 py-3 md:px-5">
