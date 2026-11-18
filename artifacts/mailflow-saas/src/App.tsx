@@ -359,6 +359,13 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     ],
   },
   {
+    title: 'Email marketing',
+    items: [
+      { href: '/lists', label: 'Lists', icon: Activity },
+      { href: '/campaigns', label: 'Campaigns', icon: Send },
+    ],
+  },
+  {
     title: 'Prospect Management',
     items: [
       { href: '/prospects', label: 'Prospects', icon: Activity },
@@ -372,13 +379,6 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/report-gallery', label: 'Report Gallery', icon: ListFilter },
       { href: '/report-builder', label: 'Report Builder', icon: FilePlus2 },
       { href: '/my-reports', label: 'My Reports', icon: Layers3 },
-    ],
-  },
-  {
-    title: 'Email marketing',
-    items: [
-      { href: '/lists', label: 'Lists', icon: Activity },
-      { href: '/campaigns', label: 'Campaigns', icon: Send },
     ],
   },
   {
