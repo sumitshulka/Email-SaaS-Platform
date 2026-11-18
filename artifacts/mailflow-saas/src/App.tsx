@@ -443,20 +443,29 @@ function UserNotificationsHeaderAction() {
       data-testid="link-header-notifications"
       aria-label={label}
       title={label}
-      className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] transition-colors hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8]"
+      className="relative grid h-9 w-9 shrink-0 place-items-center rounded-[11px] border border-[#d8e5f6] bg-[#edf4ff] text-[#2f67a7] shadow-[0_2px_6px_rgba(35,76,129,.06)] transition-all hover:-translate-y-0.5 hover:bg-[#e2edff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8]"
     >
       <Bell aria-hidden="true" className="h-4 w-4"/>
       {unreadCount > 0 && (
         <span
           data-testid="badge-header-unread-notifications"
           aria-hidden="true"
-          className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full border-2 border-white bg-[#c45f22] px-1 text-[9px] font-bold leading-none text-white shadow-sm"
+          className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full border-2 border-white bg-[#d36749] px-1 text-[9px] font-bold leading-none text-white shadow-sm"
         >
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}
     </Link>
   );
+}
+
+function navigationIconTone(href: string) {
+  if (href.includes('prospect')) return 'bg-[#f1edff] text-[#7658aa]';
+  if (href.includes('contact') || href.includes('compan')) return 'bg-[#e8f5f3] text-[#3b827c]';
+  if (href.includes('campaign') || href.includes('email') || href === '/lists') return 'bg-[#fff0e6] text-[#bd6b35]';
+  if (href.includes('billing') || href.includes('finance') || href.includes('plans')) return 'bg-[#fff5df] text-[#a8782e]';
+  if (href.includes('notification') || href.includes('support')) return 'bg-[#fcecf0] text-[#b6526b]';
+  return 'bg-[#eaf1ff] text-[#3d6fb1]';
 }
 
 function WorkspaceGettingStarted({ user }: { user: AuthUser }) {
@@ -634,18 +643,18 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
   return (
     <div className="min-h-[100dvh] bg-white text-[#182333]">
       <aside className={cn(
-        'fixed inset-y-0 left-0 z-30 flex w-[246px] flex-col border-r border-[#e3e7eb] bg-white transition-transform md:translate-x-0',
+        'fixed inset-y-0 left-0 z-30 flex w-[246px] flex-col border-r border-[#d9e4f1] bg-gradient-to-b from-[#f6f9ff] via-white to-[#fcf9f7] transition-transform md:translate-x-0',
         navOpen ? 'translate-x-0' : '-translate-x-full',
       )}>
-        <div className="flex h-[69px] shrink-0 items-center border-b border-[#e8ebef] px-6">
+        <div className="flex h-[69px] shrink-0 items-center border-b border-[#dfe8f3] bg-gradient-to-r from-[#edf4ff] to-white px-6">
           <Link href={admin ? '/admin' : '/dashboard'} data-testid="link-shell-brand" className="no-underline"><MailflowBrand small/></Link>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-6">
-          <div className="mono mb-3 px-2 text-[9px] uppercase tracking-[.18em] text-[#99a1aa]">{admin ? 'PLATFORM' : 'WORKSPACE'}</div>
+          <div className="mono mb-3 px-2 text-[9px] uppercase tracking-[.18em] text-[#607d9f]">{admin ? 'PLATFORM' : 'WORKSPACE'}</div>
           <nav className="space-y-3" aria-label={admin ? 'Platform navigation' : 'Workspace navigation'}>
             {navGroups.map(group => (
               <div key={group.title ?? 'overview'} className="space-y-1" role="group" aria-label={group.title ?? 'Overview'}>
-                {group.title && <div className="mono mt-3 border-t border-[#eef0f2] px-2 pb-1 pt-3 text-[9px] uppercase tracking-[.14em] text-[#99a1aa]">{group.title}</div>}
+                {group.title && <div className="mono mt-3 border-t border-[#e5ebf3] px-2 pb-1 pt-3 text-[9px] uppercase tracking-[.14em] text-[#8795a7]">{group.title}</div>}
                 {group.items.map(item => {
                   const Icon = item.icon;
                   const active = location === item.href
@@ -656,15 +665,24 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
                       key={item.href}
                       href={item.href}
                       data-testid={`nav-${item.label.toLowerCase().replace(/[^a-z]+/g, '-')}`}
+                      aria-label={item.label}
                       onClick={() => setNavOpen(false)}
                       className={cn(
-                        'flex h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium no-underline transition-colors',
-                        active ? 'bg-[#edf4fc] text-[#174f99]' : 'text-[#66717e] hover:bg-[#f5f7f9] hover:text-[#182333]',
+                        'group relative flex h-10 items-center gap-3 rounded-[10px] px-2.5 text-[12px] font-medium no-underline transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4382c4]',
+                        active
+                          ? 'bg-gradient-to-r from-[#e3eeff] to-[#eff5ff] font-bold text-[#174f99] shadow-[inset_3px_0_0_#2867b0,0_2px_8px_rgba(28,75,132,.08)]'
+                          : 'text-[#586b82] hover:translate-x-0.5 hover:bg-white/90 hover:text-[#243c5b]',
                       )}
                     >
-                      <Icon className="h-[17px] w-[17px]"/>
+                      <span className={cn(
+                        'grid h-[29px] w-[29px] shrink-0 place-items-center rounded-[9px] transition-all duration-150',
+                        navigationIconTone(item.href),
+                        active && 'bg-[#174f99] text-white shadow-[0_3px_7px_rgba(23,79,153,.2)]',
+                      )}>
+                        <Icon className="h-[15px] w-[15px]"/>
+                      </span>
                       {item.label}
-                      {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#ed913e]"/>}
+                      {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#3b82c4]"/>}
                     </Link>
                   );
                 })}
@@ -673,9 +691,9 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
           </nav>
         </div>
         <div className="shrink-0 px-4 pb-4">
-          <div className="mb-4 border-t border-[#e8ebef] pt-4">
-            <Link href="/profile" data-testid="nav-account-profile" className="flex items-center gap-3 rounded-md px-2 py-2 no-underline hover:bg-[#f7f8fa]">
-              <span className="grid h-8 w-8 place-items-center rounded-md bg-[#edf2f7] text-[11px] font-bold text-[#34577c]">
+          <div className="mb-4 border-t border-[#e2e9f1] pt-4">
+            <Link href="/profile" data-testid="nav-account-profile" className="flex items-center gap-3 rounded-[10px] px-2 py-2 no-underline transition-colors hover:bg-white">
+              <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-gradient-to-br from-[#dceaff] to-[#ebe7ff] text-[11px] font-bold text-[#355c93]">
                 {(user.firstName[0] || user.username[0] || 'A').toUpperCase()}{(user.lastName[0] || '').toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">
@@ -685,25 +703,25 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
               <ChevronDown className="h-3.5 w-3.5 text-[#8b95a1]"/>
             </Link>
           </div>
-          <Button variant="quiet" className="w-full justify-start px-2" testId="button-logout" disabled={logout.isPending} onClick={leave}>
+          <Button variant="quiet" className="w-full justify-start px-2 text-[#a34e4e] hover:bg-[#fff0ef] hover:text-[#9f3c3c]" testId="button-logout" disabled={logout.isPending} onClick={leave}>
             <LogOut className="h-4 w-4"/>Sign out
           </Button>
         </div>
       </aside>
       <div className="md:pl-[246px] flex min-h-[100dvh] flex-col">
-        <header className="sticky top-0 z-20 flex h-[69px] items-center justify-between border-b border-[#e3e7eb] bg-white/95 px-5 backdrop-blur md:px-9">
+        <header className="sticky top-0 z-20 flex h-[69px] items-center justify-between border-b border-[#dce5f0] bg-gradient-to-r from-[#f4f8ff]/95 via-white/95 to-[#fff9f4]/95 px-5 shadow-[0_3px_14px_rgba(30,54,82,.045)] backdrop-blur md:px-9">
           <div className="flex items-center gap-3">
-            <button data-testid="button-open-navigation" aria-label="Open navigation" className="rounded-md p-2 text-[#66717e] hover:bg-[#f2f4f6] md:hidden" onClick={() => setNavOpen(v => !v)}>
-              <Menu className="h-5 w-5"/>
+            <button data-testid="button-open-navigation" aria-label={navOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={navOpen} className="rounded-[9px] bg-[#edf4ff] p-2 text-[#315f9c] transition-colors hover:bg-[#dfeaff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8] md:hidden" onClick={() => setNavOpen(v => !v)}>
+              {navOpen ? <X className="h-5 w-5"/> : <Menu className="h-5 w-5"/>}
             </button>
-            <div className="mono hidden text-[10px] uppercase tracking-[.16em] text-[#8893a0] sm:block">{admin ? 'PLATFORM CONTROL' : 'ACCOUNT CONSOLE'}</div>
+            <div className="mono hidden text-[10px] uppercase tracking-[.16em] text-[#5c7596] sm:block">{admin ? 'PLATFORM CONTROL' : 'ACCOUNT CONSOLE'}</div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-1.5 text-[11px] text-[#7d8794] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#4c82bb]"/>Signed in</span>
-            <div className="h-4 w-px bg-[#e3e7eb]"/>
-            <span className="mono text-[10px] text-[#7d8794]">{user.timezone}</span>
+            <span className="hidden items-center gap-1.5 rounded-full bg-[#eaf6f0] px-2.5 py-1 text-[10px] font-semibold text-[#3c765e] sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#4c9a71]"/>Signed in</span>
+            <div className="hidden h-4 w-px bg-[#dbe5ef] sm:block"/>
+            <span className="mono rounded-full bg-[#f0f4fb] px-2 py-1 text-[9px] text-[#66809f]">{user.timezone}</span>
             {!admin && user.role === 'USER' && <UserNotificationsHeaderAction/>}
-            <Link href="/profile" data-testid="link-header-profile" className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] hover:bg-[#f4f6f8]"><UserRound className="h-4 w-4"/></Link>
+            <Link href="/profile" data-testid="link-header-profile" aria-label="Profile" title="Profile" className="grid h-9 w-9 place-items-center rounded-[11px] border border-[#d9e8e2] bg-[#eef7f3] text-[#397967] transition-all hover:-translate-y-0.5 hover:bg-[#e1f1eb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8]"><UserRound className="h-4 w-4"/></Link>
             <button
               type="button"
               data-testid="button-header-logout"
@@ -711,7 +729,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
               title={logout.isPending ? 'Signing out' : 'Sign out'}
               disabled={logout.isPending}
               onClick={leave}
-              className="grid h-8 w-8 place-items-center rounded-full border border-[#e1e5e9] text-[#5c6877] transition-colors hover:bg-[#fff4f2] hover:text-[#b34e43] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8] disabled:cursor-wait disabled:opacity-60"
+              className="grid h-9 w-9 place-items-center rounded-[11px] border border-[#f0dada] bg-[#fff1f0] text-[#b0524e] transition-all hover:-translate-y-0.5 hover:bg-[#ffe5e3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3b73b8] disabled:cursor-wait disabled:opacity-60"
             >
               {logout.isPending
                 ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true"/>
