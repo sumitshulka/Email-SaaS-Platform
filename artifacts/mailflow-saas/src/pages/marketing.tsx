@@ -201,14 +201,14 @@ function ProspectManagementPreview() {
 
 function ProspectManagementFeatureImage() {
   return (
-    <figure className="m-0 overflow-hidden rounded-2xl border border-[#d8e2df] bg-[#f7f3ea] shadow-[0_18px_40px_rgba(29,48,70,.11)]">
+    <figure className="m-0 overflow-hidden rounded-2xl border border-[#d8e2df] bg-[#eff4f3] shadow-[0_18px_40px_rgba(29,48,70,.11)]">
       <img
         src="/prospect-management-editorial.webp"
         alt="An editorial illustration of people connected to a company, an opportunity milestone, and a follow-up calendar."
-        width="1024"
-        height="1024"
-        decoding="async"
-        className="block aspect-square w-full object-cover"
+        width="1000"
+        height="1000"
+        decoding="sync"
+        className="block aspect-[4/3] w-full object-cover object-center"
       />
       <figcaption className="flex items-center justify-between gap-4 border-t border-[#e7ece9] bg-white px-4 py-3 sm:px-5">
         <span>
