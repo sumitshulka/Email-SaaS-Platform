@@ -54,7 +54,7 @@ export const defaultPlatformSettings: PlatformSettingsInput = {
   maintenanceMode: false,
   maxContactsPerUser: 5000,
   maxUploadFileSizeMb: 10,
-  allowedContactFileTypes: ["csv"],
+  allowedContactFileTypes: ["xlsx"],
   passwordMinimumLength: 12,
   otpExpiryMinutes: 10,
   maxOtpAttempts: 5,

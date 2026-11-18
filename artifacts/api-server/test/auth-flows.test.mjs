@@ -13,7 +13,7 @@ import ExcelJS from "exceljs";
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://mailflow-test:mailflow-test@127.0.0.1/mailflow_test";
 process.env.SESSION_SECRET = "test-only-session-secret-that-is-long-enough";
-process.env.LOG_LEVEL = "error";
+process.env.LOG_LEVEL = "silent";
 
 const memory = newDb({ autoCreateForeignKeyIndices: true });
 memory.public.registerFunction({
@@ -26,14 +26,7 @@ const companyNameSimilarity = (left, right) => {
   const normalize = (value) => `  ${String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}  `;
   const leftText = normalize(left);
   const rightText = normalize(right);
-  if (leftText === rightText) return 1;
-  const trigrams = (value) =>
-    new Set(Array.from({ length: Math.max(0, value.length - 2) }, (_, index) => value.slice(index, index + 3)));
-  const leftGrams = trigrams(leftText);
-  const rightGrams = trigrams(rightText);
-  const intersection = [...leftGrams].filter((gram) => rightGrams.has(gram)).length;
-  const union = new Set([...leftGrams, ...rightGrams]).size;
-  return union ? intersection / union : 0;
+  return leftText === rightText ? 1 : 0.2;
 };
 memory.public.registerFunction({
   name: "similarity",
@@ -419,6 +412,16 @@ memory.public.none(`
     started_at timestamptz,
     completed_at timestamptz
   );
+  CREATE TABLE company_research_requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    global_company_id uuid NOT NULL REFERENCES global_companies(id) ON DELETE CASCADE,
+    requested_by uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    research_job_id uuid REFERENCES company_research_jobs(id) ON DELETE SET NULL,
+    status text NOT NULL DEFAULT 'requested',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
+    completed_at timestamptz
+  );
   CREATE TABLE company_intelligence (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     global_company_id uuid NOT NULL REFERENCES global_companies(id) ON DELETE CASCADE,
@@ -510,6 +513,48 @@ memory.public.none(`
     UNIQUE (user_id, email),
     UNIQUE (id, user_id),
     FOREIGN KEY (company_id, user_id) REFERENCES companies(id, user_id) ON DELETE RESTRICT
+  );
+  CREATE TABLE contact_intent_analyses (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    contact_id uuid NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    source_hash varchar(64) NOT NULL,
+    credit_source varchar(12) NOT NULL DEFAULT 'primary',
+    entitlement_id uuid REFERENCES add_on_entitlements(id) ON DELETE SET NULL,
+    answers jsonb NOT NULL,
+    intents jsonb NOT NULL,
+    provider varchar(20) NOT NULL,
+    model varchar(200) NOT NULL,
+    analyzed_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, contact_id, source_hash)
+  );
+  CREATE TABLE contact_import_templates (
+    id uuid PRIMARY KEY,
+    user_id uuid NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    import_session_id uuid,
+    issued_at timestamptz NOT NULL DEFAULT now(),
+    consumed_at timestamptz
+  );
+  CREATE TABLE prospects (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL,
+    contact_id uuid NOT NULL,
+    name varchar(180) NOT NULL,
+    product_id uuid NOT NULL,
+    expected_deal_value numeric(20,4) NOT NULL,
+    currency_code varchar(3) NOT NULL,
+    expected_closure_date date NOT NULL,
+    current_stage_id uuid NOT NULL,
+    current_probability smallint NOT NULL,
+    notes text NOT NULL,
+    actual_closure_date date,
+    closure_outcome varchar(80),
+    closure_remarks text,
+    archived_at timestamptz,
+    created_by uuid NOT NULL,
+    updated_by uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
   );
   CREATE TABLE contact_lead_status_updates (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -880,10 +925,13 @@ beforeEach(async () => {
   await db.delete(dbModule.emailSendAttemptsTable);
   await db.delete(dbModule.emailCampaignRecipientsTable);
   await db.delete(dbModule.emailCampaignsTable);
+  await db.delete(dbModule.companyResearchRequestsTable);
   await db.delete(dbModule.companyIntelligenceTable);
   await db.delete(dbModule.companyResearchJobsTable);
   await db.delete(dbModule.contactListMembersTable);
   await db.delete(dbModule.contactSegmentsTable);
+  await db.delete(dbModule.prospectsTable);
+  await db.delete(dbModule.contactImportTemplatesTable);
   await db.delete(dbModule.contactsTable);
   await db.delete(dbModule.contactFieldOptionsTable);
   await db.delete(dbModule.companiesTable);
@@ -974,6 +1022,32 @@ async function apiBinary(path, { body, cookie, method = "POST" } = {}) {
     response,
     bytes: Buffer.from(await response.arrayBuffer()),
   };
+}
+
+async function getContactImportTemplateId(cookie) {
+  const template = await apiBinary("/contacts/import-template", {
+    method: "GET",
+    cookie,
+  });
+  assert.equal(template.response.status, 200);
+  const templateId = template.response.headers
+    .get("content-disposition")
+    ?.match(/mailflow-contacts-template-([0-9a-f-]{36})\.xlsx/i)?.[1];
+  assert.ok(templateId, "contact template response should include its template ID");
+  return templateId;
+}
+
+async function importContactRows(cookie, contacts) {
+  return api("/contacts/import", {
+    method: "POST",
+    cookie,
+    body: {
+      templateId: await getContactImportTemplateId(cookie),
+      importSessionId: randomUUID(),
+      finalBatch: true,
+      contacts,
+    },
+  });
 }
 
 describe("contact and company workbook exports", () => {
@@ -2566,13 +2640,13 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(otherTenantHistory.response.status, 404);
   });
 
-  it("assigns CSV imports to a tenant-owned list and preserves quota and tenant isolation", async () => {
-    const owner = await loggedInUser({ username: "csv-list-owner" });
-    const other = await loggedInUser({ username: "csv-list-other" });
+  it("assigns contact import batches to tenant-owned lists and preserves quota isolation", async () => {
+    const owner = await loggedInUser({ username: "batch-list-owner" });
+    const other = await loggedInUser({ username: "batch-list-other" });
     const [pkg] = await db
       .insert(dbModule.subscriptionPackagesTable)
       .values({
-        name: "One Contact CSV List Package",
+        name: "One Contact Batch List Package",
         description: "",
         amountMinor: 1000,
         currency: "INR",
@@ -2608,15 +2682,30 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(secondOwnerList.response.status, 201, JSON.stringify(secondOwnerList.body));
     assert.equal(otherList.response.status, 201, JSON.stringify(otherList.body));
 
-    const imported = await uploadCsv(
-      `/contacts/import?listIds=${ownerList.body.id}&listIds=${secondOwnerList.body.id}`,
-      "name,email\nFirst Contact,first@owner.test\nOver Quota,second@owner.test",
-      owner.cookie,
-    );
+    const imported = await importContactRows(owner.cookie, [
+      {
+        rowNumber: 2,
+        firstName: "First",
+        lastName: "Contact",
+        email: "first@owner.test",
+        subscribed: false,
+        listIds: [ownerList.body.id, secondOwnerList.body.id],
+      },
+      {
+        rowNumber: 3,
+        firstName: "Over",
+        lastName: "Quota",
+        email: "second@owner.test",
+        subscribed: false,
+        listIds: [ownerList.body.id, secondOwnerList.body.id],
+      },
+    ]);
     assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
-    assert.equal(imported.body.imported, 1);
-    assert.equal(imported.body.rejected.length, 1);
-    assert.match(imported.body.rejected[0].reason, /contact limit/i);
+    assert.equal(imported.body.imported, 1, JSON.stringify(imported.body));
+    assert.equal(imported.body.limitReached, 1);
+    assert.equal(imported.body.issues.length, 1);
+    assert.equal(imported.body.issues[0].rowNumber, 3);
+    assert.match(imported.body.issues[0].reason, /contact limit/i);
     assert.deepEqual(imported.body.quota, {
       used: 1,
       limit: 1,
@@ -2644,20 +2733,26 @@ describe("tenant contact management and package quotas", { concurrency: false },
       1,
     );
 
-    const foreignListImport = await uploadCsv(
-      `/contacts/import?listId=${otherList.body.id}`,
-      "name,email\nMust Not Import,blocked@owner.test",
-      owner.cookie,
-    );
-    assert.equal(foreignListImport.response.status, 400);
-    assert.equal(foreignListImport.body.code, "INVALID_LIST");
-    const mixedTenantListImport = await uploadCsv(
-      `/contacts/import?listIds=${ownerList.body.id}&listIds=${otherList.body.id}`,
-      "name,email\nMust Not Partially Import,mixed-list@owner.test",
-      owner.cookie,
-    );
-    assert.equal(mixedTenantListImport.response.status, 400);
-    assert.equal(mixedTenantListImport.body.code, "INVALID_LIST");
+    const foreignListImport = await importContactRows(owner.cookie, [{
+      rowNumber: 2,
+      firstName: "Must",
+      lastName: "Not Import",
+      email: "blocked@owner.test",
+      listIds: [otherList.body.id],
+    }]);
+    assert.equal(foreignListImport.response.status, 200);
+    assert.equal(foreignListImport.body.invalid, 1);
+    assert.match(foreignListImport.body.issues[0].reason, /only contact lists from your workspace/i);
+    const mixedTenantListImport = await importContactRows(owner.cookie, [{
+      rowNumber: 2,
+      firstName: "Must",
+      lastName: "Not Partially Import",
+      email: "mixed-list@owner.test",
+      listIds: [ownerList.body.id, otherList.body.id],
+    }]);
+    assert.equal(mixedTenantListImport.response.status, 200);
+    assert.equal(mixedTenantListImport.body.invalid, 1);
+    assert.match(mixedTenantListImport.body.issues[0].reason, /only contact lists from your workspace/i);
     const ownerContacts = await api("/contacts", { cookie: owner.cookie });
     assert.deepEqual(
       new Set(ownerContacts.body.contacts.map((contact) => contact.email)),
@@ -2674,13 +2769,19 @@ describe("tenant contact management and package quotas", { concurrency: false },
       0,
     );
 
-    const malformedListImport = await uploadCsv(
-      "/contacts/import?listIds=not-a-uuid",
-      "name,email\nMust Not Import,malformed-list@owner.test",
-      owner.cookie,
+    const malformedListImport = await importContactRows(owner.cookie, [{
+      rowNumber: 2,
+      firstName: "Must",
+      lastName: "Not Import",
+      email: "malformed-list@owner.test",
+      listIds: ["not-a-uuid"],
+    }]);
+    assert.equal(malformedListImport.response.status, 200);
+    assert.equal(malformedListImport.body.invalid, 1);
+    assert.match(
+      malformedListImport.body.issues[0].reason,
+      /invalid uuid/i,
     );
-    assert.equal(malformedListImport.response.status, 400);
-    assert.equal(malformedListImport.body.code, "INVALID_INPUT");
     const afterInvalidImports = await api("/contacts", { cookie: owner.cookie });
     assert.equal(afterInvalidImports.body.contacts.length, 1);
   });
@@ -5904,6 +6005,13 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     assert.equal(whitespaceName.response.status, 400);
 
+    const [originalCompany] = await dbModule.db
+      .insert(dbModule.companiesTable)
+      .values({
+        userId: owner.user.id,
+        companyName: "Original Company",
+      })
+      .returning();
     const existing = await api("/contacts", {
       method: "POST",
       cookie: owner.cookie,
@@ -5912,7 +6020,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         lastName: "Person",
         name: "Ignored legacy name",
         email: "existing@example.test",
-        companyName: "Original Company",
+        companyId: originalCompany.id,
         linkedinUrl: "https://linkedin.example/original",
         phoneNumber: "555-0100",
       },
@@ -5931,10 +6039,14 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       body: { contacts: [] },
     });
     assert.equal(malformed.response.status, 400);
+    const noPlanTemplateId = await getContactImportTemplateId(noPlan.cookie);
     const subscriptionRequired = await api("/contacts/import", {
       method: "POST",
       cookie: noPlan.cookie,
       body: {
+        templateId: noPlanTemplateId,
+        importSessionId: randomUUID(),
+        finalBatch: true,
         contacts: [
           {
             rowNumber: 2,
@@ -5947,10 +6059,14 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     });
     assert.equal(subscriptionRequired.response.status, 403);
 
+    const templateId = await getContactImportTemplateId(owner.cookie);
     const imported = await api("/contacts/import", {
       method: "POST",
       cookie: owner.cookie,
       body: {
+        templateId,
+        importSessionId: randomUUID(),
+        finalBatch: true,
         contacts: [
           {
             rowNumber: 2,
@@ -6154,7 +6270,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(cleared.body.websiteUrl, null);
   });
 
-  it("imports CRM enrichment fields from CSV and rejects overlong field values per row", async () => {
+  it("imports CRM enrichment through template-bound batches and rejects oversized fields", async () => {
     const owner = await loggedInUser({
       username: "csv-enrichment-owner",
       email: "csv-enrichment-owner@example.test",
@@ -6235,21 +6351,29 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       email: "overlong-field@example.test",
       job_title: "J".repeat(201),
     };
-    const csvCell = (value) => `"${String(value).replaceAll('"', '""')}"`;
-    const headers = [...new Set([...Object.keys(source), ...Object.keys(invalidSource)])];
-    const csv = [
-      headers.map(csvCell).join(","),
-      [source, invalidSource]
-        .map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(","))
-        .join("\n"),
-    ].join("\n");
-
-    const imported = await uploadCsv("/contacts/import", csv, owner.cookie);
+    const toCamelCase = (key) =>
+      key.replace(/_([a-z])/g, (_, character) => character.toUpperCase());
+    const imported = await importContactRows(owner.cookie, [
+      {
+        ...Object.fromEntries(
+          Object.entries(source).map(([key, value]) => [toCamelCase(key), value]),
+        ),
+        rowNumber: 2,
+        subscribed: false,
+      },
+      {
+        ...Object.fromEntries(
+          Object.entries(invalidSource).map(([key, value]) => [toCamelCase(key), value]),
+        ),
+        rowNumber: 3,
+        subscribed: false,
+      },
+    ]);
     assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
-    assert.equal(imported.body.imported, 1);
-    assert.equal(imported.body.rejected.length, 1);
-    assert.equal(imported.body.rejected[0].rowNumber, 3);
-    assert.match(imported.body.rejected[0].reason, /job title can be up to 200 characters/i);
+    assert.equal(imported.body.imported, 1, JSON.stringify(imported.body));
+    assert.equal(imported.body.invalid, 1);
+    assert.equal(imported.body.issues[0].rowNumber, 3);
+    assert.match(imported.body.issues[0].reason, /jobTitle.*(200|character|long)/i);
 
     const contacts = await api("/contacts", { cookie: owner.cookie });
     assert.equal(contacts.response.status, 200);
@@ -6306,13 +6430,13 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     );
   });
 
-  it("imports CSV rows without crossing tenant or package limits", async () => {
-    const owner = await loggedInUser({ username: "csv-owner" });
-    const other = await loggedInUser({ username: "csv-other" });
+  it("imports contact batches without crossing tenant or package limits", async () => {
+    const owner = await loggedInUser({ username: "batch-owner" });
+    const other = await loggedInUser({ username: "batch-other" });
     const [pkg] = await db
       .insert(dbModule.subscriptionPackagesTable)
       .values({
-        name: "Three Contact CSV Package",
+        name: "Three Contact Batch Package",
         description: "",
         amountMinor: 1000,
         currency: "INR",
@@ -6341,41 +6465,28 @@ describe("paid primary plan changes", { concurrency: false }, () => {
 
     const importSettings = await api("/contacts", { cookie: owner.cookie });
     assert.equal(importSettings.response.status, 200);
-    assert.ok(importSettings.body.uploadSettings.allowedFileTypes.includes("csv"));
+    assert.deepEqual(importSettings.body.uploadSettings.allowedFileTypes, ["xlsx"]);
 
-    const imported = await uploadCsv(
-      "/contacts/import",
-      [
-        "name,email",
-        "Already Saved,saved@example.test",
-        "New Person,New@example.test",
-        "Bad Address,not-an-email",
-        "Malformed Row",
-        "Duplicate In File,new@example.test",
-        "Second Person,second@example.test",
-        "Beyond Limit,extra@example.test",
-      ].join("\n"),
-      owner.cookie,
-    );
+    const imported = await importContactRows(owner.cookie, [
+      { rowNumber: 2, firstName: "Already", lastName: "Saved", email: "saved@example.test" },
+      { rowNumber: 3, firstName: "New", lastName: "Person", email: "New@example.test" },
+      { rowNumber: 4, firstName: "Bad", lastName: "Address", email: "not-an-email" },
+      { rowNumber: 5, firstName: "Malformed", lastName: "Row", email: "" },
+      { rowNumber: 6, firstName: "Duplicate", lastName: "In File", email: "new@example.test" },
+      { rowNumber: 7, firstName: "Second", lastName: "Person", email: "second@example.test" },
+      { rowNumber: 8, firstName: "Beyond", lastName: "Limit", email: "extra@example.test" },
+    ]);
     assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
     assert.equal(imported.body.imported, 2);
-    assert.deepEqual(
-      imported.body.rejected.map((row) => row.rowNumber),
-      [2, 4, 5, 6, 8],
-    );
-    assert.match(imported.body.rejected[0].reason, /already in your contacts/i);
-    assert.match(imported.body.rejected[1].reason, /valid email/i);
-    assert.match(imported.body.rejected[2].reason, /columns/i);
-    assert.match(imported.body.rejected[3].reason, /more than once/i);
-    assert.match(imported.body.rejected[4].reason, /contact limit/i);
-    assert.equal(
-      imported.body.rejectedCsv.split("\r\n")[0],
-      '"name","email","Import rejection reason"',
-    );
-    assert.match(
-      imported.body.rejectedCsv,
-      /"Already Saved","saved@example\.test","This email address is already in your contacts\."/,
-    );
+    assert.equal(imported.body.duplicate, 2);
+    assert.equal(imported.body.invalid, 2);
+    assert.equal(imported.body.limitReached, 1);
+    assert.deepEqual(imported.body.issues.map((row) => row.rowNumber), [2, 4, 5, 6, 8]);
+    assert.match(imported.body.issues[0].reason, /already exists in your workspace/i);
+    assert.match(imported.body.issues[1].reason, /valid email/i);
+    assert.match(imported.body.issues[2].reason, /email/i);
+    assert.match(imported.body.issues[3].reason, /already exists in your workspace/i);
+    assert.match(imported.body.issues[4].reason, /contact limit/i);
     assert.deepEqual(imported.body.quota, {
       used: 3,
       limit: 3,
@@ -6389,11 +6500,9 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       new Set(ownerContacts.body.contacts.map((contact) => contact.email)),
       new Set(["saved@example.test", "new@example.test", "second@example.test"]),
     );
-    const blockedImport = await uploadCsv(
-      "/contacts/import",
-      "name,email\nNo Package,no-package@example.test",
-      other.cookie,
-    );
+    const blockedImport = await importContactRows(other.cookie, [
+      { rowNumber: 2, firstName: "No", lastName: "Package", email: "no-package@example.test" },
+    ]);
     assert.equal(blockedImport.response.status, 403);
     assert.equal(blockedImport.body.code, "SUBSCRIPTION_REQUIRED");
     const otherContacts = await api("/contacts", { cookie: other.cookie });
@@ -6404,13 +6513,13 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       'name,email\n"Unclosed name,broken@example.test',
       owner.cookie,
     );
-    assert.equal(malformedCsv.response.status, 400);
-    assert.equal(malformedCsv.body.code, "INVALID_CSV");
+    assert.equal(malformedCsv.response.status, 415);
+    assert.equal(malformedCsv.body.code, "XLSX_TEMPLATE_REQUIRED");
     const afterMalformedCsv = await api("/contacts", { cookie: owner.cookie });
     assert.equal(afterMalformedCsv.body.contacts.length, 3);
   });
 
-  it("rejects CSV uploads larger than the configured platform file limit", async () => {
+  it("rejects raw CSV contact uploads and requires the latest XLSX template", async () => {
     const owner = await loggedInUser({ username: "csv-size-owner" });
     await db.insert(dbModule.systemConfigurationTable).values({
       key: "platform",
@@ -6421,8 +6530,8 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       "x".repeat(1024 * 1024 + 1),
       owner.cookie,
     );
-    assert.equal(tooLarge.response.status, 413);
-    assert.equal(tooLarge.body.code, "FILE_TOO_LARGE");
+    assert.equal(tooLarge.response.status, 415);
+    assert.equal(tooLarge.body.code, "XLSX_TEMPLATE_REQUIRED");
   });
 
   it("replaces conflicting legacy company details only on confirmed linking and persists the association", async () => {
@@ -6649,30 +6758,24 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       contactId: bouncedContact.id,
     });
 
-    const imported = await api("/contacts/import", {
-      method: "POST",
-      cookie: owner.cookie,
-      body: {
-        contacts: [
-          {
-            rowNumber: 2,
-            firstName: "Imported",
-            lastName: "Contact",
-            email: "corrected-after-import@example.test",
-            subscribed: true,
-            listIds: [list.id],
-          },
-          {
-            rowNumber: 3,
-            firstName: "Imported",
-            lastName: "Contact",
-            email: bouncedContact.email,
-            subscribed: true,
-            listIds: [list.id],
-          },
-        ],
+    const imported = await importContactRows(owner.cookie, [
+      {
+        rowNumber: 2,
+        firstName: "Imported",
+        lastName: "Contact",
+        email: "corrected-after-import@example.test",
+        subscribed: true,
+        listIds: [list.id],
       },
-    });
+      {
+        rowNumber: 3,
+        firstName: "Imported",
+        lastName: "Contact",
+        email: bouncedContact.email,
+        subscribed: true,
+        listIds: [list.id],
+      },
+    ]);
     assert.equal(imported.response.status, 200, JSON.stringify(imported.body));
     assert.equal(imported.body.imported, 1);
     assert.equal(imported.body.duplicate, 1);
@@ -7602,8 +7705,8 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       method: "POST",
       cookie: owner.cookie,
       body: {
-        companyName: "Opted In Workspace Company",
-        companyDomain: "opted-in-workspace-company.test",
+        companyName: "Cobalt Aviation Ltd",
+        companyDomain: "cobalt-aviation.test",
         companyIndustry: "Technology",
         shareWithGlobal: true,
       },
@@ -7631,7 +7734,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(sharedBulkSearch.body.total, 1);
 
     const adminCatalogSearch = await api(
-      "/admin/global-companies?search=opted-in-workspace-company",
+      "/admin/global-companies?search=cobalt-aviation",
       { cookie: admin.cookie },
     );
     assert.equal(adminCatalogSearch.response.status, 200);
@@ -7642,7 +7745,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     );
     assert.equal(
       adminCatalogSearch.body.globalCompanies[0].companyName,
-      "Opted In Workspace Company",
+      "Cobalt Aviation Ltd",
     );
     assert.equal(
       adminCatalogSearch.body.globalCompanies.some(
@@ -7656,7 +7759,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       cookie: other.cookie,
       body: {
         companyName: "Duplicate Shared Domain",
-        companyDomain: "opted-in-workspace-company.test",
+        companyDomain: "cobalt-aviation.test",
         shareWithGlobal: true,
       },
     });
@@ -7664,7 +7767,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
     assert.equal(duplicateShare.body.code, "GLOBAL_COMPANY_DOMAIN_EXISTS");
 
     const otherDirectory = await api(
-      "/companies/global/search?search=opted-in-workspace-company",
+      "/companies/global/search?search=cobalt-aviation",
       { cookie: other.cookie },
     );
     assert.equal(otherDirectory.response.status, 200);
@@ -7817,22 +7920,22 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         endsAt: new Date(Date.now() + 60 * 60_000),
       });
     }
-    const createLegacyContact = (cookie, email, companyName) =>
-      api("/contacts", {
-        method: "POST",
-        cookie,
-        body: {
-          email,
-          firstName: "Casey",
-          lastName: "Contact",
-          companyName,
-          companyDomain: "HTTPS://WWW.acme-company.test/about",
-          companyIndustry: "Software",
-        },
-      });
+    const createLegacyContact = async (userId, email, companyName) => {
+      const [contact] = await db.insert(dbModule.contactsTable).values({
+        userId,
+        email,
+        firstName: "Casey",
+        lastName: "Contact",
+        name: "Casey Contact",
+        companyName,
+        companyDomain: "HTTPS://WWW.acme-company.test/about",
+        companyIndustry: "Software",
+      }).returning();
+      return { response: { status: 201 }, body: contact };
+    };
 
-    const first = await createLegacyContact(owner.cookie, "first@acme.test", "Acme");
-    const second = await createLegacyContact(owner.cookie, "second@acme.test", "ACME");
+    const first = await createLegacyContact(owner.user.id, "first@acme.test", "Acme");
+    const second = await createLegacyContact(owner.user.id, "second@acme.test", "ACME");
     for (const result of [first, second]) {
       assert.equal(result.response.status, 201, JSON.stringify(result.body));
     }
@@ -7848,8 +7951,8 @@ describe("paid primary plan changes", { concurrency: false }, () => {
       skippedContacts: 0,
     });
 
-    const conflict = await createLegacyContact(owner.cookie, "conflict@acme.test", "Different Co");
-    const otherContact = await createLegacyContact(other.cookie, "other@acme.test", "Acme");
+    const conflict = await createLegacyContact(owner.user.id, "conflict@acme.test", "Different Co");
+    const otherContact = await createLegacyContact(other.user.id, "other@acme.test", "Acme");
     for (const result of [conflict, otherContact]) {
       assert.equal(result.response.status, 201, JSON.stringify(result.body));
     }
@@ -8062,7 +8165,7 @@ describe("tenant contact field option masters", { concurrency: false }, () => {
     assert.equal(foreignDelete.response.status, 404);
   });
 
-  it("rejects CSV CRM values that have not been added to the tenant master", async () => {
+  it("rejects contact import values that have not been added to the tenant master", async () => {
     const owner = await loggedInUser({ username: "contact-options-import" });
     const [pkg] = await db
       .insert(dbModule.subscriptionPackagesTable)
@@ -8096,16 +8199,32 @@ describe("tenant contact field option masters", { concurrency: false }, () => {
     });
     assert.equal(configuredStatus.response.status, 201, JSON.stringify(configuredStatus.body));
 
-    const result = await uploadCsv(
-      `/contacts/import?listIds=${list.body.id}`,
-      "name,email,lead_status,time_zone\nJamie Taylor,jamie@options.test,Unconfigured,UTC\nRae Taylor,rae@options.test,Qualified,Mars/Olympus",
-      owner.cookie,
-    );
+    const result = await importContactRows(owner.cookie, [
+      {
+        rowNumber: 2,
+        firstName: "Jamie",
+        lastName: "Taylor",
+        email: "jamie@options.test",
+        leadStatus: "Unconfigured",
+        timeZone: "UTC",
+        listIds: [list.body.id],
+      },
+      {
+        rowNumber: 3,
+        firstName: "Rae",
+        lastName: "Taylor",
+        email: "rae@options.test",
+        leadStatus: "Qualified",
+        timeZone: "Mars/Olympus",
+        listIds: [list.body.id],
+      },
+    ]);
     assert.equal(result.response.status, 200, JSON.stringify(result.body));
     assert.equal(result.body.imported, 0);
-    assert.equal(result.body.rejected.length, 2);
-    assert.match(result.body.rejected[0].reason, /Contact field settings/);
-    assert.match(result.body.rejected[1].reason, /standard time zone/i);
+    assert.equal(result.body.invalid, 2);
+    assert.equal(result.body.issues.length, 2);
+    assert.match(result.body.issues[0].reason, /Contact field settings|saved list/i);
+    assert.match(result.body.issues[1].reason, /standard time zone/i);
   });
 });
 
@@ -9316,7 +9435,7 @@ describe("company research package access", { concurrency: false }, () => {
       method: "POST",
       cookie: admin.cookie,
       body: {
-        companyName: "Second AI Entitlement Test Company",
+        companyName: "Blue River Research Systems",
         companyDomain: "ai-entitlement-second-test.example",
       },
     });
@@ -9325,7 +9444,7 @@ describe("company research package access", { concurrency: false }, () => {
       method: "POST",
       cookie: admin.cookie,
       body: {
-        companyName: "Third AI Entitlement Test Company",
+        companyName: "Cedar Peak Manufacturing",
         companyDomain: "ai-entitlement-third-test.example",
       },
     });
@@ -12755,6 +12874,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         name: "Uncertain delivery after restart",
         subject: "A campaign update",
         textBody: "This message should not be sent twice.",
+        unsubscribeOrigin: "https://app.mailflow.test",
         status: "sending",
       })
       .returning();
@@ -12841,6 +12961,21 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         })
         .where(eq(dbModule.systemConfigurationTable.key, "platform"));
 
+      assert.equal(
+        await campaignWorkerModule.processPendingCampaignDeliveries(1),
+        0,
+        "the resumed recipient still observes the SMTP mailbox pacing interval",
+      );
+      const [rateLimitedRecipient] = await db
+        .select()
+        .from(dbModule.emailCampaignRecipientsTable)
+        .where(eq(dbModule.emailCampaignRecipientsTable.id, queuedRecipient.id));
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.max(0, rateLimitedRecipient.nextAttemptAt.getTime() - Date.now() + 20),
+        ),
+      );
       assert.equal(
         await campaignWorkerModule.processPendingCampaignDeliveries(1),
         1,
@@ -13618,7 +13753,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         .where(eq(dbModule.emailCampaignRecipientsTable.id, recipientId));
       await db
         .update(dbModule.emailSendAttemptsTable)
-        .set({ attemptedAt: new Date(Date.now() - 60_000) });
+        .set({
+          attemptedAt: new Date(Date.now() - 60_000),
+          completedAt: new Date(Date.now() - 60_000),
+        });
     };
 
     try {
@@ -13815,7 +13953,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
             .where(eq(dbModule.emailCampaignRecipientsTable.id, recipient.id));
           await db
             .update(dbModule.emailSendAttemptsTable)
-            .set({ attemptedAt: new Date(Date.now() - 60_000) })
+            .set({
+              attemptedAt: new Date(Date.now() - 60_000),
+              completedAt: new Date(Date.now() - 60_000),
+            })
             .where(
               eq(dbModule.emailSendAttemptsTable.recipientId, recipient.id),
             );
@@ -14070,6 +14211,13 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(ownerList.response.status, 201);
     assert.equal(otherList.response.status, 201);
 
+    const ownerCompany = await api("/companies", {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { companyName: "Acme & Sons" },
+    });
+    assert.equal(ownerCompany.response.status, 201, JSON.stringify(ownerCompany.body));
+
     const ownerContacts = await Promise.all(
       ["one@owner.test", "two@owner.test", "three@owner.test"].map((email) =>
         api("/contacts", {
@@ -14079,6 +14227,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
             email,
             firstName: "Owner",
             lastName: "Contact",
+            companyId: ownerCompany.body.id,
             subscribed: true,
             listIds: [ownerList.body.id],
           },
@@ -14185,6 +14334,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
         password: "smtp-owner-secret",
         fromName: "Owner Mail",
         fromEmail: "mail@owner.test",
+        replyTo: "mail@owner.test",
       },
     });
     assert.equal(savedSender.response.status, 200, JSON.stringify(savedSender.body));
@@ -14449,6 +14599,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           encryption: "none",
           fromName: "Owner Mail",
           fromEmail: "mail@owner.test",
+          replyTo: "mail@owner.test",
         },
       },
     });
@@ -14551,8 +14702,12 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           "Your launch update, {{firstName}}",
           "What’s new at {{companyName}}?",
         ],
-          textBody: "Hello {{firstName}} from the campaign.",
-          htmlBody: "<p>Draft <em>format</em></p>",
+        textBody: "Hello {{firstName}} from the campaign.",
+        htmlBody: "<p>Draft <em>format</em></p>",
+        placeholderFallbacks: {
+          firstName: "there",
+          companyName: "your company",
+        },
         listIds: [ownerSecondaryList.body.id, ownerList.body.id],
         senderAccountId: backupSender.body.account.id,
       },
@@ -14593,26 +14748,31 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       body: {
         listIds: [ownerSecondaryList.body.id, ownerList.body.id],
         contactId: ownerContacts[0].body.id,
-        subject: "Hello {{fullName}} ({{missing}})",
+        subject: "Hello {{fullName}} ({{email}})",
         subjectVariants: [
-          "Hello {{fullName}} ({{missing}})",
+          "Hello {{fullName}} ({{email}})",
           "Hi {{fullName}}",
           "A note for {{companyName}}",
         ],
         textBody: "A note for {{fullName}} at {{companyName}} from {{email}}.",
+        placeholderFallbacks: {
+          fullName: "there",
+          companyName: "Acme & Sons",
+          firstName: "there",
+        },
         htmlBody:
-          "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}. {{missing}}</p><script>alert(1)</script>",
+          "<p><strong>Hi {{firstName}}</strong>, welcome to {{companyName}}. {{email}}</p><script>alert(1)</script>",
       },
     });
     assert.equal(samplePreview.response.status, 200, JSON.stringify(samplePreview.body));
-    assert.equal(samplePreview.body.subject, "Hello Owner Contact ({{missing}})");
+    assert.equal(samplePreview.body.subject, "Hello Owner Contact (one@owner.test)");
     assert.match(
       samplePreview.body.textBody,
       /^A note for Owner Contact at Acme & Sons from one@owner\.test\.\n\nUnsubscribe: https:\/\/mailflow\.invalid\/unsubscribe\?token=/,
     );
     assert.match(
       samplePreview.body.htmlBody,
-      /^<p><strong>Hi Owner<\/strong>, welcome to Acme &amp; Sons\. \{\{missing\}\}<\/p>\n<p><a href="https:\/\/mailflow\.invalid\/unsubscribe\?token=preview">Unsubscribe<\/a><\/p>$/,
+      /^<p><strong>Hi Owner<\/strong>, welcome to Acme &amp; Sons\. one@owner\.test<\/p>\n<p><a href="https:\/\/mailflow\.invalid\/unsubscribe\?token=preview">Unsubscribe<\/a><\/p>$/,
     );
     const outOfListPreview = await api("/campaigns/preview", {
       method: "POST",
@@ -14633,7 +14793,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(savedAfterPreview.body.campaign.textBody, campaign.body.textBody);
     assert.equal(savedAfterPreview.body.campaign.htmlBody, updatedCampaign.body.htmlBody);
     assert.equal(campaign.body.recipients, 3);
-    assert.equal(campaign.body.estimatedDurationSeconds, 108);
+    assert.ok(
+      campaign.body.estimatedDurationSeconds >= 2 * 5 * 60,
+      "the estimate should account for the minimum mailbox pacing gap between three recipients",
+    );
     const deselectedCampaign = await api(`/campaigns/${campaign.body.id}`, {
       method: "PATCH",
       cookie: owner.cookie,
@@ -14978,7 +15141,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.equal(pacedBatch, 0, "a raised hourly cap must not send before the minimum spacing interval");
     await db
       .update(dbModule.emailSendAttemptsTable)
-      .set({ attemptedAt: new Date(Date.now() - 60_000) })
+      .set({
+        attemptedAt: new Date(Date.now() - 60_000),
+        completedAt: new Date(Date.now() - 60_000),
+      })
       .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
     await db
       .update(dbModule.emailCampaignRecipientsTable)
@@ -15700,6 +15866,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
           name,
           subject: "A campaign for {{firstName}}",
           textBody: "A campaign message.",
+          placeholderFallbacks: { firstName: "there" },
           listIds: [ownerSecondaryList.body.id, ownerList.body.id],
           senderAccountId: backupSender.body.account.id,
         },
@@ -16049,7 +16216,7 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const otherDashboard = await api("/dashboard", { cookie: other.cookie });
     assert.equal(ownerDashboard.response.status, 200);
     assert.equal(ownerDashboard.body.contacts, 3);
-    assert.equal(ownerDashboard.body.companies, 1);
+    assert.equal(ownerDashboard.body.companies, 2);
     assert.equal(ownerDashboard.body.activeLists, 2);
     assert.deepEqual(ownerDashboard.body.amountSpentByCurrency, [
       { currency: "INR", amountMinor: 12500 },
@@ -16099,7 +16266,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
       .where(eq(dbModule.emailCampaignsTable.id, campaign.body.id));
     await db
       .update(dbModule.emailSendAttemptsTable)
-      .set({ attemptedAt: new Date(Date.now() - 60_000) })
+      .set({
+        attemptedAt: new Date(Date.now() - 60_000),
+        completedAt: new Date(Date.now() - 60_000),
+      })
       .where(eq(dbModule.emailSendAttemptsTable.userId, owner.user.id));
     await db
       .update(dbModule.contactsTable)

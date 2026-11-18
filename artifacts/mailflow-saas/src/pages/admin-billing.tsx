@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity, CircleAlert, CreditCard, Gift, KeyRound, LoaderCircle, PencilLine, Plus, Save, ShieldCheck, X,
@@ -189,6 +189,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
   const [draft, setDraft] = useState<PackageDraft>(blankDraft);
   const [editing, setEditing] = useState<SubscriptionPackage | null>(null);
   const [packageFormOpen, setPackageFormOpen] = useState(false);
+  const packageFormRef = useRef<HTMLFormElement>(null);
   const [notice, setNotice] = useState<{ text: string; bad?: boolean } | null>(null);
   const hasOtherFreePackage = draft.packageType === 'primary' && packages.some(pkg => pkg.packageType === 'primary' && pkg.amountMinor === 0 && pkg.id !== editing?.id);
   const busy = createPackage.isPending || updatePackage.isPending;
@@ -209,6 +210,17 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         (Number(draft.researchAllowance) > 0 ||
           Number(draft.aiEmailAssistAllowance) > 0 ||
           Number(draft.additionalMailboxCount) > 0));
+
+  useEffect(() => {
+    if (!packageFormOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const form = packageFormRef.current;
+      if (!form) return;
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      form.querySelector<HTMLInputElement>('input:not([disabled])')?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [packageFormOpen, editing]);
 
   const announce = (text: string) => setNotice({ text });
   const refreshPackages = () => {
@@ -408,15 +420,15 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       {isBillingPage && <div className="flex items-center gap-2 rounded-md border border-[#dfe7ed] bg-[#f6f9fb] px-3 py-2 text-[11px] text-[#53677b]"><ShieldCheck className="h-4 w-4 text-[#3374a9]"/>Secrets stay server-side</div>}
     </header>
 
-    {isPackagesPage && <Panel className="overflow-hidden" testId="gift-subscription-panel">
-      <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6">
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-[#edf4fa] text-[#265e91]"><Gift className="h-[17px] w-[17px]"/></span>
+    {isPackagesPage && <Panel className="overflow-hidden !border-[#cfe2ee]" testId="gift-subscription-panel">
+      <div className="flex items-center gap-3 border-b border-[#d4e7f1] bg-[#edf7fb] px-5 py-4 md:px-6">
+        <span className="grid h-9 w-9 place-items-center rounded-md bg-[#d9edf7] text-[#176985]"><Gift className="h-[17px] w-[17px]"/></span>
         <div>
           <h2 className="text-[15px] font-bold text-[#1d2d40]">Gift a subscription or add-on</h2>
           <p className="mt-0.5 text-[11px] text-[#788696]">Grant a primary package term or add-on allowances without collecting or recording a payment.</p>
         </div>
       </div>
-      <form onSubmit={submitGift} className="space-y-4 p-5 md:p-6">
+      <form onSubmit={submitGift} className="space-y-4 bg-[#f8fcfe] p-5 md:p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <label htmlFor="gift-account-search" className="block text-[12px] font-semibold text-[#35445a]">Tenant account</label>
@@ -500,15 +512,15 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       </form>
     </Panel>}
 
-    {isPackagesPage && <Panel className="overflow-hidden" testId="correct-add-on-gift-panel">
-      <div className="flex items-center gap-3 border-b border-[#e9edf1] px-5 py-4 md:px-6">
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-[#fff3e8] text-[#9b5a25]"><PencilLine className="h-[17px] w-[17px]"/></span>
+    {isPackagesPage && <Panel className="overflow-hidden !border-[#edd9bd]" testId="correct-add-on-gift-panel">
+      <div className="flex items-center gap-3 border-b border-[#f0dfc7] bg-[#fff6e8] px-5 py-4 md:px-6">
+        <span className="grid h-9 w-9 place-items-center rounded-md bg-[#ffe8ca] text-[#9b571b]"><PencilLine className="h-[17px] w-[17px]"/></span>
         <div>
           <h2 className="text-[15px] font-bold text-[#1d2d40]">Correct an add-on gift</h2>
           <p className="mt-0.5 text-[11px] text-[#788696]">Find the recipient and remove only unused allowances from a specific admin gift. Payment history is not changed.</p>
         </div>
       </div>
-      <div className="space-y-4 p-5 md:p-6">
+      <div className="space-y-4 bg-[#fffdf9] p-5 md:p-6">
         <div className="max-w-xl space-y-1.5">
           <label htmlFor="correction-account-search" className="block text-[12px] font-semibold text-[#35445a]">Tenant account</label>
           {correctionRecipient ? <div className="flex min-h-10 items-start justify-between gap-3 rounded-md border border-[#d8dfe6] bg-[#f8fafb] px-3 py-2" data-testid="selected-correction-recipient">
@@ -697,10 +709,10 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         <button data-testid="button-new-subscription-package" onClick={() => { resetPackageForm(); setPackageFormOpen(true); setNotice(null); }} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>New package</button>
       </div>
 
-      {packageFormOpen && <Panel className="mb-4 p-5 md:p-6">
+      {packageFormOpen && <Panel className="mb-4 !border-[#cedaf2] !bg-[#f5f7ff] p-5 md:p-6">
         <div className="mb-4 flex items-center justify-between"><h3 className="text-[14px] font-bold text-[#23364b]">{editing ? `Edit ${editing.name}` : 'Create a package'}</h3>
           <button data-testid="button-close-package-form" onClick={resetPackageForm} className="rounded px-2 py-1 text-[11px] font-semibold text-[#6f7e8e] hover:bg-[#f1f4f6]">Close</button></div>
-        <form onSubmit={submitPackage} className="space-y-4">
+        <form ref={packageFormRef} onSubmit={submitPackage} className="space-y-4">
           {sendingLimits && <div data-testid="text-admin-package-sending-limits" className="rounded-md border border-[#d7e4ef] bg-[#f3f8fc] px-3.5 py-3 text-[11px] leading-5 text-[#47627b]">
             Platform settings apply the same independent allowance to each SMTP mailbox for every package: {sendingLimits.emailsPerHourPerSmtp.toLocaleString()} campaign attempts per rolling hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per rolling 24 hours. Package SMTP slots determine how many mailboxes customers can configure; retries count toward the limits.
           </div>}

@@ -74,10 +74,7 @@ app.use(
     const incidentId = randomUUID();
     const path = sanitizeDiagnosticPath(req.originalUrl.split("?")[0] ?? req.path);
     const diagnosticsEnabled = shouldCaptureApiErrorDiagnostics();
-    const details =
-      diagnosticsEnabled || process.env.NODE_ENV === "test"
-        ? describeApiError(error)
-        : null;
+    const details = diagnosticsEnabled ? describeApiError(error) : null;
     req.log.error(
       {
         incidentId,
