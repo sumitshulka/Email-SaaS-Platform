@@ -30,8 +30,10 @@ import {
 } from "@workspace/api-zod";
 import { Router, type IRouter } from "express";
 import { requireUserRole } from "../lib/session";
+import { requirePackageFeature } from "../lib/package-feature-access";
 
 const router: IRouter = Router();
+router.use("/prospect-follow-ups", requireUserRole, requirePackageFeature("prospectManagementEnabled"));
 
 function todayInZone(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {

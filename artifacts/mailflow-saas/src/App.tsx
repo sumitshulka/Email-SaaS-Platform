@@ -9,11 +9,12 @@ import {
   Trash2, UserRound, Users, Building2, LifeBuoy, X, Power, FilePlus2, Layers3, ListFilter,
 } from 'lucide-react';
 import {
-  AUTH_SESSION_EXPIRED_EVENT, getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey, getListEmailTemplatesQueryKey, getListInactiveUsersQueryKey,
+  AUTH_SESSION_EXPIRED_EVENT, getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetCurrentSubscriptionQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey, getListEmailTemplatesQueryKey, getListInactiveUsersQueryKey,
   getGetCurrentUserQueryKey, getGetUserDashboardQueryKey, getListAdminUsersQueryKey,
   getGetUserNotificationsQueryKey, useGetUserNotifications, useMarkUserNotificationRead,
   useChangePassword, useDeleteAdminUser, useGetAdminDashboard, useGetAdminSettings, useGetPasswordPolicy, useGetUserDashboard,
   useGetApplicationEmailSettings, useGetCurrentUser, useGetMaintenanceStatus, useListAdminUsers, useListEmailTemplates, useListInactiveUsers,
+  useGetCurrentSubscription,
   useLogin, useLogout, useRegister, useRequestPasswordReset, useResetPassword,
   usePreviewBlockedTerms, useSendApplicationEmailTest, useUpdateAdminSettings, useUpdateAdminUserStatus, useCreateEmailTemplate, useUpdateEmailTemplate, useDeleteEmailTemplate, useSendInactivityNotice, useRemoveInactiveUser,
   useUpdateApplicationEmailSettings, useUpdateProfile, useVerifyRegistrationEmail,
@@ -541,7 +542,34 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
   const logout = useLogout();
   const [navOpen, setNavOpen] = useState(false);
   const qc = useQueryClient();
-  const navGroups = admin ? platformNavigationGroups : workspaceNavigationGroups;
+  const packageQuery = useGetCurrentSubscription({
+    query: {
+      queryKey: getGetCurrentSubscriptionQueryKey(),
+      enabled: !admin && user.role === 'USER',
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+      refetchInterval: 60_000,
+    },
+  });
+  const currentSubscription = packageQuery.data?.subscription;
+  const activePackage = currentSubscription?.status === 'active' ? currentSubscription.package : undefined;
+  const hasProspectAccess = Boolean(activePackage?.amountMinor && activePackage.prospectManagementEnabled);
+  const hasReportAccess = activePackage?.reportsEnabled === true;
+  const navGroups = admin
+    ? platformNavigationGroups
+    : workspaceNavigationGroups.filter(group =>
+        group.title === 'Prospect Management' ? hasProspectAccess
+          : group.title === 'Reports' ? hasReportAccess
+            : true);
+  const prospectPath = ['/prospects', '/prospect-follow-ups', '/prospect-products', '/prospect-stages', '/prospect-actions', '/prospect-currencies']
+    .some(path => location === path || location.startsWith(`${path}/`));
+  const reportPath = ['/report-gallery', '/report-builder', '/my-reports']
+    .some(path => location === path || location.startsWith(`${path}/`));
+  useEffect(() => {
+    if (!packageQuery.isSuccess) return;
+    if (prospectPath && !hasProspectAccess) setLocation('/plans?feature=prospects');
+    else if (reportPath && !hasReportAccess) setLocation('/plans?feature=reports');
+  }, [hasProspectAccess, hasReportAccess, packageQuery.isSuccess, prospectPath, reportPath, setLocation]);
   const leftAlignedPage = [
     '/admin',
     '/admin/users',
@@ -818,6 +846,17 @@ function Metric({ label, value, sub, icon: Icon, accent = 'blue' }: { label: str
 }
 function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser; maintenancePaused?: boolean }) {
   const query = useGetUserDashboard({ query: { queryKey: getGetUserDashboardQueryKey() } });
+  const packageQuery = useGetCurrentSubscription({
+    query: {
+      queryKey: getGetCurrentSubscriptionQueryKey(),
+      refetchOnMount: 'always',
+      refetchOnWindowFocus: true,
+    },
+  });
+  const currentSubscription = packageQuery.data?.subscription;
+  const prospectAccess = Boolean(currentSubscription?.status === 'active'
+    && currentSubscription.package.amountMinor
+    && currentSubscription.package.prospectManagementEnabled);
   const notificationQuery = useGetUserNotifications({ query: {
     queryKey: getGetUserNotificationsQueryKey(),
     refetchInterval: 30_000,
@@ -857,7 +896,7 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
     <PageHeading eyebrow="WORKSPACE / OVERVIEW" title="Good to see you, again." detail="A clear view of the audience, account, and campaigns in this workspace."
       trailing={<div className="flex items-center gap-2 rounded-full border border-[#dce5e2] bg-[#f2f7f4] px-3 py-1.5 text-[11px] font-semibold text-[#426c5d]"><span className="h-1.5 w-1.5 rounded-full bg-[#538a70]"/><span className="capitalize">{data.subscriptionStatus}</span> plan</div>}/>
 
-    <FollowUpsTodayPanel/>
+    {prospectAccess && <FollowUpsTodayPanel/>}
     <section aria-label="Workspace summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard label="Contacts" value={data.contacts.toLocaleString()} note="All contacts in this workspace" icon={Users} tint="blue"/>
       <SummaryCard label="Companies" value={data.companies.toLocaleString()} note="Workspace company records" icon={Building2} tint="sage"/>
@@ -884,7 +923,7 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
       </Panel>
     </section>
 
-    <ProspectAnalyticsOverview/>
+    {prospectAccess && <ProspectAnalyticsOverview/>}
 
     <Panel className="overflow-hidden">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8ece8] px-5 py-5 sm:px-6">

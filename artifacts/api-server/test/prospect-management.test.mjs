@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import express from "express";
 import { test } from "node:test";
 
@@ -13,7 +13,8 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     { db, usersTable, contactsTable, companiesTable, contactTagsTable, contactTagAssignmentsTable,
       prospectsTable, prospectProductsTable, prospectCurrenciesTable, prospectStagesTable,
       prospectStageTransitionsTable, prospectActionTypesTable, prospectStageHistoryTable, prospectValueHistoryTable,
-      prospectActionsTable, prospectFollowUpsTable, prospectTagAssignmentsTable },
+      prospectActionsTable, prospectFollowUpsTable, prospectTagAssignmentsTable,
+      subscriptionPackagesTable, userSubscriptionsTable },
     { default: prospectSettingsRouter },
     { default: prospectsRouter },
     { default: prospectFollowUpsRouter },
@@ -25,7 +26,8 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     import("../src/routes/prospect-follow-ups.ts"),
     import("../src/routes/sending.ts"),
   ]);
-  const tenantIds = [randomUUID(), randomUUID()];
+  const tenantIds = [randomUUID(), randomUUID(), randomUUID()];
+  const packageIds = tenantIds.map(() => randomUUID());
   const companyIds = [randomUUID(), randomUUID()];
   const testUsers = tenantIds.map((id, index) => ({
     id,
@@ -84,6 +86,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     }
     await db.transaction(async tx => {
       for (const userId of tenantIds) {
+        await tx.delete(userSubscriptionsTable).where(eq(userSubscriptionsTable.userId, userId));
         await tx.delete(prospectFollowUpsTable).where(eq(prospectFollowUpsTable.userId, userId));
         await tx.delete(prospectActionsTable).where(eq(prospectActionsTable.userId, userId));
         await tx.delete(prospectTagAssignmentsTable).where(eq(prospectTagAssignmentsTable.userId, userId));
@@ -101,13 +104,31 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
         await tx.delete(companiesTable).where(eq(companiesTable.userId, userId));
         await tx.delete(usersTable).where(eq(usersTable.id, userId));
       }
+      await tx.delete(subscriptionPackagesTable).where(inArray(subscriptionPackagesTable.id, packageIds));
     });
   }
 
   let mainServer;
   let otherTenantServer;
+  let featurelessServer;
   try {
     await db.insert(usersTable).values(testUsers);
+    await db.insert(subscriptionPackagesTable).values(tenantIds.map((_, index) => ({
+      id: packageIds[index],
+      packageType: "primary",
+      name: `Prospect test ${packageIds[index].slice(0, 8)}`,
+      amountMinor: 100,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 100,
+      prospectManagementEnabled: index !== 2,
+    })));
+    await db.insert(userSubscriptionsTable).values(tenantIds.map((userId, index) => ({
+      userId,
+      packageId: packageIds[index],
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 86_400_000),
+    })));
     await db.insert(companiesTable).values([
       { id: companyIds[0], userId: tenantIds[0], companyName: "Prospect Filter Company" },
       { id: companyIds[1], userId: tenantIds[1], companyName: "Other Tenant Company" },
@@ -132,10 +153,12 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
       tagId: tagIds[0],
       slot: 1,
     });
-    [mainServer, otherTenantServer] = await Promise.all([
+    [mainServer, otherTenantServer, featurelessServer] = await Promise.all([
       startTenantApp(testUsers[0]),
       startTenantApp(testUsers[1]),
+      startTenantApp(testUsers[2]),
     ]);
+    assert.equal((await call(featurelessServer, "/prospects")).status, 403);
 
     const currencySave = await call(mainServer, "/prospect-currencies", "PUT", {
       currencies: ["INR", "USD"],

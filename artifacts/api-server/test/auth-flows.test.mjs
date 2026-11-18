@@ -198,6 +198,11 @@ memory.public.none(`
     currency varchar(3) NOT NULL DEFAULT 'INR',
     period_days integer NOT NULL,
     contact_limit integer NOT NULL DEFAULT 5000,
+    open_campaign_allowance integer NOT NULL DEFAULT 0,
+    open_campaign_recipient_limit integer NOT NULL DEFAULT 0,
+    prospect_management_enabled boolean NOT NULL DEFAULT false,
+    reports_enabled boolean NOT NULL DEFAULT false,
+    personal_report_limit integer NOT NULL DEFAULT 0,
     email_account_limit integer NOT NULL DEFAULT 1,
     research_allowance integer NOT NULL DEFAULT 0,
     ai_email_assist_allowance integer NOT NULL DEFAULT 0,
@@ -429,6 +434,7 @@ memory.public.none(`
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     company_id uuid,
     company_link_suppressed boolean NOT NULL DEFAULT false,
+    imported_contact varchar(255),
     name varchar(201) NOT NULL DEFAULT '',
     email varchar(254) NOT NULL,
     first_name varchar(100) NOT NULL DEFAULT '',
@@ -2653,7 +2659,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(afterInvalidImports.body.contacts.length, 1);
   });
 
-  it("stores package contact and SMTP account limits and returns them from create and update", async () => {
+  it("stores package feature access and saved-report limits on create and update", async () => {
     const admin = await loggedInUser({
       username: "package-limit-admin",
       role: "SUPERADMIN",
@@ -2683,6 +2689,9 @@ describe("tenant contact management and package quotas", { concurrency: false },
         periodDays: 30,
         contactLimit: 1250,
         emailAccountLimit: 2,
+        prospectManagementEnabled: true,
+        reportsEnabled: true,
+        personalReportLimit: 12,
         preferred: true,
         active: true,
       },
@@ -2690,16 +2699,28 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(created.response.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.contactLimit, 1250);
     assert.equal(created.body.emailAccountLimit, 2);
+    assert.equal(created.body.prospectManagementEnabled, true);
+    assert.equal(created.body.reportsEnabled, true);
+    assert.equal(created.body.personalReportLimit, 12);
     assert.equal(created.body.preferred, true);
 
     const updated = await api(`/admin/billing/packages/${created.body.id}`, {
       method: "PATCH",
       cookie: admin.cookie,
-      body: { contactLimit: 2400, emailAccountLimit: 4 },
+      body: {
+        contactLimit: 2400,
+        emailAccountLimit: 4,
+        prospectManagementEnabled: true,
+        reportsEnabled: true,
+        personalReportLimit: 5,
+      },
     });
     assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
     assert.equal(updated.body.contactLimit, 2400);
     assert.equal(updated.body.emailAccountLimit, 4);
+    assert.equal(updated.body.prospectManagementEnabled, true);
+    assert.equal(updated.body.reportsEnabled, true);
+    assert.equal(updated.body.personalReportLimit, 5);
     assert.equal(updated.body.preferred, true);
     const [saved] = await db
       .select()
@@ -2707,6 +2728,26 @@ describe("tenant contact management and package quotas", { concurrency: false },
       .where(eq(dbModule.subscriptionPackagesTable.id, created.body.id));
     assert.equal(saved.contactLimit, 2400);
     assert.equal(saved.emailAccountLimit, 4);
+    assert.equal(saved.prospectManagementEnabled, true);
+    assert.equal(saved.reportsEnabled, true);
+    assert.equal(saved.personalReportLimit, 5);
+
+    const invalidFreeFeature = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        name: "Invalid free prospect package",
+        description: "This should be rejected",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 100,
+        prospectManagementEnabled: true,
+        active: true,
+      },
+    });
+    assert.equal(invalidFreeFeature.response.status, 400);
+    assert.equal(invalidFreeFeature.body.code, "INVALID_INPUT");
 
     const replacementPreferred = await api("/admin/billing/packages", {
       method: "POST",

@@ -65,8 +65,14 @@ import {
 import { Router, type IRouter } from "express";
 import { readContactTags } from "../lib/contact-tags";
 import { requireUserRole } from "../lib/session";
+import { requirePackageFeature } from "../lib/package-feature-access";
 
 const router: IRouter = Router();
+router.use(
+  ["/prospects", "/prospect-dashboard", "/contacts"],
+  requireUserRole,
+  requirePackageFeature("prospectManagementEnabled"),
+);
 const auditActor = alias(usersTable, "prospect_audit_actor");
 const valueAuditActor = alias(usersTable, "prospect_value_audit_actor");
 const actionActor = alias(usersTable, "prospect_action_actor");

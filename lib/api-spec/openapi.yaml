@@ -8733,6 +8733,9 @@ components:
         contactLimit: { type: integer, minimum: 0 }
         openCampaignAllowance: { type: integer, minimum: 0 }
         openCampaignRecipientLimit: { type: integer, minimum: 0 }
+        prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for this package. Free packages cannot include this feature. }
+        reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
+        personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
         emailAccountLimit: { type: integer, minimum: 0 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign draft or revision results included in this add-on. }
@@ -8741,7 +8744,7 @@ components:
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, packageType, name, description, amountMinor, currency, periodDays, contactLimit, emailAccountLimit, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount, preferred, active, createdAt, updatedAt]
+      required: [id, packageType, name, description, amountMinor, currency, periodDays, contactLimit, prospectManagementEnabled, reportsEnabled, personalReportLimit, emailAccountLimit, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount, preferred, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -8774,6 +8777,9 @@ components:
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         openCampaignAllowance: { type: integer, minimum: 0, maximum: 10000 }
         openCampaignRecipientLimit: { type: integer, minimum: 0, maximum: 100000 }
+        prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for this package. Free packages cannot include this feature. }
+        reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
+        personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
@@ -8864,6 +8870,9 @@ components:
         contactLimit: { type: integer, minimum: 0, maximum: 10000000 }
         openCampaignAllowance: { type: integer, minimum: 0, maximum: 10000 }
         openCampaignRecipientLimit: { type: integer, minimum: 0, maximum: 100000 }
+        prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for paid primary packages. }
+        reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
+        personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }

@@ -51,6 +51,9 @@ export function createPackageCheckoutSnapshot(
     contactLimit: pkg.contactLimit,
     openCampaignAllowance: pkg.openCampaignAllowance,
     openCampaignRecipientLimit: pkg.openCampaignRecipientLimit,
+    prospectManagementEnabled: pkg.prospectManagementEnabled,
+    reportsEnabled: pkg.reportsEnabled,
+    personalReportLimit: pkg.personalReportLimit,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
@@ -71,6 +74,12 @@ function packageMatchesCheckoutSnapshot(
     snapshot.contactLimit === pkg.contactLimit &&
     (snapshot.openCampaignAllowance ?? 0) === pkg.openCampaignAllowance &&
     (snapshot.openCampaignRecipientLimit ?? 0) === pkg.openCampaignRecipientLimit &&
+    (snapshot.prospectManagementEnabled === undefined ||
+      snapshot.prospectManagementEnabled === pkg.prospectManagementEnabled) &&
+    (snapshot.reportsEnabled === undefined ||
+      snapshot.reportsEnabled === pkg.reportsEnabled) &&
+    (snapshot.personalReportLimit === undefined ||
+      snapshot.personalReportLimit === pkg.personalReportLimit) &&
     snapshot.emailAccountLimit === pkg.emailAccountLimit &&
     snapshot.researchAllowance === pkg.researchAllowance &&
     snapshot.aiEmailAssistAllowance === pkg.aiEmailAssistAllowance &&
@@ -90,6 +99,9 @@ export function serializePackage(pkg: PackageRow) {
     contactLimit: pkg.contactLimit,
     openCampaignAllowance: pkg.openCampaignAllowance,
     openCampaignRecipientLimit: pkg.openCampaignRecipientLimit,
+    prospectManagementEnabled: pkg.prospectManagementEnabled,
+    reportsEnabled: pkg.reportsEnabled,
+    personalReportLimit: pkg.personalReportLimit,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,

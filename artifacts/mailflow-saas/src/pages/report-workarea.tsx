@@ -9,7 +9,7 @@ import {
   getGetReportWorkareaCatalogQueryKey, getListSavedReportsQueryKey,
   useCreateSavedReport, useDeleteSavedReport, useExportReportWorkareaCsv,
   useExportReportWorkareaXlsx, useGetReportWorkareaCatalog, useListSavedReports,
-  useRunReportWorkareaQuery, useUpdateSavedReport,
+  useRunReportWorkareaQuery, useUpdateSavedReport, useGetCurrentSubscription,
 } from '@workspace/api-client-react';
 import type {
   ReportDefinition, ReportEntityMetadata, ReportFieldMetadata, ReportWorkareaRunResult,
@@ -160,6 +160,7 @@ export function ReportBuilderPage() {
   const duplicateId = useMemo(() => new URLSearchParams(window.location.search).get('duplicate'), []);
   const catalogQuery = useGetReportWorkareaCatalog({ query: { queryKey: getGetReportWorkareaCatalogQueryKey() } });
   const reportsQuery = useListSavedReports({ query: { queryKey: getListSavedReportsQueryKey() } });
+  const packageQuery = useGetCurrentSubscription();
   const runReport = useRunReportWorkareaQuery();
   const createReport = useCreateSavedReport();
   const updateReport = useUpdateSavedReport();
@@ -205,6 +206,10 @@ export function ReportBuilderPage() {
   const templates = catalogQuery.data?.templates ?? [];
   const selectedTemplate = templates.find(template => template.id === templateId);
   const savedReports = reportsQuery.data?.reports ?? [];
+  const personalReportLimit = packageQuery.data?.subscription?.status === 'active'
+    ? packageQuery.data.subscription.package.personalReportLimit
+    : 0;
+  const reportLimitReached = !reportId && savedReports.length >= personalReportLimit;
   const savedReport = savedReports.find(report => report.id === reportId);
   const duplicateReport = savedReports.find(report => report.id === duplicateId);
   const summaryMode = Boolean(definition.aggregates?.length || definition.groupBy?.length);
@@ -670,14 +675,15 @@ export function ReportBuilderPage() {
         </section>
 
         <section className="rounded-xl border border-[#dce3d9] bg-[#fffefa] p-5 sm:p-6">
-          <SectionLabel aside={<span className="font-mono text-[10px] text-[#91a096]">SAVE FOR LATER</span>}>Report details</SectionLabel>
+          <SectionLabel aside={<span data-testid="text-report-save-usage" className="font-mono text-[10px] text-[#71877b]">{savedReports.length} / {personalReportLimit} personal reports saved</span>}>Report details</SectionLabel>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Report name</span><InputClass testId="input-report-name" value={name} onChange={setName} maxLength={160} placeholder="A name your team will recognize" /></label>
             <label className="space-y-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Category</span><InputClass testId="input-report-category" value={category} onChange={setCategory} maxLength={80} placeholder="Optional" /></label>
             <label className="space-y-1.5 md:col-span-2"><span className="text-[11px] font-semibold text-[#52685d]">Description</span><textarea data-testid="input-report-description" value={description} onChange={event => setDescription(event.target.value)} maxLength={1000} rows={2} placeholder="What is this report for?" className="w-full resize-y rounded-lg border border-[#d8dfd6] bg-[#fffefa] px-3 py-2.5 text-[13px] outline-none focus:border-[#71998c] focus:ring-2 focus:ring-[#dfebe2] placeholder:text-[#a3afa6]" /></label>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <ReportButton onClick={save} disabled={!name.trim() || !hasReportData || !!missingFields.length || createReport.isPending || updateReport.isPending} testId="button-save-report"><Save className="h-4 w-4" />{createReport.isPending || updateReport.isPending ? 'Saving…' : reportId ? 'Save changes' : 'Save report'}</ReportButton>
+            {reportLimitReached && <span data-testid="text-personal-report-limit" className="w-full text-[11px] leading-5 text-[#8c572a]">Your package allows {personalReportLimit} saved personal reports. Delete a saved report or choose a package with a higher allowance to save another.</span>}
+            <ReportButton onClick={save} disabled={!name.trim() || !hasReportData || !!missingFields.length || reportLimitReached || createReport.isPending || updateReport.isPending} testId="button-save-report"><Save className="h-4 w-4" />{createReport.isPending || updateReport.isPending ? 'Saving…' : reportId ? 'Save changes' : 'Save report'}</ReportButton>
             {saveNotice && <span role="status" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#4f7965]"><Check className="h-3.5 w-3.5" />{saveNotice}</span>}
             {(createReport.isError || updateReport.isError) && <span role="alert" className="text-[12px] text-[#a4513d]">Could not save: {getErrorText(createReport.error ?? updateReport.error)}</span>}
           </div>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import express from "express";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { test } from "node:test";
 
 const enabled = process.env.RUN_REPORT_WORKAREA_DB_TESTS === "1";
@@ -10,13 +10,14 @@ test("saved reports stay tenant-owned and run through shared export/query paths"
   skip: !enabled ? "Set RUN_REPORT_WORKAREA_DB_TESTS=1 to run against a disposable test database." : false,
 }, async () => {
   const [
-    { db, usersTable, savedReportDefinitionsTable },
+    { db, usersTable, savedReportDefinitionsTable, subscriptionPackagesTable, userSubscriptionsTable },
     { default: reportWorkareaRouter },
   ] = await Promise.all([
     import("@workspace/db"),
     import("../src/routes/report-workarea.ts"),
   ]);
-  const userIds = [randomUUID(), randomUUID()];
+  const userIds = [randomUUID(), randomUUID(), randomUUID()];
+  const packageIds = userIds.map(() => randomUUID());
   const users = userIds.map((id, index) => ({
     id,
     username: `report_route_${id.slice(0, 8)}`,
@@ -65,7 +66,24 @@ test("saved reports stay tenant-owned and run through shared export/query paths"
 
   try {
     await db.insert(usersTable).values(users);
-    const [ownerServer, otherServer] = await Promise.all(apps);
+    await db.insert(subscriptionPackagesTable).values(userIds.map((_, index) => ({
+      id: packageIds[index],
+      packageType: "primary",
+      name: `Report test ${packageIds[index].slice(0, 8)}`,
+      amountMinor: 100,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 100,
+      reportsEnabled: index !== 2,
+      personalReportLimit: index === 0 ? 1 : 3,
+    })));
+    await db.insert(userSubscriptionsTable).values(userIds.map(userId => ({
+      userId,
+      packageId: packageIds[userIds.indexOf(userId)],
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 86_400_000),
+    })));
+    const [ownerServer, otherServer, reportsDisabledServer] = await Promise.all(apps);
     const definition = {
       version: 1,
       baseEntityId: "contacts",
@@ -78,6 +96,13 @@ test("saved reports stay tenant-owned and run through shared export/query paths"
     });
     assert.equal(created.response.status, 201, JSON.stringify(created.data));
     const reportId = created.data.id;
+    const overLimit = await call(ownerServer, "/report-workarea/saved", "POST", {
+      name: "Second report beyond allowance",
+      definition,
+    });
+    assert.equal(overLimit.response.status, 409);
+    assert.equal(overLimit.data.code, "PERSONAL_REPORT_LIMIT_REACHED");
+    assert.equal((await call(reportsDisabledServer, "/report-workarea/saved")).response.status, 403);
 
     assert.equal((await call(ownerServer, "/report-workarea/saved")).data.reports.length, 1);
     assert.equal((await call(otherServer, "/report-workarea/saved")).data.reports.length, 0);
@@ -116,6 +141,10 @@ test("saved reports stay tenant-owned and run through shared export/query paths"
     }
     await db.delete(savedReportDefinitionsTable).where(eq(savedReportDefinitionsTable.userId, userIds[0]));
     await db.delete(savedReportDefinitionsTable).where(eq(savedReportDefinitionsTable.userId, userIds[1]));
+    await db.delete(userSubscriptionsTable).where(eq(userSubscriptionsTable.userId, userIds[0]));
+    await db.delete(userSubscriptionsTable).where(eq(userSubscriptionsTable.userId, userIds[1]));
+    await db.delete(userSubscriptionsTable).where(eq(userSubscriptionsTable.userId, userIds[2]));
+    await db.delete(subscriptionPackagesTable).where(inArray(subscriptionPackagesTable.id, packageIds));
     await db.delete(usersTable).where(eq(usersTable.id, userIds[0]));
     await db.delete(usersTable).where(eq(usersTable.id, userIds[1]));
   }

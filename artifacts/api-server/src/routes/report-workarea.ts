@@ -1,9 +1,11 @@
 import ExcelJS from "exceljs";
 import { and, desc, eq } from "drizzle-orm";
+import { count } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   db,
   savedReportDefinitionsTable,
+  usersTable,
 } from "@workspace/db";
 import {
   CreateSavedReportBody,
@@ -22,6 +24,7 @@ import {
   ExportReportWorkareaXlsxBody,
 } from "@workspace/api-zod";
 import { requireUserRole } from "../lib/session";
+import { requirePackageFeature } from "../lib/package-feature-access";
 import { getReportWorkareaCatalog } from "../lib/report-workarea-catalog";
 import {
   exportReport,
@@ -35,6 +38,7 @@ import {
 
 const router: IRouter = Router();
 const EXCEL_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+router.use("/report-workarea", requireUserRole, requirePackageFeature("reportsEnabled"));
 
 function sendReportError(res: any, error: unknown): boolean {
   if (error instanceof ReportDefinitionError) {
@@ -234,17 +238,46 @@ router.post("/report-workarea/saved", requireUserRole, async (req, res): Promise
   }
   try {
     const definition = normalizeReportDefinition(parsed.data.definition);
-    const [created] = await db.insert(savedReportDefinitionsTable)
-      .values({
-        userId: req.authUser!.id,
-        name,
-        description,
-        category,
-        baseEntityId: definition.baseEntityId,
-        definition,
-        definitionVersion: 1,
-      })
-      .returning();
+    const access = req.packageFeatureAccess;
+    const limit = access?.personalReportLimit ?? 0;
+    const result = await db.transaction(async tx => {
+      const [lockedUser] = await tx.select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.id, req.authUser!.id))
+        .for("update");
+      if (!lockedUser) return { kind: "missing_user" as const };
+      const [usage] = await tx.select({ used: count() })
+        .from(savedReportDefinitionsTable)
+        .where(eq(savedReportDefinitionsTable.userId, req.authUser!.id));
+      const used = Number(usage?.used ?? 0);
+      if (used >= limit) return { kind: "limit_reached" as const, used };
+      const [created] = await tx.insert(savedReportDefinitionsTable)
+        .values({
+          userId: req.authUser!.id,
+          name,
+          description,
+          category,
+          baseEntityId: definition.baseEntityId,
+          definition,
+          definitionVersion: 1,
+        })
+        .returning();
+      return { kind: "created" as const, created };
+    });
+    if (result.kind === "missing_user") {
+      res.status(401).json({ error: "Please sign in to continue.", code: "UNAUTHENTICATED" });
+      return;
+    }
+    if (result.kind === "limit_reached") {
+      res.status(409).json({
+        error: `Your package allows up to ${limit} personal reports. Delete an existing report or choose a package with a higher allowance.`,
+        code: "PERSONAL_REPORT_LIMIT_REACHED",
+        limit,
+        used: result.used,
+      });
+      return;
+    }
+    const created = result.created;
     res.status(201).json(CreateSavedReportResponse.parse(formatSavedReport(created)));
   } catch (error) {
     if (isUniqueViolation(error)) {

@@ -42,6 +42,16 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 100000
      */
   openCampaignRecipientLimit?: number;
+  /** Enables full Prospect Management access for paid primary packages. */
+  prospectManagementEnabled?: boolean;
+  /** Enables the Report Workarea for this package. */
+  reportsEnabled?: boolean;
+  /**
+     * Maximum personal report definitions a user may save; zero disables saving.
+     * @minimum 0
+     * @maximum 10000
+     */
+  personalReportLimit?: number;
   /**
      * @minimum 0
      * @maximum 100

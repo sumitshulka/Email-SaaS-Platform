@@ -42,8 +42,20 @@ import {
 } from "@workspace/api-zod";
 import { Router, type IRouter } from "express";
 import { requireUserRole } from "../lib/session";
+import { requirePackageFeature } from "../lib/package-feature-access";
 
 const router: IRouter = Router();
+router.use(
+  [
+    "/prospect-product-categories",
+    "/prospect-products",
+    "/prospect-currencies",
+    "/prospect-stages",
+    "/prospect-action-types",
+  ],
+  requireUserRole,
+  requirePackageFeature("prospectManagementEnabled"),
+);
 const iso4217CurrencyCodes = new Set(Intl.supportedValuesOf("currency"));
 const systemProductCategories = [
   "Software & SaaS",

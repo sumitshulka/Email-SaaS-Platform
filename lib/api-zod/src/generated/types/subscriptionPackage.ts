@@ -25,6 +25,16 @@ export interface SubscriptionPackage {
   openCampaignAllowance?: number;
   /** @minimum 0 */
   openCampaignRecipientLimit?: number;
+  /** Enables full Prospect Management access for this package. Free packages cannot include this feature. */
+  prospectManagementEnabled: boolean;
+  /** Enables the Report Workarea for this package. */
+  reportsEnabled: boolean;
+  /**
+     * Maximum personal report definitions a user may save; zero disables saving.
+     * @minimum 0
+     * @maximum 10000
+     */
+  personalReportLimit: number;
   /** @minimum 0 */
   emailAccountLimit: number;
   /**

@@ -5,7 +5,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Loader
 import {
   getListContactNotesQueryKey,
   getGetCompanyQueryKey, getGetContactEmailHistoryQueryKey, getGetContactFieldOptionsQueryKey, getGetContactNavigationQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactLeadStatusUpdatesQueryKey, getListContactsQueryKey, getListUnlinkedCompanyProfilesQueryKey,
-  getListContactCampaignRepliesQueryKey, useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useGetContactNavigation, useListCampaignReplies, useListContactCampaignReplies, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact,
+  getListContactCampaignRepliesQueryKey, useGetContact, useGetContactEmailHistory, useGetContactFieldOptions, useGetContactNavigation, useListCampaignReplies, useListContactCampaignReplies, useListCompanies, useListContactLeadStatusUpdates, useListContactLists, useListContactNotes, useCreateContactNote, useUpdateContact, useGetCurrentSubscription,
 } from '@workspace/api-client-react';
 import type { Company, Contact, ContactEmailHistoryItem, ContactLeadStatusUpdate, ContactNote, ContactUpdate } from '@workspace/api-client-react';
 import { CompanyLinkConfirmation, CompanyProfileComparison, isCompanyProfileConflict, type CompanyLinkReplacement, type CompanyProfileSnapshot } from '@/components/company-link-confirmation';
@@ -228,6 +228,11 @@ export function ContactDetailPage() {
   const query = useGetContact(contactId, {
     query: { enabled: !!contactId, queryKey: getGetContactQueryKey(contactId), staleTime: 0, refetchOnMount: 'always' },
   });
+  const packageQuery = useGetCurrentSubscription();
+  const currentSubscription = packageQuery.data?.subscription;
+  const prospectAccess = Boolean(currentSubscription?.status === 'active'
+    && currentSubscription.package.amountMinor
+    && currentSubscription.package.prospectManagementEnabled);
   const navigationQuery = useGetContactNavigation(contactId, {
     query: {
       enabled: !!contactId,
@@ -436,7 +441,7 @@ export function ContactDetailPage() {
       <div className="flex flex-wrap items-center gap-2"><span className="text-[12px] font-semibold text-[#344154]">Tags</span><ContactTagBadges tags={contact.tags}/>{!contact.tags?.length && <span className="text-[11px] text-[#7c8794]">No tags assigned</span>}</div>
       <button type="button" onClick={() => setTagEditorOpen(true)} className="rounded-md border border-[#d8dde4] px-3 py-2 text-[11px] font-semibold text-[#245b9b]">Edit tags</button>
     </section>
-    <div className="mb-5"><ContactProspectsPanel contactId={contact.id} contactName={displayName}/></div>
+    {prospectAccess && <div className="mb-5"><ContactProspectsPanel contactId={contact.id} contactName={displayName}/></div>}
     {tagEditorOpen && <ContactTagEditor key={contact.id} contactId={contact.id} contactName={displayName} tags={contact.tags ?? []} onClose={() => setTagEditorOpen(false)}/>}
     <form onSubmit={save} className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(330px,.88fr)]">
       <div className="space-y-5">

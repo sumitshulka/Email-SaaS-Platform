@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   getGetCompanyQueryKey, getGetCompanyResearchRequestAccessQueryKey, getGetContactQueryKey, getListCompaniesQueryKey, getListContactOptionsQueryKey, getListContactsQueryKey,
-  useDeleteCompany, useGetCompany, useGetCompanyResearchRequestAccess, useListCompanies, useListContactOptions, useRequestPrivateCompanyResearch, useUpdateContact,
+  useDeleteCompany, useGetCompany, useGetCompanyResearchRequestAccess, useListCompanies, useListContactOptions, useRequestPrivateCompanyResearch, useUpdateContact, useGetCurrentSubscription,
 } from '@workspace/api-client-react';
 import type { Company, ContactOption } from '@workspace/api-client-react';
 import { CompanyEditor } from '@/pages/companies';
@@ -60,6 +60,11 @@ const profileFields = [
 export function CompanyDetailPage() {
   const { companyId = '' } = useParams<{ companyId: string }>();
   const query = useGetCompany(companyId, { query: { enabled: !!companyId, retry: false, queryKey: getGetCompanyQueryKey(companyId) } });
+  const packageQuery = useGetCurrentSubscription();
+  const currentSubscription = packageQuery.data?.subscription;
+  const prospectAccess = Boolean(currentSubscription?.status === 'active'
+    && currentSubscription.package.amountMinor
+    && currentSubscription.package.prospectManagementEnabled);
   const researchRequestAccess = useGetCompanyResearchRequestAccess({ query: {
     enabled: Boolean(query.data?.company && !query.data.company.globalCompanyId),
     queryKey: getGetCompanyResearchRequestAccessQueryKey(),
@@ -245,7 +250,7 @@ export function CompanyDetailPage() {
           <header className="flex items-center justify-between border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">CONTACT RELATIONSHIPS</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Associated contacts <span data-testid="text-linked-contact-count" className="ml-1 text-[11px] font-medium text-[#8793a0]">({linked.length})</span></h2></div><Users className="h-4 w-4 text-[#8a96a4]"/></header>
           {linked.length ? <div className="divide-y divide-[#edf0f2]">{linked.map(contact => <Link key={contact.id} href={`/contacts/${contact.id}`} data-testid={`link-company-contact-${contact.id}`} className="flex items-center gap-3 px-5 py-3 no-underline hover:bg-[#f8fafb]"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#edf2f7] text-[10px] font-bold text-[#526a82]">{(contact.name[0] || '?').toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#36495d]">{contact.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#8793a0]">{contact.email}{contact.jobTitle ? ` · ${contact.jobTitle}` : ''}</span></span><span className="text-[10px] font-semibold text-[#55708e]">View</span></Link>)}</div> : <div data-testid="empty-company-contacts" className="px-5 py-8 text-center"><p className="text-[12px] font-semibold text-[#45566a]">No contacts associated</p><p className="mt-1 text-[10px] text-[#8995a2]">Attach an existing unlinked contact below.</p></div>}
         </section>
-        <section className={`${panel} overflow-hidden`} data-testid="panel-linked-prospects">
+        {prospectAccess && <section className={`${panel} overflow-hidden`} data-testid="panel-linked-prospects">
           <header className="flex items-center justify-between border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4">
             <div><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">OPPORTUNITY RELATIONSHIPS</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Linked prospects <span data-testid="text-linked-prospect-count" className="ml-1 text-[11px] font-medium text-[#8793a0]">({linkedProspects.length})</span></h2></div>
             <Briefcase className="h-4 w-4 text-[#8a96a4]"/>
@@ -270,7 +275,7 @@ export function CompanyDetailPage() {
               </Link>)}
             </div>
           </> : <div data-testid="empty-company-prospects" className="px-5 py-8 text-center"><p className="text-[12px] font-semibold text-[#45566a]">No prospects linked</p><p className="mt-1 text-[10px] text-[#8995a2]">Prospects connected to this company’s contacts will appear here.</p></div>}
-        </section>
+        </section>}
         <section className={`${panel} overflow-hidden`} data-testid="panel-attach-contact">
           <header className="border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4"><div className="mono text-[9px] uppercase tracking-[.14em] text-[#8a96a4]">SAFE ASSOCIATION</div><h2 className="mt-1 text-[15px] font-bold text-[#223247]">Attach an existing contact</h2><p className="mt-1 text-[11px] text-[#7f8b99]">Only unlinked contacts are eligible. Compatible legacy details merge into this profile. Conflicting legacy details can be replaced only after you confirm.</p></header>
           <div className="p-5">

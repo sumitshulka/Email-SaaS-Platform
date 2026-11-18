@@ -544,6 +544,8 @@ function PackageCard({ pkg, index, sendingLimits, checkoutHref, onSelect }: {
         <li data-testid={`text-package-hourly-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}</b> campaign attempts per rolling hour, per SMTP mailbox</span></li>
         <li data-testid={`text-package-daily-limit-${pkg.id}`}><span className="limit-icon"><Clock3 size={15}/></span><span>Up to <b>{sendingLimits.emailsPerDayPerSmtp.toLocaleString()}</b> campaign attempts per rolling 24 hours, per SMTP mailbox</span></li>
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
+        <li data-testid={`text-package-prospect-management-${pkg.id}`}><span className="limit-icon"><ContactRound size={15}/></span><span>Prospect Management: <b>{pkg.prospectManagementEnabled && pkg.amountMinor > 0 ? 'all features included' : 'not included'}</b></span></li>
+        <li data-testid={`text-package-reports-${pkg.id}`}><span className="limit-icon"><Layers3 size={15}/></span><span>{pkg.reportsEnabled ? pkg.personalReportLimit > 0 ? <>Reports included · save up to <b>{pkg.personalReportLimit.toLocaleString()}</b> personal reports</> : 'Reports included · run and export, but no personal reports can be saved' : 'Reports are not included'}</span></li>
       </ul>
       {onSelect
         ? <button type="button" className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`button-select-replacement-${pkg.id}`} onClick={onSelect}>Choose this plan <ArrowRight size={16}/></button>

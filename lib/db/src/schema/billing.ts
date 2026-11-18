@@ -52,6 +52,9 @@ export type PackageCheckoutSnapshot = {
   contactLimit: number;
   openCampaignAllowance?: number;
   openCampaignRecipientLimit?: number;
+  prospectManagementEnabled?: boolean;
+  reportsEnabled?: boolean;
+  personalReportLimit?: number;
   emailAccountLimit: number;
   researchAllowance: number;
   aiEmailAssistAllowance: number;
@@ -73,6 +76,9 @@ export const subscriptionPackagesTable = pgTable(
     contactLimit: integer("contact_limit").notNull().default(5000),
     openCampaignAllowance: integer("open_campaign_allowance").notNull().default(0),
     openCampaignRecipientLimit: integer("open_campaign_recipient_limit").notNull().default(0),
+    prospectManagementEnabled: boolean("prospect_management_enabled").notNull().default(false),
+    reportsEnabled: boolean("reports_enabled").notNull().default(false),
+    personalReportLimit: integer("personal_report_limit").notNull().default(0),
     emailAccountLimit: integer("email_account_limit").notNull().default(1),
     researchAllowance: integer("research_allowance").notNull().default(0),
     aiEmailAssistAllowance: integer("ai_email_assist_allowance")

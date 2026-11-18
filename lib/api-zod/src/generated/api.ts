@@ -10224,6 +10224,9 @@ export const listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignAllowa
 
 export const listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin = 0;
 
+export const listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin = 0;
+export const listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax = 10000;
+
 export const listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
 
 export const listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin = 0;
@@ -10251,6 +10254,9 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "contactLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin).max(listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10292,6 +10298,9 @@ export const createSubscriptionPackageBodyOpenCampaignAllowanceMax = 10000;
 export const createSubscriptionPackageBodyOpenCampaignRecipientLimitMin = 0;
 export const createSubscriptionPackageBodyOpenCampaignRecipientLimitMax = 100000;
 
+export const createSubscriptionPackageBodyPersonalReportLimitMin = 0;
+export const createSubscriptionPackageBodyPersonalReportLimitMax = 10000;
+
 export const createSubscriptionPackageBodyEmailAccountLimitMin = 0;
 export const createSubscriptionPackageBodyEmailAccountLimitMax = 100;
 
@@ -10316,6 +10325,9 @@ export const CreateSubscriptionPackageBody = zod.object({
   "contactLimit": zod.number().int().min(createSubscriptionPackageBodyContactLimitMin).max(createSubscriptionPackageBodyContactLimitMax),
   "openCampaignAllowance": zod.number().int().min(createSubscriptionPackageBodyOpenCampaignAllowanceMin).max(createSubscriptionPackageBodyOpenCampaignAllowanceMax).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(createSubscriptionPackageBodyOpenCampaignRecipientLimitMin).max(createSubscriptionPackageBodyOpenCampaignRecipientLimitMax).optional(),
+  "prospectManagementEnabled": zod.boolean().optional().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().optional().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(createSubscriptionPackageBodyPersonalReportLimitMin).max(createSubscriptionPackageBodyPersonalReportLimitMax).optional().describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageBodyResearchAllowanceMin).max(createSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(createSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
@@ -10332,6 +10344,9 @@ export const createSubscriptionPackageResponseContactLimitMin = 0;
 export const createSubscriptionPackageResponseOpenCampaignAllowanceMin = 0;
 
 export const createSubscriptionPackageResponseOpenCampaignRecipientLimitMin = 0;
+
+export const createSubscriptionPackageResponsePersonalReportLimitMin = 0;
+export const createSubscriptionPackageResponsePersonalReportLimitMax = 10000;
 
 export const createSubscriptionPackageResponseEmailAccountLimitMin = 0;
 
@@ -10357,6 +10372,9 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "contactLimit": zod.number().int().min(createSubscriptionPackageResponseContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(createSubscriptionPackageResponseOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(createSubscriptionPackageResponseOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(createSubscriptionPackageResponsePersonalReportLimitMin).max(createSubscriptionPackageResponsePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageResponseResearchAllowanceMin).max(createSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(createSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10396,6 +10414,9 @@ export const updateSubscriptionPackageBodyOpenCampaignAllowanceMax = 10000;
 export const updateSubscriptionPackageBodyOpenCampaignRecipientLimitMin = 0;
 export const updateSubscriptionPackageBodyOpenCampaignRecipientLimitMax = 100000;
 
+export const updateSubscriptionPackageBodyPersonalReportLimitMin = 0;
+export const updateSubscriptionPackageBodyPersonalReportLimitMax = 10000;
+
 export const updateSubscriptionPackageBodyEmailAccountLimitMin = 0;
 export const updateSubscriptionPackageBodyEmailAccountLimitMax = 100;
 
@@ -10419,6 +10440,9 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "contactLimit": zod.number().int().min(updateSubscriptionPackageBodyContactLimitMin).max(updateSubscriptionPackageBodyContactLimitMax).optional(),
   "openCampaignAllowance": zod.number().int().min(updateSubscriptionPackageBodyOpenCampaignAllowanceMin).max(updateSubscriptionPackageBodyOpenCampaignAllowanceMax).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(updateSubscriptionPackageBodyOpenCampaignRecipientLimitMin).max(updateSubscriptionPackageBodyOpenCampaignRecipientLimitMax).optional(),
+  "prospectManagementEnabled": zod.boolean().optional().describe('Enables full Prospect Management access for paid primary packages.'),
+  "reportsEnabled": zod.boolean().optional().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(updateSubscriptionPackageBodyPersonalReportLimitMin).max(updateSubscriptionPackageBodyPersonalReportLimitMax).optional().describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageBodyResearchAllowanceMin).max(updateSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(updateSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
@@ -10435,6 +10459,9 @@ export const updateSubscriptionPackageResponseContactLimitMin = 0;
 export const updateSubscriptionPackageResponseOpenCampaignAllowanceMin = 0;
 
 export const updateSubscriptionPackageResponseOpenCampaignRecipientLimitMin = 0;
+
+export const updateSubscriptionPackageResponsePersonalReportLimitMin = 0;
+export const updateSubscriptionPackageResponsePersonalReportLimitMax = 10000;
 
 export const updateSubscriptionPackageResponseEmailAccountLimitMin = 0;
 
@@ -10460,6 +10487,9 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "contactLimit": zod.number().int().min(updateSubscriptionPackageResponseContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(updateSubscriptionPackageResponseOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(updateSubscriptionPackageResponseOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(updateSubscriptionPackageResponsePersonalReportLimitMin).max(updateSubscriptionPackageResponsePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageResponseResearchAllowanceMin).max(updateSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(updateSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10487,6 +10517,9 @@ export const giftAdminSubscriptionResponseOneSubscriptionPackageContactLimitMin 
 export const giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignAllowanceMin = 0;
 
 export const giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignRecipientLimitMin = 0;
+
+export const giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMin = 0;
+export const giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMax = 10000;
 
 export const giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin = 0;
 
@@ -10526,6 +10559,9 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
   "contactLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMin).max(giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10647,6 +10683,9 @@ export const listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignAl
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin = 0;
 
+export const listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin = 0;
+export const listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax = 10000;
+
 export const listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin = 0;
 
 export const listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin = 0;
@@ -10674,6 +10713,9 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "contactLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin).max(listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10712,6 +10754,9 @@ export const getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignAll
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin = 0;
 
+export const getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMin = 0;
+export const getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMax = 10000;
+
 export const getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
 export const getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin = 0;
@@ -10731,6 +10776,9 @@ export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageContac
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignAllowanceMin = 0;
 
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignRecipientLimitMin = 0;
+
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMin = 0;
+export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMax = 10000;
 
 export const getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin = 0;
 
@@ -10763,6 +10811,9 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMin).max(getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10790,6 +10841,9 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "contactLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10819,6 +10873,9 @@ export const activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin 
 export const activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignAllowanceMin = 0;
 
 export const activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignRecipientLimitMin = 0;
+
+export const activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMin = 0;
+export const activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMax = 10000;
 
 export const activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin = 0;
 
@@ -10851,6 +10908,9 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "contactLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMin).max(activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10908,6 +10968,9 @@ export const getSubscriptionAddOnsResponsePackagesItemContactLimitMin = 0;
 export const getSubscriptionAddOnsResponsePackagesItemOpenCampaignAllowanceMin = 0;
 
 export const getSubscriptionAddOnsResponsePackagesItemOpenCampaignRecipientLimitMin = 0;
+
+export const getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMin = 0;
+export const getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMax = 10000;
 
 export const getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin = 0;
 
@@ -10970,6 +11033,9 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "contactLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMin).max(getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -11044,6 +11110,9 @@ export const verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignAllo
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin = 0;
 
+export const verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMin = 0;
+export const verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMax = 10000;
+
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin = 0;
 
 export const verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin = 0;
@@ -11078,6 +11147,9 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "contactLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageContactLimitMin),
   "openCampaignAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignAllowanceMin).optional(),
   "openCampaignRecipientLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageOpenCampaignRecipientLimitMin).optional(),
+  "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
+  "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
+  "personalReportLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),

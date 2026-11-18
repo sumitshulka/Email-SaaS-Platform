@@ -562,10 +562,14 @@ async function hasOtherFreePackage(exceptPackageId?: string): Promise<boolean> {
 
 function packageConfigurationError(input: {
   packageType: "primary" | "addon";
+  amountMinor: number;
   periodDays: number;
   contactLimit: number;
   openCampaignAllowance?: number;
   openCampaignRecipientLimit?: number;
+  prospectManagementEnabled: boolean;
+  reportsEnabled: boolean;
+  personalReportLimit: number;
   emailAccountLimit: number;
   researchAllowance: number;
   aiEmailAssistAllowance: number;
@@ -574,6 +578,12 @@ function packageConfigurationError(input: {
 }): string | null {
   if (input.packageType === "primary") {
     if (input.periodDays < 1) return "A primary package must have a term of at least one day.";
+    if (input.amountMinor === 0 && input.prospectManagementEnabled) {
+      return "Prospect Management is only available in paid primary packages.";
+    }
+    if (!input.reportsEnabled && input.personalReportLimit > 0) {
+      return "A personal report limit can only be set when Reports are included.";
+    }
     if (input.aiEmailAssistAllowance > 0 || input.additionalMailboxCount > 0) {
       return "AI email assist and additional mailbox allowances belong to add-on packages.";
     }
@@ -584,6 +594,9 @@ function packageConfigurationError(input: {
     input.contactLimit !== 0 ||
     (input.openCampaignAllowance ?? 0) !== 0 ||
     (input.openCampaignRecipientLimit ?? 0) !== 0 ||
+    input.prospectManagementEnabled ||
+    input.reportsEnabled ||
+    input.personalReportLimit !== 0 ||
     input.emailAccountLimit !== 0 ||
     input.preferred
   ) {
@@ -1182,6 +1195,9 @@ router.post(
       contactLimit: packageType === "addon" ? 0 : parsed.data.contactLimit,
       openCampaignAllowance: packageType === "addon" ? 0 : (parsed.data.openCampaignAllowance ?? 0),
       openCampaignRecipientLimit: packageType === "addon" ? 0 : (parsed.data.openCampaignRecipientLimit ?? 0),
+      prospectManagementEnabled: packageType === "primary" && (parsed.data.prospectManagementEnabled ?? false),
+      reportsEnabled: packageType === "primary" && (parsed.data.reportsEnabled ?? false),
+      personalReportLimit: packageType === "primary" ? (parsed.data.personalReportLimit ?? 0) : 0,
       emailAccountLimit:
         packageType === "addon" ? 0 : (parsed.data.emailAccountLimit ?? 0),
       researchAllowance: parsed.data.researchAllowance ?? 0,
@@ -1296,6 +1312,9 @@ router.patch(
         currentPackage.aiEmailAssistAllowance,
       openCampaignAllowance: currentPackage.packageType === "addon" ? 0 : (parsed.data.openCampaignAllowance ?? currentPackage.openCampaignAllowance),
       openCampaignRecipientLimit: currentPackage.packageType === "addon" ? 0 : (parsed.data.openCampaignRecipientLimit ?? currentPackage.openCampaignRecipientLimit),
+      prospectManagementEnabled: currentPackage.packageType === "primary" && (parsed.data.prospectManagementEnabled ?? currentPackage.prospectManagementEnabled),
+      reportsEnabled: currentPackage.packageType === "primary" && (parsed.data.reportsEnabled ?? currentPackage.reportsEnabled),
+      personalReportLimit: currentPackage.packageType === "primary" ? (parsed.data.personalReportLimit ?? currentPackage.personalReportLimit) : 0,
       additionalMailboxCount:
         parsed.data.additionalMailboxCount ??
         currentPackage.additionalMailboxCount,
@@ -1347,6 +1366,9 @@ router.patch(
             ...parsed.data,
             openCampaignAllowance: effectivePackage.openCampaignAllowance,
             openCampaignRecipientLimit: effectivePackage.openCampaignRecipientLimit,
+            prospectManagementEnabled: effectivePackage.prospectManagementEnabled,
+            reportsEnabled: effectivePackage.reportsEnabled,
+            personalReportLimit: effectivePackage.personalReportLimit,
             updatedBy: req.authUser!.id,
             updatedAt: now,
           })

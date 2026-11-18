@@ -60,6 +60,7 @@ import {
 import { requireUserRole } from "../lib/session";
 import { getCompanyBusinessAreaValues } from "../lib/company-business-areas";
 import { summarizeCompanyProspectValues } from "../lib/company-prospect-summary";
+import { getPackageFeatureAccess } from "../lib/package-feature-access";
 
 const router: IRouter = Router();
 const COMPANY_EXPORT_BATCH_SIZE = 250;
@@ -735,6 +736,7 @@ router.get(
       res.status(404).json({ error: "Company not found.", code: "COMPANY_NOT_FOUND" });
       return;
     }
+    const packageAccess = await getPackageFeatureAccess(userId);
     const [contacts, prospectRows] = await Promise.all([
       db
         .select({
@@ -746,7 +748,7 @@ router.get(
         .from(contactsTable)
         .where(and(eq(contactsTable.companyId, company.id), eq(contactsTable.userId, userId)))
         .orderBy(asc(contactsTable.firstName), asc(contactsTable.lastName)),
-      db
+      packageAccess?.prospectManagementEnabled ? (db
         .select({
           id: prospectsTable.id,
           name: prospectsTable.name,
@@ -773,7 +775,8 @@ router.get(
           eq(contactsTable.companyId, company.id),
           isNull(prospectsTable.archivedAt),
         ))
-        .orderBy(desc(prospectsTable.updatedAt), asc(prospectsTable.name)),
+        .orderBy(desc(prospectsTable.updatedAt), asc(prospectsTable.name)))
+        : Promise.resolve([]),
     ]);
     const prospects = prospectRows.map(row => ({
       ...row,
