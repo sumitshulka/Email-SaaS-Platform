@@ -547,7 +547,7 @@ export function ReportBuilderPage() {
         <section className="rounded-xl border border-[#dce3d9] bg-[#fffefa] p-5 sm:p-6">
           <SectionLabel aside={<span className="font-mono text-[10px] text-[#91a096]">01 / DATA</span>}>Choose the record source</SectionLabel>
           <div className="grid gap-4 md:grid-cols-[minmax(200px,.85fr)_1.15fr]">
-            <label className="space-y-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Base record</span><Select testId="select-report-entity" value={definition.baseEntityId} onChange={updateEntity}>{entities.map(entity => <option key={entity.id} value={entity.id}>{entity.label}</option>)}</Select></label>
+            <label className="flex min-w-0 flex-col items-start gap-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Base record</span><Select testId="select-report-entity" value={definition.baseEntityId} onChange={updateEntity} className="w-full">{entities.map(entity => <option key={entity.id} value={entity.id}>{entity.label}</option>)}</Select></label>
             <div className="rounded-lg bg-[#f5f7f1] px-4 py-3"><div className="font-mono text-[9px] uppercase tracking-[.14em] text-[#8a988e]">Report grain</div><p className="mt-1 text-[12px] leading-5 text-[#63746a]">{currentEntity?.grain || currentEntity?.description || 'Records are returned at the source entity grain.'}</p></div>
           </div>
         </section>
