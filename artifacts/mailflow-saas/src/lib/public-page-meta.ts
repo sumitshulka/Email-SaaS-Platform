@@ -6,15 +6,15 @@ export const SOCIAL_IMAGE_ALT =
 export const PUBLIC_PAGE_METADATA = {
   home: {
     path: '/',
-    title: 'Mailflow — simple email campaigns from your own sender',
+    title: 'Mailflow — prospect tracking and email campaigns',
     description:
-      'Organize contacts and companies, prepare simple campaigns, and send with your SMTP account. Add company research and AI drafts when included in your plan.',
+      'Organize contacts and companies, track prospects and follow-ups, then run campaigns through an SMTP account you control.',
   },
   features: {
     path: '/features',
-    title: 'Mailflow Features: Your Sender, Simpler Campaigns & AI',
+    title: 'Mailflow Features: Prospect Management, Campaigns & Your Sender',
     description:
-      'Explore Open Campaigns from CSV or XLSX, private contacts, your own SMTP, personalized fallbacks, campaign scheduling, unsubscribe controls and AI drafts.',
+      'Track prospect stages, deal history and follow-ups alongside private contacts, company context, Open Campaigns and sending through your own SMTP.',
   },
   pricing: {
     path: '/pricing',

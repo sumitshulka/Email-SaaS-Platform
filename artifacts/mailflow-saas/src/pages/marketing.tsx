@@ -160,6 +160,45 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
   return <div className="mf-eyebrow"><span/> {children}</div>;
 }
 
+function ProspectManagementPreview() {
+  return (
+    <div className="rounded-xl border border-[#d8e2df] bg-white p-5 shadow-[0_16px_36px_rgba(29,48,70,.08)] sm:p-6" aria-label="Illustration of prospect pipeline and follow-up tools">
+      <div className="flex items-center justify-between gap-3 border-b border-[#e7ece9] pb-4">
+        <span className="font-mono text-[9px] tracking-[.14em] text-[#71827a]">PROSPECT PIPELINE</span>
+        <span className="rounded-full bg-[#edf3ec] px-2.5 py-1 font-mono text-[8px] text-[#587766]">EXAMPLE</span>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {[
+          { label: 'New', tone: 'bg-[#e9eff7] text-[#496b91]' },
+          { label: 'In progress', tone: 'bg-[#f5eee2] text-[#967a4e]' },
+          { label: 'Won', tone: 'bg-[#e8f2eb] text-[#4f8065]' },
+        ].map(stage => (
+          <div key={stage.label} className="rounded-lg border border-[#e7ece9] bg-[#fbfcf9] p-3">
+            <span className={`inline-flex rounded-full px-2 py-1 text-[9px] font-semibold ${stage.tone}`}>{stage.label}</span>
+            <div className="mt-3 h-1.5 rounded-full bg-[#e9eeea]"><div className="h-full w-2/3 rounded-full bg-[#8eaaa0]" /></div>
+            <span className="mt-2 block font-mono text-[8px] text-[#88958d]">Stage + probability</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg bg-[#f3f6f3] p-4">
+          <div className="flex items-center gap-2 text-[#476d5b]"><Clock3 size={14}/><span className="font-mono text-[8px] tracking-[.1em]">FOLLOW-UP</span></div>
+          <p className="mt-2 text-[11px] font-semibold text-[#344b40]">Date · action · note</p>
+          <p className="mt-1 text-[9px] leading-4 text-[#7b8980]">Review today’s next steps or use the follow-up calendar.</p>
+        </div>
+        <div className="rounded-lg bg-[#f3f5f8] p-4">
+          <div className="flex items-center gap-2 text-[#4a6c8d]"><Gauge size={14}/><span className="font-mono text-[8px] tracking-[.1em]">COMPANY VIEW</span></div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div><b className="text-[11px] text-[#344b60]">TPV</b><span className="mt-0.5 block text-[8px] leading-4 text-[#7b8995]">Non-archived prospects</span></div>
+            <div><b className="text-[11px] text-[#344b60]">TRV</b><span className="mt-0.5 block text-[8px] leading-4 text-[#7b8995]">Won expected value</span></div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 border-t border-[#e7ece9] pt-3 text-[9px] leading-4 text-[#7b8980]">Deal-value changes keep their reason and history. Company totals keep currencies separate.</p>
+    </div>
+  );
+}
+
 export function MarketingHomePage() {
   usePageMeta(homeMeta);
   return (
@@ -168,11 +207,11 @@ export function MarketingHomePage() {
         <section className="mf-hero">
           <div className="mf-hero-grid">
             <div className="mf-hero-copy">
-              <SectionEyebrow>Email campaigns without the platform switch</SectionEyebrow>
-              <h1>Keep your email.<br/><em>Simplify the campaign.</em></h1>
-              <p className="mf-hero-lede">Mailflow is the campaign workspace for the SMTP account you control. Organize contacts and companies, prepare a message, choose a sender, then queue or schedule—without moving your sending to a separate bulk-email platform.</p>
+              <SectionEyebrow>Contacts, prospects and campaigns in one workspace</SectionEyebrow>
+              <h1>Keep your email.<br/><em>Move work forward.</em></h1>
+              <p className="mf-hero-lede">Mailflow brings contact and company context, prospect stages and follow-ups, and a practical campaign workflow together. Send through the SMTP account you control—without moving to a separate bulk-email platform.</p>
               <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="hero-get-started" onClick={() => trackMarketingSignupCta('home', 'hero')}>Start with Mailflow <ArrowRight size={17}/></Link><Link href="/pricing" className="mf-text-link" data-testid="hero-view-pricing">See plans <ArrowUpRight size={16}/></Link></div>
-              <div className="mf-hero-footnote"><span className="mf-check-ring"><Check size={12}/></span> Your sending account stays yours <span className="mf-foot-divider"/> A clear route from list to send</div>
+              <div className="mf-hero-footnote"><span className="mf-check-ring"><Check size={12}/></span> Your sending account stays yours <span className="mf-foot-divider"/> People → prospects → campaigns</div>
             </div>
             <HeroIllustration />
           </div>
@@ -181,8 +220,21 @@ export function MarketingHomePage() {
 
         <section className="mf-intro mf-section-wrap" id="how-it-works">
           <div className="mf-intro-aside"><SectionEyebrow>Simple by design</SectionEyebrow><span className="mf-index">01 / THE WORKSPACE</span></div>
-          <div className="mf-intro-copy"><h2>A campaign workspace,<br/><span>not another maze.</span></h2><p>Keep contact and company context, audience selection, message preparation and campaign history together. Do the useful steps in order—without building complicated journeys just to send a considered email.</p><Link href="/register" className="mf-underlined-link" data-testid="intro-create-account" onClick={() => trackMarketingSignupCta('home', 'intro')}>Set up your workspace <ArrowRight size={15}/></Link></div>
-          <div className="mf-route-graphic" aria-hidden="true"><div className="route-label">A BETTER ROUTE THROUGH EMAIL</div><div className="route-line"><i/><i/><i/><span><ArrowRight size={20}/></span></div><div className="route-steps"><span>Know your people</span><span>Shape your message</span><span>Understand the outcome</span></div></div>
+          <div className="mf-intro-copy"><h2>From people<br/><span>to the next step.</span></h2><p>Keep contact and company context close to prospect stages, deal history and follow-ups. When it is time to reach out, prepare a campaign with the audience, message and sender together—then review the outcomes your provider actually reports.</p><Link href="/register" className="mf-underlined-link" data-testid="intro-create-account" onClick={() => trackMarketingSignupCta('home', 'intro')}>Set up your workspace <ArrowRight size={15}/></Link></div>
+          <div className="mf-route-graphic" aria-hidden="true"><div className="route-label">A CLEAR ROUTE THROUGH THE WORK</div><div className="route-line"><i/><i/><i/><span><ArrowRight size={20}/></span></div><div className="route-steps"><span>Know people</span><span>Track prospects</span><span>Plan the send</span><span>Review outcomes</span></div></div>
+        </section>
+
+        <section className="border-y border-[#d9e4e3] bg-[#eff4f3] py-16 sm:py-20" data-testid="home-prospect-management">
+          <div className="mf-section-wrap grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+            <div>
+              <SectionEyebrow>02 / PROSPECT MANAGEMENT</SectionEyebrow>
+              <h2 className="display mt-4 text-3xl font-semibold leading-tight tracking-tight text-[#172638] sm:text-4xl">Keep the opportunity<br/><em className="text-[#1d695c]">and the next step connected.</em></h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-[#4c5c68]">Keep a prospect connected to its contact and, when available, that contact’s company. Track its stage, expected deal value and close date, keep a reasoned history of changes, and schedule follow-ups in the same workspace.</p>
+              <p className="mt-3 max-w-xl text-xs leading-6 text-[#53636e]">Company pages summarize Total Prospect Value (TPV) from non-archived opportunities and Total Revenue Value (TRV) from won expected deal values. Amounts remain grouped by currency.</p>
+              <Link href="/features#prospect-management" className="mt-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline hover:underline" data-testid="home-prospect-management-link">Explore prospect management <ArrowRight size={15}/></Link>
+            </div>
+            <ProspectManagementPreview/>
+          </div>
         </section>
 
         <section className="mf-feature-section">
@@ -258,21 +310,26 @@ export function PublicFeaturesPage() {
         <div className="ft-hero-wrap">
           <div className="ft-hero-copy">
             <SectionEyebrow>THE FEATURES / MADE PRACTICAL</SectionEyebrow>
-            <p className="ft-hero-index">SMALL-TEAM EMAIL · YOUR SENDER, SIMPLIFIED</p>
-            <h1>Your sender.<br/><em>Simpler campaigns.</em></h1>
-            <p className="ft-hero-lede">Keep the email address and SMTP mailbox your team controls. Plan campaigns from saved contacts or an uploaded audience, with company context and honest outcome records—without moving your sending to a separate bulk-email platform.</p>
+            <p className="ft-hero-index">CONTACTS · PROSPECTS · CAMPAIGNS</p>
+            <h1>Your relationships.<br/><em>Your sender.</em></h1>
+            <p className="ft-hero-lede">Keep contact and company context connected to prospect stages and follow-ups, then plan campaigns from saved contacts or an uploaded audience. Your configured SMTP account does the sending.</p>
             <div className="mf-hero-actions"><Link href="/register" className="mf-button" data-testid="features-hero-register" onClick={() => trackMarketingSignupCta('features', 'hero')}>Start with Mailflow <ArrowRight size={16}/></Link><a href="#features-workflow" className="mf-text-link" data-testid="features-scroll-workflow">Explore the workflow <ArrowDown size={15}/></a></div>
             <div className="ft-hero-note"><ShieldCheck size={16}/> Your configured SMTP account does the sending.</div>
-            <a href="#open-campaigns" className="ft-underlined-cta" data-testid="features-scroll-open-campaigns">Discover Open Campaigns <ArrowDown size={15}/></a>
+            <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2">
+              <a href="#prospect-management" className="ft-underlined-cta mt-0" data-testid="features-scroll-prospects">See prospect management <ArrowDown size={15}/></a>
+              <a href="#open-campaigns" className="ft-underlined-cta mt-0" data-testid="features-scroll-open-campaigns">Discover Open Campaigns <ArrowDown size={15}/></a>
+            </div>
           </div>
           <div className="ft-hero-art" aria-label="Mailflow campaign prep, from audience to your own sender">
             <div className="ft-art-label"><span>MAILFLOW / THE SENDING ROUTE</span><span>YOU STAY IN CONTROL</span></div>
             <div className="ft-route-stage">
-              <div className="ft-route-card ft-route-audience"><span className="ft-route-icon"><ContactRound size={17}/></span><span><small>01 / AUDIENCE</small><b>Your people, in order</b><em>Contacts · Companies · Lists</em></span><Check size={15}/></div>
+              <div className="ft-route-card ft-route-audience"><span className="ft-route-icon"><ContactRound size={17}/></span><span><small>01 / AUDIENCE</small><b>Your people, in context</b><em>Contacts · Companies · Lists</em></span><Check size={15}/></div>
               <div className="ft-route-connector"><i/><i/><i/></div>
-              <div className="ft-route-card ft-route-campaign"><span className="ft-route-icon"><Layers3 size={17}/></span><span><small>02 / CAMPAIGN</small><b>A clear plan to review</b><em>Objective · Preview · Schedule</em></span><Check size={15}/></div>
+              <div className="ft-route-card ft-route-campaign"><span className="ft-route-icon"><Gauge size={17}/></span><span><small>02 / PROSPECT</small><b>Pipeline + next step</b><em>Stages · deal history · follow-ups</em></span><Check size={15}/></div>
               <div className="ft-route-connector"><i/><i/><i/></div>
-              <div className="ft-route-card ft-route-smtp"><span className="ft-route-icon"><Send size={17}/></span><span><small>03 / SENDING</small><b>Your SMTP account</b><em>Configured by your team</em></span><span className="ft-connected">CONNECTED</span></div>
+              <div className="ft-route-card ft-route-campaign"><span className="ft-route-icon"><Layers3 size={17}/></span><span><small>03 / CAMPAIGN</small><b>A clear plan to review</b><em>Objective · Preview · Schedule</em></span><Check size={15}/></div>
+              <div className="ft-route-connector"><i/><i/><i/></div>
+              <div className="ft-route-card ft-route-smtp"><span className="ft-route-icon"><Send size={17}/></span><span><small>04 / SENDING</small><b>Your SMTP account</b><em>Configured by your team</em></span><span className="ft-connected">CONNECTED</span></div>
             </div>
             <div className="ft-hero-callout"><span className="ft-callout-line"/><span>Mailflow coordinates the work.<br/><b>Your provider’s rules still apply.</b></span></div>
             <div className="ft-art-caption"><span>ONE SIMPLE ROUTE</span><span>NO BULK-PLATFORM MOVE-IN</span></div>
@@ -282,7 +339,7 @@ export function PublicFeaturesPage() {
       </section>
 
       <section className="ft-thesis" data-testid="features-thesis">
-        <div className="mf-section-wrap ft-thesis-inner"><span className="ft-thesis-kicker">THE MAILFLOW DIFFERENCE</span><p>Your configured SMTP account sends. <em>Mailflow keeps the audience, company context and campaign work simple.</em></p><span className="ft-thesis-end">YOUR SENDER<br/>YOUR WORKFLOW</span></div>
+        <div className="mf-section-wrap ft-thesis-inner"><span className="ft-thesis-kicker">THE MAILFLOW DIFFERENCE</span><p>Your configured SMTP account sends. <em>Mailflow connects contact context, prospect follow-through and straightforward campaign work.</em></p><span className="ft-thesis-end">YOUR SENDER<br/>YOUR WORKFLOW</span></div>
       </section>
 
       <section className="ft-audience-section" id="features-audience">
@@ -297,9 +354,26 @@ export function PublicFeaturesPage() {
         </div>
       </section>
 
+      <section className="border-y border-[#d9e4e3] bg-[#f1f4f1] py-16 sm:py-20" id="prospect-management" data-testid="features-prospect-management">
+        <div className="mf-section-wrap grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
+          <div>
+            <SectionEyebrow>02 / PROSPECT MANAGEMENT</SectionEyebrow>
+            <h2 className="display mt-4 text-3xl font-semibold leading-tight tracking-tight text-[#172638] sm:text-4xl">Track the opportunity.<br/><em className="text-[#1d695c]">Keep its next step clear.</em></h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-[#4c5c68]">Keep a prospect connected to its contact and, when available, that contact’s company. Follow it through configurable stages, record the expected value and close date, and keep a reasoned history as it changes.</p>
+            <ul className="mt-5 grid gap-3 text-[12px] leading-6 text-[#4c5c68]">
+              <li className="flex gap-2"><Check className="mt-1 h-4 w-4 shrink-0 text-[#55816e]"/>Change deal value at any stage; each change requires a reason and remains in the history.</li>
+              <li className="flex gap-2"><Check className="mt-1 h-4 w-4 shrink-0 text-[#55816e]"/>Record prospect actions and schedule follow-ups with a date, action and note. Review today’s work or use daily, weekly and monthly calendar views.</li>
+              <li className="flex gap-2"><Check className="mt-1 h-4 w-4 shrink-0 text-[#55816e]"/>See company-level TPV from non-archived linked prospects and TRV from won expected deal values. These are pipeline summaries, not invoiced or collected revenue, and currencies stay separate.</li>
+            </ul>
+            <Link href="/register" className="mt-6 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#245b9b] px-4 text-[12px] font-semibold text-white no-underline transition hover:bg-[#1e4d83]" data-testid="features-prospect-register" onClick={() => trackMarketingSignupCta('features', 'intro')}>Build your workspace <ArrowRight size={15}/></Link>
+          </div>
+          <ProspectManagementPreview/>
+        </div>
+      </section>
+
       <section className="ft-campaign-section" id="features-workflow">
         <div className="mf-section-wrap">
-          <div className="ft-campaign-intro"><div><SectionEyebrow>02 / PLAN THE SEND</SectionEyebrow><h2>One campaign.<br/><em>A few clear decisions.</em></h2></div><p>Set an objective, prioritize lists, select eligible contacts and choose the SMTP sender. Review the audience and message before you queue or schedule.</p></div>
+          <div className="ft-campaign-intro"><div><SectionEyebrow>03 / PLAN THE SEND</SectionEyebrow><h2>One campaign.<br/><em>A few clear decisions.</em></h2></div><p>Set an objective, prioritize lists, select eligible contacts and choose the SMTP sender. Review the audience and message before you queue or schedule.</p></div>
           <div className="ft-campaign-layout"><FeatureCampaignPreview/><div className="ft-campaign-steps">
             <article><span>01</span><div><h3>Give it a purpose.</h3><p>Write down the campaign objective so your team knows what this send is for.</p></div></article>
             <article><span>02</span><div><h3>Choose your audience and sender.</h3><p>Prioritize lists, include or exclude eligible contacts from the draft, and choose its SMTP mailbox. Bounced contacts remain visible but cannot be selected.</p></div></article>
@@ -342,7 +416,7 @@ export function PublicFeaturesPage() {
 
       <section className="ft-sender-section">
         <div className="mf-section-wrap ft-sender-layout">
-          <div className="ft-sender-heading"><SectionEyebrow>03 / YOUR SENDER, YOUR CALL</SectionEyebrow><h2>Keep your email<br/><em>address where it belongs.</em></h2><p>Mailflow doesn’t replace your email provider. Configure the SMTP mailbox you control, check the connection and send a test email. When your package allows multiple mailboxes, choose a different sender for each campaign.</p><Link href="/register" className="ft-underlined-cta" data-testid="features-sender-register" onClick={() => trackMarketingSignupCta('features', 'sender')}>Set up your workspace <ArrowRight size={15}/></Link></div>
+          <div className="ft-sender-heading"><SectionEyebrow>04 / YOUR SENDER, YOUR CALL</SectionEyebrow><h2>Keep your email<br/><em>address where it belongs.</em></h2><p>Mailflow doesn’t replace your email provider. Configure the SMTP mailbox you control, check the connection and send a test email. When your package allows multiple mailboxes, choose a different sender for each campaign.</p><Link href="/register" className="ft-underlined-cta" data-testid="features-sender-register" onClick={() => trackMarketingSignupCta('features', 'sender')}>Set up your workspace <ArrowRight size={15}/></Link></div>
           <div className="ft-sender-panel">
             <div className="ft-sender-panel-head"><span><ShieldCheck size={15}/> SENDING ACCOUNT</span><span className="ft-sender-status"><i/> CONNECTION CHECKED</span></div>
             <div className="ft-sender-identity"><div className="ft-sender-avatar"><Mail size={19}/></div><span><small>SENDER IDENTITY</small><b>hello@yourstudio.example</b><em>Your name · Reply-to set by you</em></span><Check size={16}/></div>
@@ -357,7 +431,7 @@ export function PublicFeaturesPage() {
       <section className="border-y border-[#d9e4e3] bg-[#eff4f3] py-16 sm:py-20" data-testid="features-ai-context">
         <div className="mf-section-wrap grid gap-8 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
           <div>
-            <SectionEyebrow>04 / CONTEXT &amp; DRAFTING</SectionEyebrow>
+            <SectionEyebrow>05 / CONTEXT &amp; DRAFTING</SectionEyebrow>
             <h2 className="display mt-4 text-3xl font-semibold leading-tight tracking-tight text-[#172638] sm:text-4xl">AI for preparation.<br/><em className="text-[#1d695c]">You stay in control.</em></h2>
             <p className="mt-4 max-w-xl text-sm leading-7 text-[#4c5c68]">Request company research for supported Global Company DB profiles, or use AI Email Assist to turn a campaign objective into an editable first draft. These tools help with preparation; they do not send campaigns for you.</p>
             <p className="mt-4 max-w-xl text-xs leading-6 text-[#53636e]">Availability depends on your plan or add-on credits and the platform’s AI setup. Company research is about company-level context, not your contact list.</p>
@@ -379,7 +453,7 @@ export function PublicFeaturesPage() {
 
       <section className="ft-history-section">
         <div className="mf-section-wrap ft-history-layout">
-          <div><SectionEyebrow>05 / A RECORD TO RETURN TO</SectionEyebrow><h2>Know what the<br/><em>server told you.</em></h2><p>Campaign history keeps persisted outcomes with the work, so you can review what was queued and what your configured sending account reported.</p><div className="ft-honesty"><span><Check size={13}/></span><p>SMTP acceptance is not inbox confirmation. Mailflow keeps that distinction clear.</p></div></div>
+          <div><SectionEyebrow>06 / A RECORD TO RETURN TO</SectionEyebrow><h2>Know what the<br/><em>server told you.</em></h2><p>Campaign history keeps persisted outcomes with the work, so you can review what was queued and what your configured sending account reported.</p><div className="ft-honesty"><span><Check size={13}/></span><p>SMTP acceptance is not inbox confirmation. Mailflow keeps that distinction clear.</p></div></div>
           <div className="ft-history-card">
             <div className="ft-history-card-head"><span>CAMPAIGN HISTORY · EXAMPLE</span><span>APRIL 08 <ArrowDown size={11}/></span></div>
             <div className="ft-history-campaign"><span className="ft-history-campaign-icon"><Mail size={16}/></span><span><b>April studio notes</b><small>Spring clients · Sender: hello@yourstudio.example</small></span><span className="ft-history-done">COMPLETED</span></div>
@@ -394,6 +468,7 @@ export function PublicFeaturesPage() {
       <section className="ft-faq-section">
         <div className="mf-section-wrap ft-faq-layout"><div><SectionEyebrow>GOOD TO KNOW</SectionEyebrow><h2>Helpful clarity<br/>before you begin.</h2></div><div className="faq-items">
           <details><summary data-testid="feature-faq-transport">Does Mailflow provide bulk email sending? <ChevronDown size={17}/></summary><p>No. Mailflow manages contacts, the campaign workflow and its recorded outcomes. Delivery uses the SMTP account you configure, and provider quotas, rules and deliverability limits apply.</p></details>
+          <details><summary data-testid="feature-faq-prospects">Can I track prospects and follow-ups in Mailflow? <ChevronDown size={17}/></summary><p>Yes. Keep prospects connected to their contacts and, where available, the contact’s company. Track configurable stages and reasoned deal-value changes, record actions, and schedule follow-ups in the overview and calendar. Company TPV sums non-archived linked prospect values; TRV sums won expected deal values. These are pipeline summaries, not collected revenue, and currencies are kept separate.</p></details>
           <details><summary data-testid="feature-faq-automation">Does Mailflow run automatic drip journeys? <ChevronDown size={17}/></summary><p>Mailflow offers a straightforward campaign process: select lists, set priority, preview the audience and template, then queue or schedule delivery. It is not an automatic behavioral journey builder.</p></details>
           <details><summary data-testid="feature-faq-variants">How do message variants and unsubscribes work? <ChevronDown size={17}/></summary><p>Subject, greeting and signature variants are assigned consistently for each recipient during a campaign. Every campaign includes a one-click unsubscribe link that updates the contact’s subscription status for future sends in that workspace. Variant reports show assignments and recorded sending outcomes, not opens, clicks or inbox placement.</p></details>
           <details><summary data-testid="feature-faq-ai">Does AI send messages automatically? <ChevronDown size={17}/></summary><p>No. AI Email Assist creates an editable draft for you to review. Company research is requested for supported company profiles, not run against your contacts. AI features require the relevant plan allowance or credits and platform setup.</p></details>
