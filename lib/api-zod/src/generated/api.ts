@@ -2734,6 +2734,9 @@ export const updateProspectBodyNameMax = 180;
 export const updateProspectBodyExpectedDealValueMin = 0;
 
 export const updateProspectBodyCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const updateProspectBodyDealValueChangeReasonMin = 3;
+export const updateProspectBodyDealValueChangeReasonMax = 4000;
+
 export const updateProspectBodyNotesMax = 20000;
 
 export const updateProspectBodyClosureRemarksMax = 20000;
@@ -2745,6 +2748,7 @@ export const UpdateProspectBody = zod.object({
   "productId": zod.string().uuid().optional(),
   "expectedDealValue": zod.number().min(updateProspectBodyExpectedDealValueMin).optional(),
   "currencyCode": zod.string().regex(updateProspectBodyCurrencyCodeRegExp).optional(),
+  "dealValueChangeReason": zod.string().min(updateProspectBodyDealValueChangeReasonMin).max(updateProspectBodyDealValueChangeReasonMax).optional(),
   "expectedClosureDate": zod.coerce.date().optional(),
   "notes": zod.string().min(1).max(updateProspectBodyNotesMax).optional(),
   "archived": zod.boolean().optional(),
@@ -3176,6 +3180,8 @@ export const getProspectValueHistoryResponsePreviousCurrencyCodeRegExp = new Reg
 export const getProspectValueHistoryResponseNewDealValueMin = 0;
 
 export const getProspectValueHistoryResponseNewCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectValueHistoryResponseReasonMax = 4000;
+
 
 
 export const GetProspectValueHistoryResponseItem = zod.object({
@@ -3184,6 +3190,7 @@ export const GetProspectValueHistoryResponseItem = zod.object({
   "previousCurrencyCode": zod.string().regex(getProspectValueHistoryResponsePreviousCurrencyCodeRegExp),
   "newDealValue": zod.number().min(getProspectValueHistoryResponseNewDealValueMin),
   "newCurrencyCode": zod.string().regex(getProspectValueHistoryResponseNewCurrencyCodeRegExp),
+  "reason": zod.string().max(getProspectValueHistoryResponseReasonMax).nullable(),
   "changedByName": zod.string(),
   "createdAt": zod.coerce.date()
 })

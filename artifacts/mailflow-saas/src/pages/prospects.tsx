@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useParams } from 'wouter';
 import {
-  Activity, ArrowLeft, ArrowRight, Archive, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Trash2,
+  Activity, ArrowLeft, ArrowRight, Archive, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Trash2, Pencil, X,
   CircleAlert, Clock3, DollarSign, ExternalLink, Filter, History, Layers3, Plus, Search, Settings2,
   Tag, UserRound,
 } from 'lucide-react';
@@ -44,6 +44,7 @@ const money = (value: number, currency: string) => {
   try { return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 4 }).format(value); }
   catch { return `${currency} ${value.toLocaleString()}`; }
 };
+const canonicalMoney = (value: string | number) => Number.isFinite(Number(value)) ? Number(value).toFixed(4) : '';
 const localDateInput = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 function Notice({ children, kind = 'success' }: { children: ReactNode; kind?: 'success' | 'error' }) {
   return <div role={kind === 'error' ? 'alert' : 'status'} className={`rounded-lg border px-3.5 py-3 text-[11px] leading-5 ${kind === 'error' ? 'border-[#efc9bf] bg-[#fff6f3] text-[#9b4837]' : 'border-[#cde2d7] bg-[#f1f8f4] text-[#35684f]'}`}>{children}</div>;
@@ -269,6 +270,7 @@ function ProspectForm({ prospectId, initialContactId, onSaved }: { prospectId?: 
   const [productId, setProductId] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('');
+  const [dealValueChangeReason, setDealValueChangeReason] = useState('');
   const [closeDate, setCloseDate] = useState('');
   const [stageId, setStageId] = useState('');
   const [notes, setNotes] = useState('');
@@ -280,8 +282,16 @@ function ProspectForm({ prospectId, initialContactId, onSaved }: { prospectId?: 
     setCloseDate(record.expectedClosureDate.slice(0, 10)); setStageId(record.currentStage.id); setNotes(record.notes); setTagIds(record.prospectTags.map(t => t.id)); setInitialized(true);
   }
   const isSetupReady = Boolean(stages.data?.some(s => s.active && s.stageType === 'active') && products.data?.some(p => p.active) && currencies.data?.currencies.length);
+  const isDealValueChange = Boolean(prospectId && record && (
+    canonicalMoney(amount) !== canonicalMoney(record.expectedDealValue)
+    || (currency || currencies.data?.defaultCurrencyCode || '') !== record.currencyCode
+  ));
   const submit = (event: FormEvent) => {
     event.preventDefault(); setNotice(null);
+    if (isDealValueChange && dealValueChangeReason.trim().length < 3) {
+      setNotice({ kind: 'error', text: 'Enter at least 3 characters explaining the deal-value change.' });
+      return;
+    }
     if (!prospectId) {
       const data: CreateProspectInput = { contactId, name: name.trim(), productId, expectedDealValue: Number(amount), currencyCode: currency || currencies.data?.defaultCurrencyCode || '', expectedClosureDate: closeDate, stageId, notes: notes.trim(), prospectTagIds: tagIds };
       create.mutate({ data }, { onSuccess: result => {
@@ -290,7 +300,15 @@ function ProspectForm({ prospectId, initialContactId, onSaved }: { prospectId?: 
         setLocation(`/prospects/${encodeURIComponent(result.prospect.id)}`);
       }, onError: e => setNotice({ kind: 'error', text: errText(e) }) });
     } else {
-      update.mutate({ prospectId, data: { name: name.trim(), productId, expectedDealValue: Number(amount), currencyCode: currency || currencies.data?.defaultCurrencyCode || '', expectedClosureDate: closeDate, notes: notes.trim() } }, {
+      update.mutate({ prospectId, data: {
+        name: name.trim(),
+        productId,
+        expectedDealValue: Number(amount),
+        currencyCode: currency || currencies.data?.defaultCurrencyCode || '',
+        ...(isDealValueChange ? { dealValueChangeReason: dealValueChangeReason.trim() } : {}),
+        expectedClosureDate: closeDate,
+        notes: notes.trim(),
+      } }, {
         onSuccess: () => {
           void qc.invalidateQueries({ queryKey: getGetProspectValueHistoryQueryKey(prospectId) });
           void qc.invalidateQueries({ queryKey: getListContactProspectsQueryKey(contactId) });
@@ -331,6 +349,7 @@ function ProspectForm({ prospectId, initialContactId, onSaved }: { prospectId?: 
         {!prospectId && <label><span className={label}>Initial stage <em className="not-italic text-[#b45743]">*</em></span><select required className={field} value={stageId} onChange={e => setStageId(e.target.value)} data-testid="select-prospect-initial-stage"><option value="">Choose a stage</option>{availableStages.map(s => <option key={s.id} value={s.id}>{s.name} · {s.probability}%</option>)}</select></label>}
         <label><span className={label}>Expected deal value <em className="not-italic text-[#b45743]">*</em></span><input required min="0" step="0.0001" type="number" className={field} value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" data-testid="input-prospect-value"/></label>
         <label><span className={label}>Currency <em className="not-italic text-[#b45743]">*</em></span><select required className={field} value={currency || currencies.data?.defaultCurrencyCode || ''} onChange={e => setCurrency(e.target.value)} data-testid="select-prospect-currency"><option value="">Choose a currency</option>{currencies.data?.currencies.map(c => <option key={c.code} value={c.code}>{c.code}{c.isDefault ? ' · default' : ''}</option>)}</select></label>
+         {isDealValueChange && <label className="sm:col-span-2"><span className={label}>Reason for deal value change <em className="not-italic text-[#b45743]">* required</em></span><textarea required minLength={3} maxLength={4000} className="min-h-[82px] w-full resize-y rounded-lg border border-[#d7e0e9] bg-white px-3 py-2.5 text-[12px] leading-5 text-[#1a2b40] outline-none focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]" value={dealValueChangeReason} onChange={e => setDealValueChangeReason(e.target.value)} placeholder="Why is the expected value or currency changing?" data-testid="input-prospect-value-change-reason"/></label>}
         <label><span className={label}>Expected closure date <em className="not-italic text-[#b45743]">*</em></span><input required type="date" className={field} value={closeDate} onChange={e => setCloseDate(e.target.value)} data-testid="input-prospect-close-date"/></label>
         <label className="sm:col-span-2"><span className={label}>Prospect notes <em className="not-italic text-[#b45743]">*</em></span><textarea required maxLength={20000} className="min-h-[108px] w-full resize-y rounded-lg border border-[#d7e0e9] bg-white px-3 py-2.5 text-[12px] leading-5 text-[#1a2b40] outline-none focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Capture the context that belongs to this opportunity. Contact notes remain separate." data-testid="input-prospect-notes"/></label>
       </div>
@@ -361,7 +380,7 @@ export function ProspectDetailPage() {
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.16em] text-[#70859a]">PROSPECT / {record.id.slice(0, 8)}</div><h1 className="display break-words text-[29px] font-bold text-[#172b43] sm:text-[35px]">{record.name}</h1><p className="mt-2 text-[12px] text-[#718093]">{record.product.itemType === 'service' ? 'Service' : 'Product'} · {record.product.name}{record.product.category ? ` · ${record.product.category}` : ''} · created {dateLabel(record.createdAt)} · updated {dateLabel(record.updatedAt)}</p></div><span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${record.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{record.currentStage.name} · {record.currentProbability}%</span></div>
     {record.archivedAt && <div className="mb-4"><Notice>Archived {dateLabel(record.archivedAt)}. This record is retained for history.</Notice></div>}
     <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Metric tone="blue" title="Expected deal value" value={money(record.expectedDealValue, record.currencyCode)} note={record.currencyCode} icon={<DollarSign className="h-4 w-4"/>}/>
+      <DealValueMetric record={record}/>
       <Metric tone="amber" title="Expected closure" value={dateLabel(record.expectedClosureDate)} note={record.actualClosureDate ? `Closed ${dateLabel(record.actualClosureDate)}` : 'Target date'} icon={<CalendarDays className="h-4 w-4"/>}/>
       <Metric tone="green" title="Current probability" value={`${record.currentProbability}%`} note={record.currentStage.name} icon={<Activity className="h-4 w-4"/>}/>
       <Metric tone="violet" title="Last activity" value={dateLabel(record.lastActivityAt)} note="Most recent recorded touch" icon={<Clock3 className="h-4 w-4"/>}/>
@@ -395,6 +414,64 @@ function Metric({ tone, title, value, note, icon }: { tone: 'blue' | 'amber' | '
   };
   return <div className={`rounded-xl border p-4 shadow-[0_4px_18px_rgba(19,43,70,.035)] ${tones[tone]}`}><div className="flex items-center justify-between"><span className="text-[9px] font-bold uppercase tracking-[.1em] text-[#536a80]">{title}</span>{icon}</div><div className="mt-3 truncate text-[18px] font-bold tracking-[-.04em] text-[#213a55]">{value}</div><div className="mt-1 text-[9px] text-[#718093]">{note}</div></div>;
 }
+
+function DealValueMetric({ record }: { record: ProspectRecord }) {
+  const qc = useQueryClient();
+  const currencies = useGetProspectCurrencies();
+  const update = useUpdateProspect();
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(String(record.expectedDealValue));
+  const [currency, setCurrency] = useState(record.currencyCode);
+  const [reason, setReason] = useState('');
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const changed = canonicalMoney(amount) !== canonicalMoney(record.expectedDealValue) || currency !== record.currencyCode;
+
+  const startEdit = () => {
+    setAmount(String(record.expectedDealValue));
+    setCurrency(record.currencyCode);
+    setReason('');
+    setNotice(null);
+    setEditing(true);
+  };
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    setNotice(null);
+    update.mutate({
+      prospectId: record.id,
+      data: {
+        expectedDealValue: Number(amount),
+        currencyCode: currency,
+        dealValueChangeReason: reason.trim(),
+      },
+    }, {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getGetProspectQueryKey(record.id) });
+        void qc.invalidateQueries({ queryKey: getListProspectsQueryKey() });
+        void qc.invalidateQueries({ queryKey: getGetProspectDashboardQueryKey() });
+        void qc.invalidateQueries({ queryKey: getGetProspectValueHistoryQueryKey(record.id) });
+        void qc.invalidateQueries({ queryKey: getListContactProspectsQueryKey(record.contact.id) });
+        if (record.contact.company?.id) {
+          void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(record.contact.company.id) });
+        }
+        setEditing(false);
+        setNotice({ kind: 'success', text: 'Deal value updated and reason recorded.' });
+      },
+      onError: error => setNotice({ kind: 'error', text: errText(error) }),
+    });
+  };
+
+  return <section className="rounded-xl border border-[#d6e6f5] bg-[#eff6fd] p-4 shadow-[0_4px_18px_rgba(19,43,70,.035)]" data-testid="summary-deal-value">
+    <div className="flex items-center justify-between"><span className="text-[9px] font-bold uppercase tracking-[.1em] text-[#536a80]">Expected deal value</span><div className="flex items-center gap-2 text-[#3f6f9d]"><DollarSign className="h-4 w-4"/>{editing ? <button type="button" onClick={() => { setEditing(false); setNotice(null); }} className="rounded p-1 text-[#647b90] hover:bg-white/70" aria-label="Cancel value edit" data-testid="button-cancel-deal-value"><X className="h-3.5 w-3.5"/></button> : <button type="button" onClick={startEdit} className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-[9px] font-semibold text-[#2c5f90] hover:bg-white" data-testid="button-edit-deal-value"><Pencil className="h-3 w-3"/>Edit value</button>}</div></div>
+    {editing ? <form onSubmit={save} className="mt-3 space-y-2.5">
+      <label className="block"><span className={label}>New amount</span><input required min="0" step="0.0001" type="number" className={field} value={amount} onChange={event => setAmount(event.target.value)} data-testid="input-inline-deal-value"/></label>
+      <label className="block"><span className={label}>Currency</span><select required className={field} value={currency} onChange={event => setCurrency(event.target.value)} data-testid="select-inline-deal-currency"><option value="">Choose currency</option>{currencies.data?.currencies.map(item => <option key={item.code} value={item.code}>{item.code}{item.isDefault ? ' · default' : ''}</option>)}</select></label>
+      <label className="block"><span className={label}>Reason <em className="not-italic text-[#b45743]">* required</em></span><textarea required minLength={3} maxLength={4000} className="min-h-[68px] w-full resize-y rounded-lg border border-[#d7e0e9] bg-white px-3 py-2 text-[11px] leading-4 text-[#1a2b40] outline-none focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]" value={reason} onChange={event => setReason(event.target.value)} placeholder="Why is the deal value changing?" data-testid="input-inline-deal-value-reason"/></label>
+      {notice && <Notice kind={notice.kind}>{notice.text}</Notice>}
+      <button type="submit" disabled={update.isPending || !changed || reason.trim().length < 3 || !currency} className={`${smallBtn} w-full`} data-testid="button-save-inline-deal-value">{update.isPending ? 'Saving…' : <><Check className="h-3.5 w-3.5"/>Save value</>}</button>
+    </form> : <><div className="mt-3 truncate text-[18px] font-bold tracking-[-.04em] text-[#213a55]">{money(record.expectedDealValue, record.currencyCode)}</div><div className="mt-1 text-[9px] text-[#718093]">{record.currencyCode}</div>{notice && <div className="mt-2"><Notice kind={notice.kind}>{notice.text}</Notice></div>}</>}
+  </section>;
+}
+
 function StageChangePanel({ record }: { record: ProspectRecord }) {
   const qc = useQueryClient();
   const stages = useListProspectStages();
@@ -496,6 +573,7 @@ function ValueHistoryPanel({ prospectId }: { prospectId: string }) {
         : query.data?.length ? <ol className="space-y-3">{query.data.map(entry => <li key={entry.id} className="rounded-lg border border-[#dcebe0] bg-[#f8fbf9] p-3" data-testid={`row-prospect-value-history-${entry.id}`}>
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"><span className="text-[10px] font-bold text-[#466c52]">Deal value updated</span><time className="text-[9px] text-[#82938a]">{dateLabel(entry.createdAt)}</time></div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]"><span className="font-semibold text-[#708077]">{money(entry.previousDealValue, entry.previousCurrencyCode)}</span><ArrowRight className="h-3 w-3 text-[#8b9d91]"/><strong className="text-[#286d4a]">{money(entry.newDealValue, entry.newCurrencyCode)}</strong></div>
+          <p className="mt-2 whitespace-pre-wrap break-words text-[10px] leading-4 text-[#536b5a]"><strong>Reason:</strong> {entry.reason ?? 'Not captured for this earlier change.'}</p>
           <div className="mt-1 text-[9px] text-[#82938a]">Changed by {entry.changedByName}</div>
         </li>)}</ol>
         : <div className="rounded-lg border border-dashed border-[#dce7df] bg-[#f8fbf9] px-4 py-8 text-center text-[10px] text-[#7c8d82]" data-testid="empty-prospect-value-history"><History className="mx-auto mb-2 h-4 w-4 text-[#6a9074]"/>No deal value changes yet. Updates made from Edit prospect will appear here.</div>}

@@ -577,6 +577,9 @@ router.patch("/prospects/:prospectId", requireUserRole, async (req, res): Promis
     const nextCurrencyCode = input.data.currencyCode ?? current.currencyCode;
     const valueChanged = canonicalDealValue(current.expectedDealValue) !== canonicalDealValue(nextDealValue)
       || current.currencyCode !== nextCurrencyCode;
+    if (valueChanged && !input.data.dealValueChangeReason?.trim()) {
+      return { kind: "value_reason_required" as const };
+    }
     const patch: Partial<typeof prospectsTable.$inferInsert> = { updatedBy: userId, updatedAt: new Date() };
     if (input.data.name !== undefined) patch.name = input.data.name.trim();
     if (input.data.productId !== undefined) patch.productId = input.data.productId;
@@ -597,6 +600,7 @@ router.patch("/prospects/:prospectId", requireUserRole, async (req, res): Promis
         previousCurrencyCode: current.currencyCode,
         newDealValue: canonicalDealValue(nextDealValue),
         newCurrencyCode: nextCurrencyCode,
+        reason: input.data.dealValueChangeReason!.trim(),
         changedBy: userId,
       });
     }
@@ -616,6 +620,10 @@ router.patch("/prospects/:prospectId", requireUserRole, async (req, res): Promis
   }
   if (result.kind === "invalid_currency") {
     res.status(400).json({ error: "Select a currency configured for your account." });
+    return;
+  }
+  if (result.kind === "value_reason_required") {
+    res.status(400).json({ error: "Provide a reason of at least 3 characters when changing the deal value or currency." });
     return;
   }
   const record = await getOwnedRecord(userId, params.data.prospectId);
@@ -869,6 +877,7 @@ router.get("/prospects/:prospectId/value-history", requireUserRole, async (req, 
     previousCurrencyCode: prospectValueHistoryTable.previousCurrencyCode,
     newDealValue: prospectValueHistoryTable.newDealValue,
     newCurrencyCode: prospectValueHistoryTable.newCurrencyCode,
+    reason: prospectValueHistoryTable.reason,
     actorFirstName: valueAuditActor.firstName,
     actorLastName: valueAuditActor.lastName,
     createdAt: prospectValueHistoryTable.createdAt,
@@ -884,6 +893,7 @@ router.get("/prospects/:prospectId/value-history", requireUserRole, async (req, 
     previousCurrencyCode: row.previousCurrencyCode,
     newDealValue: Number(row.newDealValue),
     newCurrencyCode: row.newCurrencyCode,
+    reason: row.reason,
     changedByName: `${row.actorFirstName} ${row.actorLastName}`.trim(),
     createdAt: row.createdAt,
   }))));

@@ -267,7 +267,17 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     assert.equal(usdTotals.activeValue, 50);
     assert.equal(usdTotals.weightedValue, 10);
 
-    const valueUpdate = await call(mainServer, `/prospects/${first.id}`, "PATCH", { expectedDealValue: 125 });
+    const missingValueReason = await call(mainServer, `/prospects/${first.id}`, "PATCH", { expectedDealValue: 125 });
+    assert.equal(missingValueReason.status, 400, "a changed deal value requires an explanation");
+    const blankValueReason = await call(mainServer, `/prospects/${first.id}`, "PATCH", {
+      expectedDealValue: 125,
+      dealValueChangeReason: "   ",
+    });
+    assert.equal(blankValueReason.status, 400, "a whitespace-only reason is not accepted");
+    const valueUpdate = await call(mainServer, `/prospects/${first.id}`, "PATCH", {
+      expectedDealValue: 125,
+      dealValueChangeReason: "Updated after the revised proposal.",
+    });
     assert.equal(valueUpdate.status, 200);
     assert.equal(valueUpdate.data.prospect.expectedDealValue, 125);
     let valueHistory = await call(mainServer, `/prospects/${first.id}/value-history`);
@@ -279,8 +289,15 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
         previousCurrencyCode: valueHistory.data[0].previousCurrencyCode,
         newDealValue: valueHistory.data[0].newDealValue,
         newCurrencyCode: valueHistory.data[0].newCurrencyCode,
+        reason: valueHistory.data[0].reason,
       },
-      { previousDealValue: 100, previousCurrencyCode: "INR", newDealValue: 125, newCurrencyCode: "INR" },
+      {
+        previousDealValue: 100,
+        previousCurrencyCode: "INR",
+        newDealValue: 125,
+        newCurrencyCode: "INR",
+        reason: "Updated after the revised proposal.",
+      },
     );
     const noOpValueUpdate = await call(mainServer, `/prospects/${first.id}`, "PATCH", {
       expectedDealValue: 125,
@@ -311,11 +328,15 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
       reason: "Discovery completed; proposal prepared.",
     });
     assert.equal(firstMove.status, 200);
-    const valueUpdateAtLaterStage = await call(mainServer, `/prospects/${first.id}`, "PATCH", { expectedDealValue: 150 });
+    const valueUpdateAtLaterStage = await call(mainServer, `/prospects/${first.id}`, "PATCH", {
+      expectedDealValue: 150,
+      dealValueChangeReason: "Expanded scope increased the estimate.",
+    });
     assert.equal(valueUpdateAtLaterStage.status, 200, "deal values remain editable after a stage change");
     valueHistory = await call(mainServer, `/prospects/${first.id}/value-history`);
     assert.equal(valueHistory.data.length, 2, "each actual deal-value change is retained");
     assert.equal(valueHistory.data[0].newDealValue, 150);
+    assert.equal(valueHistory.data[0].reason, "Expanded scope increased the estimate.");
     const backMove = await call(mainServer, `/prospects/${first.id}/stage`, "POST", {
       newStageId: qualification.id,
       reason: "Revisit qualification after budget review.",

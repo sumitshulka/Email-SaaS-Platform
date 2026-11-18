@@ -222,6 +222,7 @@ export const prospectValueHistoryTable = pgTable("prospect_value_history", {
   previousCurrencyCode: varchar("previous_currency_code", { length: 3 }).notNull(),
   newDealValue: numeric("new_deal_value", { precision: 20, scale: 4 }).notNull(),
   newCurrencyCode: varchar("new_currency_code", { length: 3 }).notNull(),
+  reason: text("reason"),
   changedBy: uuid("changed_by").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, table => [
@@ -235,6 +236,7 @@ export const prospectValueHistoryTable = pgTable("prospect_value_history", {
   index("prospect_value_history_prospect_time_idx").on(table.userId, table.prospectId, table.createdAt),
   check("prospect_value_history_nonnegative", sql`${table.previousDealValue} >= 0 and ${table.newDealValue} >= 0`),
   check("prospect_value_history_currency_codes", sql`${table.previousCurrencyCode} ~ '^[A-Z]{3}$' and ${table.newCurrencyCode} ~ '^[A-Z]{3}$'`),
+  check("prospect_value_history_reason_valid", sql`${table.reason} is null or length(trim(${table.reason})) between 3 and 4000`),
 ]);
 
 export const prospectActionsTable = pgTable("prospect_actions", {

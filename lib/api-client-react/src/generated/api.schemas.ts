@@ -6097,6 +6097,11 @@ export interface UpdateProspectInput {
   expectedDealValue?: number;
   /** @pattern ^[A-Z]{3}$ */
   currencyCode?: string;
+  /**
+     * @minLength 3
+     * @maxLength 4000
+     */
+  dealValueChangeReason?: string;
   expectedClosureDate?: string;
   /**
      * @minLength 1
@@ -6176,6 +6181,11 @@ export interface ProspectValueHistoryEntry {
   newDealValue: number;
   /** @pattern ^[A-Z]{3}$ */
   newCurrencyCode: string;
+  /**
+     * @maxLength 4000
+     * @nullable
+     */
+  reason: string | null;
   changedByName: string;
   createdAt: string;
 }

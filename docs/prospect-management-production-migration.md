@@ -62,3 +62,15 @@ The migration is also available as
 `lib/db/migrations/0026_prospect_value_history.sql` for hosts that apply SQL
 through their own migration tooling. Do not use the Replit development
 database URL for an external production install.
+
+To require a reason for each amount or currency change, apply the next
+additive migration as well:
+
+```sh
+pnpm --filter @workspace/api-server run migrate:prospect-value-history-reason
+```
+
+Hosts using their own PostgreSQL migration tooling can apply
+`lib/db/migrations/0027_prospect_value_history_reason.sql`. Existing history
+rows remain valid with no reason; all new changes are required to include one
+by the API.

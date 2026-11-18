@@ -9192,6 +9192,7 @@ components:
         productId: { type: string, format: uuid }
         expectedDealValue: { type: number, minimum: 0 }
         currencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        dealValueChangeReason: { type: string, minLength: 3, maxLength: 4000 }
         expectedClosureDate: { type: string, format: date }
         notes: { type: string, minLength: 1, maxLength: 20000 }
         archived: { type: boolean }
@@ -9231,9 +9232,10 @@ components:
         previousCurrencyCode: { type: string, pattern: "^[A-Z]{3}$" }
         newDealValue: { type: number, minimum: 0 }
         newCurrencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        reason: { type: ["string", "null"], maxLength: 4000 }
         changedByName: { type: string }
         createdAt: { type: string, format: date-time }
-      required: [id, previousDealValue, previousCurrencyCode, newDealValue, newCurrencyCode, changedByName, createdAt]
+      required: [id, previousDealValue, previousCurrencyCode, newDealValue, newCurrencyCode, reason, changedByName, createdAt]
     CreateProspectActionInput:
       type: object
       properties:

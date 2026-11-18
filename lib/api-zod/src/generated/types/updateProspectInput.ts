@@ -17,6 +17,11 @@ export interface UpdateProspectInput {
   expectedDealValue?: number;
   /** @pattern ^[A-Z]{3}$ */
   currencyCode?: string;
+  /**
+     * @minLength 3
+     * @maxLength 4000
+     */
+  dealValueChangeReason?: string;
   expectedClosureDate?: Date;
   /**
      * @minLength 1
