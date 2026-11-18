@@ -140,6 +140,17 @@ test("report summaries preserve entity grain, activity counts, currency, and ten
     }, { page: 1, pageSize: 10 });
     assert.equal(Number(companySummary.rows[0]?.["aggregate:prospects"]), 3);
 
+    const contactCompanies = await runReport(userId, {
+      version: 1,
+      baseEntityId: "contacts",
+      columns: [
+        { fieldId: "contacts.email" },
+        { fieldId: "contacts.company.name" },
+      ],
+    }, { page: 1, pageSize: 10 });
+    assert.equal(contactCompanies.rows.length, 1);
+    assert.equal(contactCompanies.rows[0]?.["contacts.company.name"], "Report test company");
+
     const currencySummary = await runReport(userId, {
       version: 1,
       baseEntityId: "prospects",

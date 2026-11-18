@@ -493,6 +493,7 @@ const contacts: ReportEntity = {
     booleanField("contacts.subscribed", "Subscribed", contactsTable.subscribed),
     textField("contacts.tags", "Tags", contactTagSummary, "Tenant-scoped tag summary; does not add rows.", undefined, false),
     textField("contacts.lists", "Lists", contactListSummary, "Tenant-scoped list summary; does not add rows.", undefined, false),
+    textField("contacts.company.name", "Linked company name", contactCompany.companyName, "Workspace company linked to this contact.", "company"),
     textField("contacts.company.businessArea", "Linked company business area", contactCompany.companyBusinessArea, "", "company"),
     textField("contacts.company.industry", "Linked company industry", contactCompany.companyIndustry, "", "company"),
     textField("contacts.company.domain", "Linked company domain", contactCompany.companyDomain, "", "company"),
@@ -1092,6 +1093,7 @@ export const reportTemplates = [
     definition: definition("contacts", [
       "contacts.name",
       "contacts.email",
+      "contacts.company.name",
       "contacts.company.businessArea",
       "contacts.jobTitle",
       "contacts.subscribed",
