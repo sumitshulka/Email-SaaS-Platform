@@ -190,6 +190,7 @@ import type {
   ListProspectActionsParams,
   ListProspectFollowUpsParams,
   ListProspectsParams,
+  ListSavedReports200,
   LoginInput,
   MaintenanceStatus,
   MessageResponse,
@@ -243,7 +244,13 @@ import type {
   RazorpayTestResponse,
   RazorpayWebhookPayload,
   RegisterInput,
+  ReportWorkareaCatalog,
+  ReportWorkareaExportInput,
+  ReportWorkareaRunInput,
+  ReportWorkareaRunResult,
   ResetPasswordInput,
+  SaveReportWorkareaInput,
+  SavedReportDefinition,
   SearchCompaniesParams,
   SearchGlobalCompaniesParams,
   SenderInboxCheckInput,
@@ -277,6 +284,7 @@ import type {
   UnlinkedCompanyProfileCollection,
   UpdateProspectFollowUpInput,
   UpdateProspectInput,
+  UpdateSavedReportInput,
   UploadCampaignAttachmentParams,
   UserDashboard,
   UserNotificationReadResponse,
@@ -20042,5 +20050,751 @@ export const useReceiveRazorpayWebhook = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReceiveRazorpayWebhookMutationOptions(options));
+    }
+
+export const getGetReportWorkareaCatalogUrl = () => {
+
+
+
+
+  return `/api/report-workarea/catalog`
+}
+
+/**
+ * @summary Get the tenant-safe report catalogue and predefined templates
+ */
+export const getReportWorkareaCatalog = async ( options?: Parameters<typeof customFetch>[1]): Promise<ReportWorkareaCatalog> => {
+
+  return customFetch<ReportWorkareaCatalog>(getGetReportWorkareaCatalogUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReportWorkareaCatalogQueryKey = () => {
+    return [
+    `/api/report-workarea/catalog`
+    ] as const;
+    }
+
+
+export const getGetReportWorkareaCatalogQueryOptions = <TData = Awaited<ReturnType<typeof getReportWorkareaCatalog>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReportWorkareaCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReportWorkareaCatalogQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReportWorkareaCatalog>>> = ({ signal }) => getReportWorkareaCatalog({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReportWorkareaCatalog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReportWorkareaCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof getReportWorkareaCatalog>>>
+export type GetReportWorkareaCatalogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the tenant-safe report catalogue and predefined templates
+ */
+
+export function useGetReportWorkareaCatalog<TData = Awaited<ReturnType<typeof getReportWorkareaCatalog>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReportWorkareaCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReportWorkareaCatalogQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRunReportWorkareaQueryUrl = () => {
+
+
+
+
+  return `/api/report-workarea/run`
+}
+
+/**
+ * @summary Run a validated report definition with pagination
+ */
+export const runReportWorkareaQuery = async (reportWorkareaRunInput: ReportWorkareaRunInput, options?: Parameters<typeof customFetch>[1]): Promise<ReportWorkareaRunResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ReportWorkareaRunResult>(getRunReportWorkareaQueryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reportWorkareaRunInput)
+  }
+);}
+
+
+
+
+
+export const getRunReportWorkareaQueryMutationKey = () => ['runReportWorkareaQuery'] as const;
+
+export const getRunReportWorkareaQueryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runReportWorkareaQuery>>, TError,RunReportWorkareaQueryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runReportWorkareaQuery>>, TError,RunReportWorkareaQueryMutationVariables, TContext> => {
+
+const mutationKey = getRunReportWorkareaQueryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runReportWorkareaQuery>>, RunReportWorkareaQueryMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  runReportWorkareaQuery(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunReportWorkareaQueryMutationResult = NonNullable<Awaited<ReturnType<typeof runReportWorkareaQuery>>>
+    export type RunReportWorkareaQueryMutationBody = BodyType<ReportWorkareaRunInput>
+    export type RunReportWorkareaQueryMutationError = ErrorType<void>
+    export type RunReportWorkareaQueryMutationVariables = {data: BodyType<ReportWorkareaRunInput>}
+
+    /**
+ * @summary Run a validated report definition with pagination
+ */
+export const useRunReportWorkareaQuery = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runReportWorkareaQuery>>, TError,RunReportWorkareaQueryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof runReportWorkareaQuery>>,
+        TError,
+        RunReportWorkareaQueryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRunReportWorkareaQueryMutationOptions(options));
+    }
+
+export const getListSavedReportsUrl = () => {
+
+
+
+
+  return `/api/report-workarea/saved`
+}
+
+/**
+ * @summary List the authenticated user's saved reports
+ */
+export const listSavedReports = async ( options?: Parameters<typeof customFetch>[1]): Promise<ListSavedReports200> => {
+
+  return customFetch<ListSavedReports200>(getListSavedReportsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSavedReportsQueryKey = () => {
+    return [
+    `/api/report-workarea/saved`
+    ] as const;
+    }
+
+
+export const getListSavedReportsQueryOptions = <TData = Awaited<ReturnType<typeof listSavedReports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSavedReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSavedReportsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSavedReports>>> = ({ signal }) => listSavedReports({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSavedReports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSavedReportsQueryResult = NonNullable<Awaited<ReturnType<typeof listSavedReports>>>
+export type ListSavedReportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated user's saved reports
+ */
+
+export function useListSavedReports<TData = Awaited<ReturnType<typeof listSavedReports>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSavedReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSavedReportsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateSavedReportUrl = () => {
+
+
+
+
+  return `/api/report-workarea/saved`
+}
+
+/**
+ * @summary Save a validated report definition for the authenticated user
+ */
+export const createSavedReport = async (saveReportWorkareaInput: SaveReportWorkareaInput, options?: Parameters<typeof customFetch>[1]): Promise<SavedReportDefinition> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SavedReportDefinition>(getCreateSavedReportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(saveReportWorkareaInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSavedReportMutationKey = () => ['createSavedReport'] as const;
+
+export const getCreateSavedReportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSavedReport>>, TError,CreateSavedReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSavedReport>>, TError,CreateSavedReportMutationVariables, TContext> => {
+
+const mutationKey = getCreateSavedReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSavedReport>>, CreateSavedReportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSavedReport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSavedReportMutationResult = NonNullable<Awaited<ReturnType<typeof createSavedReport>>>
+    export type CreateSavedReportMutationBody = BodyType<SaveReportWorkareaInput>
+    export type CreateSavedReportMutationError = ErrorType<void>
+    export type CreateSavedReportMutationVariables = {data: BodyType<SaveReportWorkareaInput>}
+
+    /**
+ * @summary Save a validated report definition for the authenticated user
+ */
+export const useCreateSavedReport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSavedReport>>, TError,CreateSavedReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSavedReport>>,
+        TError,
+        CreateSavedReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateSavedReportMutationOptions(options));
+    }
+
+export const getGetSavedReportUrl = (reportId: string,) => {
+
+
+
+
+  return `/api/report-workarea/saved/${reportId}`
+}
+
+/**
+ * @summary Get one report owned by the authenticated user
+ */
+export const getSavedReport = async (reportId: string, options?: Parameters<typeof customFetch>[1]): Promise<SavedReportDefinition> => {
+
+  return customFetch<SavedReportDefinition>(getGetSavedReportUrl(reportId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSavedReportQueryKey = (reportId: string,) => {
+    return [
+    `/api/report-workarea/saved/${reportId}`
+    ] as const;
+    }
+
+
+export const getGetSavedReportQueryOptions = <TData = Awaited<ReturnType<typeof getSavedReport>>, TError = ErrorType<void>>(reportId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavedReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSavedReportQueryKey(reportId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSavedReport>>> = ({ signal }) => getSavedReport(reportId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: reportId !== null && reportId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSavedReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSavedReportQueryResult = NonNullable<Awaited<ReturnType<typeof getSavedReport>>>
+export type GetSavedReportQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get one report owned by the authenticated user
+ */
+
+export function useGetSavedReport<TData = Awaited<ReturnType<typeof getSavedReport>>, TError = ErrorType<void>>(
+ reportId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavedReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSavedReportQueryOptions(reportId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSavedReportUrl = (reportId: string,) => {
+
+
+
+
+  return `/api/report-workarea/saved/${reportId}`
+}
+
+/**
+ * @summary Update a saved report owned by the authenticated user
+ */
+export const updateSavedReport = async (reportId: string,
+    updateSavedReportInput: UpdateSavedReportInput, options?: Parameters<typeof customFetch>[1]): Promise<SavedReportDefinition> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SavedReportDefinition>(getUpdateSavedReportUrl(reportId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateSavedReportInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateSavedReportMutationKey = () => ['updateSavedReport'] as const;
+
+export const getUpdateSavedReportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSavedReport>>, TError,UpdateSavedReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSavedReport>>, TError,UpdateSavedReportMutationVariables, TContext> => {
+
+const mutationKey = getUpdateSavedReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSavedReport>>, UpdateSavedReportMutationVariables> = (props) => {
+          const {reportId,data} = props ?? {};
+
+          return  updateSavedReport(reportId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSavedReportMutationResult = NonNullable<Awaited<ReturnType<typeof updateSavedReport>>>
+    export type UpdateSavedReportMutationBody = BodyType<UpdateSavedReportInput>
+    export type UpdateSavedReportMutationError = ErrorType<void>
+    export type UpdateSavedReportMutationVariables = {reportId: string;data: BodyType<UpdateSavedReportInput>}
+
+    /**
+ * @summary Update a saved report owned by the authenticated user
+ */
+export const useUpdateSavedReport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSavedReport>>, TError,UpdateSavedReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSavedReport>>,
+        TError,
+        UpdateSavedReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateSavedReportMutationOptions(options));
+    }
+
+export const getDeleteSavedReportUrl = (reportId: string,) => {
+
+
+
+
+  return `/api/report-workarea/saved/${reportId}`
+}
+
+/**
+ * @summary Delete a saved report owned by the authenticated user
+ */
+export const deleteSavedReport = async (reportId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteSavedReportUrl(reportId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSavedReportMutationKey = () => ['deleteSavedReport'] as const;
+
+export const getDeleteSavedReportMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSavedReport>>, TError,DeleteSavedReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSavedReport>>, TError,DeleteSavedReportMutationVariables, TContext> => {
+
+const mutationKey = getDeleteSavedReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSavedReport>>, DeleteSavedReportMutationVariables> = (props) => {
+          const {reportId} = props ?? {};
+
+          return  deleteSavedReport(reportId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSavedReportMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSavedReport>>>
+
+    export type DeleteSavedReportMutationError = ErrorType<void>
+    export type DeleteSavedReportMutationVariables = {reportId: string}
+
+    /**
+ * @summary Delete a saved report owned by the authenticated user
+ */
+export const useDeleteSavedReport = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSavedReport>>, TError,DeleteSavedReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSavedReport>>,
+        TError,
+        DeleteSavedReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteSavedReportMutationOptions(options));
+    }
+
+export const getExportReportWorkareaCsvUrl = () => {
+
+
+
+
+  return `/api/report-workarea/export/csv`
+}
+
+/**
+ * @summary Export a validated report as CSV
+ */
+export const exportReportWorkareaCsv = async (reportWorkareaExportInput: ReportWorkareaExportInput, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Blob>(getExportReportWorkareaCsvUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reportWorkareaExportInput)
+  }
+);}
+
+
+
+
+
+export const getExportReportWorkareaCsvMutationKey = () => ['exportReportWorkareaCsv'] as const;
+
+export const getExportReportWorkareaCsvMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportReportWorkareaCsv>>, TError,ExportReportWorkareaCsvMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportReportWorkareaCsv>>, TError,ExportReportWorkareaCsvMutationVariables, TContext> => {
+
+const mutationKey = getExportReportWorkareaCsvMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportReportWorkareaCsv>>, ExportReportWorkareaCsvMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportReportWorkareaCsv(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportReportWorkareaCsvMutationResult = NonNullable<Awaited<ReturnType<typeof exportReportWorkareaCsv>>>
+    export type ExportReportWorkareaCsvMutationBody = BodyType<ReportWorkareaExportInput>
+    export type ExportReportWorkareaCsvMutationError = ErrorType<unknown>
+    export type ExportReportWorkareaCsvMutationVariables = {data: BodyType<ReportWorkareaExportInput>}
+
+    /**
+ * @summary Export a validated report as CSV
+ */
+export const useExportReportWorkareaCsv = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportReportWorkareaCsv>>, TError,ExportReportWorkareaCsvMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportReportWorkareaCsv>>,
+        TError,
+        ExportReportWorkareaCsvMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportReportWorkareaCsvMutationOptions(options));
+    }
+
+export const getExportReportWorkareaXlsxUrl = () => {
+
+
+
+
+  return `/api/report-workarea/export/xlsx`
+}
+
+/**
+ * @summary Export a validated report as an Excel workbook
+ */
+export const exportReportWorkareaXlsx = async (reportWorkareaExportInput: ReportWorkareaExportInput, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Blob>(getExportReportWorkareaXlsxUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reportWorkareaExportInput)
+  }
+);}
+
+
+
+
+
+export const getExportReportWorkareaXlsxMutationKey = () => ['exportReportWorkareaXlsx'] as const;
+
+export const getExportReportWorkareaXlsxMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportReportWorkareaXlsx>>, TError,ExportReportWorkareaXlsxMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportReportWorkareaXlsx>>, TError,ExportReportWorkareaXlsxMutationVariables, TContext> => {
+
+const mutationKey = getExportReportWorkareaXlsxMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportReportWorkareaXlsx>>, ExportReportWorkareaXlsxMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportReportWorkareaXlsx(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportReportWorkareaXlsxMutationResult = NonNullable<Awaited<ReturnType<typeof exportReportWorkareaXlsx>>>
+    export type ExportReportWorkareaXlsxMutationBody = BodyType<ReportWorkareaExportInput>
+    export type ExportReportWorkareaXlsxMutationError = ErrorType<unknown>
+    export type ExportReportWorkareaXlsxMutationVariables = {data: BodyType<ReportWorkareaExportInput>}
+
+    /**
+ * @summary Export a validated report as an Excel workbook
+ */
+export const useExportReportWorkareaXlsx = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportReportWorkareaXlsx>>, TError,ExportReportWorkareaXlsxMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportReportWorkareaXlsx>>,
+        TError,
+        ExportReportWorkareaXlsxMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportReportWorkareaXlsxMutationOptions(options));
     }
 

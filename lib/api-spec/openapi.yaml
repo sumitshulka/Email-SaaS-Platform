@@ -5563,6 +5563,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+  /report-workarea/catalog:
+    get:
+      operationId: getReportWorkareaCatalog
+      tags: [reports]
+      summary: Get the tenant-safe report catalogue and predefined templates
+      responses:
+        "200":
+          description: Available entities, fields, filters, and starter reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportWorkareaCatalog"
+  /report-workarea/run:
+    post:
+      operationId: runReportWorkareaQuery
+      tags: [reports]
+      summary: Run a validated report definition with pagination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportWorkareaRunInput"
+      responses:
+        "200":
+          description: Current report page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportWorkareaRunResult"
+        "400":
+          description: Invalid report definition or filter
+        "422":
+          description: A field is no longer available in this report catalogue
+  /report-workarea/saved:
+    get:
+      operationId: listSavedReports
+      tags: [reports]
+      summary: List the authenticated user's saved reports
+      responses:
+        "200":
+          description: Saved reports owned by the authenticated user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SavedReportDefinition"
+                required: [reports]
+    post:
+      operationId: createSavedReport
+      tags: [reports]
+      summary: Save a validated report definition for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveReportWorkareaInput"
+      responses:
+        "201":
+          description: Saved report created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedReportDefinition"
+        "400":
+          description: Invalid saved report definition
+        "409":
+          description: A report with this name already exists
+  /report-workarea/saved/{reportId}:
+    parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getSavedReport
+      tags: [reports]
+      summary: Get one report owned by the authenticated user
+      responses:
+        "200":
+          description: Saved report definition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedReportDefinition"
+        "404":
+          description: Report not found
+    patch:
+      operationId: updateSavedReport
+      tags: [reports]
+      summary: Update a saved report owned by the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSavedReportInput"
+      responses:
+        "200":
+          description: Updated report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedReportDefinition"
+        "404":
+          description: Report not found
+        "409":
+          description: A report with this name already exists
+    delete:
+      operationId: deleteSavedReport
+      tags: [reports]
+      summary: Delete a saved report owned by the authenticated user
+      responses:
+        "204":
+          description: Report deleted
+        "404":
+          description: Report not found
+  /report-workarea/export/csv:
+    post:
+      operationId: exportReportWorkareaCsv
+      tags: [reports]
+      summary: Export a validated report as CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportWorkareaExportInput"
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+  /report-workarea/export/xlsx:
+    post:
+      operationId: exportReportWorkareaXlsx
+      tags: [reports]
+      summary: Export a validated report as an Excel workbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportWorkareaExportInput"
+      responses:
+        "200":
+          description: Excel export
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
 components:
   schemas:
     HealthStatus:
@@ -9368,3 +9524,186 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ProspectClosurePeriodMetric" }
       required: [totalActive, totalWon, totalLost, currencyTotals, byStage, byProduct, byClosurePeriod]
+    ReportFieldMetadata:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        dataType: { type: string, enum: [text, number, currency, date, datetime, boolean] }
+        operators:
+          type: array
+          items: { type: string }
+        groupable: { type: boolean }
+        aggregations:
+          type: array
+          items: { type: string, enum: [count, count_distinct, sum, avg, min, max, win_rate] }
+        dateIntervals:
+          type: array
+          items: { type: string, enum: [day, week, month, quarter, year] }
+        relationId: { type: string }
+        calculated: { type: boolean }
+        isSensitive: { type: boolean }
+      required: [id, label, description, dataType, operators, groupable, aggregations, dateIntervals, calculated]
+    ReportRelationMetadata:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        entityId: { type: string }
+        cardinality: { type: string, enum: [many_to_one, one_to_one, one_to_many] }
+        description: { type: string }
+      required: [id, label, entityId, cardinality, description]
+    ReportEntityMetadata:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        grain: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/ReportFieldMetadata" }
+        relations:
+          type: array
+          items: { $ref: "#/components/schemas/ReportRelationMetadata" }
+      required: [id, label, description, grain, fields, relations]
+    ReportColumnDefinition:
+      type: object
+      properties:
+        fieldId: { type: string }
+        label: { type: string, maxLength: 120 }
+      required: [fieldId]
+    ReportSortDefinition:
+      type: object
+      properties:
+        fieldId: { type: string }
+        direction: { type: string, enum: [asc, desc] }
+      required: [fieldId, direction]
+    ReportGroupDefinition:
+      type: object
+      properties:
+        fieldId: { type: string }
+        interval: { type: string, enum: [day, week, month, quarter, year] }
+      required: [fieldId]
+    ReportAggregationDefinition:
+      type: object
+      properties:
+        id: { type: string, pattern: "^[a-zA-Z][a-zA-Z0-9_-]{0,39}$" }
+        label: { type: string, minLength: 1, maxLength: 100 }
+        operation: { type: string, enum: [count, count_distinct, sum, avg, min, max, win_rate] }
+        fieldId: { type: string }
+      required: [id, label, operation]
+    ReportDefinition:
+      type: object
+      properties:
+        version: { type: integer, const: 1 }
+        baseEntityId: { type: string }
+        columns:
+          type: array
+          minItems: 0
+          maxItems: 30
+          items: { $ref: "#/components/schemas/ReportColumnDefinition" }
+        filters: { type: object, additionalProperties: true }
+        sorting:
+          type: array
+          maxItems: 4
+          items: { $ref: "#/components/schemas/ReportSortDefinition" }
+        groupBy:
+          type: array
+          maxItems: 4
+          items: { $ref: "#/components/schemas/ReportGroupDefinition" }
+        aggregates:
+          type: array
+          maxItems: 8
+          items: { $ref: "#/components/schemas/ReportAggregationDefinition" }
+        subtotals: { type: boolean, default: false }
+        grandTotal: { type: boolean, default: true }
+        visualization: { type: object, additionalProperties: true }
+      required: [version, baseEntityId, columns]
+      additionalProperties: true
+    ReportTemplate:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { type: string }
+        description: { type: string }
+        baseEntityId: { type: string }
+        definition: { $ref: "#/components/schemas/ReportDefinition" }
+      required: [id, name, category, description, baseEntityId, definition]
+    ReportWorkareaCatalog:
+      type: object
+      properties:
+        entities:
+          type: array
+          items: { $ref: "#/components/schemas/ReportEntityMetadata" }
+        templates:
+          type: array
+          items: { $ref: "#/components/schemas/ReportTemplate" }
+        definitionVersion: { type: integer }
+      required: [entities, templates, definitionVersion]
+    ReportWorkareaRunInput:
+      type: object
+      properties:
+        definition: { $ref: "#/components/schemas/ReportDefinition" }
+        savedReportId: { type: string, format: uuid }
+        page: { type: integer, minimum: 1, default: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      required: [definition]
+    ReportResultColumn:
+      type: object
+      properties:
+        fieldId: { type: string }
+        label: { type: string }
+        dataType: { type: string, enum: [text, number, currency, date, datetime, boolean] }
+      required: [fieldId, label, dataType]
+    ReportWorkareaRunResult:
+      type: object
+      properties:
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/ReportResultColumn" }
+        rows:
+          type: array
+          items: { type: object, additionalProperties: true }
+        totalRows: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+        totalPages: { type: integer, minimum: 0 }
+        grain: { type: string }
+      required: [columns, rows, totalRows, page, pageSize, totalPages, grain]
+    ReportWorkareaExportInput:
+      type: object
+      properties:
+        definition: { $ref: "#/components/schemas/ReportDefinition" }
+      required: [definition]
+    SaveReportWorkareaInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 1000 }
+        category: { type: string, maxLength: 80 }
+        definition: { $ref: "#/components/schemas/ReportDefinition" }
+      required: [name, definition]
+    UpdateSavedReportInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 1000 }
+        category: { type: string, maxLength: 80 }
+        definition: { $ref: "#/components/schemas/ReportDefinition" }
+    SavedReportDefinition:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        baseEntityId: { type: string }
+        definition: { $ref: "#/components/schemas/ReportDefinition" }
+        definitionVersion: { type: integer }
+        lastRunAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, description, category, baseEntityId, definition, definitionVersion, lastRunAt, createdAt, updatedAt]

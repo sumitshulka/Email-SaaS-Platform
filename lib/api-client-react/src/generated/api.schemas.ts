@@ -6326,6 +6326,272 @@ export interface ProspectDashboard {
   byClosurePeriod: ProspectClosurePeriodMetric[];
 }
 
+export type ReportFieldMetadataDataType = typeof ReportFieldMetadataDataType[keyof typeof ReportFieldMetadataDataType];
+
+
+export const ReportFieldMetadataDataType = {
+  text: 'text',
+  number: 'number',
+  currency: 'currency',
+  date: 'date',
+  datetime: 'datetime',
+  boolean: 'boolean',
+} as const;
+
+export type ReportFieldMetadataAggregationsItem = typeof ReportFieldMetadataAggregationsItem[keyof typeof ReportFieldMetadataAggregationsItem];
+
+
+export const ReportFieldMetadataAggregationsItem = {
+  count: 'count',
+  count_distinct: 'count_distinct',
+  sum: 'sum',
+  avg: 'avg',
+  min: 'min',
+  max: 'max',
+  win_rate: 'win_rate',
+} as const;
+
+export type ReportFieldMetadataDateIntervalsItem = typeof ReportFieldMetadataDateIntervalsItem[keyof typeof ReportFieldMetadataDateIntervalsItem];
+
+
+export const ReportFieldMetadataDateIntervalsItem = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  quarter: 'quarter',
+  year: 'year',
+} as const;
+
+export interface ReportFieldMetadata {
+  id: string;
+  label: string;
+  description: string;
+  dataType: ReportFieldMetadataDataType;
+  operators: string[];
+  groupable: boolean;
+  aggregations: ReportFieldMetadataAggregationsItem[];
+  dateIntervals: ReportFieldMetadataDateIntervalsItem[];
+  relationId?: string;
+  calculated: boolean;
+  isSensitive?: boolean;
+}
+
+export type ReportRelationMetadataCardinality = typeof ReportRelationMetadataCardinality[keyof typeof ReportRelationMetadataCardinality];
+
+
+export const ReportRelationMetadataCardinality = {
+  many_to_one: 'many_to_one',
+  one_to_one: 'one_to_one',
+  one_to_many: 'one_to_many',
+} as const;
+
+export interface ReportRelationMetadata {
+  id: string;
+  label: string;
+  entityId: string;
+  cardinality: ReportRelationMetadataCardinality;
+  description: string;
+}
+
+export interface ReportEntityMetadata {
+  id: string;
+  label: string;
+  description: string;
+  grain: string;
+  fields: ReportFieldMetadata[];
+  relations: ReportRelationMetadata[];
+}
+
+export interface ReportColumnDefinition {
+  fieldId: string;
+  /** @maxLength 120 */
+  label?: string;
+}
+
+export type ReportSortDefinitionDirection = typeof ReportSortDefinitionDirection[keyof typeof ReportSortDefinitionDirection];
+
+
+export const ReportSortDefinitionDirection = {
+  asc: 'asc',
+  desc: 'desc',
+} as const;
+
+export interface ReportSortDefinition {
+  fieldId: string;
+  direction: ReportSortDefinitionDirection;
+}
+
+export type ReportGroupDefinitionInterval = typeof ReportGroupDefinitionInterval[keyof typeof ReportGroupDefinitionInterval];
+
+
+export const ReportGroupDefinitionInterval = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  quarter: 'quarter',
+  year: 'year',
+} as const;
+
+export interface ReportGroupDefinition {
+  fieldId: string;
+  interval?: ReportGroupDefinitionInterval;
+}
+
+export type ReportAggregationDefinitionOperation = typeof ReportAggregationDefinitionOperation[keyof typeof ReportAggregationDefinitionOperation];
+
+
+export const ReportAggregationDefinitionOperation = {
+  count: 'count',
+  count_distinct: 'count_distinct',
+  sum: 'sum',
+  avg: 'avg',
+  min: 'min',
+  max: 'max',
+  win_rate: 'win_rate',
+} as const;
+
+export interface ReportAggregationDefinition {
+  /** @pattern ^[a-zA-Z][a-zA-Z0-9_-]{0,39}$ */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  label: string;
+  operation: ReportAggregationDefinitionOperation;
+  fieldId?: string;
+}
+
+export type ReportDefinitionFilters = { [key: string]: unknown };
+
+export type ReportDefinitionVisualization = { [key: string]: unknown };
+
+export interface ReportDefinition {
+  version: 1;
+  baseEntityId: string;
+  /**
+     * @minItems 0
+     * @maxItems 30
+     */
+  columns: ReportColumnDefinition[];
+  filters?: ReportDefinitionFilters;
+  /** @maxItems 4 */
+  sorting?: ReportSortDefinition[];
+  /** @maxItems 4 */
+  groupBy?: ReportGroupDefinition[];
+  /** @maxItems 8 */
+  aggregates?: ReportAggregationDefinition[];
+  subtotals?: boolean;
+  grandTotal?: boolean;
+  visualization?: ReportDefinitionVisualization;
+  [key: string]: unknown;
+ }
+
+export interface ReportTemplate {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  baseEntityId: string;
+  definition: ReportDefinition;
+}
+
+export interface ReportWorkareaCatalog {
+  entities: ReportEntityMetadata[];
+  templates: ReportTemplate[];
+  definitionVersion: number;
+}
+
+export interface ReportWorkareaRunInput {
+  definition: ReportDefinition;
+  savedReportId?: string;
+  /** @minimum 1 */
+  page?: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  pageSize?: number;
+}
+
+export type ReportResultColumnDataType = typeof ReportResultColumnDataType[keyof typeof ReportResultColumnDataType];
+
+
+export const ReportResultColumnDataType = {
+  text: 'text',
+  number: 'number',
+  currency: 'currency',
+  date: 'date',
+  datetime: 'datetime',
+  boolean: 'boolean',
+} as const;
+
+export interface ReportResultColumn {
+  fieldId: string;
+  label: string;
+  dataType: ReportResultColumnDataType;
+}
+
+export type ReportWorkareaRunResultRowsItem = { [key: string]: unknown };
+
+export interface ReportWorkareaRunResult {
+  columns: ReportResultColumn[];
+  rows: ReportWorkareaRunResultRowsItem[];
+  /** @minimum 0 */
+  totalRows: number;
+  /** @minimum 1 */
+  page: number;
+  /** @minimum 1 */
+  pageSize: number;
+  /** @minimum 0 */
+  totalPages: number;
+  grain: string;
+}
+
+export interface ReportWorkareaExportInput {
+  definition: ReportDefinition;
+}
+
+export interface SaveReportWorkareaInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /** @maxLength 1000 */
+  description?: string;
+  /** @maxLength 80 */
+  category?: string;
+  definition: ReportDefinition;
+}
+
+export interface UpdateSavedReportInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name?: string;
+  /** @maxLength 1000 */
+  description?: string;
+  /** @maxLength 80 */
+  category?: string;
+  definition?: ReportDefinition;
+}
+
+export interface SavedReportDefinition {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  baseEntityId: string;
+  definition: ReportDefinition;
+  definitionVersion: number;
+  /** @nullable */
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AuthorizeMicrosoftSender200 = {
   authorizationUrl: string;
 };
@@ -6928,4 +7194,8 @@ export const ListAdminUsersStatus = {
   inactive: 'inactive',
   pending: 'pending',
 } as const;
+
+export type ListSavedReports200 = {
+  reports: SavedReportDefinition[];
+};
 

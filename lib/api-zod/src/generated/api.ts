@@ -11104,3 +11104,638 @@ export const ReceiveRazorpayWebhookResponse = zod.object({
 })
 
 
+/**
+ * @summary Get the tenant-safe report catalogue and predefined templates
+ */
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionColumnsItemLabelMax = 120;
+
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionColumnsMin = 0;
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionColumnsMax = 30;
+
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionSortingMax = 4;
+
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionGroupByMax = 4;
+
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesItemLabelMax = 100;
+
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesMax = 8;
+
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionSubtotalsDefault = false;
+export const getReportWorkareaCatalogResponseTemplatesItemDefinitionGrandTotalDefault = true;
+
+export const GetReportWorkareaCatalogResponse = zod.object({
+  "entities": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "grain": zod.string(),
+  "fields": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "dataType": zod.enum(['text', 'number', 'currency', 'date', 'datetime', 'boolean']),
+  "operators": zod.array(zod.string()),
+  "groupable": zod.boolean(),
+  "aggregations": zod.array(zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate'])),
+  "dateIntervals": zod.array(zod.enum(['day', 'week', 'month', 'quarter', 'year'])),
+  "relationId": zod.string().optional(),
+  "calculated": zod.boolean(),
+  "isSensitive": zod.boolean().optional()
+})),
+  "relations": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "entityId": zod.string(),
+  "cardinality": zod.enum(['many_to_one', 'one_to_one', 'one_to_many']),
+  "description": zod.string()
+}))
+})),
+  "templates": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "baseEntityId": zod.string(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(getReportWorkareaCatalogResponseTemplatesItemDefinitionColumnsItemLabelMax).optional()
+})).min(getReportWorkareaCatalogResponseTemplatesItemDefinitionColumnsMin).max(getReportWorkareaCatalogResponseTemplatesItemDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(getReportWorkareaCatalogResponseTemplatesItemDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(getReportWorkareaCatalogResponseTemplatesItemDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(getReportWorkareaCatalogResponseTemplatesItemDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(getReportWorkareaCatalogResponseTemplatesItemDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+})
+})),
+  "definitionVersion": zod.number().int()
+})
+
+
+/**
+ * @summary Run a validated report definition with pagination
+ */
+export const runReportWorkareaQueryBodyDefinitionColumnsItemLabelMax = 120;
+
+export const runReportWorkareaQueryBodyDefinitionColumnsMin = 0;
+export const runReportWorkareaQueryBodyDefinitionColumnsMax = 30;
+
+export const runReportWorkareaQueryBodyDefinitionSortingMax = 4;
+
+export const runReportWorkareaQueryBodyDefinitionGroupByMax = 4;
+
+export const runReportWorkareaQueryBodyDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const runReportWorkareaQueryBodyDefinitionAggregatesItemLabelMax = 100;
+
+export const runReportWorkareaQueryBodyDefinitionAggregatesMax = 8;
+
+export const runReportWorkareaQueryBodyDefinitionSubtotalsDefault = false;
+export const runReportWorkareaQueryBodyDefinitionGrandTotalDefault = true;
+export const runReportWorkareaQueryBodyPageDefault = 1;
+
+export const runReportWorkareaQueryBodyPageSizeDefault = 25;
+export const runReportWorkareaQueryBodyPageSizeMax = 100;
+
+
+
+export const RunReportWorkareaQueryBody = zod.object({
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(runReportWorkareaQueryBodyDefinitionColumnsItemLabelMax).optional()
+})).min(runReportWorkareaQueryBodyDefinitionColumnsMin).max(runReportWorkareaQueryBodyDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(runReportWorkareaQueryBodyDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(runReportWorkareaQueryBodyDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(runReportWorkareaQueryBodyDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(runReportWorkareaQueryBodyDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(runReportWorkareaQueryBodyDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(runReportWorkareaQueryBodyDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(runReportWorkareaQueryBodyDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+}),
+  "savedReportId": zod.string().uuid().optional(),
+  "page": zod.number().int().min(1).default(runReportWorkareaQueryBodyPageDefault),
+  "pageSize": zod.number().int().min(1).max(runReportWorkareaQueryBodyPageSizeMax).default(runReportWorkareaQueryBodyPageSizeDefault)
+})
+
+export const runReportWorkareaQueryResponseTotalRowsMin = 0;
+
+
+
+export const runReportWorkareaQueryResponseTotalPagesMin = 0;
+
+
+
+export const RunReportWorkareaQueryResponse = zod.object({
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string(),
+  "dataType": zod.enum(['text', 'number', 'currency', 'date', 'datetime', 'boolean'])
+})),
+  "rows": zod.array(zod.record(zod.string(), zod.unknown())),
+  "totalRows": zod.number().int().min(runReportWorkareaQueryResponseTotalRowsMin),
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(1),
+  "totalPages": zod.number().int().min(runReportWorkareaQueryResponseTotalPagesMin),
+  "grain": zod.string()
+})
+
+
+/**
+ * @summary List the authenticated user's saved reports
+ */
+export const listSavedReportsResponseReportsItemDefinitionColumnsItemLabelMax = 120;
+
+export const listSavedReportsResponseReportsItemDefinitionColumnsMin = 0;
+export const listSavedReportsResponseReportsItemDefinitionColumnsMax = 30;
+
+export const listSavedReportsResponseReportsItemDefinitionSortingMax = 4;
+
+export const listSavedReportsResponseReportsItemDefinitionGroupByMax = 4;
+
+export const listSavedReportsResponseReportsItemDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const listSavedReportsResponseReportsItemDefinitionAggregatesItemLabelMax = 100;
+
+export const listSavedReportsResponseReportsItemDefinitionAggregatesMax = 8;
+
+export const listSavedReportsResponseReportsItemDefinitionSubtotalsDefault = false;
+export const listSavedReportsResponseReportsItemDefinitionGrandTotalDefault = true;
+
+export const ListSavedReportsResponse = zod.object({
+  "reports": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "baseEntityId": zod.string(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(listSavedReportsResponseReportsItemDefinitionColumnsItemLabelMax).optional()
+})).min(listSavedReportsResponseReportsItemDefinitionColumnsMin).max(listSavedReportsResponseReportsItemDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(listSavedReportsResponseReportsItemDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(listSavedReportsResponseReportsItemDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(listSavedReportsResponseReportsItemDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(listSavedReportsResponseReportsItemDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(listSavedReportsResponseReportsItemDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(listSavedReportsResponseReportsItemDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(listSavedReportsResponseReportsItemDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+}),
+  "definitionVersion": zod.number().int(),
+  "lastRunAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Save a validated report definition for the authenticated user
+ */
+export const createSavedReportBodyNameMax = 160;
+
+export const createSavedReportBodyDescriptionMax = 1000;
+
+export const createSavedReportBodyCategoryMax = 80;
+
+export const createSavedReportBodyDefinitionColumnsItemLabelMax = 120;
+
+export const createSavedReportBodyDefinitionColumnsMin = 0;
+export const createSavedReportBodyDefinitionColumnsMax = 30;
+
+export const createSavedReportBodyDefinitionSortingMax = 4;
+
+export const createSavedReportBodyDefinitionGroupByMax = 4;
+
+export const createSavedReportBodyDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const createSavedReportBodyDefinitionAggregatesItemLabelMax = 100;
+
+export const createSavedReportBodyDefinitionAggregatesMax = 8;
+
+export const createSavedReportBodyDefinitionSubtotalsDefault = false;
+export const createSavedReportBodyDefinitionGrandTotalDefault = true;
+
+export const CreateSavedReportBody = zod.object({
+  "name": zod.string().min(1).max(createSavedReportBodyNameMax),
+  "description": zod.string().max(createSavedReportBodyDescriptionMax).optional(),
+  "category": zod.string().max(createSavedReportBodyCategoryMax).optional(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(createSavedReportBodyDefinitionColumnsItemLabelMax).optional()
+})).min(createSavedReportBodyDefinitionColumnsMin).max(createSavedReportBodyDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(createSavedReportBodyDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(createSavedReportBodyDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(createSavedReportBodyDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(createSavedReportBodyDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(createSavedReportBodyDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(createSavedReportBodyDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(createSavedReportBodyDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+})
+})
+
+export const createSavedReportResponseDefinitionColumnsItemLabelMax = 120;
+
+export const createSavedReportResponseDefinitionColumnsMin = 0;
+export const createSavedReportResponseDefinitionColumnsMax = 30;
+
+export const createSavedReportResponseDefinitionSortingMax = 4;
+
+export const createSavedReportResponseDefinitionGroupByMax = 4;
+
+export const createSavedReportResponseDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const createSavedReportResponseDefinitionAggregatesItemLabelMax = 100;
+
+export const createSavedReportResponseDefinitionAggregatesMax = 8;
+
+export const createSavedReportResponseDefinitionSubtotalsDefault = false;
+export const createSavedReportResponseDefinitionGrandTotalDefault = true;
+
+export const CreateSavedReportResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "baseEntityId": zod.string(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(createSavedReportResponseDefinitionColumnsItemLabelMax).optional()
+})).min(createSavedReportResponseDefinitionColumnsMin).max(createSavedReportResponseDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(createSavedReportResponseDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(createSavedReportResponseDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(createSavedReportResponseDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(createSavedReportResponseDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(createSavedReportResponseDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(createSavedReportResponseDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(createSavedReportResponseDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+}),
+  "definitionVersion": zod.number().int(),
+  "lastRunAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get one report owned by the authenticated user
+ */
+export const GetSavedReportParams = zod.object({
+  "reportId": zod.coerce.string().uuid()
+})
+
+export const getSavedReportResponseDefinitionColumnsItemLabelMax = 120;
+
+export const getSavedReportResponseDefinitionColumnsMin = 0;
+export const getSavedReportResponseDefinitionColumnsMax = 30;
+
+export const getSavedReportResponseDefinitionSortingMax = 4;
+
+export const getSavedReportResponseDefinitionGroupByMax = 4;
+
+export const getSavedReportResponseDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const getSavedReportResponseDefinitionAggregatesItemLabelMax = 100;
+
+export const getSavedReportResponseDefinitionAggregatesMax = 8;
+
+export const getSavedReportResponseDefinitionSubtotalsDefault = false;
+export const getSavedReportResponseDefinitionGrandTotalDefault = true;
+
+export const GetSavedReportResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "baseEntityId": zod.string(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(getSavedReportResponseDefinitionColumnsItemLabelMax).optional()
+})).min(getSavedReportResponseDefinitionColumnsMin).max(getSavedReportResponseDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(getSavedReportResponseDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(getSavedReportResponseDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(getSavedReportResponseDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(getSavedReportResponseDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(getSavedReportResponseDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(getSavedReportResponseDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(getSavedReportResponseDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+}),
+  "definitionVersion": zod.number().int(),
+  "lastRunAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a saved report owned by the authenticated user
+ */
+export const UpdateSavedReportParams = zod.object({
+  "reportId": zod.coerce.string().uuid()
+})
+
+export const updateSavedReportBodyNameMax = 160;
+
+export const updateSavedReportBodyDescriptionMax = 1000;
+
+export const updateSavedReportBodyCategoryMax = 80;
+
+export const updateSavedReportBodyDefinitionColumnsItemLabelMax = 120;
+
+export const updateSavedReportBodyDefinitionColumnsMin = 0;
+export const updateSavedReportBodyDefinitionColumnsMax = 30;
+
+export const updateSavedReportBodyDefinitionSortingMax = 4;
+
+export const updateSavedReportBodyDefinitionGroupByMax = 4;
+
+export const updateSavedReportBodyDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const updateSavedReportBodyDefinitionAggregatesItemLabelMax = 100;
+
+export const updateSavedReportBodyDefinitionAggregatesMax = 8;
+
+export const updateSavedReportBodyDefinitionSubtotalsDefault = false;
+export const updateSavedReportBodyDefinitionGrandTotalDefault = true;
+
+export const UpdateSavedReportBody = zod.object({
+  "name": zod.string().min(1).max(updateSavedReportBodyNameMax).optional(),
+  "description": zod.string().max(updateSavedReportBodyDescriptionMax).optional(),
+  "category": zod.string().max(updateSavedReportBodyCategoryMax).optional(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(updateSavedReportBodyDefinitionColumnsItemLabelMax).optional()
+})).min(updateSavedReportBodyDefinitionColumnsMin).max(updateSavedReportBodyDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(updateSavedReportBodyDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(updateSavedReportBodyDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(updateSavedReportBodyDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(updateSavedReportBodyDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(updateSavedReportBodyDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(updateSavedReportBodyDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(updateSavedReportBodyDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+}).optional()
+})
+
+export const updateSavedReportResponseDefinitionColumnsItemLabelMax = 120;
+
+export const updateSavedReportResponseDefinitionColumnsMin = 0;
+export const updateSavedReportResponseDefinitionColumnsMax = 30;
+
+export const updateSavedReportResponseDefinitionSortingMax = 4;
+
+export const updateSavedReportResponseDefinitionGroupByMax = 4;
+
+export const updateSavedReportResponseDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const updateSavedReportResponseDefinitionAggregatesItemLabelMax = 100;
+
+export const updateSavedReportResponseDefinitionAggregatesMax = 8;
+
+export const updateSavedReportResponseDefinitionSubtotalsDefault = false;
+export const updateSavedReportResponseDefinitionGrandTotalDefault = true;
+
+export const UpdateSavedReportResponse = zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "baseEntityId": zod.string(),
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(updateSavedReportResponseDefinitionColumnsItemLabelMax).optional()
+})).min(updateSavedReportResponseDefinitionColumnsMin).max(updateSavedReportResponseDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(updateSavedReportResponseDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(updateSavedReportResponseDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(updateSavedReportResponseDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(updateSavedReportResponseDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(updateSavedReportResponseDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(updateSavedReportResponseDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(updateSavedReportResponseDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+}),
+  "definitionVersion": zod.number().int(),
+  "lastRunAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a saved report owned by the authenticated user
+ */
+export const DeleteSavedReportParams = zod.object({
+  "reportId": zod.coerce.string().uuid()
+})
+
+export const DeleteSavedReportResponse = zod.void()
+
+
+/**
+ * @summary Export a validated report as CSV
+ */
+export const exportReportWorkareaCsvBodyDefinitionColumnsItemLabelMax = 120;
+
+export const exportReportWorkareaCsvBodyDefinitionColumnsMin = 0;
+export const exportReportWorkareaCsvBodyDefinitionColumnsMax = 30;
+
+export const exportReportWorkareaCsvBodyDefinitionSortingMax = 4;
+
+export const exportReportWorkareaCsvBodyDefinitionGroupByMax = 4;
+
+export const exportReportWorkareaCsvBodyDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const exportReportWorkareaCsvBodyDefinitionAggregatesItemLabelMax = 100;
+
+export const exportReportWorkareaCsvBodyDefinitionAggregatesMax = 8;
+
+export const exportReportWorkareaCsvBodyDefinitionSubtotalsDefault = false;
+export const exportReportWorkareaCsvBodyDefinitionGrandTotalDefault = true;
+
+export const ExportReportWorkareaCsvBody = zod.object({
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(exportReportWorkareaCsvBodyDefinitionColumnsItemLabelMax).optional()
+})).min(exportReportWorkareaCsvBodyDefinitionColumnsMin).max(exportReportWorkareaCsvBodyDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(exportReportWorkareaCsvBodyDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(exportReportWorkareaCsvBodyDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(exportReportWorkareaCsvBodyDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(exportReportWorkareaCsvBodyDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(exportReportWorkareaCsvBodyDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(exportReportWorkareaCsvBodyDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(exportReportWorkareaCsvBodyDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+})
+})
+
+export const ExportReportWorkareaCsvResponse = zod.unknown()
+
+
+/**
+ * @summary Export a validated report as an Excel workbook
+ */
+export const exportReportWorkareaXlsxBodyDefinitionColumnsItemLabelMax = 120;
+
+export const exportReportWorkareaXlsxBodyDefinitionColumnsMin = 0;
+export const exportReportWorkareaXlsxBodyDefinitionColumnsMax = 30;
+
+export const exportReportWorkareaXlsxBodyDefinitionSortingMax = 4;
+
+export const exportReportWorkareaXlsxBodyDefinitionGroupByMax = 4;
+
+export const exportReportWorkareaXlsxBodyDefinitionAggregatesItemIdRegExp = new RegExp('^[a-zA-Z][a-zA-Z0-9_-]{0,39}$');
+export const exportReportWorkareaXlsxBodyDefinitionAggregatesItemLabelMax = 100;
+
+export const exportReportWorkareaXlsxBodyDefinitionAggregatesMax = 8;
+
+export const exportReportWorkareaXlsxBodyDefinitionSubtotalsDefault = false;
+export const exportReportWorkareaXlsxBodyDefinitionGrandTotalDefault = true;
+
+export const ExportReportWorkareaXlsxBody = zod.object({
+  "definition": zod.object({
+  "version": zod.literal(1),
+  "baseEntityId": zod.string(),
+  "columns": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "label": zod.string().max(exportReportWorkareaXlsxBodyDefinitionColumnsItemLabelMax).optional()
+})).min(exportReportWorkareaXlsxBodyDefinitionColumnsMin).max(exportReportWorkareaXlsxBodyDefinitionColumnsMax),
+  "filters": zod.record(zod.string(), zod.unknown()).optional(),
+  "sorting": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "direction": zod.enum(['asc', 'desc'])
+})).max(exportReportWorkareaXlsxBodyDefinitionSortingMax).optional(),
+  "groupBy": zod.array(zod.object({
+  "fieldId": zod.string(),
+  "interval": zod.enum(['day', 'week', 'month', 'quarter', 'year']).optional()
+})).max(exportReportWorkareaXlsxBodyDefinitionGroupByMax).optional(),
+  "aggregates": zod.array(zod.object({
+  "id": zod.string().regex(exportReportWorkareaXlsxBodyDefinitionAggregatesItemIdRegExp),
+  "label": zod.string().min(1).max(exportReportWorkareaXlsxBodyDefinitionAggregatesItemLabelMax),
+  "operation": zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate']),
+  "fieldId": zod.string().optional()
+})).max(exportReportWorkareaXlsxBodyDefinitionAggregatesMax).optional(),
+  "subtotals": zod.boolean().default(exportReportWorkareaXlsxBodyDefinitionSubtotalsDefault),
+  "grandTotal": zod.boolean().default(exportReportWorkareaXlsxBodyDefinitionGrandTotalDefault),
+  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+})
+})
+
+export const ExportReportWorkareaXlsxResponse = zod.unknown()
+
+

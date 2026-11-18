@@ -6,7 +6,7 @@ import {
   Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, BrainCircuit, Check, Eye, EyeOff,
   ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, CreditCard, Gauge, KeyRound, LoaderCircle,
   LockKeyhole, LogOut, Menu, Package, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, ReceiptText,
-  Trash2, UserRound, Users, Building2, LifeBuoy, X, Power,
+  Trash2, UserRound, Users, Building2, LifeBuoy, X, Power, FilePlus2, Layers3, ListFilter,
 } from 'lucide-react';
 import {
   AUTH_SESSION_EXPIRED_EVENT, getGetAdminDashboardQueryKey, getGetAdminSettingsQueryKey, getGetApplicationEmailSettingsQueryKey, getGetMaintenanceStatusQueryKey, getGetPasswordPolicyQueryKey, getListEmailTemplatesQueryKey, getListInactiveUsersQueryKey,
@@ -58,6 +58,7 @@ import { CompanyDetailPage } from '@/pages/company-detail';
 import { ProspectsPage, NewProspectPage, ProspectDetailPage, ProspectProductsPage, ProspectStagesPage, ProspectActionsPage, ProspectCurrenciesPage } from '@/pages/prospects';
 import { AdminGlobalCompanyDetailPage } from '@/pages/admin-global-company-detail';
 import PlansPage from '@/pages/plans';
+import ReportWorkareaPage from '@/pages/report-workarea';
 import NotFound from '@/pages/not-found';
 import './index.css';
 
@@ -366,6 +367,14 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     ],
   },
   {
+    title: 'Reports',
+    items: [
+      { href: '/report-gallery', label: 'Report Gallery', icon: ListFilter },
+      { href: '/report-builder', label: 'Report Builder', icon: FilePlus2 },
+      { href: '/my-reports', label: 'My Reports', icon: Layers3 },
+    ],
+  },
+  {
     title: 'Email marketing',
     items: [
       { href: '/lists', label: 'Lists', icon: Activity },
@@ -555,7 +564,10 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/support',
     '/plans',
     '/profile',
-  ].includes(location) || location.startsWith('/prospects/');
+    '/report-gallery',
+    '/report-builder',
+    '/my-reports',
+  ].includes(location) || location.startsWith('/prospects/') || location.startsWith('/report-builder/');
   const leave = () => logout.mutate(undefined, { onSuccess: () => { clearUserActivity(user.id); qc.clear(); setLocation('/'); } });
 
   useEffect(() => {
@@ -1923,6 +1935,10 @@ function Routes() {
      <Route path="/prospects">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectsPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospects/new">{() => <RouteGate>{u => u.role === 'USER' ? <NewProspectPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/prospect-follow-ups">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectFollowUpsPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/report-gallery">{() => <RouteGate>{u => u.role === 'USER' ? <ReportWorkareaPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/report-builder">{() => <RouteGate>{u => u.role === 'USER' ? <ReportWorkareaPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/report-builder/:reportId">{() => <RouteGate>{u => u.role === 'USER' ? <ReportWorkareaPage/> : <NotFound/>}</RouteGate>}</Route>
+    <Route path="/my-reports">{() => <RouteGate>{u => u.role === 'USER' ? <ReportWorkareaPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospects/:prospectId">{params => <RouteGate>{u => u.role === 'USER' ? <ProspectDetailPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospect-products">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectProductsPage/> : <NotFound/>}</RouteGate>}</Route>
      <Route path="/prospect-stages">{() => <RouteGate>{u => u.role === 'USER' ? <ProspectStagesPage/> : <NotFound/>}</RouteGate>}</Route>

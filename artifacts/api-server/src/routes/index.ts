@@ -29,6 +29,7 @@ import remoteDiagnosticsRouter from "./remote-diagnostics";
 import prospectSettingsRouter from "./prospect-settings";
 import prospectsRouter from "./prospects";
 import prospectFollowUpsRouter from "./prospect-follow-ups";
+import reportWorkareaRouter from "./report-workarea";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -44,6 +45,7 @@ router.use(contactIntentRouter);
 router.use(contactTagsRouter);
 router.use(prospectSettingsRouter);
 router.use(prospectFollowUpsRouter);
+router.use(reportWorkareaRouter);
 router.use(prospectsRouter);
 router.use(contactFieldOptionsRouter);
 router.use(notificationsRouter);
