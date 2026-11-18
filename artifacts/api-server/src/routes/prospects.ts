@@ -69,7 +69,7 @@ import { requirePackageFeature } from "../lib/package-feature-access";
 
 const router: IRouter = Router();
 router.use(
-  ["/prospects", "/prospect-dashboard", "/contacts"],
+  ["/prospects", "/prospect-dashboard"],
   requireUserRole,
   requirePackageFeature("prospectManagementEnabled"),
 );
@@ -636,7 +636,11 @@ router.patch("/prospects/:prospectId", requireUserRole, async (req, res): Promis
   res.json(UpdateProspectResponse.parse({ prospect: record }));
 });
 
-router.get("/contacts/:contactId/prospects", requireUserRole, async (req, res): Promise<void> => {
+router.get(
+  "/contacts/:contactId/prospects",
+  requireUserRole,
+  requirePackageFeature("prospectManagementEnabled"),
+  async (req, res): Promise<void> => {
   const params = ListContactProspectsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "Invalid contact identifier." });
@@ -657,7 +661,8 @@ router.get("/contacts/:contactId/prospects", requireUserRole, async (req, res): 
     )).orderBy(desc(prospectsTable.updatedAt));
   const records = await buildRecords(userId, prospects.map(prospect => prospect.id));
   res.json(ListContactProspectsResponse.parse(records));
-});
+  },
+);
 
 router.post("/prospects/:prospectId/stage", requireUserRole, async (req, res): Promise<void> => {
   const params = ChangeProspectStageParams.safeParse(req.params);
