@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, BriefcaseBusiness, Check, Languages, LoaderCircle, Plus, Radio, Trash2, UserRoundCheck, UsersRound } from "lucide-react";
+import { AlertCircle, Check, Layers3, LoaderCircle, Plus, Settings2, Trash2 } from "lucide-react";
 import {
   getGetContactFieldOptionsQueryKey,
   useCreateContactFieldOption,
@@ -17,14 +17,15 @@ const fieldDetails: Array<{ field: ContactFieldKey; title: string; description: 
   { field: "jobTitle", title: "Job titles", description: "Standard job titles for your contact records." },
   { field: "preferredLanguage", title: "Preferred languages", description: "Languages your contacts may prefer for communication." },
 ];
-const fieldIcons = {
-  lifecycleStage: Radio,
-  leadStatus: UserRoundCheck,
-  leadSource: UsersRound,
-  jobTitle: BriefcaseBusiness,
-  preferredLanguage: Languages,
+const valueNames: Record<ContactFieldKey, string> = {
+  lifecycleStage: "lifecycle stage",
+  leadStatus: "lead status",
+  leadSource: "lead source",
+  jobTitle: "job title",
+  preferredLanguage: "preferred language",
 };
-const inputClass = "h-11 w-full rounded-lg border border-[#d8dde4] bg-white px-3.5 text-[13px] text-[#182333] outline-none transition placeholder:text-[#9ba6b2] focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]";
+const panelClass = "rounded-xl border border-[#dce4ed] bg-white shadow-[0_4px_18px_rgba(19,43,70,.035)]";
+const inputClass = "h-10 w-full rounded-lg border border-[#d7e0e9] bg-white px-3 text-[12px] text-[#1a2b40] outline-none transition placeholder:text-[#9ba6b2] focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]";
 
 function MasterCard({
   field,
@@ -45,46 +46,55 @@ function MasterCard({
 }) {
   const [value, setValue] = useState("");
   const entries = options.filter(option => option.field === field);
-  const Icon = fieldIcons[field];
-  return <section data-testid={`section-master-${field}`} className="rounded-lg border border-[#e0e4e9] bg-white">
-    <header className="flex items-start gap-3.5 border-b border-[#e8edf1] bg-[#fbfcfd] px-5 py-4">
-      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#dce6ef] bg-[#eef4f9] text-[#315e88]"><Icon className="h-4 w-4" strokeWidth={1.8}/></span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <h2 className="text-[14px] font-bold tracking-[-.015em] text-[#223247]">{title}</h2>
-          <span className="rounded-full bg-[#edf1f4] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[#647487]">{entries.length} {entries.length === 1 ? "value" : "values"}</span>
-        </div>
-        <p className="mt-1 text-[12px] leading-[1.55] text-[#788696]">{description}</p>
-      </div>
-    </header>
-    <div className="p-5">
-      <form className="flex flex-col gap-2 sm:flex-row" onSubmit={event => {
+  const valueName = valueNames[field];
+  return <div data-testid={`section-master-${field}`} className="grid items-start gap-5 xl:grid-cols-[minmax(290px,.7fr)_minmax(0,1.3fr)]">
+    <section className={`${panelClass} p-5`}>
+      <div className="mono text-[9px] tracking-[.14em] text-[#71869a]">NEW CONTACT FIELD VALUE</div>
+      <h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Add a {valueName}</h2>
+      <p className="mt-1 text-[10px] leading-5 text-[#8290a0]">{description}</p>
+      <form onSubmit={event => {
         event.preventDefault();
         const trimmed = value.trim();
         if (!trimmed) return;
         void onAdd(field, trimmed).then(() => setValue("")).catch(() => undefined);
-      }}>
-        <input aria-label={`New ${title.toLowerCase()}`} data-testid={`input-master-${field}`} value={value}
-          onChange={event => setValue(event.target.value)} maxLength={200} className={`${inputClass} min-w-0 flex-1`} placeholder={`Add a ${title.toLowerCase().replace(/s$/, "")}`} />
+      }} className="mt-5 space-y-5">
+        <label className="block space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-[.1em] text-[#66778a]">Value</span>
+          <input aria-label={`New ${valueName}`} data-testid={`input-master-${field}`} value={value}
+            onChange={event => setValue(event.target.value)} maxLength={200} className={inputClass} placeholder="Enter a value"/>
+        </label>
         <button type="submit" data-testid={`button-add-master-${field}`} disabled={!value.trim() || busy}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#174f99] px-4 text-[12px] font-semibold text-white transition-colors hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-45">
-          {busy ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Plus className="h-4 w-4"/>}Add value
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#164f91] bg-[#164f91] px-4 text-[12px] font-bold text-white transition hover:-translate-y-px hover:bg-[#103e76] disabled:cursor-not-allowed disabled:opacity-50">
+          {busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Plus className="h-3.5 w-3.5"/>}
+          {busy ? "Adding…" : "Add value"}
         </button>
       </form>
-      {entries.length ? <ul className="mt-4 divide-y divide-[#edf0f2] rounded-lg border border-[#e6eaee]">
-        {entries.map(option => <li key={option.id} data-testid={`row-master-${option.id}`} className="flex min-h-11 items-center gap-3 px-3.5 py-2">
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#eff5f9] text-[#547895]"><Check className="h-3 w-3" strokeWidth={2.2}/></span>
-          <span className="min-w-0 flex-1 break-words text-[12px] font-medium text-[#34485d]">{option.value}</span>
+    </section>
+    <section className={`${panelClass} overflow-hidden`}>
+      <header className="flex items-center justify-between gap-3 border-b border-[#e8edf2] bg-[#fbfcfd] px-5 py-4">
+        <div>
+          <div className="mono text-[9px] tracking-[.14em] text-[#71869a]">SAVED SETTINGS</div>
+          <h2 className="mt-1 text-[14px] font-bold text-[#263c53]">Configured {title.toLowerCase()}</h2>
+        </div>
+        <span className="shrink-0 rounded-full bg-[#edf1f4] px-2 py-1 text-[10px] font-semibold tabular-nums text-[#647487]">{entries.length} {entries.length === 1 ? "value" : "values"}</span>
+      </header>
+      {entries.length ? <ul className="divide-y divide-[#edf1f4]">
+        {entries.map(option => <li key={option.id} data-testid={`row-master-${option.id}`} className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#eff5f9] text-[#547895]"><Check className="h-3 w-3" strokeWidth={2.2}/></span>
+            <span className="min-w-0 break-words text-[11px] font-semibold text-[#34485d]">{option.value}</span>
+          </div>
           <button type="button" data-testid={`button-remove-master-${option.id}`} onClick={() => onRemove(option)}
             aria-label={`Remove ${option.value}`} disabled={busy}
-            className="rounded-md p-2 text-[#8995a1] transition-colors hover:bg-[#fff3ed] hover:text-[#a84926] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e6b18d] disabled:opacity-40"><Trash2 className="h-4 w-4"/></button>
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#9a5245] transition-colors hover:bg-[#fff0ec] disabled:opacity-40"><Trash2 className="h-3.5 w-3.5"/></button>
         </li>)}
-      </ul> : <div data-testid={`empty-master-${field}`} className="mt-4 flex items-start gap-3 rounded-lg border border-dashed border-[#d9e1e8] bg-[#fafcfd] px-4 py-3.5">
-        <span className="mt-0.5 shrink-0 text-[11px] font-semibold text-[#6e8193]">No values yet</span>
-        <p className="text-[11px] leading-5 text-[#8491a0]">Add one above or create it while editing a contact.</p>
+      </ul> : <div data-testid={`empty-master-${field}`} className="px-5 py-12 text-center">
+        <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-[#f0f4f7] text-[#69839b]"><Layers3 className="h-4 w-4"/></div>
+        <p className="mt-3 text-[11px] text-[#8290a0]">No {title.toLowerCase()} configured yet.</p>
+        <p className="mt-1 text-[10px] text-[#8996a3]">Add a value using the form.</p>
       </div>}
-    </div>
-  </section>;
+    </section>
+  </div>;
 }
 
 export default function ContactFieldSettingsPage() {
@@ -146,19 +156,13 @@ export default function ContactFieldSettingsPage() {
         <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4"/>Contact field settings could not be loaded.</span>
         <button type="button" onClick={() => void query.refetch()} className="rounded-md px-3 py-2 font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Retry</button>
       </section> : <Tabs defaultValue={fieldDetails[0].field} className="w-full" data-testid="contact-field-tabs">
-        <TabsList aria-label="Contact field categories" className="mb-5 flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border border-[#e0e4e9] bg-white p-1.5">
-          {fieldDetails.map(item => {
-            const Icon = fieldIcons[item.field];
-            const count = options.filter(option => option.field === item.field).length;
-            return <TabsTrigger key={item.field} value={item.field} data-testid={`tab-contact-field-${item.field}`}
-              className="min-h-10 min-w-[155px] flex-1 justify-center gap-2 rounded-md px-3 py-2 text-[11px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm sm:min-w-0">
-              <Icon className="h-3.5 w-3.5 shrink-0"/>
-              <span>{item.title}</span>
-              <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[9px] tabular-nums text-current">{count}</span>
-            </TabsTrigger>;
-          })}
+        <TabsList aria-label="Contact field categories" className="mb-4 flex h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0">
+          {fieldDetails.map(item => <TabsTrigger key={item.field} value={item.field} data-testid={`tab-contact-field-${item.field}`}
+            className="min-h-0 min-w-0 rounded-lg border border-[#dce4ed] bg-white px-3 py-2 text-[10px] font-semibold text-[#64788c] shadow-none transition-colors hover:bg-[#f7f9fb] data-[state=active]:border-[#a8c1d9] data-[state=active]:bg-[#edf4fb] data-[state=active]:text-[#235687] data-[state=active]:shadow-none">
+            {item.title}
+          </TabsTrigger>)}
         </TabsList>
-        {fieldDetails.map(item => <TabsContent key={item.field} value={item.field} forceMount className="mt-0">
+        {fieldDetails.map(item => <TabsContent key={item.field} value={item.field} forceMount className="mt-0 data-[state=inactive]:hidden">
           <MasterCard {...item} options={options}
             busy={remove.isPending || create.isPending} onAdd={add} onRemove={removeOption}/>
         </TabsContent>)}
