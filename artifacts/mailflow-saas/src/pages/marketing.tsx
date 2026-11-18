@@ -199,6 +199,28 @@ function ProspectManagementPreview() {
   );
 }
 
+function ProspectManagementFeatureImage() {
+  return (
+    <figure className="m-0 overflow-hidden rounded-2xl border border-[#d8e2df] bg-[#f7f3ea] shadow-[0_18px_40px_rgba(29,48,70,.11)]">
+      <img
+        src="/prospect-management-editorial.webp"
+        alt="An editorial illustration of people connected to a company, an opportunity milestone, and a follow-up calendar."
+        width="1024"
+        height="1024"
+        decoding="async"
+        className="block aspect-square w-full object-cover"
+      />
+      <figcaption className="flex items-center justify-between gap-4 border-t border-[#e7ece9] bg-white px-4 py-3 sm:px-5">
+        <span>
+          <span className="block font-mono text-[8px] tracking-[.13em] text-[#71827a]">CONNECTED BY DESIGN</span>
+          <span className="mt-1 block text-[11px] font-semibold text-[#344b60]">From first conversation to the next follow-up</span>
+        </span>
+        <ArrowRight size={16} className="shrink-0 text-[#2865ae]" aria-hidden="true"/>
+      </figcaption>
+    </figure>
+  );
+}
+
 export function MarketingHomePage() {
   usePageMeta(homeMeta);
   return (
@@ -233,7 +255,7 @@ export function MarketingHomePage() {
               <p className="mt-3 max-w-xl text-xs leading-6 text-[#53636e]">Company pages summarize Total Prospect Value (TPV) from non-archived opportunities and Total Revenue Value (TRV) from won expected deal values. Amounts remain grouped by currency.</p>
               <Link href="/features#prospect-management" className="mt-5 inline-flex items-center gap-2 text-[12px] font-semibold text-[#245b9b] no-underline hover:underline" data-testid="home-prospect-management-link">Explore prospect management <ArrowRight size={15}/></Link>
             </div>
-            <ProspectManagementPreview/>
+            <ProspectManagementFeatureImage/>
           </div>
         </section>
 
