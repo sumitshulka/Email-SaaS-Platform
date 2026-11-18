@@ -48,6 +48,11 @@ export type ReportDefinition = {
   }>;
   subtotals?: boolean;
   grandTotal?: boolean;
+  visualization?: {
+    type: "table" | "kpi" | "bar" | "horizontal_bar" | "line" | "area" | "pie" | "donut";
+    categoryFieldId?: string;
+    valueFieldId?: string;
+  };
 };
 
 const reportDefinitionSchema = z.object({
@@ -74,7 +79,11 @@ const reportDefinitionSchema = z.object({
   })).max(8).optional(),
   subtotals: z.boolean().optional(),
   grandTotal: z.boolean().optional(),
-  visualization: z.record(z.string(), z.unknown()).optional(),
+  visualization: z.object({
+    type: z.enum(["table", "kpi", "bar", "horizontal_bar", "line", "area", "pie", "donut"]),
+    categoryFieldId: z.string().min(1).max(160).optional(),
+    valueFieldId: z.string().min(1).max(160).optional(),
+  }).optional(),
 }).passthrough();
 
 const filterGroupShape = z.object({
@@ -401,6 +410,23 @@ export function validateReportDefinition(raw: unknown): ValidatedDefinition {
   )) {
     throw new ReportDefinitionError("Summary reports can be sorted by a grouping field.");
   }
+  const visualization = input.visualization;
+  if (visualization && visualization.type !== "table") {
+    const allowedValueIds = new Set(aggregates.map((aggregate) => `aggregate:${aggregate.id}`));
+    if (!visualization.valueFieldId || !allowedValueIds.has(visualization.valueFieldId)) {
+      throw new ReportDefinitionError("Choose a measure from this report for the chart value.");
+    }
+    if (visualization.type === "kpi") {
+      if (input.grandTotal === false) {
+        throw new ReportDefinitionError("Enable grand totals to show a KPI value.");
+      }
+    } else {
+      const allowedCategoryIds = new Set(groupBy.map((group) => `group:${group.fieldId}`));
+      if (!visualization.categoryFieldId || !allowedCategoryIds.has(visualization.categoryFieldId)) {
+        throw new ReportDefinitionError("Choose a grouping field from this report for the chart categories.");
+      }
+    }
+  }
 
   const sorting = (input.sorting ?? []).map((item) => {
     const field = getField(entity, item.fieldId);
@@ -501,6 +527,7 @@ export function normalizeReportDefinition(raw: unknown): ReportDefinition {
       : {}),
     ...(typeof validated.subtotals === "boolean" ? { subtotals: validated.subtotals } : {}),
     ...(typeof validated.grandTotal === "boolean" ? { grandTotal: validated.grandTotal } : {}),
+    ...(validated.visualization ? { visualization: { ...validated.visualization } } : {}),
   };
 }
 
@@ -542,10 +569,12 @@ function buildGroupExpression(
   timeZone: string,
 ): SQLWrapper {
   if (!group.interval) return group.field.expression;
+  const intervalSql = sql.raw(`'${group.interval}'`);
   if (group.field.dataType === "date") {
-    return sql`date_trunc(${group.interval}, (${group.field.expression})::timestamp)`;
+    return sql`date_trunc(${intervalSql}, (${group.field.expression})::timestamp)`;
   }
-  return sql`date_trunc(${group.interval}, timezone(${timeZone}, ${group.field.expression}))`;
+  const timeZoneSql = sql.raw(`'${timeZone.replaceAll("'", "''")}'`);
+  return sql`date_trunc(${intervalSql}, timezone(${timeZoneSql}, ${group.field.expression}))`;
 }
 
 function buildAggregateExpression(
@@ -611,6 +640,11 @@ function getGroupingSets(validated: ValidatedDefinition): number[][] {
 }
 
 function getGroupedResultColumns(validated: ValidatedDefinition) {
+  const rowLabel = {
+    fieldId: "_summaryLabel",
+    label: "Summary level",
+    dataType: "text" as const,
+  };
   const groups = validated.groupBy.map((group) => ({
     fieldId: `group:${group.fieldId}`,
     label: group.interval
@@ -632,7 +666,7 @@ function getGroupedResultColumns(validated: ValidatedDefinition) {
       dataType,
     };
   });
-  return [...groups, ...aggregates];
+  return [rowLabel, ...groups, ...aggregates];
 }
 
 function groupingMaskValue(value: unknown): number {
@@ -651,18 +685,18 @@ function getGroupedRowType(
     return (groupingMask & bit) === 0 ? [index] : [];
   });
   const userGroupCount = validated.groupBy.filter((group) => !group.implicitCurrency).length;
-  if (presentIndexes.length === count) {
-    return { rowType: "detail", groupingLevel: userGroupCount };
-  }
-  if (presentIndexes.length === 0) {
-    return { rowType: "grand_total", groupingLevel: 0 };
-  }
   if (
     validated.currencyGroupFieldId
     && presentIndexes.length === 1
     && validated.groupBy[presentIndexes[0]]?.fieldId === validated.currencyGroupFieldId
   ) {
     return { rowType: "currency_total", groupingLevel: 0 };
+  }
+  if (presentIndexes.length === count) {
+    return { rowType: "detail", groupingLevel: userGroupCount };
+  }
+  if (presentIndexes.length === 0) {
+    return { rowType: "grand_total", groupingLevel: 0 };
   }
   return {
     rowType: "subtotal",
@@ -700,7 +734,9 @@ async function executeGroupedReport(
     selection[`rw_aggregate_${index}`] = sql`${expression}`.as(`rw_aggregate_${index}`);
   });
   selection.rw_grouping_mask = sql`${groupingMaskExpression}`.as("rw_grouping_mask");
-  const orderExpressions: SQL[] = [sql.raw('"rw_grouping_mask" asc')];
+  const orderExpressions: SQL[] = [
+    sql.raw(`"rw_grouping_mask" ${validated.visualization?.type === "kpi" ? "desc" : "asc"}`),
+  ];
   const explicitSorts = validated.sorting.length
     ? validated.sorting
     : validated.groupBy.map((group) => ({ fieldId: group.fieldId, direction: "asc" as const }));
@@ -738,6 +774,13 @@ async function executeGroupedReport(
       const output: Record<string, unknown> = {
         _rowType: rowType.rowType,
         _groupingLevel: rowType.groupingLevel,
+        _summaryLabel: rowType.rowType === "detail"
+          ? "Detail"
+          : rowType.rowType === "subtotal"
+            ? "Subtotal"
+            : rowType.rowType === "currency_total"
+              ? "Currency total"
+              : "Grand total",
       };
       validated.groupBy.forEach((group, index) => {
         output[`group:${group.fieldId}`] = normalizeValue(row[`rw_group_${index}`]);

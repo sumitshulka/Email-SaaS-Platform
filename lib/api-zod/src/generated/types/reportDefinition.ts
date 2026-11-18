@@ -8,9 +8,9 @@
 import type { ReportAggregationDefinition } from './reportAggregationDefinition';
 import type { ReportColumnDefinition } from './reportColumnDefinition';
 import type { ReportDefinitionFilters } from './reportDefinitionFilters';
-import type { ReportDefinitionVisualization } from './reportDefinitionVisualization';
 import type { ReportGroupDefinition } from './reportGroupDefinition';
 import type { ReportSortDefinition } from './reportSortDefinition';
+import type { ReportVisualizationDefinition } from './reportVisualizationDefinition';
 
 export interface ReportDefinition {
   version: 1;
@@ -29,6 +29,6 @@ export interface ReportDefinition {
   aggregates?: ReportAggregationDefinition[];
   subtotals?: boolean;
   grandTotal?: boolean;
-  visualization?: ReportDefinitionVisualization;
+  visualization?: ReportVisualizationDefinition;
   [key: string]: unknown;
  }

@@ -19,6 +19,7 @@ export interface ReportFieldMetadata {
   aggregations: ReportFieldMetadataAggregationsItem[];
   dateIntervals: ReportFieldMetadataDateIntervalsItem[];
   relationId?: string;
+  currencyGroupFieldId?: string;
   calculated: boolean;
   isSensitive?: boolean;
 }

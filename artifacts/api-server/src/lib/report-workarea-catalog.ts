@@ -312,8 +312,6 @@ const historyCompany = alias(companiesTable, "rw_history_company");
 const historyPreviousStage = alias(prospectStagesTable, "rw_history_previous_stage");
 const historyNewStage = alias(prospectStagesTable, "rw_history_new_stage");
 const historyActor = alias(usersTable, "rw_history_actor");
-const prospectCurrentStageHistory = alias(prospectStageHistoryTable, "rw_prospect_current_stage_history");
-const historyNextEvent = alias(prospectStageHistoryTable, "rw_history_next_event");
 
 const contactTagSummary = sql<string>`coalesce((
   select string_agg(${contactTagsTable.name}, ', ' order by ${contactTagsTable.name})
@@ -386,24 +384,24 @@ const prospectDaysSinceActivity = sql<number>`(
 )`;
 const prospectCurrentStageDays = sql<number>`floor(extract(epoch from (
   current_timestamp - coalesce((
-    select max(${prospectCurrentStageHistory.createdAt})
-    from ${prospectCurrentStageHistory}
-    where ${prospectCurrentStageHistory.userId} = ${prospectsTable.userId}
-      and ${prospectCurrentStageHistory.prospectId} = ${prospectsTable.id}
-      and ${prospectCurrentStageHistory.newStageId} = ${prospectsTable.currentStageId}
+    select max(current_stage_event.created_at)
+    from ${prospectStageHistoryTable} as current_stage_event
+    where current_stage_event.user_id = ${prospectsTable.userId}
+      and current_stage_event.prospect_id = ${prospectsTable.id}
+      and current_stage_event.new_stage_id = ${prospectsTable.currentStageId}
   ), ${prospectsTable.createdAt})
 )) / 86400)::int`;
 const stageHistoryDaysInStage = sql<number>`floor(extract(epoch from (
   coalesce((
-    select min(${historyNextEvent.createdAt})
-    from ${historyNextEvent}
-    where ${historyNextEvent.userId} = ${prospectStageHistoryTable.userId}
-      and ${historyNextEvent.prospectId} = ${prospectStageHistoryTable.prospectId}
+    select min(next_stage_event.created_at)
+    from ${prospectStageHistoryTable} as next_stage_event
+    where next_stage_event.user_id = ${prospectStageHistoryTable.userId}
+      and next_stage_event.prospect_id = ${prospectStageHistoryTable.prospectId}
       and (
-        ${historyNextEvent.createdAt} > ${prospectStageHistoryTable.createdAt}
+        next_stage_event.created_at > ${prospectStageHistoryTable.createdAt}
         or (
-          ${historyNextEvent.createdAt} = ${prospectStageHistoryTable.createdAt}
-          and ${historyNextEvent.id} > ${prospectStageHistoryTable.id}
+          next_stage_event.created_at = ${prospectStageHistoryTable.createdAt}
+          and next_stage_event.id > ${prospectStageHistoryTable.id}
         )
       )
   ), current_timestamp) - ${prospectStageHistoryTable.createdAt}
@@ -1028,9 +1026,20 @@ type ReportDefinition = {
   columns: ReportColumnDefinition[];
   filters?: unknown;
   sorting?: Array<{ fieldId: string; direction: "asc" | "desc" }>;
-  groupBy?: string[];
-  aggregates?: unknown[];
-  visualization?: Record<string, unknown>;
+  groupBy?: Array<{ fieldId: string; interval?: ReportDateInterval }>;
+  aggregates?: Array<{
+    id: string;
+    label: string;
+    operation: ReportAggregationOperation;
+    fieldId?: string;
+  }>;
+  subtotals?: boolean;
+  grandTotal?: boolean;
+  visualization?: {
+    type: "table" | "kpi" | "bar" | "horizontal_bar" | "line" | "area" | "pie" | "donut";
+    categoryFieldId?: string;
+    valueFieldId?: string;
+  };
 };
 
 function definition(
@@ -1043,6 +1052,33 @@ function definition(
     baseEntityId,
     columns: fields.map((fieldId) => ({ fieldId })),
     sorting,
+  };
+}
+
+function summaryDefinition(
+  baseEntityId: string,
+  groupBy: Array<{ fieldId: string; interval?: ReportDateInterval }>,
+  aggregates: Array<{
+    id: string;
+    label: string;
+    operation: ReportAggregationOperation;
+    fieldId?: string;
+  }>,
+  options: {
+    subtotals?: boolean;
+    grandTotal?: boolean;
+    visualization?: ReportDefinition["visualization"];
+  } = {},
+): ReportDefinition {
+  return {
+    version: 1,
+    baseEntityId,
+    columns: [],
+    groupBy,
+    aggregates,
+    ...(options.subtotals !== undefined ? { subtotals: options.subtotals } : {}),
+    ...(options.grandTotal !== undefined ? { grandTotal: options.grandTotal } : {}),
+    ...(options.visualization ? { visualization: options.visualization } : {}),
   };
 }
 
@@ -1134,6 +1170,120 @@ export const reportTemplates = [
     ], [{ fieldId: "prospects.expectedClosureDate", direction: "asc" }]),
   },
   {
+    id: "prospect-pipeline-by-stage",
+    name: "Pipeline by stage",
+    category: "Prospects",
+    description: "Compare weighted pipeline, prospect counts, and win rate by stage without combining currencies.",
+    baseEntityId: "prospects",
+    definition: summaryDefinition(
+      "prospects",
+      [{ fieldId: "prospects.stage.name" }],
+      [
+        { id: "weighted_value", label: "Weighted pipeline value", operation: "sum", fieldId: "prospects.weightedPipelineValue" },
+        { id: "prospect_count", label: "Prospects", operation: "count" },
+        { id: "win_rate", label: "Win rate", operation: "win_rate", fieldId: "prospects.stage.outcome" },
+      ],
+      {
+        subtotals: true,
+        grandTotal: true,
+        visualization: {
+          type: "bar",
+          categoryFieldId: "group:prospects.stage.name",
+          valueFieldId: "aggregate:weighted_value",
+        },
+      },
+    ),
+  },
+  {
+    id: "prospect-monthly-pipeline",
+    name: "Monthly pipeline trend",
+    category: "Prospects",
+    description: "Track monthly weighted pipeline and prospect volume, with a separate series per currency.",
+    baseEntityId: "prospects",
+    definition: summaryDefinition(
+      "prospects",
+      [{ fieldId: "prospects.createdAt", interval: "month" }],
+      [
+        { id: "weighted_value", label: "Weighted pipeline value", operation: "sum", fieldId: "prospects.weightedPipelineValue" },
+        { id: "prospect_count", label: "Prospects", operation: "count" },
+      ],
+      {
+        grandTotal: true,
+        visualization: {
+          type: "line",
+          categoryFieldId: "group:prospects.createdAt",
+          valueFieldId: "aggregate:weighted_value",
+        },
+      },
+    ),
+  },
+  {
+    id: "prospect-stage-duration",
+    name: "Average time in stage",
+    category: "Prospects",
+    description: "Compare average days in each stage period using immutable stage history.",
+    baseEntityId: "prospectStageHistory",
+    definition: summaryDefinition(
+      "prospectStageHistory",
+      [{ fieldId: "prospectStageHistory.newStage.name" }],
+      [
+        { id: "average_days", label: "Average days in stage", operation: "avg", fieldId: "prospectStageHistory.daysInStage" },
+        { id: "stage_events", label: "Stage events", operation: "count" },
+      ],
+      {
+        visualization: {
+          type: "horizontal_bar",
+          categoryFieldId: "group:prospectStageHistory.newStage.name",
+          valueFieldId: "aggregate:average_days",
+        },
+      },
+    ),
+  },
+  {
+    id: "campaign-recipient-outcomes-by-status",
+    name: "Recipient outcomes by status",
+    category: "Campaigns",
+    description: "Summarize recipient records by send status and distinguish replies from SMTP acceptance.",
+    baseEntityId: "campaignRecipients",
+    definition: summaryDefinition(
+      "campaignRecipients",
+      [{ fieldId: "campaignRecipients.status" }],
+      [
+        { id: "recipient_count", label: "Recipient records", operation: "count" },
+        { id: "reply_count", label: "Recorded replies", operation: "sum", fieldId: "campaignRecipients.replyCount" },
+      ],
+      {
+        visualization: {
+          type: "donut",
+          categoryFieldId: "group:campaignRecipients.status",
+          valueFieldId: "aggregate:recipient_count",
+        },
+      },
+    ),
+  },
+  {
+    id: "company-prospect-analytics",
+    name: "Prospects by business area",
+    category: "Companies",
+    description: "Compare workspace companies and their linked prospect counts by business area.",
+    baseEntityId: "companies",
+    definition: summaryDefinition(
+      "companies",
+      [{ fieldId: "companies.businessArea" }],
+      [
+        { id: "prospect_count", label: "Linked prospects", operation: "sum", fieldId: "companies.prospectCount" },
+        { id: "company_count", label: "Companies", operation: "count" },
+      ],
+      {
+        visualization: {
+          type: "bar",
+          categoryFieldId: "group:companies.businessArea",
+          valueFieldId: "aggregate:prospect_count",
+        },
+      },
+    ),
+  },
+  {
     id: "prospect-actions",
     name: "Prospect action history",
     category: "Prospects",
@@ -1192,7 +1342,7 @@ export function getReportWorkareaCatalog() {
       label,
       description,
       grain,
-      fields: fields.map(({ expression: _expression, currencyGroupFieldId: _currencyGroupFieldId, ...field }) => ({
+      fields: fields.map(({ expression: _expression, ...field }) => ({
         ...field,
         calculated: field.calculated === true,
       })),

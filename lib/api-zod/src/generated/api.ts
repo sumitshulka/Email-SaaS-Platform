@@ -11140,6 +11140,7 @@ export const GetReportWorkareaCatalogResponse = zod.object({
   "aggregations": zod.array(zod.enum(['count', 'count_distinct', 'sum', 'avg', 'min', 'max', 'win_rate'])),
   "dateIntervals": zod.array(zod.enum(['day', 'week', 'month', 'quarter', 'year'])),
   "relationId": zod.string().optional(),
+  "currencyGroupFieldId": zod.string().optional(),
   "calculated": zod.boolean(),
   "isSensitive": zod.boolean().optional()
 })),
@@ -11181,7 +11182,11 @@ export const GetReportWorkareaCatalogResponse = zod.object({
 })).max(getReportWorkareaCatalogResponseTemplatesItemDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(getReportWorkareaCatalogResponseTemplatesItemDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(getReportWorkareaCatalogResponseTemplatesItemDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 })
 })),
   "definitionVersion": zod.number().int()
@@ -11239,7 +11244,11 @@ export const RunReportWorkareaQueryBody = zod.object({
 })).max(runReportWorkareaQueryBodyDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(runReportWorkareaQueryBodyDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(runReportWorkareaQueryBodyDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 }),
   "savedReportId": zod.string().uuid().optional(),
   "page": zod.number().int().min(1).default(runReportWorkareaQueryBodyPageDefault),
@@ -11320,7 +11329,11 @@ export const ListSavedReportsResponse = zod.object({
 })).max(listSavedReportsResponseReportsItemDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(listSavedReportsResponseReportsItemDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(listSavedReportsResponseReportsItemDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 }),
   "definitionVersion": zod.number().int(),
   "lastRunAt": zod.coerce.date().nullable(),
@@ -11384,7 +11397,11 @@ export const CreateSavedReportBody = zod.object({
 })).max(createSavedReportBodyDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(createSavedReportBodyDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(createSavedReportBodyDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 })
 })
 
@@ -11435,7 +11452,11 @@ export const CreateSavedReportResponse = zod.object({
 })).max(createSavedReportResponseDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(createSavedReportResponseDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(createSavedReportResponseDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 }),
   "definitionVersion": zod.number().int(),
   "lastRunAt": zod.coerce.date().nullable(),
@@ -11498,7 +11519,11 @@ export const GetSavedReportResponse = zod.object({
 })).max(getSavedReportResponseDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(getSavedReportResponseDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(getSavedReportResponseDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 }),
   "definitionVersion": zod.number().int(),
   "lastRunAt": zod.coerce.date().nullable(),
@@ -11565,7 +11590,11 @@ export const UpdateSavedReportBody = zod.object({
 })).max(updateSavedReportBodyDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(updateSavedReportBodyDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(updateSavedReportBodyDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 }).optional()
 })
 
@@ -11616,7 +11645,11 @@ export const UpdateSavedReportResponse = zod.object({
 })).max(updateSavedReportResponseDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(updateSavedReportResponseDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(updateSavedReportResponseDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 }),
   "definitionVersion": zod.number().int(),
   "lastRunAt": zod.coerce.date().nullable(),
@@ -11680,7 +11713,11 @@ export const ExportReportWorkareaCsvBody = zod.object({
 })).max(exportReportWorkareaCsvBodyDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(exportReportWorkareaCsvBodyDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(exportReportWorkareaCsvBodyDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 })
 })
 
@@ -11732,7 +11769,11 @@ export const ExportReportWorkareaXlsxBody = zod.object({
 })).max(exportReportWorkareaXlsxBodyDefinitionAggregatesMax).optional(),
   "subtotals": zod.boolean().default(exportReportWorkareaXlsxBodyDefinitionSubtotalsDefault),
   "grandTotal": zod.boolean().default(exportReportWorkareaXlsxBodyDefinitionGrandTotalDefault),
-  "visualization": zod.record(zod.string(), zod.unknown()).optional()
+  "visualization": zod.object({
+  "type": zod.enum(['table', 'kpi', 'bar', 'horizontal_bar', 'line', 'area', 'pie', 'donut']),
+  "categoryFieldId": zod.string().optional(),
+  "valueFieldId": zod.string().optional()
+}).optional()
 })
 })
 

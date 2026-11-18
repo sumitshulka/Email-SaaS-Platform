@@ -18,6 +18,7 @@ import {
   BackLink, cx, DataTypeMark, EmptyPanel, ErrorPanel, LoadingRows, PendingLabel,
   ReportButton, SectionLabel, WorkareaFrame,
 } from '@/components/report-workarea/report-ui';
+import { ReportChart } from '@/components/report-workarea/report-chart';
 import type { ReactNode } from 'react';
 
 type Condition = { kind: 'condition'; fieldId: string; operator: string; value?: unknown; values?: unknown[] };
@@ -37,6 +38,7 @@ const tableDefinition = (definition: Definition): Definition => ({
   ...(definition.aggregates?.length ? { aggregates: definition.aggregates.map(item => ({ ...item })) } : {}),
   ...(definition.subtotals !== undefined ? { subtotals: definition.subtotals } : {}),
   ...(definition.grandTotal !== undefined ? { grandTotal: definition.grandTotal } : {}),
+  ...(definition.visualization ? { visualization: { ...definition.visualization } } : {}),
 });
 const readable = (value: string) => value.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const getErrorText = (error: unknown) => error instanceof Error ? error.message : 'Please try again.';
@@ -69,13 +71,21 @@ function mutateConditionTree(group: Group, path: number[], transform: (condition
   }
   return { ...group, children };
 }
+function mutateGroupLogic(group: Group, path: number[], logic: 'and' | 'or'): Group {
+  if (path.length === 0) return { ...group, logic };
+  const [index, ...rest] = path;
+  const children = [...group.children];
+  const child = children[index];
+  if (child?.kind === 'group') children[index] = mutateGroupLogic(child as Group, rest, logic);
+  return { ...group, children };
+}
 
 function InputClass(props: { value: string; onChange: (value: string) => void; placeholder?: string; type?: string; testId: string; maxLength?: number }) {
   return <input data-testid={props.testId} type={props.type ?? 'text'} maxLength={props.maxLength} value={props.value} onChange={event => props.onChange(event.target.value)} placeholder={props.placeholder} className="h-10 w-full rounded-lg border border-[#d8dfd6] bg-[#fffefa] px-3 text-[13px] text-[#2d443c] outline-none transition focus:border-[#71998c] focus:ring-2 focus:ring-[#dfebe2] placeholder:text-[#a3afa6]" />;
 }
 
-function Select({ value, onChange, children, testId, className = '', disabled = false }: { value: string; onChange: (value: string) => void; children: ReactNode; testId: string; className?: string; disabled?: boolean }) {
-  return <select data-testid={testId} disabled={disabled} value={value} onChange={event => onChange(event.target.value)} className={cx('h-10 min-w-0 rounded-lg border border-[#d8dfd6] bg-[#fffefa] px-3 text-[13px] text-[#334a40] outline-none focus:border-[#71998c] focus:ring-2 focus:ring-[#dfebe2] disabled:cursor-not-allowed disabled:opacity-55', className)}>{children}</select>;
+function Select({ value, onChange, children, testId, className = '', disabled = false, title }: { value: string; onChange: (value: string) => void; children: ReactNode; testId: string; className?: string; disabled?: boolean; title?: string }) {
+  return <select data-testid={testId} title={title} disabled={disabled} value={value} onChange={event => onChange(event.target.value)} className={cx('h-10 min-w-0 rounded-lg border border-[#d8dfd6] bg-[#fffefa] px-3 text-[13px] text-[#334a40] outline-none focus:border-[#71998c] focus:ring-2 focus:ring-[#dfebe2] disabled:cursor-not-allowed disabled:opacity-55', className)}>{children}</select>;
 }
 
 export function ReportGalleryPage() {
@@ -169,6 +179,29 @@ export function ReportBuilderPage() {
   const currentEntity = entities.find(entity => entity.id === definition.baseEntityId);
   const fields = currentEntity?.fields ?? [];
   const fieldMap = useMemo(() => fieldMapFor(currentEntity), [currentEntity]);
+  const chartGroupFields = Array.from(new Set([
+    ...(definition.groupBy ?? []).map(group => group.fieldId),
+    ...(definition.aggregates ?? [])
+      .map(aggregate => fieldMap.get(aggregate.fieldId ?? '')?.currencyGroupFieldId)
+      .filter((fieldId): fieldId is string => Boolean(fieldId)),
+  ])).map(fieldId => fieldMap.get(fieldId)).filter((field): field is ReportFieldMetadata => Boolean(field));
+  const keepVisualizationValid = (next: Definition): Definition => {
+    const visualization = next.visualization;
+    if (!visualization || visualization.type === 'table') return next;
+    const aggregates = next.aggregates ?? [];
+    const validMeasure = aggregates.some(aggregate => `aggregate:${aggregate.id}` === visualization.valueFieldId);
+    const categoryIds = new Set([
+      ...(next.groupBy ?? []).map(group => `group:${group.fieldId}`),
+      ...aggregates
+        .map(aggregate => fieldMap.get(aggregate.fieldId ?? '')?.currencyGroupFieldId)
+        .filter((fieldId): fieldId is string => Boolean(fieldId))
+        .map(fieldId => `group:${fieldId}`),
+    ]);
+    const validCategory = visualization.type === 'kpi' || categoryIds.has(visualization.categoryFieldId ?? '');
+    return validMeasure && validCategory
+      ? next
+      : { ...next, visualization: { type: 'table' } };
+  };
   const templates = catalogQuery.data?.templates ?? [];
   const selectedTemplate = templates.find(template => template.id === templateId);
   const savedReports = reportsQuery.data?.reports ?? [];
@@ -253,7 +286,7 @@ export function ReportBuilderPage() {
       ...current,
       columns: [],
       sorting: [],
-      groupBy: [],
+      groupBy: current.groupBy ?? [],
       aggregates: current.aggregates?.length
         ? current.aggregates
         : [{ id: 'records', label: 'Record count', operation: 'count' }],
@@ -270,6 +303,7 @@ export function ReportBuilderPage() {
       subtotals: undefined,
       grandTotal: undefined,
       sorting: [],
+      visualization: { type: 'table' },
     }));
     setResult(null);
   };
@@ -294,11 +328,11 @@ export function ReportBuilderPage() {
       const groupBy = (current.groupBy ?? []).map((group, groupIndex) => groupIndex === index
         ? { fieldId, ...(field?.dateIntervals.length ? { interval: group.interval ?? 'month' } : {}) }
         : group);
-      return {
+      return keepVisualizationValid({
         ...current,
         groupBy,
         sorting: (current.sorting ?? []).filter(sort => groupBy.some(group => group.fieldId === sort.fieldId)),
-      };
+      });
     });
   };
   const updateGroupInterval = (index: number, interval: string) => setDefinition(current => ({
@@ -320,7 +354,7 @@ export function ReportBuilderPage() {
       ],
     }));
   };
-  const updateAggregate = (index: number, patch: Partial<{ id: string; label: string; operation: NonNullable<Definition['aggregates']>[number]['operation']; fieldId?: string }>) => setDefinition(current => ({
+  const updateAggregate = (index: number, patch: Partial<{ id: string; label: string; operation: NonNullable<Definition['aggregates']>[number]['operation']; fieldId?: string }>) => setDefinition(current => keepVisualizationValid({
     ...current,
     aggregates: (current.aggregates ?? []).map((aggregate, aggregateIndex) => aggregateIndex === index
       ? { ...aggregate, ...patch }
@@ -332,16 +366,34 @@ export function ReportBuilderPage() {
       startDetailed();
       return;
     }
-    setDefinition(current => ({ ...current, aggregates: next }));
+    setDefinition(current => keepVisualizationValid({ ...current, aggregates: next }));
   };
   const hasReportData = summaryMode
     ? Boolean(definition.aggregates?.length)
     : definition.columns.length > 0;
+  const chartMode = Boolean(definition.visualization?.type && definition.visualization.type !== 'table');
+  const selectedChartAggregate = (definition.aggregates ?? []).find(
+    aggregate => `aggregate:${aggregate.id}` === definition.visualization?.valueFieldId,
+  );
+  const chartCurrencyGroupFieldId = fieldMap.get(selectedChartAggregate?.fieldId ?? '')?.currencyGroupFieldId;
   const addCondition = () => {
     const field = fields.find(item => item.operators.length > 0);
     if (!field) return;
     const root = definition.filters as unknown as Group | undefined;
     const group: Group = { kind: 'group', logic: filterLogic(definition.filters), children: [...(root?.children ?? []), { kind: 'condition', fieldId: field.id, operator: field.operators[0] }] };
+    setDefinition(current => ({ ...current, filters: group as FilterGroup }));
+  };
+  const addNestedGroup = () => {
+    const field = fields.find(item => item.operators.length > 0);
+    if (!field) return;
+    const root = definition.filters as unknown as Group | undefined;
+    const condition: Condition = { kind: 'condition', fieldId: field.id, operator: field.operators[0] };
+    const nested: Group = { kind: 'group', logic: 'or', children: [condition] };
+    const group: Group = {
+      kind: 'group',
+      logic: filterLogic(definition.filters),
+      children: [...(root?.children ?? []), nested],
+    };
     setDefinition(current => ({ ...current, filters: group as FilterGroup }));
   };
   const updateCondition = (index: number, patch: Partial<Condition>) => {
@@ -363,6 +415,11 @@ export function ReportBuilderPage() {
       return { ...current, filters: updated.children.length ? updated as FilterGroup : undefined };
     });
   };
+  const updateFilterGroupLogic = (path: number[], logic: 'and' | 'or') => setDefinition(current => {
+    const root = current.filters as unknown as Group | undefined;
+    if (!root) return current;
+    return { ...current, filters: mutateGroupLogic(root, path, logic) as FilterGroup };
+  });
   const updateSort = (index: number, patch: Partial<{ fieldId: string; direction: 'asc' | 'desc' }>) => setDefinition(current => ({
     ...current,
     sorting: (current.sorting ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
@@ -377,15 +434,74 @@ export function ReportBuilderPage() {
   };
   const removeGroup = (index: number) => setDefinition(current => {
     const groupBy = (current.groupBy ?? []).filter((_, groupIndex) => groupIndex !== index);
-    return {
+    return keepVisualizationValid({
       ...current,
       groupBy,
       sorting: (current.sorting ?? []).filter(sort => groupBy.some(group => group.fieldId === sort.fieldId)),
-    };
+    });
   });
+  const setVisualizationType = (type: NonNullable<Definition['visualization']>['type']) => {
+    if (type === 'table') {
+      setDefinition(current => ({ ...current, visualization: { type: 'table' } }));
+      setResult(null);
+      return;
+    }
+    const firstGroupable = fields.find(field => field.groupable);
+    setDefinition(current => {
+      const aggregates = current.aggregates?.length
+        ? current.aggregates
+        : [{ id: 'records', label: 'Record count', operation: 'count' as const }];
+      const valueFieldId = `aggregate:${aggregates[0].id}`;
+      const measureField = fieldMap.get(aggregates[0].fieldId ?? '');
+      let groupBy = current.groupBy ?? [];
+      if (type !== 'kpi' && groupBy.length === 0 && firstGroupable) {
+        groupBy = [{
+          fieldId: firstGroupable.id,
+          ...(firstGroupable.dateIntervals.length ? { interval: 'month' as const } : {}),
+        }];
+      }
+      const availableCategoryIds = [
+        ...groupBy.map(group => `group:${group.fieldId}`),
+        ...(measureField?.currencyGroupFieldId ? [`group:${measureField.currencyGroupFieldId}`] : []),
+      ];
+      const categoryFieldId = type === 'kpi'
+        ? undefined
+        : availableCategoryIds.includes(current.visualization?.categoryFieldId ?? '')
+          ? current.visualization?.categoryFieldId
+          : availableCategoryIds[0];
+      return {
+        ...current,
+        columns: [],
+        groupBy,
+        aggregates,
+        grandTotal: type === 'kpi' ? true : current.grandTotal ?? true,
+        visualization: {
+          type,
+          ...(categoryFieldId ? { categoryFieldId } : {}),
+          valueFieldId,
+        },
+      };
+    });
+    setPageSize(100);
+    setResult(null);
+  };
+  const setVisualizationCategory = (categoryFieldId: string) => setDefinition(current => ({
+    ...current,
+    visualization: current.visualization
+      ? { ...current.visualization, categoryFieldId }
+      : { type: 'bar', categoryFieldId },
+  }));
+  const setVisualizationValue = (valueFieldId: string) => setDefinition(current => keepVisualizationValid({
+    ...current,
+    visualization: current.visualization
+      ? { ...current.visualization, valueFieldId }
+      : { type: 'kpi', valueFieldId },
+  }));
   const runAtPage = (page: number, size = pageSize) => {
     if (missingFields.length || !hasReportData) return;
-    runReport.mutate({ data: { definition: tableDefinition(definition), ...(reportId ? { savedReportId: reportId } : {}), page, pageSize: size } }, { onSuccess: data => {
+    const effectiveSize = chartMode ? 100 : size;
+    if (chartMode) setPageSize(100);
+    runReport.mutate({ data: { definition: tableDefinition(definition), ...(reportId ? { savedReportId: reportId } : {}), page, pageSize: effectiveSize } }, { onSuccess: data => {
       setResult(data);
       if (reportId) void queryClient.invalidateQueries({ queryKey: getListSavedReportsQueryKey() });
     } });
@@ -440,8 +556,12 @@ export function ReportBuilderPage() {
           <SectionLabel aside={<span className="font-mono text-[10px] text-[#91a096]">02 / COLUMNS</span>}>Select fields</SectionLabel>
           <p className="mb-4 text-[12px] text-[#77847b]">Choose the columns to include in your table. Up to 30 fields.</p>
           <div className="mb-4 flex flex-wrap gap-2">
-            {fields.filter(field => !definition.columns.some(column => column.fieldId === field.id)).map(field => <button key={field.id} type="button" data-testid={`button-add-field-${field.id}`} onClick={() => addColumn(field.id)} disabled={definition.columns.length >= 30} title={field.description} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#dce3d9] bg-[#fafbf7] px-3 text-[11px] font-medium text-[#60736a] transition hover:border-[#a8c2b3] hover:bg-[#eff5ef] disabled:opacity-50"><Plus className="h-3.5 w-3.5 text-[#608a77]" />{field.label}</button>)}
+            {fields.filter(field => !field.calculated && !definition.columns.some(column => column.fieldId === field.id)).map(field => <button key={field.id} type="button" data-testid={`button-add-field-${field.id}`} onClick={() => addColumn(field.id)} disabled={definition.columns.length >= 30} title={field.description} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#dce3d9] bg-[#fafbf7] px-3 text-[11px] font-medium text-[#60736a] transition hover:border-[#a8c2b3] hover:bg-[#eff5ef] disabled:opacity-50"><Plus className="h-3.5 w-3.5 text-[#608a77]" />{field.label}</button>)}
             {fields.length === 0 && <span className="text-[12px] text-[#8a958d]">No fields are available for this source.</span>}
+          </div>
+          {fields.some(field => field.calculated && !definition.columns.some(column => column.fieldId === field.id)) && <div className="mb-2 font-mono text-[9px] uppercase tracking-[.14em] text-[#7f8d80]">Calculated metrics</div>}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {fields.filter(field => field.calculated && !definition.columns.some(column => column.fieldId === field.id)).map(field => <button key={field.id} type="button" data-testid={`button-add-field-${field.id}`} onClick={() => addColumn(field.id)} disabled={definition.columns.length >= 30} title={field.description} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#cbdccf] bg-[#edf4ec] px-3 text-[11px] font-medium text-[#476e5c] transition hover:border-[#9fbea9] hover:bg-[#e3efe3] disabled:opacity-50"><Plus className="h-3.5 w-3.5 text-[#608a77]" />{field.label}<span className="rounded bg-white/75 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wide text-[#799082]">metric</span></button>)}
           </div>
           {definition.columns.length ? <div className="space-y-2">
             {definition.columns.map((column, index) => {
@@ -497,20 +617,38 @@ export function ReportBuilderPage() {
             <label className="flex items-center gap-2 text-[11px] text-[#62736a]"><input data-testid="checkbox-report-subtotals" type="checkbox" checked={definition.subtotals ?? false} onChange={event => setDefinition(current => ({ ...current, subtotals: event.target.checked }))} />Show grouped subtotals</label>
             <label className="flex items-center gap-2 text-[11px] text-[#62736a]"><input data-testid="checkbox-report-grand-total" type="checkbox" checked={definition.grandTotal !== false} onChange={event => setDefinition(current => ({ ...current, grandTotal: event.target.checked }))} />Show grand total</label>
           </div>
+          <div className="mt-4 grid gap-3 border-t border-[#e6eae2] pt-4 md:grid-cols-3">
+            <label className="space-y-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Visualization</span><Select testId="select-report-visualization" value={definition.visualization?.type ?? 'table'} onChange={value => setVisualizationType(value as NonNullable<Definition['visualization']>['type'])}><option value="table">Table</option><option value="kpi">KPI cards</option><option value="bar">Bar chart</option><option value="horizontal_bar">Horizontal bar</option><option value="line">Line chart</option><option value="area">Area chart</option><option value="pie">Pie chart</option><option value="donut">Donut chart</option></Select></label>
+            {definition.visualization?.type && definition.visualization.type !== 'table' && <>
+              {definition.visualization.type !== 'kpi' && <label className="space-y-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Chart categories</span><Select testId="select-report-chart-category" value={definition.visualization.categoryFieldId ?? ''} onChange={setVisualizationCategory}><option value="">Choose grouping</option>{chartGroupFields.map(field => <option key={field.id} value={`group:${field.id}`}>{field.label}{!(definition.groupBy ?? []).some(group => group.fieldId === field.id) ? ' · currency' : ''}</option>)}</Select></label>}
+              <label className="space-y-1.5"><span className="text-[11px] font-semibold text-[#52685d]">Chart measure</span><Select testId="select-report-chart-value" value={definition.visualization.valueFieldId ?? ''} onChange={setVisualizationValue}><option value="">Choose measure</option>{(definition.aggregates ?? []).map(aggregate => <option key={aggregate.id} value={`aggregate:${aggregate.id}`}>{aggregate.label}</option>)}</Select></label>
+            </>}
+          </div>
+          {definition.visualization?.type && definition.visualization.type !== 'table' && <p className="mt-3 text-[10px] leading-4 text-[#859188]">Charts show the first 100 grouped rows. Use the table pages or CSV/XLSX export to review more groups.</p>}
         </section>}
 
         <section className="rounded-xl border border-[#dce3d9] bg-[#fffefa] p-5 sm:p-6">
           <SectionLabel aside={<span className="font-mono text-[10px] text-[#91a096]">03 / FILTERS</span>}>Narrow the records</SectionLabel>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] text-[#77847b]">Conditions apply to source records before they are returned.</p><ReportButton variant="outline" onClick={addCondition} disabled={!fields.some(field => field.operators.length)} testId="button-add-report-filter" className="min-h-9"><Filter className="h-3.5 w-3.5" /> Add condition</ReportButton></div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[12px] text-[#77847b]">Conditions apply to source records before they are returned. Combine up to 50 conditions.</p><div className="flex flex-wrap gap-2"><ReportButton variant="outline" onClick={addCondition} disabled={!fields.some(field => field.operators.length) || filterConditions(definition.filters).length >= 50} testId="button-add-report-filter" className="min-h-9"><Filter className="h-3.5 w-3.5" /> Add condition</ReportButton><ReportButton variant="outline" onClick={addNestedGroup} disabled={!fields.some(field => field.operators.length) || filterConditions(definition.filters).length >= 50} testId="button-add-report-filter-group" className="min-h-9"><Plus className="h-3.5 w-3.5" /> Add condition group</ReportButton></div></div>
           {filterConditions(definition.filters).length > 0 && <div className="mb-3 flex items-center gap-2 rounded-lg bg-[#f4f7f2] px-3 py-2"><span className="font-mono text-[9px] uppercase tracking-wider text-[#809087]">Match</span><Select testId="select-filter-logic" value={filterLogic(definition.filters)} onChange={logic => setDefinition(current => ({ ...current, filters: { ...(current.filters as Group), logic: logic as 'and' | 'or' } as FilterGroup }))} className="h-8"><option value="and">All conditions (AND)</option><option value="or">Any condition (OR)</option></Select></div>}
           <div className="space-y-2">
-            {conditionEntries(definition.filters).map(({ condition, depth, logic }, index) => {
+            {conditionEntries(definition.filters).map(({ condition, depth, logic, path }, index) => {
               const field = fieldMap.get(condition.fieldId);
               const operators = field?.operators ?? [];
-              return <div key={`${condition.fieldId}-${index}`} className="grid gap-2 rounded-lg border border-[#e5e9e1] bg-[#fbfcf8] p-3 sm:grid-cols-[1.1fr_1fr_1.25fr_auto]">
-                <div className="relative"><Select testId={`select-filter-field-${index}`} value={condition.fieldId} onChange={fieldId => { const nextField = fieldMap.get(fieldId); updateCondition(index, { fieldId, operator: nextField?.operators[0] ?? '' }); }} className={depth ? 'w-full pl-5' : 'w-full'}><option value="">Choose field</option>{fields.filter(candidate => candidate.operators.length > 0).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</Select>{depth > 0 && <span title={`Nested group: ${logic.toUpperCase()}`} className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 font-mono text-[8px] text-[#9b7a5f]">↳</span>}</div>
+              return <div key={`${condition.fieldId}-${index}`} className={cx('grid gap-2 rounded-lg border border-[#e5e9e1] bg-[#fbfcf8] p-3', depth ? 'sm:grid-cols-[.8fr_1.1fr_1fr_1.25fr_auto]' : 'sm:grid-cols-[1.1fr_1fr_1.25fr_auto]')}>
+                {depth > 0 && <Select testId={`select-filter-group-logic-${index}`} value={logic} onChange={groupLogic => updateFilterGroupLogic(path.slice(0, -1), groupLogic as 'and' | 'or')} title="How conditions inside this group are combined"><option value="and">Group: all</option><option value="or">Group: any</option></Select>}
+                <Select testId={`select-filter-field-${index}`} value={condition.fieldId} onChange={fieldId => { const nextField = fieldMap.get(fieldId); updateCondition(index, { fieldId, operator: nextField?.operators[0] ?? '' }); }} className={depth ? 'w-full pl-5' : 'w-full'}><option value="">Choose field</option>{fields.filter(candidate => candidate.operators.length > 0).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</Select>
                 <Select testId={`select-filter-operator-${index}`} value={condition.operator} onChange={operator => updateCondition(index, { operator, value: undefined, values: undefined })}>{operators.map(operator => <option key={operator} value={operator}>{readable(operator)}</option>)}</Select>
-                {!['is_empty', 'is_not_empty'].includes(condition.operator) ? <InputClass testId={`input-filter-value-${index}`} value={Array.isArray(condition.values) ? condition.values.join(', ') : String(condition.value ?? '')} type={field?.dataType === 'date' ? 'date' : field?.dataType === 'number' || field?.dataType === 'currency' ? 'number' : 'text'} placeholder={condition.operator === 'in' || condition.operator === 'not_in' ? 'Separate values with commas' : 'Enter a value'} onChange={value => updateCondition(index, condition.operator === 'in' || condition.operator === 'not_in' ? { values: value.split(',').map(item => item.trim()).filter(Boolean), value: undefined } : { value, values: undefined })} /> : <div className="flex h-10 items-center px-2 text-[11px] text-[#859188]">No value needed</div>}
+                {['is_empty', 'is_not_empty'].includes(condition.operator)
+                  ? <div className="flex h-10 items-center px-2 text-[11px] text-[#859188]">No value needed</div>
+                  : condition.operator === 'between'
+                    ? <div className="grid grid-cols-2 gap-2">
+                        <InputClass testId={`input-filter-value-${index}-from`} value={String(condition.values?.[0] ?? '')} type={field?.dataType === 'date' ? 'date' : field?.dataType === 'number' || field?.dataType === 'currency' ? 'number' : 'text'} placeholder="From" onChange={value => updateCondition(index, { values: [value, String(condition.values?.[1] ?? '')], value: undefined })} />
+                        <InputClass testId={`input-filter-value-${index}-to`} value={String(condition.values?.[1] ?? '')} type={field?.dataType === 'date' ? 'date' : field?.dataType === 'number' || field?.dataType === 'currency' ? 'number' : 'text'} placeholder="To" onChange={value => updateCondition(index, { values: [String(condition.values?.[0] ?? ''), value], value: undefined })} />
+                      </div>
+                    : field?.dataType === 'boolean'
+                      ? <Select testId={`input-filter-value-${index}`} value={String(condition.value ?? '')} onChange={value => updateCondition(index, { value: value === 'true', values: undefined })}><option value="">Choose yes or no</option><option value="true">Yes</option><option value="false">No</option></Select>
+                    : <InputClass testId={`input-filter-value-${index}`} value={Array.isArray(condition.values) ? condition.values.join(', ') : String(condition.value ?? '')} type={field?.dataType === 'date' ? 'date' : field?.dataType === 'number' || field?.dataType === 'currency' ? 'number' : 'text'} placeholder={condition.operator === 'in' || condition.operator === 'not_in' ? 'Separate values with commas' : 'Enter a value'} onChange={value => updateCondition(index, condition.operator === 'in' || condition.operator === 'not_in' ? { values: value.split(',').map(item => item.trim()).filter(Boolean), value: undefined } : { value, values: undefined })} />}
                 <button type="button" data-testid={`button-remove-filter-${index}`} onClick={() => removeCondition(index)} aria-label="Remove condition" className="grid h-10 w-10 place-items-center rounded-lg text-[#829087] hover:bg-[#f5eae5] hover:text-[#a45a45]"><X className="h-4 w-4" /></button>
               </div>;
             })}
@@ -548,7 +686,7 @@ export function ReportBuilderPage() {
 
       <aside className="space-y-4 xl:sticky xl:top-5">
         <section className="overflow-hidden rounded-xl border border-[#d3dfd4] bg-[#eaf1e9]">
-          <div className="border-b border-[#d6e1d6] px-5 py-4"><div className="font-mono text-[9px] uppercase tracking-[.16em] text-[#71877b]">Ready when you are</div><h2 className="mt-1 text-[16px] font-semibold text-[#29443a]">Run your report</h2><p className="mt-1 text-[11px] leading-5 text-[#6c7d72]">Live records, returned as a table.</p></div>
+          <div className="border-b border-[#d6e1d6] px-5 py-4"><div className="font-mono text-[9px] uppercase tracking-[.16em] text-[#71877b]">Ready when you are</div><h2 className="mt-1 text-[16px] font-semibold text-[#29443a]">Run your report</h2><p className="mt-1 text-[11px] leading-5 text-[#6c7d72]">Live records, shown as a {chartMode ? 'chart' : 'table'}.</p></div>
           <div className="p-5">
             {missingFields.length > 0 && <div role="alert" className="mb-4 rounded-lg border border-[#e7cebb] bg-[#fff8f1] p-3"><div className="text-[11px] font-semibold text-[#86573b]">Some fields are unavailable</div><p className="mt-1 text-[10px] leading-4 text-[#927762]">Remove or replace these fields before running or saving: {missingFields.map(id => fieldMap.get(id)?.label ?? id).join(', ')}.</p></div>}
             <div className="mb-4 flex items-center justify-between text-[11px] text-[#62776b]"><span>{summaryMode ? `${definition.aggregates?.length ?? 0} measures` : `${definition.columns.length} columns selected`}</span><span className="font-mono">{filterConditions(definition.filters).length} filters</span></div>
@@ -569,37 +707,40 @@ export function ReportBuilderPage() {
     <section className="mt-7 rounded-xl border border-[#dce3d9] bg-[#fffefa]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e6eae2] px-5 py-4 sm:px-6">
         <div><SectionLabel aside={<span className="font-mono text-[10px] text-[#91a096]">RESULTS</span>}>Report preview</SectionLabel><p className="text-[11px] text-[#7c8980]">{result ? `${result.totalRows.toLocaleString()} rows · ${result.grain}` : 'Run the report to retrieve matching records.'}</p></div>
-        {result && <label className="flex items-center gap-2 text-[11px] text-[#758279]">Rows per page <Select testId="select-report-page-size" value={String(pageSize)} onChange={value => { const nextSize = Number(value); setPageSize(nextSize); runAtPage(1, nextSize); }} className="h-8 py-0"><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></Select></label>}
+        {result && <label className="flex items-center gap-2 text-[11px] text-[#758279]">Rows per page <Select testId="select-report-page-size" value={chartMode ? '100' : String(pageSize)} onChange={value => { const nextSize = Number(value); setPageSize(nextSize); runAtPage(1, nextSize); }} className="h-8 py-0">{chartMode ? <option value="100">100</option> : <><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></>}</Select></label>}
       </div>
       {runReport.isPending && !result ? <div className="p-5"><LoadingRows rows={5} /></div> : !result ? <div className="px-5 py-12 text-center"><div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-lg bg-[#edf3ec] text-[#618071]"><ArrowDownUp className="h-4 w-4" /></div><h3 className="text-[13px] font-semibold text-[#40594d]">Your report will appear here</h3><p className="mt-1 text-[11px] text-[#89958c]">Choose fields or measures, then run the report.</p></div> : result.rows.length === 0 ? <div className="px-5 py-12 text-center"><h3 className="text-[13px] font-semibold text-[#40594d]">No records match these conditions</h3><p className="mt-1 text-[11px] text-[#89958c]">Adjust the filters and run the report again.</p></div> : <>
-        <div className="max-w-full overflow-auto">
-          <table className="w-full min-w-[720px] border-collapse text-left">
-            <thead><tr className="bg-[#f7f8f3]">{result.columns.map(column => <th key={column.fieldId} className="whitespace-nowrap border-b border-[#e5e9e1] px-4 py-3 font-mono text-[9px] font-medium uppercase tracking-[.12em] text-[#7b8980]">{column.label}</th>)}</tr></thead>
-            <tbody>{result.rows.map((row, index) => {
-              const rowType = typeof row._rowType === 'string' ? row._rowType : 'detail';
-              const rowClass = rowType === 'grand_total'
-                ? 'bg-[#eaf1e9] font-semibold'
-                : rowType === 'currency_total'
-                  ? 'bg-[#f0f4ed] font-semibold'
-                  : rowType === 'subtotal'
-                    ? 'bg-[#fbf7ec] font-medium'
-                    : 'transition-colors hover:bg-[#f9faf6]';
-              return <tr key={`${result.page}-${index}`} data-row-type={rowType} className={rowClass}>{result.columns.map((column, columnIndex) => {
-                const isGroupColumn = column.fieldId.startsWith('group:');
-                let value = row[column.fieldId];
-                if (isGroupColumn && value == null) {
-                  if (rowType === 'grand_total' && columnIndex === 0) value = 'Grand total';
-                  else if (rowType === 'subtotal' && columnIndex === 0) value = 'Subtotal';
-                }
-                const noGroupDimensions = !result.columns.some(resultColumn => resultColumn.fieldId.startsWith('group:'));
-                const cell = formatValue(value, column.dataType);
-                return <td key={column.fieldId} className="max-w-[340px] border-b border-[#edf0e9] px-4 py-3 text-[12px] text-[#43594e]">{summaryMode && noGroupDimensions && columnIndex === 0 && rowType === 'grand_total' ? <div><span className="mb-1 block font-mono text-[8px] uppercase tracking-wider text-[#71877b]">Grand total</span>{formatValue(row[column.fieldId], column.dataType)}</div> : cell}</td>;
-              })}</tr>;
-            })}</tbody>
-          </table>
-        </div>
+        {chartMode && definition.visualization?.type && definition.visualization.type !== 'table'
+          ? <div className="p-5 sm:p-6"><ReportChart result={result} visualization={definition.visualization as { type: 'kpi' | 'bar' | 'horizontal_bar' | 'line' | 'area' | 'pie' | 'donut'; categoryFieldId?: string; valueFieldId?: string }} currencyGroupFieldId={chartCurrencyGroupFieldId} /></div>
+          : <div className="max-w-full overflow-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left">
+                <thead><tr className="bg-[#f7f8f3]">{result.columns.map(column => <th key={column.fieldId} className="whitespace-nowrap border-b border-[#e5e9e1] px-4 py-3 font-mono text-[9px] font-medium uppercase tracking-[.12em] text-[#7b8980]">{column.label}</th>)}</tr></thead>
+                <tbody>{result.rows.map((row, index) => {
+                  const rowType = typeof row._rowType === 'string' ? row._rowType : 'detail';
+                  const rowClass = rowType === 'grand_total'
+                    ? 'bg-[#eaf1e9] font-semibold'
+                    : rowType === 'currency_total'
+                      ? 'bg-[#f0f4ed] font-semibold'
+                      : rowType === 'subtotal'
+                        ? 'bg-[#fbf7ec] font-medium'
+                        : 'transition-colors hover:bg-[#f9faf6]';
+                  return <tr key={`${result.page}-${index}`} data-row-type={rowType} className={rowClass}>{result.columns.map((column, columnIndex) => {
+                    const isGroupColumn = column.fieldId.startsWith('group:');
+                    let value = row[column.fieldId];
+                    if (isGroupColumn && value == null) {
+                      if (rowType === 'grand_total' && columnIndex === 0) value = 'Grand total';
+                      else if (rowType === 'subtotal' && columnIndex === 0) value = 'Subtotal';
+                    }
+                    const noGroupDimensions = !result.columns.some(resultColumn => resultColumn.fieldId.startsWith('group:'));
+                    const cell = formatValue(value, column.dataType);
+                    return <td key={column.fieldId} className="max-w-[340px] border-b border-[#edf0e9] px-4 py-3 text-[12px] text-[#43594e]">{summaryMode && noGroupDimensions && columnIndex === 0 && rowType === 'grand_total' ? <div><span className="mb-1 block font-mono text-[8px] uppercase tracking-wider text-[#71877b]">Grand total</span>{formatValue(row[column.fieldId], column.dataType)}</div> : cell}</td>;
+                  })}</tr>;
+                })}</tbody>
+              </table>
+            </div>}
+        {chartMode && result.totalRows > result.pageSize && <div className="border-t border-[#e6eae2] bg-[#f8f8f3] px-5 py-2 text-[10px] text-[#77847b]">Showing this page of grouped results. Use table pages or CSV/XLSX export for the full report.</div>}
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <span className="font-mono text-[10px] text-[#829087]">Page {result.page} of {Math.max(result.totalPages, 1)} · {result.totalRows.toLocaleString()} records</span>
+          <span className="font-mono text-[10px] text-[#829087]">Page {result.page} of {Math.max(result.totalPages, 1)} · {result.totalRows.toLocaleString()} {summaryMode ? 'groups and totals' : 'records'}</span>
           <div className="flex items-center gap-2"><ReportButton variant="outline" testId="button-report-previous-page" disabled={result.page <= 1 || runReport.isPending} onClick={() => runAtPage(result.page - 1)} className="min-h-8 px-2.5 text-[11px]"><ChevronLeft className="h-3.5 w-3.5" />Previous</ReportButton><ReportButton variant="outline" testId="button-report-next-page" disabled={result.page >= result.totalPages || runReport.isPending} onClick={() => runAtPage(result.page + 1)} className="min-h-8 px-2.5 text-[11px]">Next<ChevronRight className="h-3.5 w-3.5" /></ReportButton></div>
         </div>
       </>}
@@ -612,7 +753,11 @@ function formatValue(value: unknown, dataType: string) {
   if (value === null || value === undefined || value === '') return <span className="text-[#a1aaa1]">—</span>;
   if (typeof value === 'boolean') return <span className={cx('inline-flex rounded-md px-2 py-1 text-[10px] font-semibold', value ? 'bg-[#eaf2e9] text-[#47735d]' : 'bg-[#f0f1ed] text-[#79847d]')}>{value ? 'Yes' : 'No'}</span>;
   if (typeof value === 'object') return <span className="block truncate" title={JSON.stringify(value)}>{JSON.stringify(value)}</span>;
-  if (dataType === 'date' || dataType === 'datetime') {
+  if (dataType === 'date') {
+    const dateValue = String(value);
+    return <span className="whitespace-nowrap">{/^\d{4}-\d{2}-\d{2}/.test(dateValue) ? dateValue.slice(0, 10) : dateValue}</span>;
+  }
+  if (dataType === 'datetime') {
     const date = new Date(String(value));
     return <span className="whitespace-nowrap">{Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()}</span>;
   }

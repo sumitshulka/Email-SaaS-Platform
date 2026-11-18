@@ -6372,6 +6372,7 @@ export interface ReportFieldMetadata {
   aggregations: ReportFieldMetadataAggregationsItem[];
   dateIntervals: ReportFieldMetadataDateIntervalsItem[];
   relationId?: string;
+  currencyGroupFieldId?: string;
   calculated: boolean;
   isSensitive?: boolean;
 }
@@ -6462,9 +6463,27 @@ export interface ReportAggregationDefinition {
   fieldId?: string;
 }
 
-export type ReportDefinitionFilters = { [key: string]: unknown };
+export type ReportVisualizationDefinitionType = typeof ReportVisualizationDefinitionType[keyof typeof ReportVisualizationDefinitionType];
 
-export type ReportDefinitionVisualization = { [key: string]: unknown };
+
+export const ReportVisualizationDefinitionType = {
+  table: 'table',
+  kpi: 'kpi',
+  bar: 'bar',
+  horizontal_bar: 'horizontal_bar',
+  line: 'line',
+  area: 'area',
+  pie: 'pie',
+  donut: 'donut',
+} as const;
+
+export interface ReportVisualizationDefinition {
+  type: ReportVisualizationDefinitionType;
+  categoryFieldId?: string;
+  valueFieldId?: string;
+}
+
+export type ReportDefinitionFilters = { [key: string]: unknown };
 
 export interface ReportDefinition {
   version: 1;
@@ -6483,7 +6502,7 @@ export interface ReportDefinition {
   aggregates?: ReportAggregationDefinition[];
   subtotals?: boolean;
   grandTotal?: boolean;
-  visualization?: ReportDefinitionVisualization;
+  visualization?: ReportVisualizationDefinition;
   [key: string]: unknown;
  }
 

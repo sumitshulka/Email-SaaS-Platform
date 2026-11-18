@@ -9542,6 +9542,7 @@ components:
           type: array
           items: { type: string, enum: [day, week, month, quarter, year] }
         relationId: { type: string }
+        currencyGroupFieldId: { type: string }
         calculated: { type: boolean }
         isSensitive: { type: boolean }
       required: [id, label, description, dataType, operators, groupable, aggregations, dateIntervals, calculated]
@@ -9594,6 +9595,13 @@ components:
         operation: { type: string, enum: [count, count_distinct, sum, avg, min, max, win_rate] }
         fieldId: { type: string }
       required: [id, label, operation]
+    ReportVisualizationDefinition:
+      type: object
+      properties:
+        type: { type: string, enum: [table, kpi, bar, horizontal_bar, line, area, pie, donut] }
+        categoryFieldId: { type: string }
+        valueFieldId: { type: string }
+      required: [type]
     ReportDefinition:
       type: object
       properties:
@@ -9619,7 +9627,7 @@ components:
           items: { $ref: "#/components/schemas/ReportAggregationDefinition" }
         subtotals: { type: boolean, default: false }
         grandTotal: { type: boolean, default: true }
-        visualization: { type: object, additionalProperties: true }
+        visualization: { $ref: "#/components/schemas/ReportVisualizationDefinition" }
       required: [version, baseEntityId, columns]
       additionalProperties: true
     ReportTemplate:
