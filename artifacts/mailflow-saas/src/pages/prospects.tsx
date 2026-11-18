@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import {
   getGetProspectDashboardQueryKey, getGetProspectQueryKey, getGetProspectCurrenciesQueryKey, getGetContactQueryKey,
+  getSearchCompaniesQueryKey,
   getListContactProspectsQueryKey, getListProspectActionsQueryKey, getListProspectActionTypesQueryKey,
   getListProspectProductCategoriesQueryKey,
   getListProspectGrowthAuditQueryKey, getListProspectProductsQueryKey, getListProspectStagesQueryKey,
@@ -15,16 +16,17 @@ import {
   useDeleteProspectProductCategory,
   useCreateProspectAction, useCreateProspectActionType, useCreateProspectProduct, useCreateProspectStage,
   useGetProspect, useGetProspectCurrencies, useGetProspectDashboard, useGetContact, useListContactOptions, useListContactProspects,
-  useListCompanies, useListContactTags, useListProspectActions, useListProspectActionTypes, useListProspectGrowthAudit,
+  useSearchCompanies, useListContactTags, useListProspectActions, useListProspectActionTypes, useListProspectGrowthAudit,
   useListProspectProductCategories, useListProspectProducts, useListProspectStages, useListProspects, useSetProspectStageTransitions,
   useSetProspectTags, useUpdateProspect, useUpdateProspectActionType, useUpdateProspectCurrencies,
   useUpdateProspectProduct, useUpdateProspectStage,
 } from '@workspace/api-client-react';
 import type {
   CreateProspectInput, ListProspectsParams, ProspectActionTypeInput, ProspectProductInput,
-  ProspectProductCategory, ProspectRecord, ProspectStageInput,
+  CompanySearchResultItem, ProspectProductCategory, ProspectRecord, ProspectStageInput,
 } from '@workspace/api-client-react';
 import { ScheduleProspectFollowUpButton } from '@/pages/prospect-follow-ups';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 const panel = 'rounded-xl border border-[#dce4ed] bg-white shadow-[0_4px_18px_rgba(19,43,70,.035)]';
 const field = 'h-10 w-full rounded-lg border border-[#d7e0e9] bg-[#fff] px-3 text-[12px] text-[#1a2b40] outline-none transition focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6] disabled:bg-[#f3f6f8]';
@@ -62,9 +64,82 @@ function PageFrame({ children }: { children: ReactNode }) {
   return <main className="prospect-page fade-in mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-9 lg:py-8">{children}</main>;
 }
 
+function SearchableCompanyFilter({
+  value,
+  selectedCompany,
+  onChange,
+}: {
+  value: string;
+  selectedCompany: CompanySearchResultItem | null;
+  onChange: (company: CompanySearchResultItem | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  useEffect(() => setPage(1), [debouncedSearch]);
+  const params = { search: debouncedSearch, page, pageSize: 40 };
+  const query = useSearchCompanies(params, {
+    query: {
+      queryKey: getSearchCompaniesQueryKey(params),
+      enabled: open,
+      staleTime: 30_000,
+    },
+  });
+  const companies = query.data?.companies ?? [];
+  const total = query.data?.total ?? 0;
+  const pageSize = query.data?.pageSize ?? 40;
+  const pageCount = Math.ceil(total / pageSize);
+  const loading = search.trim() !== debouncedSearch || query.isLoading;
+  const choose = (company: CompanySearchResultItem | null) => {
+    onChange(company);
+    setSearch('');
+    setDebouncedSearch('');
+    setPage(1);
+    setOpen(false);
+  };
+
+  return <div className="min-w-0">
+    <span className={label}>Company</span>
+    <Popover open={open} onOpenChange={nextOpen => { setOpen(nextOpen); if (!nextOpen) { setSearch(''); setDebouncedSearch(''); setPage(1); } }}>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label="Filter by company" aria-expanded={open} aria-haspopup="listbox" className={`${field} flex items-center justify-between gap-2 text-left`} data-testid="select-prospect-company-filter">
+          <span className="flex min-w-0 items-center gap-2"><Building2 className="h-3.5 w-3.5 shrink-0 text-[#71869a]"/><span className="truncate">{selectedCompany?.companyName ?? 'All companies'}</span></span>
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-[#8290a0] transition-transform ${open ? 'rotate-180' : ''}`}/>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="z-[80] w-[min(22rem,calc(100vw-2rem))] p-0">
+        <div className="border-b border-[#e8edf2] p-3">
+          <label className="relative block">
+            <span className="sr-only">Search companies</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8796a5]"/>
+            <input autoFocus type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Type a company name or domain…" className="h-9 w-full rounded-md border border-[#d7e0e9] bg-white pl-9 pr-3 text-[11px] text-[#1a2b40] outline-none focus:border-[#4c80b8] focus:ring-2 focus:ring-[#dce9f6]" data-testid="input-search-prospect-company"/>
+          </label>
+        </div>
+        <div role="listbox" aria-label="Company filter results" className="max-h-64 overflow-y-auto p-1">
+          <button type="button" role="option" aria-selected={!value} onClick={() => choose(null)} className={`block w-full rounded-md px-3 py-2 text-left text-[11px] font-semibold text-[#39516b] hover:bg-[#f2f6fa] ${!value ? 'bg-[#eef4f8]' : ''}`} data-testid="option-prospect-company-all">All companies</button>
+          {loading ? <p className="px-3 py-3 text-[11px] text-[#788696]">Searching companies…</p>
+            : query.isError ? <div className="px-3 py-3 text-[11px] text-[#9b4837]" role="alert">Company options could not be loaded. <button type="button" onClick={() => void query.refetch()} className="font-semibold underline">Retry</button></div>
+            : companies.length ? companies.map(company => <button key={company.id} type="button" role="option" aria-selected={value === company.id} onClick={() => choose(company)} className={`block w-full rounded-md px-3 py-2 text-left hover:bg-[#f2f6fa] ${value === company.id ? 'bg-[#eef4f8]' : ''}`} data-testid={`option-prospect-company-${company.id}`}><span className="block truncate text-[11px] font-semibold text-[#354a60]">{company.companyName}</span>{company.companyDomain && <span className="mt-0.5 block truncate text-[10px] text-[#8290a0]">{company.companyDomain}</span>}</button>)
+            : <p className="px-3 py-4 text-center text-[11px] text-[#788696]">{search.trim() ? 'No matching companies.' : 'No company records yet.'}</p>}
+        </div>
+        {!loading && !query.isError && total > pageSize && <div className="flex items-center justify-between border-t border-[#e8edf2] px-3 py-2">
+          <span className="text-[9px] text-[#8290a0]">{((page - 1) * pageSize + 1).toLocaleString()}–{Math.min(page * pageSize, total).toLocaleString()} of {total.toLocaleString()}</span>
+          <div className="flex items-center gap-1.5"><button type="button" disabled={page <= 1 || query.isFetching} onClick={() => setPage(current => current - 1)} className="rounded px-2 py-1 text-[10px] font-semibold text-[#315879] hover:bg-[#f2f6fa] disabled:opacity-40" data-testid="button-prospect-company-previous">Previous</button><span className="text-[9px] text-[#718095]">{page}/{pageCount}</span><button type="button" disabled={page >= pageCount || query.isFetching} onClick={() => setPage(current => current + 1)} className="rounded px-2 py-1 text-[10px] font-semibold text-[#315879] hover:bg-[#f2f6fa] disabled:opacity-40" data-testid="button-prospect-company-next">Next</button></div>
+        </div>}
+      </PopoverContent>
+    </Popover>
+  </div>;
+}
+
 export function ProspectsPage() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState({ search: '', stageId: '', productId: '', companyId: '', currencyCode: '', closeFrom: '', closeTo: '', contactTagId: '', prospectTagId: '', status: 'active', includeArchived: false, sortBy: 'updatedAt', sortDirection: 'desc' });
+  const [selectedCompany, setSelectedCompany] = useState<CompanySearchResultItem | null>(null);
   const [page, setPage] = useState(1);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const params = useMemo<ListProspectsParams>(() => ({
@@ -82,7 +157,6 @@ export function ProspectsPage() {
   const dashboard = useGetProspectDashboard();
   const stages = useListProspectStages();
   const products = useListProspectProducts();
-  const companies = useListCompanies();
   const currencies = useGetProspectCurrencies();
   const tags = useListContactTags();
   const activeFilterCount = [
@@ -92,6 +166,7 @@ export function ProspectsPage() {
   const hasAnyFilters = activeFilterCount > 0 || !!filters.search.trim() || filters.sortBy !== 'updatedAt' || filters.sortDirection !== 'desc';
   const resetFilters = () => {
     setPage(1);
+    setSelectedCompany(null);
     setFilters(f => ({ ...f, search: '', stageId: '', productId: '', companyId: '', currencyCode: '', closeFrom: '', closeTo: '', contactTagId: '', prospectTagId: '', status: 'active', includeArchived: false, sortBy: 'updatedAt', sortDirection: 'desc' }));
     setMoreFiltersOpen(false);
   };
@@ -130,7 +205,7 @@ export function ProspectsPage() {
       <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <label><span className={label}>Stage</span><select className={field} value={filters.stageId} onChange={e => { setPage(1); setFilters(f => ({ ...f, stageId: e.target.value })); }} data-testid="select-prospect-stage-filter"><option value="">All stages</option>{stages.data?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <label><span className={label}>Product / service</span><select className={field} value={filters.productId} onChange={e => { setPage(1); setFilters(f => ({ ...f, productId: e.target.value })); }} data-testid="select-prospect-product-filter"><option value="">All products and services</option>{products.data?.map(p => <option key={p.id} value={p.id}>{p.itemType === 'service' ? 'Service' : 'Product'} · {p.name}</option>)}</select></label>
-        <label><span className={label}>Company</span><select className={field} value={filters.companyId} onChange={e => { setPage(1); setFilters(f => ({ ...f, companyId: e.target.value })); }} data-testid="select-prospect-company-filter"><option value="">All companies</option>{companies.data?.companies.map(company => <option key={company.id} value={company.id}>{company.companyName}</option>)}</select></label>
+        <SearchableCompanyFilter value={filters.companyId} selectedCompany={selectedCompany} onChange={company => { setPage(1); setSelectedCompany(company); setFilters(f => ({ ...f, companyId: company?.id ?? '' })); }}/>
         <label><span className={label}>Currency</span><select className={field} value={filters.currencyCode} onChange={e => { setPage(1); setFilters(f => ({ ...f, currencyCode: e.target.value })); }} data-testid="select-prospect-currency-filter"><option value="">All currencies</option>{currencies.data?.currencies.map(c => <option key={c.code} value={c.code}>{c.code}{c.isDefault ? ' · default' : ''}</option>)}</select></label>
         <label><span className={label}>Status</span><select className={field} value={filters.status} onChange={e => { setPage(1); setFilters(f => ({ ...f, status: e.target.value })); }} data-testid="select-prospect-status-filter"><option value="active">Active</option><option value="won">Won</option><option value="lost">Lost</option><option value="other_terminal">Other terminal</option><option value="all">All statuses</option></select></label>
         <label><span className={label}>Contact tag</span><select className={field} value={filters.contactTagId} onChange={e => { setPage(1); setFilters(f => ({ ...f, contactTagId: e.target.value })); }} data-testid="select-prospect-contact-tag-filter"><option value="">Any contact tag</option>{tags.data?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
