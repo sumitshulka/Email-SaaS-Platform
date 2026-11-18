@@ -174,6 +174,7 @@ function buildFilters(userId: string, filters: ProspectFilterInput) {
   if (!filters.includeArchived) conditions.push(isNull(prospectsTable.archivedAt));
   if (filters.stageId) conditions.push(eq(prospectsTable.currentStageId, filters.stageId));
   if (filters.productId) conditions.push(eq(prospectsTable.productId, filters.productId));
+  if (filters.companyId) conditions.push(eq(contactsTable.companyId, filters.companyId));
   if (filters.currencyCode) conditions.push(eq(prospectsTable.currencyCode, filters.currencyCode));
   if (filters.closeFrom) conditions.push(gte(prospectsTable.expectedClosureDate, dateOnly(filters.closeFrom)));
   if (filters.closeTo) conditions.push(lte(prospectsTable.expectedClosureDate, dateOnly(filters.closeTo)));
@@ -184,6 +185,10 @@ function buildFilters(userId: string, filters: ProspectFilterInput) {
       ilike(contactsTable.name, query),
       ilike(contactsTable.email, query),
       ilike(contactsTable.companyName, query),
+      inArray(contactsTable.companyId, db.select({ id: companiesTable.id }).from(companiesTable).where(and(
+        eq(companiesTable.userId, userId),
+        ilike(companiesTable.companyName, query),
+      ))),
       ilike(prospectProductsTable.name, query),
     )!);
   }

@@ -10,7 +10,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
   skip: !enabled ? "Set RUN_PROSPECT_MANAGEMENT_DB_TESTS=1 to run against a disposable test database." : false,
 }, async () => {
   const [
-    { db, usersTable, contactsTable, contactTagsTable, contactTagAssignmentsTable,
+    { db, usersTable, contactsTable, companiesTable, contactTagsTable, contactTagAssignmentsTable,
       prospectsTable, prospectProductsTable, prospectCurrenciesTable, prospectStagesTable,
       prospectStageTransitionsTable, prospectActionTypesTable, prospectStageHistoryTable,
       prospectActionsTable, prospectFollowUpsTable, prospectTagAssignmentsTable },
@@ -26,6 +26,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     import("../src/routes/sending.ts"),
   ]);
   const tenantIds = [randomUUID(), randomUUID()];
+  const companyIds = [randomUUID(), randomUUID()];
   const testUsers = tenantIds.map((id, index) => ({
     id,
     username: `prospect_test_${id.slice(0, 8)}`,
@@ -96,6 +97,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
         await tx.delete(contactTagAssignmentsTable).where(eq(contactTagAssignmentsTable.userId, userId));
         await tx.delete(contactTagsTable).where(eq(contactTagsTable.userId, userId));
         await tx.delete(contactsTable).where(eq(contactsTable.userId, userId));
+        await tx.delete(companiesTable).where(eq(companiesTable.userId, userId));
         await tx.delete(usersTable).where(eq(usersTable.id, userId));
       }
     });
@@ -105,9 +107,14 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
   let otherTenantServer;
   try {
     await db.insert(usersTable).values(testUsers);
+    await db.insert(companiesTable).values([
+      { id: companyIds[0], userId: tenantIds[0], companyName: "Prospect Filter Company" },
+      { id: companyIds[1], userId: tenantIds[1], companyName: "Other Tenant Company" },
+    ]);
     await db.insert(contactsTable).values({
       id: contactId,
       userId: tenantIds[0],
+      companyId: companyIds[0],
       name: "Prospect Test Contact",
       firstName: "Prospect",
       lastName: "Contact",
@@ -224,6 +231,15 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     assert.deepEqual(tagFilter.data.prospects.map(item => item.id), [first.id]);
     const contactTagFilter = await call(mainServer, `/prospects?contactTagId=${tagIds[0]}`);
     assert.equal(contactTagFilter.data.total, 2, "contact tags remain searchable separately");
+    const linkedCompanyFilter = await call(mainServer, `/prospects?companyId=${companyIds[0]}`);
+    assert.equal(linkedCompanyFilter.status, 200);
+    assert.equal(linkedCompanyFilter.data.total, 2, "all deals for the selected linked company are included");
+    const foreignCompanyFilter = await call(mainServer, `/prospects?companyId=${companyIds[1]}`);
+    assert.equal(foreignCompanyFilter.status, 200);
+    assert.equal(foreignCompanyFilter.data.total, 0, "company filtering does not expose another tenant's deals");
+    const linkedCompanySearch = await call(mainServer, "/prospects?search=Prospect%20Filter%20Company");
+    assert.equal(linkedCompanySearch.status, 200);
+    assert.equal(linkedCompanySearch.data.total, 2, "free-text search matches the linked company's canonical name");
     const prospectSearch = `/prospects?search=${encodeURIComponent(`prospect-contact-${contactId}@example.invalid`)}&pageSize=1&status=active`;
     const firstSearchPage = await call(mainServer, prospectSearch);
     assert.equal(firstSearchPage.status, 200);

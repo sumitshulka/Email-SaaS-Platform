@@ -2377,6 +2377,7 @@ export const ListProspectsQueryParams = zod.object({
   "search": zod.coerce.string().max(listProspectsQuerySearchMax).optional(),
   "stageId": zod.coerce.string().uuid().optional(),
   "productId": zod.coerce.string().uuid().optional(),
+  "companyId": zod.coerce.string().uuid().optional(),
   "currencyCode": zod.coerce.string().regex(listProspectsQueryCurrencyCodeRegExp).optional(),
   "closeFrom": zod.date().optional(),
   "closeTo": zod.date().optional(),

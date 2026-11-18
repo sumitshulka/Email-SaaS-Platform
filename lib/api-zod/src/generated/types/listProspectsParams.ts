@@ -25,6 +25,7 @@ pageSize?: number;
 search?: string;
 stageId?: string;
 productId?: string;
+companyId?: string;
 /**
  * @pattern ^[A-Z]{3}$
  */

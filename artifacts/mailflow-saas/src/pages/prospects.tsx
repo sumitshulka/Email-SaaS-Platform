@@ -15,7 +15,7 @@ import {
   useDeleteProspectProductCategory,
   useCreateProspectAction, useCreateProspectActionType, useCreateProspectProduct, useCreateProspectStage,
   useGetProspect, useGetProspectCurrencies, useGetProspectDashboard, useGetContact, useListContactOptions, useListContactProspects,
-  useListContactTags, useListProspectActions, useListProspectActionTypes, useListProspectGrowthAudit,
+  useListCompanies, useListContactTags, useListProspectActions, useListProspectActionTypes, useListProspectGrowthAudit,
   useListProspectProductCategories, useListProspectProducts, useListProspectStages, useListProspects, useSetProspectStageTransitions,
   useSetProspectTags, useUpdateProspect, useUpdateProspectActionType, useUpdateProspectCurrencies,
   useUpdateProspectProduct, useUpdateProspectStage,
@@ -64,12 +64,13 @@ function PageFrame({ children }: { children: ReactNode }) {
 
 export function ProspectsPage() {
   const qc = useQueryClient();
-  const [filters, setFilters] = useState({ search: '', stageId: '', productId: '', currencyCode: '', closeFrom: '', closeTo: '', contactTagId: '', prospectTagId: '', status: 'active', includeArchived: false, sortBy: 'updatedAt', sortDirection: 'desc' });
+  const [filters, setFilters] = useState({ search: '', stageId: '', productId: '', companyId: '', currencyCode: '', closeFrom: '', closeTo: '', contactTagId: '', prospectTagId: '', status: 'active', includeArchived: false, sortBy: 'updatedAt', sortDirection: 'desc' });
   const [page, setPage] = useState(1);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const params = useMemo<ListProspectsParams>(() => ({
     page, pageSize: 20, ...(filters.search.trim() ? { search: filters.search.trim() } : {}),
     ...(filters.stageId ? { stageId: filters.stageId } : {}), ...(filters.productId ? { productId: filters.productId } : {}),
+    ...(filters.companyId ? { companyId: filters.companyId } : {}),
     ...(filters.currencyCode ? { currencyCode: filters.currencyCode } : {}),
     ...(filters.closeFrom ? { closeFrom: filters.closeFrom } : {}), ...(filters.closeTo ? { closeTo: filters.closeTo } : {}),
     ...(filters.contactTagId ? { contactTagId: filters.contactTagId } : {}),
@@ -81,16 +82,17 @@ export function ProspectsPage() {
   const dashboard = useGetProspectDashboard();
   const stages = useListProspectStages();
   const products = useListProspectProducts();
+  const companies = useListCompanies();
   const currencies = useGetProspectCurrencies();
   const tags = useListContactTags();
   const activeFilterCount = [
-    filters.stageId, filters.productId, filters.currencyCode, filters.status === 'active' ? '' : filters.status,
+    filters.stageId, filters.productId, filters.companyId, filters.currencyCode, filters.status === 'active' ? '' : filters.status,
     filters.contactTagId, filters.prospectTagId, filters.closeFrom, filters.closeTo, filters.includeArchived ? 'archived' : '',
   ].filter(Boolean).length;
   const hasAnyFilters = activeFilterCount > 0 || !!filters.search.trim() || filters.sortBy !== 'updatedAt' || filters.sortDirection !== 'desc';
   const resetFilters = () => {
     setPage(1);
-    setFilters(f => ({ ...f, search: '', stageId: '', productId: '', currencyCode: '', closeFrom: '', closeTo: '', contactTagId: '', prospectTagId: '', status: 'active', includeArchived: false, sortBy: 'updatedAt', sortDirection: 'desc' }));
+    setFilters(f => ({ ...f, search: '', stageId: '', productId: '', companyId: '', currencyCode: '', closeFrom: '', closeTo: '', contactTagId: '', prospectTagId: '', status: 'active', includeArchived: false, sortBy: 'updatedAt', sortDirection: 'desc' }));
     setMoreFiltersOpen(false);
   };
   if (list.isLoading) return <PageFrame><Loading label="Loading prospects"/></PageFrame>;
@@ -128,6 +130,7 @@ export function ProspectsPage() {
       <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <label><span className={label}>Stage</span><select className={field} value={filters.stageId} onChange={e => { setPage(1); setFilters(f => ({ ...f, stageId: e.target.value })); }} data-testid="select-prospect-stage-filter"><option value="">All stages</option>{stages.data?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <label><span className={label}>Product / service</span><select className={field} value={filters.productId} onChange={e => { setPage(1); setFilters(f => ({ ...f, productId: e.target.value })); }} data-testid="select-prospect-product-filter"><option value="">All products and services</option>{products.data?.map(p => <option key={p.id} value={p.id}>{p.itemType === 'service' ? 'Service' : 'Product'} · {p.name}</option>)}</select></label>
+        <label><span className={label}>Company</span><select className={field} value={filters.companyId} onChange={e => { setPage(1); setFilters(f => ({ ...f, companyId: e.target.value })); }} data-testid="select-prospect-company-filter"><option value="">All companies</option>{companies.data?.companies.map(company => <option key={company.id} value={company.id}>{company.companyName}</option>)}</select></label>
         <label><span className={label}>Currency</span><select className={field} value={filters.currencyCode} onChange={e => { setPage(1); setFilters(f => ({ ...f, currencyCode: e.target.value })); }} data-testid="select-prospect-currency-filter"><option value="">All currencies</option>{currencies.data?.currencies.map(c => <option key={c.code} value={c.code}>{c.code}{c.isDefault ? ' · default' : ''}</option>)}</select></label>
         <label><span className={label}>Status</span><select className={field} value={filters.status} onChange={e => { setPage(1); setFilters(f => ({ ...f, status: e.target.value })); }} data-testid="select-prospect-status-filter"><option value="active">Active</option><option value="won">Won</option><option value="lost">Lost</option><option value="other_terminal">Other terminal</option><option value="all">All statuses</option></select></label>
         <label><span className={label}>Contact tag</span><select className={field} value={filters.contactTagId} onChange={e => { setPage(1); setFilters(f => ({ ...f, contactTagId: e.target.value })); }} data-testid="select-prospect-contact-tag-filter"><option value="">Any contact tag</option>{tags.data?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>

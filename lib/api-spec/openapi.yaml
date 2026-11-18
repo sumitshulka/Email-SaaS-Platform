@@ -1415,6 +1415,7 @@ paths:
         - { name: search, in: query, schema: { type: string, maxLength: 200 } }
         - { name: stageId, in: query, schema: { type: string, format: uuid } }
         - { name: productId, in: query, schema: { type: string, format: uuid } }
+        - { name: companyId, in: query, schema: { type: string, format: uuid } }
         - { name: currencyCode, in: query, schema: { type: string, pattern: "^[A-Z]{3}$" } }
         - { name: closeFrom, in: query, schema: { type: string, format: date } }
         - { name: closeTo, in: query, schema: { type: string, format: date } }
