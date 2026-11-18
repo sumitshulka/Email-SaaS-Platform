@@ -1567,6 +1567,26 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
+  /prospects/{prospectId}/value-history:
+    parameters:
+      - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getProspectValueHistory
+      tags: [sending]
+      summary: Read immutable deal-value and currency changes for a prospect
+      responses:
+        "200":
+          description: Chronological deal-value history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProspectValueHistoryEntry" }
+        "404":
+          description: Prospect not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
   /prospects/{prospectId}/actions:
     parameters:
       - { name: prospectId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -9203,6 +9223,17 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ProspectActionRecord" }
       required: [id, eventType, previousStage, newStage, previousProbability, newProbability, reason, notesSnapshot, changedByName, createdAt, actions]
+    ProspectValueHistoryEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        previousDealValue: { type: number, minimum: 0 }
+        previousCurrencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        newDealValue: { type: number, minimum: 0 }
+        newCurrencyCode: { type: string, pattern: "^[A-Z]{3}$" }
+        changedByName: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, previousDealValue, previousCurrencyCode, newDealValue, newCurrencyCode, changedByName, createdAt]
     CreateProspectActionInput:
       type: object
       properties:

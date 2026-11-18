@@ -3164,6 +3164,33 @@ export const ListProspectGrowthAuditResponse = zod.array(ListProspectGrowthAudit
 
 
 /**
+ * @summary Read immutable deal-value and currency changes for a prospect
+ */
+export const GetProspectValueHistoryParams = zod.object({
+  "prospectId": zod.coerce.string().uuid()
+})
+
+export const getProspectValueHistoryResponsePreviousDealValueMin = 0;
+
+export const getProspectValueHistoryResponsePreviousCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+export const getProspectValueHistoryResponseNewDealValueMin = 0;
+
+export const getProspectValueHistoryResponseNewCurrencyCodeRegExp = new RegExp('^[A-Z]{3}$');
+
+
+export const GetProspectValueHistoryResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "previousDealValue": zod.number().min(getProspectValueHistoryResponsePreviousDealValueMin),
+  "previousCurrencyCode": zod.string().regex(getProspectValueHistoryResponsePreviousCurrencyCodeRegExp),
+  "newDealValue": zod.number().min(getProspectValueHistoryResponseNewDealValueMin),
+  "newCurrencyCode": zod.string().regex(getProspectValueHistoryResponseNewCurrencyCodeRegExp),
+  "changedByName": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const GetProspectValueHistoryResponse = zod.array(GetProspectValueHistoryResponseItem)
+
+
+/**
  * @summary List prospect actions with their associated stage period
  */
 export const ListProspectActionsParams = zod.object({

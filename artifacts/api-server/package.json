@@ -11,6 +11,7 @@
     "migrate:contact-tags": "node --import tsx scripts/apply-contact-tags-migration.mjs",
     "migrate:prospect-management": "node --import tsx scripts/apply-prospect-management-migration.mjs",
     "migrate:prospect-follow-ups": "node --import tsx scripts/apply-prospect-follow-ups-migration.mjs",
+    "migrate:prospect-value-history": "node --import tsx scripts/apply-prospect-value-history-migration.mjs",
     "migrate:prospect-product-categories": "node --import tsx scripts/apply-prospect-product-categories-migration.mjs",
     "migrate:microsoft-sender": "node --import tsx scripts/apply-microsoft-sender-migration.mjs",
     "migrate:company-research-requests": "node --import tsx scripts/apply-company-research-requests-migration.mjs",

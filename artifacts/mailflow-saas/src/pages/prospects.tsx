@@ -7,7 +7,9 @@ import {
   Tag, UserRound,
 } from 'lucide-react';
 import {
+  getGetCompanyQueryKey,
   getGetProspectDashboardQueryKey, getGetProspectQueryKey, getGetProspectCurrenciesQueryKey, getGetContactQueryKey,
+  getGetProspectValueHistoryQueryKey,
   getSearchCompaniesQueryKey,
   getListContactProspectsQueryKey, getListProspectActionsQueryKey, getListProspectActionTypesQueryKey,
   getListProspectProductCategoriesQueryKey,
@@ -15,7 +17,7 @@ import {
   getListProspectsQueryKey, useChangeProspectStage, useCreateProspect, useCreateProspectProductCategory,
   useDeleteProspectProductCategory,
   useCreateProspectAction, useCreateProspectActionType, useCreateProspectProduct, useCreateProspectStage,
-  useGetProspect, useGetProspectCurrencies, useGetProspectDashboard, useGetContact, useListContactOptions, useListContactProspects,
+  useGetProspect, useGetProspectCurrencies, useGetProspectDashboard, useGetProspectValueHistory, useGetContact, useListContactOptions, useListContactProspects,
   useSearchCompanies, useListContactTags, useListProspectActions, useListProspectActionTypes, useListProspectGrowthAudit,
   useListProspectProductCategories, useListProspectProducts, useListProspectStages, useListProspects, useSetProspectStageTransitions,
   useSetProspectTags, useUpdateProspect, useUpdateProspectActionType, useUpdateProspectCurrencies,
@@ -247,7 +249,7 @@ function SummaryList({ title, icon, rows, tone }: { title: string; icon: ReactNo
   return <section className={`${panel.replace('bg-white ', '')} overflow-hidden ${colors.card}`}><header className={`flex items-center gap-2 border-b px-4 py-3 text-[11px] font-bold text-[#324b65] ${colors.header}`}>{<span className={colors.icon}>{icon}</span>}{title}</header><div className="divide-y divide-white/70">{rows.length ? rows.slice(0, 5).map((row, index) => <div key={`${row.title}-${index}`} className="flex items-start justify-between gap-3 px-4 py-3"><div><div className="text-[11px] font-semibold text-[#354c64]">{row.title}</div><div className="mt-1 text-[9px] text-[#64788b]">{row.count} {row.subtitle.toLowerCase()}</div></div><div className="flex max-w-[60%] flex-wrap justify-end gap-1.5">{row.values.map(value => <span key={value.currencyCode} className="rounded-md bg-white/75 px-2 py-1 text-right text-[9px] text-[#52687d]">{value.activeValue > 0 && <><strong className="text-[#354f68]">{money(value.activeValue, value.currencyCode)}</strong><br/>Weighted {money(value.weightedValue, value.currencyCode)}<br/></>}{value.wonValue > 0 && <>Won {money(value.wonValue, value.currencyCode)}<br/></>}{value.lostValue > 0 && <>Lost {money(value.lostValue, value.currencyCode)}</>}{value.activeValue <= 0 && value.wonValue <= 0 && value.lostValue <= 0 && money(0, value.currencyCode)}</span>)}</div></div>) : <div className="px-4 py-6 text-center text-[10px] text-[#5e7183]">No pipeline data</div>}</div></section>;
 }
 
-function ProspectForm({ prospectId, initialContactId }: { prospectId?: string; initialContactId?: string }) {
+function ProspectForm({ prospectId, initialContactId, onSaved }: { prospectId?: string; initialContactId?: string; onSaved?: () => void }) {
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
   const detail = useGetProspect(prospectId ?? '', { query: { enabled: !!prospectId, queryKey: getGetProspectQueryKey(prospectId ?? ''), refetchOnMount: 'always' } });
@@ -290,10 +292,16 @@ function ProspectForm({ prospectId, initialContactId }: { prospectId?: string; i
     } else {
       update.mutate({ prospectId, data: { name: name.trim(), productId, expectedDealValue: Number(amount), currencyCode: currency || currencies.data?.defaultCurrencyCode || '', expectedClosureDate: closeDate, notes: notes.trim() } }, {
         onSuccess: () => {
+          void qc.invalidateQueries({ queryKey: getGetProspectValueHistoryQueryKey(prospectId) });
+          void qc.invalidateQueries({ queryKey: getListContactProspectsQueryKey(contactId) });
+          if (record?.contact.company?.id) {
+            void qc.invalidateQueries({ queryKey: getGetCompanyQueryKey(record.contact.company.id) });
+          }
           setTags.mutate({ prospectId, data: { tagIds } }, {
             onSuccess: () => {
-              setNotice({ kind: 'success', text: 'Prospect details and tags saved.' });
               void qc.invalidateQueries({ queryKey: getGetProspectQueryKey(prospectId) }); void qc.invalidateQueries({ queryKey: getListProspectsQueryKey() }); void qc.invalidateQueries({ queryKey: getGetProspectDashboardQueryKey() });
+              if (onSaved) onSaved();
+              else setNotice({ kind: 'success', text: 'Prospect details and tags saved.' });
             },
             onError: e => {
               setNotice({ kind: 'error', text: `Prospect details saved, but tags could not be updated: ${errText(e)}` });
@@ -347,7 +355,7 @@ export function ProspectDetailPage() {
   const [edit, setEdit] = useState(false);
   if (prospectQuery.isLoading) return <PageFrame><Loading label="Loading prospect"/></PageFrame>;
   if (prospectQuery.isError || !record) return <PageFrame><ErrorState retry={() => void prospectQuery.refetch()}/></PageFrame>;
-  if (edit) return <PageFrame><Heading eyebrow="PIPELINE / EDIT OPPORTUNITY" title="Edit prospect" detail="Update deal-specific details and tags. The linked contact stays unchanged."/><ProspectForm key={id} prospectId={id}/></PageFrame>;
+  if (edit) return <PageFrame><Heading eyebrow="PIPELINE / EDIT OPPORTUNITY" title="Edit prospect" detail="Update deal-specific details and tags. The linked contact stays unchanged."/><ProspectForm key={id} prospectId={id} onSaved={() => setEdit(false)}/></PageFrame>;
   return <PageFrame>
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><Link href="/prospects" className="inline-flex items-center gap-2 text-[11px] font-semibold text-[#526d86] no-underline hover:text-[#174f91]"><ArrowLeft className="h-3.5 w-3.5"/>All prospects</Link><div className="flex flex-wrap gap-2"><ScheduleProspectFollowUpButton prospectId={id} prospectName={record.name} className={`${smallBtn} border-[#bcd1e2] bg-[#edf4fb] text-[#285e8d] hover:bg-[#e5f0f9]`}/><button type="button" onClick={() => setEdit(true)} className={smallBtn} data-testid="button-edit-prospect">Edit prospect</button><ArchiveProspect record={record}/></div></div>
     <div className="mb-5 flex flex-wrap items-start justify-between gap-4"><div><div className="mono mb-2 text-[9px] tracking-[.16em] text-[#70859a]">PROSPECT / {record.id.slice(0, 8)}</div><h1 className="display break-words text-[29px] font-bold text-[#172b43] sm:text-[35px]">{record.name}</h1><p className="mt-2 text-[12px] text-[#718093]">{record.product.itemType === 'service' ? 'Service' : 'Product'} · {record.product.name}{record.product.category ? ` · ${record.product.category}` : ''} · created {dateLabel(record.createdAt)} · updated {dateLabel(record.updatedAt)}</p></div><span className={`rounded-full px-3 py-1.5 text-[10px] font-bold ${record.currentStage.stageType === 'terminal' ? 'bg-[#fff1ed] text-[#a04f3d]' : 'bg-[#edf4fc] text-[#245b91]'}`}>{record.currentStage.name} · {record.currentProbability}%</span></div>
@@ -370,9 +378,10 @@ export function ProspectDetailPage() {
       <div className="xl:col-span-2">
         <ActionPanel prospectId={id} stageName={record.currentStage.name}/>
       </div>
-      <div className="xl:col-span-2">
-        <AuditPanel prospectId={id}/>
-      </div>
+       <div className="grid gap-5 lg:grid-cols-2 xl:col-span-2">
+         <AuditPanel prospectId={id}/>
+         <ValueHistoryPanel prospectId={id}/>
+       </div>
     </div>
   </PageFrame>;
 }
@@ -475,6 +484,23 @@ function AuditPanel({ prospectId }: { prospectId: string }) {
   return <section className={`${panel} overflow-hidden`}><header className="border-b border-[#d6e3ef] bg-[#edf4fb] px-4 py-3"><div className="mono text-[9px] tracking-[.14em] text-[#52718f]">IMMUTABLE GROWTH AUDIT</div><h2 className="mt-1 text-[13px] font-bold text-[#263c53]">Stage history</h2></header><div className="max-h-[560px] overflow-y-auto p-4">
     {query.isLoading ? <div className="space-y-2"><div className="h-20 animate-pulse rounded bg-[#edf2f7]"/><div className="h-20 animate-pulse rounded bg-[#edf2f7]"/></div> : query.isError ? <div role="alert" className="text-[10px] text-[#a04d3b]">Audit history unavailable. <button type="button" onClick={() => void query.refetch()} className="font-bold underline">Retry</button></div> : query.data?.length ? <ol className="relative space-y-4 before:absolute before:bottom-2 before:left-[7px] before:top-2 before:w-px before:bg-[#dbe5ee]">{query.data.map(entry => <li key={entry.id} className="relative pl-6"><span className="absolute left-0 top-1 h-3.5 w-3.5 rounded-full border-[3px] border-white bg-[#477eae] ring-1 ring-[#a9c3d9]"/><div className="text-[10px] font-bold text-[#354e67]">{entry.previousStage ? `${entry.previousStage.name} → ${entry.newStage.name}` : `Created in ${entry.newStage.name}`}</div><div className="mt-1 text-[9px] text-[#8290a0]">{dateLabel(entry.createdAt)} · {entry.changedByName} · {entry.newProbability}%</div>{entry.reason && <p className="mt-2 rounded-md bg-[#f7f9fb] p-2 text-[9px] leading-4 text-[#607387]">{entry.reason}</p>}{entry.notesSnapshot && <details className="mt-2"><summary className="cursor-pointer text-[9px] font-semibold text-[#35678f]">View note snapshot</summary><p className="mt-1 whitespace-pre-wrap text-[9px] leading-4 text-[#738394]">{entry.notesSnapshot}</p></details>}</li>)}</ol> : <div className="py-8 text-center text-[10px] text-[#8794a1]"><History className="mx-auto mb-2 h-4 w-4"/>No audit entries available.</div>}
   </div></section>;
+}
+
+function ValueHistoryPanel({ prospectId }: { prospectId: string }) {
+  const query = useGetProspectValueHistory(prospectId, { query: { enabled: !!prospectId, queryKey: getGetProspectValueHistoryQueryKey(prospectId), refetchOnMount: 'always' } });
+  return <section className={`${panel} overflow-hidden`} data-testid="section-prospect-value-history">
+    <header className="border-b border-[#cfe4d8] bg-[#eff7f2] px-4 py-3"><div className="mono text-[9px] tracking-[.14em] text-[#5d816b]">IMMUTABLE DEAL AUDIT</div><h2 className="mt-1 text-[13px] font-bold text-[#2d5540]">Deal value history</h2><p className="mt-1 text-[10px] text-[#66816f]">Value and currency changes are recorded at every pipeline stage.</p></header>
+    <div className="max-h-[560px] overflow-y-auto p-4">
+      {query.isLoading ? <div className="space-y-2"><div className="h-16 animate-pulse rounded bg-[#edf4ef]"/><div className="h-16 animate-pulse rounded bg-[#edf4ef]"/></div>
+        : query.isError ? <div role="alert" className="text-[10px] text-[#a04d3b]">Deal value history unavailable. <button type="button" onClick={() => void query.refetch()} className="font-bold underline">Retry</button></div>
+        : query.data?.length ? <ol className="space-y-3">{query.data.map(entry => <li key={entry.id} className="rounded-lg border border-[#dcebe0] bg-[#f8fbf9] p-3" data-testid={`row-prospect-value-history-${entry.id}`}>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"><span className="text-[10px] font-bold text-[#466c52]">Deal value updated</span><time className="text-[9px] text-[#82938a]">{dateLabel(entry.createdAt)}</time></div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]"><span className="font-semibold text-[#708077]">{money(entry.previousDealValue, entry.previousCurrencyCode)}</span><ArrowRight className="h-3 w-3 text-[#8b9d91]"/><strong className="text-[#286d4a]">{money(entry.newDealValue, entry.newCurrencyCode)}</strong></div>
+          <div className="mt-1 text-[9px] text-[#82938a]">Changed by {entry.changedByName}</div>
+        </li>)}</ol>
+        : <div className="rounded-lg border border-dashed border-[#dce7df] bg-[#f8fbf9] px-4 py-8 text-center text-[10px] text-[#7c8d82]" data-testid="empty-prospect-value-history"><History className="mx-auto mb-2 h-4 w-4 text-[#6a9074]"/>No deal value changes yet. Updates made from Edit prospect will appear here.</div>}
+    </div>
+  </section>;
 }
 
 export function ContactProspectsPanel({ contactId, contactName }: { contactId: string; contactName: string }) {

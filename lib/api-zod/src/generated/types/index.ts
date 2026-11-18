@@ -418,6 +418,7 @@ export * from './prospectStageStageType';
 export * from './prospectStageTransitions';
 export * from './prospectStageTransitionsInput';
 export * from './prospectTagSelection';
+export * from './prospectValueHistoryEntry';
 export * from './putContactIntentQuestions200';
 export * from './razorpayEnvironment';
 export * from './razorpayEnvironmentSettings';

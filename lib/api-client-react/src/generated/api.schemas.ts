@@ -6166,6 +6166,20 @@ export interface ProspectGrowthAuditEntry {
   actions: ProspectActionRecord[];
 }
 
+export interface ProspectValueHistoryEntry {
+  id: string;
+  /** @minimum 0 */
+  previousDealValue: number;
+  /** @pattern ^[A-Z]{3}$ */
+  previousCurrencyCode: string;
+  /** @minimum 0 */
+  newDealValue: number;
+  /** @pattern ^[A-Z]{3}$ */
+  newCurrencyCode: string;
+  changedByName: string;
+  createdAt: string;
+}
+
 export interface CreateProspectActionInput {
   actionTypeId: string;
   actionDate: string;

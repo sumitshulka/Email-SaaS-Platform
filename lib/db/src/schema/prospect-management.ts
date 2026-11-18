@@ -214,6 +214,29 @@ export const prospectStageHistoryTable = pgTable("prospect_stage_history", {
   check("prospect_stage_history_reason_required", sql`${table.eventType} = 'created' or length(trim(coalesce(${table.reason}, ''))) > 0`),
 ]);
 
+export const prospectValueHistoryTable = pgTable("prospect_value_history", {
+  id: uuid("id").defaultRandom().notNull(),
+  userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  prospectId: uuid("prospect_id").notNull(),
+  previousDealValue: numeric("previous_deal_value", { precision: 20, scale: 4 }).notNull(),
+  previousCurrencyCode: varchar("previous_currency_code", { length: 3 }).notNull(),
+  newDealValue: numeric("new_deal_value", { precision: 20, scale: 4 }).notNull(),
+  newCurrencyCode: varchar("new_currency_code", { length: 3 }).notNull(),
+  changedBy: uuid("changed_by").notNull().references(() => usersTable.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  primaryKey({ columns: [table.id, table.userId], name: "prospect_value_history_pkey" }),
+  uniqueIndex("prospect_value_history_id_unique").on(table.id),
+  foreignKey({
+    columns: [table.prospectId, table.userId],
+    foreignColumns: [prospectsTable.id, prospectsTable.userId],
+    name: "prospect_value_history_prospect_tenant_fk",
+  }).onDelete("restrict"),
+  index("prospect_value_history_prospect_time_idx").on(table.userId, table.prospectId, table.createdAt),
+  check("prospect_value_history_nonnegative", sql`${table.previousDealValue} >= 0 and ${table.newDealValue} >= 0`),
+  check("prospect_value_history_currency_codes", sql`${table.previousCurrencyCode} ~ '^[A-Z]{3}$' and ${table.newCurrencyCode} ~ '^[A-Z]{3}$'`),
+]);
+
 export const prospectActionsTable = pgTable("prospect_actions", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
@@ -272,6 +295,7 @@ export const insertProspectStageSchema = createInsertSchema(prospectStagesTable)
 export const insertProspectActionTypeSchema = createInsertSchema(prospectActionTypesTable);
 export const insertProspectSchema = createInsertSchema(prospectsTable);
 export const insertProspectStageHistorySchema = createInsertSchema(prospectStageHistoryTable);
+export const insertProspectValueHistorySchema = createInsertSchema(prospectValueHistoryTable);
 export const insertProspectActionSchema = createInsertSchema(prospectActionsTable);
 export type ProspectProduct = typeof prospectProductsTable.$inferSelect;
 export type ProspectProductCategory = typeof prospectProductCategoriesTable.$inferSelect;
@@ -281,5 +305,6 @@ export type ProspectStageTransition = typeof prospectStageTransitionsTable.$infe
 export type ProspectActionType = typeof prospectActionTypesTable.$inferSelect;
 export type Prospect = typeof prospectsTable.$inferSelect;
 export type ProspectStageHistory = typeof prospectStageHistoryTable.$inferSelect;
+export type ProspectValueHistory = typeof prospectValueHistoryTable.$inferSelect;
 export type ProspectAction = typeof prospectActionsTable.$inferSelect;
 export type ProspectTagAssignment = typeof prospectTagAssignmentsTable.$inferSelect;

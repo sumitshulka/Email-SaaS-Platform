@@ -12,7 +12,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
   const [
     { db, usersTable, contactsTable, companiesTable, contactTagsTable, contactTagAssignmentsTable,
       prospectsTable, prospectProductsTable, prospectCurrenciesTable, prospectStagesTable,
-      prospectStageTransitionsTable, prospectActionTypesTable, prospectStageHistoryTable,
+      prospectStageTransitionsTable, prospectActionTypesTable, prospectStageHistoryTable, prospectValueHistoryTable,
       prospectActionsTable, prospectFollowUpsTable, prospectTagAssignmentsTable },
     { default: prospectSettingsRouter },
     { default: prospectsRouter },
@@ -87,6 +87,7 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
         await tx.delete(prospectFollowUpsTable).where(eq(prospectFollowUpsTable.userId, userId));
         await tx.delete(prospectActionsTable).where(eq(prospectActionsTable.userId, userId));
         await tx.delete(prospectTagAssignmentsTable).where(eq(prospectTagAssignmentsTable.userId, userId));
+        await tx.delete(prospectValueHistoryTable).where(eq(prospectValueHistoryTable.userId, userId));
         await tx.delete(prospectStageHistoryTable).where(eq(prospectStageHistoryTable.userId, userId));
         await tx.delete(prospectsTable).where(eq(prospectsTable.userId, userId));
         await tx.delete(prospectStageTransitionsTable).where(eq(prospectStageTransitionsTable.userId, userId));
@@ -266,8 +267,33 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
     assert.equal(usdTotals.activeValue, 50);
     assert.equal(usdTotals.weightedValue, 10);
 
+    const valueUpdate = await call(mainServer, `/prospects/${first.id}`, "PATCH", { expectedDealValue: 125 });
+    assert.equal(valueUpdate.status, 200);
+    assert.equal(valueUpdate.data.prospect.expectedDealValue, 125);
+    let valueHistory = await call(mainServer, `/prospects/${first.id}/value-history`);
+    assert.equal(valueHistory.status, 200);
+    assert.equal(valueHistory.data.length, 1);
+    assert.deepEqual(
+      {
+        previousDealValue: valueHistory.data[0].previousDealValue,
+        previousCurrencyCode: valueHistory.data[0].previousCurrencyCode,
+        newDealValue: valueHistory.data[0].newDealValue,
+        newCurrencyCode: valueHistory.data[0].newCurrencyCode,
+      },
+      { previousDealValue: 100, previousCurrencyCode: "INR", newDealValue: 125, newCurrencyCode: "INR" },
+    );
+    const noOpValueUpdate = await call(mainServer, `/prospects/${first.id}`, "PATCH", {
+      expectedDealValue: 125,
+      currencyCode: "INR",
+    });
+    assert.equal(noOpValueUpdate.status, 200);
+    valueHistory = await call(mainServer, `/prospects/${first.id}/value-history`);
+    assert.equal(valueHistory.data.length, 1, "saving an unchanged value does not create a false change event");
+
     const wrongTenantRead = await call(otherTenantServer, `/prospects/${first.id}`);
     assert.equal(wrongTenantRead.status, 404, "another tenant cannot read a prospect by UUID");
+    const wrongTenantValueHistory = await call(otherTenantServer, `/prospects/${first.id}/value-history`);
+    assert.equal(wrongTenantValueHistory.status, 404, "another tenant cannot read a prospect's value history");
 
     const invalidTransition = await call(mainServer, `/prospects/${first.id}/stage`, "POST", {
       newStageId: won.id,
@@ -285,6 +311,11 @@ test("prospects preserve tenant, stage, currency, action, tag, and contact invar
       reason: "Discovery completed; proposal prepared.",
     });
     assert.equal(firstMove.status, 200);
+    const valueUpdateAtLaterStage = await call(mainServer, `/prospects/${first.id}`, "PATCH", { expectedDealValue: 150 });
+    assert.equal(valueUpdateAtLaterStage.status, 200, "deal values remain editable after a stage change");
+    valueHistory = await call(mainServer, `/prospects/${first.id}/value-history`);
+    assert.equal(valueHistory.data.length, 2, "each actual deal-value change is retained");
+    assert.equal(valueHistory.data[0].newDealValue, 150);
     const backMove = await call(mainServer, `/prospects/${first.id}/stage`, "POST", {
       newStageId: qualification.id,
       reason: "Revisit qualification after budget review.",

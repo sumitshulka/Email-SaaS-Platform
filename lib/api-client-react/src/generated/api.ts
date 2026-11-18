@@ -236,6 +236,7 @@ import type {
   ProspectStageTransitions,
   ProspectStageTransitionsInput,
   ProspectTagSelection,
+  ProspectValueHistoryEntry,
   PutContactIntentQuestions200,
   RazorpaySettings,
   RazorpaySettingsInput,
@@ -5983,6 +5984,83 @@ export function useListProspectGrowthAudit<TData = Awaited<ReturnType<typeof lis
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListProspectGrowthAuditQueryOptions(prospectId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProspectValueHistoryUrl = (prospectId: string,) => {
+
+
+
+
+  return `/api/prospects/${prospectId}/value-history`
+}
+
+/**
+ * @summary Read immutable deal-value and currency changes for a prospect
+ */
+export const getProspectValueHistory = async (prospectId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProspectValueHistoryEntry[]> => {
+
+  return customFetch<ProspectValueHistoryEntry[]>(getGetProspectValueHistoryUrl(prospectId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProspectValueHistoryQueryKey = (prospectId: string,) => {
+    return [
+    `/api/prospects/${prospectId}/value-history`
+    ] as const;
+    }
+
+
+export const getGetProspectValueHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getProspectValueHistory>>, TError = ErrorType<ApiError>>(prospectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectValueHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProspectValueHistoryQueryKey(prospectId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProspectValueHistory>>> = ({ signal }) => getProspectValueHistory(prospectId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: prospectId !== null && prospectId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProspectValueHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProspectValueHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getProspectValueHistory>>>
+export type GetProspectValueHistoryQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Read immutable deal-value and currency changes for a prospect
+ */
+
+export function useGetProspectValueHistory<TData = Awaited<ReturnType<typeof getProspectValueHistory>>, TError = ErrorType<ApiError>>(
+ prospectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProspectValueHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProspectValueHistoryQueryOptions(prospectId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

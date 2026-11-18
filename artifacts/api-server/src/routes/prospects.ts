@@ -28,6 +28,7 @@ import {
   prospectStageTransitionsTable,
   prospectStagesTable,
   prospectTagAssignmentsTable,
+  prospectValueHistoryTable,
   prospectsTable,
   usersTable,
 } from "@workspace/db";
@@ -43,6 +44,8 @@ import {
   GetProspectDashboardResponse,
   GetProspectParams,
   GetProspectResponse,
+  GetProspectValueHistoryParams,
+  GetProspectValueHistoryResponse,
   ListContactProspectsParams,
   ListContactProspectsResponse,
   ListProspectActionsParams,
@@ -65,6 +68,7 @@ import { requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
 const auditActor = alias(usersTable, "prospect_audit_actor");
+const valueAuditActor = alias(usersTable, "prospect_value_audit_actor");
 const actionActor = alias(usersTable, "prospect_action_actor");
 
 type ProspectFilterInput = ReturnType<typeof ListProspectsQueryParams.parse>;
@@ -82,6 +86,10 @@ function todayInZone(timeZone: string): string {
 
 function dateOnly(value: Date | string): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+}
+
+function canonicalDealValue(value: number | string): string {
+  return Number(value).toFixed(4);
 }
 
 function normalizeDateQuery(query: Record<string, unknown>, names: string[]) {
@@ -565,6 +573,10 @@ router.patch("/prospects/:prospectId", requireUserRole, async (req, res): Promis
         ));
       if (!currency) return { kind: "invalid_currency" as const };
     }
+    const nextDealValue = input.data.expectedDealValue ?? Number(current.expectedDealValue);
+    const nextCurrencyCode = input.data.currencyCode ?? current.currencyCode;
+    const valueChanged = canonicalDealValue(current.expectedDealValue) !== canonicalDealValue(nextDealValue)
+      || current.currencyCode !== nextCurrencyCode;
     const patch: Partial<typeof prospectsTable.$inferInsert> = { updatedBy: userId, updatedAt: new Date() };
     if (input.data.name !== undefined) patch.name = input.data.name.trim();
     if (input.data.productId !== undefined) patch.productId = input.data.productId;
@@ -577,6 +589,17 @@ router.patch("/prospects/:prospectId", requireUserRole, async (req, res): Promis
       ? null
       : dateOnly(input.data.actualClosureDate);
     if (input.data.closureRemarks !== undefined) patch.closureRemarks = input.data.closureRemarks?.trim() || null;
+    if (valueChanged) {
+      await tx.insert(prospectValueHistoryTable).values({
+        userId,
+        prospectId: current.id,
+        previousDealValue: canonicalDealValue(current.expectedDealValue),
+        previousCurrencyCode: current.currencyCode,
+        newDealValue: canonicalDealValue(nextDealValue),
+        newCurrencyCode: nextCurrencyCode,
+        changedBy: userId,
+      });
+    }
     await tx.update(prospectsTable).set(patch).where(and(
       eq(prospectsTable.id, current.id),
       eq(prospectsTable.userId, userId),
@@ -827,6 +850,43 @@ router.get("/prospects/:prospectId/history", requireUserRole, async (req, res): 
     actions: (actions.get(row.id) ?? []) as never[],
   }));
   res.json(ListProspectGrowthAuditResponse.parse(history));
+});
+
+router.get("/prospects/:prospectId/value-history", requireUserRole, async (req, res): Promise<void> => {
+  const params = GetProspectValueHistoryParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid prospect identifier." });
+    return;
+  }
+  const userId = req.authUser!.id;
+  if (!await ownedProspect(userId, params.data.prospectId)) {
+    res.status(404).json({ error: "Prospect not found." });
+    return;
+  }
+  const rows = await db.select({
+    id: prospectValueHistoryTable.id,
+    previousDealValue: prospectValueHistoryTable.previousDealValue,
+    previousCurrencyCode: prospectValueHistoryTable.previousCurrencyCode,
+    newDealValue: prospectValueHistoryTable.newDealValue,
+    newCurrencyCode: prospectValueHistoryTable.newCurrencyCode,
+    actorFirstName: valueAuditActor.firstName,
+    actorLastName: valueAuditActor.lastName,
+    createdAt: prospectValueHistoryTable.createdAt,
+  }).from(prospectValueHistoryTable)
+    .innerJoin(valueAuditActor, eq(valueAuditActor.id, prospectValueHistoryTable.changedBy))
+    .where(and(
+      eq(prospectValueHistoryTable.userId, userId),
+      eq(prospectValueHistoryTable.prospectId, params.data.prospectId),
+    )).orderBy(desc(prospectValueHistoryTable.createdAt), desc(prospectValueHistoryTable.id));
+  res.json(GetProspectValueHistoryResponse.parse(rows.map(row => ({
+    id: row.id,
+    previousDealValue: Number(row.previousDealValue),
+    previousCurrencyCode: row.previousCurrencyCode,
+    newDealValue: Number(row.newDealValue),
+    newCurrencyCode: row.newCurrencyCode,
+    changedByName: `${row.actorFirstName} ${row.actorLastName}`.trim(),
+    createdAt: row.createdAt,
+  }))));
 });
 
 router.get("/prospects/:prospectId/actions", requireUserRole, async (req, res): Promise<void> => {
