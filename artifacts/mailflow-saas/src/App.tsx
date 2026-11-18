@@ -1020,22 +1020,24 @@ function AdminDashboardPage() {
       trailing={<div className="flex flex-wrap items-center gap-2"><span className="mono hidden text-[10px] text-[#87919b] sm:block">ACTIVE ENVIRONMENT</span><StatusPill tone={d.billingEnvironment === 'production' ? 'blue' : 'orange'}>{d.billingEnvironment ?? 'Not configured'}</StatusPill><span className="mono hidden text-[10px] text-[#87919b] sm:block">DEFAULT CURRENCY</span><StatusPill>{d.defaultCurrency}</StatusPill></div>}/>
 
     <section aria-label="Platform headline metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Panel className="border-[#cfe1f2] bg-[#eef6ff] p-4" data-testid="dashboard-value-new-accounts">
+      <Panel className="p-4" style={{ backgroundColor: '#eaf3ff', borderColor: '#c7dcf3' }} data-testid="dashboard-value-new-accounts">
         <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#527393]">Registrations this month</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#dcecff] text-[#316ca4]"><UserRound className="h-4 w-4"/></span></div>
         <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#294d70]">{d.newUsersThisMonth.toLocaleString()}</div>
         <div className="mt-2 text-[10px] text-[#71869a]">New platform accounts</div>
       </Panel>
-      <Panel className="border-[#cfe5d5] bg-[#eff8f1] p-4" data-testid="dashboard-value-active-subscriptions">
+      <Panel className="p-4" style={{ backgroundColor: '#eaf5ed', borderColor: '#c9e1d0' }} data-testid="dashboard-value-active-subscriptions">
         <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#557b61]">Active subscription access</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#dcefe1] text-[#3e7952]"><BadgeCheck className="h-4 w-4"/></span></div>
         <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#28583b]">{d.activeSubscriptions.toLocaleString()}</div>
         <div className="mt-2 text-[10px] text-[#748a79]">{d.activeCustomers.toLocaleString()} accounts with access; may include gifted or comped</div>
       </Panel>
-      <Panel className={cn('border-[#f0dec7] bg-[#fff7ec] p-4', d.subscriptionsEndingSoon > 0 && 'border-[#e9cba6] bg-[#fff0dc]')} data-testid="dashboard-value-ending-soon">
+      <Panel className="p-4" style={d.subscriptionsEndingSoon > 0
+        ? { backgroundColor: '#fff0dc', borderColor: '#e9cba6' }
+        : { backgroundColor: '#fff7ec', borderColor: '#f0dec7' }} data-testid="dashboard-value-ending-soon">
         <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#8a6742]">Ending within 7 days</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#ffe6ca] text-[#b46a31]"><Clock3 className="h-4 w-4"/></span></div>
         <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#734c2a]">{d.subscriptionsEndingSoon.toLocaleString()}</div>
         <div className="mt-2 text-[10px] text-[#947c61]">{d.subscriptionsEndingSoon ? 'Review renewals and customer access' : 'No upcoming expirations'}</div>
       </Panel>
-      <Panel className="border-[#ded4f0] bg-[#f5f1fc] p-4" data-testid="dashboard-value-active-packages">
+      <Panel className="p-4" style={{ backgroundColor: '#f2edfb', borderColor: '#d7cbed' }} data-testid="dashboard-value-active-packages">
         <div className="flex items-start justify-between"><div className="text-[11px] font-semibold text-[#70618c]">Active packages</div><span className="grid h-8 w-8 place-items-center rounded-md bg-[#e9e1f7] text-[#765eaa]"><SlidersHorizontal className="h-4 w-4"/></span></div>
         <div className="display mt-3 text-[28px] font-bold leading-none tracking-[-.04em] text-[#4a3b69]">{d.activePackages.toLocaleString()}</div>
         <div className="mt-2 text-[10px] text-[#827695]">{d.packageVisibility === 'public' ? 'Packages visible to customers' : 'Packages currently hidden'}</div>
