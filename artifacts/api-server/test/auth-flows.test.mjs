@@ -13,7 +13,7 @@ import ExcelJS from "exceljs";
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://mailflow-test:mailflow-test@127.0.0.1/mailflow_test";
 process.env.SESSION_SECRET = "test-only-session-secret-that-is-long-enough";
-process.env.LOG_LEVEL = "silent";
+process.env.LOG_LEVEL = "error";
 
 const memory = newDb({ autoCreateForeignKeyIndices: true });
 memory.public.registerFunction({
@@ -21,6 +21,32 @@ memory.public.registerFunction({
   returns: DataType.uuid,
   implementation: () => randomUUID(),
   impure: true,
+});
+const companyNameSimilarity = (left, right) => {
+  const normalize = (value) => `  ${String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}  `;
+  const leftText = normalize(left);
+  const rightText = normalize(right);
+  if (leftText === rightText) return 1;
+  const trigrams = (value) =>
+    new Set(Array.from({ length: Math.max(0, value.length - 2) }, (_, index) => value.slice(index, index + 3)));
+  const leftGrams = trigrams(leftText);
+  const rightGrams = trigrams(rightText);
+  const intersection = [...leftGrams].filter((gram) => rightGrams.has(gram)).length;
+  const union = new Set([...leftGrams, ...rightGrams]).size;
+  return union ? intersection / union : 0;
+};
+memory.public.registerFunction({
+  name: "similarity",
+  args: [DataType.text, DataType.text],
+  returns: DataType.float,
+  implementation: companyNameSimilarity,
+});
+memory.public.registerOperator({
+  operator: "%",
+  left: DataType.text,
+  right: DataType.text,
+  returns: DataType.bool,
+  implementation: (left, right) => companyNameSimilarity(left, right) >= 0.36,
 });
 
 memory.public.registerOperator({
@@ -3510,6 +3536,11 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         currency: "INR",
         periodDays: 30,
         contactLimit: 1_000,
+        openCampaignAllowance: 0,
+        openCampaignRecipientLimit: 0,
+        prospectManagementEnabled: false,
+        reportsEnabled: false,
+        personalReportLimit: 0,
         emailAccountLimit: 2,
         researchAllowance: 10,
         aiEmailAssistAllowance: 5,
