@@ -8,6 +8,7 @@ import {
   useGetContactFieldOptions,
 } from "@workspace/api-client-react";
 import type { ContactFieldKey, ContactFieldOption } from "@workspace/api-client-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const fieldDetails: Array<{ field: ContactFieldKey; title: string; description: string }> = [
   { field: "lifecycleStage", title: "Lifecycle stages", description: "Where each contact is in your customer lifecycle." },
@@ -144,10 +145,24 @@ export default function ContactFieldSettingsPage() {
       : query.isError ? <section role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-[#f0d5bd] bg-[#fff8f1] p-5 text-[12px] text-[#99501e]">
         <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4"/>Contact field settings could not be loaded.</span>
         <button type="button" onClick={() => void query.refetch()} className="rounded-md px-3 py-2 font-semibold text-[#245b9b] hover:bg-[#edf4fc]">Retry</button>
-      </section> : <div className="grid items-start gap-4 xl:grid-cols-2">
-        {fieldDetails.map(item => <MasterCard key={item.field} {...item} options={options}
-          busy={remove.isPending || create.isPending} onAdd={add} onRemove={removeOption}/>)}
-      </div>}
+      </section> : <Tabs defaultValue={fieldDetails[0].field} className="w-full" data-testid="contact-field-tabs">
+        <TabsList aria-label="Contact field categories" className="mb-5 flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border border-[#e0e4e9] bg-white p-1.5">
+          {fieldDetails.map(item => {
+            const Icon = fieldIcons[item.field];
+            const count = options.filter(option => option.field === item.field).length;
+            return <TabsTrigger key={item.field} value={item.field} data-testid={`tab-contact-field-${item.field}`}
+              className="min-h-10 min-w-[155px] flex-1 justify-center gap-2 rounded-md px-3 py-2 text-[11px] font-semibold text-[#66717e] data-[state=active]:bg-[#174f99] data-[state=active]:text-white data-[state=active]:shadow-sm sm:min-w-0">
+              <Icon className="h-3.5 w-3.5 shrink-0"/>
+              <span>{item.title}</span>
+              <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[9px] tabular-nums text-current">{count}</span>
+            </TabsTrigger>;
+          })}
+        </TabsList>
+        {fieldDetails.map(item => <TabsContent key={item.field} value={item.field} forceMount className="mt-0">
+          <MasterCard {...item} options={options}
+            busy={remove.isPending || create.isPending} onAdd={add} onRemove={removeOption}/>
+        </TabsContent>)}
+      </Tabs>}
     {!query.isLoading && !query.isError && <p className="mt-5 border-t border-[#e5e9ed] pt-4 text-[11px] leading-5 text-[#7c8997]">Changes are available immediately in contact forms. Existing contact values remain unchanged when a list is edited.</p>}
   </div>;
 }
