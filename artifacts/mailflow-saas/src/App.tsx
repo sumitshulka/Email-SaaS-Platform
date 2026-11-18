@@ -676,8 +676,9 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
                     >
                       <span className={cn(
                         'grid h-[29px] w-[29px] shrink-0 place-items-center rounded-[9px] transition-all duration-150',
-                        navigationIconTone(item.href),
-                        active && 'bg-[#174f99] text-white shadow-[0_3px_7px_rgba(23,79,153,.2)]',
+                        active
+                          ? 'bg-[#174f99] text-white shadow-[0_3px_7px_rgba(23,79,153,.2)]'
+                          : navigationIconTone(item.href),
                       )}>
                         <Icon className="h-[15px] w-[15px]"/>
                       </span>
