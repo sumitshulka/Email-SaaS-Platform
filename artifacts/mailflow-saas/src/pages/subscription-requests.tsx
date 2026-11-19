@@ -27,7 +27,15 @@ const errText = (error: unknown) =>
     : "Please try again.";
 
 function dateTime(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : "—";
+  return value
+    ? new Date(value).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "—";
 }
 
 function stateLabel(status: string): string {
@@ -185,22 +193,47 @@ export default function AdminSubscriptionRequestsPage() {
             </button>
           </div>
         ) : query.data?.items.length ? (
-          <div className="divide-y divide-[#edf0f2]">
+          <div className="space-y-2.5 bg-[#f8fafc] p-3 sm:p-4">
             {query.data.items.map((request) => {
               const expired =
                 request.status === "pending" &&
                 new Date(request.decisionDeadlineAt).getTime() <= Date.now();
+              const accent =
+                request.status === "pending"
+                  ? "border-l-[#d18a3e]"
+                  : request.status === "rejected"
+                    ? "border-l-[#c35c68]"
+                    : request.status === "auto_approved"
+                      ? "border-l-[#4382a0]"
+                      : "border-l-[#4e9566]";
+              const divider =
+                request.status === "pending"
+                  ? "border-[#edd8bd]"
+                  : request.status === "rejected"
+                    ? "border-[#f0d9dc]"
+                    : request.status === "auto_approved"
+                      ? "border-[#d5e6ed]"
+                      : "border-[#d9eadd]";
               return (
                 <article
                   key={request.id}
                   data-testid={`row-subscription-request-${request.id}`}
-                  className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+                  className={`rounded-md border border-l-4 bg-white px-3.5 py-3 shadow-[0_1px_3px_rgba(35,55,75,.04)] sm:px-4 ${accent}`}
                 >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
+                  <div
+                    data-testid={`subscription-request-summary-${request.id}`}
+                    className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-1"
+                  >
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <h3 className="text-[13px] font-bold text-[#26394d]">
                         {request.userName}
                       </h3>
+                      <span className="max-w-full truncate text-[10px] text-[#66778a]" title={request.email}>
+                        {request.email}
+                      </span>
+                      <span className="text-[9px] text-[#a5aeb7]">@{request.username}</span>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                       <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${
                         request.status === "pending"
                           ? "bg-[#fff3e5] text-[#955d22]"
@@ -214,29 +247,41 @@ export default function AdminSubscriptionRequestsPage() {
                         Request {request.milestone} of 3
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] text-[#66778a]">
-                      {request.email} <span className="text-[#a5aeb7]">· @{request.username}</span>
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[#788697]">
+                  </div>
+
+                  <div className={`my-2 border-t ${divider}`} />
+
+                  <div
+                    data-testid={`subscription-request-details-${request.id}`}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[#788697]">
                       <span>Requested {dateTime(request.requestedAt)}</span>
                       <span className={expired ? "font-semibold text-[#a34b32]" : ""}>
                         <CalendarClock className="mr-1 inline h-3 w-3" />
-                        Decision deadline {dateTime(request.decisionDeadlineAt)}
+                        Deadline {dateTime(request.decisionDeadlineAt)}
                       </span>
+                      {request.rejectionReason && (
+                        <span
+                          className="min-w-0 max-w-[360px] truncate text-[#8f4350]"
+                          title={`Rejection reason: ${request.rejectionReason}`}
+                        >
+                          Rejection: {request.rejectionReason}
+                        </span>
+                      )}
+                      {request.grantStartsAt && request.grantEndsAt && (
+                        <span className="text-[#52705d]">
+                          Basic {new Date(request.grantStartsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}–{new Date(request.grantEndsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · Free resumes after
+                        </span>
+                      )}
+                      {expired && (
+                        <span className="font-semibold text-[#a34b32]">
+                          Automatic grant is due.
+                        </span>
+                      )}
                     </div>
-                    {request.rejectionReason && (
-                      <p className="mt-2 rounded-md border border-[#f0d4d8] bg-[#fff7f8] px-3 py-2 text-[11px] leading-5 text-[#8f4350]">
-                        Rejection reason: {request.rejectionReason}
-                      </p>
-                    )}
-                    {request.grantStartsAt && request.grantEndsAt && (
-                      <p className="mt-2 text-[10px] text-[#52705d]">
-                        Basic term {dateTime(request.grantStartsAt)} – {dateTime(request.grantEndsAt)}. Free plan resumes afterward.
-                      </p>
-                    )}
-                  </div>
-                  {request.status === "pending" && (
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {request.status === "pending" && (
+                      <div className="flex shrink-0 flex-wrap gap-2">
                       <button
                         type="button"
                         data-testid={`button-approve-subscription-request-${request.id}`}
@@ -267,13 +312,9 @@ export default function AdminSubscriptionRequestsPage() {
                         <ShieldX className="h-3.5 w-3.5" />
                         Reject
                       </button>
-                      {expired && (
-                        <span className="basis-full text-right text-[10px] text-[#a34b32]">
-                          The automatic grant is due; rejection is no longer available.
-                        </span>
-                      )}
                     </div>
-                  )}
+                    )}
+                  </div>
                 </article>
               );
             })}
