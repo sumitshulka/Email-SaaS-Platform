@@ -937,19 +937,27 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
         <ChartHeading eyebrow="CAMPAIGN ACTIVITY" title="Campaigns" detail="Sending and outcome figures are scoped to each campaign."/>
         <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]"><span className="rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] tabular-nums" data-testid="overview-campaign-count">{data.campaignCount.toLocaleString()}</span>Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
       </div>
-      {data.campaigns.length ? <div className="divide-y divide-[#edf0ed]">
+      {data.campaigns.length ? <div className="space-y-2.5 bg-[#f7f9fb] p-3 sm:p-4">
         {data.campaigns.map(campaign => {
           const campaignIsActive = campaign.status === 'queued' || campaign.status === 'sending';
           const campaignIsPaused = maintenancePaused && campaignIsActive;
-          return <article key={campaign.id} data-testid={`campaign-row-${campaign.id}`} className="grid gap-4 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(180px,1.15fr)_repeat(5,minmax(64px,.55fr))_minmax(145px,.85fr)] lg:items-center">
-            <div className="min-w-0"><div className="flex items-center gap-2"><span className={cn('h-2 w-2 rounded-full', campaignIsPaused ? 'bg-[#d98949]' : campaign.status === 'sending' ? 'bg-[#d98949]' : campaign.status === 'completed' ? 'bg-[#548873]' : 'bg-[#8d9daf]')}/><h3 className="truncate text-[14px] font-semibold text-[#263447]">{campaign.name}</h3></div><div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#85909a]"><span className="capitalize">{campaignIsPaused ? 'paused' : campaign.status}</span><span>·</span><span>{campaign.recipients.toLocaleString()} recipients</span></div></div>
+          const accent = campaignIsPaused || campaign.status === 'sending'
+            ? 'border-l-[#d98949]'
+            : campaign.status === 'completed'
+              ? 'border-l-[#548873]'
+              : 'border-l-[#7395b5]';
+          const updatedLabel = `Updated ${shortDate(campaign.updatedAt)}${campaign.completedAt ? ` · Completed ${shortDate(campaign.completedAt)}` : campaign.queuedAt ? ` · Queued ${shortDate(campaign.queuedAt)}` : ''}`;
+          return <article key={campaign.id} data-testid={`campaign-row-${campaign.id}`} className={cn('grid grid-cols-2 gap-x-3 gap-y-3 rounded-md border border-l-4 border-[#dfe6ec] bg-white px-3.5 py-3 shadow-[0_1px_3px_rgba(35,55,75,.04)] sm:grid-cols-3 sm:px-4 lg:grid-cols-[minmax(170px,1.15fr)_repeat(5,minmax(76px,.55fr))_minmax(138px,.9fr)] lg:items-center', accent)}>
+            <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-1"><div className="flex items-center gap-2"><span className={cn('h-2 w-2 shrink-0 rounded-full', campaignIsPaused ? 'bg-[#d98949]' : campaign.status === 'sending' ? 'bg-[#d98949]' : campaign.status === 'completed' ? 'bg-[#548873]' : 'bg-[#8d9daf]')}/><h3 className="truncate text-[13px] font-semibold text-[#263447]">{campaign.name}</h3></div><div className="mt-1 flex items-center gap-2 text-[9px] text-[#85909a]"><span className="capitalize">{campaignIsPaused ? 'paused' : campaign.status}</span><span>·</span><span>{campaign.recipients.toLocaleString()} recipients</span></div></div>
             <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
             <CampaignDatum label="Bounced" value={campaign.bounced} hint="Bounced campaign recipients."/>
             <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
             <CampaignDatum label="Unknown" value={campaign.unknown} hint="No confirmed outcome is available."/>
             <CampaignDatum label="Queued / sending" value={campaign.queued} hint="Recipients queued or currently being sent."/>
-            <div className="rounded-lg bg-[#f6f7f4] px-3 py-2.5">{campaignIsActive ? <><div className="flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Mailbox attempts / last 60 min</span><span className="mono font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div><div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Mailbox capacity remaining</span><span className="mono font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div><div className="mt-1 text-[9px] leading-4 text-[#959da2]">Per SMTP mailbox; campaigns using the same mailbox share its allowance. Estimates are not additive.</div></> : <div className="text-[10px] text-[#77828b]">Hourly estimate shown while campaign is queued or sending.</div>}</div>
-            <div className="text-[10px] text-[#9099a1] lg:col-span-7">Updated {shortDate(campaign.updatedAt)}{campaign.completedAt ? ` · Completed ${shortDate(campaign.completedAt)}` : campaign.queuedAt ? ` · Queued ${shortDate(campaign.queuedAt)}` : ''}</div>
+            <div title="Hourly limits are shared by campaigns using the same SMTP mailbox. These figures are not additive." className="col-span-2 space-y-1 rounded-md bg-[#f3f6f8] px-2.5 py-2 sm:col-span-1">
+              {campaignIsActive ? <><div className="flex items-center justify-between gap-1 text-[9px] text-[#77828b]"><span className="truncate">Attempts · 60m</span><span className="mono shrink-0 font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div><div className="flex items-center justify-between gap-1 text-[9px] text-[#77828b]"><span className="truncate">Capacity left</span><span className="mono shrink-0 font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div></> : <div className="text-[9px] leading-4 text-[#77828b]">Hourly estimate appears while queued or sending.</div>}
+            </div>
+            <div title={updatedLabel} className="col-span-2 truncate border-t border-[#edf1f4] pt-2 text-[9px] text-[#9099a1] sm:col-span-3 lg:col-span-7">{updatedLabel}</div>
           </article>;
         })}
       </div> : <div className="px-6 py-14"><ChartEmpty title="No campaigns to report" body="When campaigns are created, their queue and SMTP outcome summaries will appear here."/></div>}
@@ -987,7 +995,7 @@ function ChartEmpty({ title, body }: { title: string; body: string }) {
   return <div className="flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed border-[#dce3de] bg-[#fbfcfa] px-6 text-center"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#edf3ef] text-[#628071]"><Activity className="h-4 w-4"/></span><h3 className="mt-3 text-[12px] font-semibold text-[#394a56]">{title}</h3><p className="mt-1 max-w-xs text-[10px] leading-5 text-[#828d95]">{body}</p></div>;
 }
 function CampaignDatum({ label, value, hint }: { label: string; value: number | string; hint: string }) {
-  return <div title={hint}><div className="text-[9px] uppercase tracking-[.08em] text-[#9099a1]">{label}</div><div className="mono mt-1 text-[13px] font-medium text-[#425364]">{typeof value === 'number' ? value.toLocaleString() : value}</div></div>;
+  return <div title={hint} className="min-w-0"><div className="truncate text-[8px] uppercase tracking-[.06em] text-[#9099a1]">{label}</div><div className="mono mt-0.5 text-[12px] font-medium text-[#425364]">{typeof value === 'number' ? value.toLocaleString() : value}</div></div>;
 }
 function AdminDashboardPage() {
   const query = useGetAdminDashboard(); const d = query.data;
