@@ -10117,6 +10117,7 @@ export const GetTenantAIProviderSettingsResponse = zod.object({
   "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
   "selectedModel": zod.string().nullable(),
   "apiKeyConfigured": zod.boolean(),
+  "apiKeyUsable": zod.boolean().describe('True only when the saved encrypted key can be decrypted by this deployment; never includes key material.'),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -10143,6 +10144,7 @@ export const UpdateTenantAIProviderSettingsResponse = zod.object({
   "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
   "selectedModel": zod.string().nullable(),
   "apiKeyConfigured": zod.boolean(),
+  "apiKeyUsable": zod.boolean().describe('True only when the saved encrypted key can be decrypted by this deployment; never includes key material.'),
   "updatedAt": zod.coerce.date().nullable()
 })
 
@@ -10157,6 +10159,7 @@ export const DeleteTenantAIProviderSettingsResponse = zod.object({
   "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
   "selectedModel": zod.string().nullable(),
   "apiKeyConfigured": zod.boolean(),
+  "apiKeyUsable": zod.boolean().describe('True only when the saved encrypted key can be decrypted by this deployment; never includes key material.'),
   "updatedAt": zod.coerce.date().nullable()
 })
 

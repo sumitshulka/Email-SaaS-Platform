@@ -61,6 +61,7 @@ export default function TenantAIProviderPage() {
 
   const savedKeyCanBeReused =
     settings.data?.apiKeyConfigured === true &&
+    settings.data?.apiKeyUsable === true &&
     settings.data.provider === provider;
   const busy =
     testConnection.isPending ||
@@ -215,7 +216,7 @@ export default function TenantAIProviderPage() {
                   <h2 className="text-[14px] font-bold text-[#1b2b40]">Provider configuration</h2>
                   <p className="mt-1 text-[10px] text-[#617589]">Package: {settings.data.packageName ?? "Active primary plan"}</p>
                 </div>
-                {settings.data.configured && <span className="inline-flex items-center gap-1.5 rounded-full border border-[#c7e1d1] bg-white px-2.5 py-1 text-[9px] font-semibold text-[#326d4c]"><ShieldCheck className="h-3.5 w-3.5"/>Key saved · ••••••••••••</span>}
+                {settings.data.configured && <span className={`inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1 text-[9px] font-semibold ${settings.data.apiKeyUsable ? "border-[#c7e1d1] text-[#326d4c]" : "border-[#ead8b8] text-[#8a652e]"}`}><ShieldCheck className="h-3.5 w-3.5"/>{settings.data.apiKeyUsable ? "Key saved · ••••••••••••" : "Saved key needs replacement"}</span>}
               </div>
             </div>
             <div className="space-y-4 p-4 sm:p-5">
@@ -242,7 +243,7 @@ export default function TenantAIProviderPage() {
               <label className="block space-y-1.5">
                 <span className="text-[11px] font-semibold text-[#29384b]">Provider API key</span>
                 <input data-testid="input-tenant-ai-provider-key" type="password" autoComplete="new-password" value={apiKey} onChange={event => handleApiKeyChange(event.target.value)} placeholder={savedKeyCanBeReused ? "Leave blank to reuse your saved key" : "Paste your provider API key"} maxLength={4096} disabled={busy} className="h-10 w-full rounded-md border border-[#cbd4df] bg-white px-3 text-[12px] text-[#243449] outline-none placeholder:text-[#778597] focus:border-[#3673b9] focus:ring-2 focus:ring-[#3673b9]/15 disabled:bg-[#f2f5f8]"/>
-                <span className="block text-[10px] leading-4 text-[#718192]">{savedKeyCanBeReused ? "Your saved key is encrypted. Enter a replacement only if you want to update it." : "The key is sent only to the API and encrypted before storage."}</span>
+                <span className="block text-[10px] leading-4 text-[#718192]">{savedKeyCanBeReused ? "Your saved key is encrypted. Enter a replacement only if you want to update it." : settings.data.apiKeyConfigured && !settings.data.apiKeyUsable ? "The saved key cannot be decrypted by this deployment. Enter a replacement key to restore AI access." : "The key is sent only to the API and encrypted before storage."}</span>
               </label>
 
               <div className="flex flex-wrap items-center gap-2 border-t border-[#e8edf2] pt-4">

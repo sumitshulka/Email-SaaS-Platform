@@ -46,6 +46,7 @@
 - [Global company privacy](global-company-privacy.md) — keep the global catalog profile-only; contacts stay tenant-private while linked company profiles sync.
 - [Tenant data in superadmin views](tenant-data-admin-privacy.md) — show cross-account aggregates, not tenant-owned contact records or campaign details.
 - [Company intelligence policy](company-intelligence-policy.md) — explicit reusable research, cited evidence and dated signals; no master overwrite, private-contact research or user-facing internal costs.
+- [Tenant AI provider scope](tenant-ai-provider-scope.md) — customer keys power private AI features; shared Company Intelligence research stays platform-managed.
 - [Superadmin bootstrap decision](superadmin-bootstrap.md) — retain the current one-time seeded superadmin login for SaaS onboarding.
 - [Gmail sync diagnostic privacy](gmail-sync-diagnostic-privacy.md) — keep sync diagnostics tenant-scoped, aggregate-only, and free of message or provider payloads.
 - [Add-on entitlement lifecycle](mailflow-add-on-entitlements.md) — add-ons pause when paid-primary access ends; unused allowances resume on a later paid term.

@@ -18335,7 +18335,7 @@ export const deleteTenantAIProviderSettings = async ( options?: Parameters<typeo
 
 export const getDeleteTenantAIProviderSettingsMutationKey = () => ['deleteTenantAIProviderSettings'] as const;
 
-export const getDeleteTenantAIProviderSettingsMutationOptions = <TError = ErrorType<ApiError>,
+export const getDeleteTenantAIProviderSettingsMutationOptions = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, TError,void, TContext> => {
 
@@ -18364,13 +18364,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteTenantAIProviderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>>
 
-    export type DeleteTenantAIProviderSettingsMutationError = ErrorType<ApiError>
+    export type DeleteTenantAIProviderSettingsMutationError = ErrorType<unknown>
 
 
     /**
  * @summary Remove the tenant's encrypted provider key and model
  */
-export const useDeleteTenantAIProviderSettings = <TError = ErrorType<ApiError>,
+export const useDeleteTenantAIProviderSettings = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>,

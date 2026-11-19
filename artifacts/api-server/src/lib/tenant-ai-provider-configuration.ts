@@ -27,6 +27,14 @@ export async function getTenantAIProviderConfigurationStatus(userId: string) {
     getTenantAIProviderConfiguration(userId),
   ]);
   const eligible = access?.byokAiEnabled === true;
+  let apiKeyUsable = false;
+  if (row && isAIProviderId(row.provider)) {
+    try {
+      apiKeyUsable = Boolean(decryptSecret(row.apiKeyEncrypted));
+    } catch {
+      apiKeyUsable = false;
+    }
+  }
   return {
     eligible,
     packageName: access?.packageName ?? null,
@@ -37,6 +45,7 @@ export async function getTenantAIProviderConfigurationStatus(userId: string) {
         : null,
     selectedModel: row?.selectedModel ?? null,
     apiKeyConfigured: Boolean(row?.apiKeyEncrypted),
+    apiKeyUsable,
     updatedAt: row?.updatedAt.toISOString() ?? null,
   };
 }
@@ -67,12 +76,13 @@ export async function saveTenantAIProviderConfiguration(input: {
   selectedModel: string;
 }): Promise<void> {
   const now = new Date();
+  const apiKeyEncrypted = encryptSecret(input.apiKey);
   await db
     .insert(tenantAIProviderConfigurationsTable)
     .values({
       userId: input.userId,
       provider: input.provider,
-      apiKeyEncrypted: encryptSecret(input.apiKey),
+      apiKeyEncrypted,
       selectedModel: input.selectedModel,
       lastTestedAt: now,
       updatedAt: now,
@@ -81,7 +91,7 @@ export async function saveTenantAIProviderConfiguration(input: {
       target: tenantAIProviderConfigurationsTable.userId,
       set: {
         provider: input.provider,
-        apiKeyEncrypted: encryptSecret(input.apiKey),
+        apiKeyEncrypted,
         selectedModel: input.selectedModel,
         lastTestedAt: now,
         updatedAt: now,

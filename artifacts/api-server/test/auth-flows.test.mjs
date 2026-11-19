@@ -524,6 +524,13 @@ memory.public.none(`
     UNIQUE (id, user_id),
     FOREIGN KEY (company_id, user_id) REFERENCES companies(id, user_id) ON DELETE RESTRICT
   );
+  CREATE TABLE contact_notes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    contact_id uuid NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    body text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
   CREATE TABLE contact_intent_analyses (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2829,6 +2836,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
         prospectManagementEnabled: true,
         reportsEnabled: true,
         personalReportLimit: 12,
+        byokAiEnabled: true,
         preferred: true,
         active: true,
       },
@@ -2839,6 +2847,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(created.body.prospectManagementEnabled, true);
     assert.equal(created.body.reportsEnabled, true);
     assert.equal(created.body.personalReportLimit, 12);
+    assert.equal(created.body.byokAiEnabled, true);
     assert.equal(created.body.preferred, true);
 
     const updated = await api(`/admin/billing/packages/${created.body.id}`, {
@@ -2850,6 +2859,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
         prospectManagementEnabled: true,
         reportsEnabled: true,
         personalReportLimit: 5,
+        byokAiEnabled: false,
       },
     });
     assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
@@ -2858,6 +2868,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(updated.body.prospectManagementEnabled, true);
     assert.equal(updated.body.reportsEnabled, true);
     assert.equal(updated.body.personalReportLimit, 5);
+    assert.equal(updated.body.byokAiEnabled, false);
     assert.equal(updated.body.preferred, true);
     const [saved] = await db
       .select()
@@ -2868,6 +2879,7 @@ describe("tenant contact management and package quotas", { concurrency: false },
     assert.equal(saved.prospectManagementEnabled, true);
     assert.equal(saved.reportsEnabled, true);
     assert.equal(saved.personalReportLimit, 5);
+    assert.equal(saved.byokAiEnabled, false);
 
     const invalidFreeFeature = await api("/admin/billing/packages", {
       method: "POST",
@@ -3652,6 +3664,7 @@ describe("paid primary plan changes", { concurrency: false }, () => {
         prospectManagementEnabled: false,
         reportsEnabled: false,
         personalReportLimit: 0,
+        byokAiEnabled: false,
         emailAccountLimit: 2,
         researchAllowance: 10,
         aiEmailAssistAllowance: 5,
@@ -9920,6 +9933,323 @@ describe("superadmin AI provider setup", { concurrency: false }, () => {
   });
 });
 
+describe("tenant AI provider setup", { concurrency: false }, () => {
+  it("enforces package access, encrypts keys per tenant, and allows safe removal after downgrade", async () => {
+    const admin = await loggedInUser({
+      username: "tenant-ai-provider-admin",
+      role: "SUPERADMIN",
+    });
+    const owner = await loggedInUser({ username: "tenant-ai-provider-owner" });
+    const otherOwner = await loggedInUser({ username: "tenant-ai-provider-other" });
+    const enabledPackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "Tenant BYOK enabled",
+        description: "Test package with tenant-owned AI",
+        amountMinor: 2500,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        byokAiEnabled: true,
+        active: true,
+      },
+    });
+    assert.equal(enabledPackage.response.status, 201, JSON.stringify(enabledPackage.body));
+    const disabledPackage = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "Tenant BYOK disabled",
+        description: "Test package without tenant-owned AI",
+        amountMinor: 3500,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 500,
+        emailAccountLimit: 1,
+        active: true,
+      },
+    });
+    assert.equal(disabledPackage.response.status, 201, JSON.stringify(disabledPackage.body));
+
+    const activeTerm = {
+      paymentId: null,
+      status: "active",
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    };
+    await db.insert(dbModule.userSubscriptionsTable).values([
+      { userId: owner.user.id, packageId: enabledPackage.body.id, ...activeTerm },
+      { userId: otherOwner.user.id, packageId: enabledPackage.body.id, ...activeTerm },
+    ]);
+
+    const settingsPath = "/settings/ai-provider";
+    const ownerInitial = await api(settingsPath, { cookie: owner.cookie });
+    assert.equal(ownerInitial.response.status, 200);
+    assert.equal(ownerInitial.body.eligible, true);
+    assert.equal(ownerInitial.body.configured, false);
+    assert.equal(ownerInitial.body.apiKeyUsable, false);
+    assert.equal(Object.hasOwn(ownerInitial.body, "apiKey"), false);
+
+    const blockedUser = await loggedInUser({ username: "tenant-ai-provider-blocked" });
+    const blockedRead = await api(settingsPath, { cookie: blockedUser.cookie });
+    assert.equal(blockedRead.response.status, 200);
+    assert.equal(blockedRead.body.eligible, false);
+    const apiKey = "tenant-byok-secret-value";
+    const blockedWrite = await api(settingsPath, {
+      method: "PUT",
+      cookie: blockedUser.cookie,
+      body: { provider: "openai", apiKey, selectedModel: "gpt-4.1-mini" },
+    });
+    assert.equal(blockedWrite.response.status, 403);
+    const blockedTest = await api(`${settingsPath}/test`, {
+      method: "POST",
+      cookie: blockedUser.cookie,
+      body: { provider: "openai", apiKey },
+    });
+    assert.equal(blockedTest.response.status, 403);
+
+    const providerHandler = async (url, init) => {
+      assert.equal(url.pathname, "/v1/models");
+      assert.equal(url.searchParams.has("key"), false);
+      assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${apiKey}`);
+      return new Response(
+        JSON.stringify({ data: [{ id: "gpt-4.1-mini" }], has_more: false }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    await withAIProviderFetch(providerHandler, async () => {
+      const tested = await api(`${settingsPath}/test`, {
+        method: "POST",
+        cookie: owner.cookie,
+        body: { provider: "openai", apiKey },
+      });
+      assert.equal(tested.response.status, 200, JSON.stringify(tested.body));
+      assert.equal(JSON.stringify(tested.body).includes(apiKey), false);
+      const [notSavedByTest] = await db
+        .select()
+        .from(dbModule.tenantAIProviderConfigurationsTable)
+        .where(eq(dbModule.tenantAIProviderConfigurationsTable.userId, owner.user.id));
+      assert.equal(notSavedByTest, undefined);
+
+      const invalidModel = await api(settingsPath, {
+        method: "PUT",
+        cookie: owner.cookie,
+        body: { provider: "openai", apiKey, selectedModel: "not-returned-by-provider" },
+      });
+      assert.equal(invalidModel.response.status, 400);
+
+      const saved = await api(settingsPath, {
+        method: "PUT",
+        cookie: owner.cookie,
+        body: { provider: "openai", apiKey, selectedModel: "gpt-4.1-mini" },
+      });
+      assert.equal(saved.response.status, 200, JSON.stringify(saved.body));
+      assert.equal(saved.body.eligible, true);
+      assert.equal(saved.body.configured, true);
+      assert.equal(saved.body.provider, "openai");
+      assert.equal(saved.body.apiKeyConfigured, true);
+      assert.equal(saved.body.apiKeyUsable, true);
+      assert.equal(Object.hasOwn(saved.body, "apiKey"), false);
+      assert.equal(JSON.stringify(saved.body).includes(apiKey), false);
+    });
+
+    const [stored] = await db
+      .select()
+      .from(dbModule.tenantAIProviderConfigurationsTable)
+      .where(eq(dbModule.tenantAIProviderConfigurationsTable.userId, owner.user.id));
+    assert.ok(stored);
+    assert.notEqual(stored.apiKeyEncrypted, apiKey);
+    assert.equal(securityModule.decryptSecret(stored.apiKeyEncrypted), apiKey);
+    assert.equal(
+      JSON.stringify(
+        await db.select().from(dbModule.tenantAIProviderConfigurationsTable)
+          .where(eq(dbModule.tenantAIProviderConfigurationsTable.userId, otherOwner.user.id)),
+      ).includes(apiKey),
+      false,
+    );
+
+    const otherStatus = await api(settingsPath, { cookie: otherOwner.cookie });
+    assert.equal(otherStatus.response.status, 200);
+    assert.equal(otherStatus.body.configured, false);
+    assert.equal(otherStatus.body.provider, null);
+
+    await db
+      .update(dbModule.userSubscriptionsTable)
+      .set({ packageId: disabledPackage.body.id })
+      .where(eq(dbModule.userSubscriptionsTable.userId, owner.user.id));
+    const afterDowngrade = await api(settingsPath, { cookie: owner.cookie });
+    assert.equal(afterDowngrade.response.status, 200);
+    assert.equal(afterDowngrade.body.eligible, false);
+    assert.equal(afterDowngrade.body.configured, true);
+    assert.equal(afterDowngrade.body.apiKeyUsable, true);
+    const removeAfterDowngrade = await api(settingsPath, {
+      method: "DELETE",
+      cookie: owner.cookie,
+    });
+    assert.equal(removeAfterDowngrade.response.status, 200);
+    assert.equal(removeAfterDowngrade.body.configured, false);
+    assert.equal(removeAfterDowngrade.body.apiKeyUsable, false);
+    const [removed] = await db
+      .select()
+      .from(dbModule.tenantAIProviderConfigurationsTable)
+      .where(eq(dbModule.tenantAIProviderConfigurationsTable.userId, owner.user.id));
+    assert.equal(removed, undefined);
+  });
+});
+
+describe("tenant AI provider routing", { concurrency: false }, () => {
+  it("uses BYOK for private contact-intent analysis while preserving shared credit accounting", async () => {
+    const admin = await loggedInUser({
+      username: "contact-intent-byok-admin",
+      role: "SUPERADMIN",
+    });
+    const owner = await loggedInUser({ username: "contact-intent-byok-owner" });
+    const tenantKey = "private-contact-intent-byok-key";
+    const platformKey = "platform-managed-contact-intent-key";
+    const [primary] = await db.insert(dbModule.subscriptionPackagesTable).values({
+      packageType: "primary",
+      name: "Contact intent BYOK package",
+      description: "Paid primary plan for private intent analysis",
+      amountMinor: 2500,
+      currency: "INR",
+      periodDays: 30,
+      contactLimit: 100,
+      emailAccountLimit: 1,
+      researchAllowance: 5,
+      byokAiEnabled: true,
+      active: true,
+    }).returning();
+    await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: owner.user.id,
+      packageId: primary.id,
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 86_400_000),
+    });
+    const [contact] = await db.insert(dbModule.contactsTable).values({
+      userId: owner.user.id,
+      email: "intent-byok-contact@example.test",
+      firstName: "Intent",
+      lastName: "Contact",
+    }).returning();
+    const evidence = "Can you share pricing for the service?";
+    await db.insert(dbModule.contactNotesTable).values([
+      { userId: owner.user.id, contactId: contact.id, body: evidence, createdAt: new Date(Date.now() - 3 * 86_400_000) },
+      { userId: owner.user.id, contactId: contact.id, body: "The contact requested a demonstration next month.", createdAt: new Date(Date.now() - 2 * 86_400_000) },
+      { userId: owner.user.id, contactId: contact.id, body: "The contact asked which teams can participate.", createdAt: new Date(Date.now() - 86_400_000) },
+    ]);
+    const [campaign] = await db.insert(dbModule.emailCampaignsTable).values({
+      userId: owner.user.id,
+      name: "Intent evidence campaign",
+      subject: "Planning a service review",
+      textBody: "Would you like to discuss the service?",
+      status: "completed",
+    }).returning();
+    await db.insert(dbModule.emailCampaignRecipientsTable).values([
+      {
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        status: "delivered",
+        deliveredAt: new Date(Date.now() - 2 * 86_400_000),
+      },
+      {
+        campaignId: campaign.id,
+        userId: owner.user.id,
+        contactId: contact.id,
+        email: contact.email,
+        status: "delivered",
+        deliveredAt: new Date(Date.now() - 86_400_000),
+      },
+    ]);
+    await db.insert(dbModule.tenantAIProviderConfigurationsTable).values({
+      userId: owner.user.id,
+      provider: "openai",
+      apiKeyEncrypted: securityModule.encryptSecret(tenantKey),
+      selectedModel: "gpt-4.1-mini",
+    });
+    await db.insert(dbModule.systemConfigurationTable).values({
+      key: "ai_provider",
+      value: {
+        provider: "openai",
+        apiKeyEncrypted: securityModule.encryptSecret(platformKey),
+        selectedModel: "gpt-4.1-mini",
+        lastTestedAt: new Date().toISOString(),
+      },
+      updatedBy: admin.user.id,
+    });
+
+    const status = await api(`/contacts/${contact.id}/intent`, { cookie: owner.cookie });
+    assert.equal(status.response.status, 200, JSON.stringify(status.body));
+    assert.equal(status.body.aiConfigured, true);
+    assert.equal(status.body.eligible, true);
+    assert.equal(status.body.allowance.remaining, 5);
+    const answers = Object.fromEntries(status.body.questions.map(question => [question.id, "The contact expressed interest in a product review."]));
+    const responseText = JSON.stringify({
+      intents: [{
+        intent: "Evaluate service pricing",
+        confidence: 0.82,
+        evidence: [evidence],
+        suggestedNextStep: "Offer a short service review.",
+      }],
+    });
+    let providerCalls = 0;
+    const analyzed = await withAIProviderFetch(async (url, init) => {
+      providerCalls += 1;
+      assert.equal(url.pathname, "/v1/responses");
+      assert.equal(
+        new Headers(init?.headers).get("authorization"),
+        `Bearer ${tenantKey}`,
+        "private contact analysis should use the tenant key, not the platform key",
+      );
+      return new Response(JSON.stringify({
+        output: [{ content: [{ type: "output_text", text: responseText }] }],
+        usage: { input_tokens: 30, output_tokens: 12 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }, () => api(`/contacts/${contact.id}/intent/analyze`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { answers },
+    }));
+    assert.equal(analyzed.response.status, 200, JSON.stringify(analyzed.body));
+    assert.equal(analyzed.body.reused, false);
+    assert.equal(analyzed.body.analysis.provider, "openai");
+    assert.equal(analyzed.body.analysis.model, "gpt-4.1-mini");
+    assert.deepEqual(analyzed.body.analysis.intents[0].evidence, [evidence]);
+    assert.equal(providerCalls, 1);
+
+    const cached = await withAIProviderFetch(async () => {
+      assert.fail("unchanged intent input should reuse the stored analysis");
+    }, () => api(`/contacts/${contact.id}/intent/analyze`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { answers },
+    }));
+    assert.equal(cached.response.status, 200);
+    assert.equal(cached.body.reused, true);
+    assert.equal(providerCalls, 1);
+
+    const updatedStatus = await api(`/contacts/${contact.id}/intent`, { cookie: owner.cookie });
+    assert.equal(updatedStatus.body.allowance.used, 1);
+    assert.equal(updatedStatus.body.allowance.remaining, 4);
+    const [audit] = await db
+      .select()
+      .from(dbModule.auditLogsTable)
+      .where(and(
+        eq(dbModule.auditLogsTable.actorId, owner.user.id),
+        eq(dbModule.auditLogsTable.action, "ai_usage.contact_intent.succeeded"),
+      ));
+    assert.equal(audit.metadata.providerSource, "tenant");
+    assert.equal(audit.metadata.inputTokens, 30);
+    assert.equal(audit.metadata.outputTokens, 12);
+    assert.equal(JSON.stringify(audit.metadata).includes(tenantKey), false);
+  });
+});
+
 describe("AI Email Assist credit usage", { concurrency: false }, () => {
   const validDraft = {
     subject: "A better way to plan",
@@ -9944,7 +10274,7 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
 
   async function createAccount(
     username,
-    { primaryAmountMinor = 2500, allowance = 1 } = {},
+    { primaryAmountMinor = 2500, allowance = 1, byokAiEnabled = false } = {},
   ) {
     const account = await loggedInUser({ username });
     let primaryPackage;
@@ -9958,6 +10288,7 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
         periodDays: 30,
         contactLimit: 100,
         emailAccountLimit: 1,
+        byokAiEnabled,
         active: true,
       }).returning();
       await db.insert(dbModule.userSubscriptionsTable).values({
@@ -10094,6 +10425,62 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     );
     assert.equal(exhausted.response.status, 403);
     assert.equal(exhausted.body.code, "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED");
+  });
+
+  it("uses tenant BYOK for campaign drafts and does not fall back after its key fails", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-byok-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-byok-user", {
+      allowance: 2,
+      byokAiEnabled: true,
+    });
+    await configureProvider(admin);
+    const tenantKey = "tenant-ai-assist-key-never-log";
+    await db.insert(dbModule.tenantAIProviderConfigurationsTable).values({
+      userId: account.user.id,
+      provider: "openai",
+      apiKeyEncrypted: securityModule.encryptSecret(tenantKey),
+      selectedModel: "gpt-4.1-mini",
+    });
+
+    let providerCalls = 0;
+    await withAIProviderFetch(async (url, init) => {
+      providerCalls += 1;
+      assert.equal(url.pathname, "/v1/responses");
+      assert.equal(
+        new Headers(init?.headers).get("authorization"),
+        `Bearer ${tenantKey}`,
+        "tenant BYOK must take precedence over the configured platform provider",
+      );
+      return providerCalls === 1
+        ? providerResponse(JSON.stringify(validDraft))
+        : providerResponse("", 401);
+    }, async () => {
+      const success = await draftRequest(account);
+      assert.equal(success.response.status, 200, JSON.stringify(success.body));
+      assert.deepEqual(success.body.draft, validDraft);
+
+      const providerFailure = await draftRequest(account);
+      assert.equal(providerFailure.response.status, 502);
+      assert.equal(providerFailure.body.code, "AI_DRAFT_FAILED");
+    });
+
+    assert.equal(providerCalls, 2, "a failed BYOK call must not retry with the platform key");
+    const usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.deepEqual(usages.map(usage => usage.status), ["consumed", "released"]);
+    const audits = await db
+      .select()
+      .from(dbModule.auditLogsTable)
+      .where(eq(dbModule.auditLogsTable.actorId, account.user.id));
+    const aiAudits = audits.filter(row => row.action.startsWith("ai_usage.campaign_email_assist."));
+    assert.equal(aiAudits.length, 2);
+    assert.ok(aiAudits.every(row => row.metadata.providerSource === "tenant"));
+    assert.equal(JSON.stringify(aiAudits).includes(tenantKey), false);
   });
 
   it("releases the reserved credit when generated campaign content uses Greek look-alikes for a blocked term", async () => {

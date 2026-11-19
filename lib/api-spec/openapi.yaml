@@ -5184,12 +5184,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TenantAIProviderSettings"
-        "403":
-          description: BYOK is not included in the active package
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /settings/ai-provider/test:
     post:
       operationId: testTenantAIProviderConnection
@@ -8875,8 +8869,9 @@ components:
           enum: [openai, anthropic, gemini, null]
         selectedModel: { type: ["string", "null"] }
         apiKeyConfigured: { type: boolean }
+        apiKeyUsable: { type: boolean, description: True only when the saved encrypted key can be decrypted by this deployment; never includes key material. }
         updatedAt: { type: ["string", "null"], format: date-time }
-      required: [eligible, packageName, configured, provider, selectedModel, apiKeyConfigured, updatedAt]
+      required: [eligible, packageName, configured, provider, selectedModel, apiKeyConfigured, apiKeyUsable, updatedAt]
     AIProviderSettingsInput:
       type: object
       properties:

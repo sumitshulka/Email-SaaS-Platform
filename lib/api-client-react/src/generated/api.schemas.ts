@@ -5070,6 +5070,8 @@ export interface TenantAIProviderSettings {
   /** @nullable */
   selectedModel: string | null;
   apiKeyConfigured: boolean;
+  /** True only when the saved encrypted key can be decrypted by this deployment; never includes key material. */
+  apiKeyUsable: boolean;
   /** @nullable */
   updatedAt: string | null;
 }

@@ -86,6 +86,7 @@ function serializePackage(pkg: typeof subscriptionPackagesTable.$inferSelect) {
     prospectManagementEnabled: pkg.prospectManagementEnabled,
     reportsEnabled: pkg.reportsEnabled,
     personalReportLimit: pkg.personalReportLimit,
+    byokAiEnabled: pkg.byokAiEnabled,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
