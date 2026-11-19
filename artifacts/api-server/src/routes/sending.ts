@@ -7533,7 +7533,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
       })
       .from(emailCampaignsTable)
       .where(and(eq(emailCampaignsTable.userId, userId), inCombinedPeriod))
-      .groupBy(campaignLocalDate),
+      .groupBy(sql.raw('"date"')),
     db
       .select({
         date: sql<string>`${campaignLocalDate}`,
@@ -7548,7 +7548,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
         ),
       )
       .where(and(eq(emailCampaignsTable.userId, userId), inCombinedPeriod))
-      .groupBy(campaignLocalDate),
+      .groupBy(sql.raw('"date"')),
     db
       .select({
         date: sql<string>`${contactLocalDate}`,
@@ -7561,7 +7561,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
           contactDateRange(rangeFrom, rangeTo),
         ),
       )
-      .groupBy(contactLocalDate),
+      .groupBy(sql.raw('"date"')),
     db
       .select({
         date: sql<string>`${campaignLocalDate}`,
@@ -7579,7 +7579,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
       )
       .where(and(eq(emailCampaignsTable.userId, userId), inCombinedPeriod))
       .groupBy(
-        campaignLocalDate,
+        sql.raw('"date"'),
         emailCampaignRecipientsTable.status,
         emailCampaignRecipientsTable.reportOutcome,
       ),
