@@ -600,6 +600,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/support',
     '/plans',
     '/profile',
+    '/ai-provider',
     '/report-gallery',
     '/report-builder',
     '/my-reports',
