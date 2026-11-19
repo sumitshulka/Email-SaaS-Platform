@@ -408,6 +408,156 @@ export const GetUserDashboardResponse = zod.object({
 
 
 /**
+ * @summary Get date-filtered tenant campaign and contact analytics
+ */
+export const getUserDashboardAnalyticsQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsQueryPageDefault = 1;
+
+export const getUserDashboardAnalyticsQueryPageSizeDefault = 20;
+export const getUserDashboardAnalyticsQueryPageSizeMin = 5;
+export const getUserDashboardAnalyticsQueryPageSizeMax = 50;
+
+
+
+export const GetUserDashboardAnalyticsQueryParams = zod.object({
+  "from": zod.coerce.string().regex(getUserDashboardAnalyticsQueryFromRegExp).describe('Inclusive calendar date in the account timezone'),
+  "to": zod.coerce.string().regex(getUserDashboardAnalyticsQueryToRegExp).describe('Inclusive calendar date in the account timezone'),
+  "page": zod.coerce.number().int().min(1).default(getUserDashboardAnalyticsQueryPageDefault),
+  "pageSize": zod.coerce.number().int().min(getUserDashboardAnalyticsQueryPageSizeMin).max(getUserDashboardAnalyticsQueryPageSizeMax).default(getUserDashboardAnalyticsQueryPageSizeDefault)
+})
+
+export const getUserDashboardAnalyticsResponsePeriodFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsResponsePeriodToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsResponsePeriodPreviousFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsResponsePeriodPreviousToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsResponseTotalsCampaignsCreatedMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsCampaignRecipientsMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsSmtpAcceptedMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsBouncedMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsSuppressedMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsQueuedOrSendingMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsUnknownMin = 0;
+
+export const getUserDashboardAnalyticsResponseTotalsContactsAddedMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsCampaignsCreatedMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsCampaignRecipientsMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsSmtpAcceptedMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsBouncedMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsSuppressedMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsQueuedOrSendingMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsUnknownMin = 0;
+
+export const getUserDashboardAnalyticsResponsePreviousTotalsContactsAddedMin = 0;
+
+export const getUserDashboardAnalyticsResponseTrendItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getUserDashboardAnalyticsResponseTrendItemCampaignsCreatedMin = 0;
+
+export const getUserDashboardAnalyticsResponseTrendItemRecipientsMin = 0;
+
+export const getUserDashboardAnalyticsResponseTrendItemContactsAddedMin = 0;
+
+export const getUserDashboardAnalyticsResponseRecipientOutcomesItemCountMin = 0;
+
+export const getUserDashboardAnalyticsResponseCampaignsItemRecipientsMin = 0;
+
+export const getUserDashboardAnalyticsResponseCampaignsItemSmtpAcceptedMin = 0;
+
+export const getUserDashboardAnalyticsResponseCampaignsItemBouncedMin = 0;
+
+export const getUserDashboardAnalyticsResponseCampaignsItemSuppressedMin = 0;
+
+export const getUserDashboardAnalyticsResponseCampaignsItemQueuedOrSendingMin = 0;
+
+export const getUserDashboardAnalyticsResponseCampaignsItemUnknownMin = 0;
+
+
+export const getUserDashboardAnalyticsResponsePaginationPageSizeMin = 5;
+export const getUserDashboardAnalyticsResponsePaginationPageSizeMax = 50;
+
+export const getUserDashboardAnalyticsResponsePaginationTotalCampaignsMin = 0;
+
+export const getUserDashboardAnalyticsResponsePaginationTotalPagesMin = 0;
+
+
+
+export const GetUserDashboardAnalyticsResponse = zod.object({
+  "period": zod.object({
+  "from": zod.string().regex(getUserDashboardAnalyticsResponsePeriodFromRegExp),
+  "to": zod.string().regex(getUserDashboardAnalyticsResponsePeriodToRegExp),
+  "previousFrom": zod.string().regex(getUserDashboardAnalyticsResponsePeriodPreviousFromRegExp),
+  "previousTo": zod.string().regex(getUserDashboardAnalyticsResponsePeriodPreviousToRegExp),
+  "timezone": zod.string()
+}),
+  "totals": zod.object({
+  "campaignsCreated": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsCampaignsCreatedMin),
+  "campaignRecipients": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsCampaignRecipientsMin),
+  "smtpAccepted": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsSmtpAcceptedMin),
+  "bounced": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsBouncedMin),
+  "suppressed": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsSuppressedMin),
+  "queuedOrSending": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsQueuedOrSendingMin),
+  "unknown": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsUnknownMin),
+  "contactsAdded": zod.number().int().min(getUserDashboardAnalyticsResponseTotalsContactsAddedMin)
+}),
+  "previousTotals": zod.object({
+  "campaignsCreated": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsCampaignsCreatedMin),
+  "campaignRecipients": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsCampaignRecipientsMin),
+  "smtpAccepted": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsSmtpAcceptedMin),
+  "bounced": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsBouncedMin),
+  "suppressed": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsSuppressedMin),
+  "queuedOrSending": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsQueuedOrSendingMin),
+  "unknown": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsUnknownMin),
+  "contactsAdded": zod.number().int().min(getUserDashboardAnalyticsResponsePreviousTotalsContactsAddedMin)
+}),
+  "trend": zod.array(zod.object({
+  "date": zod.string().regex(getUserDashboardAnalyticsResponseTrendItemDateRegExp),
+  "campaignsCreated": zod.number().int().min(getUserDashboardAnalyticsResponseTrendItemCampaignsCreatedMin),
+  "recipients": zod.number().int().min(getUserDashboardAnalyticsResponseTrendItemRecipientsMin),
+  "contactsAdded": zod.number().int().min(getUserDashboardAnalyticsResponseTrendItemContactsAddedMin)
+})),
+  "recipientOutcomes": zod.array(zod.object({
+  "key": zod.enum(['smtpAccepted', 'bounced', 'suppressed', 'queuedOrSending', 'unknown']),
+  "label": zod.string(),
+  "count": zod.number().int().min(getUserDashboardAnalyticsResponseRecipientOutcomesItemCountMin)
+})),
+  "campaigns": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "createdAt": zod.coerce.date(),
+  "queuedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "recipients": zod.number().int().min(getUserDashboardAnalyticsResponseCampaignsItemRecipientsMin),
+  "smtpAccepted": zod.number().int().min(getUserDashboardAnalyticsResponseCampaignsItemSmtpAcceptedMin),
+  "bounced": zod.number().int().min(getUserDashboardAnalyticsResponseCampaignsItemBouncedMin),
+  "suppressed": zod.number().int().min(getUserDashboardAnalyticsResponseCampaignsItemSuppressedMin),
+  "queuedOrSending": zod.number().int().min(getUserDashboardAnalyticsResponseCampaignsItemQueuedOrSendingMin),
+  "unknown": zod.number().int().min(getUserDashboardAnalyticsResponseCampaignsItemUnknownMin)
+})),
+  "pagination": zod.object({
+  "page": zod.number().int().min(1),
+  "pageSize": zod.number().int().min(getUserDashboardAnalyticsResponsePaginationPageSizeMin).max(getUserDashboardAnalyticsResponsePaginationPageSizeMax),
+  "totalCampaigns": zod.number().int().min(getUserDashboardAnalyticsResponsePaginationTotalCampaignsMin),
+  "totalPages": zod.number().int().min(getUserDashboardAnalyticsResponsePaginationTotalPagesMin)
+}),
+  "generatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List active unread notifications and read history for the authenticated account
  */
 export const GetUserNotificationsResponse = zod.object({

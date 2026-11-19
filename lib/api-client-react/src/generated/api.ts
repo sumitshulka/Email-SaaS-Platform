@@ -165,6 +165,7 @@ import type {
   GetContactIntentQuestions200,
   GetContactIntentReadiness200,
   GetContactReportParams,
+  GetUserDashboardAnalyticsParams,
   GlobalCompany,
   GlobalCompanyAdminCollection,
   GlobalCompanyBulkImportInput,
@@ -296,6 +297,7 @@ import type {
   UpdateSavedReportInput,
   UploadCampaignAttachmentParams,
   UserDashboard,
+  UserDashboardAnalytics,
   UserNotificationReadResponse,
   UserNotificationsResponse,
   UserStatusInput,
@@ -1713,6 +1715,90 @@ export function useGetUserDashboard<TData = Awaited<ReturnType<typeof getUserDas
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetUserDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUserDashboardAnalyticsUrl = (params: GetUserDashboardAnalyticsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/analytics?${stringifiedParams}` : `/api/dashboard/analytics`
+}
+
+/**
+ * @summary Get date-filtered tenant campaign and contact analytics
+ */
+export const getUserDashboardAnalytics = async (params: GetUserDashboardAnalyticsParams, options?: Parameters<typeof customFetch>[1]): Promise<UserDashboardAnalytics> => {
+
+  return customFetch<UserDashboardAnalytics>(getGetUserDashboardAnalyticsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUserDashboardAnalyticsQueryKey = (params?: GetUserDashboardAnalyticsParams,) => {
+    return [
+    `/api/dashboard/analytics`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetUserDashboardAnalyticsQueryOptions = <TData = Awaited<ReturnType<typeof getUserDashboardAnalytics>>, TError = ErrorType<ApiError>>(params: GetUserDashboardAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDashboardAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUserDashboardAnalyticsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserDashboardAnalytics>>> = ({ signal }) => getUserDashboardAnalytics(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUserDashboardAnalytics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUserDashboardAnalyticsQueryResult = NonNullable<Awaited<ReturnType<typeof getUserDashboardAnalytics>>>
+export type GetUserDashboardAnalyticsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get date-filtered tenant campaign and contact analytics
+ */
+
+export function useGetUserDashboardAnalytics<TData = Awaited<ReturnType<typeof getUserDashboardAnalytics>>, TError = ErrorType<ApiError>>(
+ params: GetUserDashboardAnalyticsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUserDashboardAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUserDashboardAnalyticsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

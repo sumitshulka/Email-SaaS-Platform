@@ -4,6 +4,7 @@ import { contactTagCondition, readContactTags } from "../lib/contact-tags";
 import { campaignEmailSuppressionsTable, openCampaignAudienceTable } from "@workspace/db";
 import { normalizeOpenRecipients, openCampaignAllowance, openCampaignPlaceholderError, openFollowUpAudienceError, replaceOpenAudience } from "../lib/open-campaigns";
 import { campaignFallbackError, fallbackPolicyText } from "../lib/campaign-personalization";
+import { accountLocalDateStartUtc, addCalendarDateDays } from "../lib/account-local-date";
 import {
   CampaignDateRangeError,
   resolveCampaignDateRange,
@@ -100,6 +101,8 @@ import {
   DeleteContactResponse,
   GetTenantSendingSettingsResponse,
   GetUserDashboardResponse,
+  GetUserDashboardAnalyticsQueryParams,
+  GetUserDashboardAnalyticsResponse,
   ImportContactsBody,
   ImportContactsResponse,
   ListCampaignsResponse,
@@ -7432,6 +7435,376 @@ router.post(
     res.status(202).json(SendCampaignResponse.parse(campaign));
   },
 );
+
+router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<void> => {
+  const parsed = GetUserDashboardAnalyticsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Choose a valid date range and campaign page.",
+      code: "INVALID_DASHBOARD_ANALYTICS_QUERY",
+    });
+    return;
+  }
+
+  const { from, to, page, pageSize } = parsed.data;
+  const toUtcDate = (value: string): Date | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
+      ? null
+      : date;
+  };
+  const fromDate = toUtcDate(from);
+  const toDate = toUtcDate(to);
+  if (!fromDate || !toDate) {
+    res.status(400).json({
+      error: "Start and end dates must be valid calendar dates.",
+      code: "INVALID_DASHBOARD_ANALYTICS_DATE",
+    });
+    return;
+  }
+  if (toDate < fromDate) {
+    res.status(400).json({
+      error: "The end date must be on or after the start date.",
+      code: "INVALID_DASHBOARD_ANALYTICS_ORDER",
+    });
+    return;
+  }
+
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const dayCount = Math.floor((toDate.getTime() - fromDate.getTime()) / millisecondsPerDay) + 1;
+  if (dayCount > 180) {
+    res.status(400).json({
+      error: "Dashboard date ranges cannot exceed 180 calendar days.",
+      code: "DASHBOARD_ANALYTICS_RANGE_TOO_LARGE",
+    });
+    return;
+  }
+
+  const dateKey = (date: Date) => date.toISOString().slice(0, 10);
+  const normalizeDateKey = (value: string | Date) =>
+    value instanceof Date ? dateKey(value) : String(value).slice(0, 10);
+  const addDays = (date: Date, days: number) =>
+    new Date(date.getTime() + days * millisecondsPerDay);
+  const previousFromDate = addDays(fromDate, -dayCount);
+  const previousToDate = addDays(fromDate, -1);
+  const previousFrom = dateKey(previousFromDate);
+  const previousTo = dateKey(previousToDate);
+  const rangeFrom = previousFrom;
+  const rangeTo = to;
+  const timeZone = req.authUser!.timezone;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+  } catch {
+    res.status(400).json({
+      error: "The timezone saved on this account is invalid. Update the profile timezone and retry.",
+      code: "DASHBOARD_TIMEZONE_INVALID",
+    });
+    return;
+  }
+
+  const userId = req.authUser!.id;
+  const campaignLocalDate = sql<Date>`(${emailCampaignsTable.createdAt} AT TIME ZONE ${timeZone})::date`;
+  const contactLocalDate = sql<Date>`(${contactsTable.createdAt} AT TIME ZONE ${timeZone})::date`;
+  const campaignDateRange = (start: string, end: string) =>
+    and(
+      gte(emailCampaignsTable.createdAt, accountLocalDateStartUtc(start, timeZone)),
+      lt(emailCampaignsTable.createdAt, accountLocalDateStartUtc(addCalendarDateDays(end, 1), timeZone)),
+    );
+  const contactDateRange = (start: string, end: string) =>
+    and(
+      gte(contactsTable.createdAt, accountLocalDateStartUtc(start, timeZone)),
+      lt(contactsTable.createdAt, accountLocalDateStartUtc(addCalendarDateDays(end, 1), timeZone)),
+    );
+  const inCombinedPeriod = campaignDateRange(rangeFrom, rangeTo);
+
+  const [
+    campaignCountRows,
+    campaignRecipientRowsByDay,
+    contactRowsByDay,
+    recipientSignalRowsByDay,
+    campaignTotalRow,
+    campaignPage,
+  ] = await Promise.all([
+    db
+      .select({
+        date: sql<string>`${campaignLocalDate}`,
+        value: count(),
+      })
+      .from(emailCampaignsTable)
+      .where(and(eq(emailCampaignsTable.userId, userId), inCombinedPeriod))
+      .groupBy(campaignLocalDate),
+    db
+      .select({
+        date: sql<string>`${campaignLocalDate}`,
+        value: count(emailCampaignRecipientsTable.id),
+      })
+      .from(emailCampaignsTable)
+      .leftJoin(
+        emailCampaignRecipientsTable,
+        and(
+          eq(emailCampaignRecipientsTable.campaignId, emailCampaignsTable.id),
+          eq(emailCampaignRecipientsTable.userId, userId),
+        ),
+      )
+      .where(and(eq(emailCampaignsTable.userId, userId), inCombinedPeriod))
+      .groupBy(campaignLocalDate),
+    db
+      .select({
+        date: sql<string>`${contactLocalDate}`,
+        value: count(),
+      })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.userId, userId),
+          contactDateRange(rangeFrom, rangeTo),
+        ),
+      )
+      .groupBy(contactLocalDate),
+    db
+      .select({
+        date: sql<string>`${campaignLocalDate}`,
+        status: emailCampaignRecipientsTable.status,
+        reportOutcome: emailCampaignRecipientsTable.reportOutcome,
+        value: count(),
+      })
+      .from(emailCampaignsTable)
+      .innerJoin(
+        emailCampaignRecipientsTable,
+        and(
+          eq(emailCampaignRecipientsTable.campaignId, emailCampaignsTable.id),
+          eq(emailCampaignRecipientsTable.userId, userId),
+        ),
+      )
+      .where(and(eq(emailCampaignsTable.userId, userId), inCombinedPeriod))
+      .groupBy(
+        campaignLocalDate,
+        emailCampaignRecipientsTable.status,
+        emailCampaignRecipientsTable.reportOutcome,
+      ),
+    db
+      .select({ value: count() })
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          campaignDateRange(from, to),
+        ),
+      )
+      .then((rows) => rows[0]),
+    db
+      .select({
+        id: emailCampaignsTable.id,
+        name: emailCampaignsTable.name,
+        status: emailCampaignsTable.status,
+        createdAt: emailCampaignsTable.createdAt,
+        queuedAt: emailCampaignsTable.queuedAt,
+        completedAt: emailCampaignsTable.completedAt,
+      })
+      .from(emailCampaignsTable)
+      .where(
+        and(
+          eq(emailCampaignsTable.userId, userId),
+          campaignDateRange(from, to),
+        ),
+      )
+      .orderBy(desc(emailCampaignsTable.createdAt), desc(emailCampaignsTable.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
+  ]);
+
+  const currentCampaignTotal = Number(campaignTotalRow?.value ?? 0);
+  const totalPages = Math.ceil(currentCampaignTotal / pageSize);
+  const effectivePage = Math.min(page, Math.max(1, totalPages));
+  const campaignsOnPage =
+    effectivePage === page
+      ? campaignPage
+      : await db
+          .select({
+            id: emailCampaignsTable.id,
+            name: emailCampaignsTable.name,
+            status: emailCampaignsTable.status,
+            createdAt: emailCampaignsTable.createdAt,
+            queuedAt: emailCampaignsTable.queuedAt,
+            completedAt: emailCampaignsTable.completedAt,
+          })
+          .from(emailCampaignsTable)
+          .where(
+            and(
+              eq(emailCampaignsTable.userId, userId),
+              campaignDateRange(from, to),
+            ),
+          )
+          .orderBy(desc(emailCampaignsTable.createdAt), desc(emailCampaignsTable.id))
+          .limit(pageSize)
+          .offset((effectivePage - 1) * pageSize);
+
+  type DashboardTotals = {
+    campaignsCreated: number;
+    campaignRecipients: number;
+    smtpAccepted: number;
+    bounced: number;
+    suppressed: number;
+    queuedOrSending: number;
+    unknown: number;
+    contactsAdded: number;
+  };
+  const emptyTotals = (): DashboardTotals => ({
+    campaignsCreated: 0,
+    campaignRecipients: 0,
+    smtpAccepted: 0,
+    bounced: 0,
+    suppressed: 0,
+    queuedOrSending: 0,
+    unknown: 0,
+    contactsAdded: 0,
+  });
+  const currentTotals = emptyTotals();
+  const previousTotals = emptyTotals();
+  const combinedStart = new Map<string, "current" | "previous">();
+  const trend = new Map<
+    string,
+    { date: string; campaignsCreated: number; recipients: number; contactsAdded: number }
+  >();
+  for (let offset = 0; offset < dayCount; offset += 1) {
+    const key = dateKey(addDays(fromDate, offset));
+    combinedStart.set(key, "current");
+    trend.set(key, { date: key, campaignsCreated: 0, recipients: 0, contactsAdded: 0 });
+  }
+  for (let offset = 0; offset < dayCount; offset += 1) {
+    combinedStart.set(dateKey(addDays(previousFromDate, offset)), "previous");
+  }
+
+  for (const row of campaignCountRows) {
+    const rowDate = normalizeDateKey(row.date);
+    const target = combinedStart.get(rowDate) === "current" ? currentTotals : previousTotals;
+    target.campaignsCreated += Number(row.value);
+    const point = trend.get(rowDate);
+    if (point) point.campaignsCreated += Number(row.value);
+  }
+  for (const row of campaignRecipientRowsByDay) {
+    const rowDate = normalizeDateKey(row.date);
+    const target = combinedStart.get(rowDate) === "current" ? currentTotals : previousTotals;
+    target.campaignRecipients += Number(row.value);
+    const point = trend.get(rowDate);
+    if (point) point.recipients += Number(row.value);
+  }
+  for (const row of contactRowsByDay) {
+    const rowDate = normalizeDateKey(row.date);
+    const target = combinedStart.get(rowDate) === "current" ? currentTotals : previousTotals;
+    target.contactsAdded += Number(row.value);
+    const point = trend.get(rowDate);
+    if (point) point.contactsAdded += Number(row.value);
+  }
+  for (const row of recipientSignalRowsByDay) {
+    const rowDate = normalizeDateKey(row.date);
+    const target = combinedStart.get(rowDate) === "current" ? currentTotals : previousTotals;
+    const value = Number(row.value);
+    if (row.status === "delivered") target.smtpAccepted += value;
+    if (
+      row.status === "bounced" ||
+      row.reportOutcome === "bounced" ||
+      row.reportOutcome === "failed"
+    ) {
+      target.bounced += value;
+    }
+    if (row.status === "suppressed") target.suppressed += value;
+    if (row.status === "queued" || row.status === "sending") {
+      target.queuedOrSending += value;
+    }
+    if (row.status === "unknown") target.unknown += value;
+  }
+
+  const outcomeSignals = [
+    { key: "smtpAccepted" as const, label: "SMTP accepted", count: currentTotals.smtpAccepted },
+    { key: "bounced" as const, label: "Bounced or failed", count: currentTotals.bounced },
+    { key: "suppressed" as const, label: "Suppressed", count: currentTotals.suppressed },
+    { key: "queuedOrSending" as const, label: "Queued or sending", count: currentTotals.queuedOrSending },
+    { key: "unknown" as const, label: "Unknown outcome", count: currentTotals.unknown },
+  ];
+
+  const pageCampaignRecipientRows = campaignsOnPage.length
+    ? await db
+        .select({
+          campaignId: emailCampaignRecipientsTable.campaignId,
+          status: emailCampaignRecipientsTable.status,
+          reportOutcome: emailCampaignRecipientsTable.reportOutcome,
+          value: count(),
+        })
+        .from(emailCampaignRecipientsTable)
+        .where(
+          and(
+            eq(emailCampaignRecipientsTable.userId, userId),
+            inArray(
+              emailCampaignRecipientsTable.campaignId,
+              campaignsOnPage.map((campaign) => campaign.id),
+            ),
+          ),
+        )
+        .groupBy(
+          emailCampaignRecipientsTable.campaignId,
+          emailCampaignRecipientsTable.status,
+          emailCampaignRecipientsTable.reportOutcome,
+        )
+    : [];
+  const campaignCounts = new Map<string, DashboardTotals>();
+  for (const row of pageCampaignRecipientRows) {
+    const target = campaignCounts.get(row.campaignId) ?? {
+      campaignsCreated: 0,
+      campaignRecipients: 0,
+      smtpAccepted: 0,
+      bounced: 0,
+      suppressed: 0,
+      queuedOrSending: 0,
+      unknown: 0,
+      contactsAdded: 0,
+    };
+    const value = Number(row.value);
+    target.campaignRecipients += value;
+    if (row.status === "delivered") target.smtpAccepted += value;
+    if (
+      row.status === "bounced" ||
+      row.reportOutcome === "bounced" ||
+      row.reportOutcome === "failed"
+    ) {
+      target.bounced += value;
+    }
+    if (row.status === "suppressed") target.suppressed += value;
+    if (row.status === "queued" || row.status === "sending") {
+      target.queuedOrSending += value;
+    }
+    if (row.status === "unknown") target.unknown += value;
+    campaignCounts.set(row.campaignId, target);
+  }
+
+  res.json(GetUserDashboardAnalyticsResponse.parse({
+    period: { from, to, previousFrom, previousTo, timezone: timeZone },
+    totals: currentTotals,
+    previousTotals,
+    trend: Array.from(trend.values()),
+    recipientOutcomes: outcomeSignals,
+    campaigns: campaignsOnPage.map((campaign) => {
+      const countsForCampaign = campaignCounts.get(campaign.id) ?? emptyTotals();
+      return {
+        ...campaign,
+        recipients: countsForCampaign.campaignRecipients,
+        smtpAccepted: countsForCampaign.smtpAccepted,
+        bounced: countsForCampaign.bounced,
+        suppressed: countsForCampaign.suppressed,
+        queuedOrSending: countsForCampaign.queuedOrSending,
+        unknown: countsForCampaign.unknown,
+      };
+    }),
+    pagination: {
+      page: effectivePage,
+      pageSize,
+      totalCampaigns: currentCampaignTotal,
+      totalPages,
+    },
+    generatedAt: new Date().toISOString(),
+  }));
+});
 
 router.get("/dashboard", requireUserRole, async (req, res): Promise<void> => {
   const userId = req.authUser!.id;

@@ -53,6 +53,7 @@ import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
 import { ProspectAnalyticsOverview } from '@/components/prospect-analytics-overview';
+import UserDashboardAnalytics from '@/components/user-dashboard-analytics';
 import { FollowUpsTodayPanel, ProspectFollowUpsPage } from '@/pages/prospect-follow-ups';
 import { clearPackageCheckoutCredentials, getPackageCheckoutTerms, getVerifiedPackageCheckout } from '@/lib/package-checkout';
 import { ContactDetailPage } from '@/pages/contact-detail';
@@ -855,7 +856,7 @@ function Metric({ label, value, sub, icon: Icon, accent = 'blue' }: { label: str
   return <Panel className="p-5"><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#6d7886]">{label}</span><span className={cn('grid h-8 w-8 place-items-center rounded-md', accent === 'blue' ? 'bg-[#edf4fc] text-[#245b9b]' : 'bg-[#fff2e6] text-[#bc6829]')}><Icon className="h-4 w-4"/></span></div><div className="mt-3 display text-[27px] font-bold leading-none tracking-[-.04em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div>{sub && <div className="mt-2 text-[11px] text-[#7e8894]">{sub}</div>}</Panel>;
 }
 function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser; maintenancePaused?: boolean }) {
-  const query = useGetUserDashboard({ query: { queryKey: getGetUserDashboardQueryKey() } });
+  const query = useGetUserDashboard({ query: { queryKey: getGetUserDashboardQueryKey(), staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false } });
   const packageQuery = useGetCurrentSubscription({
     query: {
       queryKey: getGetCurrentSubscriptionQueryKey(),
@@ -878,17 +879,11 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
   const data = query.data;
   if (query.isLoading) return <LoadingPanel label="Loading workspace sending summary"/>;
   if (query.isError || !data) return <QueryProblem retry={() => void query.refetch()}/>;
-  const stages = normalizeSegments(data.lifecycleStages);
-  const leads = normalizeSegments(data.leadStatuses);
-  const money = (minor: number, currency: string) => {
-    const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency });
-    const minorUnitDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
-    return formatter.format(minor / 10 ** minorUnitDigits);
-  };
   const shortDate = (date: string | null) => date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(date)) : '—';
   const markRead = (notificationId: string) => markNotificationRead.mutate({ notificationId }, {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: getGetUserNotificationsQueryKey() }); },
   });
+  const activeCampaigns = data.campaigns.filter(campaign => campaign.status === 'queued' || campaign.status === 'sending');
   return <div className="fade-in space-y-6">
     {notificationQuery.isError ? <section aria-label="Platform notice error" data-testid="dashboard-notification-error" className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[#efd8c7] bg-[#fff8f2] px-5 py-4 text-[#75421f]">
       <div className="flex items-start gap-3"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#bd692d]"/><div><h2 className="text-[12px] font-semibold">Platform notices couldn’t be loaded</h2><p className="mt-1 text-[11px] text-[#93694c]">Your dashboard is available. Retry to check for account updates.</p></div></div>
@@ -907,65 +902,36 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
       trailing={<div className="flex items-center gap-2 rounded-full border border-[#dce5e2] bg-[#f2f7f4] px-3 py-1.5 text-[11px] font-semibold text-[#426c5d]"><span className="h-1.5 w-1.5 rounded-full bg-[#538a70]"/><span className="capitalize">{data.subscriptionStatus}</span> plan</div>}/>
 
     {prospectAccess && <FollowUpsTodayPanel/>}
-    <section aria-label="Workspace summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard label="Contacts" value={data.contacts.toLocaleString()} note="All contacts in this workspace" icon={Users} tint="blue"/>
-      <SummaryCard label="Companies" value={data.companies.toLocaleString()} note="Workspace company records" icon={Building2} tint="sage"/>
-      <SummaryCard label="Active lists" value={data.activeLists.toLocaleString()} note="Available for campaign audiences" icon={Activity} tint="apricot"/>
-      <Panel className="overflow-hidden p-5" style={{ backgroundColor: '#fff2d6', borderColor: '#e8d8ad' }}>
-        <div className="flex items-start justify-between"><div><div className="text-[12px] font-medium text-[#62583f]">Captured payments</div><div className="mt-1 text-[10px] uppercase tracking-[.08em] text-[#827657]">Spend by currency</div></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#ead9a7] text-[#795f2c]"><CreditCard className="h-4 w-4"/></span></div>
-        {data.amountSpentByCurrency.length ? <div className="mt-3 space-y-1.5">{data.amountSpentByCurrency.map(item => <div key={item.currency} className="flex items-baseline justify-between gap-2" data-testid={`spend-${item.currency.toLowerCase()}`}><span className="mono text-[10px] text-[#796f56]">{item.currency}</span><span className="text-[19px] font-bold tracking-[-.04em] text-[#283747]">{money(item.amountMinor, item.currency)}</span></div>)}</div> : <div className="mt-4 text-[14px] font-semibold text-[#687484]">No captured spend</div>}
-        <p className="mt-2 text-[10px] leading-4 text-[#796f56]">Captured payments only; gifts, non-captured, and refunded rows are excluded.</p>
-      </Panel>
-    </section>
-
-    <section className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]">
-      <Panel className="p-5 sm:p-6">
-        <ChartHeading eyebrow="CONTACT PROFILE" title="Lifecycle stages" detail="Workspace-wide contact count by lifecycle stage."/>
-        {data.contacts > 0 && stages.length ? <div className="mt-4 h-[250px]" data-testid="chart-lifecycle-stages"><ResponsiveContainer width="100%" height="100%" debounce={0}><BarChart data={stages} layout="vertical" margin={{ top: 4, right: 14, left: 4, bottom: 4 }}>
-          <CartesianGrid horizontal={false} stroke="#edf0ed"/><XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#79838d' }} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="name" width={104} tick={{ fontSize: 11, fill: '#566474' }} axisLine={false} tickLine={false}/><Tooltip isAnimationActive={false} cursor={{ fill: '#f4f6f3' }} contentStyle={chartTooltip} formatter={(value: number) => [value.toLocaleString(), 'Contacts']}/><Bar dataKey="count" name="Contacts" fill="#4d897e" radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={25}/>
-        </BarChart></ResponsiveContainer></div> : <ChartEmpty title="No lifecycle data yet" body="Contact stage counts will appear once this workspace has categorized contacts."/>}
-      </Panel>
-      <Panel className="p-5 sm:p-6">
-        <ChartHeading eyebrow="CONTACT PROFILE" title="Lead status" detail="Workspace-wide contact count by lead status."/>
-        {data.contacts > 0 && leads.length ? <div className="mt-4 h-[250px]" data-testid="chart-lead-statuses"><ResponsiveContainer width="100%" height="100%" debounce={0}><BarChart data={leads} layout="vertical" margin={{ top: 4, right: 14, left: 4, bottom: 4 }}>
-          <CartesianGrid horizontal={false} stroke="#edf0ed"/><XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#79838d' }} axisLine={false} tickLine={false}/><YAxis type="category" dataKey="name" width={104} tick={{ fontSize: 11, fill: '#566474' }} axisLine={false} tickLine={false}/><Tooltip isAnimationActive={false} cursor={{ fill: '#f4f6f3' }} contentStyle={chartTooltip} formatter={(value: number) => [value.toLocaleString(), 'Contacts']}/><Bar dataKey="count" name="Contacts" fill="#d88a52" radius={[0, 5, 5, 0]} isAnimationActive={false} maxBarSize={25}/>
-        </BarChart></ResponsiveContainer></div> : <ChartEmpty title="No lead status data yet" body="Lead status counts will appear as contacts are categorized."/>}
-      </Panel>
-    </section>
+    <UserDashboardAnalytics
+      currentSnapshot={data}
+      timeZone={user.timezone}
+      onRefresh={() => { void query.refetch(); }}
+    />
 
     {prospectAccess && <ProspectAnalyticsOverview/>}
 
-    <Panel className="overflow-hidden">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8ece8] px-5 py-5 sm:px-6">
-        <ChartHeading eyebrow="CAMPAIGN ACTIVITY" title="Campaigns" detail="Sending and outcome figures are scoped to each campaign."/>
-        <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]"><span className="rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] tabular-nums" data-testid="overview-campaign-count">{data.campaignCount.toLocaleString()}</span>Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
+    {activeCampaigns.length > 0 && <Panel className="overflow-hidden border-[#e2e7df] bg-[#f7f8f2]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e2e7df] px-5 py-4 sm:px-6">
+        <div><p className="mono text-[9px] uppercase tracking-[.15em] text-[#75877c]">Operational snapshot · not date-filtered</p><h2 className="display mt-1 text-[17px] font-bold text-[#263a35]">Live campaign activity</h2></div>
+        <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]"><span className="rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] tabular-nums" data-testid="overview-campaign-count">{data.campaignCount.toLocaleString()}</span>Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
       </div>
-      {data.campaigns.length ? <div className="space-y-2.5 bg-[#f7f9fb] p-3 sm:p-4">
-        {data.campaigns.map(campaign => {
-          const campaignIsActive = campaign.status === 'queued' || campaign.status === 'sending';
-          const campaignIsPaused = maintenancePaused && campaignIsActive;
-          const accent = campaignIsPaused || campaign.status === 'sending'
-            ? 'border-l-[#d98949]'
-            : campaign.status === 'completed'
-              ? 'border-l-[#548873]'
-              : 'border-l-[#7395b5]';
-          const updatedLabel = `Updated ${shortDate(campaign.updatedAt)}${campaign.completedAt ? ` · Completed ${shortDate(campaign.completedAt)}` : campaign.queuedAt ? ` · Queued ${shortDate(campaign.queuedAt)}` : ''}`;
-          return <article key={campaign.id} data-testid={`campaign-row-${campaign.id}`} className={cn('grid grid-cols-2 gap-x-3 gap-y-3 rounded-md border border-l-4 border-[#dfe6ec] bg-white px-3.5 py-3 shadow-[0_1px_3px_rgba(35,55,75,.04)] sm:grid-cols-3 sm:px-4 lg:grid-cols-[minmax(170px,1.15fr)_repeat(5,minmax(76px,.55fr))_minmax(138px,.9fr)] lg:items-center', accent)}>
-            <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-1"><div className="flex items-center gap-2"><span className={cn('h-2 w-2 shrink-0 rounded-full', campaignIsPaused ? 'bg-[#d98949]' : campaign.status === 'sending' ? 'bg-[#d98949]' : campaign.status === 'completed' ? 'bg-[#548873]' : 'bg-[#8d9daf]')}/><h3 className="truncate text-[13px] font-semibold text-[#263447]">{campaign.name}</h3></div><div className="mt-1 flex items-center gap-2 text-[9px] text-[#85909a]"><span className="capitalize">{campaignIsPaused ? 'paused' : campaign.status}</span><span>·</span><span>{campaign.recipients.toLocaleString()} recipients</span></div></div>
-            <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
-            <CampaignDatum label="Bounced" value={campaign.bounced} hint="Bounced campaign recipients."/>
-            <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
-            <CampaignDatum label="Unknown" value={campaign.unknown} hint="No confirmed outcome is available."/>
-            <CampaignDatum label="Queued / sending" value={campaign.queued} hint="Recipients queued or currently being sent."/>
-            <div title="Hourly limits are shared by campaigns using the same SMTP mailbox. These figures are not additive." className="col-span-2 space-y-1 rounded-md bg-[#f3f6f8] px-2.5 py-2 sm:col-span-1">
-              {campaignIsActive ? <><div className="flex items-center justify-between gap-1 text-[9px] text-[#77828b]"><span className="truncate">Attempts · 60m</span><span className="mono shrink-0 font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div><div className="flex items-center justify-between gap-1 text-[9px] text-[#77828b]"><span className="truncate">Capacity left</span><span className="mono shrink-0 font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div></> : <div className="text-[9px] leading-4 text-[#77828b]">Hourly estimate appears while queued or sending.</div>}
-            </div>
-            <div title={updatedLabel} className="col-span-2 truncate border-t border-[#edf1f4] pt-2 text-[9px] text-[#9099a1] sm:col-span-3 lg:col-span-7">{updatedLabel}</div>
-          </article>;
-        })}
-      </div> : <div className="px-6 py-14"><ChartEmpty title="No campaigns to report" body="When campaigns are created, their queue and SMTP outcome summaries will appear here."/></div>}
-      <div className="border-t border-[#e8ece8] bg-[#fbfcfa] px-5 py-3 text-[10px] leading-5 text-[#7f8992] sm:px-6">SMTP accepted means the sending server accepted the message, not that it reached the inbox. Hourly estimates appear for queued or sending campaigns only; the cap is shared, so estimates are not additive.</div>
-    </Panel>
+      {maintenancePaused && <p className="border-b border-[#ead7bb] bg-[#fff8ec] px-5 py-2.5 text-[11px] text-[#845a31]">Platform maintenance is paused. Queued campaigns will resume when maintenance ends.</p>}
+      <div className="divide-y divide-[#e4e9e2]">
+        {activeCampaigns.map(campaign => <article key={campaign.id} data-testid={`live-campaign-row-${campaign.id}`} className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1.2fr)_repeat(5,minmax(90px,.55fr))_minmax(170px,1fr)] lg:items-center sm:px-6">
+          <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-[#263a35]" title={campaign.name}>{campaign.name}</h3><p className="mt-1 text-xs capitalize text-[#78857d]">{maintenancePaused ? 'paused for maintenance' : campaign.status} · {campaign.recipients.toLocaleString()} recipients</p></div>
+          <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
+          <CampaignDatum label="Bounced / failed" value={campaign.bounced} hint="Bounced or failed campaign recipients."/>
+          <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
+          <CampaignDatum label="Queued / sending" value={campaign.queued} hint="Recipients queued or currently being sent."/>
+          <CampaignDatum label="Unknown outcome" value={campaign.unknown} hint="No confirmed outcome is available."/>
+          <div title="Hourly limits are shared by campaigns using the same SMTP mailbox. These figures are not additive." className="rounded-md bg-white px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Attempts · last 60 min</span><span className="mono font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Capacity remaining</span><span className="mono font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div>
+          </div>
+        </article>)}
+      </div>
+      <div className="border-t border-[#e2e7df] bg-[#fbfcf8] px-5 py-3 text-[10px] leading-5 text-[#7f8992] sm:px-6">SMTP accepted means the sender’s server accepted the message, not that it reached the inbox. Hourly limits are shared by campaigns using the same sender mailbox.</div>
+    </Panel>}
 
     <section>
       <Panel className="flex flex-col justify-between gap-5 bg-[#f1f6fa] p-5 sm:flex-row sm:items-center sm:p-6">
@@ -977,20 +943,6 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
   </div>;
 }
 const chartTooltip = { borderRadius: 8, border: '1px solid #dfe5e0', background: '#fffefa', fontSize: 12, boxShadow: '0 8px 24px rgba(35,48,59,.08)' };
-function normalizeSegments(items: Array<{ value: string; count: number }>) {
-  const counts = new Map<string, number>();
-  items.forEach(item => { const name = item.value.trim() || 'Not set'; counts.set(name, (counts.get(name) || 0) + item.count); });
-  return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-}
-function SummaryCard({ label, value, note, icon: Icon, tint }: { label: string; value: string; note: string; icon: typeof Users; tint: 'blue' | 'sage' | 'apricot' }) {
-  const colors = { blue: 'bg-[#d8e8ff] text-[#2862a1]', sage: 'bg-[#d9ecde] text-[#3e7856]', apricot: 'bg-[#ffe0ca] text-[#a75d2d]' };
-  const surfaces: Record<typeof tint, CSSProperties> = {
-    blue: { backgroundColor: '#eaf3ff', borderColor: '#c9dcf3' },
-    sage: { backgroundColor: '#eaf4ed', borderColor: '#cce2d3' },
-    apricot: { backgroundColor: '#fff0e4', borderColor: '#efd2b7' },
-  };
-  return <Panel className="p-5" style={surfaces[tint]}><div className="flex items-start justify-between"><span className="text-[12px] font-medium text-[#596779]">{label}</span><span className={cn('grid h-9 w-9 place-items-center rounded-xl', colors[tint])}><Icon className="h-4 w-4"/></span></div><div className="display mt-3 text-[29px] font-bold leading-none tracking-[-.045em] text-[#192638]" data-testid={`metric-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</div><div className="mt-2 text-[10px] text-[#6d7886]">{note}</div></Panel>;
-}
 function ChartHeading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) {
   return <div><div className="mono text-[9px] uppercase tracking-[.16em] text-[#8a969d]">{eyebrow}</div><h2 className="display mt-1 text-[18px] font-bold text-[#263447]">{title}</h2><p className="mt-1 text-[11px] text-[#818c97]">{detail}</p></div>;
 }

@@ -377,6 +377,124 @@ export interface UserDashboard {
   setupStepsTotal: number;
 }
 
+export interface DashboardAnalyticsPoint {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  /** @minimum 0 */
+  campaignsCreated: number;
+  /** @minimum 0 */
+  recipients: number;
+  /** @minimum 0 */
+  contactsAdded: number;
+}
+
+export interface DashboardAnalyticsTotals {
+  /** @minimum 0 */
+  campaignsCreated: number;
+  /** @minimum 0 */
+  campaignRecipients: number;
+  /** @minimum 0 */
+  smtpAccepted: number;
+  /** @minimum 0 */
+  bounced: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  queuedOrSending: number;
+  /** @minimum 0 */
+  unknown: number;
+  /** @minimum 0 */
+  contactsAdded: number;
+}
+
+export type DashboardRecipientOutcomeKey = typeof DashboardRecipientOutcomeKey[keyof typeof DashboardRecipientOutcomeKey];
+
+
+export const DashboardRecipientOutcomeKey = {
+  smtpAccepted: 'smtpAccepted',
+  bounced: 'bounced',
+  suppressed: 'suppressed',
+  queuedOrSending: 'queuedOrSending',
+  unknown: 'unknown',
+} as const;
+
+export interface DashboardRecipientOutcome {
+  key: DashboardRecipientOutcomeKey;
+  label: string;
+  /** @minimum 0 */
+  count: number;
+}
+
+export type DashboardCampaignAnalyticsStatus = typeof DashboardCampaignAnalyticsStatus[keyof typeof DashboardCampaignAnalyticsStatus];
+
+
+export const DashboardCampaignAnalyticsStatus = {
+  draft: 'draft',
+  queued: 'queued',
+  sending: 'sending',
+  completed: 'completed',
+} as const;
+
+export interface DashboardCampaignAnalytics {
+  id: string;
+  name: string;
+  status: DashboardCampaignAnalyticsStatus;
+  createdAt: string;
+  /** @nullable */
+  queuedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  /** @minimum 0 */
+  recipients: number;
+  /** @minimum 0 */
+  smtpAccepted: number;
+  /** @minimum 0 */
+  bounced: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  queuedOrSending: number;
+  /** @minimum 0 */
+  unknown: number;
+}
+
+export type UserDashboardAnalyticsPeriod = {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  from: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  to: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  previousFrom: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  previousTo: string;
+  timezone: string;
+};
+
+export type UserDashboardAnalyticsPagination = {
+  /** @minimum 1 */
+  page: number;
+  /**
+     * @minimum 5
+     * @maximum 50
+     */
+  pageSize: number;
+  /** @minimum 0 */
+  totalCampaigns: number;
+  /** @minimum 0 */
+  totalPages: number;
+};
+
+export interface UserDashboardAnalytics {
+  period: UserDashboardAnalyticsPeriod;
+  totals: DashboardAnalyticsTotals;
+  previousTotals: DashboardAnalyticsTotals;
+  trend: DashboardAnalyticsPoint[];
+  recipientOutcomes: DashboardRecipientOutcome[];
+  campaigns: DashboardCampaignAnalytics[];
+  pagination: UserDashboardAnalyticsPagination;
+  generatedAt: string;
+}
+
 export interface UserNotification {
   id: string;
   title: string;
@@ -6931,6 +7049,28 @@ export interface SavedReportDefinition {
   createdAt: string;
   updatedAt: string;
 }
+
+export type GetUserDashboardAnalyticsParams = {
+/**
+ * Inclusive calendar date in the account timezone
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from: string;
+/**
+ * Inclusive calendar date in the account timezone
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * @minimum 5
+ * @maximum 50
+ */
+pageSize?: number;
+};
 
 export type AuthorizeMicrosoftSender200 = {
   authorizationUrl: string;

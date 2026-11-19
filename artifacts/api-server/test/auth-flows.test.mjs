@@ -16644,6 +16644,72 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     assert.deepEqual(otherDashboard.body.amountSpentByCurrency, []);
     assert.deepEqual(otherDashboard.body.campaigns, []);
 
+    const analyticsTodayParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: owner.user.timezone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    const analyticsTodayPart = (name) =>
+      analyticsTodayParts.find((part) => part.type === name)?.value;
+    const analyticsToday = `${analyticsTodayPart("year")}-${analyticsTodayPart("month")}-${analyticsTodayPart("day")}`;
+    const todayAnalytics = await api(
+      `/dashboard/analytics?from=${analyticsToday}&to=${analyticsToday}&pageSize=5`,
+      { cookie: owner.cookie },
+    );
+    assert.equal(todayAnalytics.response.status, 200, JSON.stringify(todayAnalytics.body));
+    assert.equal(todayAnalytics.body.period.from, analyticsToday);
+    assert.equal(todayAnalytics.body.period.to, analyticsToday);
+    assert.equal(todayAnalytics.body.period.previousFrom, todayAnalytics.body.period.previousTo);
+    assert.ok(todayAnalytics.body.trend.length === 1);
+    assert.equal(todayAnalytics.body.trend[0].date, analyticsToday);
+    assert.ok(todayAnalytics.body.trend[0].contactsAdded <= ownerDashboard.body.contacts);
+    const cohortCampaign = todayAnalytics.body.campaigns.find(
+      (item) => item.id === campaign.body.id,
+    );
+    assert.ok(cohortCampaign, "the selected tenant's campaign should appear in its date cohort");
+    assert.equal(cohortCampaign.recipients, 3);
+    assert.equal(cohortCampaign.smtpAccepted, 1);
+    assert.equal(cohortCampaign.bounced, 2);
+    assert.equal(cohortCampaign.suppressed, 1);
+    assert.ok(todayAnalytics.body.totals.campaignsCreated >= 1);
+    assert.equal(
+      todayAnalytics.body.totals.contactsAdded,
+      todayAnalytics.body.trend.reduce((total, point) => total + point.contactsAdded, 0),
+    );
+    const otherAnalytics = await api(
+      `/dashboard/analytics?from=${analyticsToday}&to=${analyticsToday}`,
+      { cookie: other.cookie },
+    );
+    assert.equal(otherAnalytics.response.status, 200, JSON.stringify(otherAnalytics.body));
+    assert.equal(otherAnalytics.body.campaigns.some((item) => item.id === campaign.body.id), false);
+    assert.equal(otherAnalytics.body.campaigns.length, 0);
+    const maxAnalyticsRange = await api(
+      "/dashboard/analytics?from=2026-01-02&to=2026-06-30",
+      { cookie: owner.cookie },
+    );
+    assert.equal(maxAnalyticsRange.response.status, 200, JSON.stringify(maxAnalyticsRange.body));
+    assert.equal(maxAnalyticsRange.body.trend.length, 180);
+    const invalidAnalyticsRange = await api(
+      "/dashboard/analytics?from=2026-01-01&to=2026-06-30",
+      { cookie: owner.cookie },
+    );
+    assert.equal(invalidAnalyticsRange.response.status, 400);
+    const reversedAnalyticsRange = await api(
+      "/dashboard/analytics?from=2026-06-30&to=2026-06-29",
+      { cookie: owner.cookie },
+    );
+    assert.equal(reversedAnalyticsRange.response.status, 400);
+    const invalidAnalyticsDate = await api(
+      "/dashboard/analytics?from=2026-02-30&to=2026-02-30",
+      { cookie: owner.cookie },
+    );
+    assert.equal(invalidAnalyticsDate.response.status, 400);
+    const anonymousAnalytics = await api(
+      `/dashboard/analytics?from=${analyticsToday}&to=${analyticsToday}`,
+    );
+    assert.equal(anonymousAnalytics.response.status, 401);
+
     await db
       .update(dbModule.emailCampaignRecipientsTable)
       .set({
