@@ -901,45 +901,103 @@ function UserDashboardPage({ user, maintenancePaused = false }: { user: AuthUser
     <PageHeading eyebrow="WORKSPACE / OVERVIEW" title="Good to see you, again." detail="A clear view of the audience, account, and campaigns in this workspace."
       trailing={<div className="flex items-center gap-2 rounded-full border border-[#dce5e2] bg-[#f2f7f4] px-3 py-1.5 text-[11px] font-semibold text-[#426c5d]"><span className="h-1.5 w-1.5 rounded-full bg-[#538a70]"/><span className="capitalize">{data.subscriptionStatus}</span> plan</div>}/>
 
-    {prospectAccess && <FollowUpsTodayPanel/>}
-    <UserDashboardAnalytics
-      currentSnapshot={data}
-      timeZone={user.timezone}
-      onRefresh={() => { void query.refetch(); }}
-    />
+    <Tabs defaultValue="campaigns" className="w-full space-y-4" data-testid="dashboard-analytics-tabs">
+      <TabsList aria-label="Overview analytics sections" className="grid h-auto w-full grid-cols-2 gap-2 rounded-xl border border-[#dce5e3] bg-white p-2 shadow-sm">
+        <TabsTrigger value="campaigns" data-testid="tab-overview-campaigns" className="h-auto min-h-[68px] justify-start gap-3 whitespace-normal rounded-lg border border-transparent px-3 py-2.5 text-left text-[#637381] data-[state=active]:border-[#c7d9e8] data-[state=active]:bg-[#edf4fa] data-[state=active]:text-[#214f79] data-[state=active]:shadow-sm sm:px-4">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#e1edf7] text-[#356b99]"><Send className="h-4 w-4"/></span>
+          <span className="min-w-0 flex-1"><span className="block text-[12px] font-bold">Campaigns &amp; audience</span><span className="mt-1 block text-[9px] font-normal leading-4 text-[#7d8992]">Delivery, contacts, and campaign trends</span></span>
+          <span className="hidden rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold tabular-nums text-[#56758e] sm:inline-flex">{data.campaignCount.toLocaleString()} campaigns</span>
+        </TabsTrigger>
+        <TabsTrigger value="pipeline" data-testid="tab-overview-prospects" className="h-auto min-h-[68px] justify-start gap-3 whitespace-normal rounded-lg border border-transparent px-3 py-2.5 text-left text-[#637381] data-[state=active]:border-[#c9ded4] data-[state=active]:bg-[#edf5f0] data-[state=active]:text-[#356b5c] data-[state=active]:shadow-sm sm:px-4">
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${prospectAccess ? 'bg-[#dceee5] text-[#3a7a64]' : 'bg-[#f2efe9] text-[#8a7553]'}`}>{prospectAccess ? <Activity className="h-4 w-4"/> : <LockKeyhole className="h-4 w-4"/>}</span>
+          <span className="min-w-0 flex-1"><span className="block text-[12px] font-bold">Prospects &amp; pipeline</span><span className="mt-1 block text-[9px] font-normal leading-4 text-[#7d8992]">Stages, expected value, and follow-ups</span></span>
+          <span className="hidden rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-[#5d8070] sm:inline-flex">{prospectAccess ? 'Pipeline' : 'Plan feature'}</span>
+        </TabsTrigger>
+      </TabsList>
 
-    {prospectAccess && <ProspectAnalyticsOverview/>}
+      <TabsContent value="campaigns" data-testid="overview-campaigns-content" className="mt-0 space-y-5">
+        <UserDashboardAnalytics
+          currentSnapshot={data}
+          timeZone={user.timezone}
+          onRefresh={() => { void query.refetch(); }}
+        />
 
-    {activeCampaigns.length > 0 && <Panel className="overflow-hidden border-[#e2e7df] bg-[#f7f8f2]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e2e7df] px-5 py-4 sm:px-6">
-        <div><p className="mono text-[9px] uppercase tracking-[.15em] text-[#75877c]">Operational snapshot · not date-filtered</p><h2 className="display mt-1 text-[17px] font-bold text-[#263a35]">Live campaign activity</h2></div>
-        <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]"><span className="rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] tabular-nums" data-testid="overview-campaign-count">{data.campaignCount.toLocaleString()}</span>Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
-      </div>
-      {maintenancePaused && <p className="border-b border-[#ead7bb] bg-[#fff8ec] px-5 py-2.5 text-[11px] text-[#845a31]">Platform maintenance is paused. Queued campaigns will resume when maintenance ends.</p>}
-      <div className="divide-y divide-[#e4e9e2]">
-        {activeCampaigns.map(campaign => <article key={campaign.id} data-testid={`live-campaign-row-${campaign.id}`} className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1.2fr)_repeat(5,minmax(90px,.55fr))_minmax(170px,1fr)] lg:items-center sm:px-6">
-          <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-[#263a35]" title={campaign.name}>{campaign.name}</h3><p className="mt-1 text-xs capitalize text-[#78857d]">{maintenancePaused ? 'paused for maintenance' : campaign.status} · {campaign.recipients.toLocaleString()} recipients</p></div>
-          <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
-          <CampaignDatum label="Bounced / failed" value={campaign.bounced} hint="Bounced or failed campaign recipients."/>
-          <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
-          <CampaignDatum label="Queued / sending" value={campaign.queued} hint="Recipients queued or currently being sent."/>
-          <CampaignDatum label="Unknown outcome" value={campaign.unknown} hint="No confirmed outcome is available."/>
-          <div title="Hourly limits are shared by campaigns using the same SMTP mailbox. These figures are not additive." className="rounded-md bg-white px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Attempts · last 60 min</span><span className="mono font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div>
-            <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Capacity remaining</span><span className="mono font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div>
+        {activeCampaigns.length > 0 && <Panel className="overflow-hidden border-[#e2e7df] bg-[#f7f8f2]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e2e7df] px-5 py-4 sm:px-6">
+            <div><p className="mono text-[9px] uppercase tracking-[.15em] text-[#75877c]">Operational snapshot · not date-filtered</p><h2 className="display mt-1 text-[17px] font-bold text-[#263a35]">Live campaign activity</h2></div>
+            <Link href="/campaigns" data-testid="link-workspace-campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#245b9b] no-underline hover:bg-[#f6f9fc]"><span className="rounded-full bg-[#edf4fc] px-2 py-0.5 text-[10px] tabular-nums" data-testid="overview-campaign-count">{data.campaignCount.toLocaleString()}</span>Manage campaigns <ArrowRight className="h-3.5 w-3.5"/></Link>
           </div>
-        </article>)}
-      </div>
-      <div className="border-t border-[#e2e7df] bg-[#fbfcf8] px-5 py-3 text-[10px] leading-5 text-[#7f8992] sm:px-6">SMTP accepted means the sender’s server accepted the message, not that it reached the inbox. Hourly limits are shared by campaigns using the same sender mailbox.</div>
-    </Panel>}
+          {maintenancePaused && <p className="border-b border-[#ead7bb] bg-[#fff8ec] px-5 py-2.5 text-[11px] text-[#845a31]">Platform maintenance is paused. Queued campaigns will resume when maintenance ends.</p>}
+          <div className="divide-y divide-[#e4e9e2]">
+            {activeCampaigns.map(campaign => <article key={campaign.id} data-testid={`live-campaign-row-${campaign.id}`} className="grid gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-[minmax(180px,1.2fr)_repeat(5,minmax(90px,.55fr))_minmax(170px,1fr)] lg:items-center sm:px-6">
+              <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-[#263a35]" title={campaign.name}>{campaign.name}</h3><p className="mt-1 text-xs capitalize text-[#78857d]">{maintenancePaused ? 'paused for maintenance' : campaign.status} · {campaign.recipients.toLocaleString()} recipients</p></div>
+              <CampaignDatum label="SMTP accepted" value={campaign.delivered} hint="Accepted by the SMTP server; inbox delivery is not confirmed."/>
+              <CampaignDatum label="Bounced / failed" value={campaign.bounced} hint="Bounced or failed campaign recipients."/>
+              <CampaignDatum label="Suppressed" value={campaign.suppressed} hint="Excluded from sending by suppression rules."/>
+              <CampaignDatum label="Queued / sending" value={campaign.queued} hint="Recipients queued or currently being sent."/>
+              <CampaignDatum label="Unknown outcome" value={campaign.unknown} hint="No confirmed outcome is available."/>
+              <div title="Hourly limits are shared by campaigns using the same SMTP mailbox. These figures are not additive." className="rounded-md bg-white px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Attempts · last 60 min</span><span className="mono font-medium text-[#455566]">{campaign.attemptsThisHour.toLocaleString()}</span></div>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-[#77828b]"><span>Capacity remaining</span><span className="mono font-medium text-[#455566]">{campaign.remainingThisHour.toLocaleString()} / {campaign.hourlyLimit.toLocaleString()}</span></div>
+              </div>
+            </article>)}
+          </div>
+          <div className="border-t border-[#e2e7df] bg-[#fbfcf8] px-5 py-3 text-[10px] leading-5 text-[#7f8992] sm:px-6">SMTP accepted means the sender’s server accepted the message, not that it reached the inbox. Hourly limits are shared by campaigns using the same sender mailbox.</div>
+        </Panel>}
+      </TabsContent>
 
-    <section>
-      <Panel className="flex flex-col justify-between gap-5 bg-[#f1f6fa] p-5 sm:flex-row sm:items-center sm:p-6">
-        <div><div className="mono text-[10px] uppercase tracking-[.15em] text-[#6f8295]">SENDING WORKSPACE</div><h2 className="display mt-2 text-xl font-bold text-[#1c3044]">Your tools, one workspace.</h2><p className="mt-2 max-w-xl text-[12px] leading-5 text-[#637487]">Contacts, lists, sender settings, and campaign results stay within your tenant workspace.</p></div>
-        <div className="flex shrink-0 flex-wrap gap-2"><Link href="/sending-settings" data-testid="link-workspace-sender" className="inline-flex items-center gap-2 rounded-md bg-[#174f99] px-3.5 py-2.5 text-[11px] font-semibold text-white no-underline hover:bg-[#103f7e]">Email Setup <ArrowRight className="h-3.5 w-3.5"/></Link><Link href="/campaigns" className="inline-flex items-center gap-2 rounded-md border border-[#cad7e2] bg-white/75 px-3.5 py-2.5 text-[11px] font-semibold text-[#355571] no-underline hover:bg-white">Campaigns <ArrowRight className="h-3.5 w-3.5"/></Link></div>
-      </Panel>
+      <TabsContent value="pipeline" data-testid="overview-prospects-content" className="mt-0 space-y-5">
+        {packageQuery.isLoading ? <LoadingPanel label="Checking prospect-management access"/> :
+          packageQuery.isError ? <QueryProblem retry={() => void packageQuery.refetch()}/> :
+            prospectAccess ? <><FollowUpsTodayPanel/><ProspectAnalyticsOverview/></> :
+              <section className="overflow-hidden rounded-xl border border-[#e4ded0] bg-[#fffaf1] shadow-sm" data-testid="dashboard-prospect-access-prompt">
+                <div className="grid gap-5 p-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:p-6">
+                  <span className="grid h-12 w-12 place-items-center rounded-xl border border-[#eadcc4] bg-white text-[#9a7446]"><LockKeyhole className="h-5 w-5"/></span>
+                  <div><p className="mono text-[9px] font-semibold uppercase tracking-[.15em] text-[#94774d]">Prospect management</p><h2 className="display mt-1 text-[18px] font-bold text-[#3e3b32]">Bring your pipeline into the overview.</h2><p className="mt-1 max-w-2xl text-[11px] leading-5 text-[#766e5d]">Prospect stages, expected deal values, and follow-up tracking are available with eligible paid plans.</p></div>
+                  <Link href="/plans" data-testid="link-dashboard-prospect-plans" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#8c6739] px-4 text-[11px] font-semibold text-white no-underline transition hover:bg-[#74542f]">View plans <ArrowRight className="h-3.5 w-3.5"/></Link>
+                </div>
+                <div className="grid gap-2 border-t border-[#eadfcf] bg-[#fffdf8] px-5 py-3 text-[10px] text-[#827965] sm:grid-cols-3 sm:px-6"><span>Pipeline stages and outcomes</span><span>Weighted expected value</span><span>Follow-ups and calendar</span></div>
+              </section>}
+      </TabsContent>
+    </Tabs>
+
+    <section aria-label="Workspace next steps" data-testid="dashboard-workspace-action-center" className="overflow-hidden rounded-xl border border-[#d2e0e2] bg-white shadow-[0_12px_30px_rgba(28,56,68,.07)]">
+      <div className="grid lg:grid-cols-[minmax(250px,.85fr)_minmax(0,2fr)]">
+        <div className="relative isolate overflow-hidden bg-gradient-to-br from-[#173b51] via-[#205766] to-[#26766c] p-5 text-white sm:p-6">
+          <div aria-hidden="true" className="absolute -right-10 -top-12 -z-10 h-44 w-44 rounded-full border-[24px] border-white/5"/>
+          <div aria-hidden="true" className="absolute -bottom-20 right-10 -z-10 h-48 w-48 rounded-full bg-[#a8d9bd]/10 blur-2xl"/>
+          <p className="mono text-[9px] font-semibold uppercase tracking-[.17em] text-[#bcd8d1]">Workspace next steps</p>
+          <h2 className="display mt-2 text-[21px] font-bold leading-tight tracking-[-.025em] text-white">Turn a clear view into your next move.</h2>
+          <p className="mt-2 max-w-sm text-[11px] leading-5 text-[#d0e2de]">Your audience, delivery, and pipeline tools are connected here. Pick up where your workspace needs attention.</p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-[#102f3b]/25 px-3 py-2 text-[10px] font-semibold text-[#e7f1ec]" data-testid="dashboard-email-setup-status"><span className={`h-1.5 w-1.5 rounded-full ${data.setupChecklist.emailSetup ? 'bg-[#a8e0bb]' : 'bg-[#f0bd70]'}`}/>{data.setupChecklist.emailSetup ? 'Email setup step complete' : 'Email setup needs attention'}</span>
+            <Link href="/sending-settings" data-testid="link-dashboard-email-setup" className="inline-flex items-center gap-1.5 px-1 py-2 text-[10px] font-semibold text-white no-underline hover:underline">{data.setupChecklist.emailSetup ? 'Manage sender' : 'Set up email'} <ArrowRight className="h-3 w-3"/></Link>
+          </div>
+        </div>
+
+        <div className="grid gap-3 bg-[#f8faf9] p-4 sm:grid-cols-3 sm:p-5">
+          <Link href="/contacts" data-testid="link-dashboard-action-audience" className="group flex min-h-[142px] flex-col rounded-xl border border-[#d8e5ef] bg-gradient-to-br from-[#f0f6fc] to-white p-4 text-[#243a4e] no-underline transition hover:-translate-y-0.5 hover:border-[#b8d0e2] hover:shadow-md">
+            <span className="flex items-center justify-between"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#dfebf6] text-[#386e9b]"><Users className="h-4 w-4"/></span><span className="mono text-[10px] font-bold text-[#4c7495]">{data.contacts.toLocaleString()}</span></span>
+            <span className="mt-3 text-[12px] font-bold">Audience</span><span className="mt-1 text-[10px] leading-4 text-[#788793]">{data.companies.toLocaleString()} companies · {data.activeLists.toLocaleString()} active lists</span>
+            <span className="mt-auto inline-flex items-center gap-1 pt-3 text-[10px] font-semibold text-[#356b99]">Manage contacts <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5"/></span>
+          </Link>
+          <Link href="/campaigns" data-testid="link-dashboard-action-campaigns" className="group flex min-h-[142px] flex-col rounded-xl border border-[#e7dfd1] bg-gradient-to-br from-[#fcf7ed] to-white p-4 text-[#443a2d] no-underline transition hover:-translate-y-0.5 hover:border-[#dfcba9] hover:shadow-md">
+            <span className="flex items-center justify-between"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f4e9d6] text-[#9c7040]"><Send className="h-4 w-4"/></span><span className="mono text-[10px] font-bold text-[#8e704a]">{activeCampaigns.length} active</span></span>
+            <span className="mt-3 text-[12px] font-bold">Campaigns</span><span className="mt-1 text-[10px] leading-4 text-[#81796d]">{data.campaignCount.toLocaleString()} total · {activeCampaigns.length.toLocaleString()} queued or sending</span>
+            <span className="mt-auto inline-flex items-center gap-1 pt-3 text-[10px] font-semibold text-[#8a673c]">Open campaign workspace <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5"/></span>
+          </Link>
+          <Link href={prospectAccess ? '/prospects' : '/plans'} data-testid="link-dashboard-action-pipeline" className="group flex min-h-[142px] flex-col rounded-xl border border-[#d4e5dc] bg-gradient-to-br from-[#eef7f1] to-white p-4 text-[#2c4638] no-underline transition hover:-translate-y-0.5 hover:border-[#b9d8c9] hover:shadow-md">
+            <span className="flex items-center justify-between"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#dceee3] text-[#3c7a60]">{prospectAccess ? <Activity className="h-4 w-4"/> : <LockKeyhole className="h-4 w-4"/>}</span><span className="mono text-[9px] font-bold uppercase tracking-[.08em] text-[#54806a]">{prospectAccess ? 'Available' : 'Plan feature'}</span></span>
+            <span className="mt-3 text-[12px] font-bold">Prospect pipeline</span><span className="mt-1 text-[10px] leading-4 text-[#77877d]">{prospectAccess ? 'Review stages, deal values, and follow-ups.' : 'See plans that include pipeline tools.'}</span>
+            <span className="mt-auto inline-flex items-center gap-1 pt-3 text-[10px] font-semibold text-[#3d755c]">{prospectAccess ? 'Open prospects' : 'Compare plans'} <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5"/></span>
+          </Link>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e4ebe7] bg-[#f6f8f6] px-5 py-3 text-[10px] text-[#718078] sm:px-6">
+        <span>Account data stays private to your workspace.</span>
+        <Link href="/plans" data-testid="link-dashboard-action-billing" className="inline-flex items-center gap-1 font-semibold text-[#4b6c60] no-underline hover:underline">Plan &amp; billing <ArrowRight className="h-3 w-3"/></Link>
+      </div>
     </section>
-    <div className="flex flex-wrap gap-2"><Link href="/contacts" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Contacts</Link><Link href="/companies" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Companies</Link><Link href="/lists" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Lists</Link><Link href="/plans" data-testid="link-workspace-plans" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Plans & billing</Link><Link href="/profile" data-testid="link-workspace-profile" className="rounded-md border border-[#d8e0e8] bg-white px-3 py-2 text-[11px] font-semibold text-[#596a7b] no-underline hover:bg-[#f6f9fc]">Profile & security</Link></div>
   </div>;
 }
 const chartTooltip = { borderRadius: 8, border: '1px solid #dfe5e0', background: '#fffefa', fontSize: 12, boxShadow: '0 8px 24px rgba(35,48,59,.08)' };
