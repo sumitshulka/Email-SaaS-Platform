@@ -35,6 +35,7 @@ import AdminBillingPage, { AdminPackagesPage } from '@/pages/admin-billing';
 import AdminNotificationsPage, { NotificationsPage } from '@/pages/notifications';
 import AdminGoogleOAuthPage from '@/pages/admin-google-oauth';
 import AdminAIProviderPage from '@/pages/admin-ai-provider';
+import TenantAIProviderPage from '@/pages/tenant-ai-provider';
 import AdminContactIntentPage from '@/pages/admin-contact-intent';
 import { AdminGlobalCompaniesPage } from '@/pages/admin-global-companies';
 import { AdminCompanyIntelligencePage } from '@/pages/admin-company-intelligence';
@@ -391,6 +392,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/notifications', label: 'Notifications', icon: Bell },
       { href: '/support', label: 'Support', icon: LifeBuoy },
       { href: '/sending-settings', label: 'Email Setup', icon: Settings2 },
+      { href: '/ai-provider', label: 'AI Provider', icon: BrainCircuit },
       { href: '/plans', label: 'Plans & billing', icon: CreditCard },
       { href: '/profile', label: 'Profile & security', icon: UserRound },
     ],
@@ -1984,6 +1986,7 @@ function Routes() {
     <Route path="/notifications">{() => <RouteGate>{u => u.role === 'USER' ? <NotificationsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/support">{() => <RouteGate>{u => u.role === 'USER' ? <SupportTicketsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/sending-settings">{() => <RouteGate>{() => <SendingSettingsPage/>}</RouteGate>}</Route>
+    <Route path="/ai-provider">{() => <RouteGate>{() => <TenantAIProviderPage/>}</RouteGate>}</Route>
     <Route path="/contact-field-settings">{() => <RouteGate>{u => u.role === 'USER' ? <ContactFieldSettingsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contacts">{() => <RouteGate>{u => u.role === 'USER' ? <ContactsPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/contact-report">{() => <RouteGate>{u => u.role === 'USER' ? <ContactReportPage/> : <NotFound/>}</RouteGate>}</Route>
@@ -2121,7 +2124,7 @@ function MaintenanceBoundary({ children }: { children: ReactNode }) {
   const hasExistingFooter = path === '/'
     || ['/features', '/pricing', '/terms-and-conditions', '/privacy-policy', '/shipping-refund'].includes(path)
     || path.startsWith('/package-checkout')
-    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile', '/prospects', '/prospect-follow-ups', '/prospect-products', '/prospect-stages', '/prospect-actions', '/prospect-currencies'].some(
+    || ['/dashboard', '/notifications', '/support', '/sending-settings', '/ai-provider', '/contact-field-settings', '/contacts', '/companies', '/lists', '/campaigns', '/admin', '/plans', '/profile', '/prospects', '/prospect-follow-ups', '/prospect-products', '/prospect-stages', '/prospect-actions', '/prospect-currencies'].some(
       route => path === route || path.startsWith(`${route}/`),
     );
   const showStandaloneFooter = path !== '/login' && !hasExistingFooter;

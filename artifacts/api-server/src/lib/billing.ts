@@ -54,6 +54,7 @@ export function createPackageCheckoutSnapshot(
     prospectManagementEnabled: pkg.prospectManagementEnabled,
     reportsEnabled: pkg.reportsEnabled,
     personalReportLimit: pkg.personalReportLimit,
+    byokAiEnabled: pkg.byokAiEnabled,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,
@@ -80,6 +81,8 @@ function packageMatchesCheckoutSnapshot(
       snapshot.reportsEnabled === pkg.reportsEnabled) &&
     (snapshot.personalReportLimit === undefined ||
       snapshot.personalReportLimit === pkg.personalReportLimit) &&
+    (snapshot.byokAiEnabled === undefined ||
+      snapshot.byokAiEnabled === pkg.byokAiEnabled) &&
     snapshot.emailAccountLimit === pkg.emailAccountLimit &&
     snapshot.researchAllowance === pkg.researchAllowance &&
     snapshot.aiEmailAssistAllowance === pkg.aiEmailAssistAllowance &&
@@ -102,6 +105,7 @@ export function serializePackage(pkg: PackageRow) {
     prospectManagementEnabled: pkg.prospectManagementEnabled,
     reportsEnabled: pkg.reportsEnabled,
     personalReportLimit: pkg.personalReportLimit,
+    byokAiEnabled: pkg.byokAiEnabled,
     emailAccountLimit: pkg.emailAccountLimit,
     researchAllowance: pkg.researchAllowance,
     aiEmailAssistAllowance: pkg.aiEmailAssistAllowance,

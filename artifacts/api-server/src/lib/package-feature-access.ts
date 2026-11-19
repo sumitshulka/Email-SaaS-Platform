@@ -3,7 +3,10 @@ import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { db, subscriptionPackagesTable, userSubscriptionsTable } from "@workspace/db";
 import { renewExpiredFreePrimaryPlanForUser } from "./billing";
 
-export type PackageFeature = "prospectManagementEnabled" | "reportsEnabled";
+export type PackageFeature =
+  | "prospectManagementEnabled"
+  | "reportsEnabled"
+  | "byokAiEnabled";
 
 export type PackageFeatureAccess = {
   packageId: string;
@@ -12,6 +15,7 @@ export type PackageFeatureAccess = {
   prospectManagementEnabled: boolean;
   reportsEnabled: boolean;
   personalReportLimit: number;
+  byokAiEnabled: boolean;
 };
 
 declare global {
@@ -36,6 +40,7 @@ export async function getPackageFeatureAccess(
         prospectManagementEnabled: subscriptionPackagesTable.prospectManagementEnabled,
         reportsEnabled: subscriptionPackagesTable.reportsEnabled,
         personalReportLimit: subscriptionPackagesTable.personalReportLimit,
+        byokAiEnabled: subscriptionPackagesTable.byokAiEnabled,
       })
       .from(userSubscriptionsTable)
       .innerJoin(
@@ -67,6 +72,7 @@ export async function getPackageFeatureAccess(
       active.amountMinor > 0 && active.prospectManagementEnabled,
     reportsEnabled: active.reportsEnabled,
     personalReportLimit: active.personalReportLimit,
+    byokAiEnabled: active.byokAiEnabled,
   };
 }
 
@@ -90,9 +96,15 @@ export function requirePackageFeature(feature: PackageFeature): RequestHandler {
         res.status(403).json({
           error: feature === "prospectManagementEnabled"
             ? "Prospect Management is not included in the active package."
-            : "Reports are not included in the active package.",
+            : feature === "reportsEnabled"
+              ? "Reports are not included in the active package."
+              : "Bring Your Own AI is not included in the active package.",
           code: "PACKAGE_FEATURE_NOT_INCLUDED",
-          feature: feature === "prospectManagementEnabled" ? "prospect_management" : "reports",
+          feature: feature === "prospectManagementEnabled"
+            ? "prospect_management"
+            : feature === "reportsEnabled"
+              ? "reports"
+              : "byok_ai",
         });
         return;
       }

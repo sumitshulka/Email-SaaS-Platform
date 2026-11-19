@@ -46,3 +46,4 @@ export * from "./saved-report-definitions";
 export * from "./sending";
 export * from "./notifications";
 export * from "./support";
+export * from "./tenant-ai-provider-configurations";

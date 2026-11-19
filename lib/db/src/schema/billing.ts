@@ -55,6 +55,7 @@ export type PackageCheckoutSnapshot = {
   prospectManagementEnabled?: boolean;
   reportsEnabled?: boolean;
   personalReportLimit?: number;
+  byokAiEnabled?: boolean;
   emailAccountLimit: number;
   researchAllowance: number;
   aiEmailAssistAllowance: number;
@@ -79,6 +80,7 @@ export const subscriptionPackagesTable = pgTable(
     prospectManagementEnabled: boolean("prospect_management_enabled").notNull().default(false),
     reportsEnabled: boolean("reports_enabled").notNull().default(false),
     personalReportLimit: integer("personal_report_limit").notNull().default(0),
+    byokAiEnabled: boolean("byok_ai_enabled").notNull().default(false),
     emailAccountLimit: integer("email_account_limit").notNull().default(1),
     researchAllowance: integer("research_allowance").notNull().default(0),
     aiEmailAssistAllowance: integer("ai_email_assist_allowance")

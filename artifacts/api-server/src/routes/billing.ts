@@ -570,6 +570,7 @@ function packageConfigurationError(input: {
   prospectManagementEnabled: boolean;
   reportsEnabled: boolean;
   personalReportLimit: number;
+  byokAiEnabled: boolean;
   emailAccountLimit: number;
   researchAllowance: number;
   aiEmailAssistAllowance: number;
@@ -597,6 +598,7 @@ function packageConfigurationError(input: {
     input.prospectManagementEnabled ||
     input.reportsEnabled ||
     input.personalReportLimit !== 0 ||
+    input.byokAiEnabled ||
     input.emailAccountLimit !== 0 ||
     input.preferred
   ) {
@@ -1198,6 +1200,7 @@ router.post(
       prospectManagementEnabled: packageType === "primary" && (parsed.data.prospectManagementEnabled ?? false),
       reportsEnabled: packageType === "primary" && (parsed.data.reportsEnabled ?? false),
       personalReportLimit: packageType === "primary" ? (parsed.data.personalReportLimit ?? 0) : 0,
+      byokAiEnabled: packageType === "primary" && (parsed.data.byokAiEnabled ?? false),
       emailAccountLimit:
         packageType === "addon" ? 0 : (parsed.data.emailAccountLimit ?? 0),
       researchAllowance: parsed.data.researchAllowance ?? 0,
@@ -1315,6 +1318,7 @@ router.patch(
       prospectManagementEnabled: currentPackage.packageType === "primary" && (parsed.data.prospectManagementEnabled ?? currentPackage.prospectManagementEnabled),
       reportsEnabled: currentPackage.packageType === "primary" && (parsed.data.reportsEnabled ?? currentPackage.reportsEnabled),
       personalReportLimit: currentPackage.packageType === "primary" ? (parsed.data.personalReportLimit ?? currentPackage.personalReportLimit) : 0,
+      byokAiEnabled: currentPackage.packageType === "primary" && (parsed.data.byokAiEnabled ?? currentPackage.byokAiEnabled),
       additionalMailboxCount:
         parsed.data.additionalMailboxCount ??
         currentPackage.additionalMailboxCount,

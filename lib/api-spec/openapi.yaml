@@ -5120,6 +5120,112 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /settings/ai-provider:
+    get:
+      operationId: getTenantAIProviderSettings
+      tags: [settings]
+      summary: Get tenant BYOK eligibility and saved provider status without its API key
+      responses:
+        "200":
+          description: Tenant AI provider status and package eligibility
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantAIProviderSettings"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      operationId: updateTenantAIProviderSettings
+      tags: [settings]
+      summary: Save the tenant's tested provider and model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AIProviderSettingsInput"
+      responses:
+        "200":
+          description: Saved tenant configuration without its API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantAIProviderSettings"
+        "400":
+          description: Invalid provider or unavailable model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: BYOK is not included in the active package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Provider connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteTenantAIProviderSettings
+      tags: [settings]
+      summary: Remove the tenant's encrypted provider key and model
+      responses:
+        "200":
+          description: Removed tenant configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantAIProviderSettings"
+        "403":
+          description: BYOK is not included in the active package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /settings/ai-provider/test:
+    post:
+      operationId: testTenantAIProviderConnection
+      tags: [settings]
+      summary: Test a tenant provider key and list available text models
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestAIProviderConnectionInput"
+      responses:
+        "200":
+          description: Provider connection result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIProviderTestResult"
+        "400":
+          description: Invalid provider or API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: BYOK is not included in the active package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Provider connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/settings/ai-provider:
     get:
       operationId: getAIProviderSettings
@@ -8758,6 +8864,19 @@ components:
         lastTestedAt: { type: ["string", "null"], format: date-time }
         updatedAt: { type: ["string", "null"], format: date-time }
       required: [configured, provider, selectedModel, apiKeyConfigured, lastTestedAt, updatedAt]
+    TenantAIProviderSettings:
+      type: object
+      properties:
+        eligible: { type: boolean }
+        packageName: { type: ["string", "null"] }
+        configured: { type: boolean }
+        provider:
+          type: ["string", "null"]
+          enum: [openai, anthropic, gemini, null]
+        selectedModel: { type: ["string", "null"] }
+        apiKeyConfigured: { type: boolean }
+        updatedAt: { type: ["string", "null"], format: date-time }
+      required: [eligible, packageName, configured, provider, selectedModel, apiKeyConfigured, updatedAt]
     AIProviderSettingsInput:
       type: object
       properties:
@@ -9015,6 +9134,7 @@ components:
         prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for this package. Free packages cannot include this feature. }
         reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
         personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
+        byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply. }
         emailAccountLimit: { type: integer, minimum: 0 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign draft or revision results included in this add-on. }
@@ -9023,7 +9143,7 @@ components:
         active: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, packageType, name, description, amountMinor, currency, periodDays, contactLimit, prospectManagementEnabled, reportsEnabled, personalReportLimit, emailAccountLimit, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount, preferred, active, createdAt, updatedAt]
+      required: [id, packageType, name, description, amountMinor, currency, periodDays, contactLimit, prospectManagementEnabled, reportsEnabled, personalReportLimit, byokAiEnabled, emailAccountLimit, researchAllowance, aiEmailAssistAllowance, additionalMailboxCount, preferred, active, createdAt, updatedAt]
     SubscriptionPackageList:
       type: object
       properties:
@@ -9059,6 +9179,7 @@ components:
         prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for this package. Free packages cannot include this feature. }
         reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
         personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
+        byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
@@ -9152,6 +9273,7 @@ components:
         prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for paid primary packages. }
         reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
         personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
+        byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }

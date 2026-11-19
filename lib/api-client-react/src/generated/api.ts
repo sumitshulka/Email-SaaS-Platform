@@ -277,6 +277,7 @@ import type {
   SupportTicketInput,
   SupportTicketMessageInput,
   SupportTicketStatusUpdate,
+  TenantAIProviderSettings,
   TenantSendingAccountResponse,
   TenantSendingAccounts,
   TenantSendingConnectionTestFailure,
@@ -18139,6 +18140,333 @@ export const useTestGoogleOAuthSettings = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getTestGoogleOAuthSettingsMutationOptions(options));
+    }
+
+export const getGetTenantAIProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/ai-provider`
+}
+
+/**
+ * @summary Get tenant BYOK eligibility and saved provider status without its API key
+ */
+export const getTenantAIProviderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<TenantAIProviderSettings> => {
+
+  return customFetch<TenantAIProviderSettings>(getGetTenantAIProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTenantAIProviderSettingsQueryKey = () => {
+    return [
+    `/api/settings/ai-provider`
+    ] as const;
+    }
+
+
+export const getGetTenantAIProviderSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getTenantAIProviderSettings>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTenantAIProviderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTenantAIProviderSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTenantAIProviderSettings>>> = ({ signal }) => getTenantAIProviderSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTenantAIProviderSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTenantAIProviderSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getTenantAIProviderSettings>>>
+export type GetTenantAIProviderSettingsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get tenant BYOK eligibility and saved provider status without its API key
+ */
+
+export function useGetTenantAIProviderSettings<TData = Awaited<ReturnType<typeof getTenantAIProviderSettings>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTenantAIProviderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTenantAIProviderSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateTenantAIProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/ai-provider`
+}
+
+/**
+ * @summary Save the tenant's tested provider and model
+ */
+export const updateTenantAIProviderSettings = async (aIProviderSettingsInput: AIProviderSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantAIProviderSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantAIProviderSettings>(getUpdateTenantAIProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aIProviderSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateTenantAIProviderSettingsMutationKey = () => ['updateTenantAIProviderSettings'] as const;
+
+export const getUpdateTenantAIProviderSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantAIProviderSettings>>, TError,UpdateTenantAIProviderSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTenantAIProviderSettings>>, TError,UpdateTenantAIProviderSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTenantAIProviderSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTenantAIProviderSettings>>, UpdateTenantAIProviderSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateTenantAIProviderSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTenantAIProviderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateTenantAIProviderSettings>>>
+    export type UpdateTenantAIProviderSettingsMutationBody = BodyType<AIProviderSettingsInput>
+    export type UpdateTenantAIProviderSettingsMutationError = ErrorType<ApiError>
+    export type UpdateTenantAIProviderSettingsMutationVariables = {data: BodyType<AIProviderSettingsInput>}
+
+    /**
+ * @summary Save the tenant's tested provider and model
+ */
+export const useUpdateTenantAIProviderSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantAIProviderSettings>>, TError,UpdateTenantAIProviderSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTenantAIProviderSettings>>,
+        TError,
+        UpdateTenantAIProviderSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTenantAIProviderSettingsMutationOptions(options));
+    }
+
+export const getDeleteTenantAIProviderSettingsUrl = () => {
+
+
+
+
+  return `/api/settings/ai-provider`
+}
+
+/**
+ * @summary Remove the tenant's encrypted provider key and model
+ */
+export const deleteTenantAIProviderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<TenantAIProviderSettings> => {
+
+  return customFetch<TenantAIProviderSettings>(getDeleteTenantAIProviderSettingsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTenantAIProviderSettingsMutationKey = () => ['deleteTenantAIProviderSettings'] as const;
+
+export const getDeleteTenantAIProviderSettingsMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, TError,void, TContext> => {
+
+const mutationKey = getDeleteTenantAIProviderSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, void> = () => {
+
+
+          return  deleteTenantAIProviderSettings(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTenantAIProviderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>>
+
+    export type DeleteTenantAIProviderSettingsMutationError = ErrorType<ApiError>
+
+
+    /**
+ * @summary Remove the tenant's encrypted provider key and model
+ */
+export const useDeleteTenantAIProviderSettings = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTenantAIProviderSettings>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteTenantAIProviderSettingsMutationOptions(options));
+    }
+
+export const getTestTenantAIProviderConnectionUrl = () => {
+
+
+
+
+  return `/api/settings/ai-provider/test`
+}
+
+/**
+ * @summary Test a tenant provider key and list available text models
+ */
+export const testTenantAIProviderConnection = async (testAIProviderConnectionInput: TestAIProviderConnectionInput, options?: Parameters<typeof customFetch>[1]): Promise<AIProviderTestResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AIProviderTestResult>(getTestTenantAIProviderConnectionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(testAIProviderConnectionInput)
+  }
+);}
+
+
+
+
+
+export const getTestTenantAIProviderConnectionMutationKey = () => ['testTenantAIProviderConnection'] as const;
+
+export const getTestTenantAIProviderConnectionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantAIProviderConnection>>, TError,TestTenantAIProviderConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testTenantAIProviderConnection>>, TError,TestTenantAIProviderConnectionMutationVariables, TContext> => {
+
+const mutationKey = getTestTenantAIProviderConnectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testTenantAIProviderConnection>>, TestTenantAIProviderConnectionMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  testTenantAIProviderConnection(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestTenantAIProviderConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testTenantAIProviderConnection>>>
+    export type TestTenantAIProviderConnectionMutationBody = BodyType<TestAIProviderConnectionInput>
+    export type TestTenantAIProviderConnectionMutationError = ErrorType<ApiError>
+    export type TestTenantAIProviderConnectionMutationVariables = {data: BodyType<TestAIProviderConnectionInput>}
+
+    /**
+ * @summary Test a tenant provider key and list available text models
+ */
+export const useTestTenantAIProviderConnection = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTenantAIProviderConnection>>, TError,TestTenantAIProviderConnectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testTenantAIProviderConnection>>,
+        TError,
+        TestTenantAIProviderConnectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getTestTenantAIProviderConnectionMutationOptions(options));
     }
 
 export const getGetAIProviderSettingsUrl = () => {

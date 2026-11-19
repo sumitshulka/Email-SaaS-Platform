@@ -244,6 +244,10 @@ function PackageCard({ item, featured, scheduled, pending, disabled, action, onl
           <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
           <span className="min-w-0 break-words">{item.reportsEnabled ? item.personalReportLimit > 0 ? `Reports included · save up to ${item.personalReportLimit.toLocaleString()} personal reports` : 'Reports included · run and export, but no personal reports can be saved' : 'Reports are not included'}</span>
         </div>
+        <div data-testid={`text-plan-byok-ai-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">{item.byokAiEnabled ? 'Bring your own AI provider key for tenant-scoped AI features' : 'Tenant-owned AI provider keys are not included'}</span>
+        </div>
         <div data-testid={`text-plan-hourly-limit-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
           <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
           <span className="min-w-0 break-words">Up to {sendingLimits.emailsPerHourPerSmtp.toLocaleString()} campaign attempts per rolling hour, per SMTP mailbox</span>

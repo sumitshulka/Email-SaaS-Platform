@@ -5048,6 +5048,32 @@ export interface AIProviderSettings {
   updatedAt: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type TenantAIProviderSettingsProvider = typeof TenantAIProviderSettingsProvider[keyof typeof TenantAIProviderSettingsProvider] | null;
+
+
+export const TenantAIProviderSettingsProvider = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  gemini: 'gemini',
+} as const;
+
+export interface TenantAIProviderSettings {
+  eligible: boolean;
+  /** @nullable */
+  packageName: string | null;
+  configured: boolean;
+  /** @nullable */
+  provider: TenantAIProviderSettingsProvider;
+  /** @nullable */
+  selectedModel: string | null;
+  apiKeyConfigured: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
 export interface AIProviderSettingsInput {
   provider: AIProviderType;
   /**
@@ -5434,6 +5460,8 @@ export interface SubscriptionPackage {
      * @maximum 10000
      */
   personalReportLimit: number;
+  /** Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply. */
+  byokAiEnabled: boolean;
   /** @minimum 0 */
   emailAccountLimit: number;
   /**
@@ -5531,6 +5559,8 @@ export interface SubscriptionPackageInput {
      * @maximum 10000
      */
   personalReportLimit?: number;
+  /** Allows users on this package to configure one tenant-owned AI provider key. */
+  byokAiEnabled?: boolean;
   /**
      * @minimum 0
      * @maximum 100
@@ -5701,6 +5731,8 @@ export interface SubscriptionPackageUpdateInput {
      * @maximum 10000
      */
   personalReportLimit?: number;
+  /** Allows users on this package to configure one tenant-owned AI provider key. */
+  byokAiEnabled?: boolean;
   /**
      * @minimum 0
      * @maximum 100

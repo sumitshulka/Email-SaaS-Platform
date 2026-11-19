@@ -10108,6 +10108,89 @@ export const TestGoogleOAuthSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get tenant BYOK eligibility and saved provider status without its API key
+ */
+export const GetTenantAIProviderSettingsResponse = zod.object({
+  "eligible": zod.boolean(),
+  "packageName": zod.string().nullable(),
+  "configured": zod.boolean(),
+  "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
+  "selectedModel": zod.string().nullable(),
+  "apiKeyConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save the tenant's tested provider and model
+ */
+export const updateTenantAIProviderSettingsBodyApiKeyMax = 4096;
+
+export const updateTenantAIProviderSettingsBodySelectedModelMax = 200;
+
+
+
+export const UpdateTenantAIProviderSettingsBody = zod.object({
+  "provider": zod.enum(['openai', 'anthropic', 'gemini']),
+  "apiKey": zod.string().min(1).max(updateTenantAIProviderSettingsBodyApiKeyMax).optional(),
+  "selectedModel": zod.string().min(1).max(updateTenantAIProviderSettingsBodySelectedModelMax)
+})
+
+export const UpdateTenantAIProviderSettingsResponse = zod.object({
+  "eligible": zod.boolean(),
+  "packageName": zod.string().nullable(),
+  "configured": zod.boolean(),
+  "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
+  "selectedModel": zod.string().nullable(),
+  "apiKeyConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Remove the tenant's encrypted provider key and model
+ */
+export const DeleteTenantAIProviderSettingsResponse = zod.object({
+  "eligible": zod.boolean(),
+  "packageName": zod.string().nullable(),
+  "configured": zod.boolean(),
+  "provider": zod.union([zod.literal('openai'),zod.literal('anthropic'),zod.literal('gemini'),zod.literal(null)]).nullable(),
+  "selectedModel": zod.string().nullable(),
+  "apiKeyConfigured": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Test a tenant provider key and list available text models
+ */
+export const testTenantAIProviderConnectionBodyApiKeyMax = 4096;
+
+
+
+export const TestTenantAIProviderConnectionBody = zod.object({
+  "provider": zod.enum(['openai', 'anthropic', 'gemini']),
+  "apiKey": zod.string().min(1).max(testTenantAIProviderConnectionBodyApiKeyMax).optional()
+})
+
+export const testTenantAIProviderConnectionResponseModelsItemIdMax = 200;
+
+export const testTenantAIProviderConnectionResponseModelsItemNameMax = 300;
+
+
+
+export const TestTenantAIProviderConnectionResponse = zod.object({
+  "provider": zod.enum(['openai', 'anthropic', 'gemini']),
+  "connected": zod.boolean(),
+  "models": zod.array(zod.object({
+  "id": zod.string().min(1).max(testTenantAIProviderConnectionResponseModelsItemIdMax),
+  "name": zod.string().min(1).max(testTenantAIProviderConnectionResponseModelsItemNameMax)
+})),
+  "testedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get the saved LLM provider configuration without its API key
  */
 export const GetAIProviderSettingsResponse = zod.object({
@@ -10368,6 +10451,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin).max(listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10439,6 +10523,7 @@ export const CreateSubscriptionPackageBody = zod.object({
   "prospectManagementEnabled": zod.boolean().optional().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().optional().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(createSubscriptionPackageBodyPersonalReportLimitMin).max(createSubscriptionPackageBodyPersonalReportLimitMax).optional().describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().optional().describe('Allows users on this package to configure one tenant-owned AI provider key.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageBodyResearchAllowanceMin).max(createSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(createSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
@@ -10486,6 +10571,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(createSubscriptionPackageResponsePersonalReportLimitMin).max(createSubscriptionPackageResponsePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageResponseResearchAllowanceMin).max(createSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(createSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10554,6 +10640,7 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "prospectManagementEnabled": zod.boolean().optional().describe('Enables full Prospect Management access for paid primary packages.'),
   "reportsEnabled": zod.boolean().optional().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(updateSubscriptionPackageBodyPersonalReportLimitMin).max(updateSubscriptionPackageBodyPersonalReportLimitMax).optional().describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().optional().describe('Allows users on this package to configure one tenant-owned AI provider key.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageBodyResearchAllowanceMin).max(updateSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(updateSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
@@ -10601,6 +10688,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(updateSubscriptionPackageResponsePersonalReportLimitMin).max(updateSubscriptionPackageResponsePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageResponseResearchAllowanceMin).max(updateSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(updateSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10673,6 +10761,7 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMin).max(giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -10926,6 +11015,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin).max(listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -11024,6 +11114,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMin).max(getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -11054,6 +11145,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -11209,6 +11301,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMin).max(activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -11334,6 +11427,7 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMin).max(getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
@@ -11448,6 +11542,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
+  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),

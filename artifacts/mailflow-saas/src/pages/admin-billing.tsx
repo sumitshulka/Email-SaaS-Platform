@@ -39,12 +39,13 @@ type PackageDraft = {
   prospectManagementEnabled: boolean;
   reportsEnabled: boolean;
   personalReportLimit: string;
+  byokAiEnabled: boolean;
   preferred: boolean;
   active: boolean;
 };
 
 const blankDraft: PackageDraft = {
-  packageType: 'primary', name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', aiEmailAssistAllowance: '0', additionalMailboxCount: '0', openCampaignAllowance: '0', openCampaignRecipientLimit: '0', prospectManagementEnabled: false, reportsEnabled: false, personalReportLimit: '0', preferred: false, active: true,
+  packageType: 'primary', name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', aiEmailAssistAllowance: '0', additionalMailboxCount: '0', openCampaignAllowance: '0', openCampaignRecipientLimit: '0', prospectManagementEnabled: false, reportsEnabled: false, personalReportLimit: '0', byokAiEnabled: false, preferred: false, active: true,
 };
 
 const errorText = (error: unknown) =>
@@ -245,6 +246,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       prospectManagementEnabled: pkg.prospectManagementEnabled,
       reportsEnabled: pkg.reportsEnabled,
       personalReportLimit: String(pkg.personalReportLimit),
+      byokAiEnabled: pkg.byokAiEnabled,
       preferred: pkg.preferred, active: pkg.active,
     });
     setNotice(null);
@@ -269,6 +271,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       prospectManagementEnabled: !isAddon && !draft.free && draft.prospectManagementEnabled,
       reportsEnabled: !isAddon && draft.reportsEnabled,
       personalReportLimit: !isAddon && draft.reportsEnabled ? Number(draft.personalReportLimit) : 0,
+      byokAiEnabled: !isAddon && draft.byokAiEnabled,
       preferred: !isAddon && draft.preferred, active: draft.active,
     };
     const isFree = draft.free;
@@ -734,6 +737,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
                   prospectManagementEnabled: packageType === 'primary' && !d.free && d.prospectManagementEnabled,
                   reportsEnabled: packageType === 'primary' && d.reportsEnabled,
                   personalReportLimit: packageType === 'addon' ? '0' : d.personalReportLimit,
+                   byokAiEnabled: packageType === 'primary' && d.byokAiEnabled,
                 }));
               }} className="h-10 w-full rounded-md border border-[#d8dfe6] bg-[#fcfdfe] px-3 text-[13px] text-[#1b2b3d] disabled:bg-[#f1f4f6]">
                 <option value="primary">Primary plan</option><option value="addon">Add-on</option>
@@ -759,6 +763,11 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
                 Include Reports
               </label>
               {draft.reportsEnabled && <Field label="Personal reports users may save" value={draft.personalReportLimit} onChange={personalReportLimit => setDraft(d => ({ ...d, personalReportLimit }))} testId="input-package-personal-report-limit" type="number" step="1" min={0} max={10000} hint="Per account. Set 0 to allow report runs and exports but no saved personal reports."/>}
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]">
+                <input data-testid="input-package-byok-ai" type="checkbox" checked={draft.byokAiEnabled} onChange={event => setDraft(d => ({ ...d, byokAiEnabled: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>
+                Allow tenant-owned AI provider keys
+              </label>
+              <p className="-mt-2 text-[11px] text-[#718192]">Customers may configure one provider key for tenant-scoped AI features. Existing feature and credit limits remain in force. Disabled by default for all packages.</p>
             </>}
             {draft.packageType === 'addon' && <>
               <Field label="Company research credits" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Unused credits pause when the primary plan ends and resume on a later paid plan."/>
@@ -798,6 +807,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
                 <div data-testid={`text-admin-package-open-campaigns-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{(pkg.openCampaignAllowance ?? 0) > 0 && (pkg.openCampaignRecipientLimit ?? 0) > 0 ? `${(pkg.openCampaignAllowance ?? 0).toLocaleString()} open campaign${pkg.openCampaignAllowance === 1 ? '' : 's'} per term · up to ${(pkg.openCampaignRecipientLimit ?? 0).toLocaleString()} recipients each` : 'Open campaigns not included'}</div>
                 <div data-testid={`text-admin-package-prospect-management-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">Prospect Management {pkg.prospectManagementEnabled ? 'included' : 'not included'}</div>
                 <div data-testid={`text-admin-package-reports-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.reportsEnabled ? `Reports included · ${pkg.personalReportLimit.toLocaleString()} personal report${pkg.personalReportLimit === 1 ? '' : 's'} may be saved` : 'Reports not included'}</div>
+                <div data-testid={`text-admin-package-byok-ai-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">Tenant BYOK AI {pkg.byokAiEnabled ? 'included' : 'not included'}</div>
                 {sendingLimits && <div data-testid={`text-admin-package-send-limits-${pkg.id}`} className="mt-1 text-[10px] leading-4 text-[#597086]">{sendingLimits.emailsPerHourPerSmtp.toLocaleString()}/hour and {sendingLimits.emailsPerDayPerSmtp.toLocaleString()}/24h per SMTP mailbox</div>}
               </> : <>
                 <div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research credit{pkg.researchAllowance === 1 ? '' : 's'}</div>

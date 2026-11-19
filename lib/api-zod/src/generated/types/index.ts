@@ -516,6 +516,8 @@ export * from './supportTicketMessageInput';
 export * from './supportTicketStatus';
 export * from './supportTicketStatusUpdate';
 export * from './supportTicketSummary';
+export * from './tenantAIProviderSettings';
+export * from './tenantAIProviderSettingsProvider';
 export * from './tenantSendingAccount';
 export * from './tenantSendingAccountResponse';
 export * from './tenantSendingAccounts';

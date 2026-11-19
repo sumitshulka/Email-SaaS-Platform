@@ -54,6 +54,8 @@ export interface SubscriptionPackageInput {
      * @maximum 10000
      */
   personalReportLimit?: number;
+  /** Allows users on this package to configure one tenant-owned AI provider key. */
+  byokAiEnabled?: boolean;
   /**
      * @minimum 0
      * @maximum 100

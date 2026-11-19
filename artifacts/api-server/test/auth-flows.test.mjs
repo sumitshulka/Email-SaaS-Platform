@@ -222,6 +222,7 @@ memory.public.none(`
     prospect_management_enabled boolean NOT NULL DEFAULT false,
     reports_enabled boolean NOT NULL DEFAULT false,
     personal_report_limit integer NOT NULL DEFAULT 0,
+    byok_ai_enabled boolean NOT NULL DEFAULT false,
     email_account_limit integer NOT NULL DEFAULT 1,
     research_allowance integer NOT NULL DEFAULT 0,
     ai_email_assist_allowance integer NOT NULL DEFAULT 0,
@@ -230,6 +231,15 @@ memory.public.none(`
     preferred boolean NOT NULL DEFAULT false,
     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
     updated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE TABLE tenant_ai_provider_configurations (
+    user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    provider varchar(20) NOT NULL CHECK (provider IN ('openai', 'anthropic', 'gemini')),
+    api_key_encrypted text NOT NULL,
+    selected_model varchar(200) NOT NULL,
+    last_tested_at timestamptz NOT NULL DEFAULT now(),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   );

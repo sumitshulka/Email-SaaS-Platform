@@ -10,14 +10,13 @@ import {
   reserveAiEmailAssistCredit,
 } from "../lib/add-on-entitlements";
 import {
-  getAIProviderConfigurationStatus,
-  getStoredAIProviderApiKey,
-} from "../lib/ai-provider-configuration";
+  resolveAIProviderConfigurationForTenant,
+} from "../lib/tenant-ai-provider-configuration";
 import {
   researchProviderRequest,
   ResearchProviderError,
 } from "../lib/company-research-provider";
-import type { AIProviderId } from "../lib/ai-provider-client";
+import { writeAuditLog } from "../lib/audit";
 import { getPlatformSettings } from "../lib/platform-settings";
 import {
   describeBlockedCampaignFields,
@@ -89,28 +88,19 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
     return;
   }
 
-  const status = await getAIProviderConfigurationStatus();
-  if (
-    !status.configured ||
-    !status.provider ||
-    !status.selectedModel ||
-    !status.apiKeyConfigured
-  ) {
+  const providerConfiguration = await resolveAIProviderConfigurationForTenant(
+    req.authUser!.id,
+  );
+  if (providerConfiguration.kind !== "ready") {
     res.status(503).json({
-      error: "AI writing is not configured yet. Contact the platform administrator.",
+      error: providerConfiguration.reason === "tenant_key_unavailable"
+        ? "Your saved AI provider key is unavailable. Update or remove it in AI Provider settings."
+        : "AI writing is not configured yet. Contact the platform administrator.",
       code: "AI_PROVIDER_NOT_CONFIGURED",
     });
     return;
   }
-  const provider = status.provider as AIProviderId;
-  const apiKey = await getStoredAIProviderApiKey(provider);
-  if (!apiKey) {
-    res.status(503).json({
-      error: "AI writing is not available. Contact the platform administrator.",
-      code: "AI_PROVIDER_NOT_CONFIGURED",
-    });
-    return;
-  }
+  const { provider, apiKey, selectedModel } = providerConfiguration;
 
   const reservation = await reserveAiEmailAssistCredit(req.authUser!.id);
   if (!reservation) {
@@ -147,7 +137,7 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
     ].join("\n");
     const result = await researchProviderRequest({
       provider,
-      model: status.selectedModel,
+      model: selectedModel,
       apiKey,
       prompt,
       search: false,
@@ -166,6 +156,28 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
     }, settings.prohibitedEmailKeywords);
     if (blockedFields.length) {
       await finishAiEmailAssistCredit(req.authUser!.id, reservation.id, false);
+      try {
+        await writeAuditLog({
+          actorId: req.authUser!.id,
+          action: "ai_usage.campaign_email_assist.rejected",
+          entity: "ai_operation",
+          ipAddress: req.ip,
+          metadata: {
+            provider,
+            providerSource: providerConfiguration.source,
+            model: selectedModel,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            errorCategory: "content_policy",
+            allowanceConsumed: 0,
+          },
+        });
+      } catch {
+        req.log.error(
+          { provider, model: selectedModel },
+          "AI usage audit could not be recorded",
+        );
+      }
       res.status(422).json({
         error: `The platform policy blocks content in these generated fields: ${describeBlockedCampaignFields(blockedFields)}. Your credit was not used.`,
         code: "PROFANITY_BLOCKED",
@@ -179,12 +191,55 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
       usage: dashboard.balances.emailAssist,
     });
     await finishAiEmailAssistCredit(req.authUser!.id, reservation.id, true);
+    try {
+      await writeAuditLog({
+        actorId: req.authUser!.id,
+        action: "ai_usage.campaign_email_assist.succeeded",
+        entity: "ai_operation",
+        ipAddress: req.ip,
+        metadata: {
+          provider,
+          providerSource: providerConfiguration.source,
+          model: selectedModel,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          allowanceConsumed: 1,
+        },
+      });
+    } catch {
+      req.log.error(
+        { provider, model: selectedModel },
+        "AI usage audit could not be recorded",
+      );
+    }
     res.json(response);
   } catch (error) {
     try {
       await finishAiEmailAssistCredit(req.authUser!.id, reservation.id, false);
     } catch {
       // Background cleanup and later dashboard/reservation checks release stale rows.
+    }
+    try {
+      await writeAuditLog({
+        actorId: req.authUser!.id,
+        action: "ai_usage.campaign_email_assist.failed",
+        entity: "ai_operation",
+        ipAddress: req.ip,
+        metadata: {
+          provider,
+          providerSource: providerConfiguration.source,
+          model: selectedModel,
+          errorCategory: error instanceof ResearchProviderError
+            ? "provider_request_failed"
+            : "invalid_model_output",
+          allowanceConsumed: 0,
+        },
+      });
+    } catch {
+      req.log.error(
+        { provider, model: selectedModel },
+        "AI usage audit could not be recorded",
+      );
     }
     res.status(502).json({
       error:
