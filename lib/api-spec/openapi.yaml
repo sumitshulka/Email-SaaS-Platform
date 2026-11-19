@@ -3824,6 +3824,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /campaigns/date-range-report:
+    get:
+      operationId: getCampaignDateRangeReport
+      tags: [sending]
+      summary: Summarize campaigns created in a named or custom date range
+      parameters:
+        - in: query
+          name: period
+          required: true
+          schema:
+            type: string
+            enum: [this_week, last_week, this_month, last_month, this_quarter, last_quarter, this_year, last_year, custom]
+        - in: query
+          name: startDate
+          schema: { type: string, format: date }
+        - in: query
+          name: endDate
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Campaign summary and rows for the selected creation-date range
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignDateRangeReport" }
+        "400":
+          description: Invalid date range or custom range longer than 180 days
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+  /campaigns/date-range-report/export/pdf:
+    post:
+      operationId: exportCampaignDateRangeReportPdf
+      tags: [sending]
+      summary: Download a campaign date-range report as PDF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignDateRangeReportInput" }
+      responses:
+        "200":
+          description: Downloadable PDF report
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+  /campaigns/date-range-report/export/xlsx:
+    post:
+      operationId: exportCampaignDateRangeReportXlsx
+      tags: [sending]
+      summary: Download a campaign date-range report as Excel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignDateRangeReportInput" }
+      responses:
+        "200":
+          description: Downloadable Excel workbook
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
   /campaigns/preview:
     post:
       operationId: previewCampaign
@@ -7727,6 +7788,62 @@ components:
             activeCampaignFinishAt: { type: ["string", "null"], format: date-time }
           required: [campaignCount, draftCount, nonDraftCount, delivered, bounced, suppressed, activeCampaignCount, activeCampaignFinishAt]
       required: [campaigns, contextCampaignIds, total, page, pageSize, summary]
+    CampaignDateRangeReportInput:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [this_week, last_week, this_month, last_month, this_quarter, last_quarter, this_year, last_year, custom]
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+      required: [period]
+    CampaignDateRangeReportRow:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        campaignType: { type: string, enum: [primary, follow_up] }
+        status: { type: string, enum: [draft, queued, sending, completed] }
+        paused: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        recipients: { type: integer, minimum: 0 }
+        queued: { type: integer, minimum: 0 }
+        accepted: { type: integer, minimum: 0 }
+        rejectedOrFailed: { type: integer, minimum: 0 }
+        suppressed: { type: integer, minimum: 0 }
+        unknown: { type: integer, minimum: 0 }
+      required: [id, name, campaignType, status, paused, createdAt, scheduledAt, completedAt, recipients, queued, accepted, rejectedOrFailed, suppressed, unknown]
+    CampaignDateRangeReport:
+      type: object
+      properties:
+        period: { type: string, enum: [this_week, last_week, this_month, last_month, this_quarter, last_quarter, this_year, last_year, custom] }
+        periodLabel: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        timeZone: { type: string }
+        generatedAt: { type: string, format: date-time }
+        summary:
+          type: object
+          properties:
+            campaignCount: { type: integer, minimum: 0 }
+            draftCount: { type: integer, minimum: 0 }
+            queuedCount: { type: integer, minimum: 0 }
+            sendingCount: { type: integer, minimum: 0 }
+            completedCount: { type: integer, minimum: 0 }
+            pausedCount: { type: integer, minimum: 0 }
+            totalRecipients: { type: integer, minimum: 0 }
+            queuedRecipients: { type: integer, minimum: 0 }
+            smtpAccepted: { type: integer, minimum: 0 }
+            rejectedOrFailed: { type: integer, minimum: 0 }
+            suppressed: { type: integer, minimum: 0 }
+            unknown: { type: integer, minimum: 0 }
+          required: [campaignCount, draftCount, queuedCount, sendingCount, completedCount, pausedCount, totalRecipients, queuedRecipients, smtpAccepted, rejectedOrFailed, suppressed, unknown]
+        campaigns:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignDateRangeReportRow" }
+      required: [period, periodLabel, startDate, endDate, timeZone, generatedAt, summary, campaigns]
     CampaignPauseInput:
       type: object
       description: Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.

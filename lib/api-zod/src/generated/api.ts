@@ -7521,6 +7521,117 @@ export const GetCampaignHistoryResponse = zod.object({
 
 
 /**
+ * @summary Summarize campaigns created in a named or custom date range
+ */
+export const GetCampaignDateRangeReportQueryParams = zod.object({
+  "period": zod.enum(['this_week', 'last_week', 'this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom']),
+  "startDate": zod.date().optional(),
+  "endDate": zod.date().optional()
+})
+
+export const getCampaignDateRangeReportResponseSummaryCampaignCountMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryDraftCountMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryQueuedCountMin = 0;
+
+export const getCampaignDateRangeReportResponseSummarySendingCountMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryCompletedCountMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryPausedCountMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryTotalRecipientsMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryQueuedRecipientsMin = 0;
+
+export const getCampaignDateRangeReportResponseSummarySmtpAcceptedMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryRejectedOrFailedMin = 0;
+
+export const getCampaignDateRangeReportResponseSummarySuppressedMin = 0;
+
+export const getCampaignDateRangeReportResponseSummaryUnknownMin = 0;
+
+export const getCampaignDateRangeReportResponseCampaignsItemRecipientsMin = 0;
+
+export const getCampaignDateRangeReportResponseCampaignsItemQueuedMin = 0;
+
+export const getCampaignDateRangeReportResponseCampaignsItemAcceptedMin = 0;
+
+export const getCampaignDateRangeReportResponseCampaignsItemRejectedOrFailedMin = 0;
+
+export const getCampaignDateRangeReportResponseCampaignsItemSuppressedMin = 0;
+
+export const getCampaignDateRangeReportResponseCampaignsItemUnknownMin = 0;
+
+
+
+export const GetCampaignDateRangeReportResponse = zod.object({
+  "period": zod.enum(['this_week', 'last_week', 'this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom']),
+  "periodLabel": zod.string(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "timeZone": zod.string(),
+  "generatedAt": zod.coerce.date(),
+  "summary": zod.object({
+  "campaignCount": zod.number().int().min(getCampaignDateRangeReportResponseSummaryCampaignCountMin),
+  "draftCount": zod.number().int().min(getCampaignDateRangeReportResponseSummaryDraftCountMin),
+  "queuedCount": zod.number().int().min(getCampaignDateRangeReportResponseSummaryQueuedCountMin),
+  "sendingCount": zod.number().int().min(getCampaignDateRangeReportResponseSummarySendingCountMin),
+  "completedCount": zod.number().int().min(getCampaignDateRangeReportResponseSummaryCompletedCountMin),
+  "pausedCount": zod.number().int().min(getCampaignDateRangeReportResponseSummaryPausedCountMin),
+  "totalRecipients": zod.number().int().min(getCampaignDateRangeReportResponseSummaryTotalRecipientsMin),
+  "queuedRecipients": zod.number().int().min(getCampaignDateRangeReportResponseSummaryQueuedRecipientsMin),
+  "smtpAccepted": zod.number().int().min(getCampaignDateRangeReportResponseSummarySmtpAcceptedMin),
+  "rejectedOrFailed": zod.number().int().min(getCampaignDateRangeReportResponseSummaryRejectedOrFailedMin),
+  "suppressed": zod.number().int().min(getCampaignDateRangeReportResponseSummarySuppressedMin),
+  "unknown": zod.number().int().min(getCampaignDateRangeReportResponseSummaryUnknownMin)
+}),
+  "campaigns": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "campaignType": zod.enum(['primary', 'follow_up']),
+  "status": zod.enum(['draft', 'queued', 'sending', 'completed']),
+  "paused": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "recipients": zod.number().int().min(getCampaignDateRangeReportResponseCampaignsItemRecipientsMin),
+  "queued": zod.number().int().min(getCampaignDateRangeReportResponseCampaignsItemQueuedMin),
+  "accepted": zod.number().int().min(getCampaignDateRangeReportResponseCampaignsItemAcceptedMin),
+  "rejectedOrFailed": zod.number().int().min(getCampaignDateRangeReportResponseCampaignsItemRejectedOrFailedMin),
+  "suppressed": zod.number().int().min(getCampaignDateRangeReportResponseCampaignsItemSuppressedMin),
+  "unknown": zod.number().int().min(getCampaignDateRangeReportResponseCampaignsItemUnknownMin)
+}))
+})
+
+
+/**
+ * @summary Download a campaign date-range report as PDF
+ */
+export const ExportCampaignDateRangeReportPdfBody = zod.object({
+  "period": zod.enum(['this_week', 'last_week', 'this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom']),
+  "startDate": zod.coerce.date().optional(),
+  "endDate": zod.coerce.date().optional()
+})
+
+export const ExportCampaignDateRangeReportPdfResponse = zod.unknown()
+
+
+/**
+ * @summary Download a campaign date-range report as Excel
+ */
+export const ExportCampaignDateRangeReportXlsxBody = zod.object({
+  "period": zod.enum(['this_week', 'last_week', 'this_month', 'last_month', 'this_quarter', 'last_quarter', 'this_year', 'last_year', 'custom']),
+  "startDate": zod.coerce.date().optional(),
+  "endDate": zod.coerce.date().optional()
+})
+
+export const ExportCampaignDateRangeReportXlsxResponse = zod.unknown()
+
+
+/**
  * @summary Render unsaved campaign content for an eligible contact in its target list
  */
 export const previewCampaignBodySubjectMax = 200;

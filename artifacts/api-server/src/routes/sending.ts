@@ -5,6 +5,16 @@ import { campaignEmailSuppressionsTable, openCampaignAudienceTable } from "@work
 import { normalizeOpenRecipients, openCampaignAllowance, openCampaignPlaceholderError, openFollowUpAudienceError, replaceOpenAudience } from "../lib/open-campaigns";
 import { campaignFallbackError, fallbackPolicyText } from "../lib/campaign-personalization";
 import {
+  CampaignDateRangeError,
+  resolveCampaignDateRange,
+  type CampaignReportPeriod,
+} from "../lib/campaign-date-range-report";
+import {
+  buildCampaignDateRangeReportPdf,
+  buildCampaignDateRangeReportXlsx,
+  type CampaignDateRangeReportData,
+} from "../lib/campaign-report-export";
+import {
   and,
   asc,
   count,
@@ -39,6 +49,10 @@ import {
   CreateContactSegmentResponse,
   CreateContactResponse,
   ExportContactsBody,
+  ExportCampaignDateRangeReportPdfBody,
+  ExportCampaignDateRangeReportXlsxBody,
+  GetCampaignDateRangeReportQueryParams,
+  GetCampaignDateRangeReportResponse,
   GetCampaignHistoryQueryParams,
   GetCampaignHistoryResponse,
   GetCampaignDashboardParams,
@@ -5035,6 +5049,277 @@ router.post("/public/unsubscribe", async (req, res): Promise<void> => {
     throw error;
   }
 });
+
+async function createCampaignDateRangeReport(
+  userId: string,
+  period: CampaignReportPeriod,
+  startDate: string | undefined,
+  endDate: string | undefined,
+  requestedTimeZone: string,
+): Promise<CampaignDateRangeReportData> {
+  const range = resolveCampaignDateRange(
+    period,
+    startDate,
+    endDate,
+    requestedTimeZone,
+  );
+  const campaigns = await db
+    .select({
+      id: emailCampaignsTable.id,
+      name: emailCampaignsTable.name,
+      parentCampaignId: emailCampaignsTable.parentCampaignId,
+      status: emailCampaignsTable.status,
+      pausedAt: emailCampaignsTable.pausedAt,
+      createdAt: emailCampaignsTable.createdAt,
+      scheduledAt: emailCampaignsTable.scheduledAt,
+      completedAt: emailCampaignsTable.completedAt,
+    })
+    .from(emailCampaignsTable)
+    .where(
+      and(
+        eq(emailCampaignsTable.userId, userId),
+        sql`${emailCampaignsTable.createdAt} >= (${range.startDate}::date::timestamp AT TIME ZONE ${range.timeZone})`,
+        sql`${emailCampaignsTable.createdAt} < ((${range.endDate}::date + interval '1 day')::timestamp AT TIME ZONE ${range.timeZone})`,
+      ),
+    )
+    .orderBy(desc(emailCampaignsTable.createdAt), desc(emailCampaignsTable.id));
+
+  const metricsByCampaign = new Map(
+    campaigns.map((campaign) => [
+      campaign.id,
+      {
+        recipients: 0,
+        queued: 0,
+        accepted: 0,
+        rejectedOrFailed: 0,
+        suppressed: 0,
+        unknown: 0,
+      },
+    ]),
+  );
+  if (campaigns.length) {
+    const recipientGroups = await db
+      .select({
+        campaignId: emailCampaignRecipientsTable.campaignId,
+        status: emailCampaignRecipientsTable.status,
+        reportOutcome: emailCampaignRecipientsTable.reportOutcome,
+        value: count(),
+      })
+      .from(emailCampaignRecipientsTable)
+      .where(
+        and(
+          eq(emailCampaignRecipientsTable.userId, userId),
+          inArray(
+            emailCampaignRecipientsTable.campaignId,
+            campaigns.map((campaign) => campaign.id),
+          ),
+        ),
+      )
+      .groupBy(
+        emailCampaignRecipientsTable.campaignId,
+        emailCampaignRecipientsTable.status,
+        emailCampaignRecipientsTable.reportOutcome,
+      );
+    for (const group of recipientGroups) {
+      const metrics = metricsByCampaign.get(group.campaignId);
+      if (!metrics) continue;
+      const value = Number(group.value);
+      metrics.recipients += value;
+      if (group.status === "queued" || group.status === "sending") metrics.queued += value;
+      if (group.status === "delivered") metrics.accepted += value;
+      if (
+        group.status === "bounced" ||
+        group.reportOutcome === "bounced" ||
+        group.reportOutcome === "failed"
+      ) metrics.rejectedOrFailed += value;
+      if (group.status === "suppressed") metrics.suppressed += value;
+      if (group.status === "unknown") metrics.unknown += value;
+    }
+  }
+
+  const campaignReports = campaigns.map((campaign) => ({
+    id: campaign.id,
+    name: campaign.name,
+    campaignType: campaign.parentCampaignId ? "follow_up" as const : "primary" as const,
+    status: campaign.status,
+    paused: Boolean(campaign.pausedAt),
+    createdAt: campaign.createdAt,
+    scheduledAt: campaign.scheduledAt,
+    completedAt: campaign.completedAt,
+    ...(metricsByCampaign.get(campaign.id) ?? {
+      recipients: 0,
+      queued: 0,
+      accepted: 0,
+      rejectedOrFailed: 0,
+      suppressed: 0,
+      unknown: 0,
+    }),
+  }));
+  const summary = campaignReports.reduce(
+    (total, campaign) => {
+      total.campaignCount += 1;
+      if (campaign.status === "draft") total.draftCount += 1;
+      if (campaign.status === "queued") total.queuedCount += 1;
+      if (campaign.status === "sending") total.sendingCount += 1;
+      if (campaign.status === "completed") total.completedCount += 1;
+      if (campaign.paused) total.pausedCount += 1;
+      total.totalRecipients += campaign.recipients;
+      total.queuedRecipients += campaign.queued;
+      total.smtpAccepted += campaign.accepted;
+      total.rejectedOrFailed += campaign.rejectedOrFailed;
+      total.suppressed += campaign.suppressed;
+      total.unknown += campaign.unknown;
+      return total;
+    },
+    {
+      campaignCount: 0,
+      draftCount: 0,
+      queuedCount: 0,
+      sendingCount: 0,
+      completedCount: 0,
+      pausedCount: 0,
+      totalRecipients: 0,
+      queuedRecipients: 0,
+      smtpAccepted: 0,
+      rejectedOrFailed: 0,
+      suppressed: 0,
+      unknown: 0,
+    },
+  );
+  return {
+    period: range.period,
+    periodLabel: range.periodLabel,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    timeZone: range.timeZone,
+    generatedAt: new Date(),
+    summary,
+    campaigns: campaignReports,
+  };
+}
+
+function sendCampaignDateRangeError(res: any, error: unknown): boolean {
+  if (!(error instanceof CampaignDateRangeError)) return false;
+  res.status(400).json({ error: error.message, code: "INVALID_DATE_RANGE" });
+  return true;
+}
+
+function dateOnlyQueryDate(value: unknown): Date | undefined | null {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+    ? date
+    : null;
+}
+
+function bodyDateOnly(value: Date | undefined): string | undefined {
+  return value?.toISOString().slice(0, 10);
+}
+
+function hasInvalidCustomDateStrings(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const input = body as Record<string, unknown>;
+  if (input.period !== "custom") return false;
+  return dateOnlyQueryDate(input.startDate) === null || dateOnlyQueryDate(input.endDate) === null;
+}
+
+const campaignReportPdfMime = "application/pdf";
+const campaignReportXlsxMime =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+router.get(
+  "/campaigns/date-range-report",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const startDate = dateOnlyQueryDate(req.query.startDate);
+    const endDate = dateOnlyQueryDate(req.query.endDate);
+    const parsed = GetCampaignDateRangeReportQueryParams.safeParse({
+      ...req.query,
+      ...(startDate instanceof Date ? { startDate } : {}),
+      ...(endDate instanceof Date ? { endDate } : {}),
+    });
+    if (!parsed.success || startDate === null || endDate === null) {
+      res.status(400).json({
+        error: "Choose a valid campaign report period.",
+        code: "INVALID_DATE_RANGE",
+      });
+      return;
+    }
+    try {
+      const report = await createCampaignDateRangeReport(
+        req.authUser!.id,
+        parsed.data.period as CampaignReportPeriod,
+        bodyDateOnly(parsed.data.startDate),
+        bodyDateOnly(parsed.data.endDate),
+        req.authUser!.timezone,
+      );
+      res.json(GetCampaignDateRangeReportResponse.parse(report));
+    } catch (error) {
+      if (!sendCampaignDateRangeError(res, error)) throw error;
+    }
+  },
+);
+
+router.post(
+  "/campaigns/date-range-report/export/pdf",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = ExportCampaignDateRangeReportPdfBody.safeParse(req.body);
+    if (!parsed.success || hasInvalidCustomDateStrings(req.body)) {
+      res.status(400).json({ error: "Enter a valid campaign report period.", code: "INVALID_DATE_RANGE" });
+      return;
+    }
+    try {
+      const report = await createCampaignDateRangeReport(
+        req.authUser!.id,
+        parsed.data.period as CampaignReportPeriod,
+        bodyDateOnly(parsed.data.startDate),
+        bodyDateOnly(parsed.data.endDate),
+        req.authUser!.timezone,
+      );
+      const output = await buildCampaignDateRangeReportPdf(report);
+      res.setHeader("Content-Type", campaignReportPdfMime);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="campaign-report-${report.startDate}-to-${report.endDate}.pdf"`,
+      );
+      res.status(200).send(output);
+    } catch (error) {
+      if (!sendCampaignDateRangeError(res, error)) throw error;
+    }
+  },
+);
+
+router.post(
+  "/campaigns/date-range-report/export/xlsx",
+  requireUserRole,
+  async (req, res): Promise<void> => {
+    const parsed = ExportCampaignDateRangeReportXlsxBody.safeParse(req.body);
+    if (!parsed.success || hasInvalidCustomDateStrings(req.body)) {
+      res.status(400).json({ error: "Enter a valid campaign report period.", code: "INVALID_DATE_RANGE" });
+      return;
+    }
+    try {
+      const report = await createCampaignDateRangeReport(
+        req.authUser!.id,
+        parsed.data.period as CampaignReportPeriod,
+        bodyDateOnly(parsed.data.startDate),
+        bodyDateOnly(parsed.data.endDate),
+        req.authUser!.timezone,
+      );
+      const output = await buildCampaignDateRangeReportXlsx(report);
+      res.setHeader("Content-Type", campaignReportXlsxMime);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="campaign-report-${report.startDate}-to-${report.endDate}.xlsx"`,
+      );
+      res.status(200).send(output);
+    } catch (error) {
+      if (!sendCampaignDateRangeError(res, error)) throw error;
+    }
+  },
+);
 
 router.get("/campaigns", requireUserRole, async (req, res): Promise<void> => {
   res.json(ListCampaignsResponse.parse(await campaignPayloads(req.authUser!.id)));

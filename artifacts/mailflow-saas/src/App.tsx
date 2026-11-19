@@ -46,6 +46,7 @@ import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PackageCheckoutPage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
 import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@/pages/legal';
 import { CampaignDashboardPage, CampaignsPage, ContactsPage, ListsPage, SendingSettingsPage } from '@/pages/sending';
+import CampaignDateRangeReportPage from '@/pages/campaign-date-range-report';
 import { CampaignUnsubscribePage } from '@/pages/unsubscribe';
 import ContactFieldSettingsPage from '@/pages/contact-field-settings';
 import { trackPackageCheckoutRegistrationCompleted, trackRegistrationSucceeded, trackVerifiedSignupSucceeded } from '@/lib/analytics';
@@ -1989,6 +1990,7 @@ function Routes() {
      <Route path="/companies/:companyId">{params => <RouteGate>{u => u.role === 'USER' ? <CompanyDetailPage/> : u.role === 'SUPERADMIN' ? <AdminGlobalCompanyDetailPage/> : <NotFound/>}</RouteGate>}</Route>
     <Route path="/lists">{() => <RouteGate>{() => <ListsPage/>}</RouteGate>}</Route>
     <Route path="/campaigns">{() => <RouteGate>{() => <CampaignsPage key="campaign-list" maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
+    <Route path="/campaigns/report">{() => <RouteGate>{() => <CampaignDateRangeReportPage/>}</RouteGate>}</Route>
     <Route path="/campaigns/new">{() => <RouteGate>{() => <CampaignsPage key="campaign-create" createPage maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/campaigns/:campaignId">{params => <RouteGate>{() => <CampaignDashboardPage campaignId={params.campaignId} maintenancePaused={maintenancePaused}/>}</RouteGate>}</Route>
     <Route path="/admin">{() => <RouteGate admin>{() => <AdminDashboardPage/>}</RouteGate>}</Route>

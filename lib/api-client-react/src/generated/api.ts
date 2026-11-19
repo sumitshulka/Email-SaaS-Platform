@@ -60,6 +60,8 @@ import type {
   CampaignAudienceSummary,
   CampaignCancelResponse,
   CampaignDashboard,
+  CampaignDateRangeReport,
+  CampaignDateRangeReportInput,
   CampaignDeliveryReport,
   CampaignEmailAssistInput,
   CampaignEmailAssistResponse,
@@ -152,6 +154,7 @@ import type {
   ForgotPasswordInput,
   FreeAddOnActivation,
   FreeSubscriptionActivation,
+  GetCampaignDateRangeReportParams,
   GetCampaignDeliveryReportParams,
   GetCampaignHistoryParams,
   GetCampaignRecipientSummaryParams,
@@ -13748,6 +13751,266 @@ export function useGetCampaignHistory<TData = Awaited<ReturnType<typeof getCampa
 
 
 
+
+export const getGetCampaignDateRangeReportUrl = (params: GetCampaignDateRangeReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/campaigns/date-range-report?${stringifiedParams}` : `/api/campaigns/date-range-report`
+}
+
+/**
+ * @summary Summarize campaigns created in a named or custom date range
+ */
+export const getCampaignDateRangeReport = async (params: GetCampaignDateRangeReportParams, options?: Parameters<typeof customFetch>[1]): Promise<CampaignDateRangeReport> => {
+
+  return customFetch<CampaignDateRangeReport>(getGetCampaignDateRangeReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignDateRangeReportQueryKey = (params?: GetCampaignDateRangeReportParams,) => {
+    return [
+    `/api/campaigns/date-range-report`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCampaignDateRangeReportQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignDateRangeReport>>, TError = ErrorType<ApiError>>(params: GetCampaignDateRangeReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignDateRangeReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignDateRangeReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignDateRangeReport>>> = ({ signal }) => getCampaignDateRangeReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignDateRangeReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignDateRangeReportQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignDateRangeReport>>>
+export type GetCampaignDateRangeReportQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Summarize campaigns created in a named or custom date range
+ */
+
+export function useGetCampaignDateRangeReport<TData = Awaited<ReturnType<typeof getCampaignDateRangeReport>>, TError = ErrorType<ApiError>>(
+ params: GetCampaignDateRangeReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignDateRangeReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignDateRangeReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportCampaignDateRangeReportPdfUrl = () => {
+
+
+
+
+  return `/api/campaigns/date-range-report/export/pdf`
+}
+
+/**
+ * @summary Download a campaign date-range report as PDF
+ */
+export const exportCampaignDateRangeReportPdf = async (campaignDateRangeReportInput: CampaignDateRangeReportInput, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Blob>(getExportCampaignDateRangeReportPdfUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignDateRangeReportInput)
+  }
+);}
+
+
+
+
+
+export const getExportCampaignDateRangeReportPdfMutationKey = () => ['exportCampaignDateRangeReportPdf'] as const;
+
+export const getExportCampaignDateRangeReportPdfMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportCampaignDateRangeReportPdf>>, TError,ExportCampaignDateRangeReportPdfMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportCampaignDateRangeReportPdf>>, TError,ExportCampaignDateRangeReportPdfMutationVariables, TContext> => {
+
+const mutationKey = getExportCampaignDateRangeReportPdfMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportCampaignDateRangeReportPdf>>, ExportCampaignDateRangeReportPdfMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportCampaignDateRangeReportPdf(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportCampaignDateRangeReportPdfMutationResult = NonNullable<Awaited<ReturnType<typeof exportCampaignDateRangeReportPdf>>>
+    export type ExportCampaignDateRangeReportPdfMutationBody = BodyType<CampaignDateRangeReportInput>
+    export type ExportCampaignDateRangeReportPdfMutationError = ErrorType<unknown>
+    export type ExportCampaignDateRangeReportPdfMutationVariables = {data: BodyType<CampaignDateRangeReportInput>}
+
+    /**
+ * @summary Download a campaign date-range report as PDF
+ */
+export const useExportCampaignDateRangeReportPdf = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportCampaignDateRangeReportPdf>>, TError,ExportCampaignDateRangeReportPdfMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportCampaignDateRangeReportPdf>>,
+        TError,
+        ExportCampaignDateRangeReportPdfMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportCampaignDateRangeReportPdfMutationOptions(options));
+    }
+
+export const getExportCampaignDateRangeReportXlsxUrl = () => {
+
+
+
+
+  return `/api/campaigns/date-range-report/export/xlsx`
+}
+
+/**
+ * @summary Download a campaign date-range report as Excel
+ */
+export const exportCampaignDateRangeReportXlsx = async (campaignDateRangeReportInput: CampaignDateRangeReportInput, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Blob>(getExportCampaignDateRangeReportXlsxUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(campaignDateRangeReportInput)
+  }
+);}
+
+
+
+
+
+export const getExportCampaignDateRangeReportXlsxMutationKey = () => ['exportCampaignDateRangeReportXlsx'] as const;
+
+export const getExportCampaignDateRangeReportXlsxMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportCampaignDateRangeReportXlsx>>, TError,ExportCampaignDateRangeReportXlsxMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportCampaignDateRangeReportXlsx>>, TError,ExportCampaignDateRangeReportXlsxMutationVariables, TContext> => {
+
+const mutationKey = getExportCampaignDateRangeReportXlsxMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportCampaignDateRangeReportXlsx>>, ExportCampaignDateRangeReportXlsxMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportCampaignDateRangeReportXlsx(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportCampaignDateRangeReportXlsxMutationResult = NonNullable<Awaited<ReturnType<typeof exportCampaignDateRangeReportXlsx>>>
+    export type ExportCampaignDateRangeReportXlsxMutationBody = BodyType<CampaignDateRangeReportInput>
+    export type ExportCampaignDateRangeReportXlsxMutationError = ErrorType<unknown>
+    export type ExportCampaignDateRangeReportXlsxMutationVariables = {data: BodyType<CampaignDateRangeReportInput>}
+
+    /**
+ * @summary Download a campaign date-range report as Excel
+ */
+export const useExportCampaignDateRangeReportXlsx = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportCampaignDateRangeReportXlsx>>, TError,ExportCampaignDateRangeReportXlsxMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportCampaignDateRangeReportXlsx>>,
+        TError,
+        ExportCampaignDateRangeReportXlsxMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportCampaignDateRangeReportXlsxMutationOptions(options));
+    }
 
 export const getPreviewCampaignUrl = () => {
 

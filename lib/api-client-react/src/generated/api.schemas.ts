@@ -3568,6 +3568,123 @@ export interface CampaignHistory {
   summary: CampaignHistorySummary;
 }
 
+export type CampaignDateRangeReportInputPeriod = typeof CampaignDateRangeReportInputPeriod[keyof typeof CampaignDateRangeReportInputPeriod];
+
+
+export const CampaignDateRangeReportInputPeriod = {
+  this_week: 'this_week',
+  last_week: 'last_week',
+  this_month: 'this_month',
+  last_month: 'last_month',
+  this_quarter: 'this_quarter',
+  last_quarter: 'last_quarter',
+  this_year: 'this_year',
+  last_year: 'last_year',
+  custom: 'custom',
+} as const;
+
+export interface CampaignDateRangeReportInput {
+  period: CampaignDateRangeReportInputPeriod;
+  startDate?: string;
+  endDate?: string;
+}
+
+export type CampaignDateRangeReportRowCampaignType = typeof CampaignDateRangeReportRowCampaignType[keyof typeof CampaignDateRangeReportRowCampaignType];
+
+
+export const CampaignDateRangeReportRowCampaignType = {
+  primary: 'primary',
+  follow_up: 'follow_up',
+} as const;
+
+export type CampaignDateRangeReportRowStatus = typeof CampaignDateRangeReportRowStatus[keyof typeof CampaignDateRangeReportRowStatus];
+
+
+export const CampaignDateRangeReportRowStatus = {
+  draft: 'draft',
+  queued: 'queued',
+  sending: 'sending',
+  completed: 'completed',
+} as const;
+
+export interface CampaignDateRangeReportRow {
+  id: string;
+  name: string;
+  campaignType: CampaignDateRangeReportRowCampaignType;
+  status: CampaignDateRangeReportRowStatus;
+  paused: boolean;
+  createdAt: string;
+  /** @nullable */
+  scheduledAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+  /** @minimum 0 */
+  recipients: number;
+  /** @minimum 0 */
+  queued: number;
+  /** @minimum 0 */
+  accepted: number;
+  /** @minimum 0 */
+  rejectedOrFailed: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  unknown: number;
+}
+
+export type CampaignDateRangeReportPeriod = typeof CampaignDateRangeReportPeriod[keyof typeof CampaignDateRangeReportPeriod];
+
+
+export const CampaignDateRangeReportPeriod = {
+  this_week: 'this_week',
+  last_week: 'last_week',
+  this_month: 'this_month',
+  last_month: 'last_month',
+  this_quarter: 'this_quarter',
+  last_quarter: 'last_quarter',
+  this_year: 'this_year',
+  last_year: 'last_year',
+  custom: 'custom',
+} as const;
+
+export type CampaignDateRangeReportSummary = {
+  /** @minimum 0 */
+  campaignCount: number;
+  /** @minimum 0 */
+  draftCount: number;
+  /** @minimum 0 */
+  queuedCount: number;
+  /** @minimum 0 */
+  sendingCount: number;
+  /** @minimum 0 */
+  completedCount: number;
+  /** @minimum 0 */
+  pausedCount: number;
+  /** @minimum 0 */
+  totalRecipients: number;
+  /** @minimum 0 */
+  queuedRecipients: number;
+  /** @minimum 0 */
+  smtpAccepted: number;
+  /** @minimum 0 */
+  rejectedOrFailed: number;
+  /** @minimum 0 */
+  suppressed: number;
+  /** @minimum 0 */
+  unknown: number;
+};
+
+export interface CampaignDateRangeReport {
+  period: CampaignDateRangeReportPeriod;
+  periodLabel: string;
+  startDate: string;
+  endDate: string;
+  timeZone: string;
+  generatedAt: string;
+  summary: CampaignDateRangeReportSummary;
+  campaigns: CampaignDateRangeReportRow[];
+}
+
 /**
  * Set paused to true and provide a future resumeAt to schedule or change automatic resumption. Set resumeAt to null to keep the campaign paused without an automatic resume time. Set paused to false to resume delivery immediately.
  */
@@ -7068,6 +7185,27 @@ export const GetCampaignHistoryCreatedWithinDays = {
   NUMBER_7: 7,
   NUMBER_30: 30,
   NUMBER_90: 90,
+} as const;
+
+export type GetCampaignDateRangeReportParams = {
+period: GetCampaignDateRangeReportPeriod;
+startDate?: string;
+endDate?: string;
+};
+
+export type GetCampaignDateRangeReportPeriod = typeof GetCampaignDateRangeReportPeriod[keyof typeof GetCampaignDateRangeReportPeriod];
+
+
+export const GetCampaignDateRangeReportPeriod = {
+  this_week: 'this_week',
+  last_week: 'last_week',
+  this_month: 'this_month',
+  last_month: 'last_month',
+  this_quarter: 'this_quarter',
+  last_quarter: 'last_quarter',
+  this_year: 'this_year',
+  last_year: 'last_year',
+  custom: 'custom',
 } as const;
 
 export type GetCampaignRecipientSummaryParams = {
