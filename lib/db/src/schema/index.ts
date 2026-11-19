@@ -25,6 +25,7 @@ export * from "./settings";
 export * from "./audit";
 export * from "./api-error-diagnostics";
 export * from "./billing";
+export * from "./basic-plan-support-requests";
 export * from "./global-companies";
 export * from "./company-intelligence";
 export * from "./company-research-requests";

@@ -5414,6 +5414,73 @@ paths:
           description: Recipient no longer has an active paid-priced primary package for an add-on gift
         "404":
           description: Tenant account or subscription package not found
+  /admin/subscription-requests:
+    get:
+      operationId: listAdminSubscriptionRequests
+      tags: [billing]
+      summary: List Basic plan support requests for superadmin review
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, all], default: pending }
+      responses:
+        "200":
+          description: Subscription requests and their decision deadlines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionRequestList"
+  /admin/subscription-requests/{requestId}/approve:
+    post:
+      operationId: approveAdminSubscriptionRequest
+      tags: [billing]
+      summary: Approve a Basic plan support request
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Basic plan granted for one month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionRequestDecision"
+        "404":
+          description: Request not found
+        "409":
+          description: Request is no longer pending or its deadline has passed
+  /admin/subscription-requests/{requestId}/reject:
+    post:
+      operationId: rejectAdminSubscriptionRequest
+      tags: [billing]
+      summary: Reject a Basic plan support request with a reason
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRequestRejectionInput"
+      responses:
+        "200":
+          description: Request rejected and reason made visible to the customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionRequestDecision"
+        "400":
+          description: A valid rejection reason is required
+        "404":
+          description: Request not found
+        "409":
+          description: Request is no longer pending or its deadline has passed
   /admin/billing/users/{userId}/add-on-gifts:
     get:
       operationId: listAdminAddOnGiftEntitlements
@@ -5506,6 +5573,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CurrentSubscription"
+  /subscriptions/basic-plan-support:
+    get:
+      operationId: getBasicPlanSupportStatus
+      tags: [billing]
+      summary: Get Basic plan support request eligibility and history
+      responses:
+        "200":
+          description: Eligibility, active request, request history, and paid-tenure progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BasicPlanSupportStatus"
+    post:
+      operationId: createBasicPlanSupportRequest
+      tags: [billing]
+      summary: Request a one-month Basic plan grant
+      responses:
+        "201":
+          description: Request submitted with a 72-hour decision deadline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BasicPlanSupportStatus"
+        "409":
+          description: The account is not currently eligible or has a pending request
   /subscriptions/free:
     post:
       operationId: activateFreeSubscription
@@ -8813,6 +8905,76 @@ components:
         enabled: { type: boolean }
         superadminEmail: { type: ["string", "null"], format: email }
       required: [enabled, superadminEmail]
+    BasicPlanSupportRequest:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        milestone: { type: integer, enum: [1, 2, 3] }
+        status: { type: string, enum: [pending, approved, auto_approved, rejected] }
+        requestedAt: { type: string, format: date-time }
+        decisionDeadlineAt: { type: string, format: date-time }
+        resolvedAt: { type: ["string", "null"], format: date-time }
+        rejectionReason: { type: ["string", "null"] }
+        grantStartsAt: { type: ["string", "null"], format: date-time }
+        grantEndsAt: { type: ["string", "null"], format: date-time }
+        freePlanResumesAt: { type: ["string", "null"], format: date-time }
+      required: [id, milestone, status, requestedAt, decisionDeadlineAt, resolvedAt, rejectionReason, grantStartsAt, grantEndsAt, freePlanResumesAt]
+    BasicPlanSupportStatus:
+      type: object
+      properties:
+        canRequest: { type: boolean }
+        basicPlanAvailable: { type: boolean }
+        currentFreePlan: { type: boolean }
+        firstFreePlan: { type: boolean }
+        nextMilestone: { type: ["integer", "null"], enum: [1, 2, 3, null] }
+        requiredPaidMonths: { type: ["integer", "null"], enum: [0, 3, 6, null] }
+        completedPaidMonths: { type: integer, minimum: 0, maximum: 6 }
+        message: { type: string }
+        pendingRequest:
+          oneOf:
+            - $ref: "#/components/schemas/BasicPlanSupportRequest"
+            - type: "null"
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/BasicPlanSupportRequest" }
+      required: [canRequest, basicPlanAvailable, currentFreePlan, firstFreePlan, nextMilestone, requiredPaidMonths, completedPaidMonths, message, pendingRequest, history]
+    AdminSubscriptionRequest:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        userName: { type: string }
+        username: { type: string }
+        email: { type: string, format: email }
+        milestone: { type: integer, enum: [1, 2, 3] }
+        status: { type: string, enum: [pending, approved, auto_approved, rejected] }
+        requestedAt: { type: string, format: date-time }
+        decisionDeadlineAt: { type: string, format: date-time }
+        resolvedAt: { type: ["string", "null"], format: date-time }
+        rejectionReason: { type: ["string", "null"] }
+        grantStartsAt: { type: ["string", "null"], format: date-time }
+        grantEndsAt: { type: ["string", "null"], format: date-time }
+        freePlanResumesAt: { type: ["string", "null"], format: date-time }
+      required: [id, userId, userName, username, email, milestone, status, requestedAt, decisionDeadlineAt, resolvedAt, rejectionReason, grantStartsAt, grantEndsAt, freePlanResumesAt]
+    AdminSubscriptionRequestList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AdminSubscriptionRequest" }
+        pendingCount: { type: integer, minimum: 0 }
+      required: [items, pendingCount]
+    AdminSubscriptionRequestDecision:
+      type: object
+      properties:
+        message: { type: string }
+        request: { $ref: "#/components/schemas/AdminSubscriptionRequest" }
+      required: [message, request]
+    SubscriptionRequestRejectionInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 1000 }
+      required: [reason]
     RazorpaySettingsInput:
       type: object
       properties:

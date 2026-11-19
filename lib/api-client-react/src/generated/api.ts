@@ -40,6 +40,8 @@ import type {
   AdminNotificationStatusInput,
   AdminNotificationsResponse,
   AdminSubscriptionGiftResult,
+  AdminSubscriptionRequestDecision,
+  AdminSubscriptionRequestList,
   AdminSupportTicketCollection,
   AdminSupportTicketDetail,
   AdminUser,
@@ -51,6 +53,7 @@ import type {
   AuthResponse,
   AuthUser,
   AuthorizeMicrosoftSender200,
+  BasicPlanSupportStatus,
   BlockedTermPreviewInput,
   BlockedTermPreviewResult,
   CampaignAttachment,
@@ -186,6 +189,7 @@ import type {
   ListAdminFinancePaymentsParams,
   ListAdminGlobalCompaniesParams,
   ListAdminNotificationsParams,
+  ListAdminSubscriptionRequestsParams,
   ListAdminSupportTicketsParams,
   ListAdminUsersParams,
   ListContactOptionsParams,
@@ -267,6 +271,7 @@ import type {
   SubscriptionPackageList,
   SubscriptionPackageUpdateInput,
   SubscriptionPaymentAvailability,
+  SubscriptionRequestRejectionInput,
   SupportTicketCollection,
   SupportTicketDetail,
   SupportTicketInput,
@@ -19399,6 +19404,253 @@ export const useGiftAdminSubscription = <TError = ErrorType<void>,
       return useMutation(getGiftAdminSubscriptionMutationOptions(options));
     }
 
+export const getListAdminSubscriptionRequestsUrl = (params?: ListAdminSubscriptionRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/subscription-requests?${stringifiedParams}` : `/api/admin/subscription-requests`
+}
+
+/**
+ * @summary List Basic plan support requests for superadmin review
+ */
+export const listAdminSubscriptionRequests = async (params?: ListAdminSubscriptionRequestsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminSubscriptionRequestList> => {
+
+  return customFetch<AdminSubscriptionRequestList>(getListAdminSubscriptionRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminSubscriptionRequestsQueryKey = (params?: ListAdminSubscriptionRequestsParams,) => {
+    return [
+    `/api/admin/subscription-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminSubscriptionRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminSubscriptionRequests>>, TError = ErrorType<unknown>>(params?: ListAdminSubscriptionRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminSubscriptionRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminSubscriptionRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminSubscriptionRequests>>> = ({ signal }) => listAdminSubscriptionRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminSubscriptionRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminSubscriptionRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminSubscriptionRequests>>>
+export type ListAdminSubscriptionRequestsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List Basic plan support requests for superadmin review
+ */
+
+export function useListAdminSubscriptionRequests<TData = Awaited<ReturnType<typeof listAdminSubscriptionRequests>>, TError = ErrorType<unknown>>(
+ params?: ListAdminSubscriptionRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminSubscriptionRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminSubscriptionRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getApproveAdminSubscriptionRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/admin/subscription-requests/${requestId}/approve`
+}
+
+/**
+ * @summary Approve a Basic plan support request
+ */
+export const approveAdminSubscriptionRequest = async (requestId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminSubscriptionRequestDecision> => {
+
+  return customFetch<AdminSubscriptionRequestDecision>(getApproveAdminSubscriptionRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApproveAdminSubscriptionRequestMutationKey = () => ['approveAdminSubscriptionRequest'] as const;
+
+export const getApproveAdminSubscriptionRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveAdminSubscriptionRequest>>, TError,ApproveAdminSubscriptionRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveAdminSubscriptionRequest>>, TError,ApproveAdminSubscriptionRequestMutationVariables, TContext> => {
+
+const mutationKey = getApproveAdminSubscriptionRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveAdminSubscriptionRequest>>, ApproveAdminSubscriptionRequestMutationVariables> = (props) => {
+          const {requestId} = props ?? {};
+
+          return  approveAdminSubscriptionRequest(requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveAdminSubscriptionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof approveAdminSubscriptionRequest>>>
+
+    export type ApproveAdminSubscriptionRequestMutationError = ErrorType<void>
+    export type ApproveAdminSubscriptionRequestMutationVariables = {requestId: string}
+
+    /**
+ * @summary Approve a Basic plan support request
+ */
+export const useApproveAdminSubscriptionRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveAdminSubscriptionRequest>>, TError,ApproveAdminSubscriptionRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveAdminSubscriptionRequest>>,
+        TError,
+        ApproveAdminSubscriptionRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApproveAdminSubscriptionRequestMutationOptions(options));
+    }
+
+export const getRejectAdminSubscriptionRequestUrl = (requestId: string,) => {
+
+
+
+
+  return `/api/admin/subscription-requests/${requestId}/reject`
+}
+
+/**
+ * @summary Reject a Basic plan support request with a reason
+ */
+export const rejectAdminSubscriptionRequest = async (requestId: string,
+    subscriptionRequestRejectionInput: SubscriptionRequestRejectionInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminSubscriptionRequestDecision> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminSubscriptionRequestDecision>(getRejectAdminSubscriptionRequestUrl(requestId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(subscriptionRequestRejectionInput)
+  }
+);}
+
+
+
+
+
+export const getRejectAdminSubscriptionRequestMutationKey = () => ['rejectAdminSubscriptionRequest'] as const;
+
+export const getRejectAdminSubscriptionRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectAdminSubscriptionRequest>>, TError,RejectAdminSubscriptionRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectAdminSubscriptionRequest>>, TError,RejectAdminSubscriptionRequestMutationVariables, TContext> => {
+
+const mutationKey = getRejectAdminSubscriptionRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectAdminSubscriptionRequest>>, RejectAdminSubscriptionRequestMutationVariables> = (props) => {
+          const {requestId,data} = props ?? {};
+
+          return  rejectAdminSubscriptionRequest(requestId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectAdminSubscriptionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof rejectAdminSubscriptionRequest>>>
+    export type RejectAdminSubscriptionRequestMutationBody = BodyType<SubscriptionRequestRejectionInput>
+    export type RejectAdminSubscriptionRequestMutationError = ErrorType<void>
+    export type RejectAdminSubscriptionRequestMutationVariables = {requestId: string;data: BodyType<SubscriptionRequestRejectionInput>}
+
+    /**
+ * @summary Reject a Basic plan support request with a reason
+ */
+export const useRejectAdminSubscriptionRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectAdminSubscriptionRequest>>, TError,RejectAdminSubscriptionRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectAdminSubscriptionRequest>>,
+        TError,
+        RejectAdminSubscriptionRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRejectAdminSubscriptionRequestMutationOptions(options));
+    }
+
 export const getListAdminAddOnGiftEntitlementsUrl = (userId: string,) => {
 
 
@@ -19797,6 +20049,157 @@ export function useGetCurrentSubscription<TData = Awaited<ReturnType<typeof getC
 
 
 
+
+export const getGetBasicPlanSupportStatusUrl = () => {
+
+
+
+
+  return `/api/subscriptions/basic-plan-support`
+}
+
+/**
+ * @summary Get Basic plan support request eligibility and history
+ */
+export const getBasicPlanSupportStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<BasicPlanSupportStatus> => {
+
+  return customFetch<BasicPlanSupportStatus>(getGetBasicPlanSupportStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBasicPlanSupportStatusQueryKey = () => {
+    return [
+    `/api/subscriptions/basic-plan-support`
+    ] as const;
+    }
+
+
+export const getGetBasicPlanSupportStatusQueryOptions = <TData = Awaited<ReturnType<typeof getBasicPlanSupportStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBasicPlanSupportStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBasicPlanSupportStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBasicPlanSupportStatus>>> = ({ signal }) => getBasicPlanSupportStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBasicPlanSupportStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBasicPlanSupportStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getBasicPlanSupportStatus>>>
+export type GetBasicPlanSupportStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get Basic plan support request eligibility and history
+ */
+
+export function useGetBasicPlanSupportStatus<TData = Awaited<ReturnType<typeof getBasicPlanSupportStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBasicPlanSupportStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBasicPlanSupportStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBasicPlanSupportRequestUrl = () => {
+
+
+
+
+  return `/api/subscriptions/basic-plan-support`
+}
+
+/**
+ * @summary Request a one-month Basic plan grant
+ */
+export const createBasicPlanSupportRequest = async ( options?: Parameters<typeof customFetch>[1]): Promise<BasicPlanSupportStatus> => {
+
+  return customFetch<BasicPlanSupportStatus>(getCreateBasicPlanSupportRequestUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateBasicPlanSupportRequestMutationKey = () => ['createBasicPlanSupportRequest'] as const;
+
+export const getCreateBasicPlanSupportRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBasicPlanSupportRequest>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBasicPlanSupportRequest>>, TError,void, TContext> => {
+
+const mutationKey = getCreateBasicPlanSupportRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBasicPlanSupportRequest>>, void> = () => {
+
+
+          return  createBasicPlanSupportRequest(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBasicPlanSupportRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createBasicPlanSupportRequest>>>
+
+    export type CreateBasicPlanSupportRequestMutationError = ErrorType<void>
+
+
+    /**
+ * @summary Request a one-month Basic plan grant
+ */
+export const useCreateBasicPlanSupportRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBasicPlanSupportRequest>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBasicPlanSupportRequest>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateBasicPlanSupportRequestMutationOptions(options));
+    }
 
 export const getActivateFreeSubscriptionUrl = () => {
 

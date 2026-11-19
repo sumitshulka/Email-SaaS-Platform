@@ -42,6 +42,7 @@ import { AdminMicrosoftOAuthSettings } from '@/components/admin-microsoft-oauth'
 import { AdminApiErrorDiagnosticsPanel } from '@/components/admin-api-error-diagnostics';
 import AdminObjectStoragePage from '@/pages/admin-object-storage';
 import AdminFinancePage from '@/pages/finance';
+import AdminSubscriptionRequestsPage from '@/pages/subscription-requests';
 import { AdminSupportTicketsPage, SupportTicketsPage } from '@/pages/support';
 import { MarketingHomePage, PackageCheckoutPage, PublicFeaturesPage, PublicPricingPage } from '@/pages/marketing';
 import { PrivacyPolicyPage, ShippingRefundPage, TermsAndConditionsPage } from '@/pages/legal';
@@ -415,6 +416,7 @@ const platformNavigationGroups: SidebarNavigationGroup[] = [
       { href: '/admin/billing', label: 'Billing & PG setup', icon: CreditCard },
       { href: '/admin/packages', label: 'Packages', icon: Package },
       { href: '/admin/finance', label: 'Finance', icon: ReceiptText },
+      { href: '/admin/subscription-requests', label: 'Subscription Request', icon: ReceiptText },
     ],
   },
   {
@@ -577,6 +579,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/admin/users',
     '/admin/global-companies',
     '/admin/company-intelligence',
+    '/admin/subscription-requests',
     '/sending-settings',
     '/companies',
     '/contacts',
@@ -2004,6 +2007,7 @@ function Routes() {
     <Route path="/admin/billing">{() => <RouteGate admin>{() => <AdminBillingPage/>}</RouteGate>}</Route>
     <Route path="/admin/packages">{() => <RouteGate admin>{() => <AdminPackagesPage/>}</RouteGate>}</Route>
     <Route path="/admin/finance">{() => <RouteGate admin>{() => <AdminFinancePage/>}</RouteGate>}</Route>
+    <Route path="/admin/subscription-requests">{() => <RouteGate admin>{() => <AdminSubscriptionRequestsPage/>}</RouteGate>}</Route>
     <Route path="/admin/settings">{() => <RouteGate admin>{() => <AdminSettingsPage/>}</RouteGate>}</Route>
     <Route path="/admin/object-storage">{() => <RouteGate admin>{() => <AdminObjectStoragePage/>}</RouteGate>}</Route>
     <Route path="/admin/google-oauth">{() => <RouteGate admin>{() => <AdminGoogleOAuthPage/>}</RouteGate>}</Route>

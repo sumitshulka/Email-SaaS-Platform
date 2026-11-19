@@ -10695,6 +10695,105 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
 
 
 /**
+ * @summary List Basic plan support requests for superadmin review
+ */
+export const listAdminSubscriptionRequestsQueryStatusDefault = `pending`;
+
+export const ListAdminSubscriptionRequestsQueryParams = zod.object({
+  "status": zod.enum(['pending', 'all']).default(listAdminSubscriptionRequestsQueryStatusDefault)
+})
+
+export const listAdminSubscriptionRequestsResponsePendingCountMin = 0;
+
+
+
+export const ListAdminSubscriptionRequestsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string().uuid(),
+  "userName": zod.string(),
+  "username": zod.string(),
+  "email": zod.string().email(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+})),
+  "pendingCount": zod.number().int().min(listAdminSubscriptionRequestsResponsePendingCountMin)
+})
+
+
+/**
+ * @summary Approve a Basic plan support request
+ */
+export const ApproveAdminSubscriptionRequestParams = zod.object({
+  "requestId": zod.coerce.string().uuid()
+})
+
+export const ApproveAdminSubscriptionRequestResponse = zod.object({
+  "message": zod.string(),
+  "request": zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string().uuid(),
+  "userName": zod.string(),
+  "username": zod.string(),
+  "email": zod.string().email(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+})
+})
+
+
+/**
+ * @summary Reject a Basic plan support request with a reason
+ */
+export const RejectAdminSubscriptionRequestParams = zod.object({
+  "requestId": zod.coerce.string().uuid()
+})
+
+export const rejectAdminSubscriptionRequestBodyReasonMin = 10;
+export const rejectAdminSubscriptionRequestBodyReasonMax = 1000;
+
+
+
+export const RejectAdminSubscriptionRequestBody = zod.object({
+  "reason": zod.string().min(rejectAdminSubscriptionRequestBodyReasonMin).max(rejectAdminSubscriptionRequestBodyReasonMax)
+})
+
+export const RejectAdminSubscriptionRequestResponse = zod.object({
+  "message": zod.string(),
+  "request": zod.object({
+  "id": zod.string().uuid(),
+  "userId": zod.string().uuid(),
+  "userName": zod.string(),
+  "username": zod.string(),
+  "email": zod.string().email(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+})
+})
+
+
+/**
  * @summary List add-on gifts for a tenant account
  */
 export const ListAdminAddOnGiftEntitlementsParams = zod.object({
@@ -10965,6 +11064,94 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "updatedAt": zod.coerce.date()
 })
 }),zod.null()])
+})
+
+
+/**
+ * @summary Get Basic plan support request eligibility and history
+ */
+export const getBasicPlanSupportStatusResponseCompletedPaidMonthsMin = 0;
+export const getBasicPlanSupportStatusResponseCompletedPaidMonthsMax = 6;
+
+
+
+export const GetBasicPlanSupportStatusResponse = zod.object({
+  "canRequest": zod.boolean(),
+  "basicPlanAvailable": zod.boolean(),
+  "currentFreePlan": zod.boolean(),
+  "firstFreePlan": zod.boolean(),
+  "nextMilestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(null)]).nullable(),
+  "requiredPaidMonths": zod.union([zod.literal(0),zod.literal(3),zod.literal(6),zod.literal(null)]).nullable(),
+  "completedPaidMonths": zod.number().int().min(getBasicPlanSupportStatusResponseCompletedPaidMonthsMin).max(getBasicPlanSupportStatusResponseCompletedPaidMonthsMax),
+  "message": zod.string(),
+  "pendingRequest": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+}),zod.null()]),
+  "history": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Request a one-month Basic plan grant
+ */
+export const createBasicPlanSupportRequestResponseCompletedPaidMonthsMin = 0;
+export const createBasicPlanSupportRequestResponseCompletedPaidMonthsMax = 6;
+
+
+
+export const CreateBasicPlanSupportRequestResponse = zod.object({
+  "canRequest": zod.boolean(),
+  "basicPlanAvailable": zod.boolean(),
+  "currentFreePlan": zod.boolean(),
+  "firstFreePlan": zod.boolean(),
+  "nextMilestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3),zod.literal(null)]).nullable(),
+  "requiredPaidMonths": zod.union([zod.literal(0),zod.literal(3),zod.literal(6),zod.literal(null)]).nullable(),
+  "completedPaidMonths": zod.number().int().min(createBasicPlanSupportRequestResponseCompletedPaidMonthsMin).max(createBasicPlanSupportRequestResponseCompletedPaidMonthsMax),
+  "message": zod.string(),
+  "pendingRequest": zod.union([zod.object({
+  "id": zod.string().uuid(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+}),zod.null()]),
+  "history": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "milestone": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "status": zod.enum(['pending', 'approved', 'auto_approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "decisionDeadlineAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable(),
+  "grantStartsAt": zod.coerce.date().nullable(),
+  "grantEndsAt": zod.coerce.date().nullable(),
+  "freePlanResumesAt": zod.coerce.date().nullable()
+}))
 })
 
 

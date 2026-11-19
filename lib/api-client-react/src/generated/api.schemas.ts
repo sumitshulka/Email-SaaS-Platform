@@ -5226,6 +5226,146 @@ export interface SubscriptionPaymentAvailability {
   superadminEmail: string | null;
 }
 
+export type BasicPlanSupportRequestMilestone = typeof BasicPlanSupportRequestMilestone[keyof typeof BasicPlanSupportRequestMilestone];
+
+
+export const BasicPlanSupportRequestMilestone = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+export type BasicPlanSupportRequestStatus = typeof BasicPlanSupportRequestStatus[keyof typeof BasicPlanSupportRequestStatus];
+
+
+export const BasicPlanSupportRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  auto_approved: 'auto_approved',
+  rejected: 'rejected',
+} as const;
+
+export interface BasicPlanSupportRequest {
+  id: string;
+  milestone: BasicPlanSupportRequestMilestone;
+  status: BasicPlanSupportRequestStatus;
+  requestedAt: string;
+  decisionDeadlineAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  rejectionReason: string | null;
+  /** @nullable */
+  grantStartsAt: string | null;
+  /** @nullable */
+  grantEndsAt: string | null;
+  /** @nullable */
+  freePlanResumesAt: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type BasicPlanSupportStatusNextMilestone = typeof BasicPlanSupportStatusNextMilestone[keyof typeof BasicPlanSupportStatusNextMilestone] | null;
+
+
+export const BasicPlanSupportStatusNextMilestone = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+/**
+ * @nullable
+ */
+export type BasicPlanSupportStatusRequiredPaidMonths = typeof BasicPlanSupportStatusRequiredPaidMonths[keyof typeof BasicPlanSupportStatusRequiredPaidMonths] | null;
+
+
+export const BasicPlanSupportStatusRequiredPaidMonths = {
+  NUMBER_0: 0,
+  NUMBER_3: 3,
+  NUMBER_6: 6,
+} as const;
+
+export interface BasicPlanSupportStatus {
+  canRequest: boolean;
+  basicPlanAvailable: boolean;
+  currentFreePlan: boolean;
+  firstFreePlan: boolean;
+  /** @nullable */
+  nextMilestone: BasicPlanSupportStatusNextMilestone;
+  /** @nullable */
+  requiredPaidMonths: BasicPlanSupportStatusRequiredPaidMonths;
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  completedPaidMonths: number;
+  message: string;
+  pendingRequest: BasicPlanSupportRequest | null;
+  history: BasicPlanSupportRequest[];
+}
+
+export type AdminSubscriptionRequestMilestone = typeof AdminSubscriptionRequestMilestone[keyof typeof AdminSubscriptionRequestMilestone];
+
+
+export const AdminSubscriptionRequestMilestone = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+export type AdminSubscriptionRequestStatus = typeof AdminSubscriptionRequestStatus[keyof typeof AdminSubscriptionRequestStatus];
+
+
+export const AdminSubscriptionRequestStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  auto_approved: 'auto_approved',
+  rejected: 'rejected',
+} as const;
+
+export interface AdminSubscriptionRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  username: string;
+  email: string;
+  milestone: AdminSubscriptionRequestMilestone;
+  status: AdminSubscriptionRequestStatus;
+  requestedAt: string;
+  decisionDeadlineAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  rejectionReason: string | null;
+  /** @nullable */
+  grantStartsAt: string | null;
+  /** @nullable */
+  grantEndsAt: string | null;
+  /** @nullable */
+  freePlanResumesAt: string | null;
+}
+
+export interface AdminSubscriptionRequestList {
+  items: AdminSubscriptionRequest[];
+  /** @minimum 0 */
+  pendingCount: number;
+}
+
+export interface AdminSubscriptionRequestDecision {
+  message: string;
+  request: AdminSubscriptionRequest;
+}
+
+export interface SubscriptionRequestRejectionInput {
+  /**
+     * @minLength 10
+     * @maxLength 1000
+     */
+  reason: string;
+}
+
 export interface RazorpaySettingsInput {
   environment: RazorpayEnvironment;
   /**
@@ -7380,6 +7520,18 @@ export const ListAdminUsersStatus = {
   active: 'active',
   inactive: 'inactive',
   pending: 'pending',
+} as const;
+
+export type ListAdminSubscriptionRequestsParams = {
+status?: ListAdminSubscriptionRequestsStatus;
+};
+
+export type ListAdminSubscriptionRequestsStatus = typeof ListAdminSubscriptionRequestsStatus[keyof typeof ListAdminSubscriptionRequestsStatus];
+
+
+export const ListAdminSubscriptionRequestsStatus = {
+  pending: 'pending',
+  all: 'all',
 } as const;
 
 export type ListSavedReports200 = {

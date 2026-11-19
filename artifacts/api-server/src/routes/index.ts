@@ -30,12 +30,14 @@ import prospectSettingsRouter from "./prospect-settings";
 import prospectsRouter from "./prospects";
 import prospectFollowUpsRouter from "./prospect-follow-ups";
 import reportWorkareaRouter from "./report-workarea";
+import subscriptionRequestsRouter from "./subscription-requests";
 
 const router: IRouter = Router();
 router.use(healthRouter);
 router.use(authRouter);
 router.use(profileRouter);
 router.use(billingRouter);
+router.use(subscriptionRequestsRouter);
 router.use(campaignAiAssistRouter);
 router.use(companiesRouter);
 router.use(companyBusinessAreasRouter);

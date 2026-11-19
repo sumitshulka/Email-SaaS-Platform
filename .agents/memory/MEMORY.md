@@ -36,6 +36,7 @@
 - [Mailflow payment policy](mailflow-payment-policy.md) — Taskone owns Mailflow; plans do not auto-renew, expire immediately, and have a narrowly defined 7-day refund rule.
 - [Online payment availability](online-payment-gate.md) — default on for compatibility; off blocks only new paid checkouts, not free activation or settlement.
 - [Paid plan change expiry](paid-upgrade-expiry.md) — validate the original active plan and expiry at capture; schedule lower-limit plans at that exact expiry.
+- [Basic-plan support milestones](basic-plan-support.md) — lifetime Basic grants follow first-Free, three-month continuous paid, and six-month continuous paid milestones.
 - [Campaign variant policy](campaign-variant-policy.md) — keep A/B variants stable per recipient and include opt-out; no per-send rotation or engagement-based deliverability claims.
 - [Campaign wizard submit transitions](campaign-wizard-submit-transition.md) — keep Continue and Save as distinct buttons; changing one form button from `button` to `submit` during a step transition can submit unexpectedly.
 - [Campaign claim atomicity](campaign-claim-atomicity.md) — win the conditional queued-to-sending transition before recording an attempt or calling SMTP.

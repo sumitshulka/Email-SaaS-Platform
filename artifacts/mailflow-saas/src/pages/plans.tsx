@@ -4,9 +4,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, CreditCard, LoaderCircle, Mail, ShieldCheck, Sparkles, Upload, Users } from 'lucide-react';
 import { OpenCampaignEntitlement } from '@/components/open-campaign-audience';
 import {
-  getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getGetSubscriptionAddOnsQueryKey, getListAvailableSubscriptionPackagesQueryKey, getListContactsQueryKey,
+  getGetBasicPlanSupportStatusQueryKey, getGetCompanyResearchAllowanceQueryKey, getGetCurrentSubscriptionQueryKey, getGetSubscriptionAddOnsQueryKey, getListAvailableSubscriptionPackagesQueryKey, getListContactsQueryKey,
   getListTenantSendingAccountsQueryKey,
-  useActivateFreeAddOn, useActivateFreeSubscription, useCreateSubscriptionOrder, useGetCompanyResearchAllowance, useGetCurrentSubscription, useGetSubscriptionAddOns, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
+  useActivateFreeAddOn, useActivateFreeSubscription, useCreateBasicPlanSupportRequest, useCreateSubscriptionOrder, useGetBasicPlanSupportStatus, useGetCompanyResearchAllowance, useGetCurrentSubscription, useGetSubscriptionAddOns, useGetSubscriptionPaymentAvailability, useListAvailableSubscriptionPackages,
   useListContacts, useListTenantSendingAccounts, useVerifyRazorpayPayment,
 } from '@workspace/api-client-react';
 import type { SubscriptionOrderCreated, SubscriptionPackage, SubscriptionPackageList, TenantSendingAccount } from '@workspace/api-client-react';
@@ -275,6 +275,13 @@ export default function PlansPage() {
     },
   });
   const currentQuery = useGetCurrentSubscription();
+  const basicSupportQuery = useGetBasicPlanSupportStatus({
+    query: {
+      queryKey: getGetBasicPlanSupportStatusQueryKey(),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
   const addOnsQuery = useGetSubscriptionAddOns();
   const researchAllowanceQuery = useGetCompanyResearchAllowance({
     query: {
@@ -296,6 +303,7 @@ export default function PlansPage() {
   const createOrder = useCreateSubscriptionOrder();
   const activateFree = useActivateFreeSubscription();
   const activateFreeAddOn = useActivateFreeAddOn();
+  const requestBasicPlan = useCreateBasicPlanSupportRequest();
   const verifyPayment = useVerifyRazorpayPayment();
   const [checkoutOrder, setCheckoutOrder] = useState<SubscriptionOrderCreated | null>(null);
   const [paymentState, setPaymentState] = useState<{ kind: 'pending' | 'active' | 'reconciliation_required' | 'error' | 'dismissed'; message: string; label?: string; nextStepHref?: string; paymentReference?: string | null } | null>(null);
@@ -311,6 +319,7 @@ export default function PlansPage() {
   } | null>(null);
   const [pendingPackageAccountLimit, setPendingPackageAccountLimit] = useState(1);
   const [senderAccountsToKeep, setSenderAccountsToKeep] = useState<string[]>([]);
+  const [basicSupportMessage, setBasicSupportMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const packages = packagesQuery.data?.packages ?? [];
   const senderAccounts = senderAccountsQuery.data?.accounts ?? [];
   const onlinePaymentsEnabled = paymentAvailabilityQuery.data?.enabled === true;
@@ -336,6 +345,18 @@ export default function PlansPage() {
   const primarySenderLimit = activeSubscription?.package.emailAccountLimit ?? 0;
   const primarySenderUsed = Math.min(configuredSenderCount, primarySenderLimit);
   const primarySenderRemaining = Math.max(0, primarySenderLimit - primarySenderUsed);
+
+  const requestBasicPlanGrant = () => {
+    setBasicSupportMessage(null);
+    requestBasicPlan.mutate(undefined, {
+      onSuccess: status => {
+        queryClient.setQueryData(getGetBasicPlanSupportStatusQueryKey(), status);
+        void queryClient.invalidateQueries({ queryKey: getGetBasicPlanSupportStatusQueryKey() });
+        setBasicSupportMessage({ ok: true, text: 'Your request is submitted. The administrator has 72 hours to review it; if it remains pending, Basic will be granted automatically.' });
+      },
+      onError: error => setBasicSupportMessage({ ok: false, text: errorText(error) }),
+    });
+  };
 
   const packageAccountLimit = (pkg: SubscriptionPackage) =>
     pkg.emailAccountLimit +
@@ -746,6 +767,80 @@ export default function PlansPage() {
         </p>
       </div>
     </section>}
+
+    <section data-testid="basic-plan-support" className="overflow-hidden rounded-lg border border-[#d8e1eb] bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e5ebf0] bg-[#f0f5fa] px-5 py-4 md:px-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-white text-[#315f89] shadow-sm"><ShieldCheck className="h-4 w-4"/></span>
+          <div>
+            <div className="mono text-[9px] uppercase tracking-[.15em] text-[#5c7892]">CUSTOMER SUPPORT BENEFIT</div>
+            <h2 className="display mt-1 text-[18px] font-bold text-[#23384e]">Request a month of Basic</h2>
+            <p className="mt-1 max-w-3xl text-[11px] leading-5 text-[#617589]">
+              Eligible Free-plan customers can request Basic up to three times in their lifetime. Each request is reviewed for 72 hours; if it remains pending, it is automatically granted. Requests cannot be made consecutively.
+            </p>
+          </div>
+        </div>
+        {basicSupportQuery.data?.pendingRequest && (
+          <span className="rounded-full border border-[#efdcb9] bg-[#fff8e9] px-2.5 py-1 text-[10px] font-semibold text-[#8a652c]">
+            Pending review
+          </span>
+        )}
+      </div>
+      <div className="space-y-4 p-5 md:p-6">
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[
+            { milestone: 1, detail: 'During your first Free plan' },
+            { milestone: 2, detail: 'After 3 continuous paid months' },
+            { milestone: 3, detail: 'After 6 continuous paid months' },
+          ].map(({ milestone, detail }) => {
+            const record = basicSupportQuery.data?.history.find(item => item.milestone === milestone);
+            const isNext = basicSupportQuery.data?.nextMilestone === milestone;
+            const stageLabel = record
+              ? record.status === 'auto_approved' ? 'Auto-granted' : record.status === 'approved' ? 'Granted' : record.status === 'rejected' ? 'Rejected' : 'Pending'
+              : isNext ? 'Next request' : 'Not reached';
+            return <div key={milestone} className={`rounded-md border px-3 py-3 ${record?.status === 'rejected' ? 'border-[#f0d4d8] bg-[#fff7f8]' : isNext ? 'border-[#cbdcea] bg-[#f4f8fc]' : 'border-[#e6ebef] bg-[#fafbfd]'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-[.08em] text-[#64778a]">Request {milestone} of 3</span>
+                <span className="text-[9px] font-semibold text-[#516a80]">{stageLabel}</span>
+              </div>
+              <p className="mt-1 text-[11px] text-[#34495d]">{detail}</p>
+              {record?.rejectionReason && <p className="mt-2 border-t border-[#f0d4d8] pt-2 text-[10px] leading-4 text-[#8f4350]">Reason: {record.rejectionReason}</p>}
+              {record?.grantStartsAt && record.grantEndsAt && <p className="mt-2 text-[10px] text-[#53705e]">Basic: {new Date(record.grantStartsAt).toLocaleDateString()} – {new Date(record.grantEndsAt).toLocaleDateString()}. Free resumes after.</p>}
+            </div>;
+          })}
+        </div>
+
+        {basicSupportQuery.isLoading ? (
+          <p role="status" className="text-[11px] text-[#788796]">Checking eligibility…</p>
+        ) : basicSupportQuery.isError ? (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#f0d4d8] bg-[#fff7f8] px-3 py-2.5 text-[11px] text-[#8f4350]">
+            <span>Eligibility could not be checked. You cannot submit a request until your status loads.</span>
+            <button type="button" onClick={() => void basicSupportQuery.refetch()} className="rounded border border-[#e6c7cb] bg-white px-2.5 py-1.5 font-semibold">Retry</button>
+          </div>
+        ) : basicSupportQuery.data && (
+          <div className="flex flex-col gap-3 rounded-md border border-[#e3eaf0] bg-[#f8fafc] p-3.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2.5">
+              <CircleAlert className={`mt-0.5 h-4 w-4 shrink-0 ${basicSupportQuery.data.canRequest ? 'text-[#477a5b]' : 'text-[#728296]'}`}/>
+              <div>
+                <p data-testid="text-basic-plan-support-eligibility" className="text-[11px] font-semibold text-[#35495d]">{basicSupportQuery.data.message}</p>
+                {basicSupportQuery.data.pendingRequest && <p className="mt-1 text-[10px] text-[#758394]">Decision due by {new Date(basicSupportQuery.data.pendingRequest.decisionDeadlineAt).toLocaleString()}. You do not need to submit another request.</p>}
+                {basicSupportMessage && <p role={basicSupportMessage.ok ? 'status' : 'alert'} className={`mt-1 text-[10px] ${basicSupportMessage.ok ? 'text-[#52705d]' : 'text-[#a34b32]'}`}>{basicSupportMessage.text}</p>}
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="button-request-basic-plan"
+              onClick={requestBasicPlanGrant}
+              disabled={!basicSupportQuery.data.canRequest || requestBasicPlan.isPending || basicSupportQuery.isFetching}
+              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-[#315d84] bg-[#315d84] px-3.5 py-2 text-[11px] font-semibold text-white transition hover:bg-[#244b6d] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {requestBasicPlan.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <CalendarClock className="h-3.5 w-3.5"/>}
+              Request one month
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
 
     <section data-testid="subscription-primary-usage" className="rounded-lg border border-[#dce5ec] bg-[#f8fbfd] p-5 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
