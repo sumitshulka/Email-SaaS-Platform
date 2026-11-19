@@ -157,14 +157,22 @@ export default function CampaignDateRangeReportPage() {
       <div className="flex items-start gap-3">
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#e8f1fa] text-[#245b9b]"><CalendarDays className="h-4 w-4"/></div>
         <div className="min-w-0 flex-1">
-          <label htmlFor="campaign-report-period" className="mb-1.5 block text-[12px] font-semibold text-[#344154]">Date range</label>
-          <div className="grid gap-3 sm:grid-cols-[minmax(210px,.7fr)_minmax(180px,1fr)_minmax(180px,1fr)]">
-            <select id="campaign-report-period" data-testid="select-campaign-report-period" value={period} onChange={event => setPeriod(event.target.value as GetCampaignDateRangeReportParams["period"])} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]">
-              {periods.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+          <div className="grid gap-3 sm:grid-cols-[minmax(210px,.7fr)_minmax(180px,1fr)_minmax(180px,1fr)] sm:items-end">
+            <label htmlFor="campaign-report-period" className="block min-w-0">
+              <span className="mb-1.5 block text-[11px] font-semibold text-[#344154]">Date range</span>
+              <select id="campaign-report-period" data-testid="select-campaign-report-period" value={period} onChange={event => setPeriod(event.target.value as GetCampaignDateRangeReportParams["period"])} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] text-[#182333] outline-none focus:border-[#3b73b8] focus:ring-2 focus:ring-[#dbe8f7]">
+                {periods.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
             {period === "custom" && <>
-              <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#687484]">Start date</span><input data-testid="input-campaign-report-start-date" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] outline-none focus:border-[#3b73b8]"/></label>
-              <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[#687484]">End date</span><input data-testid="input-campaign-report-end-date" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] outline-none focus:border-[#3b73b8]"/></label>
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-[11px] font-semibold text-[#344154]">Start date</span>
+                <input data-testid="input-campaign-report-start-date" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] outline-none focus:border-[#3b73b8]"/>
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-[11px] font-semibold text-[#344154]">End date</span>
+                <input data-testid="input-campaign-report-end-date" type="date" value={endDate} onChange={event => setEndDate(event.target.value)} className="h-10 w-full rounded-md border border-[#d8dde4] bg-white px-3 text-[12px] outline-none focus:border-[#3b73b8]"/>
+              </label>
             </>}
           </div>
           <p className="mt-2 text-[11px] leading-5 text-[#718091]">The report includes campaigns created during the selected dates. Weeks run Monday through Sunday. Custom ranges can include up to 180 calendar days.</p>
