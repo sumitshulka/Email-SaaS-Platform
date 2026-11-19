@@ -365,6 +365,7 @@ const workspaceNavigationGroups: SidebarNavigationGroup[] = [
     items: [
       { href: '/lists', label: 'Lists', icon: Activity },
       { href: '/campaigns', label: 'Campaigns', icon: Send },
+      { href: '/campaigns/report', label: 'Campaign Report', icon: ReceiptText },
     ],
   },
   {
@@ -589,6 +590,7 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
     '/prospect-currencies',
     '/lists',
     '/campaigns',
+    '/campaigns/report',
     '/notifications',
     '/support',
     '/plans',
@@ -699,7 +701,8 @@ function AppShell({ user, children, admin = false }: { user: AuthUser; children:
                 {group.items.map(item => {
                   const Icon = item.icon;
                   const active = location === item.href
-                    || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href))
+                    || (item.href !== '/admin' && item.href !== '/dashboard' && location.startsWith(item.href)
+                      && !(item.href === '/campaigns' && location === '/campaigns/report'))
                     || (item.href === '/prospect-products' && ['/prospect-stages', '/prospect-actions', '/prospect-currencies'].includes(location));
                   return (
                     <Link
