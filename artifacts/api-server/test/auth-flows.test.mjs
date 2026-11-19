@@ -16653,27 +16653,10 @@ describe("tenant sending and campaign delivery", { concurrency: false }, () => {
     const analyticsTodayPart = (name) =>
       analyticsTodayParts.find((part) => part.type === name)?.value;
     const analyticsToday = `${analyticsTodayPart("year")}-${analyticsTodayPart("month")}-${analyticsTodayPart("day")}`;
-    const platformSettingsModule = await import("../src/lib/platform-settings.ts");
-    const [savedPlatformSettings] = await db.select().from(dbModule.systemConfigurationTable)
-      .where(eq(dbModule.systemConfigurationTable.key, "platform"));
-    const savedPlatformValue = savedPlatformSettings?.value ?? {};
-    await db.insert(dbModule.systemConfigurationTable)
-      .values({ key: "platform", value: { ...savedPlatformValue, apiErrorDiagnosticsEnabled: true } })
-      .onConflictDoUpdate({ target: dbModule.systemConfigurationTable.key, set: { value: { ...savedPlatformValue, apiErrorDiagnosticsEnabled: true } } });
-    await platformSettingsModule.getPlatformSettings();
     const todayAnalytics = await api(
       `/dashboard/analytics?from=${analyticsToday}&to=${analyticsToday}&pageSize=5`,
       { cookie: owner.cookie },
     );
-    if (todayAnalytics.response.status !== 200 && todayAnalytics.body.incidentId) {
-      const [diagnostic] = await db.select().from(dbModule.apiErrorDiagnosticsTable)
-        .where(eq(dbModule.apiErrorDiagnosticsTable.id, todayAnalytics.body.incidentId));
-      console.error("dashboard analytics diagnostic", diagnostic);
-    }
-    await db.insert(dbModule.systemConfigurationTable)
-      .values({ key: "platform", value: savedPlatformValue })
-      .onConflictDoUpdate({ target: dbModule.systemConfigurationTable.key, set: { value: savedPlatformValue } });
-    await platformSettingsModule.getPlatformSettings();
     assert.equal(todayAnalytics.response.status, 200, JSON.stringify(todayAnalytics.body));
     assert.equal(todayAnalytics.body.period.from, analyticsToday);
     assert.equal(todayAnalytics.body.period.to, analyticsToday);

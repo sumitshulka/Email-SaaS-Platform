@@ -7528,7 +7528,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
   ] = await Promise.all([
     db
       .select({
-        date: sql<string>`${campaignLocalDate}`,
+        date: sql<string>`${campaignLocalDate}`.as("date"),
         value: count(),
       })
       .from(emailCampaignsTable)
@@ -7536,7 +7536,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
       .groupBy(sql.raw('"date"')),
     db
       .select({
-        date: sql<string>`${campaignLocalDate}`,
+        date: sql<string>`${campaignLocalDate}`.as("date"),
         value: count(emailCampaignRecipientsTable.id),
       })
       .from(emailCampaignsTable)
@@ -7551,7 +7551,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
       .groupBy(sql.raw('"date"')),
     db
       .select({
-        date: sql<string>`${contactLocalDate}`,
+        date: sql<string>`${contactLocalDate}`.as("date"),
         value: count(),
       })
       .from(contactsTable)
@@ -7564,7 +7564,7 @@ router.get("/dashboard/analytics", requireUserRole, async (req, res): Promise<vo
       .groupBy(sql.raw('"date"')),
     db
       .select({
-        date: sql<string>`${campaignLocalDate}`,
+        date: sql<string>`${campaignLocalDate}`.as("date"),
         status: emailCampaignRecipientsTable.status,
         reportOutcome: emailCampaignRecipientsTable.reportOutcome,
         value: count(),

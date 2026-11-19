@@ -1,7 +1,7 @@
 - [Phase 1 scope language](phase-scope.md) — don't present future sending or billing capabilities as available until backed by working flows and real data.
 - [Isolated API helper checks](api-helper-tests.md) — avoid ESM test bundles that pull in PostgreSQL internals; CommonJS worked for temporary Node checks here.
 - [pg-mem with Drizzle](pg-mem-drizzle-adapter.md) — pg-mem needs narrow SQL shims, and test DDL must preserve production nullability.
-- [Timezone-bound analytics queries](pg-mem-timezone-ranges.md) — use indexed account-local UTC bounds and ordinal grouping; duplicated bound values can break PostgreSQL expression grouping.
+- [Timezone-bound analytics queries](pg-mem-timezone-ranges.md) — use indexed account-local UTC bounds and group by an explicit alias for parameterized timezone expressions.
 - [PostgreSQL lock-race checks](postgres-lock-race-checks.md) — prove contention with NOWAIT; use separate processes for worker races and one-shot triggers for ack failures.
 - [PostgreSQL timestamp cursor precision](postgres-timestamp-cursors.md) — compare timestamptz values in SQL; JavaScript Date can lose PostgreSQL microseconds and break neighbor traversal.
 - [Schema push verification](schema-push-verification.md) — inspect SQL errors and actual schema; a successful command exit can accompany a partially applied schema push.
