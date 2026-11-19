@@ -730,6 +730,7 @@ export default function PlansPage() {
       <div aria-hidden="true" className="pointer-events-none absolute -right-5 -top-16 hidden h-64 w-64 rounded-full border border-[#d5e1e9] md:block"><div className="absolute inset-7 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-14 rounded-full border border-[#d5e1e9]"/><div className="absolute inset-[84px] rounded-full border border-[#d5e1e9]"/></div>
     </header>
 
+    <div className={scheduledSubscription ? "grid gap-4 lg:grid-cols-2 lg:items-stretch" : "space-y-4"}>
     {activeSubscription ? (
       <section data-testid="current-subscription" className="grid gap-4 rounded-lg border border-[#d7e6dd] bg-[#f4f9f5] p-5 md:grid-cols-[1fr_auto] md:items-center md:px-6">
         <div>
@@ -767,6 +768,7 @@ export default function PlansPage() {
         </p>
       </div>
     </section>}
+    </div>
 
     <section data-testid="basic-plan-support" className="overflow-hidden rounded-lg border border-[#d8e1eb] bg-white">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e5ebf0] bg-[#f0f5fa] px-5 py-4 md:px-6">
