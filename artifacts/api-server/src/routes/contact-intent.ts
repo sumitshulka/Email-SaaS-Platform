@@ -81,6 +81,8 @@ router.post("/contacts/:contactId/intent/analyze", requireUserRole, async (req, 
     res.status(503).json({
       error: provider.reason === "tenant_key_unavailable"
         ? "Your saved AI provider key is unavailable. Update or remove it in AI Provider settings."
+        : provider.reason === "tenant_not_configured"
+          ? "This package requires your own AI provider. Configure it in AI Provider settings before analyzing intent."
         : "The AI provider is not configured or available for this workspace.",
       code: "AI_PROVIDER_NOT_CONFIGURED",
     });

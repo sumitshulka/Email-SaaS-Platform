@@ -117,12 +117,17 @@ export type ResolvedAIProviderConfiguration =
     }
   | {
       kind: "unavailable";
-      reason: "not_configured" | "tenant_key_unavailable" | "managed_key_unavailable";
+      reason:
+        | "not_configured"
+        | "tenant_not_configured"
+        | "tenant_key_unavailable"
+        | "managed_key_unavailable";
       source: "tenant" | "managed" | null;
     };
 
 export type AIProviderSourceChoice =
   | "tenant"
+  | "tenant_not_configured"
   | "tenant_unavailable"
   | "managed"
   | "managed_unavailable"
@@ -135,7 +140,8 @@ export function chooseAIProviderSource(input: {
   managedConfigured: boolean;
   managedKeyAvailable: boolean;
 }): AIProviderSourceChoice {
-  if (input.byokEnabled && input.tenantConfigured) {
+  if (input.byokEnabled) {
+    if (!input.tenantConfigured) return "tenant_not_configured";
     return input.tenantKeyAvailable ? "tenant" : "tenant_unavailable";
   }
   if (!input.managedConfigured) return "not_configured";
@@ -150,8 +156,9 @@ export async function resolveAIProviderConfigurationForTenant(
     getTenantAIProviderConfiguration(userId),
   ]);
 
+  const byokEnabled = access?.byokAiEnabled === true;
   let tenantApiKey: string | null = null;
-  if (access?.byokAiEnabled && tenantConfig && isAIProviderId(tenantConfig.provider)) {
+  if (byokEnabled && tenantConfig && isAIProviderId(tenantConfig.provider)) {
     try {
       tenantApiKey = decryptSecret(tenantConfig.apiKeyEncrypted) || null;
     } catch {
@@ -159,28 +166,35 @@ export async function resolveAIProviderConfigurationForTenant(
     }
   }
 
-  const useTenant = chooseAIProviderSource({
-    byokEnabled: access?.byokAiEnabled === true,
-    tenantConfigured: Boolean(tenantConfig),
-    tenantKeyAvailable: Boolean(tenantApiKey),
-    managedConfigured: false,
-    managedKeyAvailable: false,
-  });
-  if (useTenant === "tenant" && tenantConfig && isAIProviderId(tenantConfig.provider) && tenantApiKey) {
-    return {
-      kind: "ready",
-      source: "tenant",
-      provider: tenantConfig.provider,
-      selectedModel: tenantConfig.selectedModel,
-      apiKey: tenantApiKey,
-    };
-  }
-  if (useTenant === "tenant_unavailable") {
-    // Never fall back to managed AI when a tenant key is saved but unusable:
-    // that could create unexpected Mailflow provider charges.
+  if (byokEnabled) {
+    const tenantChoice = chooseAIProviderSource({
+      byokEnabled: true,
+      tenantConfigured: Boolean(tenantConfig),
+      tenantKeyAvailable: Boolean(tenantApiKey),
+      managedConfigured: false,
+      managedKeyAvailable: false,
+    });
+    if (
+      tenantChoice === "tenant" &&
+      tenantConfig &&
+      isAIProviderId(tenantConfig.provider) &&
+      tenantApiKey
+    ) {
+      return {
+        kind: "ready",
+        source: "tenant",
+        provider: tenantConfig.provider,
+        selectedModel: tenantConfig.selectedModel,
+        apiKey: tenantApiKey,
+      };
+    }
+    // A BYOK-enabled package is tenant-provider-only: neither a missing nor
+    // unusable tenant key may silently trigger platform provider usage.
     return {
       kind: "unavailable",
-      reason: "tenant_key_unavailable",
+      reason: tenantChoice === "tenant_not_configured"
+        ? "tenant_not_configured"
+        : "tenant_key_unavailable",
       source: "tenant",
     };
   }
@@ -191,9 +205,9 @@ export async function resolveAIProviderConfigurationForTenant(
       ? await getStoredAIProviderApiKey(managed.provider)
       : null;
   const managedChoice = chooseAIProviderSource({
-    byokEnabled: access?.byokAiEnabled === true,
-    tenantConfigured: Boolean(tenantConfig),
-    tenantKeyAvailable: Boolean(tenantApiKey),
+    byokEnabled: false,
+    tenantConfigured: false,
+    tenantKeyAvailable: false,
     managedConfigured: Boolean(managed.provider && managed.selectedModel && managed.apiKeyConfigured),
     managedKeyAvailable: Boolean(managedApiKey),
   });

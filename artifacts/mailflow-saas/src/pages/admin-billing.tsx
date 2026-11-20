@@ -770,7 +770,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
                 <input data-testid="input-package-byok-ai" type="checkbox" checked={draft.byokAiEnabled} onChange={event => setDraft(d => ({ ...d, byokAiEnabled: event.target.checked }))} className="h-4 w-4 accent-[#174f99]"/>
                 Allow tenant-owned AI provider keys
               </label>
-              <p className="-mt-2 text-[11px] text-[#718192]">Customers may configure one provider key for tenant-scoped AI features. Existing feature and credit limits remain in force. Disabled by default for all packages.</p>
+              <p className="-mt-2 text-[11px] text-[#718192]">When enabled, tenant-scoped AI actions use only the customer's configured provider and never fall back to platform AI. Shared Company Intelligence remains platform-managed. Existing feature and credit limits remain in force.</p>
             </>}
             {draft.packageType === 'addon' && <>
               <Field label="Company research credits" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Unused credits pause when the primary plan ends and resume on a later paid plan."/>

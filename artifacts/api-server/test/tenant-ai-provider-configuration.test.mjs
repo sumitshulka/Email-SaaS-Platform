@@ -42,7 +42,7 @@ test("an ineligible tenant's saved key is ignored and managed AI remains availab
   );
 });
 
-test("an eligible tenant without a saved key continues to use managed AI", () => {
+test("a BYOK-enabled package without a saved tenant key never uses managed AI", () => {
   assert.equal(
     chooseAIProviderSource({
       byokEnabled: true,
@@ -51,11 +51,11 @@ test("an eligible tenant without a saved key continues to use managed AI", () =>
       managedConfigured: true,
       managedKeyAvailable: true,
     }),
-    "managed",
+    "tenant_not_configured",
   );
 });
 
-test("no provider configuration returns unavailable without choosing a key", () => {
+test("an eligible tenant with no configured provider remains tenant-only", () => {
   assert.equal(
     chooseAIProviderSource({
       byokEnabled: true,
@@ -64,7 +64,20 @@ test("no provider configuration returns unavailable without choosing a key", () 
       managedConfigured: false,
       managedKeyAvailable: false,
     }),
-    "not_configured",
+    "tenant_not_configured",
+  );
+});
+
+test("a package without BYOK uses managed AI even if an old tenant key remains saved", () => {
+  assert.equal(
+    chooseAIProviderSource({
+      byokEnabled: false,
+      tenantConfigured: true,
+      tenantKeyAvailable: true,
+      managedConfigured: true,
+      managedKeyAvailable: true,
+    }),
+    "managed",
   );
 });
 

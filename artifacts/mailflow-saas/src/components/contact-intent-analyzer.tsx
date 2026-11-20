@@ -63,7 +63,7 @@ export function ContactIntentAnalyzer({ contactId }: { contactId: string }) {
       {canShowQuestionnaire && <button type="button" disabled={pending || !state.data.aiConfigured || state.data.questions.some(q => !answers[q.id]?.trim())} onClick={() => void analyze()} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e] disabled:cursor-not-allowed disabled:opacity-50">
         {pending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <BrainCircuit className="h-4 w-4"/>} {pending ? "Analyzing…" : "Analyze intent"}
       </button>}
-      {!state.data.aiConfigured && <p className="mt-2 text-[12px] text-amber-800">AI analysis is unavailable until the superadmin configures a provider.</p>}
+      {!state.data.aiConfigured && <p className="mt-2 text-[12px] text-amber-800">AI analysis is unavailable. If your package includes tenant-owned AI, configure it in AI Provider settings; otherwise ask your administrator to configure platform AI.</p>}
       {state.data.latest && <div className="mt-5 border-t border-[#e7ebef] pt-4">
         <div className="mb-3 text-[12px] font-semibold text-[#35465b]">Latest analysis · {new Date(state.data.latest.analyzedAt).toLocaleString()}</div>
         {state.data.latest.intents.length ? <ul className="space-y-3">{state.data.latest.intents.map((intent, i) => <li key={`${intent.intent}-${i}`} className="rounded-md border border-[#e2e8ef] bg-[#fbfcfd] p-3">

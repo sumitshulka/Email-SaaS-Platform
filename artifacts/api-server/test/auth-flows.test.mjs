@@ -10254,6 +10254,25 @@ describe("tenant AI provider routing", { concurrency: false }, () => {
     assert.equal(audit.metadata.inputTokens, 30);
     assert.equal(audit.metadata.outputTokens, 12);
     assert.equal(JSON.stringify(audit.metadata).includes(tenantKey), false);
+
+    await db.delete(dbModule.tenantAIProviderConfigurationsTable)
+      .where(eq(dbModule.tenantAIProviderConfigurationsTable.userId, owner.user.id));
+    const missingTenantConfig = await api(`/contacts/${contact.id}/intent`, {
+      cookie: owner.cookie,
+    });
+    assert.equal(missingTenantConfig.body.aiConfigured, false);
+    const changedAnswers = Object.fromEntries(
+      status.body.questions.map(question => [question.id, "The contact asked for a scheduled product review."]),
+    );
+    const blockedAnalysis = await withAIProviderFetch(async () => {
+      assert.fail("contact intent must not use platform AI when BYOK is required");
+    }, () => api(`/contacts/${contact.id}/intent/analyze`, {
+      method: "POST",
+      cookie: owner.cookie,
+      body: { answers: changedAnswers },
+    }));
+    assert.equal(blockedAnalysis.response.status, 503);
+    assert.match(blockedAnalysis.body.error, /requires your own AI provider/i);
   });
 });
 
@@ -10647,6 +10666,34 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     assert.equal(aiAudits.length, 2);
     assert.ok(aiAudits.every(row => row.metadata.providerSource === "tenant"));
     assert.equal(JSON.stringify(aiAudits).includes(tenantKey), false);
+  });
+
+  it("does not use platform AI for a BYOK-enabled package until a tenant provider is configured", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-byok-required-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-byok-required-user", {
+      allowance: 1,
+      byokAiEnabled: true,
+    });
+    await configureProvider(admin);
+
+    let providerCalls = 0;
+    const response = await withAIProviderFetch(async () => {
+      providerCalls += 1;
+      return providerResponse(JSON.stringify(validDraft));
+    }, () => draftRequest(account));
+
+    assert.equal(response.response.status, 503);
+    assert.equal(response.body.code, "AI_PROVIDER_NOT_CONFIGURED");
+    assert.match(response.body.error, /requires your own AI provider/i);
+    assert.equal(providerCalls, 0, "the platform provider must not be called for a BYOK-enabled package");
+    const usages = await db
+      .select()
+      .from(dbModule.aiEmailAssistUsagesTable)
+      .where(eq(dbModule.aiEmailAssistUsagesTable.userId, account.user.id));
+    assert.equal(usages.length, 0, "no AI credit should be reserved without tenant configuration");
   });
 
   it("releases the reserved credit when generated campaign content uses Greek look-alikes for a blocked term", async () => {

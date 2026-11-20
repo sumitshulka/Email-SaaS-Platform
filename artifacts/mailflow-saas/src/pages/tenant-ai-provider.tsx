@@ -158,7 +158,12 @@ export default function TenantAIProviderPage() {
       setTestedProvider(null);
       setSelectedModel("");
       setRemoveDialogOpen(false);
-      setNotice({ kind: "success", text: "Your saved provider key was removed. Eligible features will use Mailflow-managed AI when available." });
+      setNotice({
+        kind: "success",
+        text: removed.eligible
+          ? "Your saved provider key was removed. Tenant-scoped AI actions require your own key and will remain unavailable until you configure one."
+          : "Your saved provider key was removed. Mailflow-managed AI remains available where permitted.",
+      });
     } catch (error) {
       setRemoveDialogOpen(false);
       setNotice({ kind: "error", text: errorMessage(error, "Could not remove your provider configuration.") });
@@ -174,7 +179,7 @@ export default function TenantAIProviderPage() {
         </div>
         <h1 className="display text-[25px] font-bold tracking-tight text-[#17283e]">AI Provider</h1>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#647487]">
-          Bring one supported provider key for tenant-scoped AI features. You pay the provider directly; Mailflow’s package allowances and research limits still apply.
+          When your package includes tenant-owned AI, its tenant-scoped actions use only the provider configured here—never platform AI. You pay the provider directly; Mailflow’s package allowances and research limits still apply.
         </p>
       </header>
 
@@ -221,7 +226,7 @@ export default function TenantAIProviderPage() {
             </div>
             <div className="space-y-4 p-4 sm:p-5">
               <div className="rounded-md border border-[#d5e4f0] bg-[#f5f9fc] px-3 py-2.5 text-[10px] leading-4 text-[#46627c]">
-                This key is used for tenant-scoped AI drafting and contact-intent analysis. Global Company Intelligence research remains platform-managed because its results are shared across accounts.
+                This key is used exclusively for tenant-scoped AI drafting and contact-intent analysis when your package allows tenant-owned AI. Those actions do not use platform AI as a fallback. Global Company Intelligence research remains platform-managed because its results are shared across accounts.
               </div>
               {settings.data.configured && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#cfe5d8] bg-[#f1faf4] px-3 py-2.5">
@@ -280,7 +285,7 @@ export default function TenantAIProviderPage() {
             <ul className="mt-3 space-y-2.5 text-[10px] leading-4 text-[#395571]">
               <li>You pay your AI provider directly for use of this key.</li>
               <li>Mailflow still enforces package feature access and existing research or add-on credit limits.</li>
-              <li>A saved BYOK key is never silently replaced by the platform provider if it fails.</li>
+              <li>For BYOK-enabled packages, a missing, invalid, or failing tenant key blocks that AI action; it never falls back to the platform provider.</li>
               <li>Your key is encrypted at rest using the application’s configured encryption secret.</li>
             </ul>
           </aside>
@@ -296,7 +301,9 @@ export default function TenantAIProviderPage() {
         onOpenChange={setRemoveDialogOpen}
         onConfirm={() => void handleRemove()}
         title="Remove your saved AI key?"
-        description="This permanently removes the encrypted tenant key and model selection. Mailflow-managed AI will be used for eligible features when available. Existing research credits and add-on allowances are unchanged."
+        description={settings.data?.eligible
+          ? "This permanently removes the encrypted tenant key and model selection. Because your package requires tenant AI, tenant-scoped AI actions will be unavailable until you configure a key again. Platform AI will not be used as a fallback. Existing research credits and add-on allowances are unchanged."
+          : "This permanently removes the encrypted tenant key and model selection. Mailflow-managed AI remains available for features permitted by your package. Existing research credits and add-on allowances are unchanged."}
         confirmLabel="Remove key"
         pending={removeSettings.isPending}
         testId="dialog-remove-tenant-ai-provider"

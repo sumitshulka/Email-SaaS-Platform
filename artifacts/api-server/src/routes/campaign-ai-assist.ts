@@ -95,6 +95,8 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
     res.status(503).json({
       error: providerConfiguration.reason === "tenant_key_unavailable"
         ? "Your saved AI provider key is unavailable. Update or remove it in AI Provider settings."
+        : providerConfiguration.reason === "tenant_not_configured"
+          ? "This package requires your own AI provider. Configure a provider in AI Provider settings before generating a draft."
         : "AI writing is not configured yet. Contact the platform administrator.",
       code: "AI_PROVIDER_NOT_CONFIGURED",
     });
