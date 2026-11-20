@@ -11,8 +11,6 @@ import {
 import { Link } from "wouter";
 import { Activity, ArrowRight, Download, RefreshCw, TrendingUp } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -395,19 +393,18 @@ export function ProspectAnalyticsOverview() {
               {!activeCurrency ? <ChartEmpty title="No currency values to chart" body="Choose a currency after pipeline currency totals become available." />
                 : closureOutlook.length ? closureOutlook.some(row => row.weightedValue !== 0) ? (
                   <>
-                    <div className="h-[230px]" role="img" aria-label={`Area chart showing weighted expected deal value by closure month in ${activeCurrency}`}>
+                    <div className="h-[230px]" data-testid="chart-monthly-outlook" role="img" aria-label={`Column chart showing weighted expected deal value by closure month in ${activeCurrency}`}>
                       <ResponsiveContainer width="100%" height="100%" debounce={0}>
-                        <AreaChart data={closureOutlook} margin={{ top: 8, right: 12, left: 4, bottom: 0 }} accessibilityLayer>
-                          <defs><linearGradient id="prospectClosureFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={palette.teal} stopOpacity={0.28} /><stop offset="100%" stopColor={palette.teal} stopOpacity={0.03} /></linearGradient></defs>
+                        <BarChart data={closureOutlook} margin={{ top: 8, right: 12, left: 4, bottom: 0 }} accessibilityLayer>
                           <CartesianGrid stroke={palette.grid} vertical={false} />
                           <XAxis dataKey="month" tick={{ fontSize: 10, fill: palette.muted }} axisLine={false} tickLine={false} minTickGap={18} />
                           <YAxis tickFormatter={value => compactMoney(value, activeCurrency)} tick={{ fontSize: 10, fill: palette.muted }} axisLine={false} tickLine={false} width={64} />
                           <Tooltip isAnimationActive={false} cursor={{ fill: "rgba(77,137,126,.07)", stroke: "none" }} contentStyle={{ borderRadius: 8, border: `1px solid ${palette.border}`, background: "#fffefa", fontSize: 12 }} labelFormatter={(_label, payload) => payload?.[0]?.payload?.period ?? _label} formatter={(value: number, _name: string, item) => [formatMoney(value, activeCurrency), `Weighted · ${item.payload.count} opportunities`]} />
-                          <Area type="monotone" dataKey="weightedValue" name="Weighted expected value" stroke={palette.teal} strokeWidth={2.5} fill="url(#prospectClosureFill)" fillOpacity={1} activeDot={{ r: 4, fill: palette.teal, stroke: "#fff", strokeWidth: 2 }} isAnimationActive={false} />
-                        </AreaChart>
+                          <Bar dataKey="weightedValue" name="Weighted expected value" fill={palette.teal} radius={[5, 5, 0, 0]} maxBarSize={46} isAnimationActive={false} />
+                        </BarChart>
                       </ResponsiveContainer>
                     </div>
-                    <p className="mt-2 text-[10px] leading-4 text-[#87928f]">Hover a month to see its opportunity count and weighted value.</p>
+                    <p className="mt-2 text-[10px] leading-4 text-[#87928f]">Each column is one close month. Hover a column to see its opportunity count and full weighted value.</p>
                   </>
                 ) : <ChartEmpty title="No weighted closure value in this currency" body={`Closure months are present, but no ${activeCurrency} weighted values were returned.`} />
                   : <ChartEmpty title="No expected closure dates yet" body="Monthly outlook appears when prospects have an expected closure period." />}

@@ -71,6 +71,26 @@ const prospectDashboard = {
   byProduct: [],
   byClosurePeriod: [],
 };
+const prospectDashboardWithClosureMonths = {
+  totalActive: 1,
+  totalWon: 0,
+  totalLost: 0,
+  currencyTotals: [{ currencyCode: 'USD', activeValue: 10000, weightedValue: 5000, wonValue: 0, lostValue: 0 }],
+  byStage: [{
+    stageId: 'overview-active-stage',
+    stageName: 'Qualified',
+    stageType: 'active',
+    terminalOutcome: null,
+    probability: 50,
+    count: 1,
+    currencyTotals: [{ currencyCode: 'USD', activeValue: 10000, weightedValue: 5000, wonValue: 0, lostValue: 0 }],
+  }],
+  byProduct: [],
+  byClosurePeriod: [
+    { period: '2026-12', count: 1, currencyTotals: [{ currencyCode: 'USD', activeValue: 10000, weightedValue: 5000, wonValue: 0, lostValue: 0 }] },
+    { period: '2027-01', count: 1, currencyTotals: [{ currencyCode: 'USD', activeValue: 8000, weightedValue: 4000, wonValue: 0, lostValue: 0 }] },
+  ],
+};
 
 let serverProcess;
 let serverOutput = '';
@@ -141,7 +161,7 @@ async function stopWebServer() {
   }
 }
 
-async function openOverview({ prospectAccess }) {
+async function openOverview({ prospectAccess, prospectData = prospectDashboard }) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addCookies([{
     name: 'mailflow_session',
@@ -184,7 +204,7 @@ async function openOverview({ prospectAccess }) {
         },
       });
     }
-    if (pathname === '/api/prospect-dashboard') return route.fulfill({ status: 200, json: prospectDashboard });
+    if (pathname === '/api/prospect-dashboard') return route.fulfill({ status: 200, json: prospectData });
     if (pathname === '/api/prospect-stages') return route.fulfill({ status: 200, json: [] });
     if (pathname === '/api/prospect-currencies') {
       return route.fulfill({ status: 200, json: { currencies: [], defaultCurrencyCode: null } });
@@ -248,6 +268,24 @@ describe('user overview analytics tabs', { concurrency: false }, () => {
       await page.getByTestId('link-dashboard-prospect-plans').waitFor();
       assert.equal(await page.getByTestId('dashboard-workspace-action-center').isVisible(), true);
       assert.equal(requestedPaths.includes('/api/prospect-dashboard'), false);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('renders the monthly outlook as a column chart for discrete closure months', async () => {
+    const { context, page, pageErrors } = await openOverview({
+      prospectAccess: true,
+      prospectData: prospectDashboardWithClosureMonths,
+    });
+    try {
+      await page.getByTestId('tab-overview-prospects').click();
+      const chart = page.getByTestId('chart-monthly-outlook');
+      await chart.waitFor();
+      assert.equal(await chart.getAttribute('aria-label'), 'Column chart showing weighted expected deal value by closure month in USD');
+      assert.equal(await chart.locator('.recharts-bar-rectangle').count(), 2, 'each monthly total should render as a separate column');
+      assert.equal(await chart.locator('.recharts-area').count(), 0, 'the outlook should no longer render as a point/area chart');
+      assert.deepEqual(pageErrors, [], 'monthly outlook should render without browser errors');
     } finally {
       await context.close();
     }
