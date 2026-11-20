@@ -585,8 +585,11 @@ function packageConfigurationError(input: {
     if (!input.reportsEnabled && input.personalReportLimit > 0) {
       return "A personal report limit can only be set when Reports are included.";
     }
-    if (input.aiEmailAssistAllowance > 0 || input.additionalMailboxCount > 0) {
-      return "AI email assist and additional mailbox allowances belong to add-on packages.";
+    if (input.amountMinor === 0 && input.aiEmailAssistAllowance > 0) {
+      return "AI Email Assist credits are only available in paid primary packages.";
+    }
+    if (input.additionalMailboxCount > 0) {
+      return "Additional mailbox allowances belong to add-on packages.";
     }
     return null;
   }

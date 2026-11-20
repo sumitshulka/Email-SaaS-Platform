@@ -107,8 +107,8 @@ router.post("/campaigns/ai-assist", requireUserRole, async (req, res): Promise<v
     const dashboard = await getSubscriptionAddOnsDashboard(req.authUser!.id);
     res.status(403).json({
       error: dashboard.eligible
-        ? "No AI email assist credits remain. Add an AI Email Assist package to continue."
-        : "An active paid primary package and an AI Email Assist add-on are required.",
+        ? "No AI Email Assist credits remain. Increase the primary-plan allowance or add an AI Email Assist package."
+        : "An active paid primary package is required to use AI Email Assist.",
       code: dashboard.eligible
         ? "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED"
         : "PAID_PRIMARY_REQUIRED",

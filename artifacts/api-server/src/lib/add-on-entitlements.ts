@@ -287,7 +287,7 @@ export async function getSubscriptionAddOnsDashboard(
     (total, row) => total + row.researchUsed,
     0,
   );
-  const assistTotal = entitlementRows.reduce(
+  const addOnAssistTotal = entitlementRows.reduce(
     (total, row) =>
       total +
       prorateAddOnAllowance(
@@ -366,6 +366,23 @@ export async function getSubscriptionAddOnsDashboard(
         paidEntitlementCondition,
       ),
     );
+  const primaryAssistTotal = eligible
+    ? active.pkg.aiEmailAssistAllowance
+    : 0;
+  let primaryAssistUsed = 0;
+  if (eligible && active) {
+    const [primaryUsage] = await db
+      .select({ used: count() })
+      .from(aiEmailAssistUsagesTable)
+      .where(
+        and(
+          eq(aiEmailAssistUsagesTable.userId, userId),
+          eq(aiEmailAssistUsagesTable.subscriptionId, active.subscription.id),
+          inArray(aiEmailAssistUsagesTable.status, ["consumed", "reserved"]),
+        ),
+      );
+    primaryAssistUsed = Number(primaryUsage?.used ?? 0);
+  }
 
   const [accounts] = await db
     .select({ used: count() })
@@ -376,7 +393,9 @@ export async function getSubscriptionAddOnsDashboard(
     ? active.pkg.emailAccountLimit
     : 0;
   const totalMailboxLimit = baseLimit + (eligible ? additionalSlots : 0);
-  const assistUsed = Number(assistUsage?.used ?? 0);
+  const addOnAssistUsed = Number(assistUsage?.used ?? 0);
+  const assistUsed = primaryAssistUsed + addOnAssistUsed;
+  const assistTotal = primaryAssistTotal + addOnAssistTotal;
   const packages = eligible
     ? await db
         .select()
@@ -415,6 +434,16 @@ export async function getSubscriptionAddOnsDashboard(
         total: assistTotal,
         used: assistUsed,
         remaining: Math.max(0, assistTotal - assistUsed),
+      },
+      primaryEmailAssist: {
+        total: primaryAssistTotal,
+        used: primaryAssistUsed,
+        remaining: Math.max(0, primaryAssistTotal - primaryAssistUsed),
+      },
+      addOnEmailAssist: {
+        total: addOnAssistTotal,
+        used: addOnAssistUsed,
+        remaining: Math.max(0, addOnAssistTotal - addOnAssistUsed),
       },
       mailboxes: {
         baseLimit,
@@ -819,7 +848,10 @@ export async function reserveAiEmailAssistCredit(userId: string) {
 
     const now = new Date();
     const [active] = await tx
-      .select({ pkg: subscriptionPackagesTable })
+      .select({
+        subscription: userSubscriptionsTable,
+        pkg: subscriptionPackagesTable,
+      })
       .from(userSubscriptionsTable)
       .innerJoin(
         subscriptionPackagesTable,
@@ -843,6 +875,33 @@ export async function reserveAiEmailAssistCredit(userId: string) {
       .update(aiEmailAssistUsagesTable)
       .set({ status: "released" })
       .where(staleAiEmailAssistReservationCondition(now, userId));
+
+    if (active.pkg.aiEmailAssistAllowance > 0) {
+      const [primaryUsage] = await tx
+        .select({ used: count() })
+        .from(aiEmailAssistUsagesTable)
+        .where(
+          and(
+            eq(aiEmailAssistUsagesTable.userId, userId),
+            eq(
+              aiEmailAssistUsagesTable.subscriptionId,
+              active.subscription.id,
+            ),
+            inArray(aiEmailAssistUsagesTable.status, ["consumed", "reserved"]),
+          ),
+        );
+      if (Number(primaryUsage?.used ?? 0) < active.pkg.aiEmailAssistAllowance) {
+        const [usage] = await tx
+          .insert(aiEmailAssistUsagesTable)
+          .values({
+            userId,
+            subscriptionId: active.subscription.id,
+            status: "reserved",
+          })
+          .returning({ id: aiEmailAssistUsagesTable.id });
+        return usage ?? null;
+      }
+    }
 
     const entitlementRows = await tx
       .select()

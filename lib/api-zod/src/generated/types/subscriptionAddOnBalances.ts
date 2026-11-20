@@ -11,5 +11,7 @@ import type { SubscriptionAddOnMetric } from './subscriptionAddOnMetric';
 export interface SubscriptionAddOnBalances {
   research: SubscriptionAddOnMetric;
   emailAssist: SubscriptionAddOnMetric;
+  primaryEmailAssist: SubscriptionAddOnMetric;
+  addOnEmailAssist: SubscriptionAddOnMetric;
   mailboxes: SubscriptionAddOnMailboxMetric;
 }

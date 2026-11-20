@@ -199,9 +199,11 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     /^[A-Z]{3}$/.test(draft.currency) &&
     (draft.free || inputMinor(draft.amount, draft.currency) >= 1) &&
     isIntegerWithin(draft.researchAllowance, 0, 10000) &&
+    isIntegerWithin(draft.aiEmailAssistAllowance, 0, 10000) &&
     isIntegerWithin(draft.personalReportLimit, 0, 10000) &&
     (draft.packageType === 'primary'
       ? isIntegerWithin(draft.periodDays, 1, 3660) &&
+        (!draft.free || Number(draft.aiEmailAssistAllowance) === 0) &&
         isIntegerWithin(draft.contactLimit, 0, 10000000) &&
         isIntegerWithin(draft.emailAccountLimit, 0, 100) &&
         isIntegerWithin(draft.openCampaignAllowance, 0, 10000) &&
@@ -264,7 +266,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
       contactLimit: isAddon ? 0 : Number(draft.contactLimit),
       emailAccountLimit: isAddon ? 0 : Number(draft.emailAccountLimit),
       researchAllowance: Number(draft.researchAllowance),
-      aiEmailAssistAllowance: isAddon ? Number(draft.aiEmailAssistAllowance) : 0,
+      aiEmailAssistAllowance: Number(draft.aiEmailAssistAllowance),
       additionalMailboxCount: isAddon ? Number(draft.additionalMailboxCount) : 0,
       openCampaignAllowance: isAddon ? 0 : Number(draft.openCampaignAllowance),
       openCampaignRecipientLimit: isAddon ? 0 : Number(draft.openCampaignRecipientLimit),
@@ -751,6 +753,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
               <Field label="Contacts" value={draft.contactLimit} onChange={contactLimit => setDraft(d => ({ ...d, contactLimit }))} testId="input-package-contact-limit" type="number" step="1" min={0} max={10000000} hint="Maximum contacts saved on this package."/>
               <Field label="SMTP sender accounts" value={draft.emailAccountLimit} onChange={emailAccountLimit => setDraft(d => ({ ...d, emailAccountLimit }))} testId="input-package-email-account-limit" type="number" step="1" min={0} max={100} hint="Maximum base SMTP senders; eligible add-ons add mailbox slots."/>
               <Field label="Company research runs per term" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Each queued run, including retries, is used. Resets in a new term; unused runs expire at term end."/>
+              <Field label="AI Email Assist drafts per term" value={draft.aiEmailAssistAllowance} onChange={aiEmailAssistAllowance => setDraft(d => ({ ...d, aiEmailAssistAllowance }))} testId="input-package-ai-email-assist-allowance" type="number" step="1" min={0} max={10000} disabled={draft.free} hint={draft.free ? 'AI Email Assist credits are only available in paid primary packages.' : 'One credit is used only when a complete draft is successfully generated. Credits reset each term; unused credits expire at term end.'}/>
               <Field label="Open campaigns per term" value={draft.openCampaignAllowance} onChange={openCampaignAllowance => setDraft(d => ({ ...d, openCampaignAllowance }))} testId="input-package-open-campaign-allowance" type="number" step="1" min={0} max={10000} hint="Campaigns sent to an uploaded CSV or XLSX audience. Counted once when first queued; 0 disables open campaigns."/>
               <Field label="Recipients per open campaign" value={draft.openCampaignRecipientLimit} onChange={openCampaignRecipientLimit => setDraft(d => ({ ...d, openCampaignRecipientLimit }))} testId="input-package-open-campaign-recipient-limit" type="number" step="1" min={0} max={100000} hint="Maximum unique uploaded addresses in one open campaign; 0 disables open campaigns."/>
               <label className={`flex w-fit items-center gap-2 text-[12px] font-medium text-[#43566b] ${draft.free ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
@@ -771,11 +774,11 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
             </>}
             {draft.packageType === 'addon' && <>
               <Field label="Company research credits" value={draft.researchAllowance} onChange={researchAllowance => setDraft(d => ({ ...d, researchAllowance }))} testId="input-package-research-allowance" type="number" step="1" min={0} max={10000} hint="Unused credits pause when the primary plan ends and resume on a later paid plan."/>
-              <Field label="AI Email Assist credits" value={draft.aiEmailAssistAllowance} onChange={aiEmailAssistAllowance => setDraft(d => ({ ...d, aiEmailAssistAllowance }))} testId="input-package-ai-email-assist-allowance" type="number" step="1" min={0} max={10000} hint="One credit is used for each successfully generated or revised draft."/>
+              <Field label="AI Email Assist add-on credits" value={draft.aiEmailAssistAllowance} onChange={aiEmailAssistAllowance => setDraft(d => ({ ...d, aiEmailAssistAllowance }))} testId="input-package-ai-email-assist-allowance" type="number" step="1" min={0} max={10000} hint="Add-on credits are additional to any primary-plan credits and follow the add-on lifecycle."/>
               <Field label="Additional SMTP mailboxes" value={draft.additionalMailboxCount} onChange={additionalMailboxCount => setDraft(d => ({ ...d, additionalMailboxCount }))} testId="input-package-additional-mailboxes" type="number" step="1" min={0} max={100} hint="Adds sender slots while a paid primary plan is active; configured accounts are not removed when the plan expires."/>
             </>}
           </div>
-          <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount, prospectManagementEnabled: event.target.checked ? false : d.prospectManagementEnabled }))} className="h-4 w-4 accent-[#174f99]"/>{draft.packageType === 'addon' ? 'Free add-on · available to paid-primary customers' : 'Free package · 0 price, no Razorpay order'}</label>
+           <label className={`flex w-fit items-center gap-2 rounded-md border border-[#e1e6eb] bg-[#f8fafb] px-3 py-2 text-[11px] font-medium text-[#43566b] ${hasOtherFreePackage ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}><input data-testid="input-package-free" type="checkbox" checked={draft.free} disabled={hasOtherFreePackage} onChange={event => setDraft(d => ({ ...d, free: event.target.checked, amount: event.target.checked ? '0' : d.amount, prospectManagementEnabled: event.target.checked ? false : d.prospectManagementEnabled, aiEmailAssistAllowance: event.target.checked && d.packageType === 'primary' ? '0' : d.aiEmailAssistAllowance }))} className="h-4 w-4 accent-[#174f99]"/>{draft.packageType === 'addon' ? 'Free add-on · available to paid-primary customers' : 'Free package · 0 price, no Razorpay order'}</label>
           {hasOtherFreePackage && <p className="-mt-2 text-[11px] text-[#7b8793]">A free primary package already exists. Edit it or change its price before creating another.</p>}
           {draft.packageType === 'primary' && <div className="space-y-1">
             <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] font-medium text-[#43566b]">
@@ -804,6 +807,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
               {pkg.packageType === 'primary' ? <>
                 <div data-testid={`text-package-contact-limit-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.contactLimit.toLocaleString()} contacts · {pkg.emailAccountLimit} base SMTP sender account{pkg.emailAccountLimit === 1 ? '' : 's'}</div>
                 <div data-testid={`text-admin-package-research-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.researchAllowance} company research run{pkg.researchAllowance === 1 ? '' : 's'} per term</div>
+                <div data-testid={`text-admin-package-ai-assist-allowance-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.aiEmailAssistAllowance} AI Email Assist draft{pkg.aiEmailAssistAllowance === 1 ? '' : 's'} per term</div>
                 <div data-testid={`text-admin-package-open-campaigns-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{(pkg.openCampaignAllowance ?? 0) > 0 && (pkg.openCampaignRecipientLimit ?? 0) > 0 ? `${(pkg.openCampaignAllowance ?? 0).toLocaleString()} open campaign${pkg.openCampaignAllowance === 1 ? '' : 's'} per term · up to ${(pkg.openCampaignRecipientLimit ?? 0).toLocaleString()} recipients each` : 'Open campaigns not included'}</div>
                 <div data-testid={`text-admin-package-prospect-management-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">Prospect Management {pkg.prospectManagementEnabled ? 'included' : 'not included'}</div>
                 <div data-testid={`text-admin-package-reports-${pkg.id}`} className="mt-0.5 text-[10px] text-[#7e8b99]">{pkg.reportsEnabled ? `Reports included · ${pkg.personalReportLimit.toLocaleString()} personal report${pkg.personalReportLimit === 1 ? '' : 's'} may be saved` : 'Reports not included'}</div>

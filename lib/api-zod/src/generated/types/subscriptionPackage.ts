@@ -46,7 +46,7 @@ export interface SubscriptionPackage {
      */
   researchAllowance: number;
   /**
-     * Number of successful AI campaign draft or revision results included in this add-on.
+     * Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.
      * @minimum 0
      * @maximum 10000
      */

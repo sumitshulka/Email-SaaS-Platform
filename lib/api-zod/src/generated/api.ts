@@ -10608,7 +10608,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMin).max(listAdminSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -10680,7 +10680,7 @@ export const CreateSubscriptionPackageBody = zod.object({
   "byokAiEnabled": zod.boolean().optional().describe('Allows users on this package to configure one tenant-owned AI provider key.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageBodyResearchAllowanceMin).max(createSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(createSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
+  "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(createSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional().describe('Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(createSubscriptionPackageBodyAdditionalMailboxCountMin).max(createSubscriptionPackageBodyAdditionalMailboxCountMax).optional(),
   "preferred": zod.boolean().optional(),
   "active": zod.boolean()
@@ -10728,7 +10728,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageResponseResearchAllowanceMin).max(createSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(createSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(createSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(createSubscriptionPackageResponseAdditionalMailboxCountMin).max(createSubscriptionPackageResponseAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -10797,7 +10797,7 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "byokAiEnabled": zod.boolean().optional().describe('Allows users on this package to configure one tenant-owned AI provider key.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageBodyResearchAllowanceMin).max(updateSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(updateSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional(),
+  "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(updateSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional().describe('Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(updateSubscriptionPackageBodyAdditionalMailboxCountMin).max(updateSubscriptionPackageBodyAdditionalMailboxCountMax).optional(),
   "preferred": zod.boolean().optional(),
   "active": zod.boolean().optional()
@@ -10845,7 +10845,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageResponseResearchAllowanceMin).max(updateSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(updateSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(updateSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(updateSubscriptionPackageResponseAdditionalMailboxCountMin).max(updateSubscriptionPackageResponseAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -10918,7 +10918,7 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAdditionalMailboxCountMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -11172,7 +11172,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -11271,7 +11271,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAdditionalMailboxCountMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -11302,7 +11302,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -11458,7 +11458,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAdditionalMailboxCountMin).max(activateFreeSubscriptionResponseSubscriptionPackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -11483,6 +11483,18 @@ export const getSubscriptionAddOnsResponseBalancesEmailAssistTotalMin = 0;
 export const getSubscriptionAddOnsResponseBalancesEmailAssistUsedMin = 0;
 
 export const getSubscriptionAddOnsResponseBalancesEmailAssistRemainingMin = 0;
+
+export const getSubscriptionAddOnsResponseBalancesPrimaryEmailAssistTotalMin = 0;
+
+export const getSubscriptionAddOnsResponseBalancesPrimaryEmailAssistUsedMin = 0;
+
+export const getSubscriptionAddOnsResponseBalancesPrimaryEmailAssistRemainingMin = 0;
+
+export const getSubscriptionAddOnsResponseBalancesAddOnEmailAssistTotalMin = 0;
+
+export const getSubscriptionAddOnsResponseBalancesAddOnEmailAssistUsedMin = 0;
+
+export const getSubscriptionAddOnsResponseBalancesAddOnEmailAssistRemainingMin = 0;
 
 export const getSubscriptionAddOnsResponseBalancesMailboxesBaseLimitMin = 0;
 
@@ -11545,6 +11557,16 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "used": zod.number().int().min(getSubscriptionAddOnsResponseBalancesEmailAssistUsedMin),
   "remaining": zod.number().int().min(getSubscriptionAddOnsResponseBalancesEmailAssistRemainingMin)
 }),
+  "primaryEmailAssist": zod.object({
+  "total": zod.number().int().min(getSubscriptionAddOnsResponseBalancesPrimaryEmailAssistTotalMin),
+  "used": zod.number().int().min(getSubscriptionAddOnsResponseBalancesPrimaryEmailAssistUsedMin),
+  "remaining": zod.number().int().min(getSubscriptionAddOnsResponseBalancesPrimaryEmailAssistRemainingMin)
+}),
+  "addOnEmailAssist": zod.object({
+  "total": zod.number().int().min(getSubscriptionAddOnsResponseBalancesAddOnEmailAssistTotalMin),
+  "used": zod.number().int().min(getSubscriptionAddOnsResponseBalancesAddOnEmailAssistUsedMin),
+  "remaining": zod.number().int().min(getSubscriptionAddOnsResponseBalancesAddOnEmailAssistRemainingMin)
+}),
   "mailboxes": zod.object({
   "baseLimit": zod.number().int().min(getSubscriptionAddOnsResponseBalancesMailboxesBaseLimitMin),
   "additionalSlots": zod.number().int().min(getSubscriptionAddOnsResponseBalancesMailboxesAdditionalSlotsMin),
@@ -11584,7 +11606,7 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAdditionalMailboxCountMin).max(getSubscriptionAddOnsResponsePackagesItemAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),
@@ -11699,7 +11721,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
-  "aiEmailAssistAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign draft or revision results included in this add-on.'),
+  "aiEmailAssistAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
   "additionalMailboxCount": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAdditionalMailboxCountMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAdditionalMailboxCountMax).describe('Additional SMTP campaign sender accounts allowed while a paid primary subscription is active.'),
   "preferred": zod.boolean().describe('Highlights this package in package selection screens.'),
   "active": zod.boolean(),

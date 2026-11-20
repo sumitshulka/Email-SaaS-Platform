@@ -232,6 +232,10 @@ function PackageCard({ item, featured, scheduled, pending, disabled, action, onl
           <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
           <span className="min-w-0 break-words">{item.researchAllowance === 0 ? 'Company research is not included in this package' : `${item.researchAllowance} company research run${item.researchAllowance === 1 ? '' : 's'} per term; queued retries count, and unused runs expire at term end`}</span>
         </div>
+        <div data-testid={`text-plan-ai-email-assist-allowance-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
+          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
+          <span className="min-w-0 break-words">{item.aiEmailAssistAllowance > 0 ? `${item.aiEmailAssistAllowance} AI Email Assist credits per term; primary credits reset each term` : 'AI Email Assist is not included in this package'}</span>
+        </div>
         <div data-testid={`text-plan-open-campaigns-${item.id}`} className="flex min-w-0 items-start gap-1.5 text-[11px] font-medium text-[#4b647b]">
           <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0"/>
           <span className="min-w-0 break-words">{(item.openCampaignAllowance ?? 0) > 0 && (item.openCampaignRecipientLimit ?? 0) > 0 ? `${(item.openCampaignAllowance ?? 0).toLocaleString()} open campaign${item.openCampaignAllowance === 1 ? '' : 's'} per term to uploaded recipients, up to ${(item.openCampaignRecipientLimit ?? 0).toLocaleString()} each` : 'Open campaigns to uploaded recipients are not included'}</span>
@@ -853,13 +857,13 @@ export default function PlansPage() {
         <div>
           <div className="mono text-[9px] uppercase tracking-[.16em] text-[#778596]">PRIMARY PACKAGE</div>
           <h2 className="display mt-1 text-[19px] font-bold text-[#1d2d40]">Primary plan usage</h2>
-          <p className="mt-1 text-[11px] leading-5 text-[#718192]">Company research runs included with your primary package for the current term.</p>
+          <p className="mt-1 text-[11px] leading-5 text-[#718192]">Company research and AI Email Assist allowances included with your primary package for the current term.</p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${activeSubscription ? 'bg-[#eaf5ef] text-[#397451]' : 'bg-[#f2f4f6] text-[#6c7a88]'}`}>
           {activeSubscription ? 'Term-based allowance' : 'No active primary plan'}
         </span>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             key: 'research',
@@ -869,6 +873,15 @@ export default function PlansPage() {
             used: activeSubscription ? primaryResearchUsage?.used ?? 0 : 0,
             remaining: activeSubscription ? primaryResearchUsage?.remaining ?? 0 : 0,
             unit: 'runs',
+          },
+          {
+            key: 'ai-email-assist',
+            title: 'AI Email Assist',
+            detail: 'Primary-plan credits for this term; add-on credits are tracked separately.',
+            total: activeSubscription ? addOnDashboard?.balances.primaryEmailAssist?.total ?? 0 : 0,
+            used: activeSubscription ? addOnDashboard?.balances.primaryEmailAssist?.used ?? 0 : 0,
+            remaining: activeSubscription ? addOnDashboard?.balances.primaryEmailAssist?.remaining ?? 0 : 0,
+            unit: 'drafts',
           },
           {
             key: 'contacts',
@@ -919,7 +932,7 @@ export default function PlansPage() {
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         {[
           { key: 'research', title: 'Company research', value: addOnDashboard?.balances.research, unit: 'credits' },
-          { key: 'emailAssist', title: 'AI Email Assist', value: addOnDashboard?.balances.emailAssist, unit: 'drafts' },
+          { key: 'emailAssist', title: 'AI Email Assist', value: addOnDashboard?.balances.addOnEmailAssist, unit: 'drafts' },
         ].map(metric => <article key={metric.key} data-testid={`addon-balance-${metric.key}`} className="rounded-md border border-[#e3e8ed] bg-[#f8fafb] p-3.5">
           <h3 className="text-[11px] font-semibold text-[#42566b]">{metric.title}</h3>
           <div className="mt-2 grid grid-cols-3 gap-2 text-center">
@@ -1045,7 +1058,7 @@ export default function PlansPage() {
             <p><strong>Contacts:</strong> up to {checkoutTermsReview.pkg.contactLimit.toLocaleString()}</p>
             <p><strong>SMTP sender accounts:</strong> {checkoutTermsReview.pkg.emailAccountLimit.toLocaleString()}</p>
             <p><strong>Research runs:</strong> {checkoutTermsReview.pkg.researchAllowance.toLocaleString()} per term</p>
-            <p><strong>AI email assist:</strong> {checkoutTermsReview.pkg.aiEmailAssistAllowance.toLocaleString()}</p>
+            <p><strong>AI Email Assist drafts:</strong> {checkoutTermsReview.pkg.aiEmailAssistAllowance.toLocaleString()} per term</p>
             <p><strong>Additional mailboxes:</strong> {checkoutTermsReview.pkg.additionalMailboxCount.toLocaleString()}</p>
             <p><strong>Campaign attempts:</strong> up to {checkoutTermsReview.sendingLimits.emailsPerHourPerSmtp.toLocaleString()} per hour and {checkoutTermsReview.sendingLimits.emailsPerDayPerSmtp.toLocaleString()} per 24 hours, per mailbox</p>
           </div>

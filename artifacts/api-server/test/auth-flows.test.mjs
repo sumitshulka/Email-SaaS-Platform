@@ -326,15 +326,22 @@ memory.public.none(`
   CREATE TABLE ai_email_assist_usages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    entitlement_id uuid NOT NULL REFERENCES add_on_entitlements(id) ON DELETE RESTRICT,
+    entitlement_id uuid REFERENCES add_on_entitlements(id) ON DELETE RESTRICT,
+    subscription_id uuid REFERENCES user_subscriptions(id) ON DELETE CASCADE,
     status ai_email_assist_usage_status NOT NULL DEFAULT 'reserved',
     created_at timestamptz NOT NULL DEFAULT now(),
-    completed_at timestamptz
+    completed_at timestamptz,
+    CONSTRAINT ai_email_assist_usage_source_valid CHECK (
+      (entitlement_id IS NOT NULL AND subscription_id IS NULL)
+      OR (entitlement_id IS NULL AND subscription_id IS NOT NULL)
+    )
   );
   CREATE INDEX ai_email_assist_usage_owner_status_created_idx
     ON ai_email_assist_usages (user_id, status, created_at);
   CREATE INDEX ai_email_assist_usage_entitlement_idx
     ON ai_email_assist_usages (entitlement_id);
+  CREATE INDEX ai_email_assist_usage_subscription_idx
+    ON ai_email_assist_usages (subscription_id);
   CREATE TABLE audit_logs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_id uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -10274,10 +10281,16 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
 
   async function createAccount(
     username,
-    { primaryAmountMinor = 2500, allowance = 1, byokAiEnabled = false } = {},
+    {
+      primaryAmountMinor = 2500,
+      primaryAiAllowance = 0,
+      allowance = 1,
+      byokAiEnabled = false,
+    } = {},
   ) {
     const account = await loggedInUser({ username });
     let primaryPackage;
+    let primarySubscription;
     if (primaryAmountMinor !== null) {
       [primaryPackage] = await db.insert(dbModule.subscriptionPackagesTable).values({
         packageType: "primary",
@@ -10288,15 +10301,16 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
         periodDays: 30,
         contactLimit: 100,
         emailAccountLimit: 1,
+        aiEmailAssistAllowance: primaryAiAllowance,
         byokAiEnabled,
         active: true,
       }).returning();
-      await db.insert(dbModule.userSubscriptionsTable).values({
+      [primarySubscription] = await db.insert(dbModule.userSubscriptionsTable).values({
         userId: account.user.id,
         packageId: primaryPackage.id,
         startsAt: new Date(Date.now() - 60_000),
         endsAt: new Date(Date.now() + 30 * 86_400_000),
-      });
+      }).returning();
     }
     const [addonPackage] = await db.insert(dbModule.subscriptionPackagesTable).values({
       packageType: "addon",
@@ -10315,7 +10329,11 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
       packageId: addonPackage.id,
       aiEmailAssistAllowance: allowance,
     });
-    return account;
+    return {
+      ...account,
+      primaryPackageId: primaryPackage?.id,
+      primarySubscriptionId: primarySubscription?.id,
+    };
   }
 
   function providerResponse(text, status = 200) {
@@ -10425,6 +10443,154 @@ describe("AI Email Assist credit usage", { concurrency: false }, () => {
     );
     assert.equal(exhausted.response.status, 403);
     assert.equal(exhausted.body.code, "AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED");
+  });
+
+  it("accepts paid primary-plan AI Email Assist limits and rejects them on Free plans", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-package-limit-admin",
+      role: "SUPERADMIN",
+    });
+    const primary = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "AI Assist primary package",
+        description: "Primary package with term-based AI Email Assist credits",
+        amountMinor: 2500,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 100,
+        emailAccountLimit: 1,
+        researchAllowance: 0,
+        aiEmailAssistAllowance: 4,
+        additionalMailboxCount: 0,
+        active: true,
+      },
+    });
+    assert.equal(primary.response.status, 201, JSON.stringify(primary.body));
+    assert.equal(primary.body.aiEmailAssistAllowance, 4);
+
+    const free = await api("/admin/billing/packages", {
+      method: "POST",
+      cookie: admin.cookie,
+      body: {
+        packageType: "primary",
+        name: "Free AI Assist primary package",
+        description: "Invalid free package",
+        amountMinor: 0,
+        currency: "INR",
+        periodDays: 30,
+        contactLimit: 100,
+        emailAccountLimit: 1,
+        researchAllowance: 0,
+        aiEmailAssistAllowance: 1,
+        additionalMailboxCount: 0,
+        active: true,
+      },
+    });
+    assert.equal(free.response.status, 400);
+    assert.match(free.body.error, /only available in paid primary packages/i);
+  });
+
+  it("uses primary-term credits first, resets them on a new term, then uses add-on credits", async () => {
+    const admin = await loggedInUser({
+      username: "ai-assist-primary-entitlement-admin",
+      role: "SUPERADMIN",
+    });
+    const account = await createAccount("ai-assist-primary-entitlement-user", {
+      primaryAiAllowance: 1,
+      allowance: 1,
+    });
+    await configureProvider(admin);
+
+    const first = await withAIProviderFetch(
+      async () => providerResponse(JSON.stringify(validDraft)),
+      () => draftRequest(account),
+    );
+    assert.equal(first.response.status, 200, JSON.stringify(first.body));
+    let usages = (await db.select().from(dbModule.aiEmailAssistUsagesTable))
+      .filter(usage => usage.userId === account.user.id);
+    assert.equal(usages.length, 1);
+    assert.equal(usages[0].subscriptionId, account.primarySubscriptionId);
+    assert.equal(usages[0].entitlementId, null);
+
+    const firstTermDashboard = await api("/subscriptions/add-ons", {
+      cookie: account.cookie,
+    });
+    assert.deepEqual(firstTermDashboard.body.balances.primaryEmailAssist, {
+      total: 1,
+      used: 1,
+      remaining: 0,
+    });
+    assert.deepEqual(firstTermDashboard.body.balances.addOnEmailAssist, {
+      total: 1,
+      used: 0,
+      remaining: 1,
+    });
+
+    await db.update(dbModule.userSubscriptionsTable)
+      .set({ status: "superseded" })
+      .where(eq(dbModule.userSubscriptionsTable.id, account.primarySubscriptionId));
+    const [nextTerm] = await db.insert(dbModule.userSubscriptionsTable).values({
+      userId: account.user.id,
+      packageId: account.primaryPackageId,
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 30 * 86_400_000),
+    }).returning();
+    const nextTermDashboard = await api("/subscriptions/add-ons", {
+      cookie: account.cookie,
+    });
+    assert.deepEqual(nextTermDashboard.body.balances.primaryEmailAssist, {
+      total: 1,
+      used: 0,
+      remaining: 1,
+    });
+    assert.deepEqual(nextTermDashboard.body.balances.emailAssist, {
+      total: 2,
+      used: 0,
+      remaining: 2,
+    });
+
+    const second = await withAIProviderFetch(
+      async () => providerResponse(JSON.stringify(validDraft)),
+      () => draftRequest(account),
+    );
+    assert.equal(second.response.status, 200, JSON.stringify(second.body));
+    usages = (await db.select().from(dbModule.aiEmailAssistUsagesTable))
+      .filter(usage => usage.userId === account.user.id);
+    assert.equal(usages.length, 2);
+    assert.ok(usages.some(usage => usage.subscriptionId === nextTerm.id));
+
+    const third = await withAIProviderFetch(
+      async () => providerResponse(JSON.stringify(validDraft)),
+      () => draftRequest(account),
+    );
+    assert.equal(third.response.status, 200, JSON.stringify(third.body));
+    usages = (await db.select().from(dbModule.aiEmailAssistUsagesTable))
+      .filter(usage => usage.userId === account.user.id);
+    assert.equal(usages.length, 3);
+    assert.ok(usages.some(usage => usage.subscriptionId === nextTerm.id));
+    assert.ok(usages.some(usage => usage.entitlementId !== null));
+
+    const finalDashboard = await api("/subscriptions/add-ons", {
+      cookie: account.cookie,
+    });
+    assert.deepEqual(finalDashboard.body.balances.primaryEmailAssist, {
+      total: 1,
+      used: 1,
+      remaining: 0,
+    });
+    assert.deepEqual(finalDashboard.body.balances.addOnEmailAssist, {
+      total: 1,
+      used: 1,
+      remaining: 0,
+    });
+    assert.deepEqual(finalDashboard.body.balances.emailAssist, {
+      total: 2,
+      used: 2,
+      remaining: 0,
+    });
   });
 
   it("uses tenant BYOK for campaign drafts and does not fall back after its key fails", async () => {

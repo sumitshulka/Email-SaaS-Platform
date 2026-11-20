@@ -9246,7 +9246,7 @@ components:
         byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply. }
         emailAccountLimit: { type: integer, minimum: 0 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
-        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign draft or revision results included in this add-on. }
+        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits. }
         additionalMailboxCount: { type: integer, minimum: 0, maximum: 100, description: Additional SMTP campaign sender accounts allowed while a paid primary subscription is active. }
         preferred: { type: boolean, description: Highlights this package in package selection screens. }
         active: { type: boolean }
@@ -9291,7 +9291,7 @@ components:
         byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
-        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
+        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits. }
         additionalMailboxCount: { type: integer, minimum: 0, maximum: 100 }
         preferred: { type: boolean }
         active: { type: boolean }
@@ -9385,7 +9385,7 @@ components:
         byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
-        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000 }
+        aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits. }
         additionalMailboxCount: { type: integer, minimum: 0, maximum: 100 }
         preferred: { type: boolean }
         active: { type: boolean }
@@ -9411,8 +9411,10 @@ components:
       properties:
         research: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
         emailAssist: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
+        primaryEmailAssist: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
+        addOnEmailAssist: { $ref: "#/components/schemas/SubscriptionAddOnMetric" }
         mailboxes: { $ref: "#/components/schemas/SubscriptionAddOnMailboxMetric" }
-      required: [research, emailAssist, mailboxes]
+      required: [research, emailAssist, primaryEmailAssist, addOnEmailAssist, mailboxes]
     SubscriptionAddOnRefundAdjustment:
       type: object
       properties:

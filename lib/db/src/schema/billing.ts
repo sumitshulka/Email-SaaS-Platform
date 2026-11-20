@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -256,34 +257,6 @@ export const addOnEntitlementsTable = pgTable(
   ],
 );
 
-export const aiEmailAssistUsagesTable = pgTable(
-  "ai_email_assist_usages",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => usersTable.id, { onDelete: "cascade" }),
-    entitlementId: uuid("entitlement_id")
-      .notNull()
-      .references(() => addOnEntitlementsTable.id, { onDelete: "restrict" }),
-    status: aiEmailAssistUsageStatusEnum("status")
-      .notNull()
-      .default("reserved"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-  },
-  (table) => [
-    index("ai_email_assist_usage_owner_status_created_idx").on(
-      table.userId,
-      table.status,
-      table.createdAt,
-    ),
-    index("ai_email_assist_usage_entitlement_idx").on(table.entitlementId),
-  ],
-);
-
 export const userSubscriptionsTable = pgTable(
   "user_subscriptions",
   {
@@ -312,6 +285,44 @@ export const userSubscriptionsTable = pgTable(
       table.startsAt,
       table.endsAt,
     ),
+  ],
+);
+
+export const aiEmailAssistUsagesTable = pgTable(
+  "ai_email_assist_usages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    entitlementId: uuid("entitlement_id").references(
+      () => addOnEntitlementsTable.id,
+      { onDelete: "restrict" },
+    ),
+    subscriptionId: uuid("subscription_id").references(
+      () => userSubscriptionsTable.id,
+      { onDelete: "cascade" },
+    ),
+    status: aiEmailAssistUsageStatusEnum("status")
+      .notNull()
+      .default("reserved"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    check(
+      "ai_email_assist_usage_source_valid",
+      sql`(${table.entitlementId} IS NOT NULL AND ${table.subscriptionId} IS NULL) OR (${table.entitlementId} IS NULL AND ${table.subscriptionId} IS NOT NULL)`,
+    ),
+    index("ai_email_assist_usage_owner_status_created_idx").on(
+      table.userId,
+      table.status,
+      table.createdAt,
+    ),
+    index("ai_email_assist_usage_entitlement_idx").on(table.entitlementId),
+    index("ai_email_assist_usage_subscription_idx").on(table.subscriptionId),
   ],
 );
 

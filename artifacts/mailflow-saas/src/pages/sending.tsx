@@ -2781,11 +2781,12 @@ export function CampaignsPage({ maintenancePaused = false, createPage = false }:
                   <Sparkles className="h-3.5 w-3.5"/>
                   {aiBriefFormOpen ? 'Close AI brief' : 'Draft with AI'}
                 </Button>
-                {!aiAssistAvailable && !addOnCreditsQuery.isLoading && <Button variant="outline" testId="button-campaign-ai-addons" onClick={() => setLocation('/plans')}>View add-on packages</Button>}
+                {!addOnCreditsQuery.data?.eligible && !addOnCreditsQuery.isLoading && <Button variant="outline" testId="button-campaign-ai-addons" onClick={() => setLocation('/plans')}>View plans</Button>}
+                {addOnCreditsQuery.data?.eligible && !aiAssistAvailable && !addOnCreditsQuery.isLoading && <Button variant="outline" testId="button-campaign-ai-addons" onClick={() => setLocation('/plans')}>View add-on packages</Button>}
                 {addOnCreditsQuery.isError && <Button variant="outline" testId="button-retry-campaign-ai-credits" onClick={() => void addOnCreditsQuery.refetch()}>Retry credit check</Button>}
               </div>
               <p className="mt-2 text-[10px] leading-4 text-[#6f8090]">
-                {addOnCreditsQuery.isLoading ? 'Checking your AI Email Assist balance…' : !addOnCreditsQuery.data?.eligible ? 'An active paid primary plan and an AI Email Assist add-on are required.' : !aiAssistAvailable ? 'No AI Email Assist credits remain. Choose an add-on package to add more.' : 'One credit is used only when a complete draft is successfully generated.'}
+                {addOnCreditsQuery.isLoading ? 'Checking your AI Email Assist balance…' : !addOnCreditsQuery.data?.eligible ? 'An active paid primary plan is required to use AI Email Assist.' : !aiAssistAvailable ? 'No AI Email Assist credits remain. Increase your primary-plan allowance or choose an add-on package.' : 'Primary-plan credits are used first and reset each term; add-on credits are used afterward. One credit is used only when a complete draft is successfully generated.'}
               </p>
               {aiBriefFormOpen && <div data-testid="campaign-ai-brief-form" className="mt-4 space-y-3 border-t border-[#dce5ed] pt-4">
                 <div>

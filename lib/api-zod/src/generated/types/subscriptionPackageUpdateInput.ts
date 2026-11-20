@@ -66,6 +66,7 @@ export interface SubscriptionPackageUpdateInput {
      */
   researchAllowance?: number;
   /**
+     * Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.
      * @minimum 0
      * @maximum 10000
      */

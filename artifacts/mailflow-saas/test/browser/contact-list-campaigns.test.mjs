@@ -318,6 +318,12 @@ async function installApiFixtures(context) {
               used: 1 - aiAssistCreditsRemaining,
               remaining: aiAssistCreditsRemaining,
             },
+            primaryEmailAssist: { total: 0, used: 0, remaining: 0 },
+            addOnEmailAssist: {
+              total: 1,
+              used: 1 - aiAssistCreditsRemaining,
+              remaining: aiAssistCreditsRemaining,
+            },
             mailboxes: {
               baseLimit: 1,
               additionalSlots: 0,
@@ -340,7 +346,7 @@ async function installApiFixtures(context) {
       await route.fulfill({
         status: 403,
         json: {
-          error: 'No AI email assist credits remain. Add an AI Email Assist package to continue.',
+          error: 'No AI Email Assist credits remain. Increase the primary-plan allowance or add an AI Email Assist package.',
           code: 'AI_EMAIL_ASSIST_ALLOWANCE_EXHAUSTED',
         },
       });
@@ -1439,7 +1445,7 @@ describe('contact-list campaigns and list action menu', { concurrency: false }, 
 
       await page.getByTestId('panel-campaign-ai-assist').getByText('0 credits left', { exact: true }).waitFor({ state: 'visible' });
       const error = page.getByTestId('status-campaign-ai-assist-error');
-      await error.getByText('No AI email assist credits remain. Add an AI Email Assist package to continue.', { exact: false }).waitFor({ state: 'visible' });
+      await error.getByText('No AI Email Assist credits remain. Increase the primary-plan allowance or add an AI Email Assist package.', { exact: false }).waitFor({ state: 'visible' });
       assert.equal(aiAssistBalanceReads, 2, 'the add-on balance should be fetched once on open and once after exhaustion');
       assert.equal(aiAssistDraftRequests, 1, 'an exhausted-credit rejection must not trigger another provider request');
     } finally {
