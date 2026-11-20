@@ -11,4 +11,6 @@ import type { SubscriptionPackage } from './subscriptionPackage';
 export interface SubscriptionPackageList {
   packages: SubscriptionPackage[];
   sendingLimits: SmtpSendingLimits;
+  /** Configurable heading for active packages that require tenant-owned AI keys. */
+  tenantAiSectionHeading?: string;
 }

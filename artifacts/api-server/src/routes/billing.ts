@@ -51,6 +51,8 @@ import {
   UpdateOnlinePaymentSettingsResponse,
   UpdateRazorpaySettingsBody,
   UpdateRazorpaySettingsResponse,
+  UpdateTenantAiSectionHeadingBody,
+  UpdateTenantAiSectionHeadingResponse,
   UpdateSubscriptionPackageBody,
   UpdateSubscriptionPackageParams,
   UpdateSubscriptionPackageResponse,
@@ -106,6 +108,26 @@ import { requireSuperadmin, requireUserRole } from "../lib/session";
 
 const router: IRouter = Router();
 const ONLINE_PAYMENT_CONFIGURATION_KEY = "billing_online_payments";
+const TENANT_AI_PRICING_HEADING_KEY = "tenant_ai_pricing_section_heading";
+const DEFAULT_TENANT_AI_PRICING_HEADING = "Bring Your Own AI Plans";
+
+async function getTenantAiPricingSectionHeading(): Promise<string> {
+  const [row] = await db
+    .select({ value: systemConfigurationTable.value })
+    .from(systemConfigurationTable)
+    .where(eq(systemConfigurationTable.key, TENANT_AI_PRICING_HEADING_KEY))
+    .limit(1);
+  const value = row?.value;
+  if (typeof value === "string" && value.trim().length >= 2) return value.trim();
+  if (
+    isRecord(value) &&
+    typeof value.heading === "string" &&
+    value.heading.trim().length >= 2
+  ) {
+    return value.heading.trim();
+  }
+  return DEFAULT_TENANT_AI_PRICING_HEADING;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -1075,8 +1097,47 @@ router.get(
           emailsPerHourPerSmtp: settings.defaultEmailsPerHour,
           emailsPerDayPerSmtp: settings.maxEmailsPerDay,
         },
+        tenantAiSectionHeading: await getTenantAiPricingSectionHeading(),
       }),
     );
+  },
+);
+
+router.put(
+  "/admin/billing/packages/tenant-ai-section-heading",
+  requireSuperadmin,
+  async (req, res): Promise<void> => {
+    const parsed = UpdateTenantAiSectionHeadingBody.safeParse(req.body);
+    const heading = parsed.success ? parsed.data.heading.trim() : "";
+    if (!parsed.success || heading.length < 2 || heading.length > 80) {
+      invalidInput(res, "Enter a section heading between 2 and 80 characters.");
+      return;
+    }
+    const now = new Date();
+    await db
+      .insert(systemConfigurationTable)
+      .values({
+        key: TENANT_AI_PRICING_HEADING_KEY,
+        value: { heading },
+        updatedBy: req.authUser!.id,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: systemConfigurationTable.key,
+        set: {
+          value: { heading },
+          updatedBy: req.authUser!.id,
+          updatedAt: now,
+        },
+      });
+    await writeAuditLog({
+      actorId: req.authUser!.id,
+      action: "subscription_package.tenant_ai_section_heading_updated",
+      entity: "subscription_package_display_settings",
+      ipAddress: req.ip,
+      metadata: { heading },
+    });
+    res.json(UpdateTenantAiSectionHeadingResponse.parse({ heading }));
   },
 );
 
@@ -1436,6 +1497,7 @@ router.get(
           emailsPerHourPerSmtp: settings.defaultEmailsPerHour,
           emailsPerDayPerSmtp: settings.maxEmailsPerDay,
         },
+        tenantAiSectionHeading: await getTenantAiPricingSectionHeading(),
       }),
     );
   },

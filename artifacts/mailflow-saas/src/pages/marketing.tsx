@@ -546,6 +546,7 @@ function PackageCard({ pkg, index, sendingLimits, checkoutHref, onSelect }: {
         <li><span className="limit-icon"><Clock3 size={15}/></span><span>Plan period: <b>{pkg.periodDays} {pkg.periodDays === 1 ? 'day' : 'days'}</b></span></li>
         <li data-testid={`text-package-prospect-management-${pkg.id}`}><span className="limit-icon"><ContactRound size={15}/></span><span>Prospect Management: <b>{pkg.prospectManagementEnabled && pkg.amountMinor > 0 ? 'all features included' : 'not included'}</b></span></li>
         <li data-testid={`text-package-reports-${pkg.id}`}><span className="limit-icon"><Layers3 size={15}/></span><span>{pkg.reportsEnabled ? pkg.personalReportLimit > 0 ? <>Reports included · save up to <b>{pkg.personalReportLimit.toLocaleString()}</b> personal reports</> : 'Reports included · run and export, but no personal reports can be saved' : 'Reports are not included'}</span></li>
+        {pkg.byokAiEnabled && <li data-testid={`text-package-byok-ai-${pkg.id}`}><span className="limit-icon"><Sparkles size={15}/></span><span>Tenant-specific AI uses your own provider key</span></li>}
       </ul>
       {onSelect
         ? <button type="button" className={`mf-button plan-button ${pkg.preferred ? 'button-navy' : 'button-outline'}`} data-testid={`button-select-replacement-${pkg.id}`} onClick={onSelect}>Choose this plan <ArrowRight size={16}/></button>
@@ -564,6 +565,9 @@ function PackageCard({ pkg, index, sendingLimits, checkoutHref, onSelect }: {
 function PricingContent() {
   const packagesQuery = useListAvailableSubscriptionPackages();
   const packages = packagesQuery.data?.packages ?? [];
+  const standardPackages = packages.filter(pkg => !pkg.byokAiEnabled);
+  const tenantAiPackages = packages.filter(pkg => pkg.byokAiEnabled);
+  const tenantAiHeading = packagesQuery.data?.tenantAiSectionHeading?.trim() || 'Bring Your Own AI Plans';
   return (
     <main className="mf-pricing-main">
       <section className="mf-pricing-hero">
@@ -575,11 +579,20 @@ function PricingContent() {
       </section>
       <section className="mf-plan-section" id="available-plans">
         <div className="mf-section-wrap">
-          <div className="mf-plan-heading"><div><SectionEyebrow>Available plans</SectionEyebrow><h2>Find your starting point.</h2></div><p>Limits and prices are shown as configured. Plans may be updated by the Mailflow team.</p></div>
+          {standardPackages.length > 0 && <div className="mf-plan-heading"><div><SectionEyebrow>Available plans</SectionEyebrow><h2>Find your starting point.</h2></div><p>Limits and prices are shown as configured. Plans may be updated by the Mailflow team.</p></div>}
           {packagesQuery.isLoading ? <div className="mf-plans-skeleton" aria-label="Loading available plans"><div/><div/><div/></div> :
             packagesQuery.isError ? <div className="mf-pricing-state error-state" role="alert"><span className="state-icon"><CircleAlert size={21}/></span><div><h3>Plans aren’t available right now.</h3><p>We couldn’t load the current plan list. Please try again.</p></div><button type="button" className="mf-button button-outline retry-button" data-testid="button-retry-packages" onClick={() => packagesQuery.refetch()}>Try again <ArrowRight size={15}/></button></div> :
               packages.length === 0 ? <div className="mf-pricing-state empty-state"><span className="state-icon"><Sparkles size={20}/></span><div><h3>No plans are available just now.</h3><p>Available plans are managed by the Mailflow team. Please check back soon.</p></div></div> :
-                <div className="mf-plan-grid">{packages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index} sendingLimits={packagesQuery.data!.sendingLimits} checkoutHref={packageCheckoutPath(pkg, packages)}/>)}</div>}
+                <>
+                  {standardPackages.length > 0 && <div className="mf-plan-grid" data-testid="grid-standard-packages">{standardPackages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index} sendingLimits={packagesQuery.data!.sendingLimits} checkoutHref={packageCheckoutPath(pkg, packages)}/>)}</div>}
+                  {tenantAiPackages.length > 0 && <section data-testid="section-tenant-ai-packages" className="mt-12 rounded-lg border border-[#d6dfdf] bg-[#f2f5f2] p-5 sm:p-7">
+                    <div className="mf-plan-heading mb-6">
+                      <div><SectionEyebrow>YOUR AI PROVIDER / TENANT PLANS</SectionEyebrow><h2 data-testid="heading-tenant-ai-packages">{tenantAiHeading}</h2></div>
+                      <p>These packages require your tenant AI provider key for private AI actions. Shared Company Intelligence remains platform-managed.</p>
+                    </div>
+                    <div className="mf-plan-grid">{tenantAiPackages.map((pkg, index) => <PackageCard key={pkg.id} pkg={pkg} index={index} sendingLimits={packagesQuery.data!.sendingLimits} checkoutHref={packageCheckoutPath(pkg, packages)}/>)}</div>
+                  </section>}
+                </>}
           <div className="mf-pricing-note"><ShieldCheck size={17}/><p>Your sending account is configured separately. Mailflow records SMTP outcomes; an accepted message is not the same as confirmed inbox delivery.</p></div>
           <div className="mf-pricing-note" data-testid="text-pricing-refund-guarantee"><ShieldCheck size={17}/><p style={{ color: '#465c52', fontSize: 12, lineHeight: 1.7 }}>All subscriptions come with a Refund guarantee of 7 Days if no campaign is initiated. For details, please check <Link href="/shipping-refund" data-testid="link-pricing-refund-policy" style={{ color: '#1d4f8b', textDecoration: 'underline', textUnderlineOffset: '3px', fontWeight: 700 }}>Shipping and Refund Policy</Link>.</p></div>
         </div>

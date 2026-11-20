@@ -525,6 +525,8 @@ export * from './supportTicketStatusUpdate';
 export * from './supportTicketSummary';
 export * from './tenantAIProviderSettings';
 export * from './tenantAIProviderSettingsProvider';
+export * from './tenantAiSectionHeading';
+export * from './tenantAiSectionHeadingInput';
 export * from './tenantSendingAccount';
 export * from './tenantSendingAccountResponse';
 export * from './tenantSendingAccounts';

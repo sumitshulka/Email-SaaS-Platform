@@ -35,7 +35,7 @@ export interface SubscriptionPackage {
      * @maximum 10000
      */
   personalReportLimit: number;
-  /** Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply. */
+  /** Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply. */
   byokAiEnabled: boolean;
   /** @minimum 0 */
   emailAccountLimit: number;

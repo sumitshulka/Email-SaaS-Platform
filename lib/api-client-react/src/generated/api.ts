@@ -279,6 +279,8 @@ import type {
   SupportTicketMessageInput,
   SupportTicketStatusUpdate,
   TenantAIProviderSettings,
+  TenantAiSectionHeading,
+  TenantAiSectionHeadingInput,
   TenantSendingAccountResponse,
   TenantSendingAccounts,
   TenantSendingConnectionTestFailure,
@@ -19639,6 +19641,94 @@ export const useCreateSubscriptionPackage = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateSubscriptionPackageMutationOptions(options));
+    }
+
+export const getUpdateTenantAiSectionHeadingUrl = () => {
+
+
+
+
+  return `/api/admin/billing/packages/tenant-ai-section-heading`
+}
+
+/**
+ * @summary Update the public pricing heading for tenant-AI packages
+ */
+export const updateTenantAiSectionHeading = async (tenantAiSectionHeadingInput: TenantAiSectionHeadingInput, options?: Parameters<typeof customFetch>[1]): Promise<TenantAiSectionHeading> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TenantAiSectionHeading>(getUpdateTenantAiSectionHeadingUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(tenantAiSectionHeadingInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateTenantAiSectionHeadingMutationKey = () => ['updateTenantAiSectionHeading'] as const;
+
+export const getUpdateTenantAiSectionHeadingMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantAiSectionHeading>>, TError,UpdateTenantAiSectionHeadingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTenantAiSectionHeading>>, TError,UpdateTenantAiSectionHeadingMutationVariables, TContext> => {
+
+const mutationKey = getUpdateTenantAiSectionHeadingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTenantAiSectionHeading>>, UpdateTenantAiSectionHeadingMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateTenantAiSectionHeading(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTenantAiSectionHeadingMutationResult = NonNullable<Awaited<ReturnType<typeof updateTenantAiSectionHeading>>>
+    export type UpdateTenantAiSectionHeadingMutationBody = BodyType<TenantAiSectionHeadingInput>
+    export type UpdateTenantAiSectionHeadingMutationError = ErrorType<void>
+    export type UpdateTenantAiSectionHeadingMutationVariables = {data: BodyType<TenantAiSectionHeadingInput>}
+
+    /**
+ * @summary Update the public pricing heading for tenant-AI packages
+ */
+export const useUpdateTenantAiSectionHeading = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTenantAiSectionHeading>>, TError,UpdateTenantAiSectionHeadingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTenantAiSectionHeading>>,
+        TError,
+        UpdateTenantAiSectionHeadingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateTenantAiSectionHeadingMutationOptions(options));
     }
 
 export const getUpdateSubscriptionPackageUrl = (packageId: string,) => {

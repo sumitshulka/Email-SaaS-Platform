@@ -2965,6 +2965,41 @@ describe("tenant contact management and package quotas", { concurrency: false },
     );
   });
 
+  it("lets superadmins configure the public tenant-AI package section heading", async () => {
+    const admin = await loggedInUser({
+      username: "tenant-ai-pricing-heading-admin",
+      role: "SUPERADMIN",
+    });
+    const before = await api("/admin/billing/packages", { cookie: admin.cookie });
+    assert.equal(before.response.status, 200, JSON.stringify(before.body));
+    assert.equal(before.body.tenantAiSectionHeading, "Bring Your Own AI Plans");
+
+    const invalid = await api("/admin/billing/packages/tenant-ai-section-heading", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { heading: " " },
+    });
+    assert.equal(invalid.response.status, 400);
+
+    const updated = await api("/admin/billing/packages/tenant-ai-section-heading", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { heading: "Tenant AI plans" },
+    });
+    assert.equal(updated.response.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.heading, "Tenant AI plans");
+
+    const publicPackages = await api("/subscriptions/packages");
+    assert.equal(publicPackages.response.status, 200);
+    assert.equal(publicPackages.body.tenantAiSectionHeading, "Tenant AI plans");
+
+    await api("/admin/billing/packages/tenant-ai-section-heading", {
+      method: "PUT",
+      cookie: admin.cookie,
+      body: { heading: before.body.tenantAiSectionHeading },
+    });
+  });
+
   it("creates and activates free packages without a payment or Razorpay order", async () => {
     const admin = await loggedInUser({
       username: "free-package-admin",

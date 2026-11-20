@@ -485,4 +485,82 @@ describe('marketing signup analytics', { concurrency: false }, () => {
       await context.close();
     }
   });
+
+  it('shows tenant-AI packages only in their configurable pricing section', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const packages = [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        packageType: 'primary',
+        name: 'Standard Growth',
+        description: 'A standard plan.',
+        amountMinor: 2500,
+        currency: 'USD',
+        periodDays: 30,
+        contactLimit: 1000,
+        prospectManagementEnabled: false,
+        reportsEnabled: false,
+        personalReportLimit: 0,
+        byokAiEnabled: false,
+        emailAccountLimit: 1,
+        researchAllowance: 0,
+        aiEmailAssistAllowance: 0,
+        additionalMailboxCount: 0,
+        openCampaignAllowance: 0,
+        openCampaignRecipientLimit: 0,
+        preferred: false,
+        active: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        packageType: 'primary',
+        name: 'Tenant AI Growth',
+        description: 'A plan that requires a tenant AI provider.',
+        amountMinor: 4500,
+        currency: 'USD',
+        periodDays: 30,
+        contactLimit: 2000,
+        prospectManagementEnabled: true,
+        reportsEnabled: true,
+        personalReportLimit: 5,
+        byokAiEnabled: true,
+        emailAccountLimit: 2,
+        researchAllowance: 0,
+        aiEmailAssistAllowance: 0,
+        additionalMailboxCount: 0,
+        openCampaignAllowance: 0,
+        openCampaignRecipientLimit: 0,
+        preferred: false,
+        active: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    try {
+      await installFixtures(context, { packages });
+      const page = await context.newPage();
+      await page.route('**/api/subscriptions/packages', async route => {
+        if (route.request().method() !== 'GET') return route.continue();
+        await route.fulfill({
+          status: 200,
+          json: {
+            packages,
+            tenantAiSectionHeading: 'Tenant AI plans',
+            sendingLimits: { emailsPerHourPerSmtp: 100, emailsPerDayPerSmtp: 1000 },
+          },
+        });
+      });
+      await page.goto(`${baseUrl}/pricing`);
+      await page.getByTestId('section-tenant-ai-packages').waitFor();
+      assert.equal(await page.getByTestId('heading-tenant-ai-packages').textContent(), 'Tenant AI plans');
+      assert.equal(await page.getByTestId('grid-standard-packages').getByTestId('card-package-11111111-1111-4111-8111-111111111111').count(), 1);
+      assert.equal(await page.getByTestId('grid-standard-packages').getByTestId('card-package-22222222-2222-4222-8222-222222222222').count(), 0);
+      assert.equal(await page.getByTestId('section-tenant-ai-packages').getByTestId('card-package-22222222-2222-4222-8222-222222222222').count(), 1);
+      assert.equal(await page.getByTestId('text-package-byok-ai-22222222-2222-4222-8222-222222222222').count(), 1);
+    } finally {
+      await context.close();
+    }
+  });
 });

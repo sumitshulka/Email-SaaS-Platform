@@ -9,7 +9,7 @@ import {
   useCorrectAdminAddOnGift, useCreateSubscriptionPackage, useGetOnlinePaymentSettings, useGetRazorpaySettings, useGiftAdminSubscription, useListAdminAddOnGiftEntitlements, useListAdminSubscriptionPackages,
   useListAdminUsers,
   useSetActiveRazorpayEnvironment, useTestRazorpayConnection,
-  useUpdateOnlinePaymentSettings, useUpdateRazorpaySettings, useUpdateSubscriptionPackage,
+  useUpdateOnlinePaymentSettings, useUpdateRazorpaySettings, useUpdateSubscriptionPackage, useUpdateTenantAiSectionHeading,
 } from '@workspace/api-client-react';
 import type { AdminUser, SubscriptionPackage, SubscriptionPackageInput } from '@workspace/api-client-react';
 
@@ -47,6 +47,7 @@ type PackageDraft = {
 const blankDraft: PackageDraft = {
   packageType: 'primary', name: '', description: '', amount: '', free: false, currency: 'INR', periodDays: '30', contactLimit: '5000', emailAccountLimit: '1', researchAllowance: '0', aiEmailAssistAllowance: '0', additionalMailboxCount: '0', openCampaignAllowance: '0', openCampaignRecipientLimit: '0', prospectManagementEnabled: false, reportsEnabled: false, personalReportLimit: '0', byokAiEnabled: false, preferred: false, active: true,
 };
+const DEFAULT_TENANT_AI_PRICING_HEADING = 'Bring Your Own AI Plans';
 
 const errorText = (error: unknown) =>
   error && typeof error === 'object' && 'message' in error ? String(error.message) : 'The request could not be completed. Please try again.';
@@ -137,6 +138,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
   const updatePackage = useUpdateSubscriptionPackage();
   const giftSubscription = useGiftAdminSubscription();
   const correctAddOnGift = useCorrectAdminAddOnGift();
+  const updateTenantAiSectionHeading = useUpdateTenantAiSectionHeading();
   const settings = settingsQuery.data;
   const onlinePaymentsEnabled = onlinePaymentsQuery.data?.enabled ?? true;
   const onlinePaymentsUpdatedAt = onlinePaymentsQuery.data?.updatedAt ?? null;
@@ -188,6 +190,7 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     production: { keyId: '', keySecret: '', webhookSecret: '' },
   });
   const [draft, setDraft] = useState<PackageDraft>(blankDraft);
+  const [tenantAiSectionHeadingDraft, setTenantAiSectionHeadingDraft] = useState(DEFAULT_TENANT_AI_PRICING_HEADING);
   const [editing, setEditing] = useState<SubscriptionPackage | null>(null);
   const [packageFormOpen, setPackageFormOpen] = useState(false);
   const packageFormRef = useRef<HTMLFormElement>(null);
@@ -225,10 +228,34 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
     return () => window.cancelAnimationFrame(frame);
   }, [packageFormOpen, editing]);
 
+  useEffect(() => {
+    const heading = packagesQuery.data?.tenantAiSectionHeading?.trim();
+    if (heading) setTenantAiSectionHeadingDraft(heading);
+  }, [packagesQuery.data?.tenantAiSectionHeading]);
+
   const announce = (text: string) => setNotice({ text });
   const refreshPackages = () => {
     void queryClient.invalidateQueries({ queryKey: getListAdminSubscriptionPackagesQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
+  };
+  const submitTenantAiSectionHeading = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const heading = tenantAiSectionHeadingDraft.trim();
+    if (heading.length < 2 || heading.length > 80) return;
+    updateTenantAiSectionHeading.mutate({ data: { heading } }, {
+      onSuccess: result => {
+        queryClient.setQueryData(
+          getListAdminSubscriptionPackagesQueryKey(),
+          current => current
+            ? { ...current, tenantAiSectionHeading: result.heading }
+            : current,
+        );
+        void queryClient.invalidateQueries({ queryKey: getListAvailableSubscriptionPackagesQueryKey() });
+        setTenantAiSectionHeadingDraft(result.heading);
+        announce('Tenant AI pricing section heading saved.');
+      },
+      onError: error => setNotice({ text: errorText(error), bad: true }),
+    });
   };
   const openEdit = (pkg: SubscriptionPackage) => {
     setEditing(pkg);
@@ -716,6 +743,38 @@ export default function AdminBillingPage({ page = 'billing' }: { page?: 'billing
         <div><div className="mono mb-1 text-[10px] uppercase tracking-[.17em] text-[#8290a0]">SUBSCRIPTION CATALOG</div><h2 className="display text-[22px] font-bold text-[#1d2d40]">Packages</h2><p className="mt-1 text-[12px] text-[#748292]">Set the exact price and access term customers will see at checkout.</p></div>
         <button data-testid="button-new-subscription-package" onClick={() => { resetPackageForm(); setPackageFormOpen(true); setNotice(null); }} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#174f99] px-4 text-[12px] font-semibold text-white hover:bg-[#103f7e]"><Plus className="h-4 w-4"/>New package</button>
       </div>
+
+      <Panel className="mb-4 overflow-hidden !border-[#d7d9ee] !bg-[#fbfaff]" testId="tenant-ai-pricing-heading-panel">
+        <div className="flex items-center gap-3 border-b border-[#e7e4f4] bg-[#f3f1fb] px-4 py-3.5">
+          <span className="grid h-8 w-8 place-items-center rounded-md bg-[#e4e0f4] text-[#635ca0]"><KeyRound className="h-4 w-4"/></span>
+          <div>
+            <h3 className="text-[13px] font-bold text-[#2c3151]">Tenant AI pricing section</h3>
+            <p className="mt-0.5 text-[10px] text-[#747591]">The public pricing page groups packages that allow tenant AI under this heading only.</p>
+          </div>
+        </div>
+        <form onSubmit={submitTenantAiSectionHeading} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+          <label className="block min-w-0 flex-1 space-y-1.5">
+            <span className="text-[11px] font-semibold text-[#35445a]">Section heading</span>
+            <input
+              data-testid="input-tenant-ai-pricing-section-heading"
+              value={tenantAiSectionHeadingDraft}
+              onChange={event => setTenantAiSectionHeadingDraft(event.target.value)}
+              maxLength={80}
+              className="h-10 w-full rounded-md border border-[#d8dfe6] bg-white px-3 text-[13px] outline-none focus:border-[#6c68a6] focus:ring-2 focus:ring-[#e8e5f5]"
+            />
+            <span className="block text-[10px] text-[#788091]">Default: {DEFAULT_TENANT_AI_PRICING_HEADING}. 2–80 characters.</span>
+          </label>
+          <button
+            data-testid="button-save-tenant-ai-pricing-section-heading"
+            type="submit"
+            disabled={updateTenantAiSectionHeading.isPending || tenantAiSectionHeadingDraft.trim().length < 2 || tenantAiSectionHeadingDraft.trim().length > 80 || tenantAiSectionHeadingDraft.trim() === (packagesQuery.data?.tenantAiSectionHeading || DEFAULT_TENANT_AI_PRICING_HEADING)}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-[#635ca0] px-4 text-[11px] font-semibold text-white hover:bg-[#514a89] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {updateTenantAiSectionHeading.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin"/> : <Save className="h-3.5 w-3.5"/>}
+            Save heading
+          </button>
+        </form>
+      </Panel>
 
       {packageFormOpen && <Panel className="mb-4 !border-[#cedaf2] !bg-[#f5f7ff] p-5 md:p-6">
         <div className="mb-4 flex items-center justify-between"><h3 className="text-[14px] font-bold text-[#23364b]">{editing ? `Edit ${editing.name}` : 'Create a package'}</h3>

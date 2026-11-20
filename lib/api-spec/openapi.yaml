@@ -5500,6 +5500,26 @@ paths:
                 $ref: "#/components/schemas/SubscriptionPackage"
         "409":
           description: A zero-price package already exists
+  /admin/billing/packages/tenant-ai-section-heading:
+    put:
+      operationId: updateTenantAiSectionHeading
+      tags: [billing]
+      summary: Update the public pricing heading for tenant-AI packages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantAiSectionHeadingInput"
+      responses:
+        "200":
+          description: Saved pricing section heading
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantAiSectionHeading"
+        "400":
+          description: Invalid heading
   /admin/billing/packages/{packageId}:
     patch:
       operationId: updateSubscriptionPackage
@@ -9243,7 +9263,7 @@ components:
         prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for this package. Free packages cannot include this feature. }
         reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
         personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
-        byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply. }
+        byokAiEnabled: { type: boolean, description: Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply. }
         emailAccountLimit: { type: integer, minimum: 0 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits. }
@@ -9261,7 +9281,20 @@ components:
           items: { $ref: "#/components/schemas/SubscriptionPackage" }
         sendingLimits:
           $ref: "#/components/schemas/SmtpSendingLimits"
+        tenantAiSectionHeading:
+          type: string
+          description: Configurable heading for active packages that require tenant-owned AI keys.
       required: [packages, sendingLimits]
+    TenantAiSectionHeadingInput:
+      type: object
+      properties:
+        heading: { type: string, minLength: 2, maxLength: 80 }
+      required: [heading]
+    TenantAiSectionHeading:
+      type: object
+      properties:
+        heading: { type: string, minLength: 2, maxLength: 80 }
+      required: [heading]
     SmtpSendingLimits:
       type: object
       description: Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.
@@ -9288,7 +9321,7 @@ components:
         prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for this package. Free packages cannot include this feature. }
         reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
         personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
-        byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. }
+        byokAiEnabled: { type: boolean, description: Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits. }
@@ -9382,7 +9415,7 @@ components:
         prospectManagementEnabled: { type: boolean, description: Enables full Prospect Management access for paid primary packages. }
         reportsEnabled: { type: boolean, description: Enables the Report Workarea for this package. }
         personalReportLimit: { type: integer, minimum: 0, maximum: 10000, description: Maximum personal report definitions a user may save; zero disables saving. }
-        byokAiEnabled: { type: boolean, description: Allows users on this package to configure one tenant-owned AI provider key. }
+        byokAiEnabled: { type: boolean, description: Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. }
         emailAccountLimit: { type: integer, minimum: 0, maximum: 100 }
         researchAllowance: { type: integer, minimum: 0, maximum: 10000, description: Number of company research runs in each subscription term. A run is consumed when queued, including retries; allowance resets at the start of a new term and unused runs expire at term end. }
         aiEmailAssistAllowance: { type: integer, minimum: 0, maximum: 10000, description: Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits. }

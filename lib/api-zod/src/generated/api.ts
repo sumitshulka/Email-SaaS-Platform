@@ -10605,7 +10605,7 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin).max(listAdminSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAdminSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -10618,7 +10618,8 @@ export const ListAdminSubscriptionPackagesResponse = zod.object({
   "sendingLimits": zod.object({
   "emailsPerHourPerSmtp": zod.number().int().min(1),
   "emailsPerDayPerSmtp": zod.number().int().min(1)
-}).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.')
+}).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.'),
+  "tenantAiSectionHeading": zod.string().optional().describe('Configurable heading for active packages that require tenant-owned AI keys.')
 })
 
 
@@ -10677,7 +10678,7 @@ export const CreateSubscriptionPackageBody = zod.object({
   "prospectManagementEnabled": zod.boolean().optional().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().optional().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(createSubscriptionPackageBodyPersonalReportLimitMin).max(createSubscriptionPackageBodyPersonalReportLimitMax).optional().describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().optional().describe('Allows users on this package to configure one tenant-owned AI provider key.'),
+  "byokAiEnabled": zod.boolean().optional().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageBodyEmailAccountLimitMin).max(createSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageBodyResearchAllowanceMin).max(createSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(createSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional().describe('Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -10725,7 +10726,7 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(createSubscriptionPackageResponsePersonalReportLimitMin).max(createSubscriptionPackageResponsePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(createSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(createSubscriptionPackageResponseResearchAllowanceMin).max(createSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(createSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(createSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -10734,6 +10735,28 @@ export const CreateSubscriptionPackageResponse = zod.object({
   "active": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update the public pricing heading for tenant-AI packages
+ */
+export const updateTenantAiSectionHeadingBodyHeadingMin = 2;
+export const updateTenantAiSectionHeadingBodyHeadingMax = 80;
+
+
+
+export const UpdateTenantAiSectionHeadingBody = zod.object({
+  "heading": zod.string().min(updateTenantAiSectionHeadingBodyHeadingMin).max(updateTenantAiSectionHeadingBodyHeadingMax)
+})
+
+export const updateTenantAiSectionHeadingResponseHeadingMin = 2;
+export const updateTenantAiSectionHeadingResponseHeadingMax = 80;
+
+
+
+export const UpdateTenantAiSectionHeadingResponse = zod.object({
+  "heading": zod.string().min(updateTenantAiSectionHeadingResponseHeadingMin).max(updateTenantAiSectionHeadingResponseHeadingMax)
 })
 
 
@@ -10794,7 +10817,7 @@ export const UpdateSubscriptionPackageBody = zod.object({
   "prospectManagementEnabled": zod.boolean().optional().describe('Enables full Prospect Management access for paid primary packages.'),
   "reportsEnabled": zod.boolean().optional().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(updateSubscriptionPackageBodyPersonalReportLimitMin).max(updateSubscriptionPackageBodyPersonalReportLimitMax).optional().describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().optional().describe('Allows users on this package to configure one tenant-owned AI provider key.'),
+  "byokAiEnabled": zod.boolean().optional().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageBodyEmailAccountLimitMin).max(updateSubscriptionPackageBodyEmailAccountLimitMax).optional(),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageBodyResearchAllowanceMin).max(updateSubscriptionPackageBodyResearchAllowanceMax).optional().describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageBodyAiEmailAssistAllowanceMin).max(updateSubscriptionPackageBodyAiEmailAssistAllowanceMax).optional().describe('Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -10842,7 +10865,7 @@ export const UpdateSubscriptionPackageResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(updateSubscriptionPackageResponsePersonalReportLimitMin).max(updateSubscriptionPackageResponsePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(updateSubscriptionPackageResponseEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(updateSubscriptionPackageResponseResearchAllowanceMin).max(updateSubscriptionPackageResponseResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(updateSubscriptionPackageResponseAiEmailAssistAllowanceMin).max(updateSubscriptionPackageResponseAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -10915,7 +10938,7 @@ export const GiftAdminSubscriptionResponse = zod.union([zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMin).max(giftAdminSubscriptionResponseOneSubscriptionPackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMin).max(giftAdminSubscriptionResponseOneSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -11169,7 +11192,7 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMin).max(listAvailableSubscriptionPackagesResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMin).max(listAvailableSubscriptionPackagesResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -11182,7 +11205,8 @@ export const ListAvailableSubscriptionPackagesResponse = zod.object({
   "sendingLimits": zod.object({
   "emailsPerHourPerSmtp": zod.number().int().min(1),
   "emailsPerDayPerSmtp": zod.number().int().min(1)
-}).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.')
+}).describe('Platform-configured per-mailbox limits, applied independently to each configured SMTP sender regardless of package.'),
+  "tenantAiSectionHeading": zod.string().optional().describe('Configurable heading for active packages that require tenant-owned AI keys.')
 })
 
 
@@ -11268,7 +11292,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMin).max(getCurrentSubscriptionResponseSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -11299,7 +11323,7 @@ export const GetCurrentSubscriptionResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMin).max(getCurrentSubscriptionResponseScheduledSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -11455,7 +11479,7 @@ export const ActivateFreeSubscriptionResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMin).max(activateFreeSubscriptionResponseSubscriptionPackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMin).max(activateFreeSubscriptionResponseSubscriptionPackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -11603,7 +11627,7 @@ export const GetSubscriptionAddOnsResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMin).max(getSubscriptionAddOnsResponsePackagesItemPersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMin).max(getSubscriptionAddOnsResponsePackagesItemAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
@@ -11718,7 +11742,7 @@ export const VerifyRazorpayPaymentResponse = zod.object({
   "prospectManagementEnabled": zod.boolean().describe('Enables full Prospect Management access for this package. Free packages cannot include this feature.'),
   "reportsEnabled": zod.boolean().describe('Enables the Report Workarea for this package.'),
   "personalReportLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackagePersonalReportLimitMax).describe('Maximum personal report definitions a user may save; zero disables saving.'),
-  "byokAiEnabled": zod.boolean().describe('Allows users on this package to configure one tenant-owned AI provider key. Existing Mailflow package limits still apply.'),
+  "byokAiEnabled": zod.boolean().describe('Enables a tenant-owned AI provider key. Tenant-scoped AI actions use only that key and never fall back to platform AI; shared Company Intelligence remains platform-managed. Existing Mailflow package limits still apply.'),
   "emailAccountLimit": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageEmailAccountLimitMin),
   "researchAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageResearchAllowanceMax).describe('Number of company research runs in each subscription term. A run is consumed when queued'),
   "aiEmailAssistAllowance": zod.number().int().min(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMin).max(verifyRazorpayPaymentResponseSubscriptionOnePackageAiEmailAssistAllowanceMax).describe('Number of successful AI campaign drafts or revisions included in this package. Primary-plan credits reset each term; add-on credits follow the add-on lifecycle. Free primary packages cannot include these credits.'),
