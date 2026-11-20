@@ -7707,7 +7707,7 @@ export const getBulkUpdateContactsUrl = () => {
 }
 
 /**
- * @summary Add selected tenant contacts to a list or update their subscription status
+ * @summary Add selected tenant contacts to a list, update subscription status, or add or remove a contact tag
  */
 export const bulkUpdateContacts = async (contactBulkUpdate: ContactBulkUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ContactBulkResult> => {
 
@@ -7773,7 +7773,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type BulkUpdateContactsMutationVariables = {data: BodyType<ContactBulkUpdate>}
 
     /**
- * @summary Add selected tenant contacts to a list or update their subscription status
+ * @summary Add selected tenant contacts to a list, update subscription status, or add or remove a contact tag
  */
 export const useBulkUpdateContacts = <TError = ErrorType<ApiError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateContacts>>, TError,BulkUpdateContactsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

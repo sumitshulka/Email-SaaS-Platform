@@ -13,4 +13,6 @@ export const ContactBulkUpdateAction = {
   add_to_list: 'add_to_list',
   subscribe: 'subscribe',
   unsubscribe: 'unsubscribe',
+  add_tag: 'add_tag',
+  remove_tag: 'remove_tag',
 } as const;

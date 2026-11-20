@@ -3509,6 +3509,10 @@ router.post("/contacts/bulk", requireUserRole, async (req, res): Promise<void> =
     res.status(400).json({ error: "Choose a contact list." });
     return;
   }
+  if ((parsed.data.action === "add_tag" || parsed.data.action === "remove_tag") && !parsed.data.tagId) {
+    res.status(400).json({ error: "Choose a contact tag." });
+    return;
+  }
   if (parsed.data.action === "subscribe" && parsed.data.consentConfirmed !== true) {
     res.status(400).json({ error: "Confirm that the selected contacts have given permission to receive emails." });
     return;

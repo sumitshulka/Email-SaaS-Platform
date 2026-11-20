@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ContactBulkUpdate, ContactList } from "@workspace/api-client-react";
+import type { ContactBulkUpdate, ContactList, ContactTag } from "@workspace/api-client-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -9,13 +9,16 @@ type Props = {
   count: number;
   lists: ContactList[];
   listsUnavailable: boolean;
+  tags: ContactTag[];
+  tagsUnavailable: boolean;
   pending: boolean;
   onClear: () => void;
   onApply: (action: Omit<ContactBulkUpdate, "contactIds">) => void;
 };
 
-export function ContactBulkActions({ count, lists, listsUnavailable, pending, onClear, onApply }: Props) {
+export function ContactBulkActions({ count, lists, listsUnavailable, tags, tagsUnavailable, pending, onClear, onApply }: Props) {
   const [listId, setListId] = useState("");
+  const [tagId, setTagId] = useState("");
   const [confirmAction, setConfirmAction] = useState<"subscribe" | "unsubscribe" | null>(null);
   const [consent, setConsent] = useState(false);
   const buttonClass = "rounded-md border border-[#cbd8e3] bg-white px-3 py-2 text-[11px] font-semibold text-[#315879] disabled:opacity-50";
@@ -27,22 +30,42 @@ export function ContactBulkActions({ count, lists, listsUnavailable, pending, on
         <span className="text-[10px]">Up to 1,000 contacts per action.</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <select aria-label="List for selected contacts" value={listId} disabled={pending || listsUnavailable}
+        <label className="flex items-center gap-2 text-[11px] font-semibold text-[#53677b]">
+          List
+          <select data-testid="select-bulk-contact-list" aria-label="List for selected contacts" value={listId} disabled={pending || listsUnavailable}
           onChange={event => setListId(event.target.value)}
           className="h-9 max-w-full rounded-md border border-[#cbd8e3] bg-white px-2 text-[12px]">
           <option value="">Choose a list</option>
           {lists.map(list => <option key={list.id} value={list.id}>{list.name}{list.active ? "" : " (inactive)"}</option>)}
-        </select>
-        <button type="button" className={buttonClass} disabled={pending || !listId || listsUnavailable || !lists.some(list => list.id === listId)}
+          </select>
+        </label>
+        <button data-testid="button-bulk-add-to-list" type="button" className={buttonClass} disabled={pending || !listId || listsUnavailable || !lists.some(list => list.id === listId)}
           onClick={() => onApply({ action: "add_to_list", listId })}>Add to list</button>
-        <button type="button" className={buttonClass} disabled={pending}
+        <label className="ml-1 flex items-center gap-2 text-[11px] font-semibold text-[#53677b]">
+          Tag
+          <select data-testid="select-bulk-contact-tag" aria-label="Tag for selected contacts" value={tagId} disabled={pending || tagsUnavailable}
+            onChange={event => setTagId(event.target.value)}
+            className="h-9 max-w-full rounded-md border border-[#cbd8e3] bg-white px-2 text-[12px]">
+            <option value="">Choose a tag</option>
+            {tags.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </select>
+        </label>
+        <button data-testid="button-bulk-add-tag" type="button" className={buttonClass}
+          disabled={pending || !tagId || tagsUnavailable || !tags.some(tag => tag.id === tagId)}
+          onClick={() => onApply({ action: "add_tag", tagId })}>Add tag</button>
+        <button data-testid="button-bulk-remove-tag" type="button" className={buttonClass}
+          disabled={pending || !tagId || tagsUnavailable || !tags.some(tag => tag.id === tagId)}
+          onClick={() => onApply({ action: "remove_tag", tagId })}>Remove tag</button>
+        <button data-testid="button-bulk-mark-subscribed" type="button" className={buttonClass} disabled={pending}
           onClick={() => { setConsent(false); setConfirmAction("subscribe"); }}>Mark subscribed</button>
-        <button type="button" className={buttonClass} disabled={pending}
+        <button data-testid="button-bulk-mark-unsubscribed" type="button" className={buttonClass} disabled={pending}
           onClick={() => setConfirmAction("unsubscribe")}>Mark unsubscribed</button>
       </div>
-      <p className="text-[11px] text-[#586e82]">Adding to a list keeps existing memberships and does not change subscription status.</p>
+      <p className="text-[11px] text-[#586e82]">Adding to a list keeps existing memberships. Adding a tag preserves current tags; contacts already holding two tags are skipped. Removing a tag only removes the selected tag.</p>
       {listsUnavailable && <p role="alert" className="text-[11px] text-[#a84926]">Lists could not be loaded. Retry loading the page to assign a list.</p>}
       {!listsUnavailable && lists.length === 0 && <p className="text-[11px] text-[#586e82]">Create a list on the Lists page before assigning contacts.</p>}
+      {tagsUnavailable && <p role="alert" className="text-[11px] text-[#a84926]">Tags could not be loaded. Retry loading the page to update contact tags.</p>}
+      {!tagsUnavailable && tags.length === 0 && <p className="text-[11px] text-[#586e82]">Create a tag in Manage tags before assigning one to contacts.</p>}
       <AlertDialog open={confirmAction !== null} onOpenChange={open => { if (!open) setConfirmAction(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -3096,6 +3096,8 @@ export const ContactBulkUpdateAction = {
   add_to_list: 'add_to_list',
   subscribe: 'subscribe',
   unsubscribe: 'unsubscribe',
+  add_tag: 'add_tag',
+  remove_tag: 'remove_tag',
 } as const;
 
 export interface ContactBulkUpdate {
@@ -3106,6 +3108,7 @@ export interface ContactBulkUpdate {
   contactIds: string[];
   action: ContactBulkUpdateAction;
   listId?: string;
+  tagId?: string;
   /** Must be true when subscribing; confirms permission to email the selected contacts. */
   consentConfirmed?: boolean;
 }

@@ -3929,7 +3929,7 @@ export const UpdateProspectActionTypeResponse = zod.object({
 
 
 /**
- * @summary Add selected tenant contacts to a list or update their subscription status
+ * @summary Add selected tenant contacts to a list, update subscription status, or add or remove a contact tag
  */
 export const bulkUpdateContactsBodyContactIdsMax = 1000;
 
@@ -3937,8 +3937,9 @@ export const bulkUpdateContactsBodyContactIdsMax = 1000;
 
 export const BulkUpdateContactsBody = zod.object({
   "contactIds": zod.array(zod.string().uuid()).min(1).max(bulkUpdateContactsBodyContactIdsMax),
-  "action": zod.enum(['add_to_list', 'subscribe', 'unsubscribe']),
+  "action": zod.enum(['add_to_list', 'subscribe', 'unsubscribe', 'add_tag', 'remove_tag']),
   "listId": zod.string().uuid().optional(),
+  "tagId": zod.string().uuid().optional(),
   "consentConfirmed": zod.boolean().optional().describe('Must be true when subscribing; confirms permission to email the selected contacts.')
 })
 

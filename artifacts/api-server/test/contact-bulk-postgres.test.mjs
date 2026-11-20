@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "@workspace/db";
 import { bulkUpdateTenantContacts } from "../src/lib/contact-bulk.ts";
@@ -11,6 +11,8 @@ test("bulk selection rejects empty, oversized and malformed inputs", () => {
   assert.equal(BulkUpdateContactsBody.safeParse({ action: "subscribe", contactIds: [] }).success, false);
   assert.equal(BulkUpdateContactsBody.safeParse({ action: "unsubscribe", contactIds: Array(1001).fill(randomUUID()) }).success, false);
   assert.equal(BulkUpdateContactsBody.safeParse({ action: "unknown", contactIds: [randomUUID()] }).success, false);
+  assert.equal(BulkUpdateContactsBody.safeParse({ action: "add_tag", contactIds: [randomUUID()], tagId: randomUUID() }).success, true);
+  assert.equal(BulkUpdateContactsBody.safeParse({ action: "remove_tag", contactIds: [randomUUID()], tagId: randomUUID() }).success, true);
 });
 
 test("bulk contacts preserve memberships, consent suppression and tenant boundaries",
@@ -33,7 +35,16 @@ test("bulk contacts preserve memberships, consent suppression and tenant boundar
         const [firstList, nextList, foreignList] = await tx.insert(schema.contactListsTable).values([
           { userId, name: "First" }, { userId, name: "Next" }, { userId: users[1].id, name: "Foreign" },
         ]).returning();
+        const [firstTag, secondTag, thirdTag, foreignTag] = await tx.insert(schema.contactTagsTable).values([
+          { userId, name: "First tag" },
+          { userId, name: "Second tag" },
+          { userId, name: "Third tag" },
+          { userId: users[1].id, name: "Foreign tag" },
+        ]).returning();
         await tx.insert(schema.contactListMembersTable).values({ userId, listId: firstList.id, contactId: normal.id });
+        await tx.insert(schema.contactTagAssignmentsTable).values({
+          userId, contactId: normal.id, tagId: firstTag.id, slot: 1,
+        });
         const input = { action: "add_to_list", contactIds: [normal.id, bounced.id, normal.id], listId: nextList.id };
         let result = await bulkUpdateTenantContacts(tx, userId, input);
         assert.equal(result.updatedCount, 2);
@@ -42,6 +53,36 @@ test("bulk contacts preserve memberships, consent suppression and tenant boundar
         assert.equal(result.skippedCount, 2);
         let memberships = await tx.select().from(schema.contactListMembersTable).where(eq(schema.contactListMembersTable.contactId, normal.id));
         assert.deepEqual(new Set(memberships.map(row => row.listId)), new Set([firstList.id, nextList.id]));
+        const tagInput = { action: "add_tag", contactIds: [normal.id, bounced.id], tagId: secondTag.id };
+        result = await bulkUpdateTenantContacts(tx, userId, tagInput);
+        assert.equal(result.updatedCount, 2);
+        result = await bulkUpdateTenantContacts(tx, userId, tagInput);
+        assert.equal(result.updatedCount, 0, "adding an existing tag is idempotent");
+        assert.equal(result.skippedCount, 2);
+        result = await bulkUpdateTenantContacts(tx, userId, { ...tagInput, tagId: thirdTag.id });
+        assert.equal(result.updatedCount, 1, "a contact with one free tag slot still receives the tag");
+        assert.equal(result.skippedCount, 1, "a contact already using both tag slots is skipped");
+        const tagRows = await tx.select().from(schema.contactTagAssignmentsTable)
+          .where(inArray(schema.contactTagAssignmentsTable.contactId, [normal.id, bounced.id]));
+        assert.equal(tagRows.filter(row => row.contactId === normal.id).length, 2);
+        assert.equal(tagRows.filter(row => row.contactId === bounced.id).length, 2);
+        result = await bulkUpdateTenantContacts(tx, userId, {
+          action: "remove_tag", contactIds: [normal.id, bounced.id], tagId: secondTag.id,
+        });
+        assert.equal(result.updatedCount, 2);
+        result = await bulkUpdateTenantContacts(tx, userId, {
+          action: "remove_tag", contactIds: [normal.id, bounced.id], tagId: secondTag.id,
+        });
+        assert.equal(result.updatedCount, 0);
+        assert.equal(result.skippedCount, 2, "removing a tag is safe when it is not assigned");
+        result = await bulkUpdateTenantContacts(tx, userId, {
+          action: "add_tag", contactIds: [normal.id], tagId: foreignTag.id,
+        });
+        assert.equal(result.kind, "not_found", "contacts cannot be assigned another tenant's tag");
+        result = await bulkUpdateTenantContacts(tx, userId, {
+          action: "add_tag", contactIds: [normal.id, foreign.id], tagId: firstTag.id,
+        });
+        assert.equal(result.kind, "not_found", "mixed-tenant tag updates fail atomically");
         for (const action of ["add_to_list", "unsubscribe", "subscribe"]) {
           result = await bulkUpdateTenantContacts(tx, userId, { ...input, action, consentConfirmed: true, contactIds: [normal.id, foreign.id] });
           assert.equal(result.kind, "not_found", "mixed tenant selections fail atomically");

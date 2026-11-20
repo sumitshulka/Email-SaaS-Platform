@@ -30,11 +30,11 @@ import {
   getGetGmailMailboxConnectionQueryKey, useDisconnectGmailMailbox, useRescheduleCampaign, useCancelPausedCampaign,
   useGetGmailMailboxConnection, useRescanRecentGmailMessages, useStartGmailMailboxConnection,
   useSyncGmailMailboxNow, useCheckSenderMailbox,
-  getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
+  getListContactOptionsQueryKey, getListContactsQueryKey, getListContactSegmentsQueryKey, getListContactTagsQueryKey, useCreateCampaign, useCreateCampaignFollowUp, useCreateContact, useCreateContactList, useCreateContactSegment, useListCompanies,
   useDeleteCampaign, useDeleteContact, useDeleteContactList, useDeleteContactSegment, useGenerateCampaignEmailDraft, useGetCampaignDashboard, useGetCampaignRecipientSummary, useGetCampaignVariantLimits, useGetSubscriptionAddOns, useListCampaignReplies, useSetCampaignPaused, useRetryUnknownCampaignDeliveries,
   useGetCampaignHistory, useGetContactEmailHistory, useGetContactFilterOptions, useGetCampaignAttachmentAvailability, useListCampaigns, useListContactLists, useListContactOptions, useListContacts, useListTenantSendingAccounts, usePreviewCampaign, useSendCampaign,
   useCreateTenantSendingAccount, useDeleteTenantSendingAccount, useSetPrimaryTenantSendingAccount, useUpdateTenantSendingAccount,
-  useListContactSegments, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
+  useListContactSegments, useListContactTags, useTestTenantSendingConnection, useTestTenantSendingSettings, useUpdateCampaign, useUpdateContact, useUpdateContactSegment, useVerifyContactEmail,
   useUpdateContactList, useBulkUpdateContacts,
   getGetOpenCampaignAllowanceQueryKey, getGetOpenCampaignAudienceQueryKey, useGetOpenCampaignAllowance, useGetOpenCampaignAudience,
 } from '@workspace/api-client-react';
@@ -934,6 +934,9 @@ export function ContactsPage() {
     },
   });
   const listsQuery = useListContactLists();
+  const tagsQuery = useListContactTags({
+    query: { queryKey: getListContactTagsQueryKey(), staleTime: 0, refetchOnWindowFocus: true },
+  });
   const companiesQuery = useListCompanies();
   const filterOptionsQuery = useGetContactFilterOptions({
     query: { queryKey: getGetContactFilterOptionsQueryKey(), staleTime: 60_000 },
@@ -973,6 +976,7 @@ export function ContactsPage() {
     ? Math.min(contactsQuery.data.page * contactsQuery.data.pageSize, contactsQuery.data.total)
     : 0;
   const lists = (listsQuery.data || []) as ContactList[];
+  const tags = tagsQuery.data ?? [];
   const lifecycleStages = filterOptionsQuery.data?.lifecycleStages ?? [];
   const leadStatuses = filterOptionsQuery.data?.leadStatuses ?? [];
   const leadSources = filterOptionsQuery.data?.leadSources ?? [];
@@ -1032,9 +1036,15 @@ export function ContactsPage() {
     bulkUpdate.mutate({ data: { ...action, contactIds } }, {
       onSuccess: result => {
         setSelectedContactIds(current => current.filter(id => !contactIds.includes(id)));
-        setNotice({ kind: 'success', text: action.action === 'add_to_list'
+        const selectedTagName = action.tagId ? tags.find(tag => tag.id === action.tagId)?.name ?? 'selected tag' : 'selected tag';
+        const message = action.action === 'add_to_list'
           ? `${result.updatedCount} contacts added to the list.${result.skippedCount ? ` ${result.skippedCount} already belonged to it.` : ''}`
-          : `${result.updatedCount} contacts marked ${action.action === 'subscribe' ? 'subscribed' : 'unsubscribed'}.${result.skippedCount ? ` ${result.skippedCount} bounced addresses skipped; correct them individually before subscribing.` : ''}` });
+          : action.action === 'add_tag'
+            ? `${result.updatedCount} contacts tagged with “${selectedTagName}”.${result.skippedCount ? ` ${result.skippedCount} unchanged because they already had this tag or had reached the two-tag limit.` : ''}`
+            : action.action === 'remove_tag'
+              ? `${result.updatedCount} contacts had “${selectedTagName}” removed.${result.skippedCount ? ` ${result.skippedCount} did not have that tag.` : ''}`
+              : `${result.updatedCount} contacts marked ${action.action === 'subscribe' ? 'subscribed' : 'unsubscribed'}.${result.skippedCount ? ` ${result.skippedCount} bounced addresses skipped; correct them individually before subscribing.` : ''}`;
+        setNotice({ kind: 'success', text: message });
         void qc.invalidateQueries({
           predicate: query => typeof query.queryKey[0] === 'string'
             && /^\/api\/(contacts|contact-lists|contact-report|campaigns|dashboard)(\/|$)/.test(query.queryKey[0]),
@@ -1316,6 +1326,7 @@ export function ContactsPage() {
       </div>
         {selectedContactIds.length > 0 && <ContactBulkActions count={selectedContactIds.length}
           lists={lists} listsUnavailable={listsQuery.isLoading || listsQuery.isError}
+          tags={tags} tagsUnavailable={tagsQuery.isLoading || tagsQuery.isError}
           pending={bulkUpdate.isPending || update.isPending || remove.isPending}
           onClear={() => { setSelectedContactIds([]); dismiss(); }} onApply={applyBulkAction}/>}
         {bulkUpdate.isPending && <p role="status" className="px-5 py-3 text-[12px] text-[#315879]">Updating selected contacts…</p>}

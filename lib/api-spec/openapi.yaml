@@ -2012,7 +2012,7 @@ paths:
     post:
       operationId: bulkUpdateContacts
       tags: [sending]
-      summary: Add selected tenant contacts to a list or update their subscription status
+      summary: Add selected tenant contacts to a list, update subscription status, or add or remove a contact tag
       requestBody:
         required: true
         content:
@@ -2021,7 +2021,7 @@ paths:
               $ref: "#/components/schemas/ContactBulkUpdate"
       responses:
         "200":
-          description: Contacts processed; bounced contacts are skipped when subscribing
+          description: Contacts processed; bounced contacts are skipped when subscribing and contacts at the two-tag limit are skipped when adding a tag
           content:
             application/json:
               schema:
@@ -7800,8 +7800,9 @@ components:
           minItems: 1
           maxItems: 1000
           items: { type: string, format: uuid }
-        action: { type: string, enum: [add_to_list, subscribe, unsubscribe] }
+        action: { type: string, enum: [add_to_list, subscribe, unsubscribe, add_tag, remove_tag] }
         listId: { type: string, format: uuid }
+        tagId: { type: string, format: uuid }
         consentConfirmed:
           type: boolean
           description: Must be true when subscribing; confirms permission to email the selected contacts.

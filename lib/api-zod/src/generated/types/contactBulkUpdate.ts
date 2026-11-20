@@ -15,6 +15,7 @@ export interface ContactBulkUpdate {
   contactIds: string[];
   action: ContactBulkUpdateAction;
   listId?: string;
+  tagId?: string;
   /** Must be true when subscribing; confirms permission to email the selected contacts. */
   consentConfirmed?: boolean;
 }

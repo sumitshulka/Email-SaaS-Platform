@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   contactsTable, contactListsTable, contactListMembersTable,
+  contactTagsTable, contactTagAssignmentsTable,
   emailCampaignRecipientsTable, usersTable, db,
 } from "@workspace/db";
 import type { BulkUpdateContactsBody } from "@workspace/api-zod";
@@ -32,6 +33,66 @@ export async function bulkUpdateTenantContacts(
         .onConflictDoNothing().returning({ id: contactListMembersTable.contactId });
       return { kind: "updated" as const, updatedCount: inserted.length,
         skippedCount: ids.length - inserted.length, campaignIds: [] as string[] };
+    }
+
+    if (input.action === "add_tag" || input.action === "remove_tag") {
+      const [tag] = await tx.select({ id: contactTagsTable.id })
+        .from(contactTagsTable)
+        .where(and(
+          eq(contactTagsTable.userId, userId),
+          eq(contactTagsTable.id, input.tagId!),
+        ))
+        .for("update");
+      if (!tag) return { kind: "not_found" as const };
+
+      if (input.action === "remove_tag") {
+        const removed = await tx.delete(contactTagAssignmentsTable).where(and(
+          eq(contactTagAssignmentsTable.userId, userId),
+          eq(contactTagAssignmentsTable.tagId, tag.id),
+          inArray(contactTagAssignmentsTable.contactId, ids),
+        )).returning({ contactId: contactTagAssignmentsTable.contactId });
+        return {
+          kind: "updated" as const,
+          updatedCount: removed.length,
+          skippedCount: ids.length - removed.length,
+          campaignIds: [] as string[],
+        };
+      }
+
+      const assignments = await tx.select({
+        contactId: contactTagAssignmentsTable.contactId,
+        tagId: contactTagAssignmentsTable.tagId,
+        slot: contactTagAssignmentsTable.slot,
+      }).from(contactTagAssignmentsTable).where(and(
+        eq(contactTagAssignmentsTable.userId, userId),
+        inArray(contactTagAssignmentsTable.contactId, ids),
+      ));
+      const byContact = new Map<string, typeof assignments>();
+      for (const assignment of assignments) {
+        const current = byContact.get(assignment.contactId) ?? [];
+        current.push(assignment);
+        byContact.set(assignment.contactId, current);
+      }
+      const toInsert: Array<{
+        userId: string;
+        contactId: string;
+        tagId: string;
+        slot: number;
+      }> = [];
+      for (const contactId of ids) {
+        const current = byContact.get(contactId) ?? [];
+        if (current.length >= 2 || current.some(assignment => assignment.tagId === tag.id)) continue;
+        const occupiedSlots = new Set(current.map(assignment => assignment.slot));
+        const slot = occupiedSlots.has(1) ? 2 : 1;
+        toInsert.push({ userId, contactId, tagId: tag.id, slot });
+      }
+      if (toInsert.length) await tx.insert(contactTagAssignmentsTable).values(toInsert);
+      return {
+        kind: "updated" as const,
+        updatedCount: toInsert.length,
+        skippedCount: ids.length - toInsert.length,
+        campaignIds: [] as string[],
+      };
     }
 
     const eligible = contacts.filter(contact => input.action !== "subscribe" || contact.emailStatus !== "bounced");
